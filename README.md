@@ -103,7 +103,7 @@ de vente, *application* (calme, régulière) pour la lecture des cours.
 | | Prix | Contenu |
 |---|---|---|
 | Essentiel | 97 € (au lieu de 197) | les 12 modules |
-| Complet | 197 € (au lieu de 397) | + le code source, le kit de publication, les 60 demandes IA |
+| Complet | 197 € (au lieu de 397) | + **la revue personnelle de ton app** (TestFlight / bêta Play), le code source, le kit de publication, les 60 demandes IA |
 
 Paiement unique, accès à vie, garantie 30 jours.
 

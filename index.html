@@ -40,6 +40,7 @@
 
     <nav class="nav-liens">
       <a href="#programme">Programme</a>
+      <a href="#revue">La revue</a>
       <a href="#tarifs">Tarifs</a>
       <a href="#faq">FAQ</a>
       <a href="#formateur">Le formateur</a>
@@ -529,7 +530,68 @@ eas submit --platform ios --latest
     </div>
   </section>
 
-  <!-- ═══════ 11 · Tarifs ═══════ -->
+  <!-- ═══════ 11 · La revue avant soumission ═══════ -->
+  <section id="revue" class="apparait">
+    <div class="section-tete">
+      <p class="etiquette">Offre Complet · inclus</p>
+      <h2 class="t-h1">Avant d'appuyer sur « Envoyer »,<br>je teste ton app.</h2>
+      <p class="t-lead colonne" style="margin-top:var(--e-2)">
+        Tu m'ajoutes comme testeur sur TestFlight ou sur la bêta Google Play.
+        J'installe ton application sur un vrai téléphone, je l'utilise comme le
+        ferait un examinateur d'Apple, et je te renvoie par écrit ce qui va
+        coincer — avant qu'Apple ne te le dise.
+      </p>
+    </div>
+
+    <div class="grille grille-2" style="gap:clamp(32px,6vw,64px);align-items:start">
+      <div class="pile g-4">
+        <p class="etiquette">Ce que je regarde</p>
+        <ul class="liste-marque">
+          <li>Les motifs de rejet que je repère dans ton app, règle Apple par règle Apple</li>
+          <li>Le bouton « Restaurer les achats », la suppression de compte, les textes de permission</li>
+          <li>Ce qui casse sur petit écran, en mode sombre, hors connexion</li>
+          <li>Le moment où j'hésite plus de trois secondes — c'est là que tes utilisateurs abandonnent</li>
+          <li>Ta fiche : le titre, le sous-titre, la première capture</li>
+          <li>Et les <strong>trois choses à corriger en priorité</strong>, dans l'ordre</li>
+        </ul>
+      </div>
+
+      <div class="pile g-4">
+        <p class="etiquette">Comment ça se passe</p>
+        <div class="carte-creuse pile g-4">
+          <div class="rang rang-haut" style="flex-wrap:nowrap;gap:var(--e-3)">
+            <span class="etiquette-mono" style="flex:none;width:20px">01</span>
+            <p class="t-petit">Tu m'ajoutes comme testeur avec l'adresse que je te donne dans l'espace membre.</p>
+          </div>
+          <div class="rang rang-haut" style="flex-wrap:nowrap;gap:var(--e-3)">
+            <span class="etiquette-mono" style="flex:none;width:20px">02</span>
+            <p class="t-petit">J'installe et je teste sur un vrai appareil, iPhone ou Android selon ce que tu envoies.</p>
+          </div>
+          <div class="rang rang-haut" style="flex-wrap:nowrap;gap:var(--e-3)">
+            <span class="etiquette-mono" style="flex:none;width:20px">03</span>
+            <p class="t-petit">Tu reçois un retour écrit sous <strong>7 jours ouvrés</strong>, classé par gravité.</p>
+          </div>
+        </div>
+        <p class="t-micro t-3">
+          Une application, un passage, à utiliser quand tu veux — il n'y a pas de
+          date limite. Places limitées chaque mois pour que le délai soit tenu.
+        </p>
+      </div>
+    </div>
+
+    <div class="encadre encadre--attention colonne">
+      <span class="marqueur" aria-hidden="true">⚠️</span>
+      <div>
+        <p><strong>Ce que je ne peux pas te promettre.</strong></p>
+        <p>Que ton application sera acceptée. Personne ne contrôle la revue
+        d'Apple, et quiconque te garantit le contraire te ment. Ce que je te dis,
+        c'est ce qui va te faire rejeter — pour que tu le corriges avant, au lieu
+        de perdre deux allers-retours de 48 heures.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════ 12 · Tarifs ═══════ -->
   <section id="tarifs" class="apparait">
     <div class="section-tete">
       <p class="etiquette">Tarifs</p>
@@ -572,6 +634,7 @@ eas submit --platform ios --latest
         <hr class="filet" style="margin:0">
         <ul class="liste-marque">
           <li><strong>Tout l'Essentiel</strong>, plus :</li>
+          <li><strong>Je teste ton app avant que tu la soumettes</strong> — TestFlight ou bêta Google Play, sur un vrai téléphone, avec un retour écrit. <a href="#revue">Comment ça marche</a></li>
           <li>Le code source complet et commenté de <strong>Rituel</strong></li>
           <li>Le kit de publication : gabarits de captures, textes App Store, politique de confidentialité prête à l'emploi</li>
           <li>Le carnet des 60 demandes IA, testées, une par étape</li>
@@ -579,7 +642,10 @@ eas submit --platform ios --latest
           <li>Le module référencement : trouver tes mots-clés</li>
         </ul>
         <a href="#" class="btn btn-principal btn-large btn-bloc" data-stripe="complet">Prendre le Complet</a>
-        <p class="t-micro t-3 t-centre">Rentabilisé dès tes 56 premiers abonnés.</p>
+        <p class="t-micro t-3 t-centre">
+          <!-- Ajuste ce nombre selon ce que tu peux réellement absorber. -->
+          Revue personnelle incluse · <span id="places-revue">20</span> places par mois
+        </p>
       </div>
     </div>
 
@@ -599,7 +665,7 @@ eas submit --platform ios --latest
     </p>
   </section>
 
-  <!-- ═══════ 12 · FAQ ═══════ -->
+  <!-- ═══════ 13 · FAQ ═══════ -->
   <section id="faq" class="apparait">
     <div class="section-tete">
       <p class="etiquette">Questions</p>
@@ -644,13 +710,17 @@ eas submit --platform ios --latest
         <div class="corps-acc"><p class="t-corps t-2">Oui, en 3 fois sans frais : l'option apparaît au moment du paiement si ta banque le permet.</p></div>
       </details>
       <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="titre-acc">Comment marche la revue de mon app ?</span></summary>
+        <div class="corps-acc"><p class="t-corps t-2">Elle est incluse dans l'offre Complet. Quand ton app est prête à être soumise, tu m'ajoutes comme testeur sur TestFlight ou sur la bêta fermée Google Play — l'adresse est dans ton espace membre. Je l'installe sur un vrai téléphone, je la teste comme le ferait un examinateur, et tu reçois un retour écrit sous 7 jours ouvrés : les motifs de rejet que j'y vois, ce qui casse sur petit écran ou en mode sombre, et les trois choses à corriger en priorité. Une application, un passage, sans date limite. Je ne peux pas te garantir qu'Apple l'acceptera — je te dis ce qui va coincer avant qu'ils te le disent.</p></div>
+      </details>
+      <details class="acc">
         <summary><span class="chevron" aria-hidden="true">›</span><span class="titre-acc">Est-ce que je vais gagner de l'argent ?</span></summary>
         <div class="corps-acc"><p class="t-corps t-2">Je n'en sais rien, et méfie-toi de quiconque te répond autrement. Ce que je peux te garantir, c'est une application publiée et la compétence de recommencer. La section « Parlons argent » plus haut te donne les vraies maths, sans enjolivement.</p></div>
       </details>
     </div>
   </section>
 
-  <!-- ═══════ 13 · Appel final ═══════ -->
+  <!-- ═══════ 14 · Appel final ═══════ -->
   <section class="apparait">
     <div class="colonne pile g-5">
       <h2 class="t-h1">Dans 30 jours, tu auras soit une application, soit 30 jours de plus.</h2>
