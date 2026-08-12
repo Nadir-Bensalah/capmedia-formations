@@ -1,4 +1,4 @@
-# Prompt Claude Design — Charte + mockups Atelier Zéro
+# Prompt Claude Design — Charte + mockups Capmedia Academy
 
 **Mode d'emploi.** Cinq passes, dans l'ordre. La passe 0 produit la charte et
 le fichier `tokens.css`. Les passes suivantes **recollent le bloc TOKENS** en
@@ -16,7 +16,7 @@ Ne lance pas les 5 d'un coup. Valide la passe 0 avant tout le reste.
 > C'est la référence de tout le reste.
 
 ```
-Tu conçois la charte graphique complète d'« Atelier Zéro », une école en
+Tu conçois la charte graphique complète d'« Capmedia Academy », une école en
 ligne francophone qui vend des formations pour créer et publier des
 applications mobiles. Première formation : « De Zéro à l'App Store ».
 
@@ -225,7 +225,7 @@ d'applications mobiles, d'App Store, de code. Jamais de lorem ipsum.
 > qu'elle a produit. Tant que ce n'est pas fait, colle ceci.
 
 ```
-CHARTE ATELIER ZÉRO — respecter à la lettre
+CHARTE CAPMEDIA ACADEMY — respecter à la lettre
 
 Référence : Notion. Sans-serif uniquement, gris CHAUDS, rayons 3-6px,
 aucune ombre sauf éléments flottants, séparation par l'espace et non
@@ -262,7 +262,7 @@ Tout le texte en français, jamais de lorem ipsum.
 ```
 [COLLER LE BLOC TOKENS]
 
-Conçois la page de vente complète d'« Atelier Zéro — De Zéro à l'App
+Conçois la page de vente complète d'« Capmedia Academy — De Zéro à l'App
 Store », en HTML/CSS autonome, esthétique du SITE MARKETING de Notion.
 
 Ce qu'on vend : une formation en ligne écrite, en français, qui emmène
@@ -280,7 +280,7 @@ Garantie 30 jours. Paiement Stripe.
 
 ─── LES 13 SECTIONS, DANS L'ORDRE ───
 
- 1. Barre de navigation — 56px, logo « Z Atelier Zéro » (carré noir
+ 1. Barre de navigation — 56px, logo « C Capmedia Academy » (carré noir
     rayon 4px + lettre), 4 liens, « Se connecter », bouton d'action.
     Aucune bordure avant défilement.
 
@@ -366,7 +366,7 @@ Pas de « [votre texte ici] », pas de lorem ipsum.
 ```
 [COLLER LE BLOC TOKENS]
 
-Conçois l'espace membre d'Atelier Zéro : l'interface où l'élève lit sa
+Conçois l'espace membre d'Capmedia Academy : l'interface où l'élève lit sa
 formation. Esthétique de l'APPLICATION Notion, pas du site marketing.
 HTML/CSS/JS autonome.
 
@@ -434,7 +434,7 @@ Fais-les tous, empilés dans la même page, séparés par une étiquette :
 ```
 [COLLER LE BLOC TOKENS]
 
-Conçois les pages transactionnelles d'Atelier Zéro. Sobres, centrées,
+Conçois les pages transactionnelles d'Capmedia Academy. Sobres, centrées,
 une seule colonne de 420px. HTML/CSS autonome.
 
 ─── PAGE « ACCÈS » — connexion par lien magique, sans mot de passe ───
@@ -450,7 +450,7 @@ Cinq états, tous à produire, empilés et étiquetés :
 
 ─── PAGE « MERCI » — après paiement Stripe ───
 Une coche verte animée une seule fois (200ms, jamais en boucle).
-« Paiement confirmé. Bienvenue à l'Atelier. »
+« Paiement confirmé. Bienvenue chez Capmedia Academy. »
 Trois étapes numérotées pour entrer dans la formation.
 Un bouton principal. Un encadré astuce avec un conseil de démarrage.
 Mentions : garantie 30 jours, contact.
@@ -479,7 +479,7 @@ Assemble un dossier de présentation qui montre tout le produit d'un
 seul coup d'œil. Page HTML autonome, à faire défiler.
 
 Structure :
- 1. Couverture — « Atelier Zéro · Système de design », la date,
+ 1. Couverture — « Capmedia Academy · Système de design », la date,
     un aperçu de la palette sur une ligne
  2. Les principes, en 5 lignes maximum
  3. La palette et la typographie, en résumé

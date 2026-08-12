@@ -1,5 +1,5 @@
 /* ==========================================================================
-   ATELIER ZÉRO — Configuration publique
+   CAPMEDIA ACADEMY — Configuration publique
    Ce fichier est PUBLIC (il part sur GitHub Pages). N'y mets JAMAIS de clé
    secrète : pas de sk_live_…, pas de whsec_…, pas de clé de service Firebase.
    Les clés Firebase « apiKey » ci-dessous sont publiques par conception —
@@ -36,6 +36,6 @@ window.AZ = {
 
   /* --- Divers ----------------------------------------------------------- */
   // URL absolue de la page qui reçoit le lien magique.
-  urlAcces: 'https://nadir-bensalah.github.io/atelier-zero/acces.html',
-  contact:  'contact@atelier-zero.fr',
+  urlAcces: 'https://nadir-bensalah.github.io/capmedia-formations/acces.html',
+  contact:  'contact@capmedia.tn',
 };

@@ -1,5 +1,5 @@
 /* ==========================================================================
-   ATELIER ZÉRO — Comportements de la page de vente
+   CAPMEDIA ACADEMY — Comportements de la page de vente
    Pas de dépendance, pas de framework.
    ========================================================================== */
 (function () {

@@ -1,6 +1,6 @@
 {
-  "name": "atelier-zero-fonctions",
-  "description": "Webhook Stripe pour Atelier Zéro",
+  "name": "capmedia-academy-fonctions",
+  "description": "Webhook Stripe pour Capmedia Academy",
   "main": "index.js",
   "engines": {
     "node": "20"

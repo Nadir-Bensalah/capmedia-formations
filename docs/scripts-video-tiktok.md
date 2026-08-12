@@ -29,7 +29,7 @@ sortants dans le texte des publications.
 
 ## Le compte à ouvrir
 
-**Pas** un compte « Atelier Zéro ». Un compte **à ton nom**.
+**Pas** un compte « Capmedia Academy ». Un compte **à ton nom**.
 
 Bio type :
 ```
