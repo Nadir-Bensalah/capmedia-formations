@@ -296,6 +296,18 @@ Tu vends un produit numérique à des consommateurs français. Il te faut :
   moment du paiement (art. L221-28 13° du code de la consommation). Stripe permet
   d'ajouter une case à cocher personnalisée dans le Payment Link : **utilise-la.**
   Sans ça, ta garantie 30 jours devient une rétractation de 14 jours non maîtrisée.
+- **⚠️ La revue personnelle est une prestation de service, pas du contenu
+  numérique.** La renonciation ci-dessus ne la couvre pas : pour un service, le
+  délai de 14 jours court tant que la prestation n'est pas exécutée
+  (art. L221-25). Concrètement, un client peut demander sa revue puis se
+  rétracter. Deux lignes à écrire dans les CGV pour te protéger :
+  1. la revue s'exécute **à la demande expresse du client**, qui reconnaît perdre
+     son droit de rétractation une fois la revue livrée ;
+  2. elle porte sur **une application, un passage**, sous 7 jours ouvrés, dans la
+     limite des places du mois.
+- **Ne promets jamais l'acceptation par Apple.** « Je te dis ce qui va coincer »
+  est une obligation de moyens. « Ton app sera acceptée » serait une obligation
+  de résultat que tu ne peux pas tenir — et une pratique commerciale trompeuse.
 - **TVA** — si tu vends depuis la France à des particuliers de l'UE, le guichet
   unique OSS s'applique au-delà de 10 000 €/an de ventes transfrontalières
 - **RGPD** — une politique de confidentialité, la même que celle que tu enseignes

@@ -278,7 +278,7 @@ rejets d'Apple, les captures d'écran, l'ASO.
 Offres : Essentiel 97 € (barré 197) · Complet 197 € (barré 397).
 Garantie 30 jours. Paiement Stripe.
 
-─── LES 13 SECTIONS, DANS L'ORDRE ───
+─── LES 14 SECTIONS, DANS L'ORDRE ───
 
  1. Barre de navigation — 56px, logo « C Capmedia Academy » (carré noir
     rayon 4px + lettre), 4 liens, « Se connecter », bouton d'action.
@@ -330,11 +330,17 @@ Garantie 30 jours. Paiement Stripe.
 
 11. LE FORMATEUR — photo, nom, 3 paragraphes à la première personne.
 
-12. TARIFS — deux offres côte à côte, la seconde marquée « Le plus
+12. LA REVUE — section propre, offre Complet. « Avant d'appuyer sur
+    Envoyer, je teste ton app ». Deux colonnes : ce que je regarde / comment
+    ça se passe en 3 étapes numérotées. Se termine par un encadré attention
+    « ce que je ne peux pas promettre ». C'est la section qui installe le prix,
+    place-la juste avant les tarifs.
+
+13. TARIFS — deux offres côte à côte, la seconde marquée « Le plus
     pris ». Prix en très gros, ancien prix barré à côté. Liste de
     contenus. Puis le bloc de garantie 30 jours.
 
-13. FAQ (10 questions, accordéon) → appel final → pied de page.
+14. FAQ (11 questions, accordéon) → appel final → pied de page.
 
 ─── EXIGENCES ───
 
