@@ -299,3 +299,152 @@
   text-underline-offset: 2px;
 }
 .lien-nu:hover { color: var(--texte); }
+
+/* --- Déblocage progressif ------------------------------------------------ */
+/* Bloqué par la progression : grisé, mais visible — le parcours se lit. */
+.lien-module.est-bloque {
+  color: var(--texte-3);
+  cursor: pointer;                 /* cliquable : on explique pourquoi c'est fermé */
+}
+.lien-module.est-bloque .num { color: var(--texte-3); }
+.lien-module.est-bloque:hover { background: transparent; color: var(--texte-3); }
+
+/* Le « plouf » : une ligne qui vient de se débloquer */
+@keyframes plouf {
+  0%   { transform: scale(0.94); background: var(--voile-vert); opacity: 0.4; }
+  55%  { transform: scale(1.03); background: var(--voile-vert); opacity: 1; }
+  100% { transform: none; background: transparent; }
+}
+.lien-module.plouf { animation: plouf 550ms cubic-bezier(.2, .8, .2, 1); }
+
+/* Le refus : clic sur un module encore fermé */
+@keyframes refus {
+  0%, 100% { transform: none; }
+  25% { transform: translateX(-3px); }
+  75% { transform: translateX(3px); }
+}
+.lien-module.refus { animation: refus 220ms ease-in-out; }
+
+/* Pagination vers un module encore fermé */
+.pagination-verrou {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: var(--e-3) var(--e-4);
+  border: 1px dashed var(--trait-fort);
+  border-radius: var(--r-3);
+  color: var(--texte-3);
+}
+.pagination-verrou .sens  { font-size: 12px; line-height: 1.4; }
+.pagination-verrou .titre { font-size: 14px; line-height: 1.4; font-weight: 600; color: var(--texte-2); }
+.pagination-verrou.droite { text-align: right; }
+
+/* --- Carte prompt (mode avec IA) ------------------------------------------ */
+.prompt {
+  background: var(--voile-bleu);
+  border-radius: var(--r-2);
+  margin-block: var(--e-3);
+  overflow: hidden;
+}
+.prompt > summary {
+  display: flex; align-items: center; gap: var(--e-2);
+  padding: var(--e-3) var(--e-4);
+  cursor: pointer;
+  list-style: none;
+  font-size: 14px;
+  font-weight: 600;
+  transition: background var(--t-survol);
+}
+.prompt > summary::-webkit-details-marker { display: none; }
+.prompt > summary::marker { content: ""; }
+.prompt > summary:hover { background: var(--survol); }
+.prompt > summary:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--anneau); }
+.prompt .prompt-ico { flex: none; color: var(--action); }
+.prompt .prompt-titre { flex: 1; min-width: 0; }
+.prompt .prompt-indice {
+  flex: none;
+  font-weight: 500; font-size: 11px;
+  color: var(--texte-3);
+}
+.prompt[open] .prompt-indice { visibility: hidden; }
+.prompt .prompt-corps { padding: 0 var(--e-2) var(--e-2); animation: deplie-prompt 200ms cubic-bezier(.2,.8,.2,1); }
+@keyframes deplie-prompt { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.prompt pre { margin: 0; background: var(--bg); }
+.prompt .bloc-code { margin: 0; }
+.prompt .copier { opacity: 1; }             /* toujours visible dans un prompt */
+
+/* Animation du bouton Copier au moment de la copie */
+.copier { transition: opacity var(--t-apparition), color var(--t-survol),
+                      background var(--t-apparition), transform var(--t-apparition); }
+.copier[data-copie] {
+  background: var(--voile-vert);
+  color: var(--texte);
+  border-color: transparent;
+  transform: scale(1.06);
+}
+
+/* Trace discrète d'un prompt masqué (mode sans IA) */
+.prompt-alt {
+  font-size: 12px;
+  color: var(--texte-3);
+  border-left: 2px solid var(--trait);
+  padding-left: var(--e-3);
+}
+
+/* --- Questionnaire et réglages -------------------------------------------- */
+.surcouche {
+  position: fixed; inset: 0; z-index: 150;
+  display: grid; place-items: center;
+  background: rgba(15, 15, 15, 0.4);
+  padding: var(--marge-mobile);
+  animation: fondu-surcouche 160ms ease-out;
+}
+@keyframes fondu-surcouche { from { opacity: 0; } }
+.panneau {
+  background: var(--bg);
+  border-radius: var(--r-3);
+  box-shadow: var(--ombre-flottant);
+  width: 100%; max-width: 460px;
+  max-height: 88dvh;
+  overflow-y: auto;
+  padding: var(--e-6);
+}
+
+/* Choix segmenté du profil */
+.seg { display: flex; flex-wrap: wrap; gap: var(--e-2); }
+.seg button {
+  border: 1px solid var(--trait-fort);
+  border-radius: var(--r-2);
+  background: transparent;
+  color: var(--texte-2);
+  font-size: 13px; font-weight: 500; line-height: 1.4;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background var(--t-survol), color var(--t-survol), border-color var(--t-survol);
+}
+.seg button:hover { background: var(--survol); color: var(--texte); }
+.seg button:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--anneau); }
+.seg button[aria-pressed="true"] {
+  background: var(--action);
+  border-color: var(--action);
+  color: #fff;
+}
+
+/* --- Toast ----------------------------------------------------------------- */
+.toast {
+  position: fixed;
+  bottom: calc(var(--e-5) + env(safe-area-inset-bottom));
+  left: 50%;
+  z-index: 200;
+  transform: translateX(-50%) translateY(8px);
+  opacity: 0;
+  background: var(--texte);
+  color: var(--bg);
+  font-size: 13px; font-weight: 500; line-height: 1.4;
+  padding: 10px 16px;
+  border-radius: var(--r-2);
+  box-shadow: var(--ombre-flottant);
+  max-width: min(420px, calc(100vw - 48px));
+  text-align: center;
+  pointer-events: none;
+  transition: opacity var(--t-apparition), transform var(--t-apparition);
+}
+.toast.visible { opacity: 1; transform: translateX(-50%); }
