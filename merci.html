@@ -5,125 +5,133 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Bienvenue — Atelier Zéro</title>
 <meta name="robots" content="noindex, nofollow">
-<meta name="theme-color" content="#FBFAF8">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#191919" media="(prefers-color-scheme: dark)">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:wght@400;500;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="./assets/css/atelier.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%2314130F'/><text y='72' x='50' text-anchor='middle' font-size='62' font-family='Georgia,serif' fill='%23FBFAF8'>Z</text></svg>">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="./assets/css/tokens.css">
+<link rel="stylesheet" href="./assets/css/az.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='%2337352F'/><text y='71' x='50' text-anchor='middle' font-size='60' font-weight='700' font-family='Inter,Helvetica,sans-serif' fill='%23fff'>Z</text></svg>">
+<script>
+  (function () {
+    try {
+      var t = localStorage.getItem('az:theme');
+      if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+    } catch (e) {}
+  })();
+</script>
 <style>
-  body { display: grid; place-items: center; min-height: 100dvh; padding: 32px 24px; }
-  .boite { width: 100%; max-width: 560px; }
+  body { display: grid; place-items: center; min-height: 100dvh; padding: var(--e-7) var(--marge-mobile); }
+  .boite { width: 100%; max-width: 520px; }
+
   .sceau {
-    width: 72px; height: 72px;
-    border-radius: 50%;
-    background: var(--vert-voile);
-    border: 1px solid #CFE4D8;
+    width: 40px; height: 40px;
+    border-radius: var(--r-rond);
+    background: var(--voile-vert);
     display: grid; place-items: center;
-    margin-inline: auto;
-    animation: pop .5s cubic-bezier(.2,1.3,.4,1) both;
+    animation: pop 200ms cubic-bezier(.2, .8, .2, 1) both;
   }
-  .sceau svg { animation: trace .5s .25s cubic-bezier(.2,.8,.2,1) both; }
-  @keyframes pop   { from { transform: scale(.6); opacity: 0; } }
+  .sceau path { animation: trace 200ms 120ms cubic-bezier(.2, .8, .2, 1) both; }
+  @keyframes pop   { from { transform: scale(.8); opacity: 0; } }
   @keyframes trace { from { stroke-dasharray: 24; stroke-dashoffset: 24; } to { stroke-dasharray: 24; stroke-dashoffset: 0; } }
+
   .etape {
-    display: flex; gap: 16px; align-items: flex-start;
-    padding: 18px 0;
+    display: flex; gap: var(--e-3); align-items: flex-start;
+    padding-block: var(--e-4);
     border-bottom: 1px solid var(--trait);
   }
-  .etape:last-child { border-bottom: 0; }
-  @media (prefers-reduced-motion: reduce) { .sceau, .sceau svg { animation: none; } }
+  .etape:last-child { border-bottom: 0; padding-bottom: 0; }
+  .etape .num {
+    flex: none; width: 20px;
+    font-family: var(--police-mono);
+    font-weight: 500; font-size: 12px; line-height: 1.65;
+    color: var(--texte-3);
+  }
 </style>
 </head>
 <body>
 
-<main class="boite pile pile-32">
+<main class="boite pile g-6">
 
-  <div class="pile pile-24 t-centre">
+  <div class="pile g-4">
     <div class="sceau">
-      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--vert)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--valide)"
+           stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M5 13l4 4L19 7"/>
       </svg>
     </div>
-    <div class="pile pile-12">
-      <h1 class="t-h1" style="font-size:clamp(1.9rem,4.5vw,2.7rem)">Paiement confirmé.<br>Bienvenue à l'Atelier.</h1>
-      <p class="t-lead" style="font-size:1.05rem">
-        Ton reçu part par e-mail dans quelques secondes.
-        Voici comment entrer dans ta formation.
+    <div class="pile g-3">
+      <h1 class="t-h1" style="font-size:clamp(28px,5vw,40px)">Paiement confirmé.<br>Bienvenue à l'Atelier.</h1>
+      <p class="t-lead" style="font-size:17px">
+        Ton reçu part par e-mail dans quelques secondes. Voici comment entrer
+        dans ta formation.
       </p>
     </div>
   </div>
 
-  <div class="carte" style="background:var(--papier-pur)">
+  <div class="carte-creuse">
     <div class="pile">
-
       <div class="etape">
-        <span class="jeton-num">1</span>
-        <div class="pile pile-4">
-          <h2 class="t-h3">Clique sur le bouton ci-dessous</h2>
-          <p class="t-petit t-douce">Il t'emmène sur la page de connexion de l'espace membre.</p>
+        <span class="num">01</span>
+        <div class="pile g-1">
+          <p class="t-h3">Clique sur le bouton ci-dessous</p>
+          <p class="t-petit t-2">Il t'emmène sur la page de connexion de l'espace membre.</p>
         </div>
       </div>
-
       <div class="etape">
-        <span class="jeton-num">2</span>
-        <div class="pile pile-4">
-          <h2 class="t-h3">Saisis l'e-mail utilisé pour le paiement</h2>
-          <p class="t-petit t-douce">
-            <b>Exactement le même</b> — c'est lui qui ouvre ton accès.
+        <span class="num">02</span>
+        <div class="pile g-1">
+          <p class="t-h3">Saisis l'e-mail utilisé pour le paiement</p>
+          <p class="t-petit t-2">
+            <strong>Exactement le même</strong> — c'est lui qui ouvre ton accès.
             Aucun mot de passe à créer ni à retenir.
           </p>
         </div>
       </div>
-
       <div class="etape">
-        <span class="jeton-num">3</span>
-        <div class="pile pile-4">
-          <h2 class="t-h3">Ouvre le lien reçu par e-mail</h2>
-          <p class="t-petit t-douce">
+        <span class="num">03</span>
+        <div class="pile g-1">
+          <p class="t-h3">Ouvre le lien reçu par e-mail</p>
+          <p class="t-petit t-2">
             Et tu es dedans. Regarde dans tes indésirables si tu ne le vois pas
             arriver dans la minute.
           </p>
         </div>
       </div>
-
     </div>
   </div>
 
-  <div class="pile pile-12">
-    <a href="./acces.html" class="btn btn--principal btn--bloc btn--large">
-      Ouvrir ma formation
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-    </a>
-    <p class="t-micro t-tenue t-centre">
-      Mets cette page en favori&nbsp;: <code>acces.html</code> est ta porte d'entrée permanente.
+  <div class="pile g-3">
+    <a href="./acces.html" class="btn btn-principal btn-large btn-bloc">Ouvrir ma formation</a>
+    <p class="t-micro t-3 t-centre">
+      Mets cette page en favori : <code>acces.html</code> est ta porte d'entrée permanente.
     </p>
   </div>
 
-  <hr class="filet">
-
-  <div class="carte carte--accent">
-    <div class="pile pile-8">
-      <h2 class="t-h3">Un conseil avant de commencer</h2>
-      <p class="t-petit t-douce">
-        Ne lis pas les 12 modules d'affilée. Ouvre le module 0, prends une feuille,
-        et écris en une phrase l'application que <em>toi</em> tu veux publier.
-        Tu construiras <b>Rituel</b> avec moi, mais garde ton idée sous les yeux —
-        au module 11, c'est elle que tu lanceras.
-      </p>
+  <div class="encadre encadre--astuce">
+    <span class="marqueur" aria-hidden="true">💡</span>
+    <div>
+      <p><strong>Un conseil avant de commencer.</strong></p>
+      <p>Ne lis pas les 12 modules d'affilée. Ouvre le module 0, prends une
+      feuille, et écris en une phrase l'application que <em>toi</em> tu veux
+      publier. Tu construiras <strong>Rituel</strong> avec moi, mais garde ton
+      idée sous les yeux — au module 11, c'est elle que tu lanceras.</p>
     </div>
   </div>
 
-  <div class="pile pile-8 t-centre">
-    <p class="t-micro t-tenue">
-      Un souci d'accès&nbsp;? <a href="mailto:contact@atelier-zero.fr" style="text-decoration:underline">contact@atelier-zero.fr</a> — je réponds dans la journée.
+  <div class="pile g-2">
+    <p class="t-micro t-3">
+      Un souci d'accès&nbsp;? <a href="mailto:contact@atelier-zero.fr">contact@atelier-zero.fr</a>
+      — je réponds dans la journée.
     </p>
-    <p class="t-micro t-tenue">
-      Garantie 30 jours&nbsp;: un e-mail suffit, remboursement intégral, sans justification.
+    <p class="t-micro t-3">
+      Garantie 30 jours : un e-mail suffit, remboursement intégral, sans justification.
     </p>
   </div>
 
 </main>
 
+<script src="./assets/js/theme.js"></script>
 </body>
 </html>

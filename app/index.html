@@ -5,31 +5,44 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Ma formation — Atelier Zéro</title>
 <meta name="robots" content="noindex, nofollow">
-<meta name="theme-color" content="#FBFAF8">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#191919" media="(prefers-color-scheme: dark)">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/css/atelier.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="../assets/css/tokens.css">
+<link rel="stylesheet" href="../assets/css/az.css">
 <link rel="stylesheet" href="../assets/css/lecture.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%2314130F'/><text y='72' x='50' text-anchor='middle' font-size='62' font-family='Georgia,serif' fill='%23FBFAF8'>Z</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='%2337352F'/><text y='71' x='50' text-anchor='middle' font-size='60' font-weight='700' font-family='Inter,Helvetica,sans-serif' fill='%23fff'>Z</text></svg>">
+<script>
+  (function () {
+    try {
+      var t = localStorage.getItem('az:theme');
+      if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+    } catch (e) {}
+  })();
+</script>
 </head>
-<body class="corps-app">
+<body>
 
 <!-- ── Écran d'attente ─────────────────────────────────────────────────── -->
 <div class="voile" id="voile">
-  <div class="pile pile-16 t-centre">
-    <svg class="tourne" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--encre-tenue)" stroke-width="2.4" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 9 9"/></svg>
-    <p class="t-petit t-douce" id="voile-texte">Vérification de ton accès…</p>
+  <div class="rang" style="justify-content:center">
+    <svg class="tourne" width="18" height="18" viewBox="0 0 24 24" fill="none"
+         stroke="var(--texte-3)" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
+      <path d="M12 3a9 9 0 1 0 9 9"/>
+    </svg>
+    <span class="t-petit t-2" id="voile-texte">Vérification de ton accès…</span>
   </div>
 </div>
 
 <!-- ── Barre mobile ────────────────────────────────────────────────────── -->
 <div class="barre-app">
   <button class="bouton-icone" id="ouvrir-menu" aria-label="Ouvrir le sommaire">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
   </button>
-  <span class="logo" style="font-size:.9rem"><span class="marque" style="width:22px;height:22px;font-size:.85rem">Z</span> Atelier&nbsp;Zéro</span>
-  <span style="width:38px"></span>
+  <span class="logo" style="font-size:14px"><span class="marque" style="width:20px;height:20px;font-size:12px">Z</span>Atelier&nbsp;Zéro</span>
 </div>
 
 <div class="agencement">
@@ -37,26 +50,32 @@
   <!-- ── Sommaire ──────────────────────────────────────────────────────── -->
   <aside class="sommaire" id="sommaire">
     <div class="sommaire-haut">
-      <a href="../index.html" class="logo"><span class="marque">Z</span> Atelier&nbsp;Zéro</a>
-      <button class="bouton-icone masque-bureau" id="fermer-menu" aria-label="Fermer le sommaire">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      <a href="../index.html" class="logo"><span class="marque">Z</span>Atelier&nbsp;Zéro</a>
+      <button class="bouton-icone mobile-seul" id="fermer-menu" aria-label="Fermer le sommaire">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
       </button>
     </div>
 
-    <div class="progression">
-      <div class="rang rang--espace">
-        <span class="t-micro" style="font-weight:600">Ta progression</span>
-        <span class="t-micro t-tenue" id="progression-texte">0 / 12</span>
+    <div class="sommaire-progression">
+      <div class="rang-espace">
+        <span class="t-micro t-2">Ta progression</span>
+        <span class="t-micro t-3 t-nb" id="progression-texte">0/0</span>
       </div>
-      <div class="jauge"><div class="jauge-remplie" id="jauge"></div></div>
+      <div class="jauge"><span id="jauge"></span></div>
     </div>
 
-    <nav class="liens-modules" id="liens-modules"></nav>
+    <nav class="liens-modules" id="liens-modules" aria-label="Modules de la formation"></nav>
 
     <div class="sommaire-bas">
-      <div class="pile pile-8">
-        <span class="t-micro t-tenue" id="email-membre"></span>
-        <button class="lien-nu t-micro" id="deconnexion">Se déconnecter</button>
+      <span class="t-micro t-3" id="email-membre"></span>
+      <div class="rang-espace">
+        <button class="lien-nu" id="deconnexion">Se déconnecter</button>
+        <div class="selecteur-theme" role="group" aria-label="Thème" style="padding:2px">
+          <button type="button" data-theme-val="light" aria-pressed="false" style="padding:2px 6px;font-size:11px">Clair</button>
+          <button type="button" data-theme-val="dark" aria-pressed="false" style="padding:2px 6px;font-size:11px">Sombre</button>
+          <button type="button" data-theme-val="auto" aria-pressed="true" style="padding:2px 6px;font-size:11px">Auto</button>
+        </div>
       </div>
     </div>
   </aside>
@@ -67,19 +86,18 @@
   <main class="lecture" id="lecture">
     <article class="page" id="page"></article>
 
-    <nav class="pagination" id="pagination"></nav>
+    <nav class="pagination" id="pagination" aria-label="Module précédent et suivant"></nav>
 
     <footer class="pied-lecture">
-      <p class="t-micro t-tenue">
-        Formation Atelier Zéro · usage strictement personnel ·
-        <a href="mailto:contact@atelier-zero.fr">une question&nbsp;?</a>
-      </p>
+      Formation Atelier Zéro · usage strictement personnel ·
+      <a href="mailto:contact@atelier-zero.fr">une question&nbsp;?</a>
     </footer>
   </main>
 
 </div>
 
 <script src="../assets/js/config.js"></script>
+<script src="../assets/js/theme.js"></script>
 <script type="module" src="../assets/js/app.js"></script>
 </body>
 </html>

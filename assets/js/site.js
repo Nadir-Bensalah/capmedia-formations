@@ -1,61 +1,54 @@
 /* ==========================================================================
    ATELIER ZÉRO — Comportements de la page de vente
-   Pas de dépendance, pas de framework. ~4 ko.
+   Pas de dépendance, pas de framework.
    ========================================================================== */
 (function () {
   'use strict';
 
   var cfg = window.AZ || {};
 
-  /* --- 1. Compte à rebours du tarif de lancement ------------------------ */
-  var elCompte = document.getElementById('compte');
-  if (elCompte && cfg.offre && cfg.offre.finLancement) {
+  /* --- 1. Tarif de lancement : une ligne de texte, pas un bandeau -------- */
+  var elLancement = document.getElementById('lancement');
+  if (elLancement && cfg.offre && cfg.offre.finLancement) {
     var fin = new Date(cfg.offre.finLancement).getTime();
 
-    var tic = function () {
+    var majLancement = function () {
       var reste = fin - Date.now();
 
       if (reste <= 0) {
-        var bandeau = document.getElementById('bandeau');
-        if (bandeau) {
-          bandeau.innerHTML = '<span>Dernières heures avant le retour au tarif plein.</span>';
-        }
+        elLancement.textContent = 'dernières heures au tarif de lancement';
         clearInterval(minuteur);
         return;
       }
 
-      var s = Math.floor(reste / 1000);
-      var j = Math.floor(s / 86400);
-      var h = Math.floor((s % 86400) / 3600);
-      var m = Math.floor((s % 3600) / 60);
-      var sec = s % 60;
+      var jours = Math.floor(reste / 86400000);
+      var heures = Math.floor((reste % 86400000) / 3600000);
 
-      elCompte.textContent = j + 'j ' + pad(h) + 'h ' + pad(m) + 'm ' + pad(sec) + 's';
+      elLancement.textContent = jours > 0
+        ? 'tarif de lancement — encore ' + jours + (jours > 1 ? ' jours' : ' jour')
+        : 'tarif de lancement — encore ' + heures + ' h';
     };
 
-    var pad = function (n) { return n < 10 ? '0' + n : '' + n; };
-    tic();
-    var minuteur = setInterval(tic, 1000);
+    majLancement();
+    var minuteur = setInterval(majLancement, 60000);
   }
 
-  /* --- 2. En-tête qui se décolle ---------------------------------------- */
+  /* --- 2. En-tête : trait 1px seulement après défilement ----------------- */
   var entete = document.getElementById('entete');
   if (entete) {
-    var majEntete = function () {
-      entete.classList.toggle('decolle', window.scrollY > 8);
-    };
+    var majEntete = function () { entete.classList.toggle('decolle', window.scrollY > 8); };
     majEntete();
     window.addEventListener('scroll', majEntete, { passive: true });
   }
 
-  /* --- 3. Barre collante mobile : apparaît après le héros --------------- */
+  /* --- 3. Barre collante mobile ----------------------------------------- */
   var barre = document.getElementById('barre-collante');
   var tarifs = document.getElementById('tarifs');
   if (barre && tarifs) {
     var majBarre = function () {
-      var apresHeros = window.scrollY > window.innerHeight * 0.85;
-      var rect = tarifs.getBoundingClientRect();
-      var surTarifs = rect.top < window.innerHeight && rect.bottom > 0;
+      var apresHeros = window.scrollY > window.innerHeight * 0.8;
+      var r = tarifs.getBoundingClientRect();
+      var surTarifs = r.top < window.innerHeight && r.bottom > 0;
       barre.classList.toggle('visible', apresHeros && !surTarifs);
     };
     majBarre();
@@ -69,24 +62,21 @@
     if (!('IntersectionObserver' in window)) {
       cibles.forEach(function (el) { el.classList.add('vu'); });
     } else {
-      var observateur = new IntersectionObserver(function (entrees) {
+      var obs = new IntersectionObserver(function (entrees) {
         entrees.forEach(function (e) {
-          if (e.isIntersecting) {
-            e.target.classList.add('vu');
-            observateur.unobserve(e.target);
-          }
+          if (!e.isIntersecting) return;
+          e.target.classList.add('vu');
+          obs.unobserve(e.target);
         });
-      }, { rootMargin: '0px 0px -8% 0px', threshold: 0.06 });
-
-      cibles.forEach(function (el) { observateur.observe(el); });
+      }, { rootMargin: '0px 0px -6% 0px', threshold: 0.05 });
+      cibles.forEach(function (el) { obs.observe(el); });
     }
   }
 
   /* --- 5. Boutons Stripe ------------------------------------------------ */
   var liens = cfg.stripe || {};
   document.querySelectorAll('[data-stripe]').forEach(function (btn) {
-    var offre = btn.getAttribute('data-stripe');
-    var url = liens[offre];
+    var url = liens[btn.getAttribute('data-stripe')];
 
     if (url) {
       btn.setAttribute('href', url);
@@ -102,28 +92,22 @@
     });
   });
 
-  /* --- 6. Un seul module ouvert à la fois (accordéon) ------------------- */
-  document.querySelectorAll('#programme details.module').forEach(function (d) {
-    d.addEventListener('toggle', function () {
-      if (!d.open) return;
-      d.parentElement.querySelectorAll('details.module').forEach(function (autre) {
-        if (autre !== d) autre.open = false;
+  /* --- 6. Accordéons : un seul ouvert par liste ------------------------- */
+  ['liste-programme', 'liste-faq'].forEach(function (id) {
+    var liste = document.getElementById(id);
+    if (!liste) return;
+
+    liste.querySelectorAll('details.acc').forEach(function (d) {
+      d.addEventListener('toggle', function () {
+        if (!d.open) return;
+        liste.querySelectorAll('details.acc').forEach(function (autre) {
+          if (autre !== d) autre.open = false;
+        });
       });
     });
   });
 
-  /* --- 7. Petite animation du téléphone du héros ------------------------ */
-  var puce = document.getElementById('puce-cible');
-  if (puce && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    var coche = false;
-    setInterval(function () {
-      coche = !coche;
-      puce.style.background = coche ? 'var(--vert)' : 'transparent';
-      puce.style.borderColor = coche ? 'var(--vert)' : 'var(--trait-fort)';
-    }, 2400);
-  }
-
-  /* --- 8. Défilement doux avec compensation de l'en-tête ---------------- */
+  /* --- 7. Défilement doux, en compensant l'en-tête ---------------------- */
   document.querySelectorAll('a[href^="#"]').forEach(function (a) {
     a.addEventListener('click', function (e) {
       var id = a.getAttribute('href');
@@ -131,8 +115,10 @@
       var cible = document.querySelector(id);
       if (!cible) return;
       e.preventDefault();
-      var haut = cible.getBoundingClientRect().top + window.scrollY - 76;
-      window.scrollTo({ top: haut, behavior: 'smooth' });
+      window.scrollTo({
+        top: cible.getBoundingClientRect().top + window.scrollY - 72,
+        behavior: 'smooth',
+      });
     });
   });
 

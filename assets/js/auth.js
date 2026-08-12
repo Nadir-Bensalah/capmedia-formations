@@ -29,21 +29,23 @@ const formulaire  = $('formulaire');
 const champEmail  = $('email');
 const bouton      = $('envoyer');
 const msgOk       = $('msg-ok');
+const msgOkCorps  = $('msg-ok-corps');
 const msgErr      = $('msg-err');
+const msgErrCorps = $('msg-err-corps');
 const chargement  = $('chargement');
 const titre       = $('titre');
 const sousTitre   = $('sous-titre');
 
 /* --- Affichage ----------------------------------------------------------- */
 function afficherOk(html) {
-  msgErr.classList.remove('visible');
-  msgOk.innerHTML = html;
-  msgOk.classList.add('visible');
+  msgErr.classList.add('masque');
+  msgOkCorps.innerHTML = html;
+  msgOk.classList.remove('masque');
 }
 function afficherErreur(html) {
-  msgOk.classList.remove('visible');
-  msgErr.innerHTML = html;
-  msgErr.classList.add('visible');
+  msgOk.classList.add('masque');
+  msgErrCorps.innerHTML = html;
+  msgErr.classList.remove('masque');
 }
 function masquerFormulaire() {
   formulaire.classList.add('masque');
