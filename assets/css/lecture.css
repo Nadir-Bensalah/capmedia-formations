@@ -647,3 +647,160 @@
     font-size: 16px;
   }
 }
+
+/* ==========================================================================
+   Passe premium : matière, rythme, micro-détails.
+   Toujours dans la retenue Notion : rien qui brille, tout qui respire.
+   ========================================================================== */
+
+/* --- Barres de défilement fines, partout ---------------------------------- */
+* { scrollbar-width: thin; scrollbar-color: var(--trait-fort) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--trait-fort);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background-color: var(--texte-3); background-clip: content-box; }
+
+/* --- Barre de progression de lecture, un cheveu sous le bord --------------- */
+.barre-lecture {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  z-index: 90;
+  pointer-events: none;
+}
+.barre-lecture span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--action);
+  transition: width 80ms linear;
+}
+
+/* --- Entrée du contenu : un souffle, pas un effet ---------------------------- */
+.page-entree .corps, .page-entree .chapeau {
+  animation: entree-page 260ms cubic-bezier(.2, .8, .2, 1) both;
+}
+.page-entree .corps { animation-delay: 40ms; }
+@keyframes entree-page {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* --- Chapeau : la ligne de métadonnées ---------------------------------------- */
+.chapeau .etiquette-mono .sep { color: var(--trait-fort); padding-inline: 2px; }
+.chapeau h1 { margin-top: 2px; }
+
+/* --- La colonne : détails de lecture ------------------------------------------ */
+.corps ::selection { background: var(--anneau); }
+.corps a { text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.corps table tbody tr { transition: background var(--t-survol); }
+.corps table tbody tr:hover { background: var(--survol); }
+.corps blockquote {
+  border-left: 2px solid var(--action);
+  background: var(--bg-2);
+  border-radius: 0 var(--r-2) var(--r-2) 0;
+  padding: var(--e-3) var(--e-4);
+  font-style: normal;
+  color: var(--texte-2);
+}
+.corps kbd {
+  color: var(--texte);
+  background: var(--bg);
+  border: 1px solid var(--trait-fort);
+  border-bottom-width: 2px;
+  border-radius: var(--r-1);
+  padding: 1px 6px;
+  font-size: 0.82em;
+}
+
+/* Les titres portent un fil discret qui structure la page au défilement */
+.corps h2 {
+  padding-bottom: var(--e-2);
+  border-bottom: 1px solid var(--trait);
+}
+
+/* --- Encadrés : le marqueur dans une pastille teintée -------------------------- */
+.encadre { border-radius: var(--r-3); padding: var(--e-4) var(--e-4) var(--e-4) var(--e-3); }
+.encadre .marqueur {
+  width: 26px; height: 26px;
+  border-radius: var(--r-2);
+  background: rgba(255, 255, 255, 0.55);
+}
+[data-theme="dark"] .encadre .marqueur { background: rgba(0, 0, 0, 0.22); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .encadre .marqueur { background: rgba(0, 0, 0, 0.22); }
+}
+
+/* --- Cartes prompt : l'icône dans sa pastille, le corps qui respire ------------ */
+.prompt { border-radius: var(--r-3); }
+.prompt > summary { padding: var(--e-3) var(--e-4); gap: var(--e-3); }
+.prompt .prompt-ico {
+  display: grid; place-items: center;
+  width: 26px; height: 26px;
+  border-radius: var(--r-2);
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--action);
+}
+[data-theme="dark"] .prompt .prompt-ico { background: rgba(0, 0, 0, 0.25); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .prompt .prompt-ico { background: rgba(0, 0, 0, 0.25); }
+}
+
+/* --- Le sommaire : plus de tenue ------------------------------------------------ */
+.liens-modules .groupe {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  padding-top: var(--e-5);
+}
+.lien-module { min-height: 30px; }
+.lien-module .num { display: inline-flex; justify-content: center; }
+.lien-module[aria-current="true"] {
+  box-shadow: inset 2px 0 0 var(--action);
+  border-radius: 0 var(--r-1) var(--r-1) 0;
+}
+.sommaire-bas #email-membre {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  display: block; max-width: 100%;
+}
+
+/* --- Pagination : des cartes qui invitent ---------------------------------------- */
+.pagination a .sens::before, .pagination a.droite .sens::after {
+  content: "→";
+  display: inline-block;
+  transition: transform var(--t-apparition);
+}
+.pagination a .sens::before { content: "←"; margin-right: 5px; }
+.pagination a.droite .sens::before { content: none; }
+.pagination a.droite .sens::after { margin-left: 5px; }
+.pagination a:hover .sens::before { transform: translateX(-2px); }
+.pagination a.droite:hover .sens::after { transform: translateX(2px); }
+
+/* --- Le bloc de fin de module ------------------------------------------------------ */
+.bloc-fini {
+  border: 1px solid var(--trait);
+  background: var(--bg);
+  box-shadow: 0 1px 2px rgba(15, 15, 15, 0.03);
+}
+.bloc-fini .btn { display: inline-flex; align-items: center; gap: 7px; }
+
+/* --- Boutons : la fermeté du clic ---------------------------------------------------- */
+.btn:active { transform: translateY(0.5px); }
+.btn-principal { box-shadow: 0 1px 2px rgba(15, 15, 15, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.08); }
+
+/* --- Squelette : un balayage plutôt qu'un clignotement -------------------------------- */
+.squelette span {
+  animation: none;
+  background: linear-gradient(90deg, var(--bg-3) 25%, var(--bg-2) 45%, var(--bg-3) 65%);
+  background-size: 200% 100%;
+  animation: balayage 1.2s ease-in-out infinite;
+}
+@keyframes balayage { from { background-position: 180% 0; } to { background-position: -20% 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .page-entree .corps, .page-entree .chapeau, .squelette span { animation: none; }
+}

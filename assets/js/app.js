@@ -482,12 +482,14 @@ async function aller(id, remplacer = false) {
   else history.pushState(null, '', url);
 
   const page = $('page');
+  const position = lecons.filter((x) => x.offre !== 'complet').length;
   const chapeau =
     `<header class="chapeau">
-       <p class="etiquette-mono">Module ${String(l.ordre).padStart(2, '0')}</p>
+       <p class="etiquette-mono">Module ${String(l.ordre).padStart(2, '0')}${
+         l.offre !== 'complet' ? ` <span class="sep">/</span> ${String(position).padStart(2, '0')}` : ''
+       }${l.duree ? ` <span class="sep">·</span> ${echapper(l.duree)} de lecture` : ''}</p>
        <h1>${echapper(l.titre)}</h1>
        ${l.resume ? `<p class="resume">${echapper(l.resume)}</p>` : ''}
-       ${l.duree ? `<p class="duree">Environ ${echapper(l.duree)} de lecture</p>` : ''}
      </header>
      <hr class="chapeau-filet">`;
 
@@ -510,6 +512,9 @@ async function aller(id, remplacer = false) {
     if (courante !== id) return;
 
     page.innerHTML = chapeau + '<div class="corps">' + versHtml(markdown, tagsProfil()) + '</div>';
+    page.classList.remove('page-entree');
+    void page.offsetWidth;                 // relance l'animation d'entrée
+    page.classList.add('page-entree');
     ajouterBoutonsCopier(page);
     ajouterBoutonFini(l);
   } catch (err) {
@@ -558,7 +563,7 @@ function ajouterBoutonFini(l) {
           : 'Coche-le : le module suivant se débloque.'}</span>
      </div>
      <button type="button" class="btn ${dejaFait ? 'btn-secondaire' : 'btn-principal'}" id="btn-fini">
-       ${dejaFait ? 'Décocher' : 'Marquer comme terminé'}
+       ${dejaFait ? 'Décocher' : ico('coche', 13) + ' Marquer comme terminé'}
      </button>`;
 
   $('page').appendChild(zone);
@@ -596,8 +601,8 @@ function construirePagination(l) {
   };
 
   $('pagination').innerHTML =
-    carte(prec, '← Précédent', false) +
-    carte(suiv, 'Suivant →', true);
+    carte(prec, 'Précédent', false) +
+    carte(suiv, 'Suivant', true);
 
   $('pagination').querySelectorAll('[data-aller]').forEach((a) => {
     a.addEventListener('click', (e) => { e.preventDefault(); aller(a.dataset.aller); });
@@ -839,7 +844,6 @@ function afficherAvis() {
       b.setAttribute('role', 'radio');
       b.setAttribute('aria-checked', String(i === note));
       b.setAttribute('aria-label', i + ' sur 5');
-      b.innerHTML = etoiles(0, 0);           // pas utilisé, on met la vraie icône :
       b.innerHTML = `<svg class="ico" width="22" height="22" viewBox="0 0 24 24" fill="${i <= note ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26"/></svg>`;
       b.addEventListener('click', () => { note = i; peindre(); });
       zone.appendChild(b);
@@ -880,6 +884,7 @@ function afficherAvis() {
 }
 
 $('ouvrir-support').addEventListener('click', afficherSupport);
+$('ouvrir-profil').addEventListener('click', afficherReglages);
 
 /* ==========================================================================
    8. Protection du contenu
@@ -948,6 +953,23 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowLeft'  && dispo[i - 1]) aller(dispo[i - 1].id);
   if (e.key === 'Escape') fermerMenu();
 });
+
+/* --- Barre de progression de lecture --------------------------------------- */
+(function () {
+  const barre = document.createElement('div');
+  barre.className = 'barre-lecture';
+  barre.innerHTML = '<span></span>';
+  document.body.appendChild(barre);
+  const arc = barre.firstChild;
+  const maj = () => {
+    const h = document.documentElement;
+    const total = h.scrollHeight - h.clientHeight;
+    arc.style.width = total > 0 ? Math.min(100, (h.scrollTop / total) * 100) + '%' : '0%';
+  };
+  maj();
+  window.addEventListener('scroll', maj, { passive: true });
+  window.addEventListener('resize', maj);
+})();
 
 /* --- Toast ---------------------------------------------------------------- */
 let toastMinuteur;
