@@ -1,8 +1,8 @@
-# Prompt Claude Design — Charte + mockups Capmedia Academy
+# Prompt Claude Design : Charte + mockups Capmedia Academy
 
 **Mode d'emploi.** Cinq passes, dans l'ordre. La passe 0 produit la charte et
 le fichier `tokens.css`. Les passes suivantes **recollent le bloc TOKENS** en
-tête de prompt — c'est ce qui garantit la cohérence entre des générations
+tête de prompt : c'est ce qui garantit la cohérence entre des générations
 faites à des moments différents.
 
 Ne lance pas les 5 d'un coup. Valide la passe 0 avant tout le reste.
@@ -10,7 +10,7 @@ Ne lance pas les 5 d'un coup. Valide la passe 0 avant tout le reste.
 ---
 ---
 
-# PASSE 0 — La charte graphique
+# PASSE 0 : La charte graphique
 
 > Produit : une page de styleguide vivante + un fichier `tokens.css`.
 > C'est la référence de tout le reste.
@@ -73,10 +73,10 @@ LES JETONS À PRODUIRE
 ═══════════════════════════════════════════════════════════════════
 
 Pars de ces valeurs. Tu peux les affiner, pas changer leur logique.
-Les gris sont CHAUDS (teinte brune, jamais bleutée) — c'est la
+Les gris sont CHAUDS (teinte brune, jamais bleutée) : c'est la
 signature de Notion et c'est ce qui rend la page « papier ».
 
-COULEURS — clair
+COULEURS : clair
   --bg              #FFFFFF     fond de page
   --bg-2            #F7F7F5     barre latérale, zones creuses
   --bg-3            #F1F1EF     survol de bloc, code en ligne
@@ -96,7 +96,7 @@ COULEURS — clair
 
   Texte sur voile : toujours --texte, jamais une couleur vive.
 
-COULEURS — sombre (obligatoire, pas optionnel)
+COULEURS : sombre (obligatoire, pas optionnel)
   --bg #191919 · --bg-2 #202020 · --bg-3 #2C2C2C
   --texte #E9E9E7 · --texte-2 #9B9B9B · --texte-3 #6F6F6F
   --trait rgba(255,255,255,0.094) · --survol rgba(255,255,255,0.055)
@@ -128,7 +128,7 @@ TYPOGRAPHIE
   (700). C'est ce qui fait le rendu Notion marketing. Un titre à 400
   avec un interlettrage nul rate complètement l'effet.
 
-ESPACE — échelle de 4
+ESPACE : échelle de 4
   4 · 8 · 12 · 16 · 24 · 32 · 48 · 64 · 96 · 128
   Colonne de lecture : 708px de large (la largeur exacte de Notion).
   Conteneur marketing : 1120px.
@@ -141,7 +141,7 @@ RAYONS
   6px  cartes, modales
   Rien au-dessus de 8px, sauf les avatars et pastilles rondes (999px).
 
-OMBRES — seulement pour ce qui flotte
+OMBRES : seulement pour ce qui flotte
   --ombre-flottant  0 0 0 1px rgba(15,15,15,0.05),
                     0 3px 6px rgba(15,15,15,0.1),
                     0 9px 24px rgba(15,15,15,0.2)
@@ -157,35 +157,35 @@ LES COMPOSANTS À DÉFINIR
 
 Pour chacun : état par défaut, survol, actif, focus clavier, désactivé.
 
- 1. Bouton principal — fond --action, texte blanc, 4px, 14px/600,
+ 1. Bouton principal : fond --action, texte blanc, 4px, 14px/600,
     padding 8px 14px. Survol : --action-survol. Pas d'ombre, pas de
     translation verticale.
- 2. Bouton secondaire — fond transparent, bordure --trait-fort.
- 3. Bouton fantôme — juste du texte, fond --survol au survol. C'est le
+ 2. Bouton secondaire : fond transparent, bordure --trait-fort.
+ 3. Bouton fantôme : juste du texte, fond --survol au survol. C'est le
     bouton le plus utilisé dans une interface Notion.
- 4. Bouton marketing large — 16px/600, padding 12px 24px. Sur la
+ 4. Bouton marketing large : 16px/600, padding 12px 24px. Sur la
     landing uniquement.
- 5. Champ de saisie — bordure --trait-fort, 4px, focus : bordure
+ 5. Champ de saisie : bordure --trait-fort, 4px, focus : bordure
     --action + anneau 3px --action à 20% d'opacité.
- 6. Encadré de contenu (callout) — fond voile, rayon 4px, padding
+ 6. Encadré de contenu (callout) : fond voile, rayon 4px, padding
     16px, un emoji à gauche aligné sur la première ligne, aucune
     bordure. Cinq variantes : note, astuce, attention, piège, action.
- 7. Bloc de code — fond --bg-3 en clair / #2C2C2C en sombre, rayon 4px,
+ 7. Bloc de code : fond --bg-3 en clair / #2C2C2C en sombre, rayon 4px,
     police mono 13.5px, bouton « Copier » qui n'apparaît qu'au survol
     en haut à droite.
- 8. Code en ligne — fond --bg-3, rayon 3px, padding 2px 5px, couleur
+ 8. Code en ligne : fond --bg-3, rayon 3px, padding 2px 5px, couleur
     #EB5757, police mono 0.9em.
- 9. Ligne de barre latérale — hauteur 28px, padding 4px 8px, rayon 3px,
+ 9. Ligne de barre latérale : hauteur 28px, padding 4px 8px, rayon 3px,
     14px, --texte-2. Survol : fond --survol. Actif : fond --bg-3 +
     --texte + poids 600.
-10. Séparateur — 1px --trait, marges 24px. Rare.
-11. Tableau — pas de bordure extérieure, uniquement des lignes
+10. Séparateur : 1px --trait, marges 24px. Rare.
+11. Tableau : pas de bordure extérieure, uniquement des lignes
     horizontales --trait. En-tête 12px/600 majuscules --texte-3.
 12. Anneau de progression et barre de progression.
-13. Pastille d'état — terminé (coche), en cours, à venir, verrouillé.
-14. Accordéon — chevron 12px qui pivote de 90°, ligne --trait en bas,
+13. Pastille d'état : terminé (coche), en cours, à venir, verrouillé.
+14. Accordéon : chevron 12px qui pivote de 90°, ligne --trait en bas,
     ouverture par hauteur automatique en 200ms.
-15. Barre de navigation marketing — hauteur 56px, fond blanc,
+15. Barre de navigation marketing : hauteur 56px, fond blanc,
     aucune bordure tant qu'on n'a pas défilé, --trait 1px après.
 
 ═══════════════════════════════════════════════════════════════════
@@ -219,13 +219,13 @@ d'applications mobiles, d'App Store, de code. Jamais de lorem ipsum.
 ---
 ---
 
-# BLOC TOKENS — à recoller en tête des passes 1 à 4
+# BLOC TOKENS : à recoller en tête des passes 1 à 4
 
 > Une fois la passe 0 validée, remplace ce bloc par le `tokens.css` réel
 > qu'elle a produit. Tant que ce n'est pas fait, colle ceci.
 
 ```
-CHARTE CAPMEDIA ACADEMY — respecter à la lettre
+CHARTE CAPMEDIA ACADEMY · respecter à la lettre
 
 Référence : Notion. Sans-serif uniquement, gris CHAUDS, rayons 3-6px,
 aucune ombre sauf éléments flottants, séparation par l'espace et non
@@ -257,12 +257,12 @@ Tout le texte en français, jamais de lorem ipsum.
 ---
 ---
 
-# PASSE 1 — La landing, section par section
+# PASSE 1 : La landing, section par section
 
 ```
 [COLLER LE BLOC TOKENS]
 
-Conçois la page de vente complète d'« Capmedia Academy — De Zéro à l'App
+Conçois la page de vente complète d'« Capmedia Academy · De Zéro à l'App
 Store », en HTML/CSS autonome, esthétique du SITE MARKETING de Notion.
 
 Ce qu'on vend : une formation en ligne écrite, en français, qui emmène
@@ -272,7 +272,7 @@ publie pour de vrai. 12 modules + 2 bonus.
 
 Positionnement, à faire ressentir sans jamais le sur-expliquer :
 « Les autres t'apprennent à coder. Moi je t'apprends à publier. »
-Le code n'est plus le mur — le mur, ce sont les certificats, les
+Le code n'est plus le mur : le mur, ce sont les certificats, les
 rejets d'Apple, les captures d'écran, l'ASO.
 
 Offres : Essentiel 97 € (barré 197) · Complet 197 € (barré 397).
@@ -280,11 +280,11 @@ Garantie 30 jours. Paiement Stripe.
 
 ─── LES 14 SECTIONS, DANS L'ORDRE ───
 
- 1. Barre de navigation — 56px, logo « C Capmedia Academy » (carré noir
+ 1. Barre de navigation : 56px, logo « C Capmedia Academy » (carré noir
     rayon 4px + lettre), 4 liens, « Se connecter », bouton d'action.
     Aucune bordure avant défilement.
 
- 2. HÉROS — c'est 60 % de l'impression. Immense blanc au-dessus.
+ 2. HÉROS : c'est 60 % de l'impression. Immense blanc au-dessus.
     Titre sur 3 lignes, display, très serré, très gras :
       « Ton application mobile
         en ligne sur l'App Store
@@ -294,49 +294,49 @@ Garantie 30 jours. Paiement Stripe.
     À droite ou en dessous : une capture de produit posée à plat,
     sans cadre de téléphone tape-à-l'œil, sans ombre portée forte.
 
- 3. Bande de preuve — « Formation écrite par un développeur qui a
+ 3. Bande de preuve : « Formation écrite par un développeur qui a
     réellement publié » + 4 noms d'apps en texte gris.
     Très discret, une ligne, aucune bordure.
 
- 4. LE PROBLÈME — colonne de texte étroite, ton direct.
+ 4. LE PROBLÈME : colonne de texte étroite, ton direct.
     « Tu as une idée d'application depuis combien de temps ? »
     Agence 25 000 € · bootcamp 7 000 € · la vidéo YouTube fermée au
     bout de 4 minutes · le no-code qui bloque à la publication.
     Se termine sur une phrase isolée, plus grande, qui pique.
 
- 5. CE QUI A CHANGÉ — 3 étapes : tu décris / l'IA écrit / ça tourne
+ 5. CE QUI A CHANGÉ : 3 étapes : tu décris / l'IA écrit / ça tourne
     sur ton téléphone en 15 secondes.
 
- 6. LE PIVOT — la section qui vend.
+ 6. LE PIVOT : la section qui vend.
     « Faire tourner une app, c'est 20 % du travail. »
     À droite, une liste de 10 obstacles réels de publication.
     C'est le moment le plus fort de la page : donne-lui du poids.
 
- 7. CE QUE TU CONSTRUIS — le projet fil rouge « Rituel », une app de
+ 7. CE QUE TU CONSTRUIS : le projet fil rouge « Rituel », une app de
     suivi d'habitudes. 4 blocs : des écrans / des données qui restent /
     des notifications / un vrai paiement.
 
- 8. LE PROGRAMME — accordéon de 12 modules. Numéro en mono, titre,
+ 8. LE PROGRAMME : accordéon de 12 modules. Numéro en mono, titre,
     chevron. Ouvert : 4 à 8 puces. Un seul ouvert à la fois.
 
- 9. POUR QUI / PAS POUR QUI — deux colonnes, coches et croix.
+ 9. POUR QUI / PAS POUR QUI : deux colonnes, coches et croix.
 
-10. PARLONS ARGENT — la section d'honnêteté, qui convertit mieux que
+10. PARLONS ARGENT : la section d'honnêteté, qui convertit mieux que
     la promesse creuse. Décomposition de 4,99 € : −TVA 20 % −commission
     Apple 15 % = 3,54 € net. Donc 2 000 €/mois = 565 abonnés.
     Puis 3 chiffres : 3-12 mois · 1 app sur 5 dépasse 100 €/mois · 124 $.
     Termine sur : « Toute personne qui te promet un revenu garanti te ment. »
     Traite ça comme un tableau de document, pas comme une infographie.
 
-11. LE FORMATEUR — photo, nom, 3 paragraphes à la première personne.
+11. LE FORMATEUR : photo, nom, 3 paragraphes à la première personne.
 
-12. LA REVUE — section propre, offre Complet. « Avant d'appuyer sur
+12. LA REVUE : section propre, offre Complet. « Avant d'appuyer sur
     Envoyer, je teste ton app ». Deux colonnes : ce que je regarde / comment
     ça se passe en 3 étapes numérotées. Se termine par un encadré attention
     « ce que je ne peux pas promettre ». C'est la section qui installe le prix,
     place-la juste avant les tarifs.
 
-13. TARIFS — deux offres côte à côte, la seconde marquée « Le plus
+13. TARIFS : deux offres côte à côte, la seconde marquée « Le plus
     pris ». Prix en très gros, ancien prix barré à côté. Liste de
     contenus. Puis le bloc de garantie 30 jours.
 
@@ -367,7 +367,7 @@ Pas de « [votre texte ici] », pas de lorem ipsum.
 ---
 ---
 
-# PASSE 2 — L'espace membre (lecture des cours)
+# PASSE 2 : L'espace membre (lecture des cours)
 
 ```
 [COLLER LE BLOC TOKENS]
@@ -401,16 +401,16 @@ Colonne de lecture, 708px, centrée, 96px de padding haut :
 
 Fais-les tous, empilés dans la même page, séparés par une étiquette :
 
- 1. Lecture normale — un module réel affiché en entier, avec au moins :
+ 1. Lecture normale : un module réel affiché en entier, avec au moins :
     2 h2, 1 h3, du corps, une liste à puces, une liste numérotée, un
     tableau à 3 colonnes, un bloc de code avec bouton Copier, du code
     en ligne, une citation, et LES CINQ types d'encadré :
       📄 note · 💡 astuce · ⚠️ attention · 🛑 piège · 👉 action
- 2. Chargement — squelette de la colonne, pas de roue qui tourne
- 3. Module verrouillé — offre Essentiel devant un bonus Complet
+ 2. Chargement : squelette de la colonne, pas de roue qui tourne
+ 3. Module verrouillé : offre Essentiel devant un bonus Complet
  4. Erreur de chargement
- 5. « Aucun achat trouvé » — connecté mais pas acheteur
- 6. Accueil de la formation — anneau de progression, « reprendre où
+ 5. « Aucun achat trouvé » : connecté mais pas acheteur
+ 6. Accueil de la formation : anneau de progression, « reprendre où
     tu t'es arrêté », frise des 14 modules en pastilles
  7. Mobile : barre supérieure + sommaire en tiroir, avec le voile
  8. Sombre : au moins la lecture normale et l'accueil
@@ -435,7 +435,7 @@ Fais-les tous, empilés dans la même page, séparés par une étiquette :
 ---
 ---
 
-# PASSE 3 — Connexion, confirmation, pages légales
+# PASSE 3 : Connexion, confirmation, pages légales
 
 ```
 [COLLER LE BLOC TOKENS]
@@ -443,25 +443,25 @@ Fais-les tous, empilés dans la même page, séparés par une étiquette :
 Conçois les pages transactionnelles d'Capmedia Academy. Sobres, centrées,
 une seule colonne de 420px. HTML/CSS autonome.
 
-─── PAGE « ACCÈS » — connexion par lien magique, sans mot de passe ───
+─── PAGE « ACCÈS » : connexion par lien magique, sans mot de passe ───
 Cinq états, tous à produire, empilés et étiquetés :
- 1. Formulaire — logo, titre « Ton espace de formation », explication
+ 1. Formulaire : logo, titre « Ton espace de formation », explication
     en une phrase, champ e-mail, bouton pleine largeur, micro-mention
     « le lien est valable 1 heure »
- 2. Envoi en cours — bouton en attente
- 3. Lien envoyé — message vert désaturé, l'adresse rappelée en gras,
+ 2. Envoi en cours : bouton en attente
+ 3. Lien envoyé : message vert désaturé, l'adresse rappelée en gras,
     mention des indésirables, lien « renvoyer » après 30 secondes
- 4. Vérification du lien à l'arrivée — état de chargement
- 5. Erreur — lien expiré / trop de tentatives / domaine non autorisé
+ 4. Vérification du lien à l'arrivée : état de chargement
+ 5. Erreur : lien expiré / trop de tentatives / domaine non autorisé
 
-─── PAGE « MERCI » — après paiement Stripe ───
+─── PAGE « MERCI » : après paiement Stripe ───
 Une coche verte animée une seule fois (200ms, jamais en boucle).
 « Paiement confirmé. Bienvenue chez Capmedia Academy. »
 Trois étapes numérotées pour entrer dans la formation.
 Un bouton principal. Un encadré astuce avec un conseil de démarrage.
 Mentions : garantie 30 jours, contact.
 
-─── PAGES LÉGALES — mentions et CGV ───
+─── PAGES LÉGALES : mentions et CGV ───
 Un gabarit de page de document : colonne 708px, h2 24px, corps 16px,
 sommaire ancré à gauche en position collante sur grand écran.
 Remplis avec un contenu français réaliste pour un vendeur de formation
@@ -476,7 +476,7 @@ Clair et sombre. Mobile vérifié à 375px.
 ---
 ---
 
-# PASSE 4 — Le dossier de présentation des maquettes
+# PASSE 4 : Le dossier de présentation des maquettes
 
 ```
 [COLLER LE BLOC TOKENS]
@@ -485,7 +485,7 @@ Assemble un dossier de présentation qui montre tout le produit d'un
 seul coup d'œil. Page HTML autonome, à faire défiler.
 
 Structure :
- 1. Couverture — « Capmedia Academy · Système de design », la date,
+ 1. Couverture : « Capmedia Academy · Système de design », la date,
     un aperçu de la palette sur une ligne
  2. Les principes, en 5 lignes maximum
  3. La palette et la typographie, en résumé
@@ -515,7 +515,7 @@ Exigences :
 ## Ordre de travail conseillé
 
 1. **Passe 0**, et on itère jusqu'à ce que la charte soit juste. Ne passe
-   pas à la suite avant — tout le reste en dépend.
+   pas à la suite avant : tout le reste en dépend.
 2. Récupère le `tokens.css` produit, remplace le BLOC TOKENS de ce fichier.
 3. **Passe 1** (landing). C'est celle qui rapporte de l'argent.
 4. **Passe 2** (espace membre).

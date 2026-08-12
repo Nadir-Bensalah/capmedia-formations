@@ -1,5 +1,5 @@
 /* ==========================================================================
-   CAPMEDIA ACADEMY — Comportements de la page de vente
+   CAPMEDIA ACADEMY · Comportements de la page de vente
    Pas de dépendance, pas de framework.
    ========================================================================== */
 (function () {
@@ -25,8 +25,8 @@
       var heures = Math.floor((reste % 86400000) / 3600000);
 
       elLancement.textContent = jours > 0
-        ? 'tarif de lancement — encore ' + jours + (jours > 1 ? ' jours' : ' jour')
-        : 'tarif de lancement — encore ' + heures + ' h';
+        ? 'tarif de lancement : encore ' + jours + (jours > 1 ? ' jours' : ' jour')
+        : 'tarif de lancement : encore ' + heures + ' h';
     };
 
     majLancement();

@@ -1,4 +1,4 @@
-# Scripts vidéo — TikTok / Reels / Shorts
+# Scripts vidéo : TikTok / Reels / Shorts
 
 Format 9:16, 1080 × 1920. Durée cible **28 à 45 secondes**.
 Zone sûre : rien d'important dans les **250 px du bas** ni les **120 px du haut**.
@@ -39,9 +39,9 @@ Je montre tout : le code, les rejets d'Apple, les chiffres.
 ```
 
 Trois piliers de contenu, en alternance :
-- **Coulisses** (50 %) — ce que tu construis en ce moment, ce qui plante
-- **Enseignement** (30 %) — une chose concrète apprise, transmise en 40 s
-- **Chiffres** (20 %) — revenus, téléchargements, taux de rejet, sans mentir
+- **Coulisses** (50 %) : ce que tu construis en ce moment, ce qui plante
+- **Enseignement** (30 %) : une chose concrète apprise, transmise en 40 s
+- **Chiffres** (20 %) : revenus, téléchargements, taux de rejet, sans mentir
 
 Rythme minimal pour que l'algorithme te prenne au sérieux : **4 à 5 vidéos par
 semaine pendant 6 semaines**. En dessous, ne compte pas sur des résultats.
@@ -52,7 +52,7 @@ semaine pendant 6 semaines**. En dessous, ne compte pas sur des résultats.
 
 ---
 
-## 1 — « Sans savoir coder » (le pilier)
+## 1 : « Sans savoir coder » (le pilier)
 
 **Accroche visuelle :** ton doigt qui appuie sur l'icône de ton app sur ton
 écran d'accueil, en très gros plan. Puis l'app s'ouvre.
@@ -60,7 +60,7 @@ semaine pendant 6 semaines**. En dessous, ne compte pas sur des résultats.
 | Temps | Voix | Texte à l'écran |
 |---|---|---|
 | 0-3 s | « Cette application est sur l'App Store. Je ne sais pas coder. » | **JE NE SAIS PAS CODER** |
-| 3-8 s | « Enfin — je ne savais pas. Il y a 30 jours, j'avais jamais écrit une ligne de ma vie. » | il y a 30 jours : 0 ligne |
+| 3-8 s | « Enfin : je ne savais pas. Il y a 30 jours, j'avais jamais écrit une ligne de ma vie. » | il y a 30 jours : 0 ligne |
 | 8-16 s | *(écran partagé : à gauche tu tapes une phrase en français, à droite le code apparaît)* « Aujourd'hui, tu décris ce que tu veux. En français. L'IA écrit. » | ↓ tu écris ça ↓ |
 | 16-24 s | « En 15 secondes c'est sur mon téléphone. » *(le téléphone se met à jour en direct)* | 15 SECONDES |
 | 24-32 s | « Le code, c'est plus le problème. Le problème c'est tout ce qu'il y a après. Les certificats, les rejets d'Apple, les captures d'écran. Ça, personne t'en parle. » | le vrai mur : la PUBLICATION |
@@ -71,7 +71,7 @@ rejets. #vibecoding #appmobile #devfrancais #reconversion »
 
 ---
 
-## 2 — « Apple m'a rejeté 3 fois »
+## 2 : « Apple m'a rejeté 3 fois »
 
 **Accroche visuelle :** capture d'écran du mail de rejet d'Apple, en plein cadre,
 avec un rond rouge autour de « Guideline 2.1 ».
@@ -89,7 +89,7 @@ avec un rond rouge autour de « Guideline 2.1 ».
 
 ---
 
-## 3 — « Ce que tu touches vraiment sur 4,99 € »
+## 3 : « Ce que tu touches vraiment sur 4,99 € »
 
 **Accroche visuelle :** un billet de 5 € qu'on découpe aux ciseaux, en gros plan.
 
@@ -106,7 +106,7 @@ avec un rond rouge autour de « Guideline 2.1 ».
 
 ---
 
-## 4 — « 124 dollars »
+## 4 : « 124 dollars »
 
 **Accroche :** toi qui poses trois pièces sur une table, une par une.
 
@@ -123,7 +123,7 @@ avec un rond rouge autour de « Guideline 2.1 ».
 
 ---
 
-## 5 — « L'onglet que personne ne trouve »
+## 5 : « L'onglet que personne ne trouve »
 
 Format **pure valeur**, très fort en enregistrements. Zéro visage, plein écran.
 
@@ -139,7 +139,7 @@ Format **pure valeur**, très fort en enregistrements. Zéro visage, plein écra
 
 ---
 
-## 6 — « Le bug qui efface les données de tes utilisateurs »
+## 6 : « Le bug qui efface les données de tes utilisateurs »
 
 | Temps | Voix | Texte |
 |---|---|---|
@@ -151,7 +151,7 @@ Format **pure valeur**, très fort en enregistrements. Zéro visage, plein écra
 
 ---
 
-## 7 — « Ma mère a testé mon app »
+## 7 : « Ma mère a testé mon app »
 
 Format **émotionnel**, très partagé. À filmer pour de vrai.
 
@@ -165,7 +165,7 @@ Format **émotionnel**, très partagé. À filmer pour de vrai.
 
 ---
 
-## 8 — « 12 testeurs pendant 14 jours »
+## 8 : « 12 testeurs pendant 14 jours »
 
 | Temps | Voix | Texte |
 |---|---|---|
@@ -177,7 +177,7 @@ Format **émotionnel**, très partagé. À filmer pour de vrai.
 
 ---
 
-## 9 — « Mon premier mois : le vrai chiffre »
+## 9 : « Mon premier mois : le vrai chiffre »
 
 ⚠️ **À tourner uniquement quand tu as de vrais chiffres à montrer.** Ne
 fabrique jamais une capture d'écran de revenus.
@@ -186,7 +186,7 @@ fabrique jamais une capture d'écran de revenus.
 |---|---|
 | 0-3 s | **MON PREMIER MOIS** |
 | 3-8 s | *(capture réelle d'App Store Connect)* |
-| 8-18 s | Téléchargements : X — Abonnés : X — Net : X € |
+| 8-18 s | Téléchargements : X (Abonnés : X) Net : X € |
 | 18-28 s | Ce qui a marché : *(une chose précise)* |
 | 28-38 s | Ce qui a raté : *(une chose précise)* |
 | 38-45 s | « Je publie le chiffre tous les mois. Suivez si ça vous intéresse. » |
@@ -196,7 +196,7 @@ contenu que 3 000 € : c'est crédible, et ça crée une histoire qu'on suit.
 
 ---
 
-## 10 — « Le prompt qui change tout »
+## 10 : « Le prompt qui change tout »
 
 | Temps | Voix | Texte |
 |---|---|---|
@@ -208,7 +208,7 @@ contenu que 3 000 € : c'est crédible, et ça crée une histoire qu'on suit.
 
 ---
 
-## 11 — « Ne baisse jamais ton prix »
+## 11 : « Ne baisse jamais ton prix »
 
 | Temps | Voix | Texte |
 |---|---|---|
@@ -220,7 +220,7 @@ contenu que 3 000 € : c'est crédible, et ça crée une histoire qu'on suit.
 
 ---
 
-## 12 — « 3 secondes pour comprendre » (le format « avant/après »)
+## 12 : « 3 secondes pour comprendre » (le format « avant/après »)
 
 Vidéo **sans parole**, musique seule, très partagée.
 
@@ -234,7 +234,7 @@ Vidéo **sans parole**, musique seule, très partagée.
 
 ---
 
-## 13 — « La question qui tue ton idée d'app »
+## 13 : « La question qui tue ton idée d'app »
 
 | Temps | Voix | Texte |
 |---|---|---|
@@ -244,12 +244,12 @@ Vidéo **sans parole**, musique seule, très partagée.
 | 24-34 s | « Instagram au début, c'était : poster une photo carrée avec un filtre. C'est tout. » | |
 | 34-40 s | « Écris ta phrase en commentaire. Je dis à ceux qui sont trop gros. » | 👇 écris ta phrase |
 
-**Très fort en commentaires** — et tu récupères une liste d'idées et de gens
+**Très fort en commentaires** : et tu récupères une liste d'idées et de gens
 chauds. Réponds à tout le monde.
 
 ---
 
-## 14 — « Ce que ton app raconte sur toi »
+## 14 : « Ce que ton app raconte sur toi »
 
 Format lent, plus intime. À poster le dimanche soir.
 
@@ -263,7 +263,7 @@ Format lent, plus intime. À poster le dimanche soir.
 
 ---
 
-## 15 — « La série » (format récurrent, un épisode par jour)
+## 15 : « La série » (format récurrent, un épisode par jour)
 
 Le format qui construit une audience : **« Je publie une app en 30 jours,
 jour X/30 »**. Un épisode par jour, 25 à 35 secondes.
@@ -274,7 +274,7 @@ Structure fixe, toujours la même :
 |---|---|
 | 0-3 s | « Jour X sur 30. » + l'état actuel en une phrase |
 | 3-8 s | Ce que j'ai fait hier |
-| 8-22 s | **Le truc précis appris aujourd'hui** — c'est le cœur, sois concret |
+| 8-22 s | **Le truc précis appris aujourd'hui** : c'est le cœur, sois concret |
 | 22-30 s | Ce que je fais demain |
 
 **Pourquoi ça marche :** les gens reviennent pour la suite, l'algorithme adore
