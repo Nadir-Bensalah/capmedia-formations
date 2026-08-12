@@ -619,15 +619,18 @@
 /* Filigrane : l'adresse de l'acheteur, répétée en diagonale, à peine là. */
 .filigrane {
   position: absolute; inset: 0;
-  overflow: hidden;
-  pointer-events: none;
+  overflow: hidden;          /* la nappe tournée est découpée ici, */
+  pointer-events: none;      /* elle ne peut plus étirer la page   */
   z-index: 5;
+  opacity: 0.028;
+}
+.filigrane .nappe {
+  position: absolute; inset: -25%;
   display: flex; flex-wrap: wrap;
   align-content: space-around;
   justify-content: space-around;
   gap: 96px;
-  transform: rotate(-24deg) scale(1.4);
-  opacity: 0.028;
+  transform: rotate(-24deg);
 }
 [data-theme="dark"] .filigrane { opacity: 0.045; }
 .filigrane span {
@@ -635,7 +638,7 @@
   white-space: nowrap;
   color: var(--texte);
 }
-.lecture { position: relative; }
+.lecture { position: relative; overflow: clip; }
 
 /* Impression : le cours ne sort pas sur papier. */
 @media print {

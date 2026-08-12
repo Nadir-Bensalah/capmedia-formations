@@ -923,7 +923,9 @@ function protegerContenu() {
     const f = document.createElement('div');
     f.className = 'filigrane';
     f.setAttribute('aria-hidden', 'true');
-    f.innerHTML = Array.from({ length: 18 }, () => `<span>${echapper(email)}</span>`).join('');
+    f.innerHTML = '<div class="nappe">' +
+      Array.from({ length: 24 }, () => `<span>${echapper(email)}</span>`).join('') +
+      '</div>';
     $('lecture').appendChild(f);
   }
 }
