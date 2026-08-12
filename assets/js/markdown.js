@@ -28,13 +28,9 @@
    ou null pour tout afficher (aperçu, développement).
    ========================================================================== */
 
-const MARQUEURS = {
-  note:      '📄',
-  astuce:    '💡',
-  attention: '⚠️',
-  piege:     '🛑',
-  action:    '👉',
-};
+import { ico } from './icones.js';
+
+const TYPES_ENCADRE = new Set(['note', 'astuce', 'attention', 'piege', 'action']);
 
 // Jeton de mise de côté du code littéral. Construit à partir de U+0000, un
 // caractère qu'on ne peut pas écrire dans le markdown source : aucune
@@ -122,13 +118,13 @@ export function versHtml(markdown, contexte = null) {
         // discrète : le lecteur sait qu'un raccourci existe s'il change d'avis.
         if (contexte !== null && contexte.has('sans-ia')) {
           sortie.push(
-            `<p class="prompt-alt">✦ ${titre ? echapper(titre) + ' : ' : ''}` +
+            `<p class="prompt-alt">${ico('ia', 12)} ${titre ? echapper(titre) + ' : ' : ''}` +
             `prompt IA masqué (mode sans IA)</p>`
           );
         } else {
           sortie.push(
             `<details class="prompt">` +
-            `<summary><span class="prompt-ico" aria-hidden="true">✦</span>` +
+            `<summary><span class="prompt-ico">${ico('ia', 15)}</span>` +
             `<span class="prompt-titre">${titre ? echapper(titre) : 'Le prompt, prêt à copier'}</span>` +
             `<span class="prompt-indice">déplier</span></summary>` +
             `<div class="prompt-corps"><pre><code>${echapper(corps.join('\n'))}</code></pre></div>` +
@@ -138,8 +134,15 @@ export function versHtml(markdown, contexte = null) {
         continue;
       }
 
+      const etiquettes = { bash: 'Terminal', sh: 'Terminal', js: 'JavaScript',
+        jsx: 'JavaScript', ts: 'TypeScript', tsx: 'TypeScript', json: 'JSON',
+        html: 'HTML', css: 'CSS', markdown: 'Markdown', md: 'Markdown' };
       sortie.push(
-        `<pre><code${info ? ` class="langue-${info}"` : ''}>${echapper(corps.join('\n'))}</code></pre>`
+        `<div class="bloc-code">` +
+        `<div class="bloc-code-tete"><span class="points"><i></i><i></i><i></i></span>` +
+        `<span class="bloc-code-langue">${etiquettes[info] || (info ? echapper(info) : 'Code')}</span></div>` +
+        `<pre><code${info ? ` class="langue-${info}"` : ''}>${echapper(corps.join('\n'))}</code></pre>` +
+        `</div>`
       );
       continue;
     }
@@ -161,9 +164,10 @@ export function versHtml(markdown, contexte = null) {
       const { corps, suite } = extraireBloc(lignes, i + 1);
       i = suite;
       const dedans = versHtml(corps.join('\n'), contexte);
+      const t = TYPES_ENCADRE.has(type) ? type : 'note';
       sortie.push(
-        `<aside class="encadre encadre--${type}">` +
-        `<span class="marqueur" aria-hidden="true">${MARQUEURS[type] || MARQUEURS.note}</span>` +
+        `<aside class="encadre encadre--${t}">` +
+        `<span class="marqueur">${ico(t, 18)}</span>` +
         `<div>${titre ? `<p><strong>${enLigne(titre)}</strong></p>` : ''}${dedans}</div>` +
         `</aside>`
       );
@@ -175,7 +179,7 @@ export function versHtml(markdown, contexte = null) {
     if (visuel) {
       sortie.push(
         `<figure><div class="emplacement-visuel">` +
-        `<span class="ev-ico" aria-hidden="true">🖼️</span>` +
+        `<span class="ev-ico">${ico('image', 26)}</span>` +
         `<span class="ev-nom">Image à venir</span>` +
         `<span class="ev-desc">${echapper(visuel[1])}</span>` +
         `</div></figure>`

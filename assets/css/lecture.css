@@ -496,3 +496,154 @@
   transition: opacity var(--t-apparition), transform var(--t-apparition);
 }
 .toast.visible { opacity: 1; transform: translateX(-50%); }
+
+/* --- Blocs de code premium ------------------------------------------------ */
+.bloc-code {
+  position: relative;
+  border-radius: var(--r-3);
+  overflow: hidden;
+  background: var(--bg-3);
+  margin-block: var(--e-3);
+}
+.bloc-code-tete {
+  display: flex; align-items: center; gap: var(--e-3);
+  padding: 8px 10px 8px 14px;
+  border-bottom: 1px solid var(--trait);
+}
+.bloc-code-tete .points { display: inline-flex; gap: 5px; }
+.bloc-code-tete .points i {
+  width: 9px; height: 9px;
+  border-radius: 999px;
+  background: var(--trait-fort);
+  display: inline-block;
+}
+.bloc-code-langue {
+  font-family: var(--police-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--texte-3);
+}
+.bloc-code pre { margin: 0; border-radius: 0; background: transparent; }
+.bloc-code .copier {
+  position: static;
+  margin-left: auto;
+  opacity: 1;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.bloc-code-nu { background: transparent; overflow: visible; }
+.bloc-code-nu pre { border-radius: var(--r-2); background: var(--bg-3); }
+.bloc-code-nu .copier { position: absolute; top: var(--e-2); right: var(--e-2); }
+.prompt .bloc-code-nu .copier { opacity: 1; }
+.copier .ico { flex: none; }
+
+/* --- Icônes en général ----------------------------------------------------- */
+.ico { display: inline-block; vertical-align: -0.15em; flex: none; }
+.encadre .marqueur { display: grid; place-items: center; width: 20px; height: 26px; color: var(--texte-2); }
+.encadre--astuce    .marqueur { color: var(--action); }
+.encadre--attention .marqueur { color: #B8860B; }
+.encadre--piege     .marqueur { color: var(--danger); }
+.encadre--action    .marqueur { color: var(--valide); }
+.lien-module .num .ico { vertical-align: -0.1em; }
+.emplacement-visuel .ev-ico { color: var(--texte-3); font-size: 0; }
+
+/* --- Onglets du panneau support -------------------------------------------- */
+.onglets {
+  display: flex; gap: var(--e-1);
+  padding: 0 var(--e-5);
+  border-bottom: 1px solid var(--trait);
+}
+.onglets [role="tab"] {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 0; background: transparent;
+  padding: 10px 12px;
+  font-size: 13px; font-weight: 500;
+  color: var(--texte-2);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color var(--t-survol), border-color var(--t-survol);
+}
+.onglets [role="tab"]:hover { color: var(--texte); }
+.onglets [role="tab"][aria-selected="true"] {
+  color: var(--texte);
+  font-weight: 600;
+  border-bottom-color: var(--action);
+}
+
+/* --- Le chat ---------------------------------------------------------------- */
+.notice-chat {
+  display: flex; gap: var(--e-2); align-items: flex-start;
+  background: var(--voile-bleu);
+  border-radius: var(--r-2);
+  padding: var(--e-3);
+  margin-block: var(--e-3);
+}
+.notice-chat .marqueur { color: var(--action); padding-top: 1px; }
+.fil-chat {
+  display: flex; flex-direction: column; gap: var(--e-2);
+  max-height: 260px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-block: var(--e-2);
+}
+.bulle {
+  max-width: 86%;
+  border-radius: var(--r-3);
+  padding: 8px 12px;
+}
+.bulle p { font-size: 14px; line-height: 1.55; white-space: pre-wrap; }
+.bulle-moi   { align-self: flex-end;   background: var(--voile-bleu); }
+.bulle-nadir { align-self: flex-start; background: var(--bg-2); }
+.envoi-chat { display: flex; flex-direction: column; gap: var(--e-2); padding-block: var(--e-2) var(--e-4); }
+.envoi-chat textarea { resize: vertical; min-height: 64px; }
+.envoi-chat .btn { display: inline-flex; align-items: center; gap: 6px; }
+
+/* --- Étoiles d'avis ----------------------------------------------------------- */
+.choix-etoiles { display: flex; gap: 4px; }
+.etoile-btn {
+  border: 0; background: transparent; padding: 2px;
+  color: var(--trait-fort);
+  cursor: pointer;
+  transition: color var(--t-survol), transform var(--t-survol);
+}
+.etoile-btn:hover { transform: scale(1.08); }
+.etoile-btn.active { color: #E7B93C; }
+.rang-etoiles { display: inline-flex; gap: 2px; color: #E7B93C; }
+
+/* --- Protection du contenu ------------------------------------------------------ */
+/* Le texte du cours ne se sélectionne pas ; le code et les prompts, si. */
+.corps { -webkit-user-select: none; user-select: none; }
+.corps pre, .corps code, .corps .prompt,
+.corps input, .corps textarea { -webkit-user-select: text; user-select: text; }
+
+/* Filigrane : l'adresse de l'acheteur, répétée en diagonale, à peine là. */
+.filigrane {
+  position: absolute; inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 5;
+  display: flex; flex-wrap: wrap;
+  align-content: space-around;
+  justify-content: space-around;
+  gap: 96px;
+  transform: rotate(-24deg) scale(1.4);
+  opacity: 0.028;
+}
+[data-theme="dark"] .filigrane { opacity: 0.045; }
+.filigrane span {
+  font-size: 15px; font-weight: 600;
+  white-space: nowrap;
+  color: var(--texte);
+}
+.lecture { position: relative; }
+
+/* Impression : le cours ne sort pas sur papier. */
+@media print {
+  .agencement, .barre-app { display: none !important; }
+  body::after {
+    content: "Formation Capmedia Academy · contenu protégé, réservé à un usage personnel en ligne.";
+    display: block;
+    padding: 48px 24px;
+    font-size: 16px;
+  }
+}
