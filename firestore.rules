@@ -27,7 +27,8 @@ service cloud.firestore {
     // --- Fonctions utilitaires ----------------------------------------
     function connecte() {
       return request.auth != null
-          && request.auth.token.email != null;
+          && request.auth.token.email != null
+          && request.auth.token.email_verified == true;
     }
 
     function monEmail() {

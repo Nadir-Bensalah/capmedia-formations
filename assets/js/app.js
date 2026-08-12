@@ -47,6 +47,8 @@ let utilisateur = null;
 let courante    = null;
 let profil      = null;   // { ordi, tel, tablette, montre, ia } ou null
 let maxDebloque = -1;     // ordre le plus haut jamais débloqué : ne redescend jamais
+let idSession   = null;   // identifiant unique de cette session (session unique)
+let arreterEcouteSession = null;
 
 const CLE_PROFIL = 'az:profil';
 
@@ -252,6 +254,7 @@ onAuthStateChanged(auth, async (u) => {
     construireSommaire();
     ouvrirDepuisUrl();
     protegerContenu();
+    await prendreLaSession();
     voile.classList.add('parti');
 
     if (!profil) afficherOnboarding();
@@ -673,6 +676,57 @@ $('fermer-menu').addEventListener('click', fermerMenu);
 ombre.addEventListener('click', fermerMenu);
 
 /* ==========================================================================
+   6bis. Session unique : un seul appareil à la fois
+
+   À l'ouverture, cet onglet écrit un identifiant de session et écoute le
+   champ. Si un autre appareil ouvre la formation, il devient le propriétaire
+   et cet onglet-ci se ferme proprement. Efficace contre le partage de compte,
+   sans gêne pour l'usage légitime (on reprend la main sur son nouvel appareil).
+   ========================================================================== */
+function nouvelId() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return 'sess-' + Date.now() + '-' + Math.floor(Math.random() * 1e9);
+}
+
+async function prendreLaSession() {
+  idSession = nouvelId();
+  const ref = doc(bdd, 'progression', utilisateur.uid);
+
+  try {
+    await setDoc(ref, { sessionActive: idSession, sessionMaj: new Date().toISOString() }, { merge: true });
+  } catch (e) { console.warn('Session non enregistrée', e); return; }
+
+  // Petit délai avant d'écouter : on ignore l'écho de notre propre écriture.
+  arreterEcouteSession = onSnapshot(ref, (snap) => {
+    if (!snap.exists()) return;
+    const active = snap.data().sessionActive;
+    if (active && active !== idSession) sessionEvincee();
+  });
+}
+
+function sessionEvincee() {
+  if (arreterEcouteSession) { arreterEcouteSession(); arreterEcouteSession = null; }
+  if (arreterEcouteChat)    { arreterEcouteChat(); arreterEcouteChat = null; }
+  document.querySelectorAll('.surcouche').forEach((x) => x.remove());
+
+  voile.classList.remove('parti');
+  voile.innerHTML = `
+    <div class="pile g-5 t-centre" style="max-width:400px">
+      <div class="pile g-3">
+        <h1 class="t-h2">Ta formation est ouverte ailleurs</h1>
+        <p class="t-petit t-2">Pour protéger ton accès, un seul appareil peut
+        lire la formation à la fois. Elle vient d'être ouverte sur un autre
+        appareil ou un autre onglet.</p>
+      </div>
+      <button type="button" class="btn btn-principal btn-large btn-bloc" onclick="location.reload()">
+        Reprendre ici
+      </button>
+      <p class="t-micro t-3">Si ce n'est pas toi, change de mot de passe de
+      messagerie : ton lien de connexion transite par ta boîte mail.</p>
+    </div>`;
+}
+
+/* ==========================================================================
    7. Aide, support & avis
 
    Le chat suit une règle stricte, appliquée par les règles Firestore :
@@ -933,6 +987,7 @@ function protegerContenu() {
 
 /* --- Déconnexion --------------------------------------------------------- */
 function deconnecter() {
+  if (arreterEcouteSession) { arreterEcouteSession(); arreterEcouteSession = null; }
   signOut(auth).then(() => window.location.replace('../acces.html'));
 }
 $('deconnexion').addEventListener('click', deconnecter);
