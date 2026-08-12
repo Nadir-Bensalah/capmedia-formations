@@ -807,3 +807,20 @@
 @media (prefers-reduced-motion: reduce) {
   .page-entree .corps, .page-entree .chapeau, .squelette span { animation: none; }
 }
+
+
+/* ==========================================================================
+   Full radius (décision client : Apple / Revolut) dans l'espace membre
+   ========================================================================== */
+.seg { border-radius: var(--r-rond); padding: 3px; }
+.seg button { border-radius: var(--r-rond); }
+.onglets [role="tab"] { border-radius: var(--r-rond) var(--r-rond) 0 0; }
+.pastille { border-radius: var(--r-rond); }
+.copier { border-radius: var(--r-rond); }
+.etoile-btn { border-radius: var(--r-rond); }
+.bloc-code .copier { border-radius: var(--r-rond); }
+.pagination a { border-radius: var(--r-3); }
+
+/* Le sélecteur de thème du sommaire, compact et pill */
+.sommaire-bas .selecteur-theme { border-radius: var(--r-rond); }
+.sommaire-bas .selecteur-theme button { border-radius: var(--r-rond); }

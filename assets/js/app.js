@@ -127,7 +127,14 @@ function lireFormulaire(racine) {
 
 function enregistrerProfil(nouveau) {
   profil = nouveau;
-  try { localStorage.setItem(CLE_PROFIL, JSON.stringify(profil)); } catch (e) {}
+  // Le profil est aussi sauvegardé dans Firestore (progression), donc il
+  // survit de toute façon. En localStorage, seulement si les préférences
+  // sont acceptées.
+  var okPrefs = !window.AZConsent || window.AZConsent.prefs();
+  try {
+    if (okPrefs) localStorage.setItem(CLE_PROFIL, JSON.stringify(profil));
+    else localStorage.removeItem(CLE_PROFIL);
+  } catch (e) {}
   enregistrerProgression();
 }
 
