@@ -19,4 +19,16 @@
   <url><loc>https://nadir-bensalah.github.io/capmedia-formations/cgv.html</loc><priority>0.3</priority></url>
   <url><loc>https://nadir-bensalah.github.io/capmedia-formations/confidentialite.html</loc><priority>0.3</priority></url>
   <url><loc>https://nadir-bensalah.github.io/capmedia-formations/cookies.html</loc><priority>0.3</priority></url>
+  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/formations/</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/formations/github.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/formations/claude-code.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/formations/site-web-ia.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/formations/automatiser-ia.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/formations/prompting.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/formations/firebase.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/formations/stripe.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/formations/aso.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/formations/design-app.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/formations/micro-saas.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/formations/seo-contenu.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
 </urlset>

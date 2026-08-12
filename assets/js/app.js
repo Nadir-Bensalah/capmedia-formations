@@ -26,6 +26,9 @@ import { ico, etoiles } from './icones.js';
 const cfg = window.AZ;
 const $ = (id) => document.getElementById(id);
 
+/* Quelle formation ? ?f=slug dans l'URL, mobile par défaut. */
+const FORMATION = new URLSearchParams(location.search).get('f') || 'mobile';
+
 const voile      = $('voile');
 const voileTexte = $('voile-texte');
 
@@ -248,11 +251,24 @@ onAuthStateChanged(auth, async (u) => {
     const fiche = await getDoc(doc(bdd, 'acheteurs', email));
 
     if (!fiche.exists()) {
-      voile.innerHTML = gabaritPasAcheteur(email);
+      voile.innerHTML = gabaritPasAcheteur(email, false);
       $('voile-deconnexion').addEventListener('click', deconnecter);
       return;
     }
     acheteur = fiche.data();
+
+    /* Multi-formations : achats { slug: offre } + pack, avec rétrocompat
+       de l'ancien champ « offre » (qui valait pour mobile). */
+    acheteur.achatsN = { ...(acheteur.achats || {}) };
+    if (acheteur.offre && !acheteur.achatsN.mobile) acheteur.achatsN.mobile = acheteur.offre;
+
+    const accesCetteFormation = acheteur.pack
+      || acheteur.achatsN[FORMATION];
+    if (!accesCetteFormation) {
+      voile.innerHTML = gabaritPasAcheteur(email, true);
+      $('voile-deconnexion').addEventListener('click', deconnecter);
+      return;
+    }
 
     voileTexte.textContent = 'Chargement de ta formation…';
     await Promise.all([chargerLecons(), chargerProgression()]);
@@ -274,11 +290,12 @@ onAuthStateChanged(auth, async (u) => {
   }
 });
 
-function gabaritPasAcheteur(email) {
+function gabaritPasAcheteur(email, aDautres) {
+  const lienAchat = FORMATION === 'mobile' ? '../index.html#tarifs' : `../formations/${FORMATION}.html`;
   return `
     <div class="pile g-5" style="max-width:420px">
       <div class="pile g-2">
-        <h1 class="t-h2">Aucun achat trouvé</h1>
+        <h1 class="t-h2">${aDautres ? "Cette formation n'est pas dans ton compte" : 'Aucun achat trouvé'}</h1>
         <p class="t-petit t-2">
           Tu es bien connecté avec <strong>${echapper(email)}</strong>, mais aucune
           commande n'est associée à cette adresse.
@@ -293,7 +310,8 @@ function gabaritPasAcheteur(email) {
         </div>
       </div>
       <div class="pile g-3">
-        <a href="../index.html#tarifs" class="btn btn-principal btn-large btn-bloc">Voir la formation</a>
+        <a href="${lienAchat}" class="btn btn-principal btn-large btn-bloc">Voir cette formation</a>
+        ${aDautres ? '<a href="../compte.html" class="btn btn-secondaire btn-bloc">Mes formations</a>' : ''}
         <div class="rang-espace">
           <button type="button" class="lien-nu" id="voile-deconnexion">Se déconnecter</button>
           <a class="t-micro" href="mailto:${cfg.contact}">${cfg.contact}</a>
@@ -306,7 +324,9 @@ function gabaritPasAcheteur(email) {
    2. Chargement du contenu et de la progression
    ========================================================================== */
 async function chargerLecons() {
-  const instantane = await getDocs(query(collection(bdd, 'lecons'), orderBy('ordre')));
+  const instantane = await getDocs(
+    query(collection(bdd, 'formations', FORMATION, 'lecons'), orderBy('ordre'))
+  );
   lecons = instantane.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
@@ -314,18 +334,28 @@ const cacheContenus = new Map();
 
 async function chargerContenu(id) {
   if (cacheContenus.has(id)) return cacheContenus.get(id);
-  const d = await getDoc(doc(bdd, 'contenus', id));
+  const d = await getDoc(doc(bdd, 'formations', FORMATION, 'contenus', id));
   const md = d.exists() ? (d.data().markdown || '') : '';
   cacheContenus.set(id, md);
   return md;
 }
 
+let progressionDoc = {};
+
 async function chargerProgression() {
   const p = await getDoc(doc(bdd, 'progression', utilisateur.uid));
-  const donnees = p.exists() ? p.data() : {};
-  faits = new Set(donnees.faits || []);
-  maxDebloque = typeof donnees.maxDebloque === 'number' ? donnees.maxDebloque : -1;
-  profil = donnees.profil || null;
+  progressionDoc = p.exists() ? p.data() : {};
+
+  /* La progression vit par formation ; l'ancienne forme racine (avant
+     multi-formations) appartient à mobile. */
+  const parF = progressionDoc.parFormation || {};
+  let mienne = parF[FORMATION];
+  if (!mienne && FORMATION === 'mobile' && progressionDoc.faits) {
+    mienne = { faits: progressionDoc.faits, maxDebloque: progressionDoc.maxDebloque };
+  }
+  faits = new Set((mienne && mienne.faits) || []);
+  maxDebloque = mienne && typeof mienne.maxDebloque === 'number' ? mienne.maxDebloque : -1;
+  profil = progressionDoc.profil || null;
 
   if (!profil) {
     try { profil = JSON.parse(localStorage.getItem(CLE_PROFIL)) || null; } catch (e) {}
@@ -337,8 +367,7 @@ async function enregistrerProgression() {
     await setDoc(
       doc(bdd, 'progression', utilisateur.uid),
       {
-        faits: [...faits],
-        maxDebloque,
+        parFormation: { [FORMATION]: { faits: [...faits], maxDebloque } },
         profil: profil || null,
         maj: new Date().toISOString(),
       },
@@ -350,7 +379,7 @@ async function enregistrerProgression() {
 /* --- Accès par offre (Essentiel / Complet) -------------------------------- */
 function accessible(lecon) {
   if (lecon.offre !== 'complet') return true;
-  return acheteur.offre === 'complet';
+  return acheteur.achatsN[FORMATION] === 'complet' || acheteur.pack === 'avance';
 }
 
 /* ==========================================================================

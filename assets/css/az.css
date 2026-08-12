@@ -923,3 +923,45 @@ td.nb, th.nb { text-align: right; font-variant-numeric: tabular-nums; }
   .masque-tel-mobile { display: none; }
   .section .grille[style*="1fr auto"] { grid-template-columns: minmax(0,1fr) !important; }
 }
+
+/* ==========================================================================
+   Cartes de formation (catalogue + cross-sell)
+   ========================================================================== */
+.grille-catalogue { align-items: stretch; }
+.carte-formation {
+  position: relative;
+  display: flex; flex-direction: column;
+  min-height: 190px;
+  text-decoration: none;
+  color: var(--texte);
+  transition: border-color var(--t-survol), transform var(--t-apparition), box-shadow var(--t-apparition);
+}
+.carte-formation:hover {
+  text-decoration: none;
+  color: var(--texte);
+  border-color: var(--trait-fort);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px -12px rgba(15, 15, 15, 0.18);
+}
+.cf-ico {
+  display: grid; place-items: center;
+  width: 34px; height: 34px;
+  border-radius: var(--r-rond);
+  background: var(--bg-3);
+  color: var(--action);
+  flex: none;
+}
+.cf-prix { font-variant-numeric: tabular-nums; }
+.cf-possede {
+  position: absolute;
+  top: -9px; left: var(--e-4);
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--voile-vert);
+  color: var(--texte);
+  font-size: 11px; font-weight: 600;
+  padding: 3px 10px;
+  border-radius: var(--r-rond);
+  box-shadow: 0 1px 2px rgba(15,15,15,.1);
+}
+.cf-possede .ico-coche { color: var(--valide); display: inline-flex; }
+.carte-formation.est-possedee { border-color: var(--valide); }
