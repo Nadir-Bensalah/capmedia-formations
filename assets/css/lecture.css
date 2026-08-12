@@ -1,367 +1,301 @@
 /* ==========================================================================
-   ATELIER ZÉRO — Espace membre : lecture façon Notion
-   ========================================================================== */
+   ATELIER ZÉRO — lecture.css
+   L'espace membre. Référence : l'APPLICATION Notion.
 
-.corps-app { background: var(--papier); }
+   Deux chiffres portent tout le rendu :
+     • la colonne de lecture fait exactement 708px
+     • les titres ont 40px de marge haute et 8px de marge basse
+   Cet écart asymétrique est ce qui crée le rythme du document.
+
+   Dépend de tokens.css puis az.css.
+   ========================================================================== */
 
 /* --- Voile de chargement ------------------------------------------------ */
 .voile {
   position: fixed; inset: 0; z-index: 200;
   display: grid; place-items: center;
-  background: var(--papier);
-  transition: opacity .3s, visibility .3s;
+  background: var(--bg);
+  padding: var(--marge-mobile);
+  transition: opacity var(--t-apparition), visibility var(--t-apparition);
 }
 .voile.parti { opacity: 0; visibility: hidden; }
-.tourne { animation: tourne .8s linear infinite; }
-@keyframes tourne { to { transform: rotate(360deg); } }
 
 /* --- Agencement --------------------------------------------------------- */
 .agencement {
   display: grid;
-  grid-template-columns: 292px minmax(0, 1fr);
+  grid-template-columns: var(--barre-laterale) minmax(0, 1fr);
   min-height: 100dvh;
 }
 
-/* --- Sommaire ----------------------------------------------------------- */
+/* --- Barre latérale ----------------------------------------------------- */
 .sommaire {
   position: sticky;
   top: 0;
   height: 100dvh;
   display: flex;
   flex-direction: column;
-  background: var(--papier-creux);
-  border-right: 1px solid var(--trait);
+  background: var(--bg-2);
   overflow: hidden;
 }
 .sommaire-haut {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 18px 20px;
+  gap: var(--e-2);
+  padding: var(--e-3) var(--e-4);
 }
-.sommaire-bas {
-  padding: 16px 20px calc(16px + env(safe-area-inset-bottom));
-  border-top: 1px solid var(--trait);
+.sommaire-progression {
+  padding: 0 var(--e-4) var(--e-4);
+  display: flex; flex-direction: column; gap: var(--e-2);
 }
-
-.progression { padding: 0 20px 16px; display: flex; flex-direction: column; gap: 8px; }
-.jauge {
-  height: 4px;
-  border-radius: 999px;
-  background: var(--trait-fort);
-  overflow: hidden;
-}
-.jauge-remplie {
-  height: 100%;
-  width: 0%;
-  border-radius: 999px;
-  background: var(--vert);
-  transition: width .5s cubic-bezier(.2,.8,.2,1);
-}
-
 .liens-modules {
   flex: 1;
   overflow-y: auto;
-  padding: 4px 12px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
   overscroll-behavior: contain;
+  padding: var(--e-1) var(--e-2) var(--e-5);
+  display: flex; flex-direction: column; gap: 2px;
 }
-.lien-module {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 9px 10px;
-  border-radius: 7px;
-  text-decoration: none;
-  color: var(--encre-douce);
-  font-size: .875rem;
-  line-height: 1.4;
+.liens-modules .groupe {
+  padding: var(--e-4) var(--e-2) var(--e-1);
+}
+.sommaire-bas {
+  padding: var(--e-3) var(--e-4) calc(var(--e-3) + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--trait);
+  display: flex; flex-direction: column; gap: var(--e-1);
+}
+
+.bouton-icone {
+  display: grid; place-items: center;
+  flex: none;
+  width: 28px; height: 28px;
+  border: 0; background: transparent;
+  border-radius: var(--r-1);
+  color: var(--texte-2);
   cursor: pointer;
-  border: 0;
-  background: none;
-  text-align: left;
-  width: 100%;
-  transition: background .13s, color .13s;
+  transition: background var(--t-survol), color var(--t-survol);
 }
-.lien-module:hover { background: rgba(20,19,15,.045); color: var(--encre); }
-.lien-module.actif { background: var(--papier-pur); color: var(--encre); font-weight: 600; box-shadow: 0 1px 2px rgba(20,19,15,.05); }
-.lien-module .num {
-  flex: 0 0 auto;
-  font-family: var(--mono);
-  font-size: .68rem;
-  font-variant-numeric: tabular-nums;
-  color: var(--encre-tenue);
-  padding-top: 2px;
-  width: 18px;
-}
-.lien-module.fait .num::after { content: "✓"; }
-.lien-module.fait .num { color: var(--vert); }
-.lien-module.fait .num span { display: none; }
+.bouton-icone:hover { background: var(--survol); color: var(--texte); }
+.bouton-icone:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--anneau); }
 
 /* --- Barre mobile ------------------------------------------------------- */
 .barre-app {
   display: none;
   position: sticky; top: 0; z-index: 60;
-  align-items: center; justify-content: space-between;
-  gap: 12px;
-  padding: 10px 14px;
-  background: rgba(251,250,248,.9);
-  backdrop-filter: saturate(180%) blur(14px);
-  -webkit-backdrop-filter: saturate(180%) blur(14px);
+  align-items: center; gap: var(--e-3);
+  height: 48px;
+  padding: 0 var(--e-3);
+  background: var(--bg);
   border-bottom: 1px solid var(--trait);
 }
-.bouton-icone {
-  display: grid; place-items: center;
-  width: 38px; height: 38px;
-  border: 0; background: none;
-  border-radius: 8px;
-  color: var(--encre-douce);
-  cursor: pointer;
-}
-.bouton-icone:hover { background: rgba(20,19,15,.05); }
 .ombre-menu {
   display: none;
   position: fixed; inset: 0; z-index: 70;
-  background: rgba(20,19,15,.28);
+  background: rgba(15, 15, 15, 0.32);
   opacity: 0;
-  transition: opacity .25s;
+  transition: opacity var(--t-apparition);
 }
-.masque-bureau { display: none; }
+.mobile-seul { display: none; }
 
 @media (max-width: 900px) {
   .agencement { grid-template-columns: minmax(0, 1fr); }
   .barre-app { display: flex; }
-  .masque-bureau { display: grid; }
+  .mobile-seul { display: grid; }
   .sommaire {
     position: fixed; inset: 0 auto 0 0; z-index: 80;
     width: min(300px, 86vw);
     transform: translateX(-102%);
-    transition: transform .28s cubic-bezier(.2,.8,.2,1);
-    box-shadow: 0 0 60px rgba(20,19,15,.18);
+    transition: transform 240ms cubic-bezier(.2, .8, .2, 1);
+    box-shadow: var(--ombre-flottant);
   }
   .sommaire.ouvert { transform: none; }
   .ombre-menu.actif { display: block; opacity: 1; }
 }
 
 /* --- Colonne de lecture ------------------------------------------------- */
-.lecture {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
+.lecture { display: flex; flex-direction: column; min-width: 0; }
+
 .page {
   width: 100%;
-  max-width: 760px;
+  max-width: var(--colonne-lecture);
   margin-inline: auto;
-  padding: clamp(32px, 6vw, 76px) clamp(20px, 5vw, 48px) 32px;
-  min-height: 60vh;
+  padding: var(--e-9) var(--marge-mobile) var(--e-6);
+  min-height: 50vh;
 }
+@media (max-width: 900px) { .page { padding-top: var(--e-7); } }
 
-/* --- Typographie de lecture --------------------------------------------- */
-.page > * + * { margin-top: 1.15em; }
-
-.page .chapeau {
-  display: flex; flex-direction: column; gap: 10px;
-  padding-bottom: 26px;
-  margin-bottom: 34px;
-  border-bottom: 1px solid var(--trait);
-}
-.page .chapeau .fil {
-  font-family: var(--mono);
-  font-size: .72rem;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: var(--encre-tenue);
-}
-.page .chapeau h1 {
-  font-family: var(--serif);
-  font-weight: 400;
-  font-size: clamp(2rem, 4.6vw, 2.9rem);
-  line-height: 1.08;
-  letter-spacing: -.022em;
+/* Chapeau de module */
+.chapeau { display: flex; flex-direction: column; gap: var(--e-3); }
+.chapeau .fil { /* .etiquette-mono */ }
+.chapeau h1 {
+  font-weight: 700;
+  font-size: 40px;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
   text-wrap: balance;
 }
-.page .chapeau .resume {
-  font-size: 1.06rem;
-  color: var(--encre-douce);
-  line-height: 1.6;
-  text-wrap: pretty;
-}
-.page .chapeau .duree {
-  font-size: .8rem;
-  color: var(--encre-tenue);
-}
+@media (max-width: 620px) { .chapeau h1 { font-size: 32px; } }
+.chapeau .resume { font-size: 18px; line-height: 1.55; color: var(--texte-2); text-wrap: pretty; }
+.chapeau .duree  { font-size: 13px; line-height: 1.5; color: var(--texte-3); }
+.chapeau + * { margin-top: 0; }
+.chapeau-filet { border: 0; border-top: 1px solid var(--trait); margin: var(--e-5) 0 0; }
 
-.page h2 {
-  font-family: var(--serif);
-  font-weight: 400;
-  font-size: 1.72rem;
-  line-height: 1.2;
-  letter-spacing: -.017em;
-  margin-top: 2.1em;
-  scroll-margin-top: 80px;
-}
-.page h3 {
-  font-size: 1.08rem;
+/* --- Corps du cours ----------------------------------------------------- */
+/* Le rythme : 12px entre blocs, 40px au-dessus d'un h2, 8px en dessous. */
+.corps > * + * { margin-top: var(--e-3); }
+
+.corps h2 {
+  margin-top: var(--e-6);
+  margin-bottom: var(--e-2);
   font-weight: 600;
-  letter-spacing: -.011em;
-  margin-top: 1.9em;
-  scroll-margin-top: 80px;
+  font-size: 24px;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+  scroll-margin-top: var(--e-8);
 }
-.page p { line-height: 1.72; text-wrap: pretty; }
-.page ul, .page ol { padding-left: 1.35em; }
-.page li { margin-block: .42em; line-height: 1.68; }
-.page li::marker { color: var(--encre-tenue); }
-.page strong { font-weight: 600; }
-.page a { color: var(--accent); text-underline-offset: 3px; }
+.corps h2 + * { margin-top: 0; }
 
-.page hr {
-  height: 1px; border: 0; background: var(--trait);
-  margin-block: 2.4em;
+.corps h3 {
+  margin-top: 28px;
+  margin-bottom: var(--e-2);
+  font-weight: 600;
+  font-size: 19px;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  scroll-margin-top: var(--e-8);
 }
+.corps h3 + * { margin-top: 0; }
 
-.page blockquote {
+.corps h4 {
+  margin-top: var(--e-5);
+  margin-bottom: var(--e-1);
+  font-weight: 600;
+  font-size: 16px;
+  line-height: 1.4;
+}
+.corps h4 + * { margin-top: 0; }
+
+.corps p  { font-size: 16px; line-height: 1.65; text-wrap: pretty; }
+.corps ul, .corps ol { padding-left: var(--e-5); }
+.corps li { margin-block: 6px; font-size: 16px; line-height: 1.65; }
+.corps li::marker { color: var(--texte-3); }
+.corps strong { font-weight: 600; }
+
+.corps blockquote {
   border-left: 2px solid var(--trait-fort);
-  padding-left: 18px;
-  color: var(--encre-douce);
-  font-style: italic;
+  padding-left: var(--e-4);
+  color: var(--texte-2);
 }
+.corps hr { border: 0; border-top: 1px solid var(--trait); margin-block: var(--e-6); }
 
-.page pre { margin-block: 1.4em; position: relative; }
-.page pre .copier {
-  position: absolute; top: 9px; right: 9px;
-  padding: 4px 9px;
-  border-radius: 6px;
-  border: 1px solid rgba(232,228,220,.2);
-  background: rgba(232,228,220,.07);
-  color: #B8B3A8;
-  font-size: .68rem;
-  font-family: var(--sans);
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity .15s, color .15s;
-}
-.page pre:hover .copier, .page pre .copier:focus-visible { opacity: 1; }
-.page pre .copier:hover { color: #fff; }
-
-/* --- Encadrés (syntaxe ::: dans le markdown) ---------------------------- */
-.encadre {
-  display: flex; gap: 13px;
-  padding: 16px 18px;
-  border-radius: var(--r);
-  border: 1px solid var(--trait);
-  background: var(--papier-pur);
-  font-size: .95rem;
-  line-height: 1.62;
-  margin-block: 1.5em;
-}
-.encadre .marqueur { flex: 0 0 auto; font-size: 1.05rem; line-height: 1.5; }
-.encadre > div > * + * { margin-top: .6em; }
-.encadre p:first-child strong:only-child { display: block; margin-bottom: .1em; }
-
-.encadre--attention { background: #FFF9EC; border-color: #F2E3BE; }
-.encadre--piege     { background: var(--accent-voile); border-color: #F2D8CA; }
-.encadre--astuce    { background: var(--vert-voile); border-color: #CFE4D8; }
-.encadre--action    { background: var(--papier-creux); border-color: var(--trait-fort); }
-.encadre--note      { background: var(--papier-pur); }
-
-/* --- Bloc « à faire maintenant » ---------------------------------------- */
-.tache {
-  border: 1px dashed var(--trait-fort);
-  border-radius: var(--r-lg);
-  padding: 20px 22px;
-  background: var(--papier-pur);
-  margin-block: 1.8em;
-}
-.tache .titre-tache {
-  font-size: .72rem; font-weight: 700;
-  letter-spacing: .1em; text-transform: uppercase;
-  color: var(--accent);
-  margin-bottom: 10px;
-}
-
-/* --- Image / capture ---------------------------------------------------- */
-.page figure { margin-block: 1.8em; }
-.page figure img {
-  width: 100%;
-  border-radius: var(--r);
-  border: 1px solid var(--trait);
-}
-.page figure figcaption {
-  margin-top: 9px;
-  font-size: .8rem;
-  color: var(--encre-tenue);
+.corps figure { margin-block: var(--e-4); }
+.corps figure img { width: 100%; border-radius: var(--r-2); }
+.corps figcaption {
+  margin-top: var(--e-2);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--texte-3);
   text-align: center;
 }
 .emplacement-visuel {
   display: grid; place-items: center;
   aspect-ratio: 16 / 9;
-  border-radius: var(--r);
-  border: 1px dashed var(--trait-fort);
-  background: var(--papier-creux);
-  color: var(--encre-tenue);
-  font-size: .82rem;
+  border-radius: var(--r-2);
+  background: var(--bg-2);
+  color: var(--texte-3);
+  font-size: 13px;
+  line-height: 1.5;
   text-align: center;
-  padding: 20px;
+  padding: var(--e-5);
 }
 
-/* --- Tableau ------------------------------------------------------------ */
-.page .cadre-tableau { overflow-x: auto; margin-block: 1.6em; }
-.page table { border-collapse: collapse; width: 100%; font-size: .92rem; }
-.page th, .page td {
-  text-align: left;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--trait);
-  vertical-align: top;
+/* --- Bloc « module terminé » -------------------------------------------- */
+.bloc-fini {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--e-4); flex-wrap: wrap;
+  background: var(--bg-2);
+  border-radius: var(--r-3);
+  padding: var(--e-4) var(--e-5);
+  margin-top: var(--e-7);
 }
-.page th { font-weight: 600; font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--encre-tenue); }
 
 /* --- Pagination --------------------------------------------------------- */
 .pagination {
   width: 100%;
-  max-width: 760px;
+  max-width: var(--colonne-lecture);
   margin-inline: auto;
-  padding: 0 clamp(20px, 5vw, 48px) 48px;
+  padding: 0 var(--marge-mobile) var(--e-7);
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: var(--e-3);
 }
 .pagination a {
-  display: flex; flex-direction: column; gap: 3px;
-  padding: 16px 18px;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: var(--e-3) var(--e-4);
   border: 1px solid var(--trait);
-  border-radius: var(--r);
-  background: var(--papier-pur);
+  border-radius: var(--r-3);
   text-decoration: none;
-  transition: border-color .15s, transform .15s;
+  color: var(--texte);
+  transition: background var(--t-survol), border-color var(--t-survol);
 }
-.pagination a:hover { border-color: var(--trait-fort); transform: translateY(-1px); }
-.pagination .sens { font-size: .72rem; color: var(--encre-tenue); }
-.pagination .titre { font-size: .93rem; font-weight: 600; letter-spacing: -.01em; }
+.pagination a:hover { background: var(--survol); border-color: var(--trait-fort); text-decoration: none; color: var(--texte); }
+.pagination a:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--anneau); }
+.pagination .sens  { font-size: 12px; line-height: 1.4; color: var(--texte-3); }
+.pagination .titre { font-size: 14px; line-height: 1.4; font-weight: 600; }
 .pagination a.droite { text-align: right; }
 .pagination .vide { visibility: hidden; }
 @media (max-width: 560px) { .pagination { grid-template-columns: 1fr; } }
 
-/* --- Bouton « module terminé » ------------------------------------------ */
-.bloc-fini {
-  width: 100%; max-width: 760px; margin-inline: auto;
-  padding: 0 clamp(20px, 5vw, 48px);
-  margin-block: 8px 32px;
-}
-
+/* --- Pied de lecture ---------------------------------------------------- */
 .pied-lecture {
   border-top: 1px solid var(--trait);
-  padding: 24px clamp(20px,5vw,48px);
+  padding: var(--e-5) var(--marge-mobile);
   text-align: center;
+  font-size: 12px;
+  color: var(--texte-3);
 }
-.pied-lecture a { color: var(--encre-douce); }
+
+/* --- Squelette de chargement -------------------------------------------- */
+.squelette { display: flex; flex-direction: column; gap: var(--e-3); }
+.squelette span {
+  display: block;
+  height: 16px;
+  border-radius: var(--r-1);
+  background: var(--bg-3);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+.squelette span:nth-child(1) { width: 30%; height: 12px; }
+.squelette span:nth-child(2) { width: 80%; height: 40px; margin-bottom: var(--e-2); }
+.squelette span:nth-child(3) { width: 100%; }
+.squelette span:nth-child(4) { width: 96%; }
+.squelette span:nth-child(5) { width: 62%; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+
+/* --- Accueil de la formation ------------------------------------------- */
+.frise {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: var(--e-2);
+}
+.frise .cran {
+  flex: none;
+  width: 28px; height: 28px;
+  display: grid; place-items: center;
+  border-radius: var(--r-rond);
+  font-family: var(--police-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  background: var(--bg-3);
+  color: var(--texte-3);
+}
+.frise .cran--fait  { background: var(--voile-vert); color: var(--valide); }
+.frise .cran--actif { background: var(--bg); box-shadow: inset 0 0 0 2px var(--action); color: var(--texte); }
 
 .lien-nu {
   border: 0; background: none; padding: 0;
-  color: var(--encre-douce);
+  color: var(--texte-2);
+  font-size: 12px;
   cursor: pointer;
   text-align: left;
   text-decoration: underline;
-  text-underline-offset: 3px;
+  text-underline-offset: 2px;
 }
-.lien-nu:hover { color: var(--encre); }
+.lien-nu:hover { color: var(--texte); }

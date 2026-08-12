@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>De Zéro à l'App Store — publie ta première application mobile en 30 jours</title>
 <meta name="description" content="La formation qui t'emmène de « je n'ai jamais codé » à « mon application est en ligne sur l'App Store et le Play Store ». Avec l'IA. En 30 jours. Sans école, sans agence, sans 8 000 €.">
-<meta name="theme-color" content="#FBFAF8">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#191919" media="(prefers-color-scheme: dark)">
 
 <meta property="og:type" content="website">
 <meta property="og:title" content="De Zéro à l'App Store — ta première app publiée en 30 jours">
@@ -16,932 +17,674 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="./assets/css/atelier.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%2314130F'/><text y='72' x='50' text-anchor='middle' font-size='62' font-family='Georgia,serif' fill='%23FBFAF8'>Z</text></svg>">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="./assets/css/tokens.css">
+<link rel="stylesheet" href="./assets/css/az.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='%2337352F'/><text y='71' x='50' text-anchor='middle' font-size='60' font-weight='700' font-family='Inter,Helvetica,sans-serif' fill='%23fff'>Z</text></svg>">
+<script>
+  /* Applique le thème avant le premier rendu, pour éviter le flash. */
+  (function () {
+    try {
+      var t = localStorage.getItem('az:theme');
+      if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+    } catch (e) {}
+  })();
+</script>
 </head>
 <body>
 
-<!-- ═══════════════ BANDEAU D'URGENCE ═══════════════ -->
-<div class="bandeau" id="bandeau">
-  <span>Tarif de lancement — <b>−50 %</b> jusqu'à la fin de l'offre&nbsp;: <span class="compte" id="compte">--j --h --m --s</span></span>
-</div>
-
-<!-- ═══════════════ EN-TÊTE ═══════════════ -->
+<!-- ═══════ 15 · Barre de navigation ═══════ -->
 <header class="entete" id="entete">
-  <div class="enveloppe interieur">
-    <a href="#" class="logo"><span class="marque">Z</span> Atelier&nbsp;Zéro</a>
+  <div class="enveloppe">
+    <a href="#" class="logo"><span class="marque">Z</span>Atelier&nbsp;Zéro</a>
+
     <nav class="nav-liens">
-      <a href="#probleme">Pourquoi</a>
       <a href="#programme">Programme</a>
-      <a href="#formateur">Le formateur</a>
       <a href="#tarifs">Tarifs</a>
       <a href="#faq">FAQ</a>
+      <a href="#formateur">Le formateur</a>
     </nav>
-    <div class="rang">
-      <a href="./acces.html" class="t-petit t-douce" style="text-decoration:none">Se connecter</a>
-      <a href="#tarifs" class="btn btn--encre" style="padding:11px 20px;font-size:.9rem">Rejoindre</a>
+
+    <span style="margin-left:auto"></span>
+    <div class="selecteur-theme" id="selecteur-theme" role="group" aria-label="Thème">
+      <button type="button" data-theme-val="light" aria-pressed="false">Clair</button>
+      <button type="button" data-theme-val="dark" aria-pressed="false">Sombre</button>
+      <button type="button" data-theme-val="auto" aria-pressed="true">Système</button>
     </div>
+    <a href="./acces.html" class="lien-discret">Se connecter</a>
+    <a href="#tarifs" class="btn btn-principal">Rejoindre</a>
   </div>
 </header>
 
-<!-- ═══════════════ HÉROS ═══════════════ -->
-<section class="section" style="padding-top:clamp(48px,7vw,88px)">
-  <div class="enveloppe">
-    <div class="grille" style="grid-template-columns:1.15fr .85fr;align-items:center;gap:clamp(32px,5vw,64px)">
+<main class="enveloppe" style="padding-top:clamp(64px,9vw,96px);padding-bottom:var(--e-10)">
+<div class="sections">
 
-      <div class="pile pile-32">
-        <div class="pile pile-24">
-          <span class="etiquette">Formation en ligne · 100 % français</span>
+  <!-- ═══════ 1 · Héros ═══════ -->
+  <section>
+    <div class="pile g-5" style="max-width:840px">
+      <p class="etiquette">Formation en ligne · 100 % française</p>
 
-          <h1 class="t-display">
-            Ton application mobile<br>
-            en ligne sur l'App&nbsp;Store<br>
-            <span class="souligne-main">dans 30 jours.</span>
-          </h1>
+      <h1 class="t-display">
+        Ton application mobile<br>
+        en ligne sur l'App&nbsp;Store<br>
+        dans 30 jours.
+      </h1>
 
-          <p class="t-lead" style="max-width:52ch">
-            Même si tu n'as <b style="color:var(--encre)">jamais écrit une ligne de code</b>.
-            Même si tu n'as pas d'argent à mettre dans une agence.
-            L'IA écrit le code&nbsp;— moi je t'apprends tout le reste,
-            c'est-à-dire les 80&nbsp;% que personne ne t'explique.
-          </p>
-        </div>
-
-        <div class="pile pile-16">
-          <div class="rang">
-            <a href="#tarifs" class="btn btn--principal btn--large">
-              Je veux publier mon app
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-            </a>
-            <a href="#programme" class="btn btn--clair btn--large">Voir le programme</a>
-          </div>
-          <p class="t-micro t-tenue">
-            Accès immédiat · À vie · Garantie 30 jours satisfait ou remboursé · Paiement sécurisé Stripe
-          </p>
-        </div>
-
-        <hr class="filet">
-
-        <div class="grille grille-3" style="gap:20px">
-          <div class="pile pile-4">
-            <span class="chiffre">12</span>
-            <span class="t-micro t-douce">modules, du premier clic<br>au bouton « Publier »</span>
-          </div>
-          <div class="pile pile-4">
-            <span class="chiffre">0 €</span>
-            <span class="t-micro t-douce">d'outils à acheter<br>pour suivre la formation</span>
-          </div>
-          <div class="pile pile-4">
-            <span class="chiffre">1</span>
-            <span class="t-micro t-douce">vraie app terminée<br>et publiée à la fin</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Visuel héros : à remplacer par le rendu Claude Design (voir docs/prompts-claude-design.md #1) -->
-      <div class="rang rang--centre" style="position:relative">
-        <div class="telephone" id="telephone-heros">
-          <div class="ecran">
-            <div style="padding:26px 20px 0;display:flex;flex-direction:column;height:100%">
-              <div style="font-size:.62rem;font-weight:600;color:var(--encre-tenue);letter-spacing:.06em">9:41</div>
-              <div style="margin-top:26px;font-family:var(--serif);font-size:1.7rem;line-height:1.1;letter-spacing:-.02em">Aujourd'hui</div>
-              <div style="font-size:.72rem;color:var(--encre-tenue);margin-top:4px">3 rituels sur 4</div>
-              <div style="margin-top:20px;display:flex;flex-direction:column;gap:9px" id="liste-heros">
-                <div class="ligne-h" style="display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--trait);border-radius:11px">
-                  <span style="width:17px;height:17px;border-radius:50%;background:var(--vert);flex:0 0 auto"></span>
-                  <span style="font-size:.78rem">Marcher 20 minutes</span>
-                </div>
-                <div class="ligne-h" style="display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--trait);border-radius:11px">
-                  <span style="width:17px;height:17px;border-radius:50%;background:var(--vert);flex:0 0 auto"></span>
-                  <span style="font-size:.78rem">Lire 10 pages</span>
-                </div>
-                <div class="ligne-h" style="display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--trait);border-radius:11px">
-                  <span style="width:17px;height:17px;border-radius:50%;background:var(--vert);flex:0 0 auto"></span>
-                  <span style="font-size:.78rem">Pas d'écran après 22 h</span>
-                </div>
-                <div class="ligne-h" id="ligne-cible" style="display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--trait);border-radius:11px">
-                  <span id="puce-cible" style="width:17px;height:17px;border-radius:50%;border:1.5px solid var(--trait-fort);flex:0 0 auto;transition:background .3s,border-color .3s"></span>
-                  <span style="font-size:.78rem">Écrire 200 mots</span>
-                </div>
-              </div>
-              <div style="margin-top:auto;padding-bottom:18px">
-                <div style="background:var(--encre);color:var(--papier);text-align:center;padding:12px;border-radius:11px;font-size:.78rem;font-weight:600">Ajouter un rituel</div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div style="position:absolute;bottom:-14px;right:-4px;background:var(--papier-pur);border:1px solid var(--trait);border-radius:12px;padding:10px 14px;font-size:.74rem;box-shadow:0 12px 28px -18px rgba(20,19,15,.4)">
-          <b>Rituel</b> · l'app que tu construis
-        </div>
-      </div>
-
-    </div>
-  </div>
-</section>
-
-<style>
-  @media (max-width: 900px) {
-    section .grille[style*="1.15fr"] { grid-template-columns: minmax(0,1fr) !important; }
-    #telephone-heros { margin-inline: auto; }
-  }
-</style>
-
-<!-- ═══════════════ PREUVE RAPIDE ═══════════════ -->
-<section class="section--serree" style="border-block:1px solid var(--trait);background:var(--papier-pur)">
-  <div class="enveloppe">
-    <div class="rang rang--espace" style="gap:28px">
-      <p class="t-petit t-douce" style="max-width:34ch">
-        Formation écrite par un développeur qui a <b style="color:var(--encre)">réellement publié</b> ses applications sur l'App Store et le Play Store.
+      <p class="t-lead" style="max-width:640px">
+        Même si tu n'as jamais écrit une ligne de code. L'IA écrit le code —
+        moi je t'apprends tout le reste, c'est-à-dire les 80 % que personne
+        ne t'explique.
       </p>
-      <div class="rang" style="gap:clamp(20px,4vw,44px);opacity:.8">
-        <!-- Remplace ces noms par tes vraies apps + leurs icônes -->
-        <span class="t-h3">MindDrop</span>
-        <span class="t-h3">Qindil</span>
-        <span class="t-h3">Flowi</span>
-        <span class="t-h3">Isogonic</span>
+
+      <div class="rang" style="gap:var(--e-3)">
+        <a href="#tarifs" class="btn btn-principal btn-large">Rejoindre l'Atelier — 97 €</a>
+        <a href="#programme" class="btn btn-secondaire btn-large">Voir les 12 modules</a>
       </div>
+
+      <p class="t-petit t-3">
+        Accès immédiat, à vie · Garantie 30 jours · Paiement sécurisé Stripe ·
+        <span id="lancement">tarif de lancement</span>
+      </p>
     </div>
-  </div>
-</section>
 
-<!-- ═══════════════ LE PROBLÈME ═══════════════ -->
-<section class="section" id="probleme">
-  <div class="enveloppe enveloppe--lisible">
-    <div class="pile pile-32 apparait">
-      <span class="etiquette">Soyons honnêtes deux minutes</span>
-      <h2 class="t-h1">Tu as une idée d'application<br>depuis combien de temps&nbsp;?</h2>
-
-      <div class="pile pile-24 t-lead">
-        <p>
-          Six mois&nbsp;? Deux ans&nbsp;? Et à chaque fois, le même mur.
-        </p>
-        <p>
-          Tu as demandé un devis à une agence&nbsp;: <b style="color:var(--encre)">entre 25 000 et 80 000 €</b>.
-          Tu as regardé les bootcamps&nbsp;: <b style="color:var(--encre)">6 000 à 9 000 €</b> et neuf mois de ta vie.
-          Tu as ouvert une vidéo YouTube de trois heures qui commence par
-          « installez Xcode » et tu as fermé l'onglet au bout de quatre minutes.
-        </p>
-        <p>
-          Tu as même testé un outil no-code. Ça marchait. Jusqu'au moment de publier —
-          là tu as découvert qu'il fallait un compte développeur, un certificat,
-          un profil de provisionnement, une politique de confidentialité, un questionnaire
-          d'âge, des captures d'écran en huit formats, et une phrase magique pour ne pas
-          se faire rejeter par un examinateur d'Apple à Cupertino.
-        </p>
-        <p style="font-family:var(--serif);font-size:1.5rem;line-height:1.4;color:var(--encre);letter-spacing:-.015em">
-          Ton idée est toujours dans les notes de ton téléphone.
-          Et pendant ce temps, quelqu'un d'autre l'a publiée.
-        </p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ═══════════════ LE RETOURNEMENT ═══════════════ -->
-<section class="section section--encre">
-  <div class="enveloppe">
-    <div class="pile pile-48">
-      <div class="pile pile-24 apparait" style="max-width:44ch">
-        <span class="etiquette">Ce qui a changé en 2026</span>
-        <h2 class="t-h1" style="color:var(--encre-inverse)">
-          Le code n'est plus<br>le problème.
-        </h2>
-        <p class="t-lead">
-          Aujourd'hui tu décris ce que tu veux en français, l'IA écrit le code.
-          Ce n'est pas de la magie et ce n'est pas de la triche&nbsp;:
-          c'est la façon dont les développeurs professionnels travaillent maintenant.
-          La barrière technique s'est effondrée.
-        </p>
-      </div>
-
-      <div class="grille grille-3">
-        <div class="carte carte--encre apparait" data-retard="1">
-          <div class="pile pile-12">
-            <span class="jeton-num">01</span>
-            <h3 class="t-h3" style="color:#fff">Tu décris</h3>
-            <p class="t-petit t-douce">« Je veux un écran avec une liste de tâches, un bouton pour en ajouter une, et une coche verte quand c'est fait. »</p>
-          </div>
-        </div>
-        <div class="carte carte--encre apparait" data-retard="2">
-          <div class="pile pile-12">
-            <span class="jeton-num">02</span>
-            <h3 class="t-h3" style="color:#fff">L'IA écrit</h3>
-            <p class="t-petit t-douce">Le code apparaît. Tu le lis, tu comprends la logique, tu ajustes. Tu ne mémorises rien par cœur.</p>
-          </div>
-        </div>
-        <div class="carte carte--encre apparait" data-retard="3">
-          <div class="pile pile-12">
-            <span class="jeton-num">03</span>
-            <h3 class="t-h3" style="color:#fff">Ça tourne sur ton téléphone</h3>
-            <p class="t-petit t-douce">En quinze secondes, sur ton vrai iPhone ou ton vrai Android. Pas dans un simulateur flou.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ═══════════════ LE PIÈGE (le pivot de vente) ═══════════════ -->
-<section class="section">
-  <div class="enveloppe">
-    <div class="grille grille-2" style="align-items:start;gap:clamp(32px,6vw,80px)">
-
-      <div class="pile pile-24 apparait">
-        <span class="etiquette">Mais</span>
-        <h2 class="t-h1">Alors pourquoi<br>si peu de gens<br>y arrivent&nbsp;?</h2>
-        <p class="t-lead">
-          Parce que faire tourner une app sur son téléphone,
-          c'est <b style="color:var(--encre)">20 % du travail</b>.
-        </p>
-        <p class="t-lead">
-          Les 80 % restants, aucune formation « vibe coding » ne te les enseigne —
-          parce que la plupart des formateurs n'ont jamais publié
-          une seule application de leur vie.
-        </p>
-        <div class="carte carte--accent">
-          <p style="font-family:var(--serif);font-size:1.28rem;line-height:1.4;letter-spacing:-.012em">
-            « Les autres t'apprennent à coder.<br>
-            Moi je t'apprends à <span class="t-accent">publier</span>. »
+    <!-- Aperçu produit, posé à plat. Remplacer par le rendu de la passe 1. -->
+    <div class="creux apparait" style="margin-top:var(--e-7);padding:clamp(24px,4vw,48px)">
+      <div class="grille" style="grid-template-columns:1fr 1fr;gap:var(--e-6);align-items:center">
+        <div class="pile g-3">
+          <p class="etiquette-mono">Module 09</p>
+          <p class="t-h3">Publier sur l'App Store</p>
+          <p class="t-petit t-2" style="max-width:38ch">
+            Du certificat de distribution au statut « Prêt pour la vente »,
+            dans l'ordre exact où Apple te les demande.
           </p>
+          <div class="rang" style="gap:6px">
+            <span class="pastille pastille--termine">✓ 11 motifs de rejet</span>
+            <span class="pastille pastille--encours">● Réponse type incluse</span>
+          </div>
+        </div>
+        <div class="bloc-code" style="margin:0">
+          <pre><code>eas build --platform ios --profile production
+eas submit --platform ios --latest
+
+✔ Build terminé
+✔ Envoyé à App Store Connect
+→ En attente de revue</code></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════ 2 · Preuve ═══════ -->
+  <section>
+    <div class="rang-espace">
+      <p class="t-petit t-2" style="max-width:38ch">
+        Écrite par un développeur qui a réellement publié ses applications
+        sur l'App Store et le Play Store.
+      </p>
+      <div class="rang" style="gap:var(--e-5)">
+        <span class="t-petit t-fort">MindDrop</span>
+        <span class="t-petit t-fort">Qindil</span>
+        <span class="t-petit t-fort">Flowi</span>
+        <span class="t-petit t-fort">Isogonic</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════ 3 · Le problème ═══════ -->
+  <section class="apparait">
+    <div class="section-tete">
+      <p class="etiquette">Soyons honnêtes deux minutes</p>
+      <h2 class="t-h1">Tu as une idée d'application<br>depuis combien de temps&nbsp;?</h2>
+    </div>
+    <div class="colonne pile g-4">
+      <p class="t-lead">Six mois&nbsp;? Deux ans&nbsp;? Et à chaque fois, le même mur.</p>
+      <p class="t-corps t-2">
+        Tu as demandé un devis à une agence&nbsp;: entre 25 000 et 80 000 €. Tu as
+        regardé les bootcamps&nbsp;: 6 000 à 9 000 € et neuf mois de ta vie. Tu as
+        ouvert une vidéo YouTube de trois heures qui commence par « installez
+        Xcode » et tu as fermé l'onglet au bout de quatre minutes.
+      </p>
+      <p class="t-corps t-2">
+        Tu as même testé un outil no-code. Ça marchait. Jusqu'au moment de
+        publier — là tu as découvert qu'il fallait un compte développeur, un
+        certificat, un profil de provisionnement, une politique de
+        confidentialité, un questionnaire d'âge, des captures d'écran en huit
+        formats, et une phrase magique pour ne pas se faire rejeter par un
+        examinateur d'Apple à Cupertino.
+      </p>
+      <p class="t-h3" style="margin-top:var(--e-3)">
+        Ton idée est toujours dans les notes de ton téléphone.
+        Et pendant ce temps, quelqu'un d'autre l'a publiée.
+      </p>
+    </div>
+  </section>
+
+  <!-- ═══════ 4 · Ce qui a changé ═══════ -->
+  <section class="apparait">
+    <div class="section-tete">
+      <p class="etiquette">Ce qui a changé en 2026</p>
+      <h2 class="t-h1">Le code n'est plus le problème.</h2>
+      <p class="t-lead colonne" style="margin-top:var(--e-2)">
+        Tu décris ce que tu veux en français, l'IA écrit le code. Ce n'est ni
+        de la magie ni de la triche&nbsp;: c'est la façon dont les développeurs
+        professionnels travaillent maintenant.
+      </p>
+    </div>
+    <div class="grille grille-3">
+      <div class="pile g-2 apparait" data-retard="1">
+        <p class="etiquette-mono">01</p>
+        <p class="t-h3">Tu décris</p>
+        <p class="t-petit t-2">« Une liste de tâches, un bouton pour en ajouter une, et une coche verte quand c'est fait. »</p>
+      </div>
+      <div class="pile g-2 apparait" data-retard="2">
+        <p class="etiquette-mono">02</p>
+        <p class="t-h3">L'IA écrit</p>
+        <p class="t-petit t-2">Le code apparaît. Tu le lis, tu comprends la logique, tu ajustes. Tu ne mémorises rien.</p>
+      </div>
+      <div class="pile g-2 apparait" data-retard="3">
+        <p class="etiquette-mono">03</p>
+        <p class="t-h3">Ça tourne sur ton téléphone</p>
+        <p class="t-petit t-2">En quinze secondes, sur ton vrai iPhone ou ton vrai Android. Pas dans un simulateur flou.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════ 5 · Le pivot ═══════ -->
+  <section class="apparait">
+    <div class="grille grille-2" style="gap:clamp(32px,6vw,80px);align-items:start">
+      <div class="pile g-5">
+        <p class="etiquette">Le pivot</p>
+        <h2 class="t-h1">Faire tourner une app sur ton téléphone, c'est 20 % du travail.</h2>
+        <p class="t-lead">
+          Les 80 % restants, personne ne les enseigne — parce que la plupart
+          des formateurs « vibe coding » n'ont jamais publié une seule
+          application de leur vie.
+        </p>
+        <div class="encadre encadre--astuce">
+          <span class="marqueur" aria-hidden="true">💡</span>
+          <div>
+            <p><strong>Les autres t'apprennent à coder.<br>Moi je t'apprends à publier.</strong></p>
+          </div>
         </div>
       </div>
 
-      <div class="pile pile-16 apparait" data-retard="1">
-        <p class="t-petit t-tenue" style="text-transform:uppercase;letter-spacing:.09em;font-weight:600">Ce qui bloque vraiment les gens</p>
-        <ul class="liste-coche liste-croix t-petit" style="font-size:.98rem">
+      <div class="pile g-4">
+        <p class="etiquette">Ce qui bloque vraiment les gens</p>
+        <ul class="liste-marque liste-marque--non">
           <li>Le compte développeur Apple à 99 $/an et son inscription qui échoue</li>
           <li>Les certificats, les identifiants d'app, les profils de provisionnement</li>
           <li>Le premier envoi qui plante avec un message d'erreur incompréhensible</li>
           <li>Le rejet d'Apple au bout de 48 h, avec un motif en anglais de trois lignes</li>
-          <li>Les captures d'écran en 6,7", 6,5", 5,5", iPad 12,9"…</li>
-          <li>La politique de confidentialité obligatoire (et où l'héberger)</li>
-          <li>Le questionnaire de confidentialité des données d'App Store Connect</li>
+          <li>Les captures d'écran en 6,9″, 6,5″, iPad 13″…</li>
+          <li>La politique de confidentialité obligatoire, et où l'héberger</li>
+          <li>Le questionnaire de confidentialité d'App Store Connect</li>
           <li>Le paywall, les achats intégrés, les abonnements, la TVA</li>
-          <li>Le référencement App Store&nbsp;: le bon titre, les bons mots-clés</li>
-          <li>Google Play, sa fiche, ses 12 testeurs obligatoires, ses délais</li>
+          <li>Le référencement App Store : le bon titre, les bons mots-clés</li>
+          <li>Google Play, ses 12 testeurs obligatoires, ses délais</li>
         </ul>
         <hr class="filet">
-        <p class="t-petit t-douce">
+        <p class="t-petit t-2">
           Chacun de ces points a fait abandonner des milliers de gens.
-          Chacun de ces points est un chapitre de cette formation,
-          écrit par quelqu'un qui s'est pris le mur avant toi.
+          Chacun est un chapitre de cette formation, écrit par quelqu'un
+          qui s'est pris le mur avant toi.
         </p>
       </div>
-
     </div>
-  </div>
-</section>
+  </section>
 
-<!-- ═══════════════ CE QUE TU CONSTRUIS ═══════════════ -->
-<section class="section section--creuse">
-  <div class="enveloppe">
-    <div class="pile pile-48">
-      <div class="pile pile-16 t-centre apparait" style="max-width:60ch;margin-inline:auto">
-        <span class="etiquette etiquette--nue" style="justify-content:center">Le fil rouge</span>
-        <h2 class="t-h1">Tu ne regardes pas.<br>Tu construis.</h2>
-        <p class="t-lead">
-          Du premier au dernier module, on construit ensemble <b style="color:var(--encre)">Rituel</b>,
-          une application de suivi d'habitudes. Simple à comprendre, complète à faire&nbsp;:
-          elle touche exactement toutes les briques dont tu auras besoin pour n'importe quelle autre idée.
+  <!-- ═══════ 6 · Ce que tu construis ═══════ -->
+  <section class="apparait">
+    <div class="section-tete">
+      <p class="etiquette">Le fil rouge</p>
+      <h2 class="t-h1">Tu ne regardes pas. Tu construis.</h2>
+      <p class="t-lead colonne" style="margin-top:var(--e-2)">
+        Du premier au dernier module, on construit <strong>Rituel</strong>, une
+        application de suivi d'habitudes. Assez simple pour ne pas te noyer,
+        assez complète pour toucher toutes les briques dont tu auras besoin ensuite.
+      </p>
+    </div>
+    <div class="grille grille-4">
+      <div class="pile g-2 apparait" data-retard="1">
+        <p class="t-h3">Des écrans</p>
+        <p class="t-petit t-2">Une liste, un détail, des réglages, une navigation en bas. Le vocabulaire de base.</p>
+      </div>
+      <div class="pile g-2 apparait" data-retard="2">
+        <p class="t-h3">Des données qui restent</p>
+        <p class="t-petit t-2">Tu fermes l'app, tu la rouvres : tout est là. Puis on synchronise dans le nuage.</p>
+      </div>
+      <div class="pile g-2 apparait" data-retard="3">
+        <p class="t-h3">Des notifications</p>
+        <p class="t-petit t-2">Le rappel de 20 h qui fait revenir les gens. C'est ça qui fait vivre une app.</p>
+      </div>
+      <div class="pile g-2 apparait" data-retard="4">
+        <p class="t-h3">Un vrai paiement</p>
+        <p class="t-petit t-2">Une version gratuite, une payante, un abonnement. L'argent qui tombe sur ton compte.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════ 7 · Programme ═══════ -->
+  <section id="programme" class="apparait">
+    <div class="section-tete">
+      <p class="etiquette">Le programme complet</p>
+      <h2 class="t-h1">12 modules. Aucun trou.</h2>
+      <p class="t-lead colonne" style="margin-top:var(--e-2)">
+        Chaque module part de zéro absolu. Aucun prérequis, aucun sous-entendu,
+        aucun « comme vous le savez déjà ».
+      </p>
+    </div>
+
+    <div class="colonne" id="liste-programme">
+      <details class="acc" open>
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="num-acc">00</span><span class="titre-acc">Avant de commencer — ce que personne ne te dit</span></summary>
+        <div class="corps-acc"><ul>
+          <li>Combien ça coûte vraiment, ligne par ligne (spoiler : 99 $ + 25 $)</li>
+          <li>Combien de temps il te faut réellement, selon ton rythme</li>
+          <li>Le seul choix technique qui compte, et pourquoi on prend celui-là</li>
+          <li>Mac ou PC ? La réponse honnête, et comment publier sur iPhone sans Mac</li>
+          <li>L'erreur de débutant n°1 : viser trop gros au premier essai</li>
+        </ul></div>
+      </details>
+
+      <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="num-acc">01</span><span class="titre-acc">Installer ton atelier</span></summary>
+        <div class="corps-acc"><ul>
+          <li>Le terminal expliqué à quelqu'un qui ne l'a jamais ouvert</li>
+          <li>Node, VS Code, Expo : quoi, pourquoi, et l'installation clic par clic</li>
+          <li>Installer Claude Code ou Cursor et le configurer pour qu'il travaille bien</li>
+          <li>Ton premier projet qui s'affiche sur ton téléphone en 15 secondes</li>
+          <li>Le guide de secours : les 6 pannes qui bloquent tout le monde</li>
+        </ul></div>
+      </details>
+
+      <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="num-acc">02</span><span class="titre-acc">Parler à l'IA pour qu'elle écrive du bon code</span></summary>
+        <div class="corps-acc"><ul>
+          <li>La structure de demande qui donne 10× de meilleurs résultats</li>
+          <li>Pourquoi « fais-moi une app de sport » ne marchera jamais</li>
+          <li>Le fichier de contexte qui rend l'IA bien meilleure sur ton projet</li>
+          <li>Comment débloquer une IA qui tourne en rond sur la même erreur</li>
+          <li>Le piège du copier-coller aveugle, et le réflexe qui te sauve</li>
+        </ul></div>
+      </details>
+
+      <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="num-acc">03</span><span class="titre-acc">Comprendre ce que tu lis (le minimum vital)</span></summary>
+        <div class="corps-acc"><ul>
+          <li>Les 8 mots de vocabulaire qui suffisent à tout comprendre</li>
+          <li>La carte de tes fichiers : où tu travailles, ce que tu ne touches jamais</li>
+          <li>Lire un message d'erreur sans paniquer</li>
+          <li>Git en trois commandes : le filet de sécurité qui te sauvera</li>
+        </ul></div>
+      </details>
+
+      <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="num-acc">04</span><span class="titre-acc">Construire les écrans de Rituel</span></summary>
+        <div class="corps-acc"><ul>
+          <li>La liste du jour, l'écran de détail, les réglages</li>
+          <li>La barre de navigation du bas, comme dans les vraies apps</li>
+          <li>Ajouter, cocher, supprimer : rendre l'app vivante</li>
+          <li>Les gestes iOS auxquels les gens s'attendent</li>
+          <li>Le piège des fuseaux horaires qui range tes données au mauvais jour</li>
+        </ul></div>
+      </details>
+
+      <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="num-acc">05</span><span class="titre-acc">Sauvegarder les données, puis les synchroniser</span></summary>
+        <div class="corps-acc"><ul>
+          <li>Garder les données sur le téléphone — le plus simple, et souvent suffisant</li>
+          <li>Le bug qui efface les données de tous tes utilisateurs, et sa parade</li>
+          <li>Passer au nuage avec Firebase, gratuitement, sans serveur à gérer</li>
+          <li>Les règles de sécurité, expliquées ligne par ligne</li>
+          <li>La facture surprise à 400 € : comment ne jamais la recevoir</li>
+        </ul></div>
+      </details>
+
+      <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="num-acc">06</span><span class="titre-acc">Le design qui fait « application payante »</span></summary>
+        <div class="corps-acc"><ul>
+          <li>Les 6 règles mécaniques qui séparent l'amateur du pro</li>
+          <li>Choisir une typo, une couleur, un rythme — sans être designer</li>
+          <li>Le mode sombre en une soirée, et pourquoi ce n'est pas l'inverse du clair</li>
+          <li>Les 3 animations qui donnent l'impression que c'est cher</li>
+          <li>Faire ton icône et ton écran de démarrage</li>
+        </ul></div>
+      </details>
+
+      <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="num-acc">07</span><span class="titre-acc">Les notifications qui font revenir les gens</span></summary>
+        <div class="corps-acc"><ul>
+          <li>Rappels locaux : le rappel de 20 h, sans serveur</li>
+          <li>Le bon moment pour demander la permission — 30 % contre 70 % d'acceptation</li>
+          <li>Les 4 pièges qui font croire que ton code est faux</li>
+          <li>Le fuseau horaire, et le rappel qui sonne à 3 h du matin fin octobre</li>
+        </ul></div>
+      </details>
+
+      <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="num-acc">08</span><span class="titre-acc">Faire payer : abonnements et achats intégrés</span></summary>
+        <div class="corps-acc"><ul>
+          <li>Payant, gratuit, freemium, abonnement : lequel pour ton idée</li>
+          <li>Où placer la limite du gratuit — la décision la plus importante</li>
+          <li>Brancher RevenueCat en une soirée, et l'ordre exact des étapes</li>
+          <li>L'essai gratuit de 7 jours : l'onglet exact où ça se règle</li>
+          <li>Le paywall qui convertit : structure, mots, prix</li>
+          <li>Ce qu'Apple prélève vraiment, et les 15 % que personne ne réclame</li>
+        </ul></div>
+      </details>
+
+      <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="num-acc">09</span><span class="titre-acc">Publier sur l'App Store — le module qui vaut la formation</span></summary>
+        <div class="corps-acc"><ul>
+          <li>Ouvrir ton compte développeur Apple sans se faire recaler</li>
+          <li>Certificats et profils : expliqués une bonne fois pour toutes</li>
+          <li>Construire ton app dans le nuage, sans Mac, avec EAS</li>
+          <li>TestFlight : faire tester ton app avant tout le monde</li>
+          <li>Le questionnaire de confidentialité, case par case</li>
+          <li>Tes captures d'écran en 20 minutes, sans Photoshop</li>
+          <li><strong>Les 11 motifs de rejet — et la réponse exacte à écrire</strong></li>
+        </ul></div>
+      </details>
+
+      <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="num-acc">10</span><span class="titre-acc">Publier sur Google Play</span></summary>
+        <div class="corps-acc"><ul>
+          <li>Le compte à 25 $, une fois pour la vie</li>
+          <li>La règle des 12 testeurs pendant 14 jours : comment la satisfaire</li>
+          <li>La clé de signature — le point de non-retour à sauvegarder</li>
+          <li>Les différences avec Apple qui piègent tout le monde</li>
+        </ul></div>
+      </details>
+
+      <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="num-acc">11</span><span class="titre-acc">Tes 100 premiers utilisateurs</span></summary>
+        <div class="corps-acc"><ul>
+          <li>Le référencement App Store : le titre, le sous-titre, les 100 caractères</li>
+          <li>Pourquoi ton app ne se vendra pas toute seule, et ce qui marche</li>
+          <li>Le format vidéo court qui amène des installations gratuitement</li>
+          <li>Les 3 seules métriques à regarder, et toutes celles à ignorer</li>
+          <li>Le rythme de mises à jour qui fait grimper une app</li>
+        </ul></div>
+      </details>
+    </div>
+  </section>
+
+  <!-- ═══════ 8 · Pour qui ═══════ -->
+  <section class="apparait">
+    <div class="grille grille-2">
+      <div class="pile g-4">
+        <p class="etiquette">C'est pour toi si…</p>
+        <ul class="liste-marque">
+          <li>Tu n'as jamais codé et ça te fait peur</li>
+          <li>Tu as une idée d'app et personne à qui la confier</li>
+          <li>Tu veux un revenu complémentaire que tu contrôles</li>
+          <li>Tu es en reconversion et tu veux une preuve concrète à montrer</li>
+          <li>Tu es artisan, coach, prof, infirmier — et ton métier a besoin d'un outil qui n'existe pas</li>
+          <li>Tu es freelance et tu veux vendre des apps à tes clients</li>
+          <li>Tu as déjà essayé et abandonné au moment de publier</li>
+        </ul>
+      </div>
+      <div class="pile g-4">
+        <p class="etiquette">Ce n'est pas pour toi si…</p>
+        <ul class="liste-marque liste-marque--non">
+          <li>Tu cherches de l'argent facile sans rien faire</li>
+          <li>Tu veux devenir développeur salarié en entreprise — prends un vrai bootcamp</li>
+          <li>Tu veux construire le prochain Uber tout seul en trois semaines</li>
+          <li>Tu ne peux pas dégager 3 à 5 heures par semaine</li>
+          <li>Tu refuses par principe d'utiliser l'IA</li>
+        </ul>
+        <hr class="filet">
+        <p class="t-petit t-3">
+          Je préfère que tu ne l'achètes pas plutôt que tu la demandes en
+          remboursement. Si tu hésites, lis la FAQ — j'y réponds franchement.
         </p>
       </div>
+    </div>
+  </section>
 
-      <div class="grille grille-4">
-        <div class="carte carte--survol apparait" data-retard="1">
-          <div class="pile pile-8">
-            <h3 class="t-h3">Des écrans</h3>
-            <p class="t-petit t-douce">Une liste, un détail, des réglages, une navigation en bas. Le vocabulaire de base de toute app.</p>
-          </div>
+  <!-- ═══════ 9 · Parlons argent ═══════ -->
+  <section class="apparait">
+    <div class="section-tete">
+      <p class="etiquette">Parlons argent, sans mentir</p>
+      <h2 class="t-h1">« On peut vraiment gagner<br>2 000 € par mois&nbsp;? »</h2>
+      <p class="t-lead colonne" style="margin-top:var(--e-2)">
+        Oui, c'est possible. Non, ce n'est pas automatique, et non, ce ne sera
+        pas le mois prochain. Voici les vraies maths.
+      </p>
+    </div>
+
+    <div class="colonne">
+      <p class="etiquette" style="margin-bottom:var(--e-2)">Un abonnement à 4,99 €/mois</p>
+      <div class="cadre-tableau" style="margin-top:0">
+        <table>
+          <tbody>
+            <tr><td>Prix payé par le client</td><td class="nb">4,99 €</td></tr>
+            <tr><td class="t-2">− TVA française (20 %)</td><td class="nb t-2">−0,83 €</td></tr>
+            <tr><td class="t-2">− Commission Apple (15 % avec le Small Business Program)</td><td class="nb t-2">−0,62 €</td></tr>
+            <tr><td class="t-fort">Ce qu'il te reste</td><td class="nb t-fort">3,54 €</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="t-corps t-2" style="margin-top:var(--e-4)">
+        Pour <strong>2 000 € net par mois</strong>, il te faut donc environ
+        <strong>565 abonnés actifs</strong>. Avec un taux de conversion réaliste
+        de 3 % et un désabonnement de 8 %/mois, ça veut dire attirer
+        <strong>à peu près 1 500 installations par mois</strong>, tous les mois.
+      </p>
+
+      <div class="grille grille-3" style="margin-top:var(--e-6)">
+        <div class="pile g-1">
+          <p class="t-h3">3 à 12 mois</p>
+          <p class="t-micro t-3">avant les premiers revenus significatifs, dans un cas normal</p>
         </div>
-        <div class="carte carte--survol apparait" data-retard="2">
-          <div class="pile pile-8">
-            <h3 class="t-h3">Des données qui restent</h3>
-            <p class="t-petit t-douce">Tu fermes l'app, tu la rouvres&nbsp;: tout est là. Puis on synchronise dans le nuage.</p>
-          </div>
+        <div class="pile g-1">
+          <p class="t-h3">1 app sur 5</p>
+          <p class="t-micro t-3">passe le cap des 100 € par mois. Une seule suffit.</p>
         </div>
-        <div class="carte carte--survol apparait" data-retard="3">
-          <div class="pile pile-8">
-            <h3 class="t-h3">Des notifications</h3>
-            <p class="t-petit t-douce">Le rappel de 20 h qui fait revenir les gens. C'est ça qui fait vivre une app.</p>
-          </div>
-        </div>
-        <div class="carte carte--survol apparait" data-retard="4">
-          <div class="pile pile-8">
-            <h3 class="t-h3">Un vrai paiement</h3>
-            <p class="t-petit t-douce">Une version gratuite, une version payante, un abonnement. L'argent qui tombe sur ton compte.</p>
-          </div>
+        <div class="pile g-1">
+          <p class="t-h3">124 $</p>
+          <p class="t-micro t-3">le coût réel pour publier sur les deux magasins</p>
         </div>
       </div>
 
-      <div class="carte apparait" style="background:var(--papier-pur)">
-        <div class="rang rang--espace" style="gap:24px">
-          <div class="pile pile-8" style="max-width:56ch">
-            <h3 class="t-h3">Et à la fin, tu la publies. Pour de vrai.</h3>
-            <p class="t-petit t-douce">
-              Pas un projet dans un tiroir. Une page App Store avec ton nom dessus,
-              que tu peux envoyer à ta famille, mettre sur ton CV, ou monétiser.
-              C'est le seul objectif de cette formation.
-            </p>
-          </div>
-          <a href="#tarifs" class="btn btn--encre">Commencer</a>
+      <div class="encadre encadre--attention" style="margin-top:var(--e-6)">
+        <span class="marqueur" aria-hidden="true">⚠️</span>
+        <div>
+          <p><strong>Ce que je te garantis, moi.</strong></p>
+          <p>Une application publiée, en ligne, avec ton nom dessus, et la
+          compétence de recommencer autant de fois que tu veux. Combien elle
+          rapporte dépend de ton idée, de ton marché et de ton travail — pas de
+          moi. <span class="t-2">Toute personne qui te promet un revenu chiffré
+          garanti te ment.</span></p>
         </div>
       </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<!-- ═══════════════ PROGRAMME ═══════════════ -->
-<section class="section" id="programme">
-  <div class="enveloppe enveloppe--lisible">
-    <div class="pile pile-32">
-      <div class="pile pile-16 apparait">
-        <span class="etiquette">Le programme complet</span>
-        <h2 class="t-h1">12 modules. Aucun trou.</h2>
-        <p class="t-lead">
-          Chaque module part de zéro absolu. Aucun prérequis, aucun sous-entendu,
-          aucun « comme vous le savez déjà ». Clique pour déplier.
-        </p>
+  <!-- ═══════ 10 · Le formateur ═══════ -->
+  <section id="formateur" class="apparait">
+    <div class="section-tete">
+      <p class="etiquette">Qui te forme</p>
+      <h2 class="t-h2">Nadir Bensalah</h2>
+      <p class="t-petit t-2">Développeur d'applications mobiles indépendant</p>
+    </div>
+    <div class="colonne pile g-4">
+      <p class="t-corps t-2">
+        Je ne suis pas un gourou du business en ligne. Je suis quelqu'un qui
+        construit et publie des applications, seul, en français, avec l'IA comme
+        outil de travail quotidien depuis deux ans.
+      </p>
+      <p class="t-corps t-2">
+        J'ai passé les étapes que tu vas passer : le premier envoi qui échoue,
+        le rejet d'Apple pour un motif absurde, la clé d'API oubliée dans un
+        fichier public, la fonctionnalité qui marche chez moi et casse chez tout
+        le monde, la nuit à comprendre pourquoi les notifications arrivent avec
+        une heure de décalage.
+      </p>
+      <p class="t-corps t-2">
+        Cette formation, c'est le document que j'aurais voulu qu'on me donne au
+        début. Écrit en français normal, sans jargon, sans rien sauter.
+      </p>
+    </div>
+  </section>
+
+  <!-- ═══════ 11 · Tarifs ═══════ -->
+  <section id="tarifs" class="apparait">
+    <div class="section-tete">
+      <p class="etiquette">Tarifs</p>
+      <h2 class="t-h1">Une agence te demande 25 000 €.<br>Un bootcamp, 7 000 €.</h2>
+      <p class="t-lead colonne" style="margin-top:var(--e-2)">
+        Moi je te demande le prix d'une soirée restaurant, et je te laisse tout,
+        à vie.
+      </p>
+    </div>
+
+    <div class="grille grille-2" style="max-width:900px;align-items:start">
+      <div class="carte pile g-5">
+        <div class="pile g-1">
+          <p class="t-h3">Essentiel</p>
+          <p class="t-petit t-2">Tout ce qu'il faut pour publier ta première app.</p>
+        </div>
+        <div class="prix"><span class="montant">97 €</span><span class="barre">197 €</span></div>
+        <p class="t-micro t-3">Paiement unique · Accès à vie · TVA incluse</p>
+        <hr class="filet" style="margin:0">
+        <ul class="liste-marque">
+          <li>Les 12 modules complets, en français</li>
+          <li>Le projet <strong>Rituel</strong> construit pas à pas</li>
+          <li>Le guide anti-rejet Apple : 11 motifs + réponses</li>
+          <li>Toutes les mises à jour, à vie</li>
+          <li>Le canal de questions par e-mail</li>
+        </ul>
+        <a href="#" class="btn btn-secondaire btn-large btn-bloc" data-stripe="essentiel">Prendre l'Essentiel</a>
       </div>
 
-      <div class="pile apparait">
-
-        <details class="module" open>
-          <summary>
-            <span class="jeton-num">00</span>
-            <span class="t-h3">Avant de commencer — ce que personne ne te dit</span>
-            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-          </summary>
-          <div class="corps">
-            <ul class="liste-coche t-petit">
-              <li>Combien ça coûte vraiment, ligne par ligne (spoiler&nbsp;: 99 $ + 25 $, une fois)</li>
-              <li>Combien de temps il te faut réellement, selon ton rythme</li>
-              <li>Le seul choix technique qui compte, et pourquoi on prend celui-là</li>
-              <li>Mac ou PC&nbsp;? La réponse honnête, et comment publier sur iPhone sans Mac</li>
-              <li>L'erreur de débutant n°1&nbsp;: viser trop gros au premier essai</li>
-            </ul>
+      <div class="carte pile g-5">
+        <div class="pile g-1">
+          <div class="rang-espace">
+            <p class="t-h3">Complet</p>
+            <span class="pastille pastille--encours">Le plus pris</span>
           </div>
-        </details>
-
-        <details class="module">
-          <summary>
-            <span class="jeton-num">01</span>
-            <span class="t-h3">Installer ton atelier (45 minutes, en te tenant la main)</span>
-            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-          </summary>
-          <div class="corps">
-            <ul class="liste-coche t-petit">
-              <li>Le terminal expliqué à quelqu'un qui n'a jamais ouvert le terminal</li>
-              <li>Node, VS Code, Expo&nbsp;: quoi, pourquoi, et l'installation clic par clic</li>
-              <li>Installer Claude Code / Cursor et le configurer pour qu'il travaille bien</li>
-              <li>Ton premier projet qui s'affiche sur ton téléphone en 15 secondes</li>
-              <li>Le fichier de secours&nbsp;: quoi faire quand rien ne marche</li>
-            </ul>
-          </div>
-        </details>
-
-        <details class="module">
-          <summary>
-            <span class="jeton-num">02</span>
-            <span class="t-h3">Parler à l'IA pour qu'elle écrive du bon code</span>
-            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-          </summary>
-          <div class="corps">
-            <ul class="liste-coche t-petit">
-              <li>La structure de demande qui donne 10× de meilleurs résultats</li>
-              <li>Pourquoi « fais-moi une app de sport » ne marchera jamais</li>
-              <li>Le fichier de contexte qui rend l'IA bien meilleure sur ton projet</li>
-              <li>Comment débloquer une IA qui tourne en rond sur la même erreur</li>
-              <li>Le piège du copier-coller aveugle, et le réflexe qui te sauve</li>
-            </ul>
-          </div>
-        </details>
-
-        <details class="module">
-          <summary>
-            <span class="jeton-num">03</span>
-            <span class="t-h3">Comprendre ce que tu lis (le minimum vital, pas plus)</span>
-            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-          </summary>
-          <div class="corps">
-            <ul class="liste-coche t-petit">
-              <li>Un écran, c'est quoi&nbsp;? Un composant, c'est quoi&nbsp;?</li>
-              <li>Les 8 mots de vocabulaire qui suffisent à tout comprendre</li>
-              <li>Lire un message d'erreur sans paniquer</li>
-              <li>Où sont rangés les fichiers, et lequel tu ouvres quand</li>
-            </ul>
-          </div>
-        </details>
-
-        <details class="module">
-          <summary>
-            <span class="jeton-num">04</span>
-            <span class="t-h3">Construire les écrans de Rituel</span>
-            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-          </summary>
-          <div class="corps">
-            <ul class="liste-coche t-petit">
-              <li>La liste du jour, l'écran de détail, les réglages</li>
-              <li>La barre de navigation du bas, comme dans les vraies apps</li>
-              <li>Ajouter, cocher, supprimer&nbsp;: rendre l'app vivante</li>
-              <li>Les gestes iOS auxquels les gens s'attendent (et qu'on oublie toujours)</li>
-            </ul>
-          </div>
-        </details>
-
-        <details class="module">
-          <summary>
-            <span class="jeton-num">05</span>
-            <span class="t-h3">Sauvegarder les données, puis les synchroniser</span>
-            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-          </summary>
-          <div class="corps">
-            <ul class="liste-coche t-petit">
-              <li>Garder les données sur le téléphone (le plus simple, et souvent suffisant)</li>
-              <li>Passer au nuage avec Firebase, gratuitement, sans serveur à gérer</li>
-              <li>La connexion par e-mail sans mot de passe (celle que les gens aiment)</li>
-              <li>Les règles de sécurité&nbsp;: éviter que n'importe qui lise les données de tes utilisateurs</li>
-              <li>La facture surprise à 400 €&nbsp;: comment ne jamais la recevoir</li>
-            </ul>
-          </div>
-        </details>
-
-        <details class="module">
-          <summary>
-            <span class="jeton-num">06</span>
-            <span class="t-h3">Le design qui fait « application payante »</span>
-            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-          </summary>
-          <div class="corps">
-            <ul class="liste-coche t-petit">
-              <li>Les 6 règles qui séparent une app d'amateur d'une app pro</li>
-              <li>Choisir une typo, une couleur, un rythme — sans être designer</li>
-              <li>Le mode sombre en une soirée</li>
-              <li>Les animations qui donnent l'impression que c'est cher</li>
-              <li>Faire ton icône et ton écran de démarrage</li>
-            </ul>
-          </div>
-        </details>
-
-        <details class="module">
-          <summary>
-            <span class="jeton-num">07</span>
-            <span class="t-h3">Les notifications qui font revenir les gens</span>
-            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-          </summary>
-          <div class="corps">
-            <ul class="liste-coche t-petit">
-              <li>Rappels locaux&nbsp;: le rappel de 20 h, sans serveur</li>
-              <li>Demander la permission au bon moment (sinon 70 % refusent)</li>
-              <li>Notifications distantes&nbsp;: quand tu en as vraiment besoin</li>
-              <li>Le fuseau horaire, ce piège qui casse tout</li>
-            </ul>
-          </div>
-        </details>
-
-        <details class="module">
-          <summary>
-            <span class="jeton-num">08</span>
-            <span class="t-h3">Faire payer&nbsp;: abonnements et achats intégrés</span>
-            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-          </summary>
-          <div class="corps">
-            <ul class="liste-coche t-petit">
-              <li>Payant, gratuit, freemium, abonnement&nbsp;: lequel pour ton idée</li>
-              <li>Brancher RevenueCat en une soirée (et pourquoi pas à la main)</li>
-              <li>Créer tes produits dans App Store Connect sans te tromper</li>
-              <li>L'essai gratuit de 7 jours&nbsp;: l'onglet exact où ça se règle</li>
-              <li>Le paywall qui convertit&nbsp;: structure, mots, prix</li>
-              <li>Ce qu'Apple prélève vraiment, et ce qui reste sur ton compte</li>
-            </ul>
-          </div>
-        </details>
-
-        <details class="module">
-          <summary>
-            <span class="jeton-num">09</span>
-            <span class="t-h3">Publier sur l'App Store — le module qui vaut la formation</span>
-            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-          </summary>
-          <div class="corps">
-            <ul class="liste-coche t-petit">
-              <li>Ouvrir ton compte développeur Apple sans se faire recaler</li>
-              <li>Certificats et profils&nbsp;: expliqués une bonne fois pour toutes</li>
-              <li>Construire ton app dans le nuage, sans Mac, avec EAS</li>
-              <li>TestFlight&nbsp;: faire tester ton app à 10 personnes avant tout le monde</li>
-              <li>Le questionnaire de confidentialité, case par case</li>
-              <li>Tes captures d'écran en 20 minutes, sans Photoshop</li>
-              <li><b>Les 11 motifs de rejet les plus courants — et la réponse à écrire</b></li>
-              <li>Que faire quand tu es rejeté&nbsp;: le message type qui débloque</li>
-            </ul>
-          </div>
-        </details>
-
-        <details class="module">
-          <summary>
-            <span class="jeton-num">10</span>
-            <span class="t-h3">Publier sur Google Play</span>
-            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-          </summary>
-          <div class="corps">
-            <ul class="liste-coche t-petit">
-              <li>Le compte à 25 $, une fois pour la vie</li>
-              <li>La règle des 12 testeurs pendant 14 jours&nbsp;: comment la satisfaire</li>
-              <li>La fiche Play Store, les visuels, la bannière</li>
-              <li>Les différences avec Apple qui piègent tout le monde</li>
-            </ul>
-          </div>
-        </details>
-
-        <details class="module">
-          <summary>
-            <span class="jeton-num">11</span>
-            <span class="t-h3">Tes 100 premiers utilisateurs</span>
-            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-          </summary>
-          <div class="corps">
-            <ul class="liste-coche t-petit">
-              <li>Le référencement App Store&nbsp;: le titre, le sous-titre, les 100 caractères de mots-clés</li>
-              <li>Pourquoi ton app ne se vendra pas toute seule (et ce qui marche à la place)</li>
-              <li>Le format vidéo court qui amène des installations gratuitement</li>
-              <li>Lire tes chiffres&nbsp;: quelles trois métriques regarder, et lesquelles ignorer</li>
-              <li>La mise à jour&nbsp;: le rythme qui fait grimper une app</li>
-            </ul>
-          </div>
-        </details>
-
-      </div>
-
-      <div class="rang rang--centre apparait" style="padding-top:16px">
-        <a href="#tarifs" class="btn btn--principal btn--large">Accéder aux 12 modules</a>
+          <p class="t-petit t-2">Pour ceux qui veulent aussi que l'app rapporte.</p>
+        </div>
+        <div class="prix"><span class="montant">197 €</span><span class="barre">397 €</span></div>
+        <p class="t-micro t-3">Paiement unique · Accès à vie · TVA incluse</p>
+        <hr class="filet" style="margin:0">
+        <ul class="liste-marque">
+          <li><strong>Tout l'Essentiel</strong>, plus :</li>
+          <li>Le code source complet et commenté de <strong>Rituel</strong></li>
+          <li>Le kit de publication : gabarits de captures, textes App Store, politique de confidentialité prête à l'emploi</li>
+          <li>Le carnet des 60 demandes IA, testées, une par étape</li>
+          <li>Le module monétisation avancée : prix, essais, paywall</li>
+          <li>Le module référencement : trouver tes mots-clés</li>
+        </ul>
+        <a href="#" class="btn btn-principal btn-large btn-bloc" data-stripe="complet">Prendre le Complet</a>
+        <p class="t-micro t-3 t-centre">Rentabilisé dès tes 56 premiers abonnés.</p>
       </div>
     </div>
-  </div>
-</section>
 
-<!-- ═══════════════ POUR QUI ═══════════════ -->
-<section class="section section--creuse">
-  <div class="enveloppe">
-    <div class="grille grille-2 apparait">
-      <div class="carte" style="background:var(--papier-pur)">
-        <div class="pile pile-16">
-          <h3 class="t-h3">C'est pour toi si…</h3>
-          <ul class="liste-coche t-petit">
-            <li>Tu n'as jamais codé et ça te fait peur</li>
-            <li>Tu as une idée d'app et personne à qui la confier</li>
-            <li>Tu veux un revenu complémentaire que tu contrôles</li>
-            <li>Tu es en reconversion et tu veux une preuve concrète à montrer</li>
-            <li>Tu es artisan, coach, prof, infirmier — et ton métier a besoin d'un outil qui n'existe pas</li>
-            <li>Tu es freelance et tu veux vendre des apps à tes clients</li>
-            <li>Tu as déjà essayé et tu as abandonné au moment de publier</li>
-          </ul>
-        </div>
-      </div>
-      <div class="carte carte--creuse">
-        <div class="pile pile-16">
-          <h3 class="t-h3">Ce n'est pas pour toi si…</h3>
-          <ul class="liste-coche liste-croix t-petit">
-            <li>Tu cherches de l'argent facile sans rien faire</li>
-            <li>Tu veux devenir développeur salarié en entreprise (prends un vrai bootcamp)</li>
-            <li>Tu veux construire le prochain Uber tout seul en trois semaines</li>
-            <li>Tu ne peux pas dégager 3 à 5 heures par semaine</li>
-            <li>Tu refuses par principe d'utiliser l'IA</li>
-          </ul>
-          <hr class="filet">
-          <p class="t-micro t-tenue">
-            Je préfère que tu ne l'achètes pas plutôt que tu la demandes en remboursement.
-            Si tu hésites, lis la FAQ tout en bas — j'y réponds franchement.
-          </p>
-        </div>
+    <div class="encadre encadre--action" style="max-width:900px">
+      <span class="marqueur" aria-hidden="true">👉</span>
+      <div>
+        <p><strong>Garantie 30 jours, sans discussion.</strong></p>
+        <p>Tu lis tout, tu essaies, et si tu estimes que ça ne t'a rien apporté :
+        tu m'écris un e-mail, je te rembourse intégralement. Pas de formulaire,
+        pas de justification, pas de « mais pourquoi ». Le risque est de mon côté.</p>
       </div>
     </div>
-  </div>
-</section>
 
-<!-- ═══════════════ LES CHIFFRES, HONNÊTEMENT ═══════════════ -->
-<section class="section section--encre">
-  <div class="enveloppe enveloppe--lisible">
-    <div class="pile pile-32 apparait">
-      <span class="etiquette">Parlons argent, sans mentir</span>
-      <h2 class="t-h1" style="color:var(--encre-inverse)">« On peut vraiment gagner<br>2 000 € par mois&nbsp;? »</h2>
+    <p class="t-micro t-3">
+      Paiement sécurisé par Stripe · Carte bancaire, Apple&nbsp;Pay,
+      Google&nbsp;Pay · Aucune donnée bancaire ne transite par ce site
+    </p>
+  </section>
 
+  <!-- ═══════ 12 · FAQ ═══════ -->
+  <section id="faq" class="apparait">
+    <div class="section-tete">
+      <p class="etiquette">Questions</p>
+      <h2 class="t-h1">Ce qu'on me demande tout le temps.</h2>
+    </div>
+
+    <div class="colonne" id="liste-faq">
+      <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="titre-acc">Je suis vraiment débutant. Genre, vraiment.</span></summary>
+        <div class="corps-acc"><p class="t-corps t-2">C'est exactement le public visé. Le module 1 t'explique ce qu'est le terminal et où cliquer, capture par capture. Si tu sais installer une application sur ton ordinateur et suivre des instructions dans l'ordre, tu as le niveau.</p></div>
+      </details>
+      <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="titre-acc">Il me faut un Mac ?</span></summary>
+        <div class="corps-acc"><p class="t-corps t-2">Non. On construit l'app dans le nuage avec EAS, donc tu peux publier sur l'App Store depuis un PC Windows. Il te faudra en revanche un iPhone ou un Android pour tester — le tien suffit.</p></div>
+      </details>
+      <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="titre-acc">Combien de temps par semaine ?</span></summary>
+        <div class="corps-acc"><p class="t-corps t-2">Compte 3 à 5 heures par semaine pour finir en un mois. Certains vont plus vite, d'autres mettent trois mois. L'accès est à vie, il n'y a pas d'horloge qui tourne.</p></div>
+      </details>
+      <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="titre-acc">C'est du no-code ?</span></summary>
+        <div class="corps-acc"><p class="t-corps t-2">Non, et c'est volontaire. Le no-code t'enferme : tu paies un abonnement à vie, tu ne possèdes pas ton app, et beaucoup de plateformes rendent la publication native compliquée. Ici tu produis du vrai code que tu possèdes — sauf que c'est l'IA qui l'écrit sous ta direction.</p></div>
+      </details>
+      <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="titre-acc">Quelle technologie exactement ?</span></summary>
+        <div class="corps-acc"><p class="t-corps t-2">React Native avec Expo. Un seul code pour iPhone et Android. C'est ce qu'utilisent Discord, Shopify et Coinbase. C'est aussi ce que les IA maîtrisent le mieux, ce qui n'est pas un détail quand c'est elles qui écrivent.</p></div>
+      </details>
+      <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="titre-acc">Il y a des vidéos ?</span></summary>
+        <div class="corps-acc"><p class="t-corps t-2">La formation est écrite, avec des captures annotées et le code à copier. C'est un choix : on lit plus vite qu'on n'écoute, on peut copier-coller depuis du texte, et une page se met à jour quand Apple change son interface — pas une vidéo. Les passages où la vidéo aide vraiment sont filmés.</p></div>
+      </details>
+      <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="titre-acc">Et si Apple refuse mon app ?</span></summary>
+        <div class="corps-acc"><p class="t-corps t-2">Ça arrive, y compris aux professionnels. Le module 9 liste les 11 motifs de rejet les plus fréquents avec, pour chacun, la correction à faire et le message exact à envoyer à l'examinateur. Un rejet n'est pas une fin, c'est un aller-retour.</p></div>
+      </details>
+      <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="titre-acc">Combien ça coûte en plus de la formation ?</span></summary>
+        <div class="corps-acc"><p class="t-corps t-2">99 $ par an pour le compte développeur Apple, 25 $ une seule fois pour Google Play. Tout le reste de ce qu'on utilise a un niveau gratuit largement suffisant. Si tu ne vises qu'Android, ça te coûte 25 $ en tout.</p></div>
+      </details>
+      <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="titre-acc">Je peux payer en plusieurs fois ?</span></summary>
+        <div class="corps-acc"><p class="t-corps t-2">Oui, en 3 fois sans frais : l'option apparaît au moment du paiement si ta banque le permet.</p></div>
+      </details>
+      <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="titre-acc">Est-ce que je vais gagner de l'argent ?</span></summary>
+        <div class="corps-acc"><p class="t-corps t-2">Je n'en sais rien, et méfie-toi de quiconque te répond autrement. Ce que je peux te garantir, c'est une application publiée et la compétence de recommencer. La section « Parlons argent » plus haut te donne les vraies maths, sans enjolivement.</p></div>
+      </details>
+    </div>
+  </section>
+
+  <!-- ═══════ 13 · Appel final ═══════ -->
+  <section class="apparait">
+    <div class="colonne pile g-5">
+      <h2 class="t-h1">Dans 30 jours, tu auras soit une application, soit 30 jours de plus.</h2>
       <p class="t-lead">
-        Oui, c'est possible. Non, ce n'est pas automatique, et non, ce ne sera pas
-        le mois prochain. Voici les vraies maths, celles que les vendeurs de rêve
-        ne te montrent jamais.
+        Ton idée ne vaut rien tant qu'elle est dans tes notes. Elle commence à
+        valoir quelque chose le jour où quelqu'un peut la télécharger.
       </p>
-
-      <div class="carte carte--encre">
-        <div class="pile pile-16">
-          <p class="t-petit t-douce" style="text-transform:uppercase;letter-spacing:.09em;font-weight:600;font-size:.72rem">Un abonnement à 4,99 €/mois</p>
-          <div class="pile pile-12" style="font-variant-numeric:tabular-nums">
-            <div class="rang rang--espace"><span class="t-petit">Prix affiché</span><b>4,99 €</b></div>
-            <hr class="filet">
-            <div class="rang rang--espace"><span class="t-petit t-douce">− TVA (France, 20 %)</span><span class="t-petit t-douce">−0,83 €</span></div>
-            <div class="rang rang--espace"><span class="t-petit t-douce">− Commission Apple (15 % la 1<sup>re</sup> année)</span><span class="t-petit t-douce">−0,62 €</span></div>
-            <hr class="filet">
-            <div class="rang rang--espace"><span class="t-petit">Il te reste</span><b style="color:var(--accent-clair);font-size:1.15rem">≈ 3,54 €</b></div>
-          </div>
-          <hr class="filet">
-          <p class="t-petit t-douce">
-            Pour <b style="color:#fff">2 000 € net par mois</b>, il te faut donc environ
-            <b style="color:#fff">565 abonnés actifs</b>. Avec un taux de conversion réaliste
-            de 3 % et un taux de désabonnement de 8 %/mois, ça veut dire attirer
-            <b style="color:#fff">à peu près 1 500 installations par mois</b>, tous les mois.
-          </p>
-        </div>
+      <div class="rang">
+        <a href="#tarifs" class="btn btn-principal btn-large">Publier mon application — 97 €</a>
       </div>
-
-      <div class="grille grille-3">
-        <div class="pile pile-4">
-          <span class="chiffre" style="color:var(--accent-clair)">3&nbsp;à&nbsp;12</span>
-          <span class="t-micro t-douce">mois avant les premiers revenus significatifs, dans un cas normal</span>
-        </div>
-        <div class="pile pile-4">
-          <span class="chiffre" style="color:var(--accent-clair)">1&nbsp;sur&nbsp;5</span>
-          <span class="t-micro t-douce">applications passe le cap des 100 € par mois. Une seule suffit.</span>
-        </div>
-        <div class="pile pile-4">
-          <span class="chiffre" style="color:var(--accent-clair)">124 $</span>
-          <span class="t-micro t-douce">le coût réel pour publier ta première app sur les deux magasins</span>
-        </div>
-      </div>
-
-      <div class="carte carte--encre" style="border-color:var(--accent)">
-        <p class="t-petit">
-          <b style="color:#fff">Ce que je te garantis, moi&nbsp;:</b>
-          une application publiée, en ligne, avec ton nom dessus, et la compétence
-          de recommencer autant de fois que tu veux. Combien elle rapporte dépend de
-          ton idée, de ton marché et de ton travail — pas de moi.
-          <span class="t-tenue">Toute personne qui te promet un revenu chiffré garanti te ment.</span>
-        </p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ═══════════════ LE FORMATEUR ═══════════════ -->
-<section class="section" id="formateur">
-  <div class="enveloppe enveloppe--lisible">
-    <div class="pile pile-24 apparait">
-      <span class="etiquette">Qui te forme</span>
-      <div class="rang" style="gap:18px">
-        <!-- Remplace par ta photo : <img src="./assets/img/nadir.jpg" class="avatar" style="width:64px;height:64px"> -->
-        <span class="avatar" style="width:64px;height:64px;font-size:1.1rem">NB</span>
-        <div class="pile pile-4">
-          <h2 class="t-h2" style="font-size:1.6rem">Nadir Bensalah</h2>
-          <p class="t-petit t-douce">Développeur d'applications mobiles indépendant</p>
-        </div>
-      </div>
-
-      <div class="pile pile-16 t-lead" style="font-size:1.08rem">
-        <p>
-          Je ne suis pas un gourou du business en ligne. Je suis quelqu'un qui construit
-          et publie des applications, seul, en français, avec l'IA comme outil de travail
-          quotidien depuis deux ans.
-        </p>
-        <p>
-          J'ai passé les étapes que tu vas passer&nbsp;: le premier envoi qui échoue,
-          le rejet d'Apple pour un motif absurde, la clé d'API oubliée dans un fichier
-          public, la fonctionnalité qui marche chez moi et casse chez tout le monde,
-          la nuit à comprendre pourquoi les notifications arrivent avec une heure de décalage.
-        </p>
-        <p>
-          Cette formation, c'est le document que j'aurais voulu qu'on me donne
-          au début. Écrit en français normal, sans jargon, sans rien sauter.
-        </p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ═══════════════ TÉMOIGNAGES ═══════════════
-     ⚠️ À REMPLIR avec de VRAIS retours d'élèves après le lancement.
-     Il est illégal en France (art. L121-2 du code de la consommation) de publier
-     de faux avis. La section reste masquée tant que tu n'as pas de vrais témoignages :
-     enlève la classe "masque" sur le <section> quand tu en as trois.
-     ══════════════════════════════════════════ -->
-<section class="section section--creuse masque" id="temoignages">
-  <div class="enveloppe">
-    <div class="pile pile-32">
-      <div class="pile pile-12 t-centre">
-        <span class="etiquette etiquette--nue" style="justify-content:center">Ils l'ont fait</span>
-        <h2 class="t-h1">Leur app est en ligne.</h2>
-      </div>
-      <div class="grille grille-3">
-        <!-- Modèle de carte témoignage — dupliquer
-        <div class="carte temoignage">
-          <div class="pile pile-16">
-            <p class="citation">« … »</p>
-            <div class="rang" style="gap:10px">
-              <span class="avatar">XY</span>
-              <div class="pile pile-4">
-                <span class="t-petit" style="font-weight:600">Prénom N.</span>
-                <span class="t-micro t-tenue">Métier · Nom de son app</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        -->
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ═══════════════ TARIFS ═══════════════ -->
-<section class="section" id="tarifs">
-  <div class="enveloppe">
-    <div class="pile pile-48">
-
-      <div class="pile pile-16 t-centre apparait" style="max-width:56ch;margin-inline:auto">
-        <span class="etiquette etiquette--nue" style="justify-content:center">Tarifs</span>
-        <h2 class="t-h1">Une agence te demande 25 000 €.<br>Un bootcamp, 7 000 €.</h2>
-        <p class="t-lead">
-          Moi je te demande le prix d'une soirée restaurant,
-          et je te laisse tout, à vie.
-        </p>
-      </div>
-
-      <div class="grille grille-2" style="max-width:900px;margin-inline:auto;align-items:start">
-
-        <!-- OFFRE 1 -->
-        <div class="carte apparait" style="background:var(--papier-pur)">
-          <div class="pile pile-24">
-            <div class="pile pile-8">
-              <h3 class="t-h3">Essentiel</h3>
-              <p class="t-petit t-douce">Tout ce qu'il faut pour publier ta première app.</p>
-            </div>
-            <div class="prix">
-              <span class="montant">97 €</span>
-              <span class="barre">197 €</span>
-            </div>
-            <p class="t-micro t-tenue">Paiement unique · Accès à vie · TVA incluse</p>
-            <hr class="filet">
-            <ul class="liste-coche t-petit">
-              <li>Les 12 modules complets, en français</li>
-              <li>Le projet <b>Rituel</b> construit pas à pas</li>
-              <li>Le guide anti-rejet Apple (11 motifs + réponses)</li>
-              <li>Toutes les mises à jour de la formation, à vie</li>
-              <li>Le canal de questions par e-mail</li>
-            </ul>
-            <a href="#" class="btn btn--clair btn--bloc btn--large" data-stripe="essentiel">Prendre l'Essentiel</a>
-          </div>
-        </div>
-
-        <!-- OFFRE 2 -->
-        <div class="carte apparait" data-retard="1" style="position:relative;background:var(--encre-fond);border-color:var(--encre-fond);color:var(--encre-inverse)">
-          <span class="ruban">Le plus pris</span>
-          <div class="pile pile-24">
-            <div class="pile pile-8">
-              <h3 class="t-h3" style="color:#fff">Complet</h3>
-              <p class="t-petit" style="color:var(--encre-inverse-douce)">Pour ceux qui veulent aussi que l'app rapporte.</p>
-            </div>
-            <div class="prix">
-              <span class="montant" style="color:#fff">197 €</span>
-              <span class="barre" style="color:#7C776D">397 €</span>
-            </div>
-            <p class="t-micro" style="color:#7C776D">Paiement unique · Accès à vie · TVA incluse</p>
-            <hr class="filet" style="background:var(--trait-inverse)">
-            <ul class="liste-coche t-petit" style="color:var(--encre-inverse-douce)">
-              <li><b style="color:#fff">Tout l'Essentiel</b>, plus&nbsp;:</li>
-              <li>Le code source complet et commenté de <b style="color:#fff">Rituel</b></li>
-              <li>Le kit de publication&nbsp;: gabarits de captures d'écran, textes App Store, politique de confidentialité prête à l'emploi</li>
-              <li>60 demandes IA prêtes à copier, testées, pour chaque étape</li>
-              <li>Le module monétisation avancée&nbsp;: prix, essais gratuits, paywall</li>
-              <li>Le module référencement App Store&nbsp;: trouver tes mots-clés</li>
-              <li>Le modèle de fiche App Store qui passe la revue du premier coup</li>
-            </ul>
-            <a href="#" class="btn btn--principal btn--bloc btn--large" data-stripe="complet">Prendre le Complet</a>
-            <p class="t-micro t-centre" style="color:#7C776D">Rentabilisé dès tes 56 premiers abonnés.</p>
-          </div>
-        </div>
-
-      </div>
-
-      <!-- GARANTIE -->
-      <div class="carte apparait" style="max-width:900px;margin-inline:auto;background:var(--vert-voile);border-color:#CFE4D8">
-        <div class="rang" style="gap:20px;flex-wrap:nowrap;align-items:flex-start">
-          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="var(--vert)" stroke-width="1.6" style="flex:0 0 auto;margin-top:2px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          <div class="pile pile-8">
-            <h3 class="t-h3">Garantie 30 jours, sans discussion</h3>
-            <p class="t-petit t-douce">
-              Tu lis tout, tu essaies, et si tu estimes que ça ne t'a rien apporté&nbsp;:
-              tu m'écris un e-mail, je te rembourse intégralement. Pas de formulaire,
-              pas de justification à fournir, pas de « mais pourquoi ». Le risque est de mon côté.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <p class="t-micro t-tenue t-centre apparait">
-        Paiement sécurisé par Stripe · Carte bancaire, Apple&nbsp;Pay, Google&nbsp;Pay ·
-        Aucune donnée bancaire ne transite par ce site
-      </p>
-
-    </div>
-  </div>
-</section>
-
-<!-- ═══════════════ FAQ ═══════════════ -->
-<section class="section section--creuse" id="faq">
-  <div class="enveloppe enveloppe--lisible">
-    <div class="pile pile-32">
-      <div class="pile pile-12 apparait">
-        <span class="etiquette">Questions</span>
-        <h2 class="t-h1">Ce qu'on me demande<br>tout le temps.</h2>
-      </div>
-
-      <div class="pile apparait">
-        <details class="module">
-          <summary><span class="t-h3">Je suis vraiment débutant. Genre, vraiment.</span><svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></summary>
-          <div class="corps" style="padding-left:0"><p class="t-petit t-douce">C'est exactement le public visé. Le module 1 t'explique ce qu'est le terminal et où cliquer, capture d'écran par capture d'écran. Si tu sais installer une application sur ton ordinateur et suivre des instructions dans l'ordre, tu as le niveau.</p></div>
-        </details>
-
-        <details class="module">
-          <summary><span class="t-h3">Il me faut un Mac&nbsp;?</span><svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></summary>
-          <div class="corps" style="padding-left:0"><p class="t-petit t-douce">Non. On construit l'app dans le nuage avec EAS, donc tu peux publier sur l'App Store depuis un PC Windows. Le module 9 détaille cette méthode. Il te faudra en revanche un iPhone ou un Android pour tester — le tien suffit.</p></div>
-        </details>
-
-        <details class="module">
-          <summary><span class="t-h3">Combien de temps par semaine&nbsp;?</span><svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></summary>
-          <div class="corps" style="padding-left:0"><p class="t-petit t-douce">Compte 3 à 5 heures par semaine pour finir en un mois. Certains vont plus vite, d'autres mettent trois mois. L'accès est à vie, il n'y a pas d'horloge qui tourne.</p></div>
-        </details>
-
-        <details class="module">
-          <summary><span class="t-h3">C'est du no-code&nbsp;?</span><svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></summary>
-          <div class="corps" style="padding-left:0"><p class="t-petit t-douce">Non, et c'est volontaire. Le no-code t'enferme&nbsp;: tu paies un abonnement à vie, tu ne possèdes pas ton app, et beaucoup de plateformes rendent la publication native compliquée. Ici tu produis du vrai code que tu possèdes — sauf que c'est l'IA qui l'écrit sous ta direction.</p></div>
-        </details>
-
-        <details class="module">
-          <summary><span class="t-h3">Quelle technologie exactement&nbsp;?</span><svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></summary>
-          <div class="corps" style="padding-left:0"><p class="t-petit t-douce">React&nbsp;Native avec Expo. Un seul code pour iPhone et Android. C'est ce qu'utilisent Discord, Shopify et Coinbase. C'est aussi ce que les IA maîtrisent le mieux, ce qui n'est pas un détail quand c'est elles qui écrivent.</p></div>
-        </details>
-
-        <details class="module">
-          <summary><span class="t-h3">Il y a des vidéos&nbsp;?</span><svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></summary>
-          <div class="corps" style="padding-left:0"><p class="t-petit t-douce">La formation est écrite, avec des captures d'écran annotées et le code à copier. C'est un choix&nbsp;: on lit plus vite qu'on n'écoute, on peut copier-coller depuis du texte, et une page se met à jour quand Apple change son interface — pas une vidéo. Les passages où la vidéo aide vraiment (les manipulations dans App Store Connect) sont filmés.</p></div>
-        </details>
-
-        <details class="module">
-          <summary><span class="t-h3">Et si Apple refuse mon app&nbsp;?</span><svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></summary>
-          <div class="corps" style="padding-left:0"><p class="t-petit t-douce">Ça arrive, y compris aux professionnels. Le module 9 liste les 11 motifs de rejet les plus fréquents avec, pour chacun, la correction à faire et le message exact à envoyer à l'examinateur. Un rejet n'est pas une fin, c'est un aller-retour.</p></div>
-        </details>
-
-        <details class="module">
-          <summary><span class="t-h3">Combien ça coûte en plus de la formation&nbsp;?</span><svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></summary>
-          <div class="corps" style="padding-left:0"><p class="t-petit t-douce">99 $ par an pour le compte développeur Apple, 25 $ une seule fois pour Google Play. Tout le reste de ce qu'on utilise a un niveau gratuit largement suffisant. Si tu ne vises qu'Android, ça te coûte 25 $ en tout.</p></div>
-        </details>
-
-        <details class="module">
-          <summary><span class="t-h3">Je peux payer en plusieurs fois&nbsp;?</span><svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></summary>
-          <div class="corps" style="padding-left:0"><p class="t-petit t-douce">Oui, en 3 fois sans frais&nbsp;: l'option apparaît au moment du paiement si ta banque le permet.</p></div>
-        </details>
-
-        <details class="module">
-          <summary><span class="t-h3">Est-ce que je vais gagner de l'argent&nbsp;?</span><svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></summary>
-          <div class="corps" style="padding-left:0"><p class="t-petit t-douce">Je n'en sais rien, et méfie-toi de quiconque te répond autrement. Ce que je peux te garantir, c'est une application publiée et la compétence de recommencer. La section « Parlons argent » plus haut te donne les vraies maths, sans enjolivement.</p></div>
-        </details>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ═══════════════ APPEL FINAL ═══════════════ -->
-<section class="section section--encre">
-  <div class="enveloppe enveloppe--lisible t-centre">
-    <div class="pile pile-32 apparait">
-      <h2 class="t-h1" style="color:var(--encre-inverse)">
-        Dans 30 jours, tu auras<br>soit une application,<br>soit 30 jours de plus.
-      </h2>
-      <p class="t-lead" style="max-width:48ch;margin-inline:auto">
-        Ton idée ne vaut rien tant qu'elle est dans tes notes.
-        Elle commence à valoir quelque chose le jour où quelqu'un peut la télécharger.
-      </p>
-      <div class="rang rang--centre">
-        <a href="#tarifs" class="btn btn--principal btn--large">Publier mon application</a>
-      </div>
-      <p class="t-micro" style="color:#7C776D">
-        97 € · Accès immédiat · Garantie 30 jours · Tarif de lancement, il augmentera
+      <p class="t-micro t-3">
+        Accès immédiat · Garantie 30 jours · Tarif de lancement, il augmentera
       </p>
     </div>
-  </div>
-</section>
+  </section>
 
-<!-- ═══════════════ PIED ═══════════════ -->
+</div>
+</main>
+
+<!-- ═══════ Pied ═══════ -->
 <footer class="pied">
   <div class="enveloppe">
-    <div class="rang rang--espace" style="align-items:flex-start;gap:32px">
-      <div class="pile pile-8">
-        <a href="#" class="logo"><span class="marque">Z</span> Atelier&nbsp;Zéro</a>
-        <p class="t-micro t-tenue">Des formations qui partent vraiment de zéro.</p>
+    <div class="rang-espace rang-haut" style="gap:var(--e-6)">
+      <div class="pile g-2">
+        <a href="#" class="logo"><span class="marque">Z</span>Atelier&nbsp;Zéro</a>
+        <p class="t-micro t-3">Des formations qui partent vraiment de zéro.</p>
       </div>
-      <div class="rang" style="gap:28px;align-items:flex-start">
-        <div class="pile pile-8 t-petit">
+      <div class="rang rang-haut" style="gap:var(--e-6)">
+        <div class="pile g-2 t-petit">
           <a href="#programme">Programme</a>
           <a href="#tarifs">Tarifs</a>
           <a href="#faq">FAQ</a>
         </div>
-        <div class="pile pile-8 t-petit">
+        <div class="pile g-2 t-petit">
           <a href="./acces.html">Espace membre</a>
           <a href="./mentions.html">Mentions légales</a>
           <a href="./cgv.html">CGV</a>
@@ -949,26 +692,26 @@
         </div>
       </div>
     </div>
-    <hr class="filet" style="margin-block:28px">
-    <p class="t-micro t-tenue">
-      © 2026 Atelier Zéro. Formation non éligible au CPF.
-      Apple, App Store, iPhone, Google Play sont des marques de leurs propriétaires respectifs
+    <hr class="filet" style="margin-block:var(--e-5)">
+    <p class="t-micro t-3">
+      © 2026 Atelier Zéro. Formation non éligible au CPF. Apple, App Store,
+      iPhone et Google Play sont des marques de leurs propriétaires respectifs
       et ne sont ni partenaires ni garants de cette formation.
     </p>
   </div>
 </footer>
 
-<!-- ═══════════════ BARRE COLLANTE MOBILE ═══════════════ -->
+<!-- ═══════ Barre collante mobile ═══════ -->
 <div class="barre-collante" id="barre-collante">
-  <div class="rang rang--espace" style="flex-wrap:nowrap;gap:14px">
-    <div class="pile" style="line-height:1.25">
-      <b style="font-size:1.05rem">97 €</b>
-      <span class="t-micro t-tenue" style="text-decoration:line-through">197 €</span>
-    </div>
-    <a href="#tarifs" class="btn btn--principal" style="flex:1;padding:13px 20px">Je me lance</a>
+  <div class="pile" style="line-height:1.25">
+    <strong style="font-size:16px">97 €</strong>
+    <span class="t-micro t-3" style="text-decoration:line-through">197 €</span>
   </div>
+  <a href="#tarifs" class="btn btn-principal" style="flex:1;justify-content:center">Je me lance</a>
 </div>
 
+<script src="./assets/js/config.js"></script>
+<script src="./assets/js/theme.js"></script>
 <script src="./assets/js/site.js"></script>
 </body>
 </html>

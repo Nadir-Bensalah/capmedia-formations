@@ -80,20 +80,28 @@ onAuthStateChanged(auth, async (u) => {
 
 function gabaritPasAcheteur(email) {
   return `
-    <div class="pile pile-24 t-centre" style="max-width:420px;padding:24px">
-      <h1 class="t-h2">Aucun achat trouvé</h1>
-      <p class="t-petit t-douce">
-        Tu es bien connecté avec <b>${echapper(email)}</b>, mais aucune commande
-        n'est associée à cette adresse.
-      </p>
-      <p class="t-petit t-douce">
-        Si tu as payé avec une <b>autre adresse</b>, déconnecte-toi et reconnecte-toi
-        avec celle-là. Si tu viens tout juste de payer, laisse une minute et recharge.
-      </p>
-      <div class="pile pile-12">
-        <a href="../index.html#tarifs" class="btn btn--principal btn--bloc">Voir la formation</a>
-        <button class="lien-nu t-micro" id="voile-deconnexion">Se déconnecter</button>
-        <a class="t-micro t-tenue" href="mailto:${cfg.contact}">Écrire à ${cfg.contact}</a>
+    <div class="pile g-5" style="max-width:420px">
+      <div class="pile g-2">
+        <h1 class="t-h2">Aucun achat trouvé</h1>
+        <p class="t-petit t-2">
+          Tu es bien connecté avec <strong>${echapper(email)}</strong>, mais aucune
+          commande n'est associée à cette adresse.
+        </p>
+      </div>
+      <div class="encadre encadre--astuce">
+        <span class="marqueur" aria-hidden="true">💡</span>
+        <div>
+          <p>Si tu as payé avec une <strong>autre adresse</strong>, déconnecte-toi et
+          reconnecte-toi avec celle-là. Si tu viens tout juste de payer, laisse une
+          minute et recharge la page.</p>
+        </div>
+      </div>
+      <div class="pile g-3">
+        <a href="../index.html#tarifs" class="btn btn-principal btn-large btn-bloc">Voir la formation</a>
+        <div class="rang-espace">
+          <button type="button" class="lien-nu" id="voile-deconnexion">Se déconnecter</button>
+          <a class="t-micro" href="mailto:${cfg.contact}">${cfg.contact}</a>
+        </div>
       </div>
     </div>`;
 }
@@ -149,13 +157,26 @@ function construireSommaire() {
   const nav = $('liens-modules');
   nav.innerHTML = '';
 
+  let bonusAnnonce = false;
+
   lecons.forEach((l) => {
+    // Les modules bonus sont regroupés sous leur propre intertitre.
+    if (l.offre === 'complet' && !bonusAnnonce) {
+      const t = document.createElement('p');
+      t.className = 'etiquette groupe';
+      t.textContent = 'Bonus · offre Complet';
+      nav.appendChild(t);
+      bonusAnnonce = true;
+    }
+
+    const ouvert = accessible(l);
     const b = document.createElement('button');
-    b.className = 'lien-module';
+    b.className = 'lien-module' + (ouvert ? '' : ' est-verrouille');
+    b.type = 'button';
     b.dataset.id = l.id;
     b.innerHTML =
-      `<span class="num"><span>${String(l.ordre).padStart(2, '0')}</span></span>` +
-      `<span>${echapper(l.titre)}${accessible(l) ? '' : ' <span class="t-tenue">· Complet</span>'}</span>`;
+      `<span class="num">${ouvert ? String(l.ordre).padStart(2, '0') : '🔒'}</span>` +
+      `<span class="titre-module">${echapper(l.titre)}</span>`;
     b.addEventListener('click', () => aller(l.id));
     nav.appendChild(b);
   });
@@ -165,14 +186,23 @@ function construireSommaire() {
 
 function majSommaire() {
   document.querySelectorAll('.lien-module').forEach((b) => {
-    b.classList.toggle('actif', b.dataset.id === courante);
-    b.classList.toggle('fait', faits.has(b.dataset.id));
+    const l = lecons.find((x) => x.id === b.dataset.id);
+    const fait = faits.has(b.dataset.id);
+
+    b.setAttribute('aria-current', String(b.dataset.id === courante));
+    b.classList.toggle('est-fait', fait);
+
+    // La coche remplace le numéro une fois le module terminé.
+    const num = b.querySelector('.num');
+    if (num && l && accessible(l)) {
+      num.textContent = fait ? '✓' : String(l.ordre).padStart(2, '0');
+    }
   });
 
   const total = lecons.length || 1;
   const n = lecons.filter((l) => faits.has(l.id)).length;
   $('jauge').style.width = Math.round((n / total) * 100) + '%';
-  $('progression-texte').textContent = `${n} / ${lecons.length}`;
+  $('progression-texte').textContent = `${n}/${lecons.length}`;
 }
 
 /* ==========================================================================
@@ -190,11 +220,12 @@ async function aller(id, remplacer = false) {
   const page = $('page');
   const chapeau =
     `<header class="chapeau">
-       <div class="fil">Module ${String(l.ordre).padStart(2, '0')}</div>
+       <p class="etiquette-mono">Module ${String(l.ordre).padStart(2, '0')}</p>
        <h1>${echapper(l.titre)}</h1>
        ${l.resume ? `<p class="resume">${echapper(l.resume)}</p>` : ''}
        ${l.duree ? `<p class="duree">Environ ${echapper(l.duree)} de lecture</p>` : ''}
-     </header>`;
+     </header>
+     <hr class="chapeau-filet">`;
 
   construirePagination(l);
   majSommaire();
@@ -207,7 +238,9 @@ async function aller(id, remplacer = false) {
     return;
   }
 
-  page.innerHTML = chapeau + '<p class="t-tenue">Chargement…</p>';
+  // Squelette plutôt qu'une roue qui tourne : la page ne saute pas.
+  page.innerHTML = chapeau +
+    '<div class="squelette"><span></span><span></span><span></span><span></span><span></span></div>';
 
   try {
     const markdown = await chargerContenu(l.id);
@@ -215,14 +248,14 @@ async function aller(id, remplacer = false) {
     // L'utilisateur a pu changer de leçon pendant le chargement.
     if (courante !== id) return;
 
-    page.innerHTML = chapeau + versHtml(markdown);
+    page.innerHTML = chapeau + '<div class="corps">' + versHtml(markdown) + '</div>';
     ajouterBoutonsCopier(page);
     ajouterBoutonFini(l);
   } catch (err) {
     console.error(err);
     if (courante !== id) return;
     page.innerHTML = chapeau +
-      '<div class="encadre encadre--piege"><span class="marqueur">🛑</span><div>' +
+      '<div class="encadre encadre--piege"><span class="marqueur" aria-hidden="true">🛑</span><div>' +
       '<p><strong>Impossible de charger ce module.</strong></p>' +
       '<p>Vérifie ta connexion et recharge la page. Si ça persiste, ' +
       `écris-moi à <a href="mailto:${cfg.contact}">${cfg.contact}</a>.</p>` +
@@ -233,38 +266,39 @@ async function aller(id, remplacer = false) {
 function gabaritVerrouille(l) {
   return `
     <header class="chapeau">
-      <div class="fil">Module ${String(l.ordre).padStart(2, '0')} · réservé à l'offre Complet</div>
+      <p class="etiquette-mono">Module ${String(l.ordre).padStart(2, '0')} · offre Complet</p>
       <h1>${echapper(l.titre)}</h1>
       <p class="resume">${echapper(l.resume || '')}</p>
     </header>
-    <div class="encadre encadre--piege">
-      <span class="marqueur">🔒</span>
-      <div>
-        <p><strong>Ce module fait partie de l'offre Complet.</strong></p>
-        <p>Tu as pris l'offre Essentiel. Tu peux passer au Complet à tout moment
-           en ne payant que la différence — écris-moi à
-           <a href="mailto:${cfg.contact}">${cfg.contact}</a> et je t'envoie le lien.</p>
+    <hr class="chapeau-filet">
+    <div class="corps">
+      <div class="encadre encadre--attention">
+        <span class="marqueur" aria-hidden="true">🔒</span>
+        <div>
+          <p><strong>Ce module fait partie de l'offre Complet.</strong></p>
+          <p>Tu as pris l'offre Essentiel. Tu peux passer au Complet à tout moment
+             en ne payant que la différence — écris-moi à
+             <a href="mailto:${cfg.contact}">${cfg.contact}</a> et je t'envoie le lien.</p>
+        </div>
       </div>
     </div>`;
 }
 
 function ajouterBoutonFini(l) {
-  const zone = document.createElement('div');
-  zone.className = 'tache';
   const dejaFait = faits.has(l.id);
+  const zone = document.createElement('div');
+  zone.className = 'bloc-fini';
 
   zone.innerHTML =
-    `<div class="rang rang--espace" style="flex-wrap:nowrap;gap:16px">
-       <div class="pile pile-4">
-         <span class="t-h3">${dejaFait ? 'Module terminé' : 'Tu as fini ce module ?'}</span>
-         <span class="t-micro t-tenue">${dejaFait
-            ? 'Tu peux le décocher si tu veux le refaire.'
-            : 'Coche-le pour suivre ta progression.'}</span>
-       </div>
-       <button class="btn ${dejaFait ? 'btn--clair' : 'btn--encre'}" id="btn-fini">
-         ${dejaFait ? 'Décocher' : 'Marquer comme terminé'}
-       </button>
-     </div>`;
+    `<div class="pile g-1">
+       <span class="t-h3">${dejaFait ? 'Module terminé' : 'Tu as fini ce module ?'}</span>
+       <span class="t-micro t-3">${dejaFait
+          ? 'Tu peux le décocher si tu veux le refaire.'
+          : 'Coche-le pour suivre ta progression.'}</span>
+     </div>
+     <button type="button" class="btn ${dejaFait ? 'btn-secondaire' : 'btn-principal'}" id="btn-fini">
+       ${dejaFait ? 'Décocher' : 'Marquer comme terminé'}
+     </button>`;
 
   $('page').appendChild(zone);
 
@@ -273,8 +307,8 @@ function ajouterBoutonFini(l) {
     else faits.add(l.id);
     enregistrerProgression();
     majSommaire();
-    ajouterBoutonFini(l);
     zone.remove();
+    ajouterBoutonFini(l);
   });
 }
 
@@ -304,18 +338,29 @@ function construirePagination(l) {
 
 function ajouterBoutonsCopier(racine) {
   racine.querySelectorAll('pre').forEach((pre) => {
+    // Le bouton se positionne sur un conteneur, pas sur le <pre> lui-même :
+    // sinon il défile avec le code quand celui-ci déborde horizontalement.
+    const cadre = document.createElement('div');
+    cadre.className = 'bloc-code';
+    pre.parentNode.insertBefore(cadre, pre);
+    cadre.appendChild(pre);
+
     const b = document.createElement('button');
+    b.type = 'button';
     b.className = 'copier';
     b.textContent = 'Copier';
+
     b.addEventListener('click', async () => {
       const code = pre.querySelector('code');
       try {
         await navigator.clipboard.writeText(code ? code.textContent : pre.textContent);
-        b.textContent = 'Copié ✓';
-        setTimeout(() => { b.textContent = 'Copier'; }, 1600);
+        b.textContent = 'Copié';
+        b.dataset.copie = '1';
+        setTimeout(() => { b.textContent = 'Copier'; delete b.dataset.copie; }, 1600);
       } catch { b.textContent = 'Échec'; }
     });
-    pre.appendChild(b);
+
+    cadre.appendChild(b);
   });
 }
 
