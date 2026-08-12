@@ -1,5 +1,5 @@
 /* ==========================================================================
-   ATELIER ZÉRO — Petit convertisseur Markdown → HTML
+   CAPMEDIA ACADEMY — Petit convertisseur Markdown → HTML
 
    Volontairement minimal : il ne gère que ce que la formation utilise, il
    échappe tout le HTML brut (rien n'est injectable), et il ajoute deux

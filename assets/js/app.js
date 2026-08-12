@@ -1,5 +1,5 @@
 /* ==========================================================================
-   ATELIER ZÉRO — Espace membre
+   CAPMEDIA ACADEMY — Espace membre
 
    Sécurité : le contenu des leçons vit dans Firestore, pas dans ce dépôt
    public. Les règles Firestore (voir firestore.rules) n'autorisent la lecture
@@ -231,7 +231,7 @@ async function aller(id, remplacer = false) {
   majSommaire();
   fermerMenu();
   window.scrollTo({ top: 0, behavior: 'instant' });
-  document.title = l.titre + ' — Atelier Zéro';
+  document.title = l.titre + ' — Capmedia Academy';
 
   if (!accessible(l)) {
     page.innerHTML = gabaritVerrouille(l);

@@ -1,7 +1,7 @@
 rules_version = '2';
 
 /*
-  ATELIER ZÉRO — Règles de sécurité Firestore
+  CAPMEDIA ACADEMY — Règles de sécurité Firestore
 
   Principe : le contenu de la formation vit ici, pas dans le dépôt GitHub
   public. Connaître l'URL de /app/ ne donne accès à rien : la lecture exige

@@ -1,5 +1,5 @@
 /* ==========================================================================
-   ATELIER ZÉRO — Thème clair / sombre / système
+   CAPMEDIA ACADEMY — Thème clair / sombre / système
    Chargé par toutes les pages. Le choix est mémorisé dans localStorage.
    L'application avant le premier rendu se fait par un script en ligne dans
    le <head> de chaque page, pour éviter le flash de thème.

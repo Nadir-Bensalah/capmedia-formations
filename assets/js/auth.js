@@ -1,5 +1,5 @@
 /* ==========================================================================
-   ATELIER ZÉRO — Connexion par lien magique (Firebase Auth, sans mot de passe)
+   CAPMEDIA ACADEMY — Connexion par lien magique (Firebase Auth, sans mot de passe)
 
    Déroulé :
    1. Le client paie sur Stripe.
@@ -166,8 +166,8 @@ formulaire.addEventListener('submit', async (e) => {
     afficherErreur(
       messages[err.code] ||
       "L'envoi a échoué. Réessaie dans un instant, ou écris-moi à " +
-      '<a href="mailto:' + (cfg.contact || 'adresse@exemple.test') + '">' +
-      (cfg.contact || 'adresse@exemple.test') + '</a>.'
+      '<a href="mailto:' + (cfg.contact || 'contact@capmedia.tn') + '">' +
+      (cfg.contact || 'contact@capmedia.tn') + '</a>.'
     );
   }
 });

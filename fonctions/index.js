@@ -1,5 +1,5 @@
 /* ==========================================================================
-   ATELIER ZÉRO — Webhook Stripe (Firebase Cloud Functions, 2e génération)
+   CAPMEDIA ACADEMY — Webhook Stripe (Firebase Cloud Functions, 2e génération)
 
    Rôle : quand un paiement réussit, écrire un document acheteurs/{email}
    dans Firestore. C'est ce document, et lui seul, qui ouvre l'accès à la

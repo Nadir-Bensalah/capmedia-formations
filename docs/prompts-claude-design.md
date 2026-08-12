@@ -1,4 +1,4 @@
-# Prompts Claude Design — Atelier Zéro
+# Prompts Claude Design — Capmedia Academy
 
 Chaque prompt est autonome : copie-colle tel quel. La charte est rappelée dans
 chacun pour que les visuels restent cohérents même produits à des jours d'écart.
@@ -8,7 +8,7 @@ chacun pour que les visuels restent cohérents même produits à des jours d'éc
 ## La charte, à rappeler partout
 
 ```
-CHARTE ATELIER ZÉRO — à respecter strictement
+CHARTE CAPMEDIA ACADEMY — à respecter strictement
 
 Couleurs :
   papier        #FBFAF8   (fond principal)
@@ -98,7 +98,7 @@ Composition :
   — fond #FBFAF8, avec une trame de points très discrète (#E8E4DC, 1px,
     espacés de 24px, opacité 0.5)
   — en haut à gauche, le logo : un carré noir arrondi 8px de 34px avec un
-    « Z » blanc en Instrument Serif, suivi du texte « Atelier Zéro » en
+    « C » blanc, suivi du texte « Capmedia Academy » en
     Inter 600
   — au centre gauche, sur 3 lignes, en Instrument Serif 68px, encre #1A1917 :
         « Ton application mobile
@@ -230,7 +230,7 @@ Trois barres horizontales, alignées à gauche, avec le montant à droite :
 
   Agence de développement    ████████████████████████████  25 000 €
   Bootcamp certifiant        ████████                       7 000 €
-  Atelier Zéro               ▌                                 97 €
+  Capmedia Academy               ▌                                 97 €
 
   — les deux premières barres en gris #E8E4DC
   — la troisième, minuscule, en terracotta #C24A17
@@ -367,7 +367,7 @@ Structure :
   — un texte d'accroche en très gros, Instrument Serif blanc, 3 lignes
     maximum, centré verticalement dans le tiers supérieur
   — un mot clé de l'accroche surligné en terracotta #C24A17
-  — en bas de la zone sûre, un petit bandeau : logo « Z Atelier Zéro »
+  — en bas de la zone sûre, un petit bandeau : logo « C Capmedia Academy »
     en blanc, opacité 0.7
 
 Génère 6 variantes avec ces accroches :
