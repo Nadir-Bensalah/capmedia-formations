@@ -1,0 +1,14 @@
+{
+  "name": "atelier-zero-fonctions",
+  "description": "Webhook Stripe pour Atelier Zéro",
+  "main": "index.js",
+  "engines": {
+    "node": "20"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.6.0",
+    "firebase-functions": "^6.1.0",
+    "stripe": "^17.3.0"
+  },
+  "private": true
+}
