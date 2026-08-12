@@ -527,9 +527,21 @@ td.nb, th.nb { text-align: right; font-variant-numeric: tabular-nums; }
 }
 
 /* Listes de contenu marketing */
-.liste-marque { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.liste-marque li { display: flex; gap: 10px; font-size: 15px; line-height: 1.55; }
-.liste-marque li::before { flex: none; width: 16px; color: var(--valide); content: "✓"; }
+.liste-marque { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 11px; }
+.liste-marque li {
+  position: relative;
+  padding-left: 26px;
+  font-size: 15px;
+  line-height: 1.55;
+}
+.liste-marque li::before {
+  position: absolute;
+  left: 0; top: 0.05em;
+  width: 16px;
+  color: var(--valide);
+  font-weight: 600;
+  content: "✓";
+}
 .liste-marque--non li::before { color: var(--texte-3); content: "✕"; }
 
 /* --- 15 : Barre de navigation marketing --------------------------------- */
@@ -547,7 +559,9 @@ td.nb, th.nb { text-align: right; font-variant-numeric: tabular-nums; }
   height: 100%;
   display: flex;
   align-items: center;
-  gap: var(--e-5);
+  gap: var(--e-4);
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .logo {
@@ -575,12 +589,13 @@ td.nb, th.nb { text-align: right; font-variant-numeric: tabular-nums; }
   line-height: 1;
 }
 
-.nav-liens { display: flex; gap: 18px; }
+.nav-liens { display: flex; gap: 20px; flex: none; }
 .nav-liens a {
   font-size: 14px;
   line-height: 1;
   color: var(--texte-2);
   text-decoration: none;
+  white-space: nowrap;
   transition: color var(--t-survol);
 }
 .nav-liens a:hover { color: var(--texte); text-decoration: none; }
@@ -809,3 +824,33 @@ td.nb, th.nb { text-align: right; font-variant-numeric: tabular-nums; }
 .cookie-switch input:checked + span { background: var(--action); }
 .cookie-switch input:checked + span::before { transform: translateX(16px); }
 .cookie-switch input:focus-visible + span { box-shadow: 0 0 0 3px var(--anneau); }
+
+
+/* ==========================================================================
+   Header : repli progressif pour ne jamais déborder
+   ========================================================================== */
+.logo { white-space: nowrap; }
+.entete .lien-discret { white-space: nowrap; flex: none; }
+.entete .btn { flex: none; white-space: nowrap; }
+.sel-langue { flex: none; }
+.entete .selecteur-theme { flex: none; }
+
+/* Sous 1180px : le sélecteur de thème disparaît de la barre (le thème
+   automatique suit le système ; le réglage reste dans l'espace membre). */
+@media (max-width: 1180px) {
+  .entete .selecteur-theme { display: none; }
+}
+/* Sous 1024px : la nav de rubriques disparaît (déjà gérée plus bas à 900). */
+@media (max-width: 1024px) {
+  .entete .nav-liens { gap: 16px; }
+}
+@media (max-width: 560px) {
+  .entete .lien-discret { display: none; }
+  .entete > .enveloppe { gap: var(--e-3); }
+}
+
+/* --- Cartes de tarifs : hauteur égale, bouton aligné en bas ---------------- */
+.cartes-prix { align-items: stretch; }
+.cartes-prix .carte { height: 100%; }
+.cartes-prix .carte .btn-bloc { margin-top: auto; }
+.cartes-prix .carte { padding: clamp(24px, 3vw, 32px); }
