@@ -21,8 +21,10 @@
     if (valeur === 'auto') racine.removeAttribute('data-theme');
     else racine.setAttribute('data-theme', valeur);
 
+    // On ne persiste le thème que si les cookies de préférences sont acceptés.
+    var okPrefs = !window.AZConsent || window.AZConsent.prefs();
     try {
-      if (valeur === 'auto') localStorage.removeItem(CLE);
+      if (valeur === 'auto' || !okPrefs) localStorage.removeItem(CLE);
       else localStorage.setItem(CLE, valeur);
     } catch (e) {}
 

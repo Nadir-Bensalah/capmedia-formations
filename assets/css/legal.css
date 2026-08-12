@@ -1,0 +1,117 @@
+/* ==========================================================================
+   CAPMEDIA ACADEMY · Pages légales (document long, colonne de lecture)
+   Dépend de tokens.css puis az.css.
+   ========================================================================== */
+
+.doc-entete {
+  border-bottom: 1px solid var(--trait);
+}
+.doc-entete .enveloppe {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--e-4);
+  height: 56px;
+}
+
+.doc {
+  width: 100%;
+  max-width: 980px;
+  margin-inline: auto;
+  padding: clamp(48px, 8vw, 96px) var(--marge-mobile) var(--e-9);
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: clamp(32px, 6vw, 72px);
+  align-items: start;
+}
+@media (max-width: 820px) {
+  .doc { grid-template-columns: minmax(0, 1fr); gap: var(--e-6); }
+  .doc-sommaire { position: static !important; }
+}
+
+.doc-sommaire {
+  position: sticky;
+  top: 88px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.doc-sommaire .titre-som {
+  font-size: 12px; font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--texte-3);
+  margin-bottom: var(--e-2);
+}
+.doc-sommaire a {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--texte-2);
+  text-decoration: none;
+  padding: 6px 10px;
+  border-radius: var(--r-rond);
+  transition: background var(--t-survol), color var(--t-survol);
+}
+.doc-sommaire a:hover { background: var(--survol); color: var(--texte); text-decoration: none; }
+.doc-sommaire a.actif { background: var(--bg-3); color: var(--texte); font-weight: 600; }
+
+.doc-corps { min-width: 0; max-width: var(--colonne-lecture); }
+.doc-corps > header { margin-bottom: var(--e-6); }
+.doc-corps h1 {
+  font-weight: 700;
+  font-size: clamp(28px, 4vw, 40px);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+.doc-corps .maj { margin-top: var(--e-2); font-size: 13px; color: var(--texte-3); }
+
+.doc-corps h2 {
+  margin-top: var(--e-7);
+  margin-bottom: var(--e-3);
+  padding-bottom: var(--e-2);
+  border-bottom: 1px solid var(--trait);
+  font-weight: 600;
+  font-size: 20px;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  scroll-margin-top: 80px;
+}
+.doc-corps h3 {
+  margin-top: var(--e-5);
+  margin-bottom: var(--e-2);
+  font-weight: 600;
+  font-size: 16px;
+}
+.doc-corps p,
+.doc-corps li { font-size: 15px; line-height: 1.7; }
+.doc-corps p { margin-top: var(--e-3); }
+.doc-corps ul, .doc-corps ol { margin-top: var(--e-3); padding-left: var(--e-5); }
+.doc-corps li { margin-block: 4px; }
+.doc-corps li::marker { color: var(--texte-3); }
+.doc-corps strong { font-weight: 600; }
+.doc-corps a { color: var(--action); text-underline-offset: 3px; }
+
+.doc-corps .bloc-info {
+  margin-top: var(--e-4);
+  background: var(--bg-2);
+  border-radius: var(--r-3);
+  padding: var(--e-4) var(--e-5);
+}
+.doc-corps .bloc-info dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px var(--e-4);
+  margin: 0;
+  font-size: 14px;
+}
+.doc-corps .bloc-info dt { color: var(--texte-3); }
+.doc-corps .bloc-info dd { margin: 0; color: var(--texte); }
+@media (max-width: 480px) {
+  .doc-corps .bloc-info dl { grid-template-columns: 1fr; gap: 2px var(--e-4); }
+  .doc-corps .bloc-info dt { margin-top: 8px; }
+}
+
+.doc-corps .note-editeur {
+  margin-top: var(--e-4);
+  border-left: 2px solid var(--action);
+  background: var(--voile-bleu);
+  border-radius: 0 var(--r-2) var(--r-2) 0;
+  padding: var(--e-3) var(--e-4);
+  font-size: 13px;
+  color: var(--texte-2);
+}

@@ -15,4 +15,8 @@
     <xhtml:link rel="alternate" hreflang="fr" href="https://nadir-bensalah.github.io/capmedia-formations/"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://nadir-bensalah.github.io/capmedia-formations/en/"/>
   </url>
+  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/mentions.html</loc><priority>0.3</priority></url>
+  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/cgv.html</loc><priority>0.3</priority></url>
+  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/confidentialite.html</loc><priority>0.3</priority></url>
+  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/cookies.html</loc><priority>0.3</priority></url>
 </urlset>
