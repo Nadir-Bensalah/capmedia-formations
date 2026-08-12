@@ -858,7 +858,7 @@ td.nb, th.nb { text-align: right; font-variant-numeric: tabular-nums; }
 .cartes-prix .carte { padding: clamp(24px, 3vw, 32px); }
 
 /* ==========================================================================
-   Mockup de téléphone (app Rituel) — CSS pur, épuré
+   Mockup de téléphone (app Rituel) : CSS pur, épuré
    ========================================================================== */
 .mock-tel {
   width: 248px;
