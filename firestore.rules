@@ -1,22 +1,18 @@
 rules_version = '2';
 
 /*
-  CAPMEDIA ACADEMY · Règles de sécurité Firestore
+  CAPMEDIA ACADEMY · Règles de sécurité Firestore (multi-formations)
 
-  Principe : le contenu de la formation vit ici, pas dans le dépôt GitHub
-  public. Connaître l'URL de /app/ ne donne accès à rien : la lecture exige
-  un document acheteurs/{email} créé par le webhook Stripe.
+  Principe inchangé et central : le contenu vit ici, pas dans le dépôt
+  public. La lecture exige un compte connecté À EMAIL VÉRIFIÉ et un
+  document acheteurs/{email} écrit uniquement par le webhook Stripe.
 
-  Deux collections, et c'est volontaire :
-   • lecons/{id}   → métadonnées (titre, ordre, résumé, offre). Lisibles par
-                     tout acheteur, ce qui permet la requête triée du
-                     sommaire. Ne contient AUCUN contenu de cours.
-   • contenus/{id} → le markdown. Lu document par document, ce qui permet
-                     à la règle de vérifier l'offre achetée par acheteur.
-
-  Ce découpage est imposé par Firestore : une requête de collection doit
-  être prouvable statiquement, elle ne peut pas dépendre de resource.data.
-  Un getDoc individuel, si.
+  Nouveautés multi-formations :
+   · acheteurs/{email}.achats = { <slug>: 'essentiel'|'complet', ... }
+   · acheteurs/{email}.pack   = null | 'basic' | 'avance'
+     Le pack ouvre toutes les formations ('basic' = essentiel partout,
+     'avance' = complet partout).
+   · formations/{slug}/lecons + formations/{slug}/contenus
 
   Déployer :  firebase deploy --only firestore:rules
 */
@@ -35,34 +31,49 @@ service cloud.firestore {
       return request.auth.token.email.lower();
     }
 
+    function maFiche() {
+      return get(/databases/$(database)/documents/acheteurs/$(monEmail())).data;
+    }
+
     function aAchete() {
       return connecte()
           && exists(/databases/$(database)/documents/acheteurs/$(monEmail()));
     }
 
-    function monOffre() {
-      return get(/databases/$(database)/documents/acheteurs/$(monEmail())).data.offre;
+    // Accès à une formation : achat direct, ou pack, ou l'ancien champ
+    // « offre » (comptes d'avant la migration, par prudence).
+    function accesFormation(slug) {
+      let fiche = maFiche();
+      return (fiche.achats != null && slug in fiche.achats)
+          || (fiche.pack != null)
+          || (slug == 'mobile' && fiche.offre != null);
+    }
+
+    // Niveau « complet » sur une formation
+    function accesComplet(slug) {
+      let fiche = maFiche();
+      return (fiche.achats != null && slug in fiche.achats && fiche.achats[slug] == 'complet')
+          || fiche.pack == 'avance'
+          || (slug == 'mobile' && fiche.offre == 'complet');
     }
 
     // --- Les acheteurs ------------------------------------------------
-    // Écrits UNIQUEMENT par le webhook Stripe (Admin SDK, qui contourne
-    // ces règles). Personne ne peut s'auto-déclarer acheteur.
+    // Écrits UNIQUEMENT par le webhook Stripe et l'admin (Admin SDK).
     match /acheteurs/{email} {
       allow read:  if connecte() && monEmail() == email;
       allow write: if false;
     }
 
-    // --- Sommaire (métadonnées seulement) -----------------------------
-    match /lecons/{leconId} {
-      allow read:  if aAchete();
-      allow write: if false;   // seed via script Admin uniquement
+    // --- Le contenu des formations --------------------------------------
+    match /formations/{slug}/lecons/{leconId} {
+      allow read:  if aAchete() && accesFormation(slug);
+      allow write: if false;   // seed Admin uniquement
     }
 
-    // --- Contenu des leçons -------------------------------------------
-    // C'est ici que l'offre est vérifiée, document par document.
-    match /contenus/{leconId} {
+    match /formations/{slug}/contenus/{leconId} {
       allow read: if aAchete()
-                  && (resource.data.offre != 'complet' || monOffre() == 'complet');
+                  && accesFormation(slug)
+                  && (resource.data.offre != 'complet' || accesComplet(slug));
       allow write: if false;
     }
 
@@ -72,9 +83,6 @@ service cloud.firestore {
     }
 
     // --- Les avis --------------------------------------------------------
-    // Chaque acheteur écrit le sien (jamais auto-publié : publie doit
-    // rester false à l'écriture ; la publication passe par l'admin).
-    // La landing lit uniquement les avis publiés.
     match /avis/{uid} {
       allow read: if resource.data.publie == true
                   || (connecte() && request.auth.uid == uid);
@@ -93,9 +101,6 @@ service cloud.firestore {
     }
 
     // --- Le support : un message à la fois -------------------------------
-    // Le membre ne peut écrire que si c'est son tour (tour == 'membre' ou
-    // conversation inexistante), et son écriture passe la main ('nadir').
-    // La réponse de Nadir arrive par l'Admin SDK, qui contourne ces règles.
     match /conversations/{uid} {
       allow read: if aAchete() && request.auth.uid == uid;
 

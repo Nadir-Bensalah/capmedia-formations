@@ -1,0 +1,95 @@
+{
+  "pack": {
+    "slug": "pack",
+    "nom": "Le Pack Academy",
+    "accroche": "Toutes les formations, actuelles et à venir pendant un an, en un seul achat. Moins 30 % sur le total, et ton prorata déduit si tu as déjà acheté.",
+    "remise": 0.3,
+    "plancher": 19
+  },
+  "formations": [
+    {
+      "slug": "mobile",
+      "nom": "De Zéro à l'App Store",
+      "prixE": 97,
+      "prixC": 197,
+      "statut": "disponible"
+    },
+    {
+      "slug": "github",
+      "nom": "Git & GitHub, la maîtrise complète",
+      "prixE": 47,
+      "prixC": 97,
+      "statut": "acces-anticipe"
+    },
+    {
+      "slug": "claude-code",
+      "nom": "Claude Code, le développeur dans ton terminal",
+      "prixE": 97,
+      "prixC": 197,
+      "statut": "acces-anticipe"
+    },
+    {
+      "slug": "site-web-ia",
+      "nom": "Ton site web professionnel avec l'IA",
+      "prixE": 67,
+      "prixC": 127,
+      "statut": "acces-anticipe"
+    },
+    {
+      "slug": "automatiser-ia",
+      "nom": "Automatiser son business avec l'IA",
+      "prixE": 97,
+      "prixC": 197,
+      "statut": "acces-anticipe"
+    },
+    {
+      "slug": "prompting",
+      "nom": "Le prompting professionnel",
+      "prixE": 47,
+      "prixC": 97,
+      "statut": "acces-anticipe"
+    },
+    {
+      "slug": "firebase",
+      "nom": "Firebase, ton backend sans serveur",
+      "prixE": 67,
+      "prixC": 127,
+      "statut": "acces-anticipe"
+    },
+    {
+      "slug": "stripe",
+      "nom": "Encaisser en ligne avec Stripe",
+      "prixE": 67,
+      "prixC": 127,
+      "statut": "acces-anticipe"
+    },
+    {
+      "slug": "aso",
+      "nom": "ASO : être trouvé sur les stores",
+      "prixE": 47,
+      "prixC": 97,
+      "statut": "acces-anticipe"
+    },
+    {
+      "slug": "design-app",
+      "nom": "Le design d'app qui fait payer",
+      "prixE": 67,
+      "prixC": 127,
+      "statut": "acces-anticipe"
+    },
+    {
+      "slug": "micro-saas",
+      "nom": "Lancer un micro-SaaS rentable",
+      "prixE": 127,
+      "prixC": 247,
+      "statut": "acces-anticipe"
+    },
+    {
+      "slug": "seo-contenu",
+      "nom": "SEO & contenu : le trafic qui revient",
+      "prixE": 67,
+      "prixC": 127,
+      "statut": "acces-anticipe"
+    }
+  ]
+}

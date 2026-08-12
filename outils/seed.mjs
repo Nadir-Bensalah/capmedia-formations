@@ -1,178 +1,131 @@
 #!/usr/bin/env node
 /* ==========================================================================
-   CAPMEDIA ACADEMY : Envoi du contenu vers Firestore
+   CAPMEDIA ACADEMY · Envoi du contenu vers Firestore (multi-formations)
 
-   Lit les fichiers de contenu/*.md, sépare l'en-tête des métadonnées du
-   markdown, et écrit deux collections :
-
-     lecons/{id}    → { ordre, titre, resume, duree, offre }   (le sommaire)
-     contenus/{id}  → { offre, markdown }                      (le cours)
-
-   Ce découpage est imposé par les règles Firestore : voir firestore.rules.
+   Structure des fichiers :  contenu/<slug>/<module>.md
+   Structure Firestore    :  formations/<slug>/lecons/<id>    (sommaire)
+                             formations/<slug>/contenus/<id>  (markdown)
 
    Usage :
-     export GOOGLE_APPLICATION_CREDENTIALS=/chemin/vers/cle-service.json
-     node outils/seed.mjs            # envoie tout
-     node outils/seed.mjs --sec      # affiche ce qui serait envoyé, sans écrire
+     node outils/seed.mjs             envoie tout
+     node outils/seed.mjs --sec       aperçu sans écrire
+     node outils/seed.mjs github      une seule formation
 
-   ⚠️  La clé de service ne doit JAMAIS être commitée.
+   Purge automatique : les documents dont l'id ne correspond plus à aucun
+   fichier sont supprimés, formation par formation. Les anciennes
+   collections racine lecons/ et contenus/ (avant multi-formations) sont
+   nettoyées si présentes.
    ========================================================================== */
 
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// firebase-admin est importé plus bas, à la demande : le mode --sec doit
-// pouvoir tourner sans aucune dépendance installée.
-
 const ICI = dirname(fileURLToPath(import.meta.url));
 const DOSSIER = join(ICI, '..', 'contenu');
-const A_SEC = process.argv.includes('--sec');
+const ARGS = process.argv.slice(2);
+const A_SEC = ARGS.includes('--sec');
+const CIBLE = ARGS.find((a) => !a.startsWith('--')) || null;
 
 /* --- Lecture de l'en-tête ------------------------------------------------ */
 function separer(texte) {
   const m = texte.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-  if (!m) throw new Error("en-tête « --- » manquant ou mal formé");
-
+  if (!m) throw new Error('en-tête manquant ou mal formé');
   const meta = {};
   for (const ligne of m[1].split('\n')) {
     const sep = ligne.indexOf(':');
     if (sep === -1) continue;
     const cle = ligne.slice(0, sep).trim();
-    let val = ligne.slice(sep + 1).trim();
+    const val = ligne.slice(sep + 1).trim();
     meta[cle] = /^\d+$/.test(val) ? Number(val) : val;
   }
   return { meta, markdown: m[2].trim() };
 }
 
 function valider(meta, fichier) {
-  const requis = ['id', 'ordre', 'titre', 'resume', 'offre'];
-  for (const cle of requis) {
+  for (const cle of ['id', 'ordre', 'titre', 'resume', 'offre']) {
     if (meta[cle] === undefined || meta[cle] === '') {
       throw new Error(`${fichier} : champ « ${cle} » manquant`);
     }
   }
   if (!['essentiel', 'complet'].includes(meta.offre)) {
-    throw new Error(`${fichier} : offre doit valoir « essentiel » ou « complet »`);
-  }
-  if (typeof meta.ordre !== 'number') {
-    throw new Error(`${fichier} : ordre doit être un nombre`);
+    throw new Error(`${fichier} : offre invalide`);
   }
 }
 
-/* --- Programme ----------------------------------------------------------- */
-const fichiers = (await readdir(DOSSIER))
-  .filter((f) => f.endsWith('.md'))
-  .sort();
+/* --- Collecte ------------------------------------------------------------ */
+const formations = {};
+for (const entree of (await readdir(DOSSIER)).sort()) {
+  const chemin = join(DOSSIER, entree);
+  if (!(await stat(chemin)).isDirectory()) continue;
+  if (CIBLE && entree !== CIBLE) continue;
 
-if (!fichiers.length) {
-  console.error('Aucun fichier .md dans contenu/');
-  process.exit(1);
-}
-
-const lecons = [];
-const ordres = new Set();
-const ids = new Set();
-
-for (const fichier of fichiers) {
-  const brut = await readFile(join(DOSSIER, fichier), 'utf8');
-  let separe;
-  try {
-    separe = separer(brut);
-  } catch (e) {
-    console.error(`✗ ${fichier} : ${e.message}`);
-    process.exit(1);
+  const lecons = [];
+  const ids = new Set(); const ordres = new Set();
+  for (const f of (await readdir(chemin)).filter((x) => x.endsWith('.md')).sort()) {
+    const { meta, markdown } = separer(await readFile(join(chemin, f), 'utf8'));
+    valider(meta, `${entree}/${f}`);
+    if (ids.has(meta.id))       throw new Error(`${entree} : id en double ${meta.id}`);
+    if (ordres.has(meta.ordre)) throw new Error(`${entree} : ordre en double ${meta.ordre}`);
+    ids.add(meta.id); ordres.add(meta.ordre);
+    lecons.push({ meta, markdown });
   }
-
-  const { meta, markdown } = separe;
-  try {
-    valider(meta, fichier);
-  } catch (e) {
-    console.error(`✗ ${e.message}`);
-    process.exit(1);
-  }
-
-  if (ids.has(meta.id))       { console.error(`✗ id en double : ${meta.id}`);       process.exit(1); }
-  if (ordres.has(meta.ordre)) { console.error(`✗ ordre en double : ${meta.ordre}`); process.exit(1); }
-  ids.add(meta.id);
-  ordres.add(meta.ordre);
-
-  lecons.push({ meta, markdown, fichier });
+  lecons.sort((a, b) => a.meta.ordre - b.meta.ordre);
+  if (lecons.length) formations[entree] = lecons;
 }
 
-lecons.sort((a, b) => a.meta.ordre - b.meta.ordre);
-
-console.log(`\n${lecons.length} module(s) trouvé(s) :\n`);
-for (const { meta, markdown } of lecons) {
-  const mots = markdown.split(/\s+/).length;
-  const marque = meta.offre === 'complet' ? '🔒' : '  ';
-  console.log(
-    ` ${marque} ${String(meta.ordre).padStart(2, '0')} · ${meta.titre}` +
-    `  ${String(mots).padStart(5)} mots`
-  );
+let totalModules = 0, totalMots = 0;
+for (const [slug, lecons] of Object.entries(formations)) {
+  const mots = lecons.reduce((n, l) => n + l.markdown.split(/\s+/).length, 0);
+  totalModules += lecons.length; totalMots += mots;
+  console.log(`  ${slug.padEnd(16)} ${String(lecons.length).padStart(2)} module(s)  ${String(mots).padStart(6)} mots`);
 }
+console.log(`\n  Total : ${totalModules} modules, ${totalMots.toLocaleString('fr-FR')} mots\n`);
 
-const total = lecons.reduce((n, l) => n + l.markdown.split(/\s+/).length, 0);
-console.log(`\n   Total : ${total.toLocaleString('fr-FR')} mots\n`);
+if (A_SEC) { console.log('Mode --sec : rien écrit.'); process.exit(0); }
 
-if (A_SEC) {
-  console.log('Mode --sec : rien n’a été écrit.\n');
-  process.exit(0);
-}
-
-/* Deux façons de s'authentifier, dans cet ordre de préférence :
-     1. GOOGLE_APPLICATION_CREDENTIALS → une clé de compte de service
-     2. les identifiants par défaut : gcloud auth application-default login
-   Les identifiants ADC ne portent pas le projet : on le donne à la main. */
+/* --- Écriture ------------------------------------------------------------ */
 const PROJET = process.env.FIREBASE_PROJECT || 'capmedia-academy';
-
 const { initializeApp, applicationDefault } = await import('firebase-admin/app');
 const { getFirestore } = await import('firebase-admin/firestore');
-
-try {
-  initializeApp({ credential: applicationDefault(), projectId: PROJET });
-} catch (e) {
-  console.error(
-    "Impossible de s'authentifier.\n" +
-    '  gcloud auth application-default login\n' +
-    "ou GOOGLE_APPLICATION_CREDENTIALS vers une clé de compte de service.\n"
-  );
-  process.exit(1);
-}
-
-console.log(`Projet : ${PROJET}`);
+initializeApp({ credential: applicationDefault(), projectId: PROJET });
 const bdd = getFirestore();
+console.log(`Projet : ${PROJET}`);
 
-const lot = bdd.batch();
+for (const [slug, lecons] of Object.entries(formations)) {
+  const lot = bdd.batch();
+  for (const { meta, markdown } of lecons) {
+    lot.set(bdd.doc(`formations/${slug}/lecons/${meta.id}`), {
+      ordre: meta.ordre, titre: meta.titre, resume: meta.resume,
+      duree: meta.duree || '', offre: meta.offre,
+    });
+    lot.set(bdd.doc(`formations/${slug}/contenus/${meta.id}`), {
+      offre: meta.offre, markdown,
+    });
+  }
+  await lot.commit();
 
-for (const { meta, markdown } of lecons) {
-  lot.set(bdd.doc(`lecons/${meta.id}`), {
-    ordre:  meta.ordre,
-    titre:  meta.titre,
-    resume: meta.resume,
-    duree:  meta.duree || '',
-    offre:  meta.offre,
-  });
-
-  lot.set(bdd.doc(`contenus/${meta.id}`), {
-    offre: meta.offre,     // dupliqué : la règle Firestore le lit ici
-    markdown,
-  });
-}
-
-await lot.commit();
-
-// Purge des documents dont l'id ne correspond plus à aucun fichier
-// (renumérotation, suppression de module).
-const idsActuels = new Set(lecons.map((l) => l.meta.id));
-for (const col of ['lecons', 'contenus']) {
-  const existants = await bdd.collection(col).listDocuments();
-  for (const ref of existants) {
-    if (!idsActuels.has(ref.id)) {
-      await ref.delete();
-      console.log(`  − supprimé ${col}/${ref.id} (orphelin)`);
+  // Purge des orphelins de cette formation
+  const idsActuels = new Set(lecons.map((l) => l.meta.id));
+  for (const col of ['lecons', 'contenus']) {
+    for (const ref of await bdd.collection(`formations/${slug}/${col}`).listDocuments()) {
+      if (!idsActuels.has(ref.id)) {
+        await ref.delete();
+        console.log(`  - supprimé formations/${slug}/${col}/${ref.id}`);
+      }
     }
   }
+  console.log(`  ok ${slug}`);
 }
-console.log(`✓ ${lecons.length} modules envoyés dans Firestore.\n`);
+
+/* --- Nettoyage de l'ancienne structure racine ----------------------------- */
+if (!CIBLE) {
+  for (const col of ['lecons', 'contenus']) {
+    const anciens = await bdd.collection(col).listDocuments();
+    for (const ref of anciens) await ref.delete();
+    if (anciens.length) console.log(`  - ancienne collection ${col}/ nettoyée (${anciens.length})`);
+  }
+}
+
+console.log('Terminé.');
 process.exit(0);

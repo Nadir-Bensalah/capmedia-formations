@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mon espace · Capmedia Academy</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#191919" media="(prefers-color-scheme: dark)">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="./assets/css/tokens.css">
+<link rel="stylesheet" href="./assets/css/az.css">
+<link rel="stylesheet" href="./assets/css/lecture.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='%2337352F'/><text y='71' x='50' text-anchor='middle' font-size='60' font-weight='700' font-family='Inter,Helvetica,sans-serif' fill='%23fff'>C</text></svg>">
+<script>(function(){try{var t=localStorage.getItem('az:theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<style>
+  .compte { max-width: 880px; margin-inline: auto; padding: clamp(40px,6vw,72px) var(--marge-mobile) var(--e-9); }
+  .compte-section { margin-top: var(--e-7); }
+  .ligne-achat, .ligne-paiement {
+    display: flex; align-items: center; gap: var(--e-4);
+    padding: var(--e-4) 0;
+    border-top: 1px solid var(--trait);
+  }
+  .ligne-achat:first-of-type, .ligne-paiement:first-of-type { border-top: 0; }
+  .la-ico { display: grid; place-items: center; width: 36px; height: 36px; border-radius: var(--r-rond); background: var(--bg-3); color: var(--action); flex: none; }
+  .la-corps { flex: 1; min-width: 0; }
+  .la-actions { flex: none; display: flex; gap: var(--e-2); align-items: center; }
+  .mini-jauge { width: 120px; }
+  @media (max-width: 640px) {
+    .ligne-achat { flex-wrap: wrap; }
+    .la-actions { width: 100%; justify-content: space-between; }
+  }
+</style>
+</head>
+<body>
+
+<div class="voile" id="voile">
+  <div class="rang" style="justify-content:center">
+    <svg class="tourne" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--texte-3)" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9"/></svg>
+    <span class="t-petit t-2" id="voile-texte">Ouverture de ton espace…</span>
+  </div>
+</div>
+
+<header class="entete decolle">
+  <div class="enveloppe">
+    <a href="./index.html" class="logo"><span class="marque">C</span>Capmedia&nbsp;Academy</a>
+    <nav class="nav-liens">
+      <a href="./formations/">Formations</a>
+      <a href="./app/">Reprendre ma formation</a>
+    </nav>
+    <span style="margin-left:auto"></span>
+    <div class="selecteur-theme" role="group" aria-label="Thème">
+      <button type="button" data-theme-val="light" aria-pressed="false">Clair</button>
+      <button type="button" data-theme-val="dark" aria-pressed="false">Sombre</button>
+      <button type="button" data-theme-val="auto" aria-pressed="true">Auto</button>
+    </div>
+    <button type="button" class="lien-discret" id="deconnexion" style="border:0;background:none;cursor:pointer">Se déconnecter</button>
+  </div>
+</header>
+
+<main class="compte">
+
+  <div class="pile g-2">
+    <p class="etiquette">Mon espace</p>
+    <h1 class="t-h1" style="font-size:clamp(28px,4.5vw,40px)">Bonjour<span id="salut"></span>.</h1>
+    <p class="t-petit t-2" id="mail-compte"></p>
+  </div>
+
+  <!-- Mes formations -->
+  <section class="compte-section">
+    <div class="rang-espace" style="margin-bottom:var(--e-3)">
+      <h2 class="t-h3" style="font-size:19px">Mes formations</h2>
+      <a href="./formations/" class="lien-discret t-petit">Voir le catalogue</a>
+    </div>
+    <div class="carte" style="padding-block:var(--e-2)" id="liste-achats"></div>
+    <div id="zone-pack" class="masque" style="margin-top:var(--e-4)"></div>
+  </section>
+
+  <!-- Paiements et factures -->
+  <section class="compte-section">
+    <h2 class="t-h3" style="font-size:19px;margin-bottom:var(--e-3)">Paiements et reçus</h2>
+    <div class="carte" style="padding-block:var(--e-2)" id="liste-paiements"></div>
+    <p class="t-micro t-3" style="margin-top:var(--e-3)">Les reçus sont émis par
+    Stripe, notre prestataire de paiement. Besoin d'une facture au format
+    spécifique ? <a href="mailto:contact@capmedia.tn">Écris-nous</a> avec ton
+    numéro de reçu.</p>
+  </section>
+
+  <!-- Profil et préférences -->
+  <section class="compte-section">
+    <h2 class="t-h3" style="font-size:19px;margin-bottom:var(--e-3)">Profil et préférences</h2>
+    <div class="carte pile g-4">
+      <div class="rang-espace">
+        <div class="pile g-1">
+          <p class="t-petit t-fort">Matériel et mode d'apprentissage</p>
+          <p class="t-micro t-3" id="resume-profil">Non renseigné</p>
+        </div>
+        <a href="./app/" class="btn btn-secondaire">Modifier dans la formation</a>
+      </div>
+      <hr class="filet" style="margin:0">
+      <div class="rang-espace">
+        <div class="pile g-1">
+          <p class="t-petit t-fort">Sécurité de l'accès</p>
+          <p class="t-micro t-3">Connexion par lien à usage unique · e-mail vérifié ·
+          une seule session de lecture à la fois · contenu filigrané à ton nom</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Données personnelles -->
+  <section class="compte-section">
+    <h2 class="t-h3" style="font-size:19px;margin-bottom:var(--e-3)">Mes données</h2>
+    <div class="carte pile g-4">
+      <div class="rang-espace">
+        <div class="pile g-1">
+          <p class="t-petit t-fort">Exporter mes données</p>
+          <p class="t-micro t-3">Un fichier JSON avec ton profil, tes achats,
+          ta progression et tes messages. Droit à la portabilité, RGPD art. 20.</p>
+        </div>
+        <button type="button" class="btn btn-secondaire" id="exporter">Exporter</button>
+      </div>
+      <hr class="filet" style="margin:0">
+      <div class="rang-espace">
+        <div class="pile g-1">
+          <p class="t-petit t-fort">Supprimer mon compte</p>
+          <p class="t-micro t-3">Suppression de tes données sous 30 jours, hors
+          obligations comptables. La demande part par e-mail, on te confirme.</p>
+        </div>
+        <a class="btn btn-secondaire" id="supprimer"
+           href="mailto:contact@capmedia.tn?subject=Suppression%20de%20mon%20compte&body=Je%20demande%20la%20suppression%20de%20mon%20compte%20et%20de%20mes%20donn%C3%A9es.">Demander</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="pied">
+  <div class="enveloppe">
+    <div class="rang" style="gap:var(--e-5);flex-wrap:wrap">
+      <a href="./mentions.html" class="t-petit">Mentions légales</a>
+      <a href="./cgv.html" class="t-petit">CGV</a>
+      <a href="./confidentialite.html" class="t-petit">Confidentialité</a>
+      <a href="./cookies.html" class="t-petit">Cookies</a>
+      <a href="mailto:contact@capmedia.tn" class="t-petit">Contact</a>
+    </div>
+  </div>
+</footer>
+
+<script src="./assets/js/config.js"></script>
+<script src="./assets/js/theme.js"></script>
+<script src="./assets/js/cookies.js"></script>
+<script type="module" src="./assets/js/compte.js"></script>
+</body>
+</html>
