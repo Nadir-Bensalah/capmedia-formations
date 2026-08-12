@@ -70,6 +70,54 @@ service cloud.firestore {
       allow read, write: if aAchete() && request.auth.uid == uid;
     }
 
+    // --- Les avis --------------------------------------------------------
+    // Chaque acheteur écrit le sien (jamais auto-publié : publie doit
+    // rester false à l'écriture ; la publication passe par l'admin).
+    // La landing lit uniquement les avis publiés.
+    match /avis/{uid} {
+      allow read: if resource.data.publie == true
+                  || (connecte() && request.auth.uid == uid);
+      allow create, update: if aAchete()
+        && request.auth.uid == uid
+        && request.resource.data.publie == false
+        && request.resource.data.note is int
+        && request.resource.data.note >= 1
+        && request.resource.data.note <= 5
+        && request.resource.data.texte is string
+        && request.resource.data.texte.size() > 0
+        && request.resource.data.texte.size() <= 1200
+        && request.resource.data.prenom is string
+        && request.resource.data.prenom.size() > 0
+        && request.resource.data.prenom.size() <= 60;
+    }
+
+    // --- Le support : un message à la fois -------------------------------
+    // Le membre ne peut écrire que si c'est son tour (tour == 'membre' ou
+    // conversation inexistante), et son écriture passe la main ('nadir').
+    // La réponse de Nadir arrive par l'Admin SDK, qui contourne ces règles.
+    match /conversations/{uid} {
+      allow read: if aAchete() && request.auth.uid == uid;
+
+      allow create: if aAchete()
+        && request.auth.uid == uid
+        && request.resource.data.tour == 'nadir'
+        && request.resource.data.messages.size() == 1
+        && request.resource.data.dernier.de == 'membre'
+        && request.resource.data.dernier.texte is string
+        && request.resource.data.dernier.texte.size() > 0
+        && request.resource.data.dernier.texte.size() <= 2000;
+
+      allow update: if aAchete()
+        && request.auth.uid == uid
+        && resource.data.tour == 'membre'
+        && request.resource.data.tour == 'nadir'
+        && request.resource.data.messages.size() == resource.data.messages.size() + 1
+        && request.resource.data.dernier.de == 'membre'
+        && request.resource.data.dernier.texte is string
+        && request.resource.data.dernier.texte.size() > 0
+        && request.resource.data.dernier.texte.size() <= 2000;
+    }
+
     // --- Tout le reste est fermé ---------------------------------------
     match /{document=**} {
       allow read, write: if false;

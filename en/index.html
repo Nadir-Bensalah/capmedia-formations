@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Build Your First Mobile App in 30 Days · No Coding Experience Needed | Capmedia Academy</title>
+<meta name="description" content="The complete course that takes you from zero to a real app published on the App Store and Google Play. AI writes the code; we teach you everything else: certificates, review, screenshots, ASO, payments. 30 days.">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#191919" media="(prefers-color-scheme: dark)">
+
+<link rel="canonical" href="https://nadir-bensalah.github.io/capmedia-formations/en/">
+<link rel="alternate" hreflang="fr" href="https://nadir-bensalah.github.io/capmedia-formations/">
+<link rel="alternate" hreflang="en" href="https://nadir-bensalah.github.io/capmedia-formations/en/">
+<link rel="alternate" hreflang="x-default" href="https://nadir-bensalah.github.io/capmedia-formations/">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="Build Your First Mobile App in 30 Days, Without Coding">
+<meta property="og:description" content="Others teach you to code. We teach you to ship. The only course that goes all the way to the App Store 'Available' button.">
+<meta property="og:image" content="../assets/img/og.png">
+<meta property="og:locale" content="en_US">
+<meta property="og:url" content="https://nadir-bensalah.github.io/capmedia-formations/en/">
+<meta name="twitter:card" content="summary_large_image">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://nadir-bensalah.github.io/capmedia-formations/#org",
+      "name": "Capmedia Academy",
+      "url": "https://nadir-bensalah.github.io/capmedia-formations/",
+      "email": "contact@capmedia.tn"
+    },
+    {
+      "@type": "Course",
+      "name": "From Zero to the App Store: build and publish your first mobile app in 30 days",
+      "description": "A complete, beginner-first course: AI writes the code, we teach the 80% nobody explains. Certificates, Apple review, screenshots, in-app purchases, ASO, Google Play. 17 modules plus 2 bonus modules.",
+      "provider": { "@id": "https://nadir-bensalah.github.io/capmedia-formations/#org" },
+      "inLanguage": "fr",
+      "hasCourseInstance": {
+        "@type": "CourseInstance",
+        "courseMode": "online",
+        "courseWorkload": "PT30H"
+      },
+      "offers": [
+        { "@type": "Offer", "name": "Essential", "price": "97", "priceCurrency": "EUR", "category": "Paid" },
+        { "@type": "Offer", "name": "Complete", "price": "197", "priceCurrency": "EUR", "category": "Paid" }
+      ]
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        { "@type": "Question", "name": "Do I need a Mac to publish an iPhone app?",
+          "acceptedAnswer": { "@type": "Answer", "text": "No. The app is built in the cloud with EAS, so you can publish to the App Store from a Windows PC. You only need a phone (yours) to test on." } },
+        { "@type": "Question", "name": "Can I really build an app without knowing how to code?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Yes. You describe what you want in plain language, the AI writes the code, and the course teaches you everything the AI cannot do: publishing, certificates, store review, screenshots, pricing and your first users." } },
+        { "@type": "Question", "name": "How much does it cost to publish a mobile app?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Apple charges 99 USD per year and Google Play 25 USD once. Every other tool used in the course has a free tier: about 124 USD total for both stores." } },
+        { "@type": "Question", "name": "How long does it take to publish a first app?",
+          "acceptedAnswer": { "@type": "Answer", "text": "With 3 to 5 hours per week, about 30 days from zero to a published app, including Apple review. Access is lifetime, so you can go slower." } },
+        { "@type": "Question", "name": "What language is the course in?",
+          "acceptedAnswer": { "@type": "Answer", "text": "The course content is currently written in French. The interface and this page exist in English, and an English version of the course is on the roadmap." } }
+      ]
+    }
+  ]
+}
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="../assets/css/tokens.css">
+<link rel="stylesheet" href="../assets/css/az.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='%2337352F'/><text y='71' x='50' text-anchor='middle' font-size='60' font-weight='700' font-family='Inter,Helvetica,sans-serif' fill='%23fff'>C</text></svg>">
+<script>
+  (function () {
+    try {
+      var t = localStorage.getItem('az:theme');
+      if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+    } catch (e) {}
+  })();
+</script>
+</head>
+<body>
+
+<header class="entete" id="entete">
+  <div class="enveloppe">
+    <a href="./" class="logo"><span class="marque">C</span>Capmedia&nbsp;Academy</a>
+
+    <nav class="nav-liens">
+      <a href="#program">Curriculum</a>
+      <a href="#review">The review</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+
+    <span style="margin-left:auto"></span>
+    <nav class="sel-langue" aria-label="Language">
+      <a href="../" hreflang="fr">FR</a>
+      <a href="./" hreflang="en" aria-current="true">EN</a>
+    </nav>
+    <div class="selecteur-theme" role="group" aria-label="Theme">
+      <button type="button" data-theme-val="light" aria-pressed="false">Light</button>
+      <button type="button" data-theme-val="dark" aria-pressed="false">Dark</button>
+      <button type="button" data-theme-val="auto" aria-pressed="true">Auto</button>
+    </div>
+    <a href="../acces.html" class="lien-discret">Sign in</a>
+    <a href="#pricing" class="btn btn-principal">Join</a>
+  </div>
+</header>
+
+<main class="enveloppe" style="padding-top:clamp(64px,9vw,96px);padding-bottom:var(--e-10)">
+<div class="sections">
+
+  <!-- 1 · Hero -->
+  <section>
+    <div class="pile g-5" style="max-width:840px">
+      <p class="etiquette">Online course · lifetime access</p>
+
+      <h1 class="t-display">
+        Your mobile app,<br>
+        live on the App&nbsp;Store,<br>
+        in 30 days.
+      </h1>
+
+      <p class="t-lead" style="max-width:640px">
+        Even if you have never written a line of code. AI writes the code;
+        we teach you everything else, meaning the 80% nobody explains.
+      </p>
+
+      <div class="rang" style="gap:var(--e-3)">
+        <a href="#pricing" class="btn btn-principal btn-large">Join the Academy · €97</a>
+        <a href="#program" class="btn btn-secondaire btn-large">See the 17 modules</a>
+      </div>
+
+      <p class="t-petit t-3">
+        Instant lifetime access · 30-day guarantee · Secure Stripe checkout ·
+        Course content currently in French
+      </p>
+    </div>
+
+    <div class="creux apparait" style="margin-top:var(--e-7);padding:clamp(24px,4vw,48px)">
+      <div class="grille" style="grid-template-columns:1fr 1fr;gap:var(--e-6);align-items:center">
+        <div class="pile g-3">
+          <p class="etiquette-mono">Module 14</p>
+          <p class="t-h3">Publishing to the App Store</p>
+          <p class="t-petit t-2" style="max-width:38ch">
+            From the distribution certificate to "Ready for Sale",
+            in the exact order Apple asks for them.
+          </p>
+          <div class="rang" style="gap:6px">
+            <span class="pastille pastille--termine">11 rejection reasons covered</span>
+            <span class="pastille pastille--encours">Reply templates included</span>
+          </div>
+        </div>
+        <div class="bloc-code" style="margin:0">
+          <pre><code>eas build --platform ios --profile production
+eas submit --platform ios --latest
+
+Build complete
+Submitted to App Store Connect
+Waiting for review</code></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 · Proof -->
+  <section>
+    <div class="rang-espace">
+      <p class="t-petit t-2" style="max-width:38ch">
+        Written by a developer who has actually shipped his own apps
+        to the App Store and Google Play.
+      </p>
+      <div class="rang" style="gap:var(--e-5)">
+        <span class="t-petit t-fort">MindDrop</span>
+        <span class="t-petit t-fort">Qindil</span>
+        <span class="t-petit t-fort">Flowi</span>
+        <span class="t-petit t-fort">Isogonic</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 · The problem -->
+  <section class="apparait">
+    <div class="section-tete">
+      <p class="etiquette">Let's be honest for two minutes</p>
+      <h2 class="t-h1">How long have you had<br>that app idea?</h2>
+    </div>
+    <div class="colonne pile g-4">
+      <p class="t-lead">Six months? Two years? And every time, the same wall.</p>
+      <p class="t-corps t-2">
+        You asked an agency for a quote: somewhere between €25,000 and €80,000.
+        You looked at bootcamps: €6,000 to €9,000 and nine months of your life.
+        You opened a three-hour YouTube tutorial that starts with "install
+        Xcode" and closed the tab four minutes in.
+      </p>
+      <p class="t-corps t-2">
+        You even tried a no-code tool. It worked, right up to the moment of
+        publishing, where you discovered you needed a developer account, a
+        certificate, a provisioning profile, a privacy policy, an age rating
+        questionnaire, screenshots in eight formats, and the magic words that
+        keep an Apple reviewer in Cupertino from rejecting you.
+      </p>
+      <p class="t-h3" style="margin-top:var(--e-3)">
+        Your idea is still in your phone's notes.
+        Meanwhile, somebody else shipped it.
+      </p>
+    </div>
+  </section>
+
+  <!-- 4 · What changed -->
+  <section class="apparait">
+    <div class="section-tete">
+      <p class="etiquette">What changed in 2026</p>
+      <h2 class="t-h1">Code is no longer the problem.</h2>
+      <p class="t-lead colonne" style="margin-top:var(--e-2)">
+        You describe what you want in plain language, AI writes the code.
+        That is not magic and it is not cheating: it is how professional
+        developers work now.
+      </p>
+    </div>
+    <div class="grille grille-3">
+      <div class="pile g-2 apparait" data-retard="1">
+        <p class="etiquette-mono">01</p>
+        <p class="t-h3">You describe</p>
+        <p class="t-petit t-2">"A list of tasks, a button to add one, a green check when it's done."</p>
+      </div>
+      <div class="pile g-2 apparait" data-retard="2">
+        <p class="etiquette-mono">02</p>
+        <p class="t-h3">AI writes</p>
+        <p class="t-petit t-2">The code appears. You read it, understand the logic, adjust. You memorize nothing.</p>
+      </div>
+      <div class="pile g-2 apparait" data-retard="3">
+        <p class="etiquette-mono">03</p>
+        <p class="t-h3">It runs on your phone</p>
+        <p class="t-petit t-2">In fifteen seconds, on your actual iPhone or Android. Not in a blurry simulator.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 · The pivot -->
+  <section class="apparait" id="review-intro">
+    <div class="grille grille-2" style="gap:clamp(32px,6vw,80px);align-items:start">
+      <div class="pile g-5">
+        <p class="etiquette">The pivot</p>
+        <h2 class="t-h1">Getting an app to run on your phone is 20% of the job.</h2>
+        <p class="t-lead">
+          Nobody teaches the other 80%, because most "AI coding" instructors
+          have never published a single app in their life.
+        </p>
+        <div class="encadre encadre--astuce">
+          <span class="marqueur"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.4 1 2.3h6c0-.9.4-1.8 1-2.3A7 7 0 0 0 12 2z"/><path d="M9 20h6"/><path d="M10 23h4"/></svg></span>
+          <div>
+            <p><strong>Others teach you to code.<br>We teach you to ship.</strong></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="pile g-4">
+        <p class="etiquette">What actually blocks people</p>
+        <ul class="liste-marque liste-marque--non">
+          <li>The $99/year Apple developer account, and its enrollment that fails</li>
+          <li>Certificates, app identifiers, provisioning profiles</li>
+          <li>The first upload that fails with an unreadable error</li>
+          <li>Apple's rejection after 48 hours, three cryptic lines long</li>
+          <li>Screenshots in 6.9", 6.5", 13" iPad formats</li>
+          <li>The mandatory privacy policy, and where to host it</li>
+          <li>App Store Connect's privacy questionnaire</li>
+          <li>The paywall, in-app purchases, subscriptions, taxes</li>
+          <li>App Store search: the right title, the right keywords</li>
+          <li>Google Play, its mandatory 12 testers, its delays</li>
+        </ul>
+        <hr class="filet">
+        <p class="t-petit t-2">
+          Each of these points has made thousands of people give up.
+          Each one is a chapter of this course, written by someone
+          who hit the wall before you.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 · What you build -->
+  <section class="apparait">
+    <div class="section-tete">
+      <p class="etiquette">The guided project</p>
+      <h2 class="t-h1">You don't watch. You build.</h2>
+      <p class="t-lead colonne" style="margin-top:var(--e-2)">
+        From the first module to the last, you build <strong>Rituel</strong>,
+        a habit-tracking app. Simple enough not to drown you, complete enough
+        to cover every building block you will ever need.
+      </p>
+    </div>
+    <div class="grille grille-4">
+      <div class="pile g-2 apparait" data-retard="1">
+        <p class="t-h3">Screens</p>
+        <p class="t-petit t-2">A list, a detail view, settings, bottom navigation. The basic vocabulary.</p>
+      </div>
+      <div class="pile g-2 apparait" data-retard="2">
+        <p class="t-h3">Data that persists</p>
+        <p class="t-petit t-2">Close the app, reopen it: everything is there. Then sync to the cloud.</p>
+      </div>
+      <div class="pile g-2 apparait" data-retard="3">
+        <p class="t-h3">Notifications</p>
+        <p class="t-petit t-2">The 8pm reminder that brings people back. That is what keeps an app alive.</p>
+      </div>
+      <div class="pile g-2 apparait" data-retard="4">
+        <p class="t-h3">Real payments</p>
+        <p class="t-petit t-2">A free tier, a paid tier, a subscription. Money landing in your account.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 · Curriculum -->
+  <section id="program" class="apparait">
+    <div class="section-tete">
+      <p class="etiquette">The full curriculum</p>
+      <h2 class="t-h1">17 modules. No gaps.</h2>
+      <p class="t-lead colonne" style="margin-top:var(--e-2)">
+        Every module starts from absolute zero. No prerequisites, no
+        "as you already know". The course adapts to your hardware
+        (Mac or Windows, iPhone or Android) and to your mode: with AI
+        (a ready-to-copy prompt at every step) or without.
+      </p>
+    </div>
+
+    <div class="colonne pile g-2">
+      <div class="cadre-tableau"><table>
+        <thead><tr><th>#</th><th>Module</th></tr></thead>
+        <tbody>
+          <tr><td class="t-nb">00</td><td>Before you start: real costs, real timelines, the one technical choice</td></tr>
+          <tr><td class="t-nb">01</td><td>Finding your idea, and the niche that goes with it</td></tr>
+          <tr><td class="t-nb">02</td><td>Setting up your workshop (45 minutes, hand held)</td></tr>
+          <tr><td class="t-nb">03</td><td>Your test bench: simulators, emulators, real phones over USB</td></tr>
+          <tr><td class="t-nb">04</td><td>Talking to AI so it writes good code: the 6 rules, the templates</td></tr>
+          <tr><td class="t-nb">05</td><td>Understanding what you read (the vital minimum, nothing more)</td></tr>
+          <tr><td class="t-nb">06</td><td>Git and GitHub: your safety net, the 12 commands, the 3 famous accidents</td></tr>
+          <tr><td class="t-nb">07</td><td>Wireframing your app before building it</td></tr>
+          <tr><td class="t-nb">08</td><td>Building the screens</td></tr>
+          <tr><td class="t-nb">09</td><td>Saving data, then syncing it (and never getting a surprise cloud bill)</td></tr>
+          <tr><td class="t-nb">10</td><td>The design that says "paid app": 6 mechanical rules</td></tr>
+          <tr><td class="t-nb">11</td><td>Notifications that bring people back</td></tr>
+          <tr><td class="t-nb">12</td><td>Charging money: subscriptions, in-app purchases, what Apple really takes</td></tr>
+          <tr><td class="t-nb">13</td><td>Xcode, the complete tour without jargon</td></tr>
+          <tr><td class="t-nb">14</td><td>Publishing to the App Store: the module worth the whole course</td></tr>
+          <tr><td class="t-nb">15</td><td>Publishing to Google Play: the 12-testers rule, solved</td></tr>
+          <tr><td class="t-nb">16</td><td>Your first 100 users: ASO, short video, the 3 metrics that matter</td></tr>
+          <tr><td class="t-nb">17</td><td>Bonus · The 60-prompt playbook (Complete plan)</td></tr>
+          <tr><td class="t-nb">18</td><td>Bonus · The publishing kit: templates, replies to rejections (Complete plan)</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <!-- 8 · Money, honestly -->
+  <section class="apparait">
+    <div class="section-tete">
+      <p class="etiquette">Let's talk money, without lying</p>
+      <h2 class="t-h1">"Can you really make<br>€2,000 a month?"</h2>
+      <p class="t-lead colonne" style="margin-top:var(--e-2)">
+        Yes, it is possible. No, it is not automatic, and no, it will not be
+        next month. Here is the real math.
+      </p>
+    </div>
+
+    <div class="colonne">
+      <div class="cadre-tableau" style="margin-top:0">
+        <table>
+          <tbody>
+            <tr><td>A €4.99/month subscription</td><td class="nb">€4.99</td></tr>
+            <tr><td class="t-2">Minus VAT (France, 20%)</td><td class="nb t-2">−€0.83</td></tr>
+            <tr><td class="t-2">Minus Apple's cut (15% with the Small Business Program)</td><td class="nb t-2">−€0.62</td></tr>
+            <tr><td class="t-fort">What you keep</td><td class="nb t-fort">€3.54</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="t-corps t-2" style="margin-top:var(--e-4)">
+        So €2,000 net per month means roughly <strong>565 active
+        subscribers</strong>. With a realistic 3% conversion rate and 8%
+        monthly churn, that means attracting about <strong>1,500 installs a
+        month</strong>, every month. Anyone who guarantees you a number is
+        lying to you. What the course guarantees: a published app with your
+        name on it, and the skill to do it again.
+      </p>
+    </div>
+  </section>
+
+  <!-- 9 · The review -->
+  <section id="review" class="apparait">
+    <div class="section-tete">
+      <p class="etiquette">Complete plan · included</p>
+      <h2 class="t-h1">Before you press "Submit",<br>I test your app.</h2>
+      <p class="t-lead colonne" style="margin-top:var(--e-2)">
+        You add me as a TestFlight or Google Play beta tester. I install your
+        app on a real device, use it the way an Apple reviewer would, and send
+        you a written report: what will get you rejected, before Apple tells you.
+      </p>
+    </div>
+    <div class="colonne pile g-3">
+      <ul class="liste-marque">
+        <li>The rejection reasons I spot, Apple guideline by guideline</li>
+        <li>What breaks on small screens, in dark mode, offline</li>
+        <li>The exact moment I hesitate: that is where your users give up</li>
+        <li>Your store listing: title, subtitle, first screenshot</li>
+        <li>The three things to fix first, in order</li>
+      </ul>
+      <p class="t-micro t-3">
+        One app, one pass, a written report within 7 business days. Limited
+        spots each month so the deadline holds. I cannot promise Apple will
+        accept your app; I tell you what will get it rejected so you fix it first.
+      </p>
+    </div>
+  </section>
+
+  <!-- 10 · Pricing -->
+  <section id="pricing" class="apparait">
+    <div class="section-tete">
+      <p class="etiquette">Pricing</p>
+      <h2 class="t-h1">An agency charges €25,000.<br>A bootcamp, €7,000.</h2>
+      <p class="t-lead colonne" style="margin-top:var(--e-2)">
+        This costs the price of a dinner out, and you keep everything, for life.
+      </p>
+    </div>
+
+    <div class="grille grille-2" style="max-width:900px;align-items:start">
+      <div class="carte pile g-5">
+        <div class="pile g-1">
+          <p class="t-h3">Essential</p>
+          <p class="t-petit t-2">Everything you need to publish your first app.</p>
+        </div>
+        <div class="prix"><span class="montant">€97</span><span class="barre">€197</span></div>
+        <p class="t-micro t-3">One-time payment · Lifetime access · VAT included</p>
+        <hr class="filet" style="margin:0">
+        <ul class="liste-marque">
+          <li>All 17 modules</li>
+          <li>Adapts to your hardware and to your mode, with or without AI</li>
+          <li>The guided project, built step by step</li>
+          <li>The anti-rejection guide: 11 reasons, 11 replies</li>
+          <li>All future updates, forever</li>
+          <li>Email support channel</li>
+        </ul>
+        <a href="#" class="btn btn-secondaire btn-large btn-bloc" data-stripe="essentiel">Get Essential</a>
+      </div>
+
+      <div class="carte pile g-5">
+        <div class="pile g-1">
+          <div class="rang-espace">
+            <p class="t-h3">Complete</p>
+            <span class="pastille pastille--encours">Most popular</span>
+          </div>
+          <p class="t-petit t-2">For those who also want the app to earn.</p>
+        </div>
+        <div class="prix"><span class="montant">€197</span><span class="barre">€397</span></div>
+        <p class="t-micro t-3">One-time payment · Lifetime access · VAT included</p>
+        <hr class="filet" style="margin:0">
+        <ul class="liste-marque">
+          <li><strong>Everything in Essential</strong>, plus:</li>
+          <li><strong>I personally test your app</strong> before you submit (TestFlight / Play beta) with a written report</li>
+          <li>The full, commented source code of the guided project</li>
+          <li>The publishing kit: screenshot templates, store copy, ready-made privacy policy</li>
+          <li>The 60-prompt playbook, one per step, tested</li>
+          <li>Advanced monetization and ASO modules</li>
+        </ul>
+        <a href="#" class="btn btn-principal btn-large btn-bloc" data-stripe="complet">Get Complete</a>
+      </div>
+    </div>
+
+    <div class="encadre encadre--action" style="max-width:900px">
+      <span class="marqueur"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 16 16 12 12 8"/><line x1="8" y1="12" x2="16" y2="12"/></svg></span>
+      <div>
+        <p><strong>30-day guarantee, no questions asked.</strong></p>
+        <p>Read everything, try everything, and if you feel it gave you
+        nothing: one email, full refund. No forms, no justification. The
+        risk is on my side.</p>
+      </div>
+    </div>
+
+    <p class="t-micro t-3">
+      Secure checkout by Stripe · Card, Apple Pay, Google Pay · Note: the
+      course content is currently written in French; this page and the member
+      area interface are in English.
+    </p>
+  </section>
+
+  <!-- 11 · FAQ -->
+  <section id="faq" class="apparait">
+    <div class="section-tete">
+      <p class="etiquette">Questions</p>
+      <h2 class="t-h1">What everyone asks.</h2>
+    </div>
+
+    <div class="colonne" id="liste-faq">
+      <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="titre-acc">I am a complete beginner. Like, truly.</span></summary>
+        <div class="corps-acc"><p class="t-corps t-2">That is exactly who this is for. Module 2 explains what a terminal is and where to click, screenshot by screenshot. If you can install software and follow instructions in order, you qualify.</p></div>
+      </details>
+      <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="titre-acc">Do I need a Mac?</span></summary>
+        <div class="corps-acc"><p class="t-corps t-2">No. Builds happen in the cloud with EAS, so you can publish to the App Store from Windows. You will need a phone to test on: yours is enough.</p></div>
+      </details>
+      <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="titre-acc">Is this no-code?</span></summary>
+        <div class="corps-acc"><p class="t-corps t-2">No, on purpose. No-code locks you in: you pay a subscription forever and you do not own your app. Here you produce real code that you own; the AI just writes it under your direction.</p></div>
+      </details>
+      <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="titre-acc">Which technology exactly?</span></summary>
+        <div class="corps-acc"><p class="t-corps t-2">React Native with Expo: one codebase for iPhone and Android. It is what Discord, Shopify and Coinbase use, and it is what AI models know best, which matters when they write the code.</p></div>
+      </details>
+      <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="titre-acc">What if Apple rejects my app?</span></summary>
+        <div class="corps-acc"><p class="t-corps t-2">It happens to professionals too. Module 14 lists the 11 most common rejection reasons with, for each one, the fix and the exact message to send the reviewer. A rejection is a round-trip, not an ending.</p></div>
+      </details>
+      <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="titre-acc">What language is the course in?</span></summary>
+        <div class="corps-acc"><p class="t-corps t-2">The course content is currently written in French. This page and the member area interface exist in English, and an English version of the full course is on the roadmap. If you read French comfortably, everything works today.</p></div>
+      </details>
+      <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="titre-acc">Will I make money?</span></summary>
+        <div class="corps-acc"><p class="t-corps t-2">Nobody can promise you that, and you should distrust anyone who does. What you get for certain: a published app and the skill to build the next one in two weeks instead of six months. The math section above gives you the honest numbers.</p></div>
+      </details>
+    </div>
+  </section>
+
+  <!-- 12 · Final call -->
+  <section class="apparait">
+    <div class="colonne pile g-5">
+      <h2 class="t-h1">In 30 days you will have either an app, or 30 more days.</h2>
+      <p class="t-lead">
+        Your idea is worth nothing while it sits in your notes. It starts
+        being worth something the day someone can download it.
+      </p>
+      <div class="rang">
+        <a href="#pricing" class="btn btn-principal btn-large">Publish my app · €97</a>
+      </div>
+      <p class="t-micro t-3">
+        Instant access · 30-day guarantee · Launch pricing, it will go up
+      </p>
+    </div>
+  </section>
+
+</div>
+</main>
+
+<footer class="pied">
+  <div class="enveloppe">
+    <div class="rang-espace rang-haut" style="gap:var(--e-6)">
+      <div class="pile g-2">
+        <a href="./" class="logo"><span class="marque">C</span>Capmedia&nbsp;Academy</a>
+        <p class="t-micro t-3">Courses that truly start from zero.</p>
+      </div>
+      <div class="rang rang-haut" style="gap:var(--e-6)">
+        <div class="pile g-2 t-petit">
+          <a href="#program">Curriculum</a>
+          <a href="#pricing">Pricing</a>
+          <a href="#faq">FAQ</a>
+        </div>
+        <div class="pile g-2 t-petit">
+          <a href="../acces.html">Member area</a>
+          <a href="../">Version française</a>
+          <a href="mailto:contact@capmedia.tn">Contact us</a>
+        </div>
+      </div>
+    </div>
+    <hr class="filet" style="margin-block:var(--e-5)">
+    <p class="t-micro t-3">
+      © 2026 Capmedia Academy. Apple, App Store, iPhone and Google Play are
+      trademarks of their respective owners, neither partners nor endorsers
+      of this course.
+    </p>
+  </div>
+</footer>
+
+<script src="../assets/js/config.js"></script>
+<script src="../assets/js/theme.js"></script>
+<script>
+  /* Boutons Stripe + en-tête (version allégée de site.js pour la page EN) */
+  (function () {
+    var cfg = window.AZ || {};
+    var liens = cfg.stripe || {};
+    document.querySelectorAll('[data-stripe]').forEach(function (btn) {
+      var url = liens[btn.getAttribute('data-stripe')];
+      if (url) { btn.setAttribute('href', url); btn.setAttribute('rel', 'noopener'); return; }
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        var t = btn.textContent;
+        btn.textContent = 'Checkout coming soon';
+        setTimeout(function () { btn.textContent = t; }, 2200);
+      });
+    });
+    var entete = document.getElementById('entete');
+    var maj = function () { entete.classList.toggle('decolle', window.scrollY > 8); };
+    maj(); window.addEventListener('scroll', maj, { passive: true });
+    document.querySelectorAll('.apparait').forEach(function (el) { el.classList.add('vu'); });
+  })();
+</script>
+</body>
+</html>

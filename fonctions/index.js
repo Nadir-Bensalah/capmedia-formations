@@ -156,3 +156,71 @@ exports.ouvrirAcces = onRequest(
     return res.status(200).send(`accès ${offre} ouvert pour ${email}`);
   },
 );
+
+
+/* ==========================================================================
+   Console d'administration : support et avis.
+   Une seule fonction, protégée par ADMIN_CLE, pilotée par « action » :
+
+     {cle, action:'support'}                        → conversations en attente
+     {cle, action:'repondre', uid, texte}           → répondre à un membre
+     {cle, action:'avis'}                           → avis en attente de relecture
+     {cle, action:'publier', uid, publie:true|false} → publier / dépublier un avis
+   ========================================================================== */
+exports.admin = onRequest(
+  { region: 'europe-west1', secrets: [ADMIN_CLE], cors: false },
+  async (req, res) => {
+    if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
+
+    const { cle, action, uid, texte, publie } = req.body || {};
+    const attendu = String(ADMIN_CLE.value() || '').trim();
+    if (!attendu || String(cle || '').trim() !== attendu) {
+      return res.status(403).send('interdit');
+    }
+
+    try {
+      if (action === 'support') {
+        const attente = await bdd.collection('conversations')
+          .where('tour', '==', 'nadir').get();
+        return res.status(200).json(attente.docs.map((d) => ({
+          uid: d.id,
+          email: d.data().email,
+          dernier: d.data().dernier,
+          nb: (d.data().messages || []).length,
+        })));
+      }
+
+      if (action === 'repondre') {
+        if (!uid || !texte) return res.status(400).send('uid et texte requis');
+        const ref = bdd.doc(`conversations/${uid}`);
+        const d = await ref.get();
+        if (!d.exists) return res.status(404).send('conversation inconnue');
+        const message = { de: 'nadir', texte: String(texte), date: new Date().toISOString() };
+        await ref.set({
+          messages: [...(d.data().messages || []), message],
+          dernier: message,
+          tour: 'membre',
+          maj: new Date().toISOString(),
+        }, { merge: true });
+        return res.status(200).send('répondu');
+      }
+
+      if (action === 'avis') {
+        const attente = await bdd.collection('avis')
+          .where('publie', '==', false).get();
+        return res.status(200).json(attente.docs.map((d) => ({ uid: d.id, ...d.data() })));
+      }
+
+      if (action === 'publier') {
+        if (!uid) return res.status(400).send('uid requis');
+        await bdd.doc(`avis/${uid}`).set({ publie: publie !== false }, { merge: true });
+        return res.status(200).send(publie !== false ? 'publié' : 'dépublié');
+      }
+
+      return res.status(400).send('action inconnue');
+    } catch (err) {
+      console.error(err);
+      return res.status(500).send('erreur interne');
+    }
+  },
+);

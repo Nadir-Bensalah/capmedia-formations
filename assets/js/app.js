@@ -17,9 +17,11 @@ import { getAuth, onAuthStateChanged, signOut }
   from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js';
 import {
   getFirestore, collection, getDocs, doc, getDoc, setDoc, query, orderBy,
+  onSnapshot,
 } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js';
 
 import { versHtml } from './markdown.js';
+import { ico, etoiles } from './icones.js';
 
 const cfg = window.AZ;
 const $ = (id) => document.getElementById(id);
@@ -52,15 +54,15 @@ const CLE_PROFIL = 'az:profil';
    Profil : questions, tags, formulaire
    ========================================================================== */
 const QUESTIONS = [
-  { cle: 'ordi', ico: '💻', titre: 'Ton ordinateur',
+  { cle: 'ordi', ico: 'ordinateur', titre: 'Ton ordinateur',
     opts: [['mac', 'Mac'], ['windows', 'Windows'], ['les-deux', 'Les deux']] },
-  { cle: 'tel', ico: '📱', titre: 'Ton téléphone',
+  { cle: 'tel', ico: 'telephone', titre: 'Ton téléphone',
     opts: [['iphone', 'iPhone'], ['android', 'Android'], ['les-deux', 'Les deux']] },
-  { cle: 'tablette', ico: '📟', titre: 'Une tablette ?',
+  { cle: 'tablette', ico: 'tablette', titre: 'Une tablette ?',
     opts: [['aucune', 'Aucune'], ['ipad', 'iPad'], ['android', 'Android'], ['les-deux', 'Les deux']] },
-  { cle: 'montre', ico: '⌚', titre: 'Une montre connectée ?',
+  { cle: 'montre', ico: 'montre', titre: 'Une montre connectée ?',
     opts: [['aucune', 'Aucune'], ['apple', 'Apple Watch'], ['android', 'Wear OS'], ['les-deux', 'Les deux']] },
-  { cle: 'ia', ico: '✨', titre: 'Ta façon de suivre',
+  { cle: 'ia', ico: 'ia', titre: 'Ta façon de suivre',
     aide: 'Avec IA : un prompt prêt à copier à chaque étape. Sans IA : les commandes et la documentation, en entier. Tu changes quand tu veux.',
     opts: [['avec', 'Avec IA (recommandé)'], ['sans', 'Sans IA']] },
 ];
@@ -87,7 +89,7 @@ function formulaireProfil(valeurs) {
   return QUESTIONS.map((q) => `
     <div class="q-profil">
       <div class="q-tete">
-        <span class="q-ico" aria-hidden="true">${q.ico}</span>
+        <span class="q-ico">${ico(q.ico, 15)}</span>
         <div class="pile g-1">
           <p class="t-petit t-fort">${q.titre}</p>
           ${q.aide ? `<p class="t-micro t-3">${q.aide}</p>` : ''}
@@ -156,7 +158,7 @@ function afficherOnboarding() {
     enregistrerProfil(lireFormulaire(sur));
     sur.remove();
     if (courante) aller(courante, true);
-    toast('Formation adaptée à ton matériel ✓');
+    toast('Formation adaptée à ton matériel');
   });
 }
 
@@ -180,7 +182,7 @@ function afficherReglages() {
         <div id="reglages-form">${formulaireProfil(profil || PROFIL_DEFAUT)}</div>
         <div class="q-profil">
           <div class="q-tete">
-            <span class="q-ico" aria-hidden="true">🔓</span>
+            <span class="q-ico">${ico('deverrouille', 15)}</span>
             <div class="pile g-1">
               <p class="t-petit t-fort">Navigation libre</p>
               <p class="t-micro t-3">Les modules se débloquent au fil de ta progression.
@@ -205,7 +207,7 @@ function afficherReglages() {
     enregistrerProfil(lireFormulaire(sur));
     fermer();
     if (courante) aller(courante, true);
-    toast('Réglages enregistrés ✓');
+    toast('Réglages enregistrés');
   });
 
   $('tout-debloquer').addEventListener('click', () => {
@@ -249,6 +251,7 @@ onAuthStateChanged(auth, async (u) => {
     majDeblocage(false);
     construireSommaire();
     ouvrirDepuisUrl();
+    protegerContenu();
     voile.classList.add('parti');
 
     if (!profil) afficherOnboarding();
@@ -272,7 +275,7 @@ function gabaritPasAcheteur(email) {
         </p>
       </div>
       <div class="encadre encadre--astuce">
-        <span class="marqueur" aria-hidden="true">💡</span>
+        <span class="marqueur">${ico('astuce', 18)}</span>
         <div>
           <p>Si tu as payé avec une <strong>autre adresse</strong>, déconnecte-toi et
           reconnecte-toi avec celle-là. Si tu viens tout juste de payer, laisse une
@@ -440,9 +443,9 @@ function majSommaire() {
     b.setAttribute('aria-disabled', String(ouvert && !dispo));
 
     const num = b.querySelector('.num');
-    if (!ouvert)      num.textContent = '🔒';
+    if (!ouvert)      num.innerHTML = ico('cadenas', 11);
     else if (!dispo)  num.textContent = '·';
-    else if (fait)    num.textContent = '✓';
+    else if (fait)    num.innerHTML = ico('coche', 12);
     else              num.textContent = String(l.ordre).padStart(2, '0');
   });
 
@@ -513,7 +516,7 @@ async function aller(id, remplacer = false) {
     console.error(err);
     if (courante !== id) return;
     page.innerHTML = chapeau +
-      '<div class="encadre encadre--piege"><span class="marqueur" aria-hidden="true">🛑</span><div>' +
+      '<div class="encadre encadre--piege"><span class="marqueur">' + ico('piege', 18) + '</span><div>' +
       '<p><strong>Impossible de charger ce module.</strong></p>' +
       '<p>Vérifie ta connexion et recharge la page. Si ça persiste, ' +
       `écris-moi à <a href="mailto:${cfg.contact}">${cfg.contact}</a>.</p>` +
@@ -531,7 +534,7 @@ function gabaritVerrouille(l) {
     <hr class="chapeau-filet">
     <div class="corps">
       <div class="encadre encadre--attention">
-        <span class="marqueur" aria-hidden="true">🔒</span>
+        <span class="marqueur">${ico('cadenas', 18)}</span>
         <div>
           <p><strong>Ce module fait partie de l'offre Complet.</strong></p>
           <p>Tu as pris l'offre Essentiel. Tu peux passer au Complet à tout moment
@@ -582,7 +585,7 @@ function construirePagination(l) {
     if (accessible(cible) && !debloquee(cible)) {
       return `<span class="pagination-verrou${droite ? ' droite' : ''}">
                 <span class="sens">${sens}</span>
-                <span class="titre">🔒 ${echapper(cible.titre)}</span>
+                <span class="titre">${ico('cadenas', 12)} ${echapper(cible.titre)}</span>
                 <span class="t-micro t-3">Termine ce module pour le débloquer</span>
               </span>`;
     }
@@ -603,33 +606,39 @@ function construirePagination(l) {
 
 function ajouterBoutonsCopier(racine) {
   racine.querySelectorAll('pre').forEach((pre) => {
-    // Le bouton se positionne sur un conteneur, pas sur le <pre> lui-même :
-    // sinon il défile avec le code quand celui-ci déborde horizontalement.
-    const cadre = document.createElement('div');
-    cadre.className = 'bloc-code';
-    pre.parentNode.insertBefore(cadre, pre);
-    cadre.appendChild(pre);
+    let hote = pre.closest('.bloc-code');
+    const dansPrompt = !!pre.closest('.prompt');
 
-    const dansPrompt = !!cadre.closest('.prompt');
+    // Les prompts n'ont pas d'en-tête : on les enveloppe comme avant.
+    if (!hote) {
+      hote = document.createElement('div');
+      hote.className = 'bloc-code bloc-code-nu';
+      pre.parentNode.insertBefore(hote, pre);
+      hote.appendChild(pre);
+    }
+
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'copier';
-    b.textContent = dansPrompt ? 'Copier le prompt' : 'Copier';
+    const libelle = dansPrompt ? 'Copier le prompt' : 'Copier';
+    b.innerHTML = ico('copier', 12) + '<span>' + libelle + '</span>';
 
     b.addEventListener('click', async () => {
       const code = pre.querySelector('code');
       try {
         await navigator.clipboard.writeText(code ? code.textContent : pre.textContent);
-        b.textContent = 'Copié ✓';
+        b.innerHTML = ico('coche', 12) + '<span>Copié</span>';
         b.dataset.copie = '1';
         setTimeout(() => {
-          b.textContent = dansPrompt ? 'Copier le prompt' : 'Copier';
+          b.innerHTML = ico('copier', 12) + '<span>' + libelle + '</span>';
           delete b.dataset.copie;
         }, 1600);
-      } catch { b.textContent = 'Échec'; }
+      } catch { b.innerHTML = '<span>Échec</span>'; }
     });
 
-    cadre.appendChild(b);
+    const tete = hote.querySelector('.bloc-code-tete');
+    if (tete) tete.appendChild(b);
+    else hote.appendChild(b);
   });
 }
 
@@ -658,8 +667,262 @@ $('ouvrir-menu').addEventListener('click', ouvrirMenu);
 $('fermer-menu').addEventListener('click', fermerMenu);
 ombre.addEventListener('click', fermerMenu);
 
-/* --- Réglages ------------------------------------------------------------ */
-$('ouvrir-profil').addEventListener('click', afficherReglages);
+/* ==========================================================================
+   7. Aide, support & avis
+
+   Le chat suit une règle stricte, appliquée par les règles Firestore :
+   UN message à la fois. Le suivant ne part que lorsque Nadir a répondu.
+   L'avis est déposé en attente de relecture, jamais publié tout seul.
+   ========================================================================== */
+let arreterEcouteChat = null;
+
+function afficherSupport() {
+  const sur = document.createElement('div');
+  sur.className = 'surcouche';
+  sur.innerHTML = `
+    <div class="panneau" role="dialog" aria-modal="true" aria-label="Aide et support">
+      <div class="pan-tete">
+        <div class="pile g-1">
+          <p class="etiquette">Aide</p>
+          <h2 class="t-h3" style="font-size:20px">Support &amp; avis</h2>
+        </div>
+        <button type="button" class="bouton-icone" id="support-fermer" aria-label="Fermer">${ico('fermer', 16)}</button>
+      </div>
+      <div class="onglets" role="tablist">
+        <button type="button" role="tab" aria-selected="true" data-onglet="chat">${ico('chat', 13)} Me contacter</button>
+        <button type="button" role="tab" aria-selected="false" data-onglet="avis">${ico('etoile', 13)} Mon avis</button>
+      </div>
+      <div class="pan-corps" id="support-corps"></div>
+    </div>`;
+  document.body.appendChild(sur);
+
+  const fermer = () => {
+    if (arreterEcouteChat) { arreterEcouteChat(); arreterEcouteChat = null; }
+    sur.remove();
+  };
+  $('support-fermer').addEventListener('click', fermer);
+  sur.addEventListener('click', (e) => { if (e.target === sur) fermer(); });
+
+  sur.querySelectorAll('[data-onglet]').forEach((b) => {
+    b.addEventListener('click', () => {
+      sur.querySelectorAll('[data-onglet]').forEach((x) => x.setAttribute('aria-selected', 'false'));
+      b.setAttribute('aria-selected', 'true');
+      if (arreterEcouteChat) { arreterEcouteChat(); arreterEcouteChat = null; }
+      if (b.dataset.onglet === 'chat') afficherChat();
+      else afficherAvis();
+    });
+  });
+
+  afficherChat();
+}
+
+/* --- Le chat, un message à la fois ---------------------------------------- */
+function afficherChat() {
+  const corps = $('support-corps');
+  corps.innerHTML = `
+    <div class="notice-chat">
+      <span class="marqueur">${ico('info', 15)}</span>
+      <p class="t-micro t-2"><strong>Un message à la fois.</strong> Tu m'écris,
+      je te réponds ici (et tu vois la réponse arriver en direct). Tu ne peux
+      envoyer le message suivant qu'après ma réponse : ça me permet de répondre
+      à tout le monde, avec de vraies réponses.</p>
+    </div>
+    <div class="fil-chat" id="fil-chat"><p class="t-micro t-3">Chargement…</p></div>
+    <form class="envoi-chat" id="envoi-chat">
+      <textarea class="champ" id="champ-chat" rows="3" maxlength="2000"
+        placeholder="Ta question, avec le maximum de contexte…"></textarea>
+      <div class="rang-espace">
+        <span class="t-micro t-3" id="compteur-chat">0 / 2000</span>
+        <button type="submit" class="btn btn-principal" id="bouton-chat">${ico('envoyer', 13)} Envoyer</button>
+      </div>
+    </form>`;
+
+  const fil = $('fil-chat');
+  const champ = $('champ-chat');
+  const bouton = $('bouton-chat');
+  const formulaire = $('envoi-chat');
+
+  champ.addEventListener('input', () => {
+    $('compteur-chat').textContent = champ.value.length + ' / 2000';
+  });
+
+  const ref = doc(bdd, 'conversations', utilisateur.uid);
+
+  arreterEcouteChat = onSnapshot(ref, (instantane) => {
+    const conv = instantane.exists() ? instantane.data() : { messages: [], tour: 'membre' };
+
+    fil.innerHTML = conv.messages.length
+      ? conv.messages.map((m) => `
+          <div class="bulle ${m.de === 'membre' ? 'bulle-moi' : 'bulle-nadir'}">
+            <span class="t-micro t-3">${m.de === 'membre' ? 'Toi' : 'Nadir'} · ${new Date(m.date).toLocaleDateString('fr-FR')}</span>
+            <p>${echapper(m.texte)}</p>
+          </div>`).join('')
+      : '<p class="t-petit t-3" style="text-align:center;padding:24px 0">Aucun message pour l\'instant. Pose ta première question.</p>';
+    fil.scrollTop = fil.scrollHeight;
+
+    const monTour = conv.tour !== 'nadir';
+    champ.disabled = !monTour;
+    bouton.disabled = !monTour;
+    champ.placeholder = monTour
+      ? 'Ta question, avec le maximum de contexte…'
+      : 'En attente de ma réponse : tu pourras écrire à nouveau juste après.';
+  }, (err) => {
+    console.error(err);
+    fil.innerHTML = '<p class="t-micro t-3">Impossible de charger la conversation.</p>';
+  });
+
+  formulaire.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const texte = champ.value.trim();
+    if (!texte) return;
+    bouton.disabled = true;
+
+    try {
+      const instantane = await getDoc(ref);
+      const conv = instantane.exists() ? instantane.data() : { messages: [] };
+      if (instantane.exists() && conv.tour === 'nadir') {
+        toast('Un message à la fois : attends ma réponse.');
+        return;
+      }
+      const message = { de: 'membre', texte, date: new Date().toISOString() };
+      await setDoc(ref, {
+        email: (utilisateur.email || '').toLowerCase(),
+        messages: [...(conv.messages || []), message],
+        dernier: message,
+        tour: 'nadir',
+        maj: new Date().toISOString(),
+      });
+      champ.value = '';
+      $('compteur-chat').textContent = '0 / 2000';
+      toast('Message envoyé. Je te réponds ici.');
+    } catch (err) {
+      console.error(err);
+      toast('Envoi impossible. Réessaie dans un instant.');
+      bouton.disabled = false;
+    }
+  });
+}
+
+/* --- L'avis sur la formation ---------------------------------------------- */
+function afficherAvis() {
+  const corps = $('support-corps');
+  corps.innerHTML = `
+    <div class="pile g-4" style="padding-block:var(--e-3)">
+      <p class="t-petit t-2">Ton retour compte double : il m'aide à améliorer la
+      formation, et il aide les suivants à se décider. Il sera relu avant
+      d'apparaître sur le site, avec ton prénom uniquement.</p>
+      <div class="pile g-2">
+        <p class="t-petit t-fort">Ta note</p>
+        <div class="choix-etoiles" id="choix-etoiles" role="radiogroup" aria-label="Note sur 5"></div>
+      </div>
+      <div>
+        <label class="etiquette-champ" for="avis-prenom">Ton prénom (affiché)</label>
+        <input class="champ" id="avis-prenom" maxlength="60" autocomplete="given-name">
+      </div>
+      <div>
+        <label class="etiquette-champ" for="avis-texte">Ton avis</label>
+        <textarea class="champ" id="avis-texte" rows="5" maxlength="1200"
+          placeholder="Qu'est-ce que la formation t'a permis de faire ? Qu'est-ce qui t'a le plus servi ?"></textarea>
+      </div>
+      <button type="button" class="btn btn-principal btn-bloc" id="avis-envoyer">Envoyer mon avis</button>
+      <p class="t-micro t-3" id="avis-etat"></p>
+    </div>`;
+
+  let note = 5;
+  const zone = $('choix-etoiles');
+  const peindre = () => {
+    zone.innerHTML = '';
+    for (let i = 1; i <= 5; i++) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'etoile-btn' + (i <= note ? ' active' : '');
+      b.setAttribute('role', 'radio');
+      b.setAttribute('aria-checked', String(i === note));
+      b.setAttribute('aria-label', i + ' sur 5');
+      b.innerHTML = etoiles(0, 0);           // pas utilisé, on met la vraie icône :
+      b.innerHTML = `<svg class="ico" width="22" height="22" viewBox="0 0 24 24" fill="${i <= note ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26"/></svg>`;
+      b.addEventListener('click', () => { note = i; peindre(); });
+      zone.appendChild(b);
+    }
+  };
+  peindre();
+
+  const ref = doc(bdd, 'avis', utilisateur.uid);
+  getDoc(ref).then((d) => {
+    if (!d.exists()) return;
+    const v = d.data();
+    note = v.note || 5; peindre();
+    $('avis-prenom').value = v.prenom || '';
+    $('avis-texte').value = v.texte || '';
+    $('avis-etat').textContent = v.publie
+      ? 'Ton avis est publié sur le site. Tu peux le modifier : il repassera en relecture.'
+      : 'Ton avis est en relecture. Tu peux encore le modifier.';
+  }).catch(() => {});
+
+  $('avis-envoyer').addEventListener('click', async () => {
+    const prenom = $('avis-prenom').value.trim();
+    const texte = $('avis-texte').value.trim();
+    if (!prenom || !texte) { toast('Prénom et avis, il me faut les deux.'); return; }
+    try {
+      await setDoc(ref, {
+        note, prenom, texte,
+        publie: false,
+        offre: acheteur.offre || 'essentiel',
+        date: new Date().toISOString(),
+      });
+      $('avis-etat').textContent = 'Merci. Ton avis part en relecture avant publication.';
+      toast('Avis envoyé, merci.');
+    } catch (err) {
+      console.error(err);
+      toast('Envoi impossible. Réessaie dans un instant.');
+    }
+  });
+}
+
+$('ouvrir-support').addEventListener('click', afficherSupport);
+
+/* ==========================================================================
+   8. Protection du contenu
+
+   Rien de « bloquant » : les blocs de code et les prompts restent
+   copiables (c'est le produit). Le texte du cours, lui, ne se copie pas,
+   ne s'imprime pas, et porte un filigrane discret au nom de l'acheteur.
+   Le contenu n'existe que via Firestore, derrière le jeton de session.
+   ========================================================================== */
+function protegerContenu() {
+  // 1. La copie du texte du cours est remplacée par une signature.
+  document.addEventListener('copy', (e) => {
+    const sel = document.getSelection();
+    if (!sel || sel.isCollapsed) return;
+    const noeud = sel.anchorNode && sel.anchorNode.parentElement;
+    if (!noeud) return;
+    if (!noeud.closest('.corps')) return;                       // hors cours : libre
+    if (noeud.closest('pre, code, .prompt')) return;            // code : libre
+    e.clipboardData.setData('text/plain',
+      'Contenu protégé · Formation Capmedia Academy · ' + location.origin);
+    e.preventDefault();
+  });
+
+  // 2. Pas de menu contextuel sur le texte du cours (le code reste libre).
+  document.addEventListener('contextmenu', (e) => {
+    const el = e.target.closest ? e.target : e.target.parentElement;
+    if (el && el.closest && el.closest('.corps') && !el.closest('pre, code, .prompt')) {
+      e.preventDefault();
+    }
+  });
+
+  // 3. Filigrane : l'adresse de l'acheteur, répétée, à peine visible.
+  //    Dissuade le partage d'écran et de PDF sans gêner la lecture.
+  const email = (utilisateur.email || '').toLowerCase();
+  if (email) {
+    const f = document.createElement('div');
+    f.className = 'filigrane';
+    f.setAttribute('aria-hidden', 'true');
+    f.innerHTML = Array.from({ length: 18 }, () => `<span>${echapper(email)}</span>`).join('');
+    $('lecture').appendChild(f);
+  }
+}
+
 
 /* --- Déconnexion --------------------------------------------------------- */
 function deconnecter() {

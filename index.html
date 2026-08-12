@@ -8,6 +8,11 @@
 <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#191919" media="(prefers-color-scheme: dark)">
 
+<link rel="canonical" href="https://nadir-bensalah.github.io/capmedia-formations/">
+<link rel="alternate" hreflang="fr" href="https://nadir-bensalah.github.io/capmedia-formations/">
+<link rel="alternate" hreflang="en" href="https://nadir-bensalah.github.io/capmedia-formations/en/">
+<link rel="alternate" hreflang="x-default" href="https://nadir-bensalah.github.io/capmedia-formations/">
+
 <meta property="og:type" content="website">
 <meta property="og:title" content="De Zéro à l'App Store : ta première app publiée en 30 jours">
 <meta property="og:description" content="Les autres t'apprennent à coder. Moi je t'apprends à publier. La seule formation française qui va jusqu'au bouton « Disponible sur l'App Store ».">
@@ -30,6 +35,51 @@
     } catch (e) {}
   })();
 </script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://nadir-bensalah.github.io/capmedia-formations/#org",
+      "name": "Capmedia Academy",
+      "url": "https://nadir-bensalah.github.io/capmedia-formations/",
+      "email": "contact@capmedia.tn"
+    },
+    {
+      "@type": "Course",
+      "name": "De Zéro à l'App Store : publie ta première application mobile en 30 jours",
+      "description": "Formation complète pour grand débutant : l'IA écrit le code, on t'apprend les 80 % que personne n'explique. Certificats, revue Apple, captures, achats intégrés, référencement, Google Play. 17 modules + 2 bonus.",
+      "provider": { "@id": "https://nadir-bensalah.github.io/capmedia-formations/#org" },
+      "inLanguage": "fr",
+      "hasCourseInstance": {
+        "@type": "CourseInstance",
+        "courseMode": "online",
+        "courseWorkload": "PT30H"
+      },
+      "offers": [
+        { "@type": "Offer", "name": "Essentiel", "price": "97", "priceCurrency": "EUR", "category": "Paid" },
+        { "@type": "Offer", "name": "Complet", "price": "197", "priceCurrency": "EUR", "category": "Paid" }
+      ]
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        { "@type": "Question", "name": "Faut-il un Mac pour publier une application iPhone ?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Non. La construction se fait dans le nuage avec EAS : on publie sur l'App Store depuis un PC Windows. Il faut seulement un téléphone pour tester, le tien suffit." } },
+        { "@type": "Question", "name": "Peut-on vraiment créer une application mobile sans savoir coder ?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Oui. Tu décris ce que tu veux en français, l'IA écrit le code, et la formation t'apprend tout ce que l'IA ne fait pas : la publication, les certificats, la revue des stores, les captures, les prix et tes premiers utilisateurs." } },
+        { "@type": "Question", "name": "Combien coûte la publication d'une application mobile ?",
+          "acceptedAnswer": { "@type": "Answer", "text": "99 $ par an chez Apple, 25 $ une seule fois chez Google Play. Tous les autres outils de la formation ont un niveau gratuit : environ 124 $ au total pour les deux magasins." } },
+        { "@type": "Question", "name": "Combien de temps pour publier une première application ?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Avec 3 à 5 heures par semaine, environ 30 jours de zéro à l'application publiée, revue Apple comprise. L'accès est à vie : tu peux aller plus lentement." } },
+        { "@type": "Question", "name": "Quelle technologie pour créer une application iOS et Android à la fois ?",
+          "acceptedAnswer": { "@type": "Answer", "text": "React Native avec Expo : un seul code pour iPhone et Android. C'est la technologie de Discord, Shopify et Coinbase, et celle que les IA maîtrisent le mieux." } }
+      ]
+    }
+  ]
+}
+</script>
 </head>
 <body>
 
@@ -47,6 +97,10 @@
     </nav>
 
     <span style="margin-left:auto"></span>
+    <nav class="sel-langue" aria-label="Langue">
+      <a href="./" hreflang="fr" aria-current="true">FR</a>
+      <a href="./en/" hreflang="en">EN</a>
+    </nav>
     <div class="selecteur-theme" id="selecteur-theme" role="group" aria-label="Thème">
       <button type="button" data-theme-val="light" aria-pressed="false">Clair</button>
       <button type="button" data-theme-val="dark" aria-pressed="false">Sombre</button>
@@ -202,7 +256,7 @@ eas submit --platform ios --latest
           application de leur vie.
         </p>
         <div class="encadre encadre--astuce">
-          <span class="marqueur" aria-hidden="true">💡</span>
+          <span class="marqueur"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.4 1 2.3h6c0-.9.4-1.8 1-2.3A7 7 0 0 0 12 2z"/><path d="M9 20h6"/><path d="M10 23h4"/></svg></span>
           <div>
             <p><strong>Les autres t'apprennent à coder.<br>Moi je t'apprends à publier.</strong></p>
           </div>
@@ -544,7 +598,7 @@ eas submit --platform ios --latest
       </div>
 
       <div class="encadre encadre--attention" style="margin-top:var(--e-6)">
-        <span class="marqueur" aria-hidden="true">⚠️</span>
+        <span class="marqueur"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
         <div>
           <p><strong>Ce que je te garantis, moi.</strong></p>
           <p>Une application publiée, en ligne, avec ton nom dessus, et la
@@ -557,7 +611,18 @@ eas submit --platform ios --latest
     </div>
   </section>
 
-  <!-- ═══════ 10 · Le formateur ═══════ -->
+    <!-- ═══════ Avis des membres (visible seulement s'il y en a) ═══════ -->
+  <section class="section masque" id="avis">
+    <div class="section-tete">
+      <p class="etiquette">Ils l'ont suivie</p>
+      <h2 class="t-h1">Les avis des membres.</h2>
+      <p class="t-petit t-2" id="avis-resume"></p>
+    </div>
+    <div class="grille grille-3" id="grille-avis"></div>
+    <p class="t-micro t-3">Seuls les acheteurs peuvent laisser un avis, depuis leur espace membre. Chaque avis est relu avant publication.</p>
+  </section>
+
+<!-- ═══════ 10 · Le formateur ═══════ -->
   <section id="formateur" class="apparait">
     <div class="section-tete">
       <p class="etiquette">Qui te forme</p>
@@ -634,7 +699,7 @@ eas submit --platform ios --latest
     </div>
 
     <div class="encadre encadre--attention colonne">
-      <span class="marqueur" aria-hidden="true">⚠️</span>
+      <span class="marqueur"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
       <div>
         <p><strong>Ce que je ne peux pas te promettre.</strong></p>
         <p>Que ton application sera acceptée. Personne ne contrôle la revue
@@ -706,7 +771,7 @@ eas submit --platform ios --latest
     </div>
 
     <div class="encadre encadre--action" style="max-width:900px">
-      <span class="marqueur" aria-hidden="true">👉</span>
+      <span class="marqueur"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 16 16 12 12 8"/><line x1="8" y1="12" x2="16" y2="12"/></svg></span>
       <div>
         <p><strong>Garantie 30 jours, sans discussion.</strong></p>
         <p>Tu lis tout, tu essaies, et si tu estimes que ça ne t'a rien apporté :
@@ -839,5 +904,6 @@ eas submit --platform ios --latest
 <script src="./assets/js/config.js"></script>
 <script src="./assets/js/theme.js"></script>
 <script src="./assets/js/site.js"></script>
+<script type="module" src="./assets/js/avis.js"></script>
 </body>
 </html>
