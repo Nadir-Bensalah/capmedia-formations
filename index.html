@@ -142,28 +142,44 @@
       </p>
     </div>
 
-    <!-- Aperçu produit, posé à plat. Remplacer par le rendu de la passe 1. -->
-    <div class="creux apparait" style="margin-top:var(--e-7);padding:clamp(24px,4vw,48px)">
-      <div class="grille" style="grid-template-columns:1fr 1fr;gap:var(--e-6);align-items:center">
-        <div class="pile g-3">
-          <p class="etiquette-mono">Module 09</p>
-          <p class="t-h3">Publier sur l'App Store</p>
-          <p class="t-petit t-2" style="max-width:38ch">
+    <div class="creux apparait" style="margin-top:var(--e-7);padding:clamp(28px,4vw,48px)">
+      <div class="grille" style="grid-template-columns:auto 1fr;gap:clamp(28px,5vw,56px);align-items:center">
+        <div class="mock-porte">
+          <div class="mock-tel">
+            <div class="mock-ecran">
+              <span class="mock-encoche"></span>
+              <div class="mock-corps">
+                <span class="mock-heure">9:41</span>
+                <div class="mock-titre">Aujourd'hui</div>
+                <div class="mock-sous">3 rituels sur 4</div>
+                <div class="mock-liste">
+                  <div class="mock-item fait"><span class="mock-rond"></span><span>Marcher 20 minutes</span></div>
+                  <div class="mock-item fait"><span class="mock-rond"></span><span>Lire 10 pages</span></div>
+                  <div class="mock-item fait"><span class="mock-rond"></span><span>Pas d'écran après 22 h</span></div>
+                  <div class="mock-item"><span class="mock-rond"></span><span>Écrire 200 mots</span></div>
+                </div>
+                <div class="mock-cta">Ajouter un rituel</div>
+              </div>
+            </div>
+          </div>
+          <span class="mock-etiquette">Rituel, l'app que tu construis</span>
+        </div>
+        <div class="pile g-4" style="min-width:0">
+          <p class="etiquette-mono">Module 14</p>
+          <p class="t-h2" style="font-size:clamp(22px,2.6vw,28px)">Puis tu la publies. Pour de vrai.</p>
+          <p class="t-petit t-2" style="max-width:42ch">
             Du certificat de distribution au statut « Prêt pour la vente »,
             dans l'ordre exact où Apple te les demande.
           </p>
-          <div class="rang" style="gap:6px">
-            <span class="pastille pastille--termine">✓ 11 motifs de rejet</span>
-            <span class="pastille pastille--encours">● Réponse type incluse</span>
-          </div>
-        </div>
-        <div class="bloc-code" style="margin:0">
-          <pre><code>eas build --platform ios --profile production
+          <div class="bloc-code" style="margin:0">
+            <div class="bloc-code-tete"><span class="points"><i></i><i></i><i></i></span><span class="bloc-code-langue">Terminal</span></div>
+            <pre><code>eas build --platform ios
 eas submit --platform ios --latest
 
-✔ Build terminé
-✔ Envoyé à App Store Connect
-→ En attente de revue</code></pre>
+Build terminé
+Envoyé à App Store Connect
+En attente de revue</code></pre>
+          </div>
         </div>
       </div>
     </div>
@@ -298,23 +314,45 @@ eas submit --platform ios --latest
         assez complète pour toucher toutes les briques dont tu auras besoin ensuite.
       </p>
     </div>
-    <div class="grille grille-4">
-      <div class="pile g-2 apparait" data-retard="1">
-        <p class="t-h3">Des écrans</p>
-        <p class="t-petit t-2">Une liste, un détail, des réglages, une navigation en bas. Le vocabulaire de base.</p>
+    <div class="grille" style="grid-template-columns:1fr auto;gap:clamp(32px,6vw,64px);align-items:center">
+      <div class="grille grille-2">
+        <div class="pile g-2 apparait" data-retard="1">
+          <p class="t-h3">Des écrans</p>
+          <p class="t-petit t-2">Une liste, un détail, des réglages, une navigation en bas. Le vocabulaire de base.</p>
+        </div>
+        <div class="pile g-2 apparait" data-retard="2">
+          <p class="t-h3">Des données qui restent</p>
+          <p class="t-petit t-2">Tu fermes l'app, tu la rouvres : tout est là. Puis on synchronise dans le nuage.</p>
+        </div>
+        <div class="pile g-2 apparait" data-retard="3">
+          <p class="t-h3">Des notifications</p>
+          <p class="t-petit t-2">Le rappel de 20 h qui fait revenir les gens. C'est ça qui fait vivre une app.</p>
+        </div>
+        <div class="pile g-2 apparait" data-retard="4">
+          <p class="t-h3">Un vrai paiement</p>
+          <p class="t-petit t-2">Une version gratuite, une payante, un abonnement. L'argent qui tombe sur ton compte.</p>
+        </div>
       </div>
-      <div class="pile g-2 apparait" data-retard="2">
-        <p class="t-h3">Des données qui restent</p>
-        <p class="t-petit t-2">Tu fermes l'app, tu la rouvres : tout est là. Puis on synchronise dans le nuage.</p>
-      </div>
-      <div class="pile g-2 apparait" data-retard="3">
-        <p class="t-h3">Des notifications</p>
-        <p class="t-petit t-2">Le rappel de 20 h qui fait revenir les gens. C'est ça qui fait vivre une app.</p>
-      </div>
-      <div class="pile g-2 apparait" data-retard="4">
-        <p class="t-h3">Un vrai paiement</p>
-        <p class="t-petit t-2">Une version gratuite, une payante, un abonnement. L'argent qui tombe sur ton compte.</p>
-      </div>
+      <div class="apparait masque-tel-mobile"><div class="mock-porte">
+          <div class="mock-tel">
+            <div class="mock-ecran">
+              <span class="mock-encoche"></span>
+              <div class="mock-corps">
+                <span class="mock-heure">9:41</span>
+                <div class="mock-titre">Aujourd'hui</div>
+                <div class="mock-sous">3 rituels sur 4</div>
+                <div class="mock-liste">
+                  <div class="mock-item fait"><span class="mock-rond"></span><span>Marcher 20 minutes</span></div>
+                  <div class="mock-item fait"><span class="mock-rond"></span><span>Lire 10 pages</span></div>
+                  <div class="mock-item fait"><span class="mock-rond"></span><span>Pas d'écran après 22 h</span></div>
+                  <div class="mock-item"><span class="mock-rond"></span><span>Écrire 200 mots</span></div>
+                </div>
+                <div class="mock-cta">Ajouter un rituel</div>
+              </div>
+            </div>
+          </div>
+          <span class="mock-etiquette">Simple à comprendre</span>
+        </div></div>
     </div>
   </section>
 
