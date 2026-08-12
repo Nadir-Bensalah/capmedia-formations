@@ -1,0 +1,78 @@
+rules_version = '2';
+
+/*
+  ATELIER ZÉRO — Règles de sécurité Firestore
+
+  Principe : le contenu de la formation vit ici, pas dans le dépôt GitHub
+  public. Connaître l'URL de /app/ ne donne accès à rien : la lecture exige
+  un document acheteurs/{email} créé par le webhook Stripe.
+
+  Deux collections, et c'est volontaire :
+   • lecons/{id}   → métadonnées (titre, ordre, résumé, offre). Lisibles par
+                     tout acheteur, ce qui permet la requête triée du
+                     sommaire. Ne contient AUCUN contenu de cours.
+   • contenus/{id} → le markdown. Lu document par document, ce qui permet
+                     à la règle de vérifier l'offre achetée par acheteur.
+
+  Ce découpage est imposé par Firestore : une requête de collection doit
+  être prouvable statiquement, elle ne peut pas dépendre de resource.data.
+  Un getDoc individuel, si.
+
+  Déployer :  firebase deploy --only firestore:rules
+*/
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- Fonctions utilitaires ----------------------------------------
+    function connecte() {
+      return request.auth != null
+          && request.auth.token.email != null;
+    }
+
+    function monEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    function aAchete() {
+      return connecte()
+          && exists(/databases/$(database)/documents/acheteurs/$(monEmail()));
+    }
+
+    function monOffre() {
+      return get(/databases/$(database)/documents/acheteurs/$(monEmail())).data.offre;
+    }
+
+    // --- Les acheteurs ------------------------------------------------
+    // Écrits UNIQUEMENT par le webhook Stripe (Admin SDK, qui contourne
+    // ces règles). Personne ne peut s'auto-déclarer acheteur.
+    match /acheteurs/{email} {
+      allow read:  if connecte() && monEmail() == email;
+      allow write: if false;
+    }
+
+    // --- Sommaire (métadonnées seulement) -----------------------------
+    match /lecons/{leconId} {
+      allow read:  if aAchete();
+      allow write: if false;   // seed via script Admin uniquement
+    }
+
+    // --- Contenu des leçons -------------------------------------------
+    // C'est ici que l'offre est vérifiée, document par document.
+    match /contenus/{leconId} {
+      allow read: if aAchete()
+                  && (resource.data.offre != 'complet' || monOffre() == 'complet');
+      allow write: if false;
+    }
+
+    // --- La progression -----------------------------------------------
+    match /progression/{uid} {
+      allow read, write: if aAchete() && request.auth.uid == uid;
+    }
+
+    // --- Tout le reste est fermé ---------------------------------------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

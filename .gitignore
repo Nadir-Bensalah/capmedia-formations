@@ -1,0 +1,35 @@
+# ══════════════════════════════════════════════════════════════════════
+#  IMPORTANT — ce dépôt est PUBLIC (GitHub Pages).
+#  Rien de ce qui suit ne doit jamais y arriver.
+# ══════════════════════════════════════════════════════════════════════
+
+# Le contenu de la formation. C'est le produit qu'on vend : il vit dans
+# Firestore, jamais dans un dépôt public.
+contenu/
+
+# Clés et secrets
+*serviceAccount*.json
+*service-account*.json
+*.pem
+*.p8
+*.p12
+.env
+.env.*
+!.env.exemple
+
+# Dépendances
+node_modules/
+package-lock.json
+
+# Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# Système
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
