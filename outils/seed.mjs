@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* ==========================================================================
-   ATELIER ZÉRO — Envoi du contenu vers Firestore
+   CAPMEDIA ACADEMY : Envoi du contenu vers Firestore
 
    Lit les fichiers de contenu/*.md, sépare l'en-tête des métadonnées du
    markdown, et écrit deux collections :
@@ -161,5 +161,18 @@ for (const { meta, markdown } of lecons) {
 }
 
 await lot.commit();
+
+// Purge des documents dont l'id ne correspond plus à aucun fichier
+// (renumérotation, suppression de module).
+const idsActuels = new Set(lecons.map((l) => l.meta.id));
+for (const col of ['lecons', 'contenus']) {
+  const existants = await bdd.collection(col).listDocuments();
+  for (const ref of existants) {
+    if (!idsActuels.has(ref.id)) {
+      await ref.delete();
+      console.log(`  − supprimé ${col}/${ref.id} (orphelin)`);
+    }
+  }
+}
 console.log(`✓ ${lecons.length} modules envoyés dans Firestore.\n`);
 process.exit(0);

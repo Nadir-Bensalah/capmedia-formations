@@ -1,5 +1,5 @@
 /* ==========================================================================
-   CAPMEDIA ACADEMY — Petit convertisseur Markdown → HTML
+   CAPMEDIA ACADEMY · Petit convertisseur Markdown → HTML
 
    Volontairement minimal : il ne gère que ce que la formation utilise, il
    échappe tout le HTML brut (rien n'est injectable), et il ajoute quatre
@@ -24,7 +24,7 @@
      [[visuel: description de l'image à produire]]
      → réserve la place d'un visuel pas encore intégré.
 
-   versHtml(markdown, contexte) — contexte est un Set de tags de profil,
+   versHtml(markdown, contexte) : contexte est un Set de tags de profil,
    ou null pour tout afficher (aperçu, développement).
    ========================================================================== */
 
@@ -73,7 +73,7 @@ function enLigne(texte) {
 
 /* --- Corps d'un bloc ::: avec prise en compte de l'imbrication ----------- */
 /* Un :::si peut contenir un :::astuce (et inversement) : on compte la
-   profondeur — une ligne `:::xxx` ouvre, une ligne `:::` seule ferme. */
+   profondeur : une ligne `:::xxx` ouvre, une ligne `:::` seule ferme. */
 function extraireBloc(lignes, depart) {
   const corps = [];
   let profondeur = 1;
@@ -107,7 +107,7 @@ export function versHtml(markdown, contexte = null) {
     /* Ligne vide */
     if (estVide(ligne)) { i++; continue; }
 
-    /* Bloc de code ``` — dont la variante ```prompt */
+    /* Bloc de code ``` : dont la variante ```prompt */
     if (/^```/.test(ligne)) {
       const info = ligne.slice(3).trim();
       const corps = [];
@@ -119,10 +119,10 @@ export function versHtml(markdown, contexte = null) {
         const titre = info.slice(6).trim();
 
         // En mode sans IA, la carte prompt s'efface au profit d'une ligne
-        // discrète — le lecteur sait qu'un raccourci existe s'il change d'avis.
+        // discrète : le lecteur sait qu'un raccourci existe s'il change d'avis.
         if (contexte !== null && contexte.has('sans-ia')) {
           sortie.push(
-            `<p class="prompt-alt">✦ ${titre ? echapper(titre) + ' — ' : ''}` +
+            `<p class="prompt-alt">✦ ${titre ? echapper(titre) + ' : ' : ''}` +
             `prompt IA masqué (mode sans IA)</p>`
           );
         } else {
@@ -174,7 +174,11 @@ export function versHtml(markdown, contexte = null) {
     const visuel = ligne.match(/^\[\[visuel:\s*(.+?)\]\]$/i);
     if (visuel) {
       sortie.push(
-        `<figure><div class="emplacement-visuel">Visuel à intégrer —<br>${echapper(visuel[1])}</div></figure>`
+        `<figure><div class="emplacement-visuel">` +
+        `<span class="ev-ico" aria-hidden="true">🖼️</span>` +
+        `<span class="ev-nom">Image à venir</span>` +
+        `<span class="ev-desc">${echapper(visuel[1])}</span>` +
+        `</div></figure>`
       );
       i++;
       continue;

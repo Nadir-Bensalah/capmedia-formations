@@ -1,5 +1,5 @@
 /* ==========================================================================
-   CAPMEDIA ACADEMY — Webhook Stripe (Firebase Cloud Functions, 2e génération)
+   CAPMEDIA ACADEMY · Webhook Stripe (Firebase Cloud Functions, 2e génération)
 
    Rôle : quand un paiement réussit, écrire un document acheteurs/{email}
    dans Firestore. C'est ce document, et lui seul, qui ouvre l'accès à la
@@ -50,7 +50,7 @@ exports.stripeWebhook = onRequest(
     const stripe = new Stripe(STRIPE_SECRET.value());
     let evenement;
 
-    // 1. Vérifier la signature — sans ça, n'importe qui peut s'offrir
+    // 1. Vérifier la signature : sans ça, n'importe qui peut s'offrir
     //    la formation en appelant cette URL.
     try {
       evenement = stripe.webhooks.constructEvent(

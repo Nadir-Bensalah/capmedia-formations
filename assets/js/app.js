@@ -1,14 +1,14 @@
 /* ==========================================================================
-   CAPMEDIA ACADEMY — Espace membre
+   CAPMEDIA ACADEMY · Espace membre
 
    Sécurité : le contenu des leçons vit dans Firestore, pas dans ce dépôt
    public. Les règles Firestore n'autorisent la lecture qu'aux acheteurs
    (document acheteurs/{email} écrit par le webhook Stripe).
 
    Ce fichier gère aussi :
-   — le PROFIL du lecteur (Mac/Windows, iPhone/Android, tablette, montre,
+   : le PROFIL du lecteur (Mac/Windows, iPhone/Android, tablette, montre,
      mode avec/sans IA) qui filtre le contenu via les blocs :::si ;
-   — le DÉBLOCAGE PROGRESSIF : un module s'ouvre quand le précédent est
+   : le DÉBLOCAGE PROGRESSIF : un module s'ouvre quand le précédent est
      terminé, avec une petite animation, et ne se reverrouille jamais.
    ========================================================================== */
 
@@ -44,7 +44,7 @@ let faits       = new Set();
 let utilisateur = null;
 let courante    = null;
 let profil      = null;   // { ordi, tel, tablette, montre, ia } ou null
-let maxDebloque = -1;     // ordre le plus haut jamais débloqué — ne redescend jamais
+let maxDebloque = -1;     // ordre le plus haut jamais débloqué : ne redescend jamais
 
 const CLE_PROFIL = 'az:profil';
 
@@ -52,17 +52,17 @@ const CLE_PROFIL = 'az:profil';
    Profil : questions, tags, formulaire
    ========================================================================== */
 const QUESTIONS = [
-  { cle: 'ordi', titre: 'Ton ordinateur',
+  { cle: 'ordi', ico: '💻', titre: 'Ton ordinateur',
     opts: [['mac', 'Mac'], ['windows', 'Windows'], ['les-deux', 'Les deux']] },
-  { cle: 'tel', titre: 'Ton téléphone',
+  { cle: 'tel', ico: '📱', titre: 'Ton téléphone',
     opts: [['iphone', 'iPhone'], ['android', 'Android'], ['les-deux', 'Les deux']] },
-  { cle: 'tablette', titre: 'Une tablette ?',
+  { cle: 'tablette', ico: '📟', titre: 'Une tablette ?',
     opts: [['aucune', 'Aucune'], ['ipad', 'iPad'], ['android', 'Android'], ['les-deux', 'Les deux']] },
-  { cle: 'montre', titre: 'Une montre connectée ?',
+  { cle: 'montre', ico: '⌚', titre: 'Une montre connectée ?',
     opts: [['aucune', 'Aucune'], ['apple', 'Apple Watch'], ['android', 'Wear OS'], ['les-deux', 'Les deux']] },
-  { cle: 'ia', titre: 'Ta façon de suivre',
+  { cle: 'ia', ico: '✨', titre: 'Ta façon de suivre',
     aide: 'Avec IA : un prompt prêt à copier à chaque étape. Sans IA : les commandes et la documentation, en entier. Tu changes quand tu veux.',
-    opts: [['avec', 'Avec IA — recommandé'], ['sans', 'Sans IA']] },
+    opts: [['avec', 'Avec IA (recommandé)'], ['sans', 'Sans IA']] },
 ];
 
 const PROFIL_DEFAUT = { ordi: 'les-deux', tel: 'les-deux', tablette: 'aucune', montre: 'aucune', ia: 'avec' };
@@ -85,9 +85,14 @@ function tagsProfil() {
 
 function formulaireProfil(valeurs) {
   return QUESTIONS.map((q) => `
-    <div class="pile g-2">
-      <p class="t-petit t-fort">${q.titre}</p>
-      ${q.aide ? `<p class="t-micro t-3">${q.aide}</p>` : ''}
+    <div class="q-profil">
+      <div class="q-tete">
+        <span class="q-ico" aria-hidden="true">${q.ico}</span>
+        <div class="pile g-1">
+          <p class="t-petit t-fort">${q.titre}</p>
+          ${q.aide ? `<p class="t-micro t-3">${q.aide}</p>` : ''}
+        </div>
+      </div>
       <div class="seg" data-cle="${q.cle}" role="group" aria-label="${q.titre}">
         ${q.opts.map(([v, l]) =>
           `<button type="button" data-val="${v}" aria-pressed="${String(valeurs[q.cle] === v)}">${l}</button>`
@@ -127,16 +132,22 @@ function afficherOnboarding() {
   const sur = document.createElement('div');
   sur.className = 'surcouche';
   sur.innerHTML = `
-    <div class="panneau pile g-5" role="dialog" aria-modal="true" aria-label="Ton matériel">
-      <div class="pile g-2">
-        <p class="etiquette">Avant de commencer</p>
-        <h2 class="t-h2" style="font-size:24px">Dis-moi avec quoi tu travailles.</h2>
-        <p class="t-petit t-2">La formation s'adapte : tu ne verras que les
-        étapes qui concernent <em>ton</em> matériel. Modifiable à tout moment
-        dans « Matériel &amp; mode », en bas du sommaire.</p>
+    <div class="panneau" role="dialog" aria-modal="true" aria-label="Ton matériel">
+      <div class="pan-tete">
+        <div class="pile g-1">
+          <p class="etiquette">Avant de commencer</p>
+          <h2 class="t-h3" style="font-size:20px">Dis-moi avec quoi tu travailles.</h2>
+        </div>
       </div>
-      <div class="pile g-4" id="onboarding-form">${formulaireProfil(PROFIL_DEFAUT)}</div>
-      <button type="button" class="btn btn-principal btn-large btn-bloc" id="onboarding-ok">C'est parti</button>
+      <div class="pan-corps">
+        <p class="t-petit t-2" style="padding-bottom:var(--e-2)">La formation s'adapte :
+        tu ne verras que les étapes qui concernent <em>ton</em> matériel.
+        Modifiable à tout moment dans « Matériel &amp; mode », en bas du sommaire.</p>
+        <div id="onboarding-form">${formulaireProfil(PROFIL_DEFAUT)}</div>
+      </div>
+      <div class="pan-pied">
+        <button type="button" class="btn btn-principal btn-large btn-bloc" id="onboarding-ok">C'est parti</button>
+      </div>
     </div>`;
   document.body.appendChild(sur);
   brancherSegments(sur);
@@ -154,21 +165,33 @@ function afficherReglages() {
   const sur = document.createElement('div');
   sur.className = 'surcouche';
   sur.innerHTML = `
-    <div class="panneau pile g-5" role="dialog" aria-modal="true" aria-label="Matériel et mode">
-      <div class="rang-espace">
-        <h2 class="t-h3">Matériel &amp; mode</h2>
+    <div class="panneau" role="dialog" aria-modal="true" aria-label="Matériel et mode">
+      <div class="pan-tete">
+        <div class="pile g-1">
+          <p class="etiquette">Réglages</p>
+          <h2 class="t-h3" style="font-size:20px">Matériel &amp; mode</h2>
+        </div>
         <button type="button" class="bouton-icone" id="reglages-fermer" aria-label="Fermer">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
         </button>
       </div>
-      <div class="pile g-4" id="reglages-form">${formulaireProfil(profil || PROFIL_DEFAUT)}</div>
-      <button type="button" class="btn btn-principal btn-bloc" id="reglages-ok">Enregistrer</button>
-      <hr class="filet" style="margin:0">
-      <div class="pile g-2">
-        <p class="t-micro t-3">Les modules se débloquent au fil de ta progression.
-        Si tu préfères naviguer librement :</p>
-        <button type="button" class="btn btn-secondaire" id="tout-debloquer">Tout débloquer définitivement</button>
+      <div class="pan-corps">
+        <div id="reglages-form">${formulaireProfil(profil || PROFIL_DEFAUT)}</div>
+        <div class="q-profil">
+          <div class="q-tete">
+            <span class="q-ico" aria-hidden="true">🔓</span>
+            <div class="pile g-1">
+              <p class="t-petit t-fort">Navigation libre</p>
+              <p class="t-micro t-3">Les modules se débloquent au fil de ta progression.
+              Si tu préfères tout ouvrir d'un coup, c'est définitif et rien ne se reverrouille.</p>
+            </div>
+          </div>
+          <button type="button" class="btn btn-secondaire" id="tout-debloquer" style="align-self:flex-start">Tout débloquer définitivement</button>
+        </div>
+      </div>
+      <div class="pan-pied">
+        <button type="button" class="btn btn-principal btn-large btn-bloc" id="reglages-ok">Enregistrer</button>
       </div>
     </div>`;
   document.body.appendChild(sur);
@@ -186,7 +209,7 @@ function afficherReglages() {
   });
 
   $('tout-debloquer').addEventListener('click', () => {
-    if (!window.confirm('Débloquer tous les modules ? C\'est définitif — ils ne se reverrouilleront pas.')) return;
+    if (!window.confirm('Débloquer tous les modules ? C\'est définitif : ils ne se reverrouilleront pas.')) return;
     const avant = maxDebloque;
     maxDebloque = Math.max(...lecons.map((l) => l.ordre));
     enregistrerProgression();
@@ -469,7 +492,7 @@ async function aller(id, remplacer = false) {
   majSommaire();
   fermerMenu();
   window.scrollTo({ top: 0, behavior: 'instant' });
-  document.title = l.titre + ' — Capmedia Academy';
+  document.title = l.titre + ' · Capmedia Academy';
 
   if (!accessible(l)) {
     page.innerHTML = gabaritVerrouille(l);
@@ -512,7 +535,7 @@ function gabaritVerrouille(l) {
         <div>
           <p><strong>Ce module fait partie de l'offre Complet.</strong></p>
           <p>Tu as pris l'offre Essentiel. Tu peux passer au Complet à tout moment
-             en ne payant que la différence — écris-moi à
+             en ne payant que la différence : écris-moi à
              <a href="mailto:${cfg.contact}">${cfg.contact}</a> et je t'envoie le lien.</p>
         </div>
       </div>
@@ -528,7 +551,7 @@ function ajouterBoutonFini(l) {
     `<div class="pile g-1">
        <span class="t-h3">${dejaFait ? 'Module terminé' : 'Tu as fini ce module ?'}</span>
        <span class="t-micro t-3">${dejaFait
-          ? 'Tu peux le décocher si tu veux le refaire — rien ne se reverrouille.'
+          ? 'Tu peux le décocher si tu veux le refaire : rien ne se reverrouille.'
           : 'Coche-le : le module suivant se débloque.'}</span>
      </div>
      <button type="button" class="btn ${dejaFait ? 'btn-secondaire' : 'btn-principal'}" id="btn-fini">

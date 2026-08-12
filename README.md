@@ -1,7 +1,7 @@
 # Capmedia Academy
 
 Plateforme de formations en ligne. Première formation :
-**De Zéro à l'App Store** — publier sa première application mobile en 30 jours.
+**De Zéro à l'App Store** : publier sa première application mobile en 30 jours.
 
 **En ligne** → https://nadir-bensalah.github.io/capmedia-formations/
 
@@ -41,13 +41,13 @@ dans Firestore par `outils/seed.mjs` et n'apparaît jamais ici.
 index.html              page de vente
 acces.html              connexion par lien magique
 merci.html              retour de paiement Stripe
-app/index.html          espace membre (coquille — le contenu vient de Firestore)
+app/index.html          espace membre (coquille : le contenu vient de Firestore)
 
 assets/css/tokens.css   le système de design (source de vérité, ne pas dupliquer)
 assets/css/az.css       les 15 composants
 assets/css/lecture.css  la colonne de lecture (708px)
 
-assets/js/config.js     clés publiques Stripe + Firebase — à renseigner
+assets/js/config.js     clés publiques Stripe + Firebase : à renseigner
 assets/js/theme.js      clair / sombre / système
 assets/js/site.js       comportements de la page de vente
 assets/js/auth.js       lien magique
@@ -78,7 +78,7 @@ python3 -m http.server 8080
 ```
 
 La page de vente fonctionne sans Firebase. `acces.html` et `app/` affichent un
-message tant que `config.js` n'est pas renseigné — c'est normal.
+message tant que `config.js` n'est pas renseigné : c'est normal.
 
 **Après avoir modifié un module :**
 
@@ -102,7 +102,7 @@ de vente, *application* (calme, régulière) pour la lecture des cours.
 
 | | Prix | Contenu |
 |---|---|---|
-| Essentiel | 97 € (au lieu de 197) | les 12 modules |
+| Essentiel | 97 € (au lieu de 197) | les 17 modules |
 | Complet | 197 € (au lieu de 397) | + **la revue personnelle de ton app** (TestFlight / bêta Play), le code source, le kit de publication, les 60 demandes IA |
 
 Paiement unique, accès à vie, garantie 30 jours.
@@ -115,4 +115,4 @@ L'architecture est prévue pour ça. Pour la formation n° 2 :
 2. Ajoute un champ `formation:` dans l'en-tête et dans le seed
 3. Duplique `index.html` en `formation-2.html`
 4. Crée deux produits Stripe de plus
-5. Le reste — connexion, espace membre, règles, progression — ne bouge pas
+5. Le reste (connexion, espace membre, règles, progression) ne bouge pas

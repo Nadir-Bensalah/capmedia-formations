@@ -1,5 +1,5 @@
 /* ==========================================================================
-   CAPMEDIA ACADEMY — Connexion par lien magique (Firebase Auth, sans mot de passe)
+   CAPMEDIA ACADEMY · Connexion par lien magique (Firebase Auth, sans mot de passe)
 
    Déroulé :
    1. Le client paie sur Stripe.
@@ -147,7 +147,7 @@ formulaire.addEventListener('submit', async (e) => {
     afficherOk(
       '<b>C’est envoyé.</b><br>' +
       'Ouvre le message reçu à <b>' + email + '</b> et clique sur le lien pour entrer. ' +
-      'Pense à regarder dans les indésirables — c’est souvent là qu’il se cache la première fois.'
+      'Pense à regarder dans les indésirables : c’est souvent là qu’il se cache la première fois.'
     );
   } catch (err) {
     console.error(err);

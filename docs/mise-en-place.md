@@ -1,4 +1,4 @@
-# Mise en place — de zéro à « le paiement fonctionne »
+# Mise en place : de zéro à « le paiement fonctionne »
 
 Compte **2 à 3 heures** la première fois. Les étapes sont dans l'ordre : chacune
 dépend de la précédente. Ne saute pas, ne réordonne pas.
@@ -36,7 +36,7 @@ et il n'est écrit que par le webhook Stripe. Personne ne peut se l'attribuer.
 
 1. [console.firebase.google.com](https://console.firebase.google.com) → Ajouter un projet
 2. Nom : `capmedia-academy`
-3. **Décoche Google Analytics** — inutile ici, et ça ajoute des obligations de
+3. **Décoche Google Analytics** : inutile ici, et ça ajoute des obligations de
    déclaration si tu publies un jour une app liée au même compte
 
 ### Firestore
@@ -44,7 +44,7 @@ et il n'est écrit que par le webhook Stripe. Personne ne peut se l'attribuer.
 Menu **Firestore Database** → Créer une base :
 
 - Mode : **production** (jamais le mode test)
-- Région : **`europe-west1`** — définitif, et ça garde les données dans l'UE
+- Région : **`europe-west1`** : définitif, et ça garde les données dans l'UE
 
 ### Authentication
 
@@ -96,7 +96,7 @@ firebase use --add          # choisis le projet capmedia-academy
 firebase deploy --only firestore:rules
 ```
 
-### Le plafond de dépenses — ne saute pas
+### Le plafond de dépenses : ne saute pas
 
 Console Google Cloud → **Facturation → Budgets et alertes** → créer un budget de
 **5 €** avec alertes à 50 %, 90 % et 100 %. Deux minutes, et tu ne recevras jamais
@@ -159,8 +159,8 @@ Catalogue de produits → **+ Ajouter un produit**, deux fois :
 
 | Produit | Prix | Type |
 |---|---|---|
-| Capmedia Academy — Essentiel | 97,00 € | Paiement unique |
-| Capmedia Academy — Complet | 197,00 € | Paiement unique |
+| Capmedia Academy : Essentiel | 97,00 € | Paiement unique |
+| Capmedia Academy : Complet | 197,00 € | Paiement unique |
 
 ### Les Payment Links
 
@@ -243,7 +243,7 @@ date future et n'importe quel CVC.
 5. Clique « Ouvrir ma formation » → saisis la même adresse
 6. Tu reçois le lien par e-mail, tu cliques
 7. Tu es dans `/app/`, les 12 modules sont lisibles
-8. Les 2 modules bonus affichent le cadenas — c'est correct pour l'Essentiel
+8. Les 2 modules bonus affichent le cadenas : c'est correct pour l'Essentiel
 9. Coche un module, recharge la page : la progression a tenu
 
 Puis refais tout avec l'offre **Complet** et une **autre** adresse : les 14 modules
@@ -254,7 +254,7 @@ doivent être ouverts.
 Ouvre `/app/` dans une **fenêtre de navigation privée**, sans être connecté.
 Tu dois être renvoyé vers `acces.html`, et la console réseau ne doit contenir
 **aucun contenu de leçon**. Si tu vois du markdown passer, les règles Firestore
-ne sont pas déployées — reprends l'étape 1.
+ne sont pas déployées : reprends l'étape 1.
 
 ---
 
@@ -266,7 +266,7 @@ ne sont pas déployées — reprends l'étape 1.
    `firebase functions:secrets:set STRIPE_WEBHOOK_SECRET` puis redéploie
 3. Fais **un vrai achat à 97 €** avec ta propre carte, vérifie toute la chaîne,
    puis rembourse-toi depuis le tableau de bord Stripe
-4. Publie les pages `mentions.html` et `cgv.html` (obligatoires — voir plus bas)
+4. Publie les pages `mentions.html` et `cgv.html` (obligatoires : voir plus bas)
 
 ---
 
@@ -285,13 +285,13 @@ Pour retirer un accès (après remboursement) : supprime le document
 
 ---
 
-## Obligations légales — à ne pas repousser
+## Obligations légales : à ne pas repousser
 
 Tu vends un produit numérique à des consommateurs français. Il te faut :
 
-- **Mentions légales** — identité de l'éditeur, SIRET, hébergeur, contact
-- **CGV** — prix TTC, ce qui est livré, garantie 30 jours, médiation à la consommation
-- **Le droit de rétractation de 14 jours** — pour un contenu numérique fourni
+- **Mentions légales** : identité de l'éditeur, SIRET, hébergeur, contact
+- **CGV** : prix TTC, ce qui est livré, garantie 30 jours, médiation à la consommation
+- **Le droit de rétractation de 14 jours** : pour un contenu numérique fourni
   immédiatement, il faut faire cocher au client une renonciation expresse au
   moment du paiement (art. L221-28 13° du code de la consommation). Stripe permet
   d'ajouter une case à cocher personnalisée dans le Payment Link : **utilise-la.**
@@ -307,10 +307,10 @@ Tu vends un produit numérique à des consommateurs français. Il te faut :
      limite des places du mois.
 - **Ne promets jamais l'acceptation par Apple.** « Je te dis ce qui va coincer »
   est une obligation de moyens. « Ton app sera acceptée » serait une obligation
-  de résultat que tu ne peux pas tenir — et une pratique commerciale trompeuse.
-- **TVA** — si tu vends depuis la France à des particuliers de l'UE, le guichet
+  de résultat que tu ne peux pas tenir : et une pratique commerciale trompeuse.
+- **TVA** : si tu vends depuis la France à des particuliers de l'UE, le guichet
   unique OSS s'applique au-delà de 10 000 €/an de ventes transfrontalières
-- **RGPD** — une politique de confidentialité, la même que celle que tu enseignes
+- **RGPD** : une politique de confidentialité, la même que celle que tu enseignes
   au module 9
 
 Le gabarit des pages légales est décrit dans la **passe 3** de
@@ -339,12 +339,12 @@ Quand `capmedia.tn` (ou un sous-domaine) sera prêt :
 
 Ce ne sont pas des oublis, ce sont des livrables identifiés :
 
-- [ ] **Le code source de Rituel** — promis dans l'offre Complet. Il faut
+- [ ] **Le code source de Rituel** : promis dans l'offre Complet. Il faut
       construire l'app pour de vrai. À faire avant le premier euro encaissé sur
       cette offre.
 - [ ] Les captures d'écran d'App Store Connect (modules 8, 9, 10)
 - [ ] La photo du formateur sur la landing
 - [ ] Les pages `mentions.html` et `cgv.html`
-- [ ] L'image Open Graph `assets/img/og.png` — prompt n° 2 dans
+- [ ] L'image Open Graph `assets/img/og.png` : prompt n° 2 dans
       [`prompts-claude-design.md`](./prompts-claude-design.md)
 - [ ] La section témoignages, masquée tant qu'il n'y a pas de vrais retours

@@ -1,5 +1,5 @@
 /* ==========================================================================
-   CAPMEDIA ACADEMY — az.css
+   CAPMEDIA ACADEMY · az.css
    Les 15 composants de la charte, en CSS de production.
 
    Les maquettes Claude Design portent les états de survol sur un attribut
@@ -35,7 +35,7 @@ a:hover { color: var(--action-survol); text-decoration: underline; text-underlin
 ::selection { background: var(--anneau); }
 
 /* --- Typographie --------------------------------------------------------- */
-/* Propriétés explicites plutôt que le raccourci `font:` — plus fiable et
+/* Propriétés explicites plutôt que le raccourci `font:` : plus fiable et
    plus facile à surcharger. Les jetons --t-* restent disponibles pour les
    maquettes et les prochaines passes. */
 
@@ -156,10 +156,10 @@ a:hover { color: var(--action-survol); text-decoration: underline; text-underlin
 @media (max-width: 900px) { .grille-3, .grille-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 620px) { .grille-2, .grille-3, .grille-4 { grid-template-columns: minmax(0, 1fr); } }
 
-/* 10 — Séparateur. Rare. */
+/* 10 : Séparateur. Rare. */
 .filet { border: 0; border-top: 1px solid var(--trait); margin-block: var(--e-5); }
 
-/* --- 01 à 04 — Boutons --------------------------------------------------- */
+/* --- 01 à 04 : Boutons --------------------------------------------------- */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -179,20 +179,20 @@ a:hover { color: var(--action-survol); text-decoration: underline; text-underlin
 .btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--anneau); }
 .btn:disabled, .btn[aria-disabled="true"] { cursor: not-allowed; }
 
-/* 01 — principal */
+/* 01 : principal */
 .btn-principal { background: var(--action); color: #fff; }
 .btn-principal:hover { background: var(--action-survol); color: #fff; }
 .btn-principal:active { background: var(--action-survol); }
 .btn-principal:disabled { opacity: 0.4; }
 
-/* 02 — secondaire */
+/* 02 : secondaire */
 .btn-secondaire { background: transparent; color: var(--texte); border-color: var(--trait-fort); }
 .btn-secondaire:hover { background: var(--survol); color: var(--texte); }
 .btn-secondaire:active { background: var(--bg-3); }
 .btn-secondaire:focus-visible { border-color: var(--action); }
 .btn-secondaire:disabled { color: var(--texte-3); border-color: var(--trait); }
 
-/* 03 — fantôme. Le bouton le plus utilisé dans l'interface. */
+/* 03 : fantôme. Le bouton le plus utilisé dans l'interface. */
 .btn-fantome {
   background: transparent;
   color: var(--texte-2);
@@ -203,11 +203,11 @@ a:hover { color: var(--action-survol); text-decoration: underline; text-underlin
 .btn-fantome:active { background: var(--bg-3); color: var(--texte); }
 .btn-fantome:disabled { color: var(--texte-3); opacity: 0.6; }
 
-/* 04 — marketing large */
+/* 04 : marketing large */
 .btn-large { font-size: 16px; padding: 12px 24px; }
 .btn-bloc { width: 100%; }
 
-/* --- 05 — Champ de saisie ------------------------------------------------ */
+/* --- 05 : Champ de saisie ------------------------------------------------ */
 .champ {
   width: 100%;
   background: var(--bg);
@@ -236,7 +236,7 @@ a:hover { color: var(--action-survol); text-decoration: underline; text-underlin
   margin-bottom: var(--e-2);
 }
 
-/* --- 06 — Encadré de contenu -------------------------------------------- */
+/* --- 06 : Encadré de contenu -------------------------------------------- */
 /* Aucune bordure. Fond voile, rayon 4px, emoji aligné sur la 1re ligne. */
 .encadre {
   display: flex;
@@ -258,7 +258,7 @@ a:hover { color: var(--action-survol); text-decoration: underline; text-underlin
 .encadre--piege     { background: var(--voile-rouge); }
 .encadre--action    { background: var(--voile-vert); }
 
-/* --- 07 — Bloc de code -------------------------------------------------- */
+/* --- 07 : Bloc de code -------------------------------------------------- */
 .bloc-code { position: relative; margin-block: var(--e-3); }
 pre {
   background: var(--bg-3);
@@ -296,7 +296,7 @@ pre code { background: none; border: 0; padding: 0; color: inherit; font-size: i
 .copier:hover { color: var(--texte); }
 .copier:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--anneau); }
 
-/* --- 08 — Code en ligne ------------------------------------------------- */
+/* --- 08 : Code en ligne ------------------------------------------------- */
 code, kbd {
   background: var(--bg-3);
   border-radius: var(--r-1);
@@ -307,7 +307,7 @@ code, kbd {
   line-height: 1;
 }
 
-/* --- 09 — Ligne de barre latérale --------------------------------------- */
+/* --- 09 : Ligne de barre latérale --------------------------------------- */
 .lien-module {
   display: flex;
   align-items: center;
@@ -351,7 +351,7 @@ code, kbd {
   white-space: nowrap;
 }
 
-/* --- 11 — Tableau ------------------------------------------------------- */
+/* --- 11 : Tableau ------------------------------------------------------- */
 .cadre-tableau { overflow-x: auto; margin-block: var(--e-4); }
 table {
   width: 100%;
@@ -379,7 +379,7 @@ th:first-child, td:first-child { padding-left: 0; }
 th:last-child,  td:last-child  { padding-right: 0; }
 td.nb, th.nb { text-align: right; font-variant-numeric: tabular-nums; }
 
-/* --- 12 — Progression --------------------------------------------------- */
+/* --- 12 : Progression --------------------------------------------------- */
 .jauge {
   height: 4px;
   border-radius: var(--r-rond);
@@ -419,7 +419,7 @@ td.nb, th.nb { text-align: right; font-variant-numeric: tabular-nums; }
   font-variant-numeric: tabular-nums;
 }
 
-/* --- 13 — Pastille d'état ----------------------------------------------- */
+/* --- 13 : Pastille d'état ----------------------------------------------- */
 .pastille {
   display: inline-flex;
   align-items: center;
@@ -437,7 +437,7 @@ td.nb, th.nb { text-align: right; font-variant-numeric: tabular-nums; }
 .pastille--avenir     { background: var(--bg-3); color: var(--texte-2); }
 .pastille--verrouille { background: var(--bg-3); color: var(--texte-3); }
 
-/* --- 14 — Accordéon ----------------------------------------------------- */
+/* --- 14 : Accordéon ----------------------------------------------------- */
 .acc { border-bottom: 1px solid var(--trait); }
 .acc > summary {
   display: flex;
@@ -511,7 +511,7 @@ td.nb, th.nb { text-align: right; font-variant-numeric: tabular-nums; }
 .liste-marque li::before { flex: none; width: 16px; color: var(--valide); content: "✓"; }
 .liste-marque--non li::before { color: var(--texte-3); content: "✕"; }
 
-/* --- 15 — Barre de navigation marketing --------------------------------- */
+/* --- 15 : Barre de navigation marketing --------------------------------- */
 .entete {
   position: sticky;
   top: 0;

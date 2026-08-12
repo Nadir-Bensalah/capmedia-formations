@@ -1,8 +1,8 @@
 /* ==========================================================================
-   CAPMEDIA ACADEMY — Configuration publique
+   CAPMEDIA ACADEMY · Configuration publique
    Ce fichier est PUBLIC (il part sur GitHub Pages). N'y mets JAMAIS de clé
    secrète : pas de sk_live_…, pas de whsec_…, pas de clé de service Firebase.
-   Les clés Firebase « apiKey » ci-dessous sont publiques par conception —
+   Les clés Firebase « apiKey » ci-dessous sont publiques par conception -
    c'est le rôle des règles de sécurité Firestore de protéger les données.
    ========================================================================== */
 

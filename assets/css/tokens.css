@@ -1,5 +1,5 @@
 /* ==========================================================================
-   CAPMEDIA ACADEMY — tokens.css
+   CAPMEDIA ACADEMY · tokens.css
    Livrable de la passe 0 (Claude Design). C'est le contrat : aucune valeur
    de couleur, de typo, d'espace ou de rayon ne doit être écrite ailleurs.
 
@@ -13,7 +13,7 @@
   --bg-2: #F7F7F5;
   --bg-3: #F1F1EF;
 
-  /* texte — gris chauds */
+  /* texte : gris chauds */
   --texte: #37352F;
   --texte-2: #787774;
   --texte-3: #9B9A97;
@@ -38,7 +38,7 @@
   --voile-rouge: #FDEBEC;
   --voile-gris: #F1F1EF;
 
-  /* ombre — flottant uniquement */
+  /* ombre : flottant uniquement */
   --ombre-flottant:
     0 0 0 1px rgba(15, 15, 15, 0.05),
     0 3px 6px rgba(15, 15, 15, 0.1),

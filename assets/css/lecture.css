@@ -1,5 +1,5 @@
 /* ==========================================================================
-   CAPMEDIA ACADEMY — lecture.css
+   CAPMEDIA ACADEMY · lecture.css
    L'espace membre. Référence : l'APPLICATION Notion.
 
    Deux chiffres portent tout le rendu :
@@ -195,16 +195,23 @@
   text-align: center;
 }
 .emplacement-visuel {
-  display: grid; place-items: center;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: var(--e-1);
   aspect-ratio: 16 / 9;
   border-radius: var(--r-2);
-  background: var(--bg-2);
+  border: 1px dashed var(--trait-fort);
+  background:
+    repeating-linear-gradient(45deg, transparent, transparent 12px,
+      var(--survol) 12px, var(--survol) 13px),
+    var(--bg-2);
   color: var(--texte-3);
-  font-size: 13px;
-  line-height: 1.5;
   text-align: center;
   padding: var(--e-5);
 }
+.emplacement-visuel .ev-ico  { font-size: 22px; opacity: 0.7; }
+.emplacement-visuel .ev-nom  { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.emplacement-visuel .ev-desc { font-size: 13px; line-height: 1.5; color: var(--texte-3); max-width: 44ch; }
 
 /* --- Bloc « module terminé » -------------------------------------------- */
 .bloc-fini {
@@ -301,7 +308,7 @@
 .lien-nu:hover { color: var(--texte); }
 
 /* --- Déblocage progressif ------------------------------------------------ */
-/* Bloqué par la progression : grisé, mais visible — le parcours se lit. */
+/* Bloqué par la progression : grisé, mais visible : le parcours se lit. */
 .lien-module.est-bloque {
   color: var(--texte-3);
   cursor: pointer;                 /* cliquable : on explique pourquoi c'est fermé */
@@ -404,28 +411,69 @@
   box-shadow: var(--ombre-flottant);
   width: 100%; max-width: 460px;
   max-height: 88dvh;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.pan-tete {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: var(--e-3);
+  padding: var(--e-5) var(--e-5) var(--e-3);
+}
+.pan-corps {
+  flex: 1;
   overflow-y: auto;
-  padding: var(--e-6);
+  overscroll-behavior: contain;
+  padding: 0 var(--e-5);
+}
+.pan-pied {
+  padding: var(--e-4) var(--e-5) var(--e-5);
+  border-top: 1px solid var(--trait);
+  background: var(--bg);
 }
 
-/* Choix segmenté du profil */
-.seg { display: flex; flex-wrap: wrap; gap: var(--e-2); }
+/* Choix segmenté du profil, façon sélecteur Notion */
+.seg {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+  gap: 2px;
+  background: var(--bg-2);
+  border-radius: var(--r-3);
+  padding: 3px;
+}
 .seg button {
-  border: 1px solid var(--trait-fort);
+  border: 0;
   border-radius: var(--r-2);
   background: transparent;
   color: var(--texte-2);
   font-size: 13px; font-weight: 500; line-height: 1.4;
-  padding: 6px 12px;
+  padding: 7px 8px;
   cursor: pointer;
-  transition: background var(--t-survol), color var(--t-survol), border-color var(--t-survol);
+  transition: background var(--t-survol), color var(--t-survol), box-shadow var(--t-survol);
 }
-.seg button:hover { background: var(--survol); color: var(--texte); }
-.seg button:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--anneau); }
+.seg button:hover { color: var(--texte); }
+.seg button:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--anneau); }
 .seg button[aria-pressed="true"] {
-  background: var(--action);
-  border-color: var(--action);
-  color: #fff;
+  background: var(--bg);
+  color: var(--texte);
+  font-weight: 600;
+  box-shadow: 0 0 0 1px var(--trait), 0 1px 2px rgba(15, 15, 15, 0.08);
+}
+
+/* Une question du profil : icône, libellé, choix */
+.q-profil {
+  display: flex; flex-direction: column; gap: var(--e-3);
+  padding-block: var(--e-4);
+  border-top: 1px solid var(--trait);
+}
+.q-profil:first-child { border-top: 0; padding-top: var(--e-2); }
+.q-tete { display: flex; gap: var(--e-3); align-items: flex-start; }
+.q-ico {
+  flex: none;
+  width: 28px; height: 28px;
+  display: grid; place-items: center;
+  background: var(--bg-2);
+  border-radius: var(--r-2);
+  font-size: 14px; line-height: 1;
 }
 
 /* --- Toast ----------------------------------------------------------------- */
