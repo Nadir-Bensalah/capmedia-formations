@@ -223,19 +223,21 @@ a:hover { color: var(--action-survol); text-decoration: underline; text-underlin
   background: var(--bg);
   color: var(--texte);
   border: 1px solid var(--trait-fort);
-  border-radius: var(--r-2);
+  border-radius: var(--r-rond);       /* pill, comme les boutons */
   font-size: 14px;
   line-height: 1.4;
-  padding: 8px 10px;
+  padding: 10px 16px;
   outline: none;
   transition: border-color var(--t-survol), box-shadow var(--t-survol);
 }
+/* Un champ multi-lignes ne peut pas être une pilule : rayon doux à la place */
+textarea.champ { border-radius: 18px; padding: 12px 16px; }
 .champ::placeholder { color: var(--texte-3); }
 .champ:hover { border-color: var(--texte-3); }
 .champ:focus { border-color: var(--action); box-shadow: 0 0 0 3px var(--anneau); }
 .champ[aria-invalid="true"] { border-color: var(--danger); color: var(--danger); }
 .champ:disabled { background: var(--bg-2); color: var(--texte-3); border-color: var(--trait); }
-.champ-large { font-size: 16px; padding: 11px 12px; }
+.champ-large { font-size: 16px; padding: 13px 20px; }
 
 .etiquette-champ {
   display: block;
@@ -854,3 +856,70 @@ td.nb, th.nb { text-align: right; font-variant-numeric: tabular-nums; }
 .cartes-prix .carte { height: 100%; }
 .cartes-prix .carte .btn-bloc { margin-top: auto; }
 .cartes-prix .carte { padding: clamp(24px, 3vw, 32px); }
+
+/* ==========================================================================
+   Mockup de téléphone (app Rituel) — CSS pur, épuré
+   ========================================================================== */
+.mock-tel {
+  width: 248px;
+  flex: none;
+  border-radius: 42px;
+  background: var(--encre-fond, #14130F);
+  padding: 10px;
+  box-shadow: 0 30px 60px -30px rgba(15,15,15,.5), 0 0 0 1px rgba(15,15,15,.06);
+}
+[data-theme="dark"] .mock-tel { box-shadow: 0 30px 60px -28px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.06); }
+.mock-ecran {
+  position: relative;
+  border-radius: 33px;
+  background: #FBFAF8;
+  overflow: hidden;
+  aspect-ratio: 9 / 19;
+  color: #1A1917;                       /* écran toujours clair, c'est l'app */
+}
+.mock-encoche {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  width: 92px; height: 22px;
+  background: #14130F; border-radius: 999px;
+}
+.mock-corps { padding: 40px 18px 16px; display: flex; flex-direction: column; height: 100%; }
+.mock-heure { font-size: 11px; font-weight: 600; color: #9C978D; letter-spacing: .04em; }
+.mock-titre { font-size: 26px; font-weight: 700; letter-spacing: -.02em; margin-top: 14px; }
+.mock-sous  { font-size: 12px; color: #9C978D; margin-top: 2px; }
+.mock-liste { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; }
+.mock-item  {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid #E8E4DC; border-radius: 13px;
+  font-size: 12.5px;
+}
+.mock-rond  { width: 18px; height: 18px; border-radius: 999px; flex: none; border: 1.5px solid #D6D1C7; }
+.mock-item.fait .mock-rond { background: #2F7D52; border-color: #2F7D52; position: relative; }
+.mock-item.fait .mock-rond::after {
+  content: ""; position: absolute; left: 5px; top: 3px;
+  width: 5px; height: 9px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+.mock-item.fait span { color: #9C978D; text-decoration: line-through; text-decoration-color: #D6D1C7; }
+.mock-cta {
+  margin-top: auto;
+  background: #14130F; color: #FBFAF8;
+  text-align: center; font-size: 12.5px; font-weight: 600;
+  padding: 12px; border-radius: 999px;
+}
+.mock-etiquette {
+  position: absolute; bottom: -12px; right: -8px;
+  background: var(--bg); border: 1px solid var(--trait);
+  border-radius: 999px; padding: 7px 14px;
+  font-size: 12px; font-weight: 500;
+  box-shadow: var(--ombre-flottant);
+  white-space: nowrap;
+}
+.mock-porte { position: relative; display: inline-block; }
+
+/* Grilles contenant un mockup : passage en colonne sur mobile */
+@media (max-width: 860px) {
+  .creux .grille[style*="auto 1fr"] { grid-template-columns: minmax(0,1fr) !important; }
+  .creux .mock-porte { margin-inline: auto; }
+  .masque-tel-mobile { display: none; }
+  .section .grille[style*="1fr auto"] { grid-template-columns: minmax(0,1fr) !important; }
+}
