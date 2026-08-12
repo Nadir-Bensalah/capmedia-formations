@@ -133,7 +133,10 @@ exports.ouvrirAcces = onRequest(
 
     const { cle, email, offre } = req.body || {};
 
-    if (cle !== ADMIN_CLE.value()) {
+    // On compare les valeurs nettoyées : un secret défini depuis un fichier
+    // embarque presque toujours un saut de ligne final.
+    const attendu = String(ADMIN_CLE.value() || '').trim();
+    if (!attendu || String(cle || '').trim() !== attendu) {
       return res.status(403).send('interdit');
     }
     if (!email || !['essentiel', 'complet'].includes(offre)) {
