@@ -120,19 +120,27 @@ if (A_SEC) {
   process.exit(0);
 }
 
-if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-  console.error(
-    'GOOGLE_APPLICATION_CREDENTIALS n’est pas défini.\n' +
-    'Console Firebase → Paramètres → Comptes de service → Générer une clé,\n' +
-    'puis :  export GOOGLE_APPLICATION_CREDENTIALS=/chemin/cle.json\n'
-  );
-  process.exit(1);
-}
+/* Deux façons de s'authentifier, dans cet ordre de préférence :
+     1. GOOGLE_APPLICATION_CREDENTIALS → une clé de compte de service
+     2. les identifiants par défaut : gcloud auth application-default login
+   Les identifiants ADC ne portent pas le projet : on le donne à la main. */
+const PROJET = process.env.FIREBASE_PROJECT || 'capmedia-academy';
 
 const { initializeApp, applicationDefault } = await import('firebase-admin/app');
 const { getFirestore } = await import('firebase-admin/firestore');
 
-initializeApp({ credential: applicationDefault() });
+try {
+  initializeApp({ credential: applicationDefault(), projectId: PROJET });
+} catch (e) {
+  console.error(
+    "Impossible de s'authentifier.\n" +
+    '  gcloud auth application-default login\n' +
+    "ou GOOGLE_APPLICATION_CREDENTIALS vers une clé de compte de service.\n"
+  );
+  process.exit(1);
+}
+
+console.log(`Projet : ${PROJET}`);
 const bdd = getFirestore();
 
 const lot = bdd.batch();

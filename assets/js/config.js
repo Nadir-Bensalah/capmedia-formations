@@ -18,20 +18,20 @@ window.AZ = {
   // Colle ici les URL de tes Payment Links Stripe (voir docs/stripe.md).
   // Tant qu'elles sont vides, les boutons affichent un message d'attente.
   stripe: {
-    essentiel: '', // ex. 'https://buy.stripe.com/xxxxxxxxxxxx'
-    complet:   '', // ex. 'https://buy.stripe.com/yyyyyyyyyyyy'
+    essentiel: 'https://buy.stripe.com/test_bJe28reMLaIU0GKgPifMA00',
+    complet:   'https://buy.stripe.com/test_00w8wPawvcR22OScz2fMA01',
   },
 
   /* --- Firebase --------------------------------------------------------- */
   // Récupère cet objet dans la console Firebase → Paramètres du projet →
   // Tes applications → Application Web.
   firebase: {
-    apiKey:            '',
-    authDomain:        '',
-    projectId:         '',
-    storageBucket:     '',
-    messagingSenderId: '',
-    appId:             '',
+    apiKey:            'AIzaSyBcVqIBbJnYUC2yTG_DxzOB4kXH0I8r0tE',
+    authDomain:        'capmedia-academy.firebaseapp.com',
+    projectId:         'capmedia-academy',
+    storageBucket:     'capmedia-academy.firebasestorage.app',
+    messagingSenderId: '501640815738',
+    appId:             '1:501640815738:web:1ac7082b16cf871d5687c3',
   },
 
   /* --- Divers ----------------------------------------------------------- */
