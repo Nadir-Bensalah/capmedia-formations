@@ -2,7 +2,7 @@
    CAPMEDIA ACADEMY — Petit convertisseur Markdown → HTML
 
    Volontairement minimal : il ne gère que ce que la formation utilise, il
-   échappe tout le HTML brut (rien n'est injectable), et il ajoute deux
+   échappe tout le HTML brut (rien n'est injectable), et il ajoute quatre
    syntaxes maison :
 
      :::astuce Titre facultatif
@@ -10,8 +10,22 @@
      :::
      types : note · astuce · attention · piege · action
 
+     :::si mac windows avec-ia …
+     Bloc affiché seulement si le profil du lecteur porte UN de ces tags.
+     Tags reconnus : mac · windows · iphone · android · ipad ·
+     tablette-android · apple-watch · montre-android · avec-ia · sans-ia
+     :::
+
+     ```prompt Titre facultatif
+     Le prompt à copier, affiché en carte dépliable avec bouton Copier.
+     Masqué (remplacé par une ligne discrète) en mode sans IA.
+     ```
+
      [[visuel: description de l'image à produire]]
      → réserve la place d'un visuel pas encore intégré.
+
+   versHtml(markdown, contexte) — contexte est un Set de tags de profil,
+   ou null pour tout afficher (aperçu, développement).
    ========================================================================== */
 
 const MARQUEURS = {
@@ -57,13 +71,35 @@ function enLigne(texte) {
   return t.replace(MOTIF_JETON, (_, i) => `<code>${coffre[Number(i)]}</code>`);
 }
 
+/* --- Corps d'un bloc ::: avec prise en compte de l'imbrication ----------- */
+/* Un :::si peut contenir un :::astuce (et inversement) : on compte la
+   profondeur — une ligne `:::xxx` ouvre, une ligne `:::` seule ferme. */
+function extraireBloc(lignes, depart) {
+  const corps = [];
+  let profondeur = 1;
+  let i = depart;
+  while (i < lignes.length) {
+    const l = lignes[i];
+    if (/^:::\s*$/.test(l)) {
+      profondeur--;
+      if (profondeur === 0) { i++; break; }
+    } else if (/^:::\S/.test(l)) {
+      profondeur++;
+    }
+    corps.push(l);
+    i++;
+  }
+  return { corps, suite: i };
+}
+
 /* --- Niveau bloc --------------------------------------------------------- */
-export function versHtml(markdown) {
+export function versHtml(markdown, contexte = null) {
   const lignes = String(markdown || '').replace(/\r\n?/g, '\n').split('\n');
   const sortie = [];
   let i = 0;
 
   const estVide = (l) => !l || !l.trim();
+  const visible = (tags) => contexte === null || tags.some((t) => contexte.has(t));
 
   while (i < lignes.length) {
     const ligne = lignes[i];
@@ -71,16 +107,49 @@ export function versHtml(markdown) {
     /* Ligne vide */
     if (estVide(ligne)) { i++; continue; }
 
-    /* Bloc de code ``` */
+    /* Bloc de code ``` — dont la variante ```prompt */
     if (/^```/.test(ligne)) {
-      const langue = ligne.slice(3).trim();
+      const info = ligne.slice(3).trim();
       const corps = [];
       i++;
       while (i < lignes.length && !/^```/.test(lignes[i])) corps.push(lignes[i++]);
       i++; // ferme
+
+      if (/^prompt(\s|$)/.test(info)) {
+        const titre = info.slice(6).trim();
+
+        // En mode sans IA, la carte prompt s'efface au profit d'une ligne
+        // discrète — le lecteur sait qu'un raccourci existe s'il change d'avis.
+        if (contexte !== null && contexte.has('sans-ia')) {
+          sortie.push(
+            `<p class="prompt-alt">✦ ${titre ? echapper(titre) + ' — ' : ''}` +
+            `prompt IA masqué (mode sans IA)</p>`
+          );
+        } else {
+          sortie.push(
+            `<details class="prompt">` +
+            `<summary><span class="prompt-ico" aria-hidden="true">✦</span>` +
+            `<span class="prompt-titre">${titre ? echapper(titre) : 'Le prompt, prêt à copier'}</span>` +
+            `<span class="prompt-indice">déplier</span></summary>` +
+            `<div class="prompt-corps"><pre><code>${echapper(corps.join('\n'))}</code></pre></div>` +
+            `</details>`
+          );
+        }
+        continue;
+      }
+
       sortie.push(
-        `<pre><code${langue ? ` class="langue-${langue}"` : ''}>${echapper(corps.join('\n'))}</code></pre>`
+        `<pre><code${info ? ` class="langue-${info}"` : ''}>${echapper(corps.join('\n'))}</code></pre>`
       );
+      continue;
+    }
+
+    /* Bloc conditionnel :::si tag1 tag2 … */
+    if (/^:::si\s/.test(ligne)) {
+      const tags = ligne.slice(5).trim().toLowerCase().split(/\s+/).filter(Boolean);
+      const { corps, suite } = extraireBloc(lignes, i + 1);
+      i = suite;
+      if (visible(tags)) sortie.push(versHtml(corps.join('\n'), contexte));
       continue;
     }
 
@@ -89,11 +158,9 @@ export function versHtml(markdown) {
       const entete = ligne.slice(3).trim().split(/\s+/);
       const type = (entete.shift() || 'note').toLowerCase();
       const titre = entete.join(' ');
-      const corps = [];
-      i++;
-      while (i < lignes.length && !/^:::\s*$/.test(lignes[i])) corps.push(lignes[i++]);
-      i++; // ferme
-      const dedans = versHtml(corps.join('\n'));
+      const { corps, suite } = extraireBloc(lignes, i + 1);
+      i = suite;
+      const dedans = versHtml(corps.join('\n'), contexte);
       sortie.push(
         `<aside class="encadre encadre--${type}">` +
         `<span class="marqueur" aria-hidden="true">${MARQUEURS[type] || MARQUEURS.note}</span>` +
@@ -108,6 +175,18 @@ export function versHtml(markdown) {
     if (visuel) {
       sortie.push(
         `<figure><div class="emplacement-visuel">Visuel à intégrer —<br>${echapper(visuel[1])}</div></figure>`
+      );
+      i++;
+      continue;
+    }
+
+    /* Image seule sur sa ligne → figure avec légende */
+    const image = ligne.match(/^!\[([^\]]*)\]\(([^)\s]+)\)\s*$/);
+    if (image) {
+      sortie.push(
+        `<figure><img src="${image[2]}" alt="${echapper(image[1])}" loading="lazy">` +
+        (image[1] ? `<figcaption>${enLigne(image[1])}</figcaption>` : '') +
+        `</figure>`
       );
       i++;
       continue;
@@ -129,7 +208,7 @@ export function versHtml(markdown) {
     if (/^>\s?/.test(ligne)) {
       const corps = [];
       while (i < lignes.length && /^>\s?/.test(lignes[i])) corps.push(lignes[i++].replace(/^>\s?/, ''));
-      sortie.push(`<blockquote>${versHtml(corps.join('\n'))}</blockquote>`);
+      sortie.push(`<blockquote>${versHtml(corps.join('\n'), contexte)}</blockquote>`);
       continue;
     }
 
@@ -177,7 +256,7 @@ export function versHtml(markdown) {
     while (
       i < lignes.length &&
       !estVide(lignes[i]) &&
-      !/^(#{2,4}\s|```|:::|>|\||\s*[-*+]\s|\s*\d+[.)]\s|\[\[visuel:)/.test(lignes[i]) &&
+      !/^(#{2,4}\s|```|:::|>|\||\s*[-*+]\s|\s*\d+[.)]\s|\[\[visuel:|!\[)/.test(lignes[i]) &&
       !/^(---|\*\*\*|___)\s*$/.test(lignes[i])
     ) {
       para.push(lignes[i++]);

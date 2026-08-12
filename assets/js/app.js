@@ -2,10 +2,14 @@
    CAPMEDIA ACADEMY — Espace membre
 
    Sécurité : le contenu des leçons vit dans Firestore, pas dans ce dépôt
-   public. Les règles Firestore (voir firestore.rules) n'autorisent la lecture
-   de la collection `lecons` que si un document `acheteurs/{email}` existe pour
-   l'utilisateur connecté. Connaître l'URL de cette page ne donne donc accès
-   à rien.
+   public. Les règles Firestore n'autorisent la lecture qu'aux acheteurs
+   (document acheteurs/{email} écrit par le webhook Stripe).
+
+   Ce fichier gère aussi :
+   — le PROFIL du lecteur (Mac/Windows, iPhone/Android, tablette, montre,
+     mode avec/sans IA) qui filtre le contenu via les blocs :::si ;
+   — le DÉBLOCAGE PROGRESSIF : un module s'ouvre quand le précédent est
+     terminé, avec une petite animation, et ne se reverrouille jamais.
    ========================================================================== */
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js';
@@ -34,11 +38,164 @@ const auth = getAuth(app);
 const bdd  = getFirestore(app);
 
 /* --- État ---------------------------------------------------------------- */
-let lecons     = [];
-let acheteur   = null;
-let faits      = new Set();
+let lecons      = [];
+let acheteur    = null;
+let faits       = new Set();
 let utilisateur = null;
-let courante   = null;
+let courante    = null;
+let profil      = null;   // { ordi, tel, tablette, montre, ia } ou null
+let maxDebloque = -1;     // ordre le plus haut jamais débloqué — ne redescend jamais
+
+const CLE_PROFIL = 'az:profil';
+
+/* ==========================================================================
+   Profil : questions, tags, formulaire
+   ========================================================================== */
+const QUESTIONS = [
+  { cle: 'ordi', titre: 'Ton ordinateur',
+    opts: [['mac', 'Mac'], ['windows', 'Windows'], ['les-deux', 'Les deux']] },
+  { cle: 'tel', titre: 'Ton téléphone',
+    opts: [['iphone', 'iPhone'], ['android', 'Android'], ['les-deux', 'Les deux']] },
+  { cle: 'tablette', titre: 'Une tablette ?',
+    opts: [['aucune', 'Aucune'], ['ipad', 'iPad'], ['android', 'Android'], ['les-deux', 'Les deux']] },
+  { cle: 'montre', titre: 'Une montre connectée ?',
+    opts: [['aucune', 'Aucune'], ['apple', 'Apple Watch'], ['android', 'Wear OS'], ['les-deux', 'Les deux']] },
+  { cle: 'ia', titre: 'Ta façon de suivre',
+    aide: 'Avec IA : un prompt prêt à copier à chaque étape. Sans IA : les commandes et la documentation, en entier. Tu changes quand tu veux.',
+    opts: [['avec', 'Avec IA — recommandé'], ['sans', 'Sans IA']] },
+];
+
+const PROFIL_DEFAUT = { ordi: 'les-deux', tel: 'les-deux', tablette: 'aucune', montre: 'aucune', ia: 'avec' };
+
+/* Le profil devient un jeu de tags que le rendu markdown consomme (:::si). */
+function tagsProfil() {
+  if (!profil) return null;                       // pas encore choisi → tout montrer
+  const t = new Set();
+  if (profil.ordi !== 'windows') t.add('mac');
+  if (profil.ordi !== 'mac')     t.add('windows');
+  if (profil.tel  !== 'android') t.add('iphone');
+  if (profil.tel  !== 'iphone')  t.add('android');
+  if (profil.tablette === 'ipad'    || profil.tablette === 'les-deux') t.add('ipad');
+  if (profil.tablette === 'android' || profil.tablette === 'les-deux') t.add('tablette-android');
+  if (profil.montre === 'apple'   || profil.montre === 'les-deux') t.add('apple-watch');
+  if (profil.montre === 'android' || profil.montre === 'les-deux') t.add('montre-android');
+  t.add(profil.ia === 'sans' ? 'sans-ia' : 'avec-ia');
+  return t;
+}
+
+function formulaireProfil(valeurs) {
+  return QUESTIONS.map((q) => `
+    <div class="pile g-2">
+      <p class="t-petit t-fort">${q.titre}</p>
+      ${q.aide ? `<p class="t-micro t-3">${q.aide}</p>` : ''}
+      <div class="seg" data-cle="${q.cle}" role="group" aria-label="${q.titre}">
+        ${q.opts.map(([v, l]) =>
+          `<button type="button" data-val="${v}" aria-pressed="${String(valeurs[q.cle] === v)}">${l}</button>`
+        ).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function brancherSegments(racine) {
+  racine.querySelectorAll('.seg').forEach((seg) => {
+    seg.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-val]');
+      if (!b) return;
+      seg.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', 'false'));
+      b.setAttribute('aria-pressed', 'true');
+    });
+  });
+}
+
+function lireFormulaire(racine) {
+  const v = {};
+  racine.querySelectorAll('.seg').forEach((seg) => {
+    const actif = seg.querySelector('button[aria-pressed="true"]');
+    v[seg.dataset.cle] = actif ? actif.dataset.val : PROFIL_DEFAUT[seg.dataset.cle];
+  });
+  return v;
+}
+
+function enregistrerProfil(nouveau) {
+  profil = nouveau;
+  try { localStorage.setItem(CLE_PROFIL, JSON.stringify(profil)); } catch (e) {}
+  enregistrerProgression();
+}
+
+/* --- Questionnaire du premier accès -------------------------------------- */
+function afficherOnboarding() {
+  const sur = document.createElement('div');
+  sur.className = 'surcouche';
+  sur.innerHTML = `
+    <div class="panneau pile g-5" role="dialog" aria-modal="true" aria-label="Ton matériel">
+      <div class="pile g-2">
+        <p class="etiquette">Avant de commencer</p>
+        <h2 class="t-h2" style="font-size:24px">Dis-moi avec quoi tu travailles.</h2>
+        <p class="t-petit t-2">La formation s'adapte : tu ne verras que les
+        étapes qui concernent <em>ton</em> matériel. Modifiable à tout moment
+        dans « Matériel &amp; mode », en bas du sommaire.</p>
+      </div>
+      <div class="pile g-4" id="onboarding-form">${formulaireProfil(PROFIL_DEFAUT)}</div>
+      <button type="button" class="btn btn-principal btn-large btn-bloc" id="onboarding-ok">C'est parti</button>
+    </div>`;
+  document.body.appendChild(sur);
+  brancherSegments(sur);
+
+  $('onboarding-ok').addEventListener('click', () => {
+    enregistrerProfil(lireFormulaire(sur));
+    sur.remove();
+    if (courante) aller(courante, true);
+    toast('Formation adaptée à ton matériel ✓');
+  });
+}
+
+/* --- Panneau de réglages « Matériel & mode » ------------------------------ */
+function afficherReglages() {
+  const sur = document.createElement('div');
+  sur.className = 'surcouche';
+  sur.innerHTML = `
+    <div class="panneau pile g-5" role="dialog" aria-modal="true" aria-label="Matériel et mode">
+      <div class="rang-espace">
+        <h2 class="t-h3">Matériel &amp; mode</h2>
+        <button type="button" class="bouton-icone" id="reglages-fermer" aria-label="Fermer">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="pile g-4" id="reglages-form">${formulaireProfil(profil || PROFIL_DEFAUT)}</div>
+      <button type="button" class="btn btn-principal btn-bloc" id="reglages-ok">Enregistrer</button>
+      <hr class="filet" style="margin:0">
+      <div class="pile g-2">
+        <p class="t-micro t-3">Les modules se débloquent au fil de ta progression.
+        Si tu préfères naviguer librement :</p>
+        <button type="button" class="btn btn-secondaire" id="tout-debloquer">Tout débloquer définitivement</button>
+      </div>
+    </div>`;
+  document.body.appendChild(sur);
+  brancherSegments(sur);
+
+  const fermer = () => sur.remove();
+  $('reglages-fermer').addEventListener('click', fermer);
+  sur.addEventListener('click', (e) => { if (e.target === sur) fermer(); });
+
+  $('reglages-ok').addEventListener('click', () => {
+    enregistrerProfil(lireFormulaire(sur));
+    fermer();
+    if (courante) aller(courante, true);
+    toast('Réglages enregistrés ✓');
+  });
+
+  $('tout-debloquer').addEventListener('click', () => {
+    if (!window.confirm('Débloquer tous les modules ? C\'est définitif — ils ne se reverrouilleront pas.')) return;
+    const avant = maxDebloque;
+    maxDebloque = Math.max(...lecons.map((l) => l.ordre));
+    enregistrerProgression();
+    fermer();
+    majSommaire();
+    marquerPlouf(avant);
+    toast('Tous les modules sont débloqués');
+  });
+}
 
 /* ==========================================================================
    1. Garde d'accès
@@ -66,9 +223,12 @@ onAuthStateChanged(auth, async (u) => {
     voileTexte.textContent = 'Chargement de ta formation…';
     await Promise.all([chargerLecons(), chargerProgression()]);
 
+    majDeblocage(false);
     construireSommaire();
     ouvrirDepuisUrl();
     voile.classList.add('parti');
+
+    if (!profil) afficherOnboarding();
 
   } catch (err) {
     console.error(err);
@@ -107,12 +267,7 @@ function gabaritPasAcheteur(email) {
 }
 
 /* ==========================================================================
-   2. Chargement du contenu
-
-   Le sommaire (collection `lecons`) ne contient que des métadonnées : titre,
-   ordre, résumé, offre. Le markdown vit dans `contenus`, lu à la demande —
-   c'est ce découpage qui permet aux règles Firestore de vérifier l'offre
-   achetée document par document (voir firestore.rules).
+   2. Chargement du contenu et de la progression
    ========================================================================== */
 async function chargerLecons() {
   const instantane = await getDocs(query(collection(bdd, 'lecons'), orderBy('ordre')));
@@ -131,27 +286,92 @@ async function chargerContenu(id) {
 
 async function chargerProgression() {
   const p = await getDoc(doc(bdd, 'progression', utilisateur.uid));
-  faits = new Set(p.exists() ? (p.data().faits || []) : []);
+  const donnees = p.exists() ? p.data() : {};
+  faits = new Set(donnees.faits || []);
+  maxDebloque = typeof donnees.maxDebloque === 'number' ? donnees.maxDebloque : -1;
+  profil = donnees.profil || null;
+
+  if (!profil) {
+    try { profil = JSON.parse(localStorage.getItem(CLE_PROFIL)) || null; } catch (e) {}
+  }
 }
 
 async function enregistrerProgression() {
   try {
     await setDoc(
       doc(bdd, 'progression', utilisateur.uid),
-      { faits: [...faits], maj: new Date().toISOString() },
+      {
+        faits: [...faits],
+        maxDebloque,
+        profil: profil || null,
+        maj: new Date().toISOString(),
+      },
       { merge: true },
     );
   } catch (e) { console.warn('Progression non enregistrée', e); }
 }
 
-/* --- Une leçon est-elle accessible avec l'offre achetée ? ---------------- */
+/* --- Accès par offre (Essentiel / Complet) -------------------------------- */
 function accessible(lecon) {
   if (lecon.offre !== 'complet') return true;
   return acheteur.offre === 'complet';
 }
 
 /* ==========================================================================
-   3. Sommaire
+   3. Déblocage progressif
+
+   Règle : le module suivant s'ouvre quand le précédent est terminé.
+   `maxDebloque` retient le plus haut ordre jamais atteint : décocher un
+   module ne reverrouille rien, jamais.
+   Les bonus (offre Complet) ne sont pas soumis à la progression : ce sont
+   des références, pas des étapes.
+   ========================================================================== */
+function serieProgressive() {
+  return lecons.filter((l) => l.offre !== 'complet').sort((a, b) => a.ordre - b.ordre);
+}
+
+function calculerPrefixe() {
+  const base = serieProgressive();
+  if (!base.length) return -1;
+  let m = base[0].ordre;                       // le premier est toujours ouvert
+  for (let k = 0; k < base.length; k++) {
+    if (!faits.has(base[k].id)) break;
+    m = base[k + 1] ? base[k + 1].ordre : base[k].ordre;
+  }
+  return m;
+}
+
+function majDeblocage(animer) {
+  const avant = maxDebloque;
+  maxDebloque = Math.max(maxDebloque, calculerPrefixe());
+  if (maxDebloque !== avant) {
+    enregistrerProgression();
+    if (animer) { majSommaire(); marquerPlouf(avant); }
+  }
+}
+
+function debloquee(lecon) {
+  if (lecon.offre === 'complet') return true;  // gated par l'offre, pas la progression
+  return lecon.ordre <= maxDebloque;
+}
+
+function prochainAFaire() {
+  return serieProgressive().find((l) => !faits.has(l.id)) || null;
+}
+
+/* Le « plouf » : les lignes nouvellement débloquées s'animent une fois. */
+function marquerPlouf(ordreAvant) {
+  document.querySelectorAll('.lien-module').forEach((b) => {
+    const l = lecons.find((x) => x.id === b.dataset.id);
+    if (l && l.offre !== 'complet' && l.ordre > ordreAvant && l.ordre <= maxDebloque) {
+      b.classList.add('plouf');
+      b.addEventListener('animationend', () => b.classList.remove('plouf'), { once: true });
+    }
+  });
+}
+
+/* ==========================================================================
+   4. Sommaire
    ========================================================================== */
 function construireSommaire() {
   const nav = $('liens-modules');
@@ -160,7 +380,6 @@ function construireSommaire() {
   let bonusAnnonce = false;
 
   lecons.forEach((l) => {
-    // Les modules bonus sont regroupés sous leur propre intertitre.
     if (l.offre === 'complet' && !bonusAnnonce) {
       const t = document.createElement('p');
       t.className = 'etiquette groupe';
@@ -169,13 +388,12 @@ function construireSommaire() {
       bonusAnnonce = true;
     }
 
-    const ouvert = accessible(l);
     const b = document.createElement('button');
-    b.className = 'lien-module' + (ouvert ? '' : ' est-verrouille');
+    b.className = 'lien-module';
     b.type = 'button';
     b.dataset.id = l.id;
     b.innerHTML =
-      `<span class="num">${ouvert ? String(l.ordre).padStart(2, '0') : '🔒'}</span>` +
+      `<span class="num"></span>` +
       `<span class="titre-module">${echapper(l.titre)}</span>`;
     b.addEventListener('click', () => aller(l.id));
     nav.appendChild(b);
@@ -187,16 +405,22 @@ function construireSommaire() {
 function majSommaire() {
   document.querySelectorAll('.lien-module').forEach((b) => {
     const l = lecons.find((x) => x.id === b.dataset.id);
-    const fait = faits.has(b.dataset.id);
+    if (!l) return;
+    const fait   = faits.has(l.id);
+    const ouvert = accessible(l);
+    const dispo  = debloquee(l);
 
-    b.setAttribute('aria-current', String(b.dataset.id === courante));
+    b.setAttribute('aria-current', String(l.id === courante));
     b.classList.toggle('est-fait', fait);
+    b.classList.toggle('est-verrouille', !ouvert);
+    b.classList.toggle('est-bloque', ouvert && !dispo);
+    b.setAttribute('aria-disabled', String(ouvert && !dispo));
 
-    // La coche remplace le numéro une fois le module terminé.
     const num = b.querySelector('.num');
-    if (num && l && accessible(l)) {
-      num.textContent = fait ? '✓' : String(l.ordre).padStart(2, '0');
-    }
+    if (!ouvert)      num.textContent = '🔒';
+    else if (!dispo)  num.textContent = '·';
+    else if (fait)    num.textContent = '✓';
+    else              num.textContent = String(l.ordre).padStart(2, '0');
   });
 
   const total = lecons.length || 1;
@@ -206,11 +430,25 @@ function majSommaire() {
 }
 
 /* ==========================================================================
-   4. Affichage d'une leçon
+   5. Affichage d'une leçon
    ========================================================================== */
 async function aller(id, remplacer = false) {
   const l = lecons.find((x) => x.id === id);
   if (!l) return;
+
+  /* Verrouillée par la progression : on secoue, on explique, on reste. */
+  if (accessible(l) && !debloquee(l)) {
+    const rangee = document.querySelector(`.lien-module[data-id="${id}"]`);
+    if (rangee) {
+      rangee.classList.add('refus');
+      rangee.addEventListener('animationend', () => rangee.classList.remove('refus'), { once: true });
+    }
+    const prochain = prochainAFaire();
+    toast(prochain
+      ? `Termine « ${prochain.titre} » pour débloquer ce module.`
+      : 'Ce module se débloque en avançant.');
+    return;
+  }
 
   courante = id;
   const url = '#' + id;
@@ -238,17 +476,14 @@ async function aller(id, remplacer = false) {
     return;
   }
 
-  // Squelette plutôt qu'une roue qui tourne : la page ne saute pas.
   page.innerHTML = chapeau +
     '<div class="squelette"><span></span><span></span><span></span><span></span><span></span></div>';
 
   try {
     const markdown = await chargerContenu(l.id);
-
-    // L'utilisateur a pu changer de leçon pendant le chargement.
     if (courante !== id) return;
 
-    page.innerHTML = chapeau + '<div class="corps">' + versHtml(markdown) + '</div>';
+    page.innerHTML = chapeau + '<div class="corps">' + versHtml(markdown, tagsProfil()) + '</div>';
     ajouterBoutonsCopier(page);
     ajouterBoutonFini(l);
   } catch (err) {
@@ -293,8 +528,8 @@ function ajouterBoutonFini(l) {
     `<div class="pile g-1">
        <span class="t-h3">${dejaFait ? 'Module terminé' : 'Tu as fini ce module ?'}</span>
        <span class="t-micro t-3">${dejaFait
-          ? 'Tu peux le décocher si tu veux le refaire.'
-          : 'Coche-le pour suivre ta progression.'}</span>
+          ? 'Tu peux le décocher si tu veux le refaire — rien ne se reverrouille.'
+          : 'Coche-le : le module suivant se débloque.'}</span>
      </div>
      <button type="button" class="btn ${dejaFait ? 'btn-secondaire' : 'btn-principal'}" id="btn-fini">
        ${dejaFait ? 'Décocher' : 'Marquer comme terminé'}
@@ -306,7 +541,9 @@ function ajouterBoutonFini(l) {
     if (faits.has(l.id)) faits.delete(l.id);
     else faits.add(l.id);
     enregistrerProgression();
+    majDeblocage(true);
     majSommaire();
+    construirePagination(l);
     zone.remove();
     ajouterBoutonFini(l);
   });
@@ -317,19 +554,24 @@ function construirePagination(l) {
   const prec = lecons[i - 1];
   const suiv = lecons[i + 1];
 
+  const carte = (cible, sens, droite) => {
+    if (!cible) return '<span class="vide"></span>';
+    if (accessible(cible) && !debloquee(cible)) {
+      return `<span class="pagination-verrou${droite ? ' droite' : ''}">
+                <span class="sens">${sens}</span>
+                <span class="titre">🔒 ${echapper(cible.titre)}</span>
+                <span class="t-micro t-3">Termine ce module pour le débloquer</span>
+              </span>`;
+    }
+    return `<a href="#${cible.id}" data-aller="${cible.id}"${droite ? ' class="droite"' : ''}>
+              <span class="sens">${sens}</span>
+              <span class="titre">${echapper(cible.titre)}</span>
+            </a>`;
+  };
+
   $('pagination').innerHTML =
-    (prec
-      ? `<a href="#${prec.id}" data-aller="${prec.id}">
-           <span class="sens">← Précédent</span>
-           <span class="titre">${echapper(prec.titre)}</span>
-         </a>`
-      : '<span class="vide"></span>') +
-    (suiv
-      ? `<a href="#${suiv.id}" data-aller="${suiv.id}" class="droite">
-           <span class="sens">Suivant →</span>
-           <span class="titre">${echapper(suiv.titre)}</span>
-         </a>`
-      : '<span class="vide"></span>');
+    carte(prec, '← Précédent', false) +
+    carte(suiv, 'Suivant →', true);
 
   $('pagination').querySelectorAll('[data-aller]').forEach((a) => {
     a.addEventListener('click', (e) => { e.preventDefault(); aller(a.dataset.aller); });
@@ -345,18 +587,22 @@ function ajouterBoutonsCopier(racine) {
     pre.parentNode.insertBefore(cadre, pre);
     cadre.appendChild(pre);
 
+    const dansPrompt = !!cadre.closest('.prompt');
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'copier';
-    b.textContent = 'Copier';
+    b.textContent = dansPrompt ? 'Copier le prompt' : 'Copier';
 
     b.addEventListener('click', async () => {
       const code = pre.querySelector('code');
       try {
         await navigator.clipboard.writeText(code ? code.textContent : pre.textContent);
-        b.textContent = 'Copié';
+        b.textContent = 'Copié ✓';
         b.dataset.copie = '1';
-        setTimeout(() => { b.textContent = 'Copier'; delete b.dataset.copie; }, 1600);
+        setTimeout(() => {
+          b.textContent = dansPrompt ? 'Copier le prompt' : 'Copier';
+          delete b.dataset.copie;
+        }, 1600);
       } catch { b.textContent = 'Échec'; }
     });
 
@@ -365,12 +611,18 @@ function ajouterBoutonsCopier(racine) {
 }
 
 /* ==========================================================================
-   5. Navigation
+   6. Navigation
    ========================================================================== */
+function derniereAccessible() {
+  const dispo = lecons.filter((l) => debloquee(l) && accessible(l));
+  return dispo.find((l) => !faits.has(l.id)) || dispo[dispo.length - 1] || lecons[0];
+}
+
 function ouvrirDepuisUrl() {
   const id = decodeURIComponent(location.hash.replace('#', ''));
-  const cible = lecons.find((l) => l.id === id);
-  aller(cible ? cible.id : lecons[0].id, true);
+  let cible = lecons.find((l) => l.id === id);
+  if (!cible || (accessible(cible) && !debloquee(cible))) cible = derniereAccessible();
+  aller(cible.id, true);
 }
 window.addEventListener('popstate', ouvrirDepuisUrl);
 
@@ -383,6 +635,9 @@ $('ouvrir-menu').addEventListener('click', ouvrirMenu);
 $('fermer-menu').addEventListener('click', fermerMenu);
 ombre.addEventListener('click', fermerMenu);
 
+/* --- Réglages ------------------------------------------------------------ */
+$('ouvrir-profil').addEventListener('click', afficherReglages);
+
 /* --- Déconnexion --------------------------------------------------------- */
 function deconnecter() {
   signOut(auth).then(() => window.location.replace('../acces.html'));
@@ -393,12 +648,37 @@ $('deconnexion').addEventListener('click', deconnecter);
 document.addEventListener('keydown', (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   if (/^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) return;
+  if (document.querySelector('.surcouche')) {
+    if (e.key === 'Escape') {
+      const sur = document.querySelector('.surcouche');
+      if (sur && sur.querySelector('#reglages-fermer')) sur.remove();
+    }
+    return;
+  }
 
-  const i = lecons.findIndex((l) => l.id === courante);
-  if (e.key === 'ArrowRight' && lecons[i + 1]) aller(lecons[i + 1].id);
-  if (e.key === 'ArrowLeft'  && lecons[i - 1]) aller(lecons[i - 1].id);
+  const dispo = lecons.filter((l) => debloquee(l));
+  const i = dispo.findIndex((l) => l.id === courante);
+  if (e.key === 'ArrowRight' && dispo[i + 1]) aller(dispo[i + 1].id);
+  if (e.key === 'ArrowLeft'  && dispo[i - 1]) aller(dispo[i - 1].id);
   if (e.key === 'Escape') fermerMenu();
 });
+
+/* --- Toast ---------------------------------------------------------------- */
+let toastMinuteur;
+function toast(texte) {
+  let t = $('toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'toast';
+    t.className = 'toast';
+    t.setAttribute('role', 'status');
+    document.body.appendChild(t);
+  }
+  t.textContent = texte;
+  requestAnimationFrame(() => t.classList.add('visible'));
+  clearTimeout(toastMinuteur);
+  toastMinuteur = setTimeout(() => t.classList.remove('visible'), 2800);
+}
 
 /* --- Utilitaire ---------------------------------------------------------- */
 function echapper(s) {
