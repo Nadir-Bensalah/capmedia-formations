@@ -38,7 +38,11 @@ function separer(texte) {
     const sep = ligne.indexOf(':');
     if (sep === -1) continue;
     const cle = ligne.slice(0, sep).trim();
-    const val = ligne.slice(sep + 1).trim();
+    let val = ligne.slice(sep + 1).trim();
+    // Tolérer les guillemets YAML autour des valeurs (titres avec deux-points)
+    if (val.length > 1 && val.startsWith('"') && val.endsWith('"')) {
+      val = val.slice(1, -1);
+    }
     meta[cle] = /^\d+$/.test(val) ? Number(val) : val;
   }
   return { meta, markdown: m[2].trim() };
