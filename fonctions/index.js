@@ -479,11 +479,12 @@ exports.ouvrirAcces = onRequest(
    Chaque appel : POST { cle, action, ...params }. La clé admin fait loi.
    ========================================================================== */
 exports.admin = onRequest(
-  { region: 'europe-west1', secrets: [ADMIN_CLE], cors: true },
+  { region: 'europe-west1', secrets: [ADMIN_CLE, STRIPE_SECRET], cors: true },
   async (req, res) => {
     if (req.method === 'OPTIONS') return res.status(204).send('');
     if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
-    const { cle, action, uid, texte, publie, email, confirmation } = req.body || {};
+    const { cle, action, uid, texte, publie, email, confirmation,
+      formation, id, titre, resume, duree, offre, markdown, session, prix, lien } = req.body || {};
     const attendu = String(ADMIN_CLE.value() || '').trim();
     if (!attendu || String(cle || '').trim() !== attendu) return res.status(403).send('interdit');
 
@@ -579,6 +580,100 @@ exports.admin = onRequest(
         tous.forEach((d) => (d.data().paiements || []).forEach((p) => liste.push({ email: d.id, ...p })));
         liste.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
         return res.status(200).json(liste);
+      }
+
+      /* --- Remboursement en un clic : Stripe rembourse, le webhook
+             charge.refunded referme l'accès tout seul derrière. ----------- */
+      if (action === 'rembourser') {
+        if (!session) return res.status(400).send('session requise');
+        const stripe = new Stripe(STRIPE_SECRET.value());
+        const s = await stripe.checkout.sessions.retrieve(String(session));
+        if (!s.payment_intent) return res.status(400).send('session sans paiement');
+        const remboursement = await stripe.refunds.create({
+          payment_intent: String(s.payment_intent),
+        });
+        return res.status(200).json({ ok: true, statut: remboursement.status,
+          montant: remboursement.amount });
+      }
+
+      /* --- Contenu des formations : lire et modifier, en direct ----------- */
+      if (action === 'lecons') {
+        if (!formation) return res.status(400).send('formation requise');
+        const docs = await bdd.collection(`formations/${formation}/lecons`).get();
+        const liste = docs.docs.map((d) => ({ id: d.id, ...d.data() }));
+        liste.sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0));
+        return res.status(200).json(liste);
+      }
+      if (action === 'contenu') {
+        if (!formation || !id) return res.status(400).send('formation et id requis');
+        const [l, c] = await Promise.all([
+          bdd.doc(`formations/${formation}/lecons/${id}`).get(),
+          bdd.doc(`formations/${formation}/contenus/${id}`).get(),
+        ]);
+        if (!l.exists) return res.status(404).send('module inconnu');
+        return res.status(200).json({ meta: l.data(), markdown: c.exists ? c.data().markdown : '' });
+      }
+      if (action === 'majContenu') {
+        if (!formation || !id) return res.status(400).send('formation et id requis');
+        const refL = bdd.doc(`formations/${formation}/lecons/${id}`);
+        if (!(await refL.get()).exists) return res.status(404).send('module inconnu');
+        const metaMaj = {};
+        if (typeof titre === 'string' && titre) metaMaj.titre = titre;
+        if (typeof resume === 'string' && resume) metaMaj.resume = resume;
+        if (typeof duree === 'string') metaMaj.duree = duree;
+        if (offre === 'essentiel' || offre === 'complet') metaMaj.offre = offre;
+        if (Object.keys(metaMaj).length) await refL.set(metaMaj, { merge: true });
+        if (typeof markdown === 'string') {
+          await bdd.doc(`formations/${formation}/contenus/${id}`).set(
+            { markdown, ...(metaMaj.offre ? { offre: metaMaj.offre } : {}) }, { merge: true });
+        }
+        return res.status(200).json({ ok: true });
+      }
+
+      /* --- Liens de paiement Stripe ---------------------------------------- */
+      if (action === 'liensPaiement') {
+        const stripe = new Stripe(STRIPE_SECRET.value());
+        const liens = await stripe.paymentLinks.list({ active: true, limit: 100 });
+        return res.status(200).json(liens.data.map((l) => ({
+          id: l.id, url: l.url, metadata: l.metadata || {},
+        })));
+      }
+      if (action === 'creerLienPaiement') {
+        const f = CATALOGUE.formations.find((x) => x.slug === formation);
+        const montant = Number(prix);
+        if (!f || !['essentiel', 'complet'].includes(offre) || !(montant > 0)) {
+          return res.status(400).send('formation, offre et prix (euros) requis');
+        }
+        const stripe = new Stripe(STRIPE_SECRET.value());
+        const prixStripe = await stripe.prices.create({
+          currency: 'eur', unit_amount: Math.round(montant * 100),
+          product_data: { name: `${f.nom} · Offre ${offre === 'complet' ? 'Complète' : 'Essentiel'}` },
+        });
+        const nouveau = await stripe.paymentLinks.create({
+          line_items: [{ price: prixStripe.id, quantity: 1 }],
+          metadata: { formation, offre },
+          billing_address_collection: 'required',
+          after_completion: { type: 'redirect',
+            redirect: { url: `${SITE}/merci.html?session_id={CHECKOUT_SESSION_ID}` } },
+        });
+        return res.status(200).json({ id: nouveau.id, url: nouveau.url });
+      }
+      if (action === 'desactiverLien') {
+        if (!lien) return res.status(400).send('lien requis');
+        const stripe = new Stripe(STRIPE_SECRET.value());
+        await stripe.paymentLinks.update(String(lien), { active: false });
+        return res.status(200).json({ ok: true });
+      }
+
+      /* --- E-mails clients (pour écrire en copie cachée) ------------------- */
+      if (action === 'emailsClients') {
+        const tous = await bdd.collection('acheteurs').get();
+        const emails = [];
+        tous.forEach((d) => {
+          const fiche = d.data();
+          if (!formation || fiche.pack || achatsDeFiche(fiche)[formation]) emails.push(d.id);
+        });
+        return res.status(200).json({ emails: emails.sort(), nb: emails.length });
       }
 
       if (action === 'lienConnexion') {
