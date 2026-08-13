@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OG Capmedia Academy</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1200px; height: 630px; }
+  body {
+    font-family: -apple-system, "SF Pro Display", "Segoe UI", Inter, sans-serif;
+    background: #101012;
+    color: #F5F5F4;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    position: relative;
+  }
+  .halo {
+    position: absolute; right: -180px; top: -180px; width: 640px; height: 640px;
+    background: radial-gradient(circle, rgba(124,92,255,.22), rgba(46,185,255,.10) 55%, transparent 72%);
+  }
+  .cadre { display: flex; align-items: center; gap: 72px; padding: 0 96px; position: relative; }
+  .logo { width: 240px; height: 240px; border-radius: 56px; box-shadow: 0 24px 80px rgba(0,0,0,.55); }
+  .sur { font-size: 22px; letter-spacing: .22em; text-transform: uppercase; color: #9B9A97; font-weight: 600; }
+  h1 { font-size: 76px; line-height: 1.04; letter-spacing: -0.02em; margin: 18px 0 26px; font-weight: 700; }
+  .sous { font-size: 28px; line-height: 1.4; color: #C9C8C5; max-width: 640px; }
+  .url { margin-top: 40px; display: inline-block; font-size: 26px; font-weight: 600;
+         color: #101012; background: #F5F5F4; border-radius: 999px; padding: 14px 34px; }
+</style>
+</head>
+<body>
+  <div class="halo"></div>
+  <div class="cadre">
+    <img class="logo" src="../assets/img/logo-academy.png" alt="">
+    <div>
+      <div class="sur">Capmedia Academy</div>
+      <h1>Build, ship and<br>sell real apps.</h1>
+      <p class="sous">Twelve complete courses, in English and French. Lifetime access, 14-day guarantee.</p>
+      <span class="url">capmedia.app</span>
+    </div>
+  </div>
+</body>
+</html>

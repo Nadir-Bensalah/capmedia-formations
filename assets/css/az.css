@@ -591,6 +591,8 @@ td.nb, th.nb { text-align: right; font-variant-numeric: tabular-nums; }
   line-height: 1;
 }
 
+.logo img.marque { background: none; object-fit: cover; padding: 0; }
+
 .nav-liens { display: flex; gap: 20px; flex: none; }
 .nav-liens a {
   font-size: 14px;
