@@ -28,6 +28,11 @@ const $ = (id) => document.getElementById(id);
 
 /* Quelle formation ? ?f=slug dans l'URL, mobile par défaut. */
 const FORMATION = new URLSearchParams(location.search).get('f') || 'mobile';
+/* Langue du contenu : 'fr' ou 'en'. Les collections anglaises vivent dans
+   formations-en/ ; si une formation n'y est pas encore, repli silencieux
+   sur le francais. */
+let LANGUE = (localStorage.getItem('az:langue') === 'en') ? 'en' : 'fr';
+let BASE_FORMATIONS = LANGUE === 'en' ? 'formations-en' : 'formations';
 
 const voile      = $('voile');
 const voileTexte = $('voile-texte');
@@ -389,9 +394,18 @@ function gabaritPasAcheteur(email, aDautres) {
    2. Chargement du contenu et de la progression
    ========================================================================== */
 async function chargerLecons() {
-  const instantane = await getDocs(
-    query(collection(bdd, 'formations', FORMATION, 'lecons'), orderBy('ordre'))
+  let instantane = await getDocs(
+    query(collection(bdd, BASE_FORMATIONS, FORMATION, 'lecons'), orderBy('ordre'))
   );
+  /* La version anglaise de cette formation n'est pas encore publiée :
+     repli sur le français, sans casser le choix global de langue. */
+  if (LANGUE === 'en' && instantane.empty) {
+    BASE_FORMATIONS = 'formations';
+    instantane = await getDocs(
+      query(collection(bdd, BASE_FORMATIONS, FORMATION, 'lecons'), orderBy('ordre'))
+    );
+    if (typeof toast === 'function') setTimeout(() => toast('English version coming soon : showing French for this course'), 800);
+  }
   lecons = instantane.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
@@ -399,7 +413,7 @@ const cacheContenus = new Map();
 
 async function chargerContenu(id) {
   if (cacheContenus.has(id)) return cacheContenus.get(id);
-  const d = await getDoc(doc(bdd, 'formations', FORMATION, 'contenus', id));
+  const d = await getDoc(doc(bdd, BASE_FORMATIONS, FORMATION, 'contenus', id));
   const md = d.exists() ? (d.data().markdown || '') : '';
   cacheContenus.set(id, md);
   return md;
@@ -1152,3 +1166,14 @@ function echapper(s) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
+
+
+/* --- Sélecteur de langue du contenu (FR/EN) ------------------------------- */
+document.querySelectorAll('[data-langue-val]').forEach((b) => {
+  b.setAttribute('aria-pressed', String(b.dataset.langueVal === LANGUE));
+  b.addEventListener('click', () => {
+    if (b.dataset.langueVal === LANGUE) return;
+    try { localStorage.setItem('az:langue', b.dataset.langueVal); } catch (e) {}
+    location.reload();
+  });
+});
