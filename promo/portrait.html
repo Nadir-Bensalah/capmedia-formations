@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Promo portrait 1080x1350</title>
+<style>
+  /* ==========================================================================
+     CAPMEDIA ACADEMY · Visuel réseaux sociaux · 1080 x 1350 (4:5, feed)
+     Direction : premium posé. Encre profonde, typographie qui respire,
+     chiffres réels. La sobriété EST la crédibilité.
+     Date : ouvrir avec ?date=21%20septembre pour l'injecter.
+     ========================================================================== */
+  * { margin: 0; box-sizing: border-box; }
+  html, body { width: 1080px; height: 1350px; overflow: hidden; }
+  body {
+    font-family: "Inter", -apple-system, "Helvetica Neue", sans-serif;
+    background:
+      radial-gradient(1200px 700px at 85% -10%, rgba(35,131,226,.16), transparent 60%),
+      radial-gradient(900px 600px at -10% 110%, rgba(124,92,252,.10), transparent 55%),
+      #131316;
+    color: #F4F3F0;
+    display: flex; flex-direction: column;
+    padding: 72px 84px 0;
+    position: relative;
+  }
+
+  .tete { display: flex; justify-content: space-between; align-items: center; }
+  .marque { display: flex; align-items: center; gap: 18px; }
+  .sceau {
+    width: 58px; height: 58px; border-radius: 14px;
+    background: #F4F3F0; color: #131316;
+    display: grid; place-items: center;
+    font-size: 34px; font-weight: 800;
+  }
+  .marque-nom { font-size: 27px; font-weight: 700; letter-spacing: -0.3px; }
+  .marque-nom span { color: #8A8A93; font-weight: 400; }
+  .domaine { font-size: 23px; color: #8A8A93; letter-spacing: .5px; }
+
+  .heros { margin-top: 96px; }
+  .avant-titre {
+    font-size: 22px; font-weight: 600; letter-spacing: 3.5px;
+    text-transform: uppercase; color: #6FA8E8; margin-bottom: 34px;
+  }
+  h1 {
+    font-size: 88px; line-height: 1.06; font-weight: 800;
+    letter-spacing: -2.5px; max-width: 880px;
+  }
+  h1 em { font-style: normal; color: #6FA8E8; }
+  .sous {
+    margin-top: 38px; font-size: 32px; line-height: 1.45;
+    color: #B9B8BF; max-width: 780px; font-weight: 400;
+  }
+  .sous strong { color: #F4F3F0; font-weight: 600; }
+
+  .preuves {
+    margin-top: 78px; display: flex; gap: 0;
+    border-top: 1px solid #26262B; border-bottom: 1px solid #26262B;
+  }
+  .preuve {
+    flex: 1; padding: 34px 8px; text-align: center;
+    border-right: 1px solid #26262B;
+  }
+  .preuve:last-child { border-right: 0; }
+  .preuve .num { font-size: 44px; font-weight: 800; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+  .preuve .lab { margin-top: 8px; font-size: 20px; color: #8A8A93; }
+
+  .pied {
+    margin-top: auto; display: flex; justify-content: space-between;
+    align-items: flex-end; padding-bottom: 66px;
+  }
+  .prix .barre { font-size: 30px; color: #8A8A93; text-decoration: line-through; text-decoration-thickness: 2px; }
+  .prix .montant { font-size: 74px; font-weight: 800; letter-spacing: -2px; margin-top: 4px; }
+  .prix .note { font-size: 21px; color: #8A8A93; margin-top: 8px; }
+  .date {
+    text-align: right; background: #1D1D22; border: 1px solid #2C2C33;
+    border-radius: 18px; padding: 26px 34px;
+  }
+  .date .lab { font-size: 19px; letter-spacing: 3px; text-transform: uppercase; color: #8A8A93; }
+  .date .val { font-size: 40px; font-weight: 800; margin-top: 8px; letter-spacing: -0.5px; color: #6FA8E8; }
+</style>
+</head>
+<body>
+
+  <div class="tete">
+    <div class="marque">
+      <div class="sceau">C</div>
+      <div class="marque-nom">Capmedia <span>Academy</span></div>
+    </div>
+    <div class="domaine">capmedia.app</div>
+  </div>
+
+  <div class="heros">
+    <p class="avant-titre">Formation en ligne · 100 % en français</p>
+    <h1>Ton application mobile, en ligne sur l'App&nbsp;Store <em>en 30 jours.</em></h1>
+    <p class="sous">Sans avoir jamais écrit une ligne de code. <strong>L'IA écrit le
+    code</strong> : la méthode t'apprend tout le reste, de l'idée à la publication.</p>
+  </div>
+
+  <div class="preuves">
+    <div class="preuve"><div class="num">19</div><div class="lab">modules, pas à pas</div></div>
+    <div class="preuve"><div class="num">à vie</div><div class="lab">accès et mises à jour</div></div>
+    <div class="preuve"><div class="num">14 j</div><div class="lab">satisfait ou remboursé</div></div>
+  </div>
+
+  <div class="pied">
+    <div class="prix">
+      <div class="barre">197 €</div>
+      <div class="montant">97 €</div>
+      <div class="note">Tarif de lancement · il augmente à l'ouverture</div>
+    </div>
+    <div class="date">
+      <div class="lab">Ouverture officielle</div>
+      <div class="val" id="date-val">[DATE]</div>
+    </div>
+  </div>
+
+<script>
+  const d = new URLSearchParams(location.search).get('date');
+  if (d) document.getElementById('date-val').textContent = d;
+</script>
+</body>
+</html>
