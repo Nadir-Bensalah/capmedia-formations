@@ -74,6 +74,47 @@ exports.stripeWebhook = onRequest(
       return res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
+    /* --- Remboursement intégral : l'accès se referme tout seul. --------- */
+    if (evenement.type === 'charge.refunded') {
+      const charge = evenement.data.object;
+      if (!charge.refunded) return res.status(200).send('remboursement partiel : rien à fermer');
+      try {
+        const liste = await stripe.checkout.sessions.list({
+          payment_intent: String(charge.payment_intent), limit: 1,
+        });
+        const s = liste.data[0];
+        if (!s) return res.status(200).send('session introuvable');
+        const email = ((s.customer_details && s.customer_details.email)
+          || s.customer_email || '').trim().toLowerCase();
+        const meta = s.metadata || {};
+        if (!email) return res.status(200).send('sans e-mail');
+
+        const ref = bdd.doc(`acheteurs/${email}`);
+        await bdd.runTransaction(async (t) => {
+          const d = await t.get(ref);
+          if (!d.exists) return;
+          const fiche = d.data();
+          const paiements = (fiche.paiements || []).map((p) =>
+            p.session === s.id ? { ...p, rembourse: true } : p);
+          const maj = { paiements, maj: FieldValue.serverTimestamp() };
+          if (meta.pack && fiche.pack === meta.pack) {
+            maj.pack = FieldValue.delete();
+          } else if (meta.formation) {
+            maj.achats = { [meta.formation]: FieldValue.delete() };
+          } else {
+            maj.achats = { mobile: FieldValue.delete() };
+            maj.offre = FieldValue.delete();
+          }
+          t.set(ref, maj, { merge: true });
+        });
+        console.log(`Remboursement : accès fermé pour ${email} (${meta.formation || meta.pack || 'mobile'})`);
+        return res.status(200).send('accès fermé');
+      } catch (err) {
+        console.error('Fermeture après remboursement échouée', err);
+        return res.status(500).send('erreur interne');   // Stripe réessaiera
+      }
+    }
+
     if (evenement.type !== 'checkout.session.completed') return res.status(200).send('ignoré');
     const session = evenement.data.object;
     if (session.payment_status !== 'paid') return res.status(200).send('non payée');
@@ -362,13 +403,21 @@ exports.ouvrirAcces = onRequest(
   { region: 'europe-west1', secrets: [ADMIN_CLE], cors: false },
   async (req, res) => {
     if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
-    const { cle, email, formation, pack, offre } = req.body || {};
+    const { cle, email, formation, pack, offre, retirer } = req.body || {};
     const attendu = String(ADMIN_CLE.value() || '').trim();
     if (!attendu || String(cle || '').trim() !== attendu) return res.status(403).send('interdit');
     if (!email) return res.status(400).send('email requis');
 
     const e = email.trim().toLowerCase();
     let maj;
+    if (retirer === true) {
+      /* Fermeture manuelle (remboursement hors Stripe, litige, erreur). */
+      if (pack) maj = { pack: FieldValue.delete(), maj: FieldValue.serverTimestamp() };
+      else if (formation) maj = { achats: { [formation]: FieldValue.delete() }, maj: FieldValue.serverTimestamp() };
+      else return res.status(400).send('formation ou pack requis avec retirer');
+      await bdd.doc(`acheteurs/${e}`).set(maj, { merge: true });
+      return res.status(200).send(`accès retiré pour ${e}`);
+    }
     if (pack === 'basic' || pack === 'avance') {
       maj = { email: e, pack, maj: FieldValue.serverTimestamp() };
     } else if (formation && ['essentiel', 'complet'].includes(offre)) {
