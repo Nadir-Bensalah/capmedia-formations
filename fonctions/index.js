@@ -243,6 +243,9 @@ exports.creerCheckoutPack = onRequest(
     const stripe = new Stripe(STRIPE_SECRET.value());
     const sessionStripe = await stripe.checkout.sessions.create({
       mode: 'payment',
+      /* Compte reel : Managed Payments (Stripe vendeur officiel) est actif
+         par defaut et exigerait un tax_code ; on vend en direct, comme en test. */
+      managed_payments: { enabled: false },
       customer_email: email,
       line_items: [{
         quantity: 1,
@@ -321,6 +324,9 @@ exports.creerCheckoutFormation = onRequest(
     const nomOffre = offre === 'complet' ? 'Complète' : 'Essentiel';
     const sessionStripe = await stripe.checkout.sessions.create({
       mode: 'payment',
+      /* Compte reel : Managed Payments (Stripe vendeur officiel) est actif
+         par defaut et exigerait un tax_code ; on vend en direct, comme en test. */
+      managed_payments: { enabled: false },
       customer_email: email,
       line_items: [{
         quantity: 1,
