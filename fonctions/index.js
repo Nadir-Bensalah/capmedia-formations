@@ -133,9 +133,17 @@ exports.stripeWebhook = onRequest(
       libelle = `Pack Academy (${meta.pack === 'avance' ? 'Avancé' : 'Basic'})`;
     } else if (meta.formation && (meta.offre === 'essentiel' || meta.offre === 'complet')) {
       const f = CATALOGUE.formations.find((x) => x.slug === meta.formation);
-      if (!f) { console.error('Formation inconnue', meta.formation); return res.status(200).send('formation inconnue'); }
-      credit = { achats: { [meta.formation]: meta.offre } };
-      libelle = `${f.nom} (${meta.offre === 'complet' ? 'Complet' : 'Essentiel'})`;
+      if (f) {
+        credit = { achats: { [meta.formation]: meta.offre } };
+        libelle = `${f.nom} (${meta.offre === 'complet' ? 'Complet' : 'Essentiel'})`;
+      } else {
+        /* Slug inconnu : lien de test du circuit, ou métadonnée mal posée.
+           On ne livre RIEN, mais chaque euro encaissé doit laisser une trace
+           visible en console (et rester remboursable depuis l'onglet Ventes). */
+        console.error('Formation inconnue, paiement enregistré sans livraison :', meta.formation);
+        credit = {};
+        libelle = `Paiement sans livraison (« ${meta.formation} » inconnu)`;
+      }
     } else {
       const offre = (session.amount_total || 0) >= 15000 ? 'complet' : 'essentiel';
       credit = { achats: { mobile: offre } };
