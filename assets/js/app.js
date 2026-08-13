@@ -223,7 +223,72 @@ function afficherReglages() {
   });
 
   $('tout-debloquer').addEventListener('click', () => {
-    if (!window.confirm('Débloquer tous les modules ? C\'est définitif : ils ne se reverrouilleront pas.')) return;
+    fermer();
+    afficherRenonciation();
+  });
+}
+
+/* --- Tout débloquer = renoncer à la garantie (CGV art. 7) ------------------
+   L'alerte est explicite et détaillée, la confirmation est enregistrée
+   côté serveur, horodatée : elle vaut renonciation expresse. */
+function afficherRenonciation() {
+  const sur = document.createElement('div');
+  sur.className = 'surcouche';
+  sur.innerHTML = `
+    <div class="panneau" role="dialog" aria-modal="true" aria-label="Tout débloquer">
+      <div class="pan-tete">
+        <div class="pile g-1">
+          <p class="etiquette">Avant de confirmer</p>
+          <h2 class="t-h3" style="font-size:20px">Tout débloquer, et renoncer à la garantie</h2>
+        </div>
+        <button type="button" class="bouton-icone" id="renon-fermer" aria-label="Fermer">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="pan-corps">
+        <div class="pile g-3">
+          <p class="t-petit t-2">En débloquant <strong>tous les modules d'un coup</strong>,
+          tu accèdes immédiatement à l'intégralité de la formation : tu consommes
+          donc le produit en entier.</p>
+          <p class="t-petit t-2">En conséquence, et comme le prévoient les
+          <a href="../cgv.html#garantie" target="_blank" rel="noopener">CGV (article 7)</a>,
+          cette action vaut <strong>renonciation à la garantie « satisfait ou
+          remboursé » de 14 jours</strong> pour cette formation. Ta confirmation
+          est enregistrée et horodatée.</p>
+          <p class="t-petit t-2">Rien ne presse : les modules se débloquent aussi
+          un par un, au fil de ta progression, et la garantie reste alors acquise
+          (tant que moins d'un tiers de la formation est débloqué). Le déblocage
+          total est définitif : rien ne se reverrouille.</p>
+        </div>
+      </div>
+      <div class="pan-pied">
+        <div class="pile g-2">
+          <button type="button" class="btn btn-principal btn-large btn-bloc" id="renon-annuler">Continuer module par module (garantie conservée)</button>
+          <button type="button" class="btn btn-secondaire btn-bloc" id="renon-confirmer">Je confirme : tout débloquer et renoncer à la garantie</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(sur);
+
+  const fermer = () => sur.remove();
+  $('renon-fermer').addEventListener('click', fermer);
+  $('renon-annuler').addEventListener('click', fermer);
+  sur.addEventListener('click', (e) => { if (e.target === sur) fermer(); });
+
+  $('renon-confirmer').addEventListener('click', async () => {
+    const b = $('renon-confirmer');
+    b.disabled = true;
+    b.textContent = 'Un instant…';
+    try {
+      if (utilisateur) {
+        await fetch('https://europe-west1-capmedia-academy.cloudfunctions.net/renoncerGarantie', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken: await utilisateur.getIdToken(), formation: FORMATION }),
+        });
+      }
+    } catch (e) { console.warn('Renonciation non enregistrée', e); }
     const avant = maxDebloque;
     maxDebloque = Math.max(...lecons.map((l) => l.ordre));
     enregistrerProgression();

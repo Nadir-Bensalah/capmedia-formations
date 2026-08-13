@@ -347,6 +347,49 @@ exports.creerCheckoutFormation = onRequest(
 );
 
 /* ==========================================================================
+   2 quater. Renonciation à la garantie (déblocage total d'une formation)
+   POST { idToken, formation }
+
+   Le membre qui débloque toute une formation d'un coup renonce à la
+   garantie « satisfait ou remboursé » (CGV, article 7). La confirmation
+   est horodatée ICI, côté serveur, dans un document que le client ne
+   peut pas modifier : la preuve est infalsifiable.
+   ========================================================================== */
+exports.renoncerGarantie = onRequest(
+  { region: 'europe-west1', cors: true },
+  async (req, res) => {
+    if (req.method === 'OPTIONS') return res.status(204).send('');
+    if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
+
+    const { idToken, formation } = req.body || {};
+    const f = CATALOGUE.formations.find((x) => x.slug === formation);
+    if (!idToken || !f) return res.status(400).json({ erreur: 'idToken et formation requis' });
+
+    let decode;
+    try {
+      decode = await getAuth().verifyIdToken(idToken);
+      if (!decode.email || !decode.email_verified) throw new Error('email non vérifié');
+    } catch (e) {
+      return res.status(401).json({ erreur: 'jeton invalide' });
+    }
+    const email = decode.email.toLowerCase();
+
+    const ref = bdd.doc(`acheteurs/${email}`);
+    const d = await ref.get();
+    if (!d.exists) return res.status(403).json({ erreur: 'aucun achat' });
+
+    await ref.set({
+      renonciations: {
+        [formation]: { date: new Date().toISOString(), uid: decode.uid },
+      },
+    }, { merge: true });
+
+    console.log(`Renonciation garantie : ${email} → ${formation}`);
+    return res.status(200).json({ ok: true });
+  },
+);
+
+/* ==========================================================================
    2 ter. Infos d'une session de paiement (page merci)
    POST { session_id }
 
