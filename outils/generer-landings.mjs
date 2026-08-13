@@ -289,7 +289,7 @@ function landing(f) {
         <a href="#tarifs" class="btn btn-principal btn-large">Rejoindre · ${f.prixE} €</a>
         <a href="#programme" class="btn btn-secondaire btn-large">Voir le programme</a>
       </div>
-      <p class="t-petit t-3">Accès immédiat, à vie · Garantie 30 jours · Paiement sécurisé Stripe</p>
+      <p class="t-petit t-3">Accès immédiat, à vie · Satisfait ou remboursé 14 jours · Paiement sécurisé Stripe</p>
     </div>
   </section>
 
@@ -315,7 +315,7 @@ ${(f.publics || []).map((p) => `          <li>${e(p)}</li>`).join('\n')}
           <li>Accès à vie, mises à jour comprises</li>
           <li>La formation s'adapte : avec IA (prompts prêts à copier) ou sans</li>
           <li>Le support par messagerie, un vrai humain qui répond</li>
-          <li>Garantie 30 jours : un e-mail, remboursement intégral</li>
+          <li>Satisfait ou remboursé 14 jours (moins d'un tiers débloqué : voir CGV)</li>
         </ul>
       </div>
     </div>
@@ -344,8 +344,8 @@ ${anticipe ? `
         <p>Le module d'introduction est en ligne aujourd'hui. Les modules
         suivants sont publiés chaque semaine, dans l'ordre du programme
         ci-dessus. Ton achat couvre tout, à vie, au prix de lancement : il
-        augmentera à la publication complète. Et la garantie 30 jours
-        s'applique dès aujourd'hui, sans condition.</p>
+        augmentera à la publication complète. Et la garantie 14 jours
+        s'applique dès aujourd'hui.</p>
       </div>
     </div>
   </section>
