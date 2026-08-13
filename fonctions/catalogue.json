@@ -61,7 +61,7 @@
       "nom": "Encaisser en ligne avec Stripe",
       "prixE": 67,
       "prixC": 127,
-      "statut": "acces-anticipe"
+      "statut": "disponible"
     },
     {
       "slug": "aso",
