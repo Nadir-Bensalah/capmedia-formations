@@ -1,12 +1,18 @@
 /* ==========================================================================
    CAPMEDIA ACADEMY · Paiement et badges de possession
 
-   Sur toutes les pages de vente :
-   1. [data-achat="slug:offre"]  → lien de paiement Stripe (window.AZ.liens)
-   2. [data-pack="basic|avance"] → connecté : checkout personnalisé (prorata
-      serveur) ; sinon lien plein tarif, ou invitation à se connecter.
-   3. Si l'utilisateur est connecté : ses formations portent le badge
-      « À toi » et le prix personnalisé du pack s'affiche.
+   Deux régimes, selon la session :
+   · Visiteur anonyme : les liens de paiement statiques (window.AZ.liens).
+   · Client CONNECTÉ : une session Checkout créée côté serveur, avec son
+     e-mail VERROUILLÉ (Apple Pay / Google Pay ne peuvent plus imposer une
+     autre adresse), le double achat refusé, et la montée Essentiel vers
+     Complet au prorata. Le serveur est seul juge des prix.
+
+   États affichés quand on est connecté :
+   · Offre possédée -> « Déjà achetée · Ouvrir » (aucun re-paiement possible)
+   · Essentiel possédé -> le bouton Complet devient « Passer à la Complète »
+     au prix prorata calculé par le serveur
+   · Cartes cross-sell -> badge « À toi »
    ========================================================================== */
 
 import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js';
@@ -15,57 +21,95 @@ import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10
 
 const cfg = window.AZ || {};
 const liens = cfg.liens || {};
-const URL_PACK = 'https://europe-west1-capmedia-academy.cloudfunctions.net/creerCheckoutPack';
+const BASE_FN = 'https://europe-west1-capmedia-academy.cloudfunctions.net';
+const URL_PACK = `${BASE_FN}/creerCheckoutPack`;
+const URL_FORMATION = `${BASE_FN}/creerCheckoutFormation`;
+
+let utilisateurCourant = null;
+
+const patiente = (b, texte) => { b.dataset.txt = b.textContent; b.disabled = true; b.textContent = texte; };
+const relache = (b, texte) => {
+  b.textContent = texte || b.dataset.txt || b.textContent;
+  b.disabled = false;
+  if (texte) setTimeout(() => { b.textContent = b.dataset.txt; }, 2400);
+};
 
 /* --- 1. Boutons d'achat à l'unité ---------------------------------------- */
 document.querySelectorAll('[data-achat]').forEach((b) => {
-  const cle = b.getAttribute('data-achat');
-  const url = liens[cle];
-  b.addEventListener('click', (e) => {
+  b.addEventListener('click', async (e) => {
     e.preventDefault();
+    const [formation, offre] = b.getAttribute('data-achat').split(':');
+
+    /* Connecté : session serveur, e-mail verrouillé, doublon refusé. */
+    if (utilisateurCourant) {
+      patiente(b, 'Un instant…');
+      try {
+        const r = await fetch(URL_FORMATION, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            idToken: await utilisateurCourant.getIdToken(),
+            formation, offre,
+          }),
+        });
+        const d = await r.json();
+        if (d.deja) { window.location.href = `../app/?f=${formation}`; return; }
+        if (d.url) { window.location.href = d.url; return; }
+        throw new Error(d.erreur || 'réponse inattendue');
+      } catch (err) {
+        console.error(err);
+        relache(b, 'Réessaie dans un instant');
+      }
+      return;
+    }
+
+    /* Anonyme : lien statique. */
+    const url = liens[`${formation}:${offre}`];
     if (url) { window.location.href = url; return; }
-    const t = b.textContent;
-    b.textContent = 'Paiement bientôt disponible';
-    setTimeout(() => { b.textContent = t; }, 2200);
+    relache(b, 'Paiement bientôt disponible');
   });
 });
 
 /* --- 2. Boutons pack ------------------------------------------------------ */
-let jetonCourant = null;
-
 document.querySelectorAll('[data-pack]').forEach((b) => {
   const niveau = b.getAttribute('data-pack');
   b.addEventListener('click', async (e) => {
     e.preventDefault();
-    const t = b.textContent;
-    b.disabled = true;
-    b.textContent = 'Un instant…';
+    patiente(b, 'Un instant…');
     try {
-      if (jetonCourant) {
-        /* Connecté : le serveur calcule le prorata et crée la session. */
+      if (utilisateurCourant) {
         const r = await fetch(URL_PACK, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ idToken: jetonCourant, niveau }),
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken: await utilisateurCourant.getIdToken(), niveau }),
         });
         const d = await r.json();
-        if (d.deja === 'pack') { b.textContent = 'Déjà à toi'; return; }
+        if (d.deja === 'pack') { relache(b, 'Déjà à toi'); return; }
         if (d.url) { window.location.href = d.url; return; }
         throw new Error(d.erreur || 'réponse inattendue');
       }
-      /* Non connecté : lien plein tarif si présent, sinon connexion. */
       const url = liens[`pack:${niveau}`];
       if (url) { window.location.href = url; return; }
       window.location.href = './../acces.html';
     } catch (err) {
       console.error(err);
-      b.textContent = 'Réessaie dans un instant';
-      setTimeout(() => { b.textContent = t; b.disabled = false; }, 2200);
+      relache(b, 'Réessaie dans un instant');
     }
   });
 });
 
-/* --- 3. État connecté : badges + prorata affiché --------------------------- */
+/* --- 3. État connecté : badges, verrous, prorata --------------------------- */
+function marquerCarteAchetee(bouton, texteBadge) {
+  const carte = bouton.closest('.carte');
+  if (!carte || carte.querySelector('.mention-achetee')) return;
+  const prix = carte.querySelector('.prix');
+  if (prix) prix.style.display = 'none';
+  const mention = document.createElement('p');
+  mention.className = 'mention-achetee t-petit t-fort';
+  mention.style.cssText = 'color:var(--valide,#2E8B57);display:flex;align-items:center;gap:6px';
+  mention.textContent = texteBadge;
+  if (prix && prix.parentNode) prix.parentNode.insertBefore(mention, prix);
+  else carte.prepend(mention);
+}
+
 if (cfg.firebase && cfg.firebase.apiKey) {
   try {
     const app = getApps().length ? getApps()[0] : initializeApp(cfg.firebase);
@@ -73,8 +117,8 @@ if (cfg.firebase && cfg.firebase.apiKey) {
     const bdd = getFirestore(app);
 
     onAuthStateChanged(auth, async (u) => {
-      if (!u || !u.email) return;
-      jetonCourant = await u.getIdToken();
+      utilisateurCourant = u && u.email ? u : null;
+      if (!utilisateurCourant) return;
 
       let fiche = null;
       try {
@@ -87,7 +131,7 @@ if (cfg.firebase && cfg.firebase.apiKey) {
       if (fiche.offre && !achats.mobile) achats.mobile = fiche.offre;
       const aLePack = !!fiche.pack;
 
-      /* Badges « À toi » sur les cartes et neutralisation des CTA possédés */
+      /* Badges « À toi » sur les cartes cross-sell / catalogue */
       document.querySelectorAll('[data-slug]').forEach((carte) => {
         const slug = carte.getAttribute('data-slug');
         if (aLePack || achats[slug]) {
@@ -96,29 +140,56 @@ if (cfg.firebase && cfg.firebase.apiKey) {
           carte.classList.add('est-possedee');
         }
       });
-      document.querySelectorAll('[data-achat]').forEach((b) => {
+
+      /* Boutons de tarifs : verrou sur le possédé, prorata sur la montée */
+      for (const b of document.querySelectorAll('[data-achat]')) {
         const [slug, offre] = b.getAttribute('data-achat').split(':');
         const niveau = achats[slug];
-        const couvert = fiche.pack === 'avance'
-          || (fiche.pack === 'basic' && offre === 'essentiel')
-          || niveau === 'complet'
-          || (niveau === 'essentiel' && offre === 'essentiel');
-        if (couvert) {
-          b.textContent = 'Déjà à toi · Ouvrir';
-          b.onclick = (e) => { e.preventDefault(); window.location.href = '../app/?f=' + slug; };
-        }
-      });
+        const possede = fiche.pack === 'avance' ? 'complet'
+          : (fiche.pack === 'basic' && !niveau) ? 'essentiel'
+          : niveau || null;
 
-      /* Prix du pack personnalisé, affiché depuis le calcul serveur */
+        const couvert = possede === 'complet'
+          || (possede === 'essentiel' && offre === 'essentiel');
+
+        if (couvert) {
+          b.textContent = 'Déjà achetée · Ouvrir';
+          b.classList.remove('btn-principal');
+          b.classList.add('btn-secondaire');
+          marquerCarteAchetee(b, offre === 'complet' ? 'Offre Complète : à toi' : 'Offre Essentiel : à toi');
+          continue;
+        }
+
+        /* Essentiel possédé, bouton Complet : la montée au prorata. */
+        if (possede === 'essentiel' && offre === 'complet') {
+          try {
+            const r = await fetch(URL_FORMATION, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                idToken: await u.getIdToken(), formation: slug, offre: 'complet', apercu: true,
+              }),
+            });
+            const d = await r.json();
+            if (d.upgrade && d.prix) {
+              b.textContent = `Passer à la Complète · ${d.prix} €`;
+              const carte = b.closest('.carte');
+              const note = carte && carte.querySelector('.t-micro');
+              if (note) note.textContent =
+                `Ton prix : ${d.deduit} € déjà payés sur l'Essentiel, déduits.`;
+            }
+          } catch (e) { /* le clic passera quand même par le serveur */ }
+        }
+      }
+
+      /* Prix du pack personnalisé (inchangé) */
       const cibles = document.querySelectorAll('[data-prix-pack]');
       if (cibles.length && !aLePack && Object.keys(achats).length) {
         for (const el of cibles) {
           const niveau = el.getAttribute('data-prix-pack');
           try {
             const r = await fetch(URL_PACK, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ idToken: jetonCourant, niveau, apercu: true }),
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ idToken: await u.getIdToken(), niveau, apercu: true }),
             });
             const d = await r.json();
             if (d.prix) {

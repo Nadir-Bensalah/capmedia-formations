@@ -217,12 +217,140 @@ exports.creerCheckoutPack = onRequest(
         },
       }],
       metadata: { pack: niveau, email },
-      success_url: `${SITE}/merci.html`,
+      success_url: `${SITE}/merci.html?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${SITE}/formations/`,
     });
 
     return res.status(200).json({ url: sessionStripe.url, prix: calc.prix,
       deja: calc.deja, remisePct: calc.remisePct });
+  },
+);
+
+/* ==========================================================================
+   2 bis. Checkout d'une formation, client connecté
+   POST { idToken, formation, offre: 'essentiel'|'complet', apercu?: true }
+
+   Pourquoi côté serveur : l'e-mail est VERROUILLÉ sur celui du compte
+   (impossible de payer avec la mauvaise adresse, y compris via Apple Pay
+   ou Google Pay), le double achat est refusé, et la montée Essentiel vers
+   Complet est facturée au prorata (différence de prix), calculée ici.
+   ========================================================================== */
+exports.creerCheckoutFormation = onRequest(
+  { region: 'europe-west1', secrets: [STRIPE_SECRET], cors: true },
+  async (req, res) => {
+    if (req.method === 'OPTIONS') return res.status(204).send('');
+    if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
+
+    const { idToken, formation, offre, apercu } = req.body || {};
+    const f = CATALOGUE.formations.find((x) => x.slug === formation);
+    if (!idToken || !f || !['essentiel', 'complet'].includes(offre)) {
+      return res.status(400).json({ erreur: 'idToken, formation et offre requis' });
+    }
+
+    let decode;
+    try {
+      decode = await getAuth().verifyIdToken(idToken);
+      if (!decode.email || !decode.email_verified) throw new Error('email non vérifié');
+    } catch (e) {
+      return res.status(401).json({ erreur: 'jeton invalide' });
+    }
+    const email = decode.email.toLowerCase();
+
+    const d = await bdd.doc(`acheteurs/${email}`).get();
+    const fiche = d.exists ? d.data() : {};
+    const achats = achatsDeFiche(fiche);
+    const possede = fiche.pack === 'avance' ? 'complet'
+      : (fiche.pack === 'basic' && !achats[formation]) ? 'essentiel'
+      : achats[formation] || null;
+
+    /* Déjà couvert : on refuse le double paiement, net. */
+    if (possede === 'complet' || (possede === 'essentiel' && offre === 'essentiel')) {
+      return res.status(200).json({ deja: true, possede });
+    }
+
+    /* Prix : plein tarif, ou prorata de montée Essentiel -> Complet. */
+    let prix = offre === 'complet' ? f.prixC : f.prixE;
+    let deduit = 0;
+    const upgrade = offre === 'complet' && possede === 'essentiel';
+    if (upgrade) { deduit = f.prixE; prix = Math.max(9, f.prixC - f.prixE); }
+
+    if (apercu) return res.status(200).json({ prix, deduit, upgrade });
+
+    const stripe = new Stripe(STRIPE_SECRET.value());
+    const nomOffre = offre === 'complet' ? 'Complète' : 'Essentiel';
+    const sessionStripe = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      customer_email: email,
+      line_items: [{
+        quantity: 1,
+        price_data: {
+          currency: 'eur',
+          unit_amount: prix * 100,
+          product_data: {
+            name: upgrade
+              ? `${f.nom} · Passage à l'offre Complète`
+              : `${f.nom} · Offre ${nomOffre}`,
+            description: upgrade
+              ? `Prorata : ${deduit} € déjà payés sur l'offre Essentiel, déduits.`
+              : 'Accès à vie, mises à jour comprises.',
+          },
+        },
+      }],
+      metadata: { formation, offre, email },
+      success_url: `${SITE}/merci.html?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${SITE}/formations/${formation === 'mobile' ? '' : formation + '.html'}`,
+    });
+
+    return res.status(200).json({ url: sessionStripe.url, prix, deduit, upgrade });
+  },
+);
+
+/* ==========================================================================
+   2 ter. Infos d'une session de paiement (page merci)
+   POST { session_id }
+
+   Le porteur du session_id (présent dans l'URL de retour Stripe) peut
+   savoir : l'e-mail auquel l'achat est rattaché, ce qui a été acheté, et
+   le statut. C'est ce qui rend la page merci infaillible, y compris quand
+   Apple Pay ou Google Pay a imposé une adresse inattendue.
+   ========================================================================== */
+exports.infoSession = onRequest(
+  { region: 'europe-west1', secrets: [STRIPE_SECRET], cors: true },
+  async (req, res) => {
+    if (req.method === 'OPTIONS') return res.status(204).send('');
+    if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
+
+    const { session_id } = req.body || {};
+    if (!session_id || !/^cs_[a-zA-Z0-9_]+$/.test(String(session_id))) {
+      return res.status(400).json({ erreur: 'session_id requis' });
+    }
+
+    try {
+      const stripe = new Stripe(STRIPE_SECRET.value());
+      const s = await stripe.checkout.sessions.retrieve(String(session_id));
+      const email = ((s.customer_details && s.customer_details.email)
+        || s.customer_email || '').trim().toLowerCase();
+      const meta = s.metadata || {};
+
+      let achat = null;
+      if (meta.pack) {
+        achat = { type: 'pack', niveau: meta.pack,
+          libelle: `Pack Academy (${meta.pack === 'avance' ? 'Avancé' : 'Basic'})` };
+      } else if (meta.formation) {
+        const f = CATALOGUE.formations.find((x) => x.slug === meta.formation);
+        achat = { type: 'formation', formation: meta.formation, offre: meta.offre,
+          libelle: f ? `${f.nom} (${meta.offre === 'complet' ? 'Complète' : 'Essentiel'})` : meta.formation };
+      }
+
+      return res.status(200).json({
+        paye: s.payment_status === 'paid',
+        email,
+        achat,
+        sessionId: s.id,
+      });
+    } catch (e) {
+      return res.status(404).json({ erreur: 'session inconnue' });
+    }
   },
 );
 
