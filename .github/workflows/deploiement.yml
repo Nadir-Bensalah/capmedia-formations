@@ -21,20 +21,6 @@ jobs:
       - name: Récupération du dépôt
         uses: actions/checkout@v4
 
-      - name: Nettoyage ponctuel (dossiers imbriqués par erreur)
-        env:
-          FTP_HOST: ${{ secrets.FTP_SERVER }}
-          FTP_USER: ${{ secrets.FTP_USERNAME }}
-          LFTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
-        run: |
-          sudo apt-get -y install lftp >/dev/null 2>&1
-          lftp --env-password -u "$FTP_USER" \
-            -e "set ftp:ssl-force true; set ssl:verify-certificate no; \
-                rm -rf /public_html/public_html; \
-                rm -f /public_html/academy/default.php; \
-                echo '== apres nettoyage =='; cls -la /public_html/; \
-                bye" "$FTP_HOST" || true
-
       - name: Envoi FTP vers public_html
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:

@@ -28,7 +28,7 @@ const STRIPE_SECRET         = defineSecret('STRIPE_SECRET');
 const STRIPE_WEBHOOK_SECRET = defineSecret('STRIPE_WEBHOOK_SECRET');
 const ADMIN_CLE             = defineSecret('ADMIN_CLE');
 
-const SITE = 'https://nadir-bensalah.github.io/capmedia-formations';  // TEMPORAIRE : re-basculer sur capmedia.app dès le DNS corrigé
+const SITE = 'https://academy.capmedia.app';
 
 /* --- Prix du pack, source de vérité serveur ------------------------------- */
 function prixPack(niveau) {
