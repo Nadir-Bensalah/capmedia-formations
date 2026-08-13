@@ -77,6 +77,18 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // --- Le contenu anglais : mêmes droits que le français ---------------
+    match /formations-en/{slug}/lecons/{leconId} {
+      allow read:  if aAchete() && accesFormation(slug);
+      allow write: if false;
+    }
+    match /formations-en/{slug}/contenus/{leconId} {
+      allow read: if aAchete()
+                  && accesFormation(slug)
+                  && (resource.data.offre != 'complet' || accesComplet(slug));
+      allow write: if false;
+    }
+
     // --- La progression -----------------------------------------------
     match /progression/{uid} {
       allow read, write: if aAchete() && request.auth.uid == uid;
