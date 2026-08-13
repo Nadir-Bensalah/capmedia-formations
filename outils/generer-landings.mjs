@@ -19,7 +19,7 @@ const ICI = dirname(fileURLToPath(import.meta.url));
 const RACINE = join(ICI, '..');
 const { default: C } = await import('../assets/js/catalogue.js');
 
-const SITE = 'https://nadir-bensalah.github.io/capmedia-formations';
+const SITE = 'https://capmedia.app';
 
 const e = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -60,6 +60,8 @@ const tete = (titre, desc, canon, jsonld) => `<!DOCTYPE html>
 <meta property="og:title" content="${e(titre)}">
 <meta property="og:description" content="${e(desc)}">
 <meta property="og:locale" content="fr_FR">
+<meta property="og:image" content="https://capmedia.app/assets/img/og.png">
+<meta name="twitter:card" content="summary_large_image">
 <meta property="og:url" content="${SITE}/${canon}">
 ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld)}</script>` : ''}
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -67,14 +69,15 @@ ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld)}</script
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="../assets/css/tokens.css">
 <link rel="stylesheet" href="../assets/css/az.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='%2337352F'/><text y='71' x='50' text-anchor='middle' font-size='60' font-weight='700' font-family='Inter,Helvetica,sans-serif' fill='%23fff'>C</text></svg>">
+<link rel="icon" type="image/png" sizes="32x32" href="../assets/img/favicon-32.png">
+<link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png"><rect width='100' height='100' rx='18' fill='%2337352F'/><text y='71' x='50' text-anchor='middle' font-size='60' font-weight='700' font-family='Inter,Helvetica,sans-serif' fill='%23fff'>C</text></svg>">
 <script>(function(){try{var t=localStorage.getItem('az:theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 </head>
 <body>
 
 <header class="entete" id="entete">
   <div class="enveloppe">
-    <a href="../index.html" class="logo"><span class="marque">C</span>Capmedia&nbsp;Academy</a>
+    <a href="../index.html" class="logo"><img class="marque" src="../assets/img/logo-academy.png" alt="" width="22" height="22">Capmedia&nbsp;Academy</a>
     <nav class="nav-liens">
       <a href="./">Formations</a>
       <a href="./#pack">Le Pack</a>
@@ -101,6 +104,7 @@ const pied = `
       <a href="mailto:contact@capmedia.tn" class="t-petit">Contact</a>
     </div>
     <hr class="filet" style="margin-block:var(--e-4)">
+    <p class="t-micro t-3" style="display:flex;align-items:center;gap:8px;margin-bottom:var(--e-3)"><img src="../assets/img/capmedia-digital.png" alt="Capmedia Digital" width="20" height="20">Capmedia Academy est une plateforme de Capmedia Digital.</p>
     <p class="t-micro t-3">© 2026 Capmedia Academy · Nadir Ben Salah (Capmedia Digital) · SIREN 814&nbsp;051&nbsp;769</p>
   </div>
 </footer>

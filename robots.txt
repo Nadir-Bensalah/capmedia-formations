@@ -4,4 +4,4 @@ Disallow: /app/
 Disallow: /acces.html
 Disallow: /merci.html
 
-Sitemap: https://nadir-bensalah.github.io/capmedia-formations/sitemap.xml
+Sitemap: https://capmedia.app/sitemap.xml

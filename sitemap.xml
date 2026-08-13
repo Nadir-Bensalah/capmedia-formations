@@ -2,33 +2,33 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
         xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
-    <loc>https://nadir-bensalah.github.io/capmedia-formations/</loc>
+    <loc>https://capmedia.app/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
-    <xhtml:link rel="alternate" hreflang="fr" href="https://nadir-bensalah.github.io/capmedia-formations/"/>
-    <xhtml:link rel="alternate" hreflang="en" href="https://nadir-bensalah.github.io/capmedia-formations/en/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://capmedia.app/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://capmedia.app/en/"/>
   </url>
   <url>
-    <loc>https://nadir-bensalah.github.io/capmedia-formations/en/</loc>
+    <loc>https://capmedia.app/en/</loc>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
-    <xhtml:link rel="alternate" hreflang="fr" href="https://nadir-bensalah.github.io/capmedia-formations/"/>
-    <xhtml:link rel="alternate" hreflang="en" href="https://nadir-bensalah.github.io/capmedia-formations/en/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://capmedia.app/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://capmedia.app/en/"/>
   </url>
-  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/mentions.html</loc><priority>0.3</priority></url>
-  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/cgv.html</loc><priority>0.3</priority></url>
-  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/confidentialite.html</loc><priority>0.3</priority></url>
-  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/cookies.html</loc><priority>0.3</priority></url>
-  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/formations/</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
-  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/formations/github.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/formations/claude-code.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/formations/site-web-ia.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/formations/automatiser-ia.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/formations/prompting.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/formations/firebase.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/formations/stripe.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/formations/aso.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/formations/design-app.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/formations/micro-saas.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://nadir-bensalah.github.io/capmedia-formations/formations/seo-contenu.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://capmedia.app/mentions.html</loc><priority>0.3</priority></url>
+  <url><loc>https://capmedia.app/cgv.html</loc><priority>0.3</priority></url>
+  <url><loc>https://capmedia.app/confidentialite.html</loc><priority>0.3</priority></url>
+  <url><loc>https://capmedia.app/cookies.html</loc><priority>0.3</priority></url>
+  <url><loc>https://capmedia.app/formations/</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://capmedia.app/formations/github.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://capmedia.app/formations/claude-code.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://capmedia.app/formations/site-web-ia.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://capmedia.app/formations/automatiser-ia.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://capmedia.app/formations/prompting.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://capmedia.app/formations/firebase.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://capmedia.app/formations/stripe.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://capmedia.app/formations/aso.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://capmedia.app/formations/design-app.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://capmedia.app/formations/micro-saas.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://capmedia.app/formations/seo-contenu.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
 </urlset>
