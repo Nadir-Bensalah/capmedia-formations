@@ -566,8 +566,10 @@ exports.admin = onRequest(
         derniers.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
         const attente = await bdd.collection('conversations').where('tour', '==', 'nadir').get();
         const avisAttente = await bdd.collection('avis').where('publie', '==', false).get();
+        const listeAttente = await bdd.collection('attente').count().get();
         return res.status(200).json({
           mode: modeVoulu,
+          listeAttente: listeAttente.data().count,
           clients: clientsDuMode.size,
           clientsSansPaiement: clientsSansPaiement.length,
           revenuTotal, revenu30j, nbPaiements, packs,
@@ -603,6 +605,13 @@ exports.admin = onRequest(
       if (action === 'client') {
         if (!email) return res.status(400).send('email requis');
         return res.status(200).json(await ficheComplete(email));
+      }
+
+      if (action === 'listeAttente') {
+        const docs = await bdd.collection('attente').get();
+        const liste = docs.docs.map((d) => d.data());
+        liste.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        return res.status(200).json({ nb: liste.length, liste });
       }
 
       if (action === 'paiements') {

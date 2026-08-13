@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Promo story 1080x1920</title>
+<style>
+  /* CAPMEDIA ACADEMY · 1080 x 1920 (story / reel) · même charte */
+  * { margin: 0; box-sizing: border-box; }
+  html, body { width: 1080px; height: 1920px; overflow: hidden; }
+  body {
+    font-family: "Inter", -apple-system, "Helvetica Neue", sans-serif;
+    background:
+      radial-gradient(1300px 800px at 90% -8%, rgba(35,131,226,.18), transparent 60%),
+      radial-gradient(1000px 700px at -12% 108%, rgba(124,92,252,.12), transparent 55%),
+      #131316;
+    color: #F4F3F0;
+    display: flex; flex-direction: column;
+    padding: 150px 90px 0;
+    text-align: left;
+  }
+  .marque { display: flex; align-items: center; gap: 20px; }
+  .sceau { width: 64px; height: 64px; border-radius: 16px; background: #F4F3F0; color: #131316;
+    display: grid; place-items: center; font-size: 38px; font-weight: 800; }
+  .marque-nom { font-size: 31px; font-weight: 700; }
+  .marque-nom span { color: #8A8A93; font-weight: 400; }
+
+  .heros { margin-top: 150px; }
+  .avant-titre { font-size: 24px; font-weight: 600; letter-spacing: 4px;
+    text-transform: uppercase; color: #6FA8E8; margin-bottom: 44px; }
+  h1 { font-size: 104px; line-height: 1.05; font-weight: 800; letter-spacing: -3px; }
+  h1 em { font-style: normal; color: #6FA8E8; }
+  .sous { margin-top: 48px; font-size: 38px; line-height: 1.45; color: #B9B8BF; max-width: 860px; }
+  .sous strong { color: #F4F3F0; font-weight: 600; }
+
+  .preuves { margin-top: 110px; display: grid; gap: 26px; }
+  .preuve { display: flex; align-items: baseline; gap: 26px;
+    border-bottom: 1px solid #26262B; padding-bottom: 26px; }
+  .preuve .num { font-size: 56px; font-weight: 800; min-width: 170px; letter-spacing: -1.5px; }
+  .preuve .lab { font-size: 30px; color: #B9B8BF; }
+
+  .pied { margin-top: auto; padding-bottom: 130px; }
+  .prix { display: flex; align-items: baseline; gap: 26px; }
+  .prix .montant { font-size: 96px; font-weight: 800; letter-spacing: -3px; }
+  .prix .barre { font-size: 42px; color: #8A8A93; text-decoration: line-through; text-decoration-thickness: 3px; }
+  .prix .note { display: block; font-size: 26px; color: #8A8A93; margin-top: 10px; }
+  .date { margin-top: 54px; background: #1D1D22; border: 1px solid #2C2C33;
+    border-radius: 22px; padding: 36px 44px; display: inline-block; }
+  .date .lab { font-size: 22px; letter-spacing: 3.5px; text-transform: uppercase; color: #8A8A93; }
+  .date .val { font-size: 52px; font-weight: 800; margin-top: 10px; color: #6FA8E8; letter-spacing: -1px; }
+  .domaine { margin-top: 44px; font-size: 28px; color: #8A8A93; letter-spacing: 1px; }
+</style>
+</head>
+<body>
+  <div class="marque"><div class="sceau">C</div><div class="marque-nom">Capmedia <span>Academy</span></div></div>
+
+  <div class="heros">
+    <p class="avant-titre">Formation en ligne · 100 % en français</p>
+    <h1>Ton app mobile, sur l'App&nbsp;Store <em>en 30 jours.</em></h1>
+    <p class="sous">Sans avoir jamais codé. <strong>L'IA écrit le code</strong> :
+    la méthode t'apprend tout le reste.</p>
+  </div>
+
+  <div class="preuves">
+    <div class="preuve"><span class="num">19</span><span class="lab">modules, de l'idée à la publication</span></div>
+    <div class="preuve"><span class="num">à vie</span><span class="lab">accès et mises à jour comprises</span></div>
+    <div class="preuve"><span class="num">14 j</span><span class="lab">satisfait ou remboursé, sans discussion</span></div>
+  </div>
+
+  <div class="pied">
+    <div class="prix">
+      <span class="montant">97 €</span>
+      <span class="barre">197 €</span>
+    </div>
+    <span class="note prix"><span class="note">Tarif de lancement · il augmente à l'ouverture</span></span>
+    <div class="date">
+      <div class="lab">Ouverture officielle</div>
+      <div class="val" id="date-val">[DATE]</div>
+    </div>
+    <div class="domaine">capmedia.app</div>
+  </div>
+<script>
+  const d = new URLSearchParams(location.search).get('date');
+  if (d) document.getElementById('date-val').textContent = d;
+</script>
+</body>
+</html>

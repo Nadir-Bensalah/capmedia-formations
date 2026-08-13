@@ -124,6 +124,20 @@ service cloud.firestore {
         && request.resource.data.dernier.texte.size() <= 2000;
     }
 
+    // --- La liste d'attente du lancement ---------------------------------
+    // Création anonyme (un e-mail = un document), jamais de lecture :
+    // les adresses ne sont visibles que par l'admin (SDK Admin).
+    match /attente/{email} {
+      allow create: if request.resource.data.keys().hasOnly(['email', 'date', 'source', 'langue'])
+        && request.resource.data.email is string
+        && request.resource.data.email == email
+        && email.matches('.+@.+[.].+')
+        && email.size() <= 120
+        && request.resource.data.source is string
+        && request.resource.data.source.size() <= 40;
+      allow read, update, delete: if false;
+    }
+
     // --- Tout le reste est fermé ---------------------------------------
     match /{document=**} {
       allow read, write: if false;
