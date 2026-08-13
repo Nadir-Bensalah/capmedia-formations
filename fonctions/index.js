@@ -443,8 +443,9 @@ exports.infoSession = onRequest(
    POST { cle, email, formation, offre } ou { cle, email, pack }
    ========================================================================== */
 exports.ouvrirAcces = onRequest(
-  { region: 'europe-west1', secrets: [ADMIN_CLE], cors: false },
+  { region: 'europe-west1', secrets: [ADMIN_CLE], cors: true },
   async (req, res) => {
+    if (req.method === 'OPTIONS') return res.status(204).send('');
     if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
     const { cle, email, formation, pack, offre, retirer } = req.body || {};
     const attendu = String(ADMIN_CLE.value() || '').trim();
@@ -474,23 +475,155 @@ exports.ouvrirAcces = onRequest(
 );
 
 /* ==========================================================================
-   4. Console d'administration : support et avis
+   4. Console d'administration : le dashboard pilote tout par ici.
+   Chaque appel : POST { cle, action, ...params }. La clé admin fait loi.
    ========================================================================== */
 exports.admin = onRequest(
-  { region: 'europe-west1', secrets: [ADMIN_CLE], cors: false },
+  { region: 'europe-west1', secrets: [ADMIN_CLE], cors: true },
   async (req, res) => {
+    if (req.method === 'OPTIONS') return res.status(204).send('');
     if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
-    const { cle, action, uid, texte, publie } = req.body || {};
+    const { cle, action, uid, texte, publie, email, confirmation } = req.body || {};
     const attendu = String(ADMIN_CLE.value() || '').trim();
     if (!attendu || String(cle || '').trim() !== attendu) return res.status(403).send('interdit');
 
+    /* Toute la connaissance client au même endroit. */
+    async function ficheComplete(e) {
+      const em = String(e).trim().toLowerCase();
+      const d = await bdd.doc(`acheteurs/${em}`).get();
+      const fiche = d.exists ? d.data() : null;
+
+      let compte = null, progression = null, conversation = null;
+      try {
+        const u = await getAuth().getUserByEmail(em);
+        compte = {
+          uid: u.uid, emailVerifie: u.emailVerified,
+          creeLe: u.metadata.creationTime, derniereConnexion: u.metadata.lastSignInTime,
+          fournisseurs: (u.providerData || []).map((p) => p.providerId),
+        };
+        const p = await bdd.doc(`progression/${u.uid}`).get();
+        if (p.exists) {
+          const pf = p.data().parFormation || {};
+          if (!pf.mobile && p.data().faits) pf.mobile = { faits: p.data().faits, maxDebloque: p.data().maxDebloque };
+          progression = Object.fromEntries(Object.entries(pf).map(([slug, v]) => [slug, {
+            faits: (v.faits || []).length, maxDebloque: v.maxDebloque ?? null,
+          }]));
+        }
+        const c = await bdd.doc(`conversations/${u.uid}`).get();
+        if (c.exists) conversation = { uid: u.uid, ...c.data() };
+      } catch (err) { /* pas de compte Auth : achat sans première connexion */ }
+
+      return { email: em, fiche, compte, progression, conversation };
+    }
+
     try {
+      /* --- Vue d'ensemble ------------------------------------------------ */
+      if (action === 'stats') {
+        const tous = await bdd.collection('acheteurs').get();
+        const il30j = Date.now() - 30 * 86400 * 1000;
+        let revenuTotal = 0, revenu30j = 0, nbPaiements = 0, packs = { basic: 0, avance: 0 };
+        const parFormation = {};
+        const derniers = [];
+        tous.forEach((d) => {
+          const f = d.data();
+          if (f.pack) packs[f.pack] = (packs[f.pack] || 0) + 1;
+          for (const [slug, offre] of Object.entries(achatsDeFiche(f))) {
+            parFormation[slug] = parFormation[slug] || { essentiel: 0, complet: 0 };
+            parFormation[slug][offre] = (parFormation[slug][offre] || 0) + 1;
+          }
+          for (const p of (f.paiements || [])) {
+            nbPaiements++;
+            if (!p.rembourse) {
+              revenuTotal += p.montant || 0;
+              if (new Date(p.date).getTime() > il30j) revenu30j += p.montant || 0;
+            }
+            derniers.push({ email: d.id, ...p });
+          }
+        });
+        derniers.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        const attente = await bdd.collection('conversations').where('tour', '==', 'nadir').get();
+        const avisAttente = await bdd.collection('avis').where('publie', '==', false).get();
+        return res.status(200).json({
+          clients: tous.size, revenuTotal, revenu30j, nbPaiements, packs,
+          parFormation, derniersPaiements: derniers.slice(0, 25),
+          supportEnAttente: attente.size, avisEnAttente: avisAttente.size,
+        });
+      }
+
+      /* --- Clients -------------------------------------------------------- */
+      if (action === 'clients') {
+        const tous = await bdd.collection('acheteurs').get();
+        const liste = tous.docs.map((d) => {
+          const f = d.data();
+          const paiements = f.paiements || [];
+          return {
+            email: d.id, achats: achatsDeFiche(f), pack: f.pack || null,
+            nbPaiements: paiements.length,
+            total: paiements.filter((p) => !p.rembourse).reduce((n, p) => n + (p.montant || 0), 0),
+            dernier: paiements.length ? paiements[paiements.length - 1].date : null,
+            renonciations: Object.keys(f.renonciations || {}),
+          };
+        });
+        liste.sort((a, b) => (b.dernier || '').localeCompare(a.dernier || ''));
+        return res.status(200).json(liste);
+      }
+
+      if (action === 'client') {
+        if (!email) return res.status(400).send('email requis');
+        return res.status(200).json(await ficheComplete(email));
+      }
+
+      if (action === 'paiements') {
+        const tous = await bdd.collection('acheteurs').get();
+        const liste = [];
+        tous.forEach((d) => (d.data().paiements || []).forEach((p) => liste.push({ email: d.id, ...p })));
+        liste.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        return res.status(200).json(liste);
+      }
+
+      if (action === 'lienConnexion') {
+        if (!email) return res.status(400).send('email requis');
+        const lien = await getAuth().generateSignInWithEmailLink(String(email).trim().toLowerCase(), {
+          url: `${SITE}/acces.html`, handleCodeInApp: true,
+        });
+        return res.status(200).json({ lien });
+      }
+
+      if (action === 'supprimerClient') {
+        if (!email) return res.status(400).send('email requis');
+        const em = String(email).trim().toLowerCase();
+        if (confirmation !== em) return res.status(400).send('confirmation : retape l\'e-mail exact');
+        const resultat = { auth: false, acheteur: false, progression: false, conversation: false };
+        try {
+          const u = await getAuth().getUserByEmail(em);
+          await bdd.doc(`progression/${u.uid}`).delete().then(() => { resultat.progression = true; });
+          await bdd.doc(`conversations/${u.uid}`).delete().then(() => { resultat.conversation = true; });
+          await bdd.doc(`avis/${u.uid}`).delete().catch(() => {});
+          await getAuth().deleteUser(u.uid);
+          resultat.auth = true;
+        } catch (e) { /* pas de compte Auth : on supprime le reste */ }
+        await bdd.doc(`acheteurs/${em}`).delete();
+        resultat.acheteur = true;
+        return res.status(200).json(resultat);
+      }
+
+      /* --- Support et avis (les actions historiques + le complet) --------- */
       if (action === 'support') {
         const attente = await bdd.collection('conversations').where('tour', '==', 'nadir').get();
         return res.status(200).json(attente.docs.map((d) => ({
           uid: d.id, email: d.data().email, dernier: d.data().dernier,
           nb: (d.data().messages || []).length,
         })));
+      }
+      if (action === 'conversations') {
+        const toutes = await bdd.collection('conversations').get();
+        const liste = toutes.docs.map((d) => ({ uid: d.id, ...d.data() }));
+        liste.sort((a, b) => (b.maj || '').localeCompare(a.maj || ''));
+        return res.status(200).json(liste);
+      }
+      if (action === 'avisTous') {
+        const tousAvis = await bdd.collection('avis').get();
+        return res.status(200).json(tousAvis.docs.map((d) => ({ uid: d.id, ...d.data() })));
       }
       if (action === 'repondre') {
         if (!uid || !texte) return res.status(400).send('uid et texte requis');
