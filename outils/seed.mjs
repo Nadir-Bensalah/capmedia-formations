@@ -22,8 +22,10 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ICI = dirname(fileURLToPath(import.meta.url));
-const DOSSIER = join(ICI, '..', 'contenu');
 const ARGS = process.argv.slice(2);
+const EN = ARGS.includes('--en');
+const DOSSIER = join(ICI, '..', EN ? 'contenu-en' : 'contenu');
+const PREFIXE = EN ? 'formations-en' : 'formations';
 const A_SEC = ARGS.includes('--sec');
 const CIBLE = ARGS.find((a) => !a.startsWith('--')) || null;
 
@@ -95,11 +97,11 @@ console.log(`Projet : ${PROJET}`);
 for (const [slug, lecons] of Object.entries(formations)) {
   const lot = bdd.batch();
   for (const { meta, markdown } of lecons) {
-    lot.set(bdd.doc(`formations/${slug}/lecons/${meta.id}`), {
+    lot.set(bdd.doc(`${PREFIXE}/${slug}/lecons/${meta.id}`), {
       ordre: meta.ordre, titre: meta.titre, resume: meta.resume,
       duree: meta.duree || '', offre: meta.offre,
     });
-    lot.set(bdd.doc(`formations/${slug}/contenus/${meta.id}`), {
+    lot.set(bdd.doc(`${PREFIXE}/${slug}/contenus/${meta.id}`), {
       offre: meta.offre, markdown,
     });
   }
@@ -108,7 +110,7 @@ for (const [slug, lecons] of Object.entries(formations)) {
   // Purge des orphelins de cette formation
   const idsActuels = new Set(lecons.map((l) => l.meta.id));
   for (const col of ['lecons', 'contenus']) {
-    for (const ref of await bdd.collection(`formations/${slug}/${col}`).listDocuments()) {
+    for (const ref of await bdd.collection(`${PREFIXE}/${slug}/${col}`).listDocuments()) {
       if (!idsActuels.has(ref.id)) {
         await ref.delete();
         console.log(`  - supprimé formations/${slug}/${col}/${ref.id}`);
