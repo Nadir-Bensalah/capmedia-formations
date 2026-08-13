@@ -484,9 +484,15 @@ exports.admin = onRequest(
     if (req.method === 'OPTIONS') return res.status(204).send('');
     if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
     const { cle, action, uid, texte, publie, email, confirmation,
-      formation, id, titre, resume, duree, offre, markdown, session, prix, lien } = req.body || {};
+      formation, id, titre, resume, duree, offre, markdown, session, prix, lien, mode } = req.body || {};
     const attendu = String(ADMIN_CLE.value() || '').trim();
     if (!attendu || String(cle || '').trim() !== attendu) return res.status(403).send('interdit');
+
+    /* Mode des données : chaque paiement porte l'empreinte de son mode
+       Stripe (cs_test_ / cs_live_). 'test', 'reel', ou 'tous'. */
+    const modeVoulu = ['test', 'reel', 'tous'].includes(mode) ? mode : 'tous';
+    const modePaiement = (p) => String(p.session || '').startsWith('cs_test_') ? 'test' : 'reel';
+    const garder = (p) => modeVoulu === 'tous' || modePaiement(p) === modeVoulu;
 
     /* Toute la connaissance client au même endroit. */
     async function ficheComplete(e) {
@@ -518,34 +524,53 @@ exports.admin = onRequest(
     }
 
     try {
-      /* --- Vue d'ensemble ------------------------------------------------ */
+      /* --- Vue d'ensemble (filtrée par le mode Stripe des paiements) ------- */
       if (action === 'stats') {
         const tous = await bdd.collection('acheteurs').get();
         const il30j = Date.now() - 30 * 86400 * 1000;
-        let revenuTotal = 0, revenu30j = 0, nbPaiements = 0, packs = { basic: 0, avance: 0 };
+        let revenuTotal = 0, revenu30j = 0, nbPaiements = 0;
+        const packs = { basic: 0, avance: 0 };
         const parFormation = {};
         const derniers = [];
+        const clientsDuMode = new Set();
+        const clientsSansPaiement = [];
+
         tous.forEach((d) => {
           const f = d.data();
-          if (f.pack) packs[f.pack] = (packs[f.pack] || 0) + 1;
-          for (const [slug, offre] of Object.entries(achatsDeFiche(f))) {
-            parFormation[slug] = parFormation[slug] || { essentiel: 0, complet: 0 };
-            parFormation[slug][offre] = (parFormation[slug][offre] || 0) + 1;
-          }
-          for (const p of (f.paiements || [])) {
+          const tousPaiements = f.paiements || [];
+          if (!tousPaiements.length) { clientsSansPaiement.push(d.id); return; }
+          for (const p of tousPaiements) {
+            if (!garder(p)) continue;
+            clientsDuMode.add(d.id);
             nbPaiements++;
-            if (!p.rembourse) {
-              revenuTotal += p.montant || 0;
-              if (new Date(p.date).getTime() > il30j) revenu30j += p.montant || 0;
-            }
             derniers.push({ email: d.id, ...p });
+            if (p.rembourse) continue;
+            revenuTotal += p.montant || 0;
+            if (new Date(p.date).getTime() > il30j) revenu30j += p.montant || 0;
+
+            /* Ventes par formation et packs : depuis le libellé du paiement,
+               pour rester dans le mode choisi. */
+            const lib = p.libelle || '';
+            if (lib.startsWith('Pack Academy')) {
+              packs[lib.includes('Avancé') ? 'avance' : 'basic']++;
+            } else {
+              const f2 = CATALOGUE.formations.find((x) => lib.startsWith(x.nom));
+              if (f2) {
+                const o = lib.includes('Complet') || lib.includes('Complète') ? 'complet' : 'essentiel';
+                parFormation[f2.slug] = parFormation[f2.slug] || { essentiel: 0, complet: 0 };
+                parFormation[f2.slug][o]++;
+              }
+            }
           }
         });
         derniers.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
         const attente = await bdd.collection('conversations').where('tour', '==', 'nadir').get();
         const avisAttente = await bdd.collection('avis').where('publie', '==', false).get();
         return res.status(200).json({
-          clients: tous.size, revenuTotal, revenu30j, nbPaiements, packs,
+          mode: modeVoulu,
+          clients: clientsDuMode.size,
+          clientsSansPaiement: clientsSansPaiement.length,
+          revenuTotal, revenu30j, nbPaiements, packs,
           parFormation, derniersPaiements: derniers.slice(0, 25),
           supportEnAttente: attente.size, avisEnAttente: avisAttente.size,
         });
@@ -554,16 +579,22 @@ exports.admin = onRequest(
       /* --- Clients -------------------------------------------------------- */
       if (action === 'clients') {
         const tous = await bdd.collection('acheteurs').get();
-        const liste = tous.docs.map((d) => {
+        const liste = [];
+        tous.forEach((d) => {
           const f = d.data();
-          const paiements = f.paiements || [];
-          return {
+          const tousPaiements = f.paiements || [];
+          const paiements = tousPaiements.filter(garder);
+          /* Sans aucun paiement = accès manuel : visible dans tous les modes. */
+          if (tousPaiements.length && !paiements.length) return;
+          liste.push({
             email: d.id, achats: achatsDeFiche(f), pack: f.pack || null,
             nbPaiements: paiements.length,
+            manuel: !tousPaiements.length,
+            test: tousPaiements.some((p) => modePaiement(p) === 'test'),
             total: paiements.filter((p) => !p.rembourse).reduce((n, p) => n + (p.montant || 0), 0),
             dernier: paiements.length ? paiements[paiements.length - 1].date : null,
             renonciations: Object.keys(f.renonciations || {}),
-          };
+          });
         });
         liste.sort((a, b) => (b.dernier || '').localeCompare(a.dernier || ''));
         return res.status(200).json(liste);
@@ -577,7 +608,8 @@ exports.admin = onRequest(
       if (action === 'paiements') {
         const tous = await bdd.collection('acheteurs').get();
         const liste = [];
-        tous.forEach((d) => (d.data().paiements || []).forEach((p) => liste.push({ email: d.id, ...p })));
+        tous.forEach((d) => (d.data().paiements || []).filter(garder)
+          .forEach((p) => liste.push({ email: d.id, ...p })));
         liste.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
         return res.status(200).json(liste);
       }
@@ -671,6 +703,8 @@ exports.admin = onRequest(
         const emails = [];
         tous.forEach((d) => {
           const fiche = d.data();
+          const tousPaiements = fiche.paiements || [];
+          if (tousPaiements.length && !tousPaiements.some(garder)) return;
           if (!formation || fiche.pack || achatsDeFiche(fiche)[formation]) emails.push(d.id);
         });
         return res.status(200).json({ emails: emails.sort(), nb: emails.length });
