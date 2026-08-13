@@ -29,7 +29,7 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftps
           timeout: 120000
-          server-dir: public_html/
+          server-dir: public_html/academy/
           exclude: |
             **/.git*
             **/.git*/**

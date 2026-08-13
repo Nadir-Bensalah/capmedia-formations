@@ -19,7 +19,7 @@ const ICI = dirname(fileURLToPath(import.meta.url));
 const RACINE = join(ICI, '..');
 const { default: C } = await import('../assets/js/catalogue.js');
 
-const SITE = 'https://capmedia.app';
+const SITE = 'https://academy.capmedia.app';
 
 const e = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -60,7 +60,7 @@ const tete = (titre, desc, canon, jsonld) => `<!DOCTYPE html>
 <meta property="og:title" content="${e(titre)}">
 <meta property="og:description" content="${e(desc)}">
 <meta property="og:locale" content="fr_FR">
-<meta property="og:image" content="https://capmedia.app/assets/img/og.png">
+<meta property="og:image" content="https://academy.capmedia.app/assets/img/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta property="og:url" content="${SITE}/${canon}">
 ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld)}</script>` : ''}

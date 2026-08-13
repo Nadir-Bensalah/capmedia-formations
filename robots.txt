@@ -4,4 +4,4 @@ Disallow: /app/
 Disallow: /acces.html
 Disallow: /merci.html
 
-Sitemap: https://capmedia.app/sitemap.xml
+Sitemap: https://academy.capmedia.app/sitemap.xml

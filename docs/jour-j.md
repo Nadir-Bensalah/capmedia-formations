@@ -55,7 +55,7 @@ Concrètement : la formation principale, De Zéro à l'App Store, passe de
 les onze autres formations et les packs.
 
 Si tu comptais te lancer, c'est le bon moment :
-https://capmedia.app
+https://academy.capmedia.app
 
 Accès à vie, mises à jour comprises, garantie 14 jours.
 
@@ -78,7 +78,7 @@ In practice: the flagship course, From Zero to the App Store, moves from
 the eleven other courses and the packs.
 
 If you were planning to start, now is the moment:
-https://capmedia.app/en/
+https://academy.capmedia.app/en/
 
 Lifetime access, updates included, 14-day guarantee.
 
@@ -99,7 +99,7 @@ publier et vendre de vraies applications : de la première ligne de code
 
 Chaque formation : accès à vie, mises à jour comprises, garantie
 14 jours. Le détail et les programmes complets sont ici :
-https://capmedia.app
+https://academy.capmedia.app
 
 Bienvenue.
 
@@ -120,7 +120,7 @@ through Firebase, Stripe, ASO and design.
 
 Every course: lifetime access, updates included, 14-day guarantee.
 Full programs here:
-https://capmedia.app/en/
+https://academy.capmedia.app/en/
 
 Welcome.
 
