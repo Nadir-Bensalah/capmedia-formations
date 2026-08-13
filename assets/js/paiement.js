@@ -27,6 +27,19 @@ const URL_FORMATION = `${BASE_FN}/creerCheckoutFormation`;
 
 let utilisateurCourant = null;
 
+/* La page peut vivre à la racine (/), dans /formations/ ou dans /en/ :
+   les liens vers l'app et la connexion se calculent, jamais en dur. */
+const PREFIXE = (location.pathname.includes('/formations/') || location.pathname.includes('/en/')) ? '../' : './';
+const versApp = (slug) => `${PREFIXE}app/?f=${encodeURIComponent(slug)}`;
+const versAcces = () => `${PREFIXE}acces.html`;
+
+/* Anti-course : un clic d'achat dans la première seconde ne doit pas
+   partir en anonyme alors qu'une session existe. On attend le premier
+   état d'authentification (ou 1,6 s au pire). */
+let resoudreAuth;
+const authPrete = new Promise((r) => { resoudreAuth = r; });
+setTimeout(() => resoudreAuth && resoudreAuth(), 1600);
+
 const patiente = (b, texte) => { b.dataset.txt = b.textContent; b.disabled = true; b.textContent = texte; };
 const relache = (b, texte) => {
   b.textContent = texte || b.dataset.txt || b.textContent;
@@ -39,6 +52,7 @@ document.querySelectorAll('[data-achat]').forEach((b) => {
   b.addEventListener('click', async (e) => {
     e.preventDefault();
     const [formation, offre] = b.getAttribute('data-achat').split(':');
+    await authPrete;
 
     /* Connecté : session serveur, e-mail verrouillé, doublon refusé. */
     if (utilisateurCourant) {
@@ -52,7 +66,7 @@ document.querySelectorAll('[data-achat]').forEach((b) => {
           }),
         });
         const d = await r.json();
-        if (d.deja) { window.location.href = `../app/?f=${formation}`; return; }
+        if (d.deja) { window.location.href = versApp(formation); return; }
         if (d.url) { window.location.href = d.url; return; }
         throw new Error(d.erreur || 'réponse inattendue');
       } catch (err) {
@@ -69,12 +83,28 @@ document.querySelectorAll('[data-achat]').forEach((b) => {
   });
 });
 
+/* Rappel discret aux anciens clients non connectés : se connecter évite
+   le double achat et donne les prix personnalisés. */
+authPrete.then(() => setTimeout(() => {
+  if (utilisateurCourant) return;
+  document.querySelectorAll('.cartes-prix').forEach((grille) => {
+    if (grille.parentNode.querySelector('.note-deja-client')) return;
+    const p = document.createElement('p');
+    p.className = 'note-deja-client t-micro t-3 t-centre';
+    p.style.marginTop = 'var(--e-3)';
+    p.innerHTML = `Déjà client ? <a href="${versAcces()}">Connecte-toi</a> pour retrouver
+      tes formations, tes prix personnalisés, et éviter tout double achat.`;
+    grille.parentNode.insertBefore(p, grille.nextSibling);
+  });
+}, 400));
+
 /* --- 2. Boutons pack ------------------------------------------------------ */
 document.querySelectorAll('[data-pack]').forEach((b) => {
   const niveau = b.getAttribute('data-pack');
   b.addEventListener('click', async (e) => {
     e.preventDefault();
     patiente(b, 'Un instant…');
+    await authPrete;
     try {
       if (utilisateurCourant) {
         const r = await fetch(URL_PACK, {
@@ -88,7 +118,7 @@ document.querySelectorAll('[data-pack]').forEach((b) => {
       }
       const url = liens[`pack:${niveau}`];
       if (url) { window.location.href = url; return; }
-      window.location.href = './../acces.html';
+      window.location.href = versAcces();
     } catch (err) {
       console.error(err);
       relache(b, 'Réessaie dans un instant');
@@ -118,6 +148,7 @@ if (cfg.firebase && cfg.firebase.apiKey) {
 
     onAuthStateChanged(auth, async (u) => {
       utilisateurCourant = u && u.email ? u : null;
+      resoudreAuth();
       if (!utilisateurCourant) return;
 
       let fiche = null;
