@@ -1,0 +1,15 @@
+{
+  "_note": "Prix après la fin du tarif de lancement (15 septembre). À valider ou modifier AVANT de lancer outils/jour-j.py. Les prix barrés ne bougent pas. Jamais de baisse.",
+  "mobile":         { "prixE": 127, "prixC": 247 },
+  "github":         { "prixE": 67,  "prixC": 127 },
+  "claude-code":    { "prixE": 127, "prixC": 247 },
+  "site-web-ia":    { "prixE": 97,  "prixC": 167 },
+  "automatiser-ia": { "prixE": 127, "prixC": 247 },
+  "prompting":      { "prixE": 67,  "prixC": 127 },
+  "firebase":       { "prixE": 97,  "prixC": 167 },
+  "stripe":         { "prixE": 97,  "prixC": 167 },
+  "aso":            { "prixE": 67,  "prixC": 127 },
+  "design-app":     { "prixE": 97,  "prixC": 167 },
+  "micro-saas":     { "prixE": 167, "prixC": 297 },
+  "seo-contenu":    { "prixE": 97,  "prixC": 167 }
+}
