@@ -27,9 +27,10 @@ const URL_FORMATION = `${BASE_FN}/creerCheckoutFormation`;
 
 let utilisateurCourant = null;
 
-/* La page peut vivre à la racine (/), dans /formations/ ou dans /en/ :
-   les liens vers l'app et la connexion se calculent, jamais en dur. */
-const PREFIXE = (location.pathname.includes('/formations/') || location.pathname.includes('/en/')) ? '../' : './';
+/* La page peut vivre à la racine (/), dans /formations/, /en/ ou
+   /en/formations/ : les liens vers l'app et la connexion se calculent. */
+const PREFIXE = location.pathname.includes('/en/formations/') ? '../../'
+  : (location.pathname.includes('/formations/') || location.pathname.includes('/en/')) ? '../' : './';
 const versApp = (slug) => `${PREFIXE}app/?f=${encodeURIComponent(slug)}`;
 const versAcces = () => `${PREFIXE}acces.html`;
 
