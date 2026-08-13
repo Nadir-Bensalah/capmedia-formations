@@ -21,7 +21,7 @@ fonctions, commit, e-mail à la liste d'attente depuis la console).
 import json, os, re, subprocess, sys
 
 RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SITE = 'https://capmedia.app'
+SITE = 'https://academy.capmedia.app'
 MERCI = f'{SITE}/merci.html?session_id={{CHECKOUT_SESSION_ID}}'
 
 def lire(chemin): return open(os.path.join(RACINE, chemin), encoding='utf-8').read()

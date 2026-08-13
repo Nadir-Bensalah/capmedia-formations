@@ -7,8 +7,8 @@ RewriteEngine On
 
 # HTTP vers HTTPS
 RewriteCond %{HTTPS} !=on
-RewriteRule ^ https://capmedia.app%{REQUEST_URI} [R=301,L]
+RewriteRule ^ https://academy.capmedia.app%{REQUEST_URI} [R=301,L]
 
 # www vers l'apex
 RewriteCond %{HTTP_HOST} ^www\.capmedia\.app$ [NC]
-RewriteRule ^ https://capmedia.app%{REQUEST_URI} [R=301,L]
+RewriteRule ^ https://academy.capmedia.app%{REQUEST_URI} [R=301,L]
