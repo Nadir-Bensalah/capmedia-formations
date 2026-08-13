@@ -23,11 +23,13 @@ jobs:
 
       - name: Diagnostic (arborescence du serveur)
         run: |
-          for d in "/" "/public_html/" "/public_html/academy/" "/domains/" "/domains/capmedia.app/public_html/"; do
-            echo "== $d =="
-            curl -s --max-time 25 --ssl-reqd "ftp://${{ secrets.FTP_SERVER }}$d" \
-              -u "${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}" --list-only | head -15 || true
-          done
+          sudo apt-get -y install lftp >/dev/null 2>&1
+          lftp -u "${{ secrets.FTP_USERNAME }},${{ secrets.FTP_PASSWORD }}" \
+            -e "set ftp:ssl-force true; set ssl:verify-certificate no; \
+                echo '== / =='; cls -la /; \
+                echo '== /public_html =='; cls -la /public_html/ | head -20; \
+                echo '== /public_html/academy =='; cls -la /public_html/academy/ | head -10; \
+                bye" "${{ secrets.FTP_SERVER }}" || true
 
       - name: Envoi FTP vers public_html
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
