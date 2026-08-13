@@ -21,7 +21,7 @@ jobs:
       - name: Récupération du dépôt
         uses: actions/checkout@v4
 
-      - name: Diagnostic (arborescence du serveur)
+      - name: Nettoyage ponctuel (dossiers imbriqués par erreur)
         env:
           FTP_HOST: ${{ secrets.FTP_SERVER }}
           FTP_USER: ${{ secrets.FTP_USERNAME }}
@@ -30,9 +30,9 @@ jobs:
           sudo apt-get -y install lftp >/dev/null 2>&1
           lftp --env-password -u "$FTP_USER" \
             -e "set ftp:ssl-force true; set ssl:verify-certificate no; \
-                echo '== / =='; cls -la /; \
-                echo '== /public_html =='; cls -la /public_html/ | head -20; \
-                echo '== /public_html/academy =='; cls -la /public_html/academy/ | head -10; \
+                rm -rf /public_html/public_html; \
+                rm -f /public_html/academy/default.php; \
+                echo '== apres nettoyage =='; cls -la /public_html/; \
                 bye" "$FTP_HOST" || true
 
       - name: Envoi FTP vers public_html
@@ -43,7 +43,7 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftps
           timeout: 120000
-          server-dir: public_html/academy/
+          server-dir: academy/
           exclude: |
             **/.git*
             **/.git*/**
