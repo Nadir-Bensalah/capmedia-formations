@@ -21,6 +21,14 @@ jobs:
       - name: Récupération du dépôt
         uses: actions/checkout@v4
 
+      - name: Diagnostic (arborescence du serveur)
+        run: |
+          for d in "/" "/public_html/" "/public_html/academy/" "/domains/" "/domains/capmedia.app/public_html/"; do
+            echo "== $d =="
+            curl -s --max-time 25 --ssl-reqd "ftp://${{ secrets.FTP_SERVER }}$d" \
+              -u "${{ secrets.FTP_USERNAME }}:${{ secrets.FTP_PASSWORD }}" --list-only | head -15 || true
+          done
+
       - name: Envoi FTP vers public_html
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
