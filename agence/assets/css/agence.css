@@ -320,7 +320,7 @@
   margin-bottom: clamp(-84px, -5.2vw, -30px);
 }
 .filigrane-zone span {
-  font: 800 clamp(56px, 10vw, 160px) / 0.82 var(--police);
+  font: 800 clamp(48px, 8.5vw, 136px) / 0.82 var(--police);
   letter-spacing: -0.045em;
   white-space: nowrap;
   color: var(--texte);
