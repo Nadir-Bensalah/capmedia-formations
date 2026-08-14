@@ -113,23 +113,25 @@
 
 .heros-notion { text-align: center; display: flex; flex-direction: column; align-items: center; gap: var(--e-5); }
 
-/* Les pastilles rondes qui se chevauchent, façon rangée d'avatars */
-.rangee-pastilles { display: flex; justify-content: center; }
-.pastille-ronde {
-  width: 56px; height: 56px; border-radius: 50%;
+/* La rangée d'icônes d'app, façon écran d'accueil de téléphone */
+.rangee-tuiles { display: flex; justify-content: center; align-items: center; gap: 14px; }
+.tuile-app {
+  width: 56px; height: 56px; border-radius: 15px;
   display: grid; place-items: center;
-  border: 2.5px solid var(--texte);
-  color: var(--texte); background: var(--bg);
-  box-shadow: 0 0 0 4px var(--bg);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+  position: relative;
 }
-.pastille-ronde + .pastille-ronde { margin-left: -10px; }
-.pastille-ronde.pr-bleu   { border-color: var(--action); color: var(--action); background: var(--voile-bleu); }
-.pastille-ronde.pr-violet { border-color: #9849E8; color: #9849E8; background: #F8F5FC; }
-.pastille-ronde.pr-vert   { border-color: #1AAE39; color: #1AAE39; background: var(--voile-vert); }
-.pastille-ronde.pr-jaune  { border-color: #E89D01; color: #E89D01; background: var(--voile-jaune); }
-.pastille-ronde.pr-plein-bleu   { background: var(--action); border-color: var(--action); color: #fff; }
-.pastille-ronde.pr-plein-rouge  { background: #FF6D00; border-color: #FF6D00; color: #fff; }
-.pastille-ronde.pr-plein-noir   { background: var(--texte); border-color: var(--texte); color: var(--bg); }
+.tuile-app:nth-child(odd)  { transform: rotate(-5deg) translateY(2px); }
+.tuile-app:nth-child(even) { transform: rotate(4deg) translateY(-3px); }
+.tuile-app:nth-child(4)    { transform: rotate(-2deg) translateY(-6px) scale(1.08); }
+.tuile-app .badge-notif {
+  position: absolute; top: -6px; right: -6px;
+  min-width: 20px; height: 20px; border-radius: 10px;
+  background: #F64932; color: #fff;
+  font: 700 12px/20px var(--police); text-align: center;
+  padding-inline: 5px;
+  box-shadow: 0 0 0 3px var(--bg);
+}
 
 /* Le titre géant et son mot surligné */
 .t-geant {
@@ -139,15 +141,19 @@
   color: var(--texte);
 }
 .mot-surligne {
-  display: inline-flex; align-items: center; gap: 0.17em;
+  display: inline-flex; align-items: center; gap: 0.18em;
   background: var(--voile-bleu);
-  border-radius: 0.42em;
-  padding: 0.04em 0.2em 0.08em 0.14em;
+  border-radius: 999px;
+  padding: 0.06em 0.34em 0.1em 0.22em;
   white-space: nowrap;
+  font-weight: 500;
+  font-size: 0.88em;
+  letter-spacing: -0.02em;
 }
 .mot-surligne .point {
-  width: 0.18em; height: 0.18em; border-radius: 50%;
+  width: 0.26em; height: 0.26em; border-radius: 50%;
   background: var(--action); flex: none;
+  align-self: center;
 }
 
 .heros-notion .t-lead { font-size: 20px; color: var(--texte-2); }
