@@ -68,7 +68,7 @@ $('voile-texte').textContent = T.verif;
 
 /* --- Menu mobile ---------------------------------------------------------- */
 const sommaire = $('sommaire');
-const ombre = $('ombre');
+const ombre = $('ombre-menu');
 const fermerMenu = () => { sommaire.classList.remove('ouvert'); ombre.classList.remove('actif'); };
 $('ouvrir-menu').addEventListener('click', () => { sommaire.classList.add('ouvert'); ombre.classList.add('actif'); });
 $('fermer-menu').addEventListener('click', fermerMenu);
