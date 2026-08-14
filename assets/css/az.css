@@ -267,7 +267,7 @@ textarea.champ { border-radius: 18px; padding: 12px 16px; }
   color: var(--texte-2);
 }
 .encadre--astuce    > .marqueur { color: var(--action); }
-.encadre--attention > .marqueur { color: #B8860B; }
+.encadre--attention > .marqueur { color: #E89D01; }
 .encadre--piege     > .marqueur { color: var(--danger); }
 .encadre--action    > .marqueur { color: var(--valide); }
 .ico { display: inline-block; vertical-align: -0.15em; }

@@ -150,7 +150,7 @@ function ouvrirFiche(a) {
           <div id="liste-avis" class="pile g-3">
             ${a.avis.length ? a.avis.map((v) => `
               <div class="pile g-1">
-                <p class="t-petit"><span style="color:#B8860B">${etoiles(v.note || 0)}</span>
+                <p class="t-petit"><span style="color:#E89D01">${etoiles(v.note || 0)}</span>
                   <strong style="margin-left:6px">${echapper(v.nom || 'Un membre')}</strong></p>
                 <p class="t-petit t-2">${echapper(v.texte || '')}</p>
               </div>`).join('')
@@ -160,7 +160,7 @@ function ouvrirFiche(a) {
           <form id="form-avis" class="pile g-2" style="margin-top:var(--e-2)">
             <p class="t-micro t-3">${monAvis ? 'Modifier mon avis' : 'Laisser mon avis'} (un seul par membre)</p>
             <div class="rang" style="gap:4px" id="choix-note">
-              ${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-note="${n}" class="bouton-icone" style="color:${(monAvis && n <= monAvis.note) ? '#B8860B' : 'var(--texte-3)'}" aria-label="${n} étoiles">${ETOILE(monAvis && n <= monAvis.note)}</button>`).join('')}
+              ${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-note="${n}" class="bouton-icone" style="color:${(monAvis && n <= monAvis.note) ? '#E89D01' : 'var(--texte-3)'}" aria-label="${n} étoiles">${ETOILE(monAvis && n <= monAvis.note)}</button>`).join('')}
             </div>
             <textarea class="champ" id="texte-avis" rows="3" maxlength="600"
                       placeholder="Ce que tu penses de cette app…">${monAvis ? echapper(monAvis.texte) : ''}</textarea>
@@ -184,7 +184,7 @@ function ouvrirFiche(a) {
       note = Number(b.dataset.note);
       boutons.forEach((x) => {
         const pleine = Number(x.dataset.note) <= note;
-        x.style.color = pleine ? '#B8860B' : 'var(--texte-3)';
+        x.style.color = pleine ? '#E89D01' : 'var(--texte-3)';
         x.innerHTML = ETOILE(pleine);
       });
     }));

@@ -26,7 +26,7 @@ if (form && cfg.firebase && cfg.firebase.apiKey) {
     bouton.disabled = true;
     bouton.textContent = 'Un instant…';
     const fini = (texte) => {
-      form.innerHTML = `<p class="t-petit t-fort" style="color:var(--valide,#2E8B57)">${texte}</p>`;
+      form.innerHTML = `<p class="t-petit t-fort" style="color:var(--valide,#1AAE39)">${texte}</p>`;
     };
     try {
       await setDoc(doc(bdd, 'attente', email), {

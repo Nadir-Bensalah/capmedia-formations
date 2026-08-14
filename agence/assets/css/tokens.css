@@ -10,33 +10,33 @@
 :root {
   /* fonds */
   --bg: #FFFFFF;
-  --bg-2: #F7F7F5;
-  --bg-3: #F1F1EF;
+  --bg-2: #F9F9F8;
+  --bg-3: #F6F5F4;
 
   /* texte : gris chauds */
-  --texte: #37352F;
-  --texte-2: #787774;
-  --texte-3: #9B9A97;
+  --texte: #000000;
+  --texte-2: #615D59;
+  --texte-3: #A39E98;
 
   /* traits et survol */
-  --trait: rgba(55, 53, 47, 0.09);
-  --trait-fort: rgba(55, 53, 47, 0.16);
-  --survol: rgba(55, 53, 47, 0.06);
+  --trait: rgba(0, 0, 0, 0.09);
+  --trait-fort: rgba(0, 0, 0, 0.16);
+  --survol: rgba(0, 0, 0, 0.06);
 
   /* action */
-  --action: #2383E2;
-  --action-survol: #1A6DBE;
-  --anneau: rgba(35, 131, 226, 0.20);
-  --danger: #EB5757;
-  --valide: #4DAB9A;
+  --action: #0075DE;
+  --action-survol: #005BAB;
+  --anneau: rgba(0, 117, 222, 0.20);
+  --danger: #F64932;
+  --valide: #1AAE39;
 
   /* voiles d'encadré */
-  --voile-jaune: #FBF3DB;
-  --voile-orange: #FAEBDD;
-  --voile-vert: #DDEDEA;
-  --voile-bleu: #DDEBF1;
-  --voile-rouge: #FDEBEC;
-  --voile-gris: #F1F1EF;
+  --voile-jaune: #FFF5E0;
+  --voile-orange: #FFF5ED;
+  --voile-vert: #F2FAFA;
+  --voile-bleu: #E6F3FE;
+  --voile-rouge: #FEF3F1;
+  --voile-gris: #F6F5F4;
 
   /* ombre : flottant uniquement */
   --ombre-flottant:
@@ -89,23 +89,23 @@
    forcer le thème clair sur un sous-arbre : <div data-theme="light">. */
 [data-theme="light"] {
   --bg: #FFFFFF;
-  --bg-2: #F7F7F5;
-  --bg-3: #F1F1EF;
-  --texte: #37352F;
-  --texte-2: #787774;
-  --texte-3: #9B9A97;
-  --trait: rgba(55, 53, 47, 0.09);
-  --trait-fort: rgba(55, 53, 47, 0.16);
-  --survol: rgba(55, 53, 47, 0.06);
-  --action: #2383E2;
-  --action-survol: #1A6DBE;
-  --anneau: rgba(35, 131, 226, 0.20);
-  --voile-jaune: #FBF3DB;
-  --voile-orange: #FAEBDD;
-  --voile-vert: #DDEDEA;
-  --voile-bleu: #DDEBF1;
-  --voile-rouge: #FDEBEC;
-  --voile-gris: #F1F1EF;
+  --bg-2: #F9F9F8;
+  --bg-3: #F6F5F4;
+  --texte: #000000;
+  --texte-2: #615D59;
+  --texte-3: #A39E98;
+  --trait: rgba(0, 0, 0, 0.09);
+  --trait-fort: rgba(0, 0, 0, 0.16);
+  --survol: rgba(0, 0, 0, 0.06);
+  --action: #0075DE;
+  --action-survol: #005BAB;
+  --anneau: rgba(0, 117, 222, 0.20);
+  --voile-jaune: #FFF5E0;
+  --voile-orange: #FFF5ED;
+  --voile-vert: #F2FAFA;
+  --voile-bleu: #E6F3FE;
+  --voile-rouge: #FEF3F1;
+  --voile-gris: #F6F5F4;
   --ombre-flottant:
     0 0 0 1px rgba(15, 15, 15, 0.05),
     0 3px 6px rgba(15, 15, 15, 0.1),
@@ -123,9 +123,9 @@
     --trait: rgba(255, 255, 255, 0.094);
     --trait-fort: rgba(255, 255, 255, 0.16);
     --survol: rgba(255, 255, 255, 0.055);
-    --action: #4A9EE8;
-    --action-survol: #6BB2EE;
-    --anneau: rgba(74, 158, 232, 0.25);
+    --action: #62AEF0;
+    --action-survol: #8CC5F5;
+    --anneau: rgba(98, 174, 240, 0.25);
     --voile-jaune: #372E20;
     --voile-orange: #3A2A1D;
     --voile-vert: #1F2E28;
@@ -149,9 +149,9 @@
   --trait: rgba(255, 255, 255, 0.094);
   --trait-fort: rgba(255, 255, 255, 0.16);
   --survol: rgba(255, 255, 255, 0.055);
-  --action: #4A9EE8;
-  --action-survol: #6BB2EE;
-  --anneau: rgba(74, 158, 232, 0.25);
+  --action: #62AEF0;
+  --action-survol: #8CC5F5;
+  --anneau: rgba(98, 174, 240, 0.25);
   --voile-jaune: #372E20;
   --voile-orange: #3A2A1D;
   --voile-vert: #1F2E28;
