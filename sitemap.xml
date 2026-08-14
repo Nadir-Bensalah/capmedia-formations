@@ -15,20 +15,20 @@
     <xhtml:link rel="alternate" hreflang="fr" href="https://academy.capmedia.app/"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://academy.capmedia.app/en/"/>
   </url>
-  <url><loc>https://academy.capmedia.app/mentions.html</loc><priority>0.3</priority></url>
-  <url><loc>https://academy.capmedia.app/cgv.html</loc><priority>0.3</priority></url>
-  <url><loc>https://academy.capmedia.app/confidentialite.html</loc><priority>0.3</priority></url>
-  <url><loc>https://academy.capmedia.app/cookies.html</loc><priority>0.3</priority></url>
+  <url><loc>https://academy.capmedia.app/mentions</loc><priority>0.3</priority></url>
+  <url><loc>https://academy.capmedia.app/cgv</loc><priority>0.3</priority></url>
+  <url><loc>https://academy.capmedia.app/confidentialite</loc><priority>0.3</priority></url>
+  <url><loc>https://academy.capmedia.app/cookies</loc><priority>0.3</priority></url>
   <url><loc>https://academy.capmedia.app/formations/</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
-  <url><loc>https://academy.capmedia.app/formations/github.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://academy.capmedia.app/formations/claude-code.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://academy.capmedia.app/formations/site-web-ia.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://academy.capmedia.app/formations/automatiser-ia.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://academy.capmedia.app/formations/prompting.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://academy.capmedia.app/formations/firebase.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://academy.capmedia.app/formations/stripe.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://academy.capmedia.app/formations/aso.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://academy.capmedia.app/formations/design-app.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://academy.capmedia.app/formations/micro-saas.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://academy.capmedia.app/formations/seo-contenu.html</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://academy.capmedia.app/formations/github</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://academy.capmedia.app/formations/claude-code</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://academy.capmedia.app/formations/site-web-ia</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://academy.capmedia.app/formations/automatiser-ia</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://academy.capmedia.app/formations/prompting</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://academy.capmedia.app/formations/firebase</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://academy.capmedia.app/formations/stripe</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://academy.capmedia.app/formations/aso</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://academy.capmedia.app/formations/design-app</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://academy.capmedia.app/formations/micro-saas</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://academy.capmedia.app/formations/seo-contenu</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
 </urlset>

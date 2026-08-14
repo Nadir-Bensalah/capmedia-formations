@@ -102,8 +102,8 @@ ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld)}</script
       <a href="../#faq">FAQ</a>
     </nav>
     <span style="margin-left:auto"></span>
-    <a href="../../compte.html" class="lien-discret">My account</a>
-    <a href="../acces.html" class="btn btn-principal">Sign in</a>
+    <a href="../../compte" class="lien-discret">My account</a>
+    <a href="../acces" class="btn btn-principal">Sign in</a>
   </div>
 </header>
 `;
@@ -113,11 +113,11 @@ const pied = `
   <div class="enveloppe">
     <div class="rang" style="gap:var(--e-5);flex-wrap:wrap">
       <a href="./" class="t-petit">All courses</a>
-      <a href="../../compte.html" class="t-petit">My account</a>
-      <a href="../../mentions.html" class="t-petit">Legal notice</a>
-      <a href="../cgv.html" class="t-petit">Terms of sale</a>
-      <a href="../../confidentialite.html" class="t-petit">Privacy</a>
-      <a href="../../cookies.html" class="t-petit">Cookies</a>
+      <a href="../../compte" class="t-petit">My account</a>
+      <a href="../../mentions" class="t-petit">Legal notice</a>
+      <a href="../cgv" class="t-petit">Terms of sale</a>
+      <a href="../../confidentialite" class="t-petit">Privacy</a>
+      <a href="../../cookies" class="t-petit">Cookies</a>
       <button type="button" class="lien-nu t-petit" data-cookies-ouvrir style="padding:0;border:0;background:none;cursor:pointer">Manage cookies</button>
       <a href="mailto:contact@capmedia.tn" class="t-petit">Contact</a>
     </div>
@@ -445,7 +445,7 @@ ${gratuit ? `    <div class="section-tete">
         <li>Lifetime access, updates included</li>
         <li>Support by messaging</li>
       </ul>
-      <a href="../acces.html" class="btn btn-principal btn-large btn-bloc">Start for free</a>
+      <a href="../acces" class="btn btn-principal btn-large btn-bloc">Start for free</a>
       <p class="t-micro t-3">Step ${f.ordre} of the path · no credit card required</p>
     </div>` : pack ? `    <div class="section-tete">
       <p class="etiquette">Pricing</p>
