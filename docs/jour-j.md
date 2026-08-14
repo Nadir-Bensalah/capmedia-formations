@@ -1,15 +1,8 @@
-> **NOTE (14 août) : le site est passé au modèle Parcours** (3 formations
-> offertes, pack unique 297 €, 4 formations à part). Ce kit datait du modèle
-> précédent : le script outils/jour-j.py et outils/prix-jour-j.json sont à
-> REFONDRE avant usage. La logique du jour J reste bonne (fin du tarif de
-> lancement le 15 septembre : hausse du pack, par exemple 297 vers 397, et
-> des formations à part, à décider). Les e-mails ci-dessous restent valables
-> dans l'esprit : remplacer les exemples de prix par ceux du pack.
-
-# Jour J : 15 septembre
+# Jour J : 15 septembre (modèle Parcours)
 
 Fin du tarif de lancement. Tout est préparé pour que la journée tienne en
-quatre gestes. Aucune improvisation.
+quatre gestes. Les prix cibles vivent dans outils/prix-jour-j.json
+(proposition : pack 297 vers 397, formations à part +30 %) : à VALIDER avant.
 
 ## Avant le jour J
 
@@ -17,33 +10,19 @@ quatre gestes. Aucune improvisation.
   (promo/exports/), rappeler la date du 15 dans chaque publication.
 - **J−3** : envoyer l'e-mail « dernier appel » à la liste d'attente
   (texte plus bas). Console > Écrire > Liste d'attente > Cci.
-- **J−1** : vérifier `outils/prix-jour-j.json` une dernière fois
-  (règle absolue : jamais de baisse, élasticité −0,14).
+- **J−1** : vérifier outils/prix-jour-j.json une dernière fois
+  (règle absolue : jamais de baisse).
 
 ## Le 15 septembre au matin
 
 1. `python3 outils/jour-j.py --sec` : relire le plan affiché.
-2. `python3 outils/jour-j.py --go` : nouveaux liens Stripe réels créés,
-   anciens désactivés, catalogue FR/EN, config.js, accueils et landings
-   mis à jour d'un coup.
+2. `python3 outils/jour-j.py --go` : nouveaux liens Stripe réels, anciens
+   désactivés, catalogues FR/EN, config.js, accueils et landings à jour.
 3. `cd fonctions && firebase deploy --only functions --project capmedia-academy`
-   : le serveur vend aux nouveaux prix (checkout connecté et prorata).
 4. `git add -A && git commit -m "Jour J : fin du tarif de lancement" && git push`
-   : le site part en ligne tout seul (GitHub Actions vers Hostinger).
 
-Puis :
-
-5. Mettre à jour les prix des visuels promo (`promo/*.html`, 97/197 → nouveaux
-   prix mobile) et régénérer les PNG :
-   `npx playwright screenshot ...` (commandes dans promo/).
-6. Envoyer l'e-mail « c'est ouvert » à la liste d'attente (texte plus bas).
-7. Publier l'annonce sur les réseaux avec les visuels à jour.
-
-## Vérifications de fin de journée
-
-- Un achat anonyme sur une landing va bien vers un lien au NOUVEAU prix.
-- Console > Ventes > Réel : les paiements du jour s'affichent.
-- Un compte connecté voit toujours ses formations et le prorata correct.
+Puis : visuels promo à re-générer avec les nouveaux prix (promo/*.html),
+e-mail « c'est ouvert » à la liste d'attente, annonce sur les réseaux.
 
 ---
 
@@ -55,15 +34,14 @@ Bonjour,
 
 Tu t'es inscrit à la liste d'attente de Capmedia Academy : merci.
 
-L'Academy est déjà ouverte, et jusqu'au 15 septembre les formations sont
-au tarif de lancement. À partir du 15, les prix montent définitivement.
+L'Academy est ouverte, et elle commence gratuitement : trois formations
+complètes offertes (Git & GitHub, Prompting, Claude Code), sur simple
+création de compte. La suite du parcours, jusqu'à ton application publiée
+sur les stores, tient dans un seul pack.
 
-Concrètement : la formation principale, De Zéro à l'App Store, passe de
-97 € à 127 € (Essentiel) et de 197 € à 247 € (Complet). Même logique sur
-les onze autres formations et les packs.
-
-Si tu comptais te lancer, c'est le bon moment :
-https://academy.capmedia.app
+Jusqu'au 15 septembre, ce pack est au tarif de lancement : 297 euros au
+lieu de 397 après l'ouverture. Si tu comptais te lancer, c'est le bon
+moment : https://academy.capmedia.app
 
 Accès à vie, mises à jour comprises, garantie 14 jours.
 
@@ -78,14 +56,12 @@ Hi,
 
 You joined the Capmedia Academy waitlist: thank you.
 
-The Academy is already open, and until September 15 every course is at
-launch pricing. From the 15th, prices go up for good.
+The Academy is open, and it starts free: three full courses (Git & GitHub,
+Prompting, Claude Code) with a simple account. The rest of the path, all
+the way to your app published on the stores, fits in one pack.
 
-In practice: the flagship course, From Zero to the App Store, moves from
-€97 to €127 (Essential) and from €197 to €247 (Complete). Same logic on
-the eleven other courses and the packs.
-
-If you were planning to start, now is the moment:
+Until September 15 the pack is at launch pricing: 297 euros instead of
+397 after opening. If you were planning to start, now is the moment:
 https://academy.capmedia.app/en/
 
 Lifetime access, updates included, 14-day guarantee.
@@ -101,13 +77,13 @@ Bonjour,
 
 Ça y est : Capmedia Academy est officiellement lancée.
 
-Douze formations complètes, en français et en anglais, pour construire,
-publier et vendre de vraies applications : de la première ligne de code
-à l'App Store, en passant par Firebase, Stripe, l'ASO et le design.
+Un parcours en huit étapes pour devenir développeur d'applications
+mobiles, de la première ligne de code au bouton « Disponible sur
+l'App Store ». Les trois premières formations sont offertes : tu juges
+sur pièces, tu continues si ça te plaît.
 
-Chaque formation : accès à vie, mises à jour comprises, garantie
-14 jours. Le détail et les programmes complets sont ici :
-https://academy.capmedia.app
+Accès à vie, mises à jour comprises, garantie 14 jours sur le payant.
+Tout est ici : https://academy.capmedia.app
 
 Bienvenue.
 
@@ -122,13 +98,12 @@ Hi,
 
 It's official: Capmedia Academy is live.
 
-Twelve complete courses, in French and in English, to build, ship and
-sell real applications: from the first line of code to the App Store,
-through Firebase, Stripe, ASO and design.
+An eight-step path to become a mobile app developer, from your first line
+of code to the App Store "Available" button. The first three courses are
+free: judge the teaching on the evidence, continue if you like it.
 
-Every course: lifetime access, updates included, 14-day guarantee.
-Full programs here:
-https://academy.capmedia.app/en/
+Lifetime access, updates included, 14-day guarantee on paid content.
+Everything is here: https://academy.capmedia.app/en/
 
 Welcome.
 

@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
-"""OBSOLETE depuis le passage au modele Parcours (14 aout) : A REFONDRE.
-Jour J (15 septembre) : fin du tarif de lancement, hausse des prix.
+"""Jour J (15 septembre), modèle Parcours : fin du tarif de lancement.
 
 Fait TOUT en une commande :
-  1. lit outils/prix-jour-j.json (à valider avant)
+  1. lit outils/prix-jour-j.json (pack + 4 formations à part ; à valider avant)
   2. crée les nouveaux prix + liens de paiement Stripe RÉELS
-     (e-mail requis, adresse requise, redirection merci, Managed Payments coupé)
+     (Managed Payments coupé, redirection merci, adresse requise)
   3. désactive les anciens liens
   4. met à jour : catalogue.js, catalogue-en.js, fonctions/catalogue.json,
-     config.js, prix mobile des deux accueils
+     config.js, les prix codés en dur des deux accueils (297, 3 × 99)
   5. régénère les landings FR et EN
 
 Usage :
@@ -32,31 +31,25 @@ mode = sys.argv[1] if len(sys.argv) > 1 else '--sec'
 if mode not in ('--sec', '--go'):
     sys.exit('usage : jour-j.py --sec (aperçu) ou --go (exécution)')
 
-NOUVEAUX = {k: v for k, v in json.load(open(os.path.join(RACINE, 'outils/prix-jour-j.json'))).items()
-            if not k.startswith('_')}
+PLAN = json.load(open(os.path.join(RACINE, 'outils/prix-jour-j.json')))
 CAT = json.load(open(os.path.join(RACINE, 'fonctions/catalogue.json')))
-ACTUELS = {f['slug']: f for f in CAT['formations']}
+SOLOS_ACTUELS = {f['slug']: f for f in CAT['formations'] if f.get('acces') == 'solo'}
 
 # --- 0. Garde-fous --------------------------------------------------------
 erreurs = []
-for slug, p in NOUVEAUX.items():
-    if slug not in ACTUELS: erreurs.append(f'slug inconnu : {slug}')
-    elif p['prixE'] < ACTUELS[slug]['prixE'] or p['prixC'] < ACTUELS[slug]['prixC']:
-        erreurs.append(f'{slug} : baisse de prix interdite')
-for slug in ACTUELS:
-    if slug not in NOUVEAUX: erreurs.append(f'prix manquant pour {slug}')
+if PLAN['pack'] < CAT['pack']['prix']:
+    erreurs.append(f"pack : baisse interdite ({CAT['pack']['prix']} -> {PLAN['pack']})")
+for slug, prix in PLAN['solos'].items():
+    if slug not in SOLOS_ACTUELS: erreurs.append(f'slug inconnu : {slug}')
+    elif prix < SOLOS_ACTUELS[slug]['prix']: erreurs.append(f'{slug} : baisse interdite')
+for slug in SOLOS_ACTUELS:
+    if slug not in PLAN['solos']: erreurs.append(f'prix manquant pour {slug}')
 if erreurs: sys.exit('ARRÊT :\n  ' + '\n  '.join(erreurs))
 
-somme_e = sum(p['prixE'] for p in NOUVEAUX.values())
-somme_c = sum(p['prixC'] for p in NOUVEAUX.values())
-pack_basic = round(somme_e * (1 - CAT['pack']['remise']))
-pack_avance = round(somme_c * (1 - CAT['pack']['remise']))
-
 print('Plan de la hausse :')
-for slug, p in NOUVEAUX.items():
-    a = ACTUELS[slug]
-    print(f"  {slug:15s} {a['prixE']:>4} → {p['prixE']:<4}  |  {a['prixC']:>4} → {p['prixC']}")
-print(f"  {'pack basic':15s} → {pack_basic} EUR   pack avancé → {pack_avance} EUR")
+print(f"  pack parcours   {CAT['pack']['prix']:>4} → {PLAN['pack']}")
+for slug, prix in PLAN['solos'].items():
+    print(f"  {slug:15s} {SOLOS_ACTUELS[slug]['prix']:>4} → {prix}")
 if mode == '--sec':
     print('\nAperçu seulement. Relance avec --go pour exécuter.')
     sys.exit(0)
@@ -92,27 +85,24 @@ def creer_lien(nom, montant, meta):
 
 # --- 2. Nouveaux liens ----------------------------------------------------
 liens = {}
-for slug, p in NOUVEAUX.items():
-    nom = ACTUELS[slug]['nom'].replace(',', ' -')
-    liens[f'{slug}:essentiel'] = creer_lien(f'{nom} : Offre Essentiel', p['prixE'],
-                                            {'formation': slug, 'offre': 'essentiel'})
-    liens[f'{slug}:complet'] = creer_lien(f'{nom} : Offre Complete', p['prixC'],
+liens['pack:parcours'] = creer_lien("Le Parcours Developpeur d'Apps (acces a vie)",
+                                    PLAN['pack'], {'pack': 'parcours'})
+print('  lien pack créé :', PLAN['pack'], 'EUR')
+for slug, prix in PLAN['solos'].items():
+    nom = SOLOS_ACTUELS[slug]['nom'].replace(',', ' -')
+    liens[f'{slug}:complet'] = creer_lien(f'{nom} (acces a vie)', prix,
                                           {'formation': slug, 'offre': 'complet'})
-    print(f'  liens créés : {slug}')
-liens['pack:basic'] = creer_lien('Pack Academy : Basic (toutes les formations - Essentiel)',
-                                 pack_basic, {'pack': 'basic'})
-liens['pack:avance'] = creer_lien('Pack Academy : Avance (toutes les formations - Complet)',
-                                  pack_avance, {'pack': 'avance'})
+    print(f'  lien créé : {slug} {prix} EUR')
 
-# --- 3. Désactivation des anciens liens (repérés par leur URL dans config.js)
+# --- 3. Désactivation des anciens liens -----------------------------------
 config = lire('assets/js/config.js')
 anciennes = set(re.findall(r"'(https://buy\.stripe\.com/[^']+)'", config))
-carte = {}
-apres = None
+carte, apres = {}, None
 while True:
     args = ['payment_links', 'list', '--limit', '100'] + (['--starting-after', apres] if apres else [])
     page = stripe(*args)
-    for l in page.get('data', []): carte[l['url']] = l['id']
+    for l in page.get('data', []):
+        if l.get('active'): carte[l['url']] = l['id']
     if not page.get('has_more'): break
     apres = page['data'][-1]['id']
 eteints = 0
@@ -123,43 +113,44 @@ for url in anciennes:
 print(f'  {eteints} anciens liens désactivés')
 
 # --- 4. Fichiers du site --------------------------------------------------
+vieux_pack = CAT['pack']['prix']
+tiers_vieux = round(vieux_pack / 3)
+tiers_neuf = round(PLAN['pack'] / 3)
+
 def hausse_catalogue(chemin):
     src = lire(chemin)
-    for slug, p in NOUVEAUX.items():
-        bloc = re.compile(
-            r"(slug:\s*'" + re.escape(slug) + r"'[\s\S]*?prixE:\s*)\d+([\s\S]*?prixC:\s*)\d+")
-        src, n = bloc.subn(lambda m: f"{m.group(1)}{p['prixE']}{m.group(2)}{p['prixC']}", src, count=1)
-        if n != 1: sys.exit(f'{chemin} : bloc {slug} introuvable')
+    src, n = re.subn(r"(pack: \{[\s\S]*?prix: )\d+", lambda m: m.group(1) + str(PLAN['pack']), src, count=1)
+    if n != 1: sys.exit(f'{chemin} : prix du pack introuvable')
+    for slug, prix in PLAN['solos'].items():
+        bloc = re.compile(r"(slug: '" + re.escape(slug) + r"',[\s\S]*?prix: )\d+")
+        src, n = bloc.subn(lambda m: m.group(1) + str(prix), src, count=1)
+        if n != 1: sys.exit(f'{chemin} : prix de {slug} introuvable')
     ecrire(chemin, src)
 hausse_catalogue('assets/js/catalogue.js')
 hausse_catalogue('assets/js/catalogue-en.js')
 
+CAT['pack']['prix'] = PLAN['pack']
 for f in CAT['formations']:
-    f['prixE'] = NOUVEAUX[f['slug']]['prixE']
-    f['prixC'] = NOUVEAUX[f['slug']]['prixC']
+    if f.get('acces') == 'solo': f['prix'] = PLAN['solos'][f['slug']]
 ecrire('fonctions/catalogue.json', json.dumps(CAT, ensure_ascii=False, indent=2) + '\n')
 
 for cle_lien, url in liens.items():
-    config = re.sub(r"'" + re.escape(cle_lien) + r"':\s*'https://buy\.stripe\.com/[^']+'",
-                    f"'{cle_lien}': '{url}'", config)
-config = re.sub(r"(essentiel:\s*)'https://buy\.stripe\.com/[^']+'",
-                lambda m: f"{m.group(1)}'{liens['mobile:essentiel']}'", config, count=1)
-config = re.sub(r"(complet:\s*)'https://buy\.stripe\.com/[^']+'",
-                lambda m: f"{m.group(1)}'{liens['mobile:complet']}'", config, count=1)
+    config, n = re.subn(r"'" + re.escape(cle_lien) + r"':\s*'https://buy\.stripe\.com/[^']+'",
+                        f"'{cle_lien}': '{url}'", config, count=1)
+    if n != 1: sys.exit(f'config.js : lien {cle_lien} introuvable')
 ecrire('assets/js/config.js', config)
 
-# Prix mobile codés en dur sur les deux accueils.
-vE, vC = ACTUELS['mobile']['prixE'], ACTUELS['mobile']['prixC']
-nE, nC = NOUVEAUX['mobile']['prixE'], NOUVEAUX['mobile']['prixC']
-for page, (aE, aC, bE, bC) in {
-    'index.html': (f'{vE} €', f'{vC} €', f'{nE} €', f'{nC} €'),
-    'en/index.html': (f'€{vE}', f'€{vC}', f'€{nE}', f'€{nC}'),
+# Les prix codés en dur des accueils (héros + carte pack + FAQ éventuelle).
+for page, paires in {
+    'index.html': [(f'{vieux_pack} €', f"{PLAN['pack']} €"), (f'3 × {tiers_vieux} €', f'3 × {tiers_neuf} €')],
+    'en/index.html': [(f'€{vieux_pack}', f"€{PLAN['pack']}"), (f'3 × €{tiers_vieux}', f'3 × €{tiers_neuf}')],
 }.items():
     src = lire(page)
-    src = src.replace(f'<span class="montant">{aE}</span>', f'<span class="montant">{bE}</span>')
-    src = src.replace(f'<span class="montant">{aC}</span>', f'<span class="montant">{bC}</span>')
+    for v, n in paires:
+        src = src.replace(v, n)
     ecrire(page, src)
-    if bE not in lire(page): sys.exit(f'{page} : prix mobile non remplacés, vérifier à la main')
+    if str(vieux_pack) in src:
+        print(f'  ATTENTION {page} : il reste des occurrences de {vieux_pack}, vérifie à la main')
 
 # --- 5. Landings ----------------------------------------------------------
 for gen in ('outils/generer-landings.mjs', 'outils/generer-landings-en.mjs'):
@@ -167,10 +158,10 @@ for gen in ('outils/generer-landings.mjs', 'outils/generer-landings-en.mjs'):
     if r.returncode != 0: sys.exit(f'{gen} : {r.stderr[:300]}')
 print('  landings FR et EN régénérées')
 
-print("""
+print(f"""
 TERMINÉ. Il reste 3 gestes (docs/jour-j.md) :
   1. cd fonctions && firebase deploy --only functions --project capmedia-academy
-     (les fonctions vendent aux nouveaux prix)
+     (le pack et les solos se vendent aux nouveaux prix côté serveur)
   2. git add -A && git commit -m "Jour J : fin du tarif de lancement" && git push
   3. E-mail à la liste d'attente : console > Écrire (textes dans docs/jour-j.md)
 """)
