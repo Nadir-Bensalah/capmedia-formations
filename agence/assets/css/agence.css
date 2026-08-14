@@ -100,3 +100,170 @@
   .bloc-info dl { grid-template-columns: 1fr; gap: 2px; }
   .bloc-info dd { margin-bottom: var(--e-2); }
 }
+
+/* ==========================================================================
+   Le langage « produit » de l'accueil : héros typographique géant, mot
+   surligné, maquette sous cadre navigateur, grandes cartes arrondies.
+   ========================================================================== */
+.heros-notion { text-align: center; display: flex; flex-direction: column; align-items: center; gap: var(--e-5); }
+
+.rangee-pastilles { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.pastille-ronde {
+  width: 52px; height: 52px; border-radius: 50%;
+  display: grid; place-items: center;
+  border: 2.5px solid var(--texte);
+  color: var(--texte); background: var(--fond);
+}
+.pastille-ronde.pr-bleu   { border-color: var(--action); color: var(--action); }
+.pastille-ronde.pr-violet { border-color: #7C5CFF; color: #7C5CFF; }
+.pastille-ronde.pr-vert   { border-color: #12B76A; color: #12B76A; }
+.pastille-ronde.pr-plein-bleu   { background: var(--action); border-color: var(--action); color: #fff; }
+.pastille-ronde.pr-plein-rouge  { background: #E8590C; border-color: #E8590C; color: #fff; }
+.pastille-ronde.pr-plein-violet { background: #7C5CFF; border-color: #7C5CFF; color: #fff; }
+
+.t-geant {
+  font-size: clamp(42px, 7.6vw, 92px);
+  font-weight: 800;
+  line-height: 1.03;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+  color: var(--texte);
+}
+.mot-surligne {
+  display: inline-flex; align-items: center; gap: 0.16em;
+  background: color-mix(in srgb, var(--action) 12%, var(--fond));
+  border-radius: 0.32em;
+  padding: 0.02em 0.18em 0.06em;
+}
+.mot-surligne .point {
+  width: 0.2em; height: 0.2em; border-radius: 50%;
+  background: var(--action); flex: none;
+}
+
+.btn-clair {
+  background: color-mix(in srgb, var(--action) 11%, var(--fond));
+  color: var(--action);
+  border: 0;
+}
+.btn-clair:hover { background: color-mix(in srgb, var(--action) 18%, var(--fond)); }
+
+/* --- La maquette sous cadre navigateur ------------------------------------ */
+.cadre-nav {
+  width: min(100%, 1000px); margin-inline: auto;
+  border: 1px solid var(--filet); border-radius: 16px; overflow: hidden;
+  background: var(--fond); text-align: left;
+  box-shadow: 0 30px 80px rgb(0 0 0 / 0.09);
+}
+.cadre-nav-tete {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; border-bottom: 1px solid var(--filet);
+  background: var(--fond-2);
+}
+.cadre-nav-tete i { width: 10px; height: 10px; border-radius: 50%; background: var(--filet); }
+.cadre-adresse {
+  font-size: 12px; color: var(--texte-3);
+  background: var(--fond); border: 1px solid var(--filet);
+  border-radius: 8px; padding: 3px 14px; margin-inline: auto;
+}
+.maquette { display: grid; grid-template-columns: 210px 1fr; min-height: 340px; }
+.maquette-lat {
+  border-right: 1px solid var(--filet); background: var(--fond-2);
+  padding: 14px 10px; display: flex; flex-direction: column; gap: 2px;
+}
+.maquette-lat .titre-lat { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--texte-3); padding: 6px 8px; }
+.maquette-lat span { font-size: 12.5px; color: var(--texte-2); padding: 5px 8px; border-radius: 6px; }
+.maquette-lat span.actif { background: var(--fond); font-weight: 600; color: var(--texte); box-shadow: 0 1px 2px rgb(0 0 0 / 0.05); }
+.maquette-corps { padding: 18px 20px; }
+.kanban { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 14px; }
+.kanban .titre-col { font-size: 11.5px; font-weight: 600; color: var(--texte-2); display: flex; align-items: center; gap: 6px; }
+.kanban .titre-col i { width: 8px; height: 8px; border-radius: 50%; }
+.tuile {
+  border: 1px solid var(--filet); border-radius: 8px;
+  padding: 8px 10px; font-size: 12px; color: var(--texte-2);
+  background: var(--fond); margin-top: 8px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+}
+@media (max-width: 720px) {
+  .maquette { grid-template-columns: 1fr; }
+  .maquette-lat { display: none; }
+  .kanban { grid-template-columns: 1fr 1fr; }
+}
+
+.bande-logos {
+  display: flex; justify-content: center; align-items: center;
+  gap: clamp(18px, 4vw, 42px); flex-wrap: wrap;
+  color: var(--texte-3); font-weight: 700; font-size: 15px; letter-spacing: 0.01em;
+}
+
+/* --- Les grandes cartes arrondies ------------------------------------------ */
+.grille-notion { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--e-4); }
+.grille-notion .large { grid-column: 1 / -1; }
+@media (max-width: 860px) { .grille-notion { grid-template-columns: 1fr; } }
+
+.carte-notion {
+  background: var(--fond-2); border-radius: 22px;
+  padding: clamp(24px, 3.5vw, 40px);
+  display: flex; flex-direction: column; gap: var(--e-3);
+  border: 1px solid transparent;
+  transition: border-color 0.2s ease;
+}
+.carte-notion:hover { border-color: var(--filet); }
+.carte-notion .sur-titre { font-size: 14px; color: var(--texte-3); }
+.carte-notion h3 {
+  font-size: clamp(22px, 2.6vw, 30px); font-weight: 700;
+  letter-spacing: -0.02em; line-height: 1.15; text-wrap: balance; max-width: 24ch;
+}
+.btn-fleche {
+  width: 42px; height: 42px; border-radius: 50%; border: 0; cursor: pointer;
+  background: var(--texte); color: var(--fond);
+  display: grid; place-items: center; flex: none;
+  transition: transform 0.15s ease;
+  text-decoration: none;
+}
+.carte-notion:hover .btn-fleche, .btn-fleche:hover { transform: translateX(3px); }
+.visuel-carte { margin-top: auto; padding-top: var(--e-3); }
+
+/* Les mini-maquettes dans les cartes */
+.mini-tel {
+  width: 156px; border: 1px solid var(--filet); border-radius: 22px;
+  padding: 12px 12px 16px; background: var(--fond); margin-inline: auto;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.07);
+}
+.mini-tel .encoche { width: 44px; height: 5px; border-radius: 3px; background: var(--fond-2); margin: 0 auto 10px; }
+.mini-ligne { height: 9px; border-radius: 5px; background: var(--fond-2); margin-top: 9px; }
+.mini-ligne.l-60 { width: 60%; } .mini-ligne.l-80 { width: 80%; } .mini-ligne.l-40 { width: 40%; }
+.mini-bloc { height: 44px; border-radius: 10px; background: color-mix(in srgb, var(--action) 12%, var(--fond)); margin-top: 10px; }
+.mini-nav { display: flex; justify-content: space-around; margin-top: 12px; }
+.mini-nav i { width: 16px; height: 16px; border-radius: 5px; background: var(--fond-2); }
+.mini-nav i:first-child { background: var(--action); }
+
+.mini-fenetre {
+  border: 1px solid var(--filet); border-radius: 14px; background: var(--fond);
+  padding: 12px 14px; max-width: 340px; margin-inline: auto;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.07);
+}
+.mini-fenetre .barre { display: flex; gap: 5px; margin-bottom: 10px; }
+.mini-fenetre .barre i { width: 8px; height: 8px; border-radius: 50%; background: var(--filet); }
+
+.mini-bulle {
+  border: 1px solid var(--filet); border-radius: 14px 14px 14px 4px;
+  background: var(--fond); padding: 12px 16px; font-size: 13.5px; color: var(--texte-2);
+  max-width: 330px; box-shadow: 0 12px 32px rgb(0 0 0 / 0.07);
+}
+.mini-bulle strong { color: var(--texte); }
+.mini-bulle + .mini-bulle { margin-top: 10px; border-radius: 14px 14px 4px 14px; margin-left: 28px; background: color-mix(in srgb, var(--action) 9%, var(--fond)); }
+
+/* --- La rangée « découvrir » ----------------------------------------------- */
+.titre-decouvrir { font-size: 17px; color: var(--texte-3); margin-bottom: var(--e-3); }
+.rangee-decouvrir { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--e-3); }
+.carte-decouvrir {
+  border: 1px solid var(--filet); border-radius: 16px;
+  padding: var(--e-4); min-height: 180px;
+  display: flex; flex-direction: column; gap: var(--e-3);
+  text-decoration: none; color: var(--texte); background: var(--fond);
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.carte-decouvrir:hover { border-color: var(--texte-3); transform: translateY(-2px); text-decoration: none; }
+.icone-ronde { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; color: #fff; flex: none; }
+.carte-decouvrir strong { font-size: 16.5px; line-height: 1.3; letter-spacing: -0.01em; margin-top: auto; }
+.carte-decouvrir strong .fleche { white-space: nowrap; }

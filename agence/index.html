@@ -73,114 +73,176 @@
 <div class="sections">
 
   <!-- ═══════ Héros ═══════ -->
-  <section>
-    <div class="pile g-5" style="max-width:840px">
-      <p class="etiquette">L'agence · Amiens, France · 100 % à distance</p>
-      <h1 class="t-display">
-        Ton application.<br>
-        Ton site. Ton IA.<br>
-        Construits pour de vrai.
-      </h1>
-      <p class="t-lead" style="max-width:640px">
-        Capmedia Digital conçoit des applications mobiles, des sites web et des
-        automatisations IA pour les indépendants, les artisans et les PME.
-        Derrière l'agence : Nadir Ben Salah, développeur qui publie ses propres
-        applications sur l'App Store et Google Play. Tu parles à celui qui code,
-        pas à un commercial.
-      </p>
-      <div class="rang" style="gap:var(--e-3)">
-        <a href="mailto:contact@capmedia.tn?subject=Demande%20de%20devis" class="btn btn-principal btn-large">Demander un devis</a>
-        <a href="#services" class="btn btn-secondaire btn-large">Voir les services</a>
+  <section class="heros-notion">
+    <div class="rangee-pastilles" aria-hidden="true">
+      <span class="pastille-ronde pr-bleu"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></span>
+      <span class="pastille-ronde"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
+      <span class="pastille-ronde pr-plein-rouge"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span>
+      <span class="pastille-ronde pr-violet"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>
+      <span class="pastille-ronde"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg></span>
+      <span class="pastille-ronde pr-plein-bleu"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.8L20 10l-6.1 1.2L12 17l-1.9-5.8L4 10l6.1-1.2z"/></svg></span>
+      <span class="pastille-ronde pr-vert"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+    </div>
+
+    <h1 class="t-geant">
+      Là où ton métier<br>
+      devient <span class="mot-surligne"><span class="point"></span>une application</span>.
+    </h1>
+
+    <p class="t-lead" style="max-width:620px">
+      Applications mobiles, sites web et automatisations IA pour les
+      indépendants, les artisans et les PME. Tu parles à celui qui code,
+      pas à un commercial.
+    </p>
+
+    <div class="rang" style="gap:var(--e-3);justify-content:center;flex-wrap:wrap">
+      <a href="mailto:contact@capmedia.tn?subject=Demande%20de%20devis" class="btn btn-principal btn-large">Demander un devis</a>
+      <a href="#services" class="btn btn-clair btn-large">Voir les services</a>
+    </div>
+    <p class="t-micro t-3">Réponse sous 24 h · Devis ferme, sans surprise · Amiens, France · 100 % à distance</p>
+
+    <div class="cadre-nav" aria-hidden="true">
+      <div class="cadre-nav-tete"><i></i><i></i><i></i><span class="cadre-adresse">capmedia.app · L'atelier</span></div>
+      <div class="maquette">
+        <div class="maquette-lat">
+          <p class="titre-lat">Projets</p>
+          <span class="actif">App Rendez-vous Pro</span>
+          <span>Site vitrine Menuiserie</span>
+          <span>Automatisation devis</span>
+          <span>Audit avant soumission</span>
+          <p class="titre-lat" style="margin-top:10px">Agence</p>
+          <span>Devis en cours</span>
+          <span>Factures</span>
+          <span>Le blog</span>
+        </div>
+        <div class="maquette-corps">
+          <p class="t-fort" style="font-size:15px">Le chantier de ton application</p>
+          <div class="kanban">
+            <div class="col">
+              <p class="titre-col"><i style="background:#F2A50C"></i>Maquette validée</p>
+              <div class="tuile">Parcours de prise de rendez-vous</div>
+              <div class="tuile">Écran devis et signature</div>
+            </div>
+            <div class="col">
+              <p class="titre-col"><i style="background:var(--action)"></i>En construction</p>
+              <div class="tuile">Notifications de rappel client</div>
+              <div class="tuile">Paiement d'acompte intégré</div>
+              <div class="tuile">Synchronisation du planning</div>
+            </div>
+            <div class="col">
+              <p class="titre-col"><i style="background:#12B76A"></i>Publiée</p>
+              <div class="tuile">En ligne sur l'App Store</div>
+              <div class="tuile">Fiche Google Play validée</div>
+            </div>
+          </div>
+        </div>
       </div>
-      <p class="t-petit t-3">Réponse sous 24 h · Devis ferme, sans surprise · Pas d'engagement avant le oui</p>
+    </div>
+
+    <p class="t-micro t-3" style="margin-top:var(--e-2)">Construit avec les outils des meilleures équipes</p>
+    <div class="bande-logos">
+      <span>React&nbsp;Native</span><span>Expo</span><span>Firebase</span><span>Stripe</span><span>App&nbsp;Store</span><span>Google&nbsp;Play</span>
     </div>
   </section>
 
   <!-- ═══════ Les 3 services ═══════ -->
   <section id="services" class="apparait">
-    <div class="section-tete">
-      <p class="etiquette">Ce qu'on fait</p>
-      <h2 class="t-h1">Trois métiers. Un seul niveau d'exigence.</h2>
-      <p class="t-lead colonne" style="margin-top:var(--e-2)">
-        Pas de catalogue à rallonge : trois choses, faites sérieusement,
-        par quelqu'un qui les pratique tous les jours sur ses propres produits.
-      </p>
-    </div>
-    <div class="grille grille-3">
-      <div class="carte pile g-3">
-        <span class="cf-ico"><svg class="ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></span>
-        <p class="t-h3">Application mobile sur mesure</p>
-        <p class="t-petit t-2">
-          iPhone et Android avec un seul code, de la maquette à la publication
-          sur les stores : compte développeur, revue Apple, fiches, captures,
-          tout est compris. Tu repars avec une app en ligne, pas un prototype.
+    <h2 class="t-h1" style="font-size:clamp(34px,5vw,56px);letter-spacing:-0.03em;max-width:18ch">
+      Trois métiers. Un seul niveau d'exigence.
+    </h2>
+    <div class="grille-notion" style="margin-top:var(--e-5)">
+
+      <article class="carte-notion">
+        <p class="sur-titre">Construire ton produit</p>
+        <div class="rang-espace" style="align-items:flex-start;gap:var(--e-3)">
+          <h3>Ton application mobile, publiée sur les stores.</h3>
+          <a class="btn-fleche" href="mailto:contact@capmedia.tn?subject=Devis%20application%20mobile" aria-label="Demander un devis pour une application"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a>
+        </div>
+        <p class="t-petit t-2" style="max-width:46ch">
+          iPhone et Android avec un seul code, de la maquette à la publication :
+          compte développeur, revue Apple, fiches, captures, tout est compris.
+          Tu repars avec une app en ligne, pas un prototype.
         </p>
-        <p class="t-petit t-2" style="margin-top:auto">
-          Demande ton devis, réponse sous 24 h avec un prix ferme.
+        <div class="visuel-carte">
+          <div class="mini-tel">
+            <div class="encoche"></div>
+            <div class="mini-bloc"></div>
+            <div class="mini-ligne l-80"></div>
+            <div class="mini-ligne l-60"></div>
+            <div class="mini-ligne l-40"></div>
+            <div class="mini-nav"><i></i><i></i><i></i><i></i></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="carte-notion">
+        <p class="sur-titre">Exister en ligne</p>
+        <div class="rang-espace" style="align-items:flex-start;gap:var(--e-3)">
+          <h3>Ton site web, rapide et trouvable sur Google.</h3>
+          <a class="btn-fleche" href="mailto:contact@capmedia.tn?subject=Devis%20site%20web" aria-label="Demander un devis pour un site web"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a>
+        </div>
+        <p class="t-petit t-2" style="max-width:46ch">
+          Vitrine, prise de rendez-vous, vente en ligne : un site propre, sans
+          abonnement à un constructeur de pages. Tu es propriétaire de tout,
+          code compris.
         </p>
-      </div>
-      <div class="carte pile g-3">
-        <span class="cf-ico"><svg class="ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><line x1="2" y1="20" x2="22" y2="20"/></svg></span>
-        <p class="t-h3">Site web professionnel</p>
-        <p class="t-petit t-2">
-          Un site rapide, propre, trouvable sur Google, sans abonnement à un
-          constructeur de pages. Vitrine, prise de rendez-vous, vente en ligne :
-          tu es propriétaire de tout, code compris.
-        </p>
-        <p class="t-petit t-2" style="margin-top:auto">
-          Demande ton devis, réponse sous 24 h avec un prix ferme.
-        </p>
-      </div>
-      <div class="carte pile g-3">
-        <span class="cf-ico"><svg class="ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
-        <p class="t-h3">Automatisation et IA pour ton business</p>
-        <p class="t-petit t-2">
-          Les tâches répétitives qui te mangent tes soirées : devis, relances,
-          tri des e-mails, saisie. On les met en pilote automatique avec les
-          bons outils, IA comprise quand elle est utile, jamais pour la vitrine.
-        </p>
-        <p class="t-petit t-2" style="margin-top:auto">
-          Demande ton devis, réponse sous 24 h avec un prix ferme.
-        </p>
-      </div>
+        <div class="visuel-carte">
+          <div class="mini-fenetre">
+            <div class="barre"><i></i><i></i><i></i></div>
+            <div class="mini-bloc" style="height:52px"></div>
+            <div class="mini-ligne l-80"></div>
+            <div class="mini-ligne l-60"></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="carte-notion large">
+        <div class="grille grille-2" style="gap:clamp(24px,4vw,56px);align-items:center">
+          <div class="pile g-3">
+            <p class="sur-titre">Travailler moins bêtement</p>
+            <div class="rang-espace" style="align-items:flex-start;gap:var(--e-3)">
+              <h3>Ton business en pilote automatique, IA comprise.</h3>
+              <a class="btn-fleche" href="mailto:contact@capmedia.tn?subject=Devis%20automatisation" aria-label="Demander un devis pour une automatisation"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a>
+            </div>
+            <p class="t-petit t-2" style="max-width:46ch">
+              Les tâches répétitives qui mangent tes soirées : devis, relances,
+              tri des e-mails, saisie. On les met en pilote automatique avec les
+              bons outils, l'IA quand elle est utile, jamais pour la vitrine.
+            </p>
+          </div>
+          <div>
+            <div class="mini-bulle">Nouveau message client : <strong>demande de devis reçue</strong> pour une terrasse de 40 m².</div>
+            <div class="mini-bulle">Devis pré-rempli, rappel programmé jeudi. <strong>Tu n'as plus qu'à valider.</strong></div>
+          </div>
+        </div>
+      </article>
+
     </div>
   </section>
 
-  <!-- ═══════ Les 3 audits ═══════ -->
+  <!-- ═══════ Découvrir : audits, académie, blog ═══════ -->
   <section id="audits" class="apparait">
-    <div class="section-tete">
-      <p class="etiquette">Les audits</p>
-      <h2 class="t-h1">Tu as déjà quelque chose ? On le passe au crible.</h2>
-      <p class="t-lead colonne" style="margin-top:var(--e-2)">
-        Trois offres courtes, à périmètre fermé : tu sais ce qu'on regarde,
-        tu sais ce que tu reçois, et tu décides ensuite de la suite,
-        avec nous ou sans nous.
-      </p>
-    </div>
-    <div class="grille grille-3">
-      <a class="carte carte-article" href="./audit-site-web.html">
-        <span class="cf-ico"><svg class="ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><line x1="2" y1="20" x2="22" y2="20"/></svg></span>
-        <div class="pile g-1" style="margin-top:var(--e-3)">
-          <p class="t-h3" style="font-size:17px">Audite mon site web</p>
-          <p class="t-petit t-2">Vitesse, SEO technique, mobile, sécurité, conversion : un rapport écrit et priorisé, à appliquer toi-même ou à nous confier.</p>
-        </div>
-        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Voir l'offre</span>
+    <p class="titre-decouvrir">Découvrir ce que Capmedia peut faire pour toi</p>
+    <div class="rangee-decouvrir">
+      <a class="carte-decouvrir" href="./audit-site-web.html">
+        <span class="icone-ronde" style="background:var(--action)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><line x1="2" y1="20" x2="22" y2="20"/></svg></span>
+        <strong>Auditer mon site web <span class="fleche">&#8594;</span></strong>
       </a>
-      <a class="carte carte-article" href="./audit-application.html">
-        <span class="cf-ico"><svg class="ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></span>
-        <div class="pile g-1" style="margin-top:var(--e-3)">
-          <p class="t-h3" style="font-size:17px">Audite mon application mobile</p>
-          <p class="t-petit t-2">UX, performances, conformité aux règles des stores, sécurité des données : un plan d'action priorisé, pas une liste de reproches.</p>
-        </div>
-        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Voir l'offre</span>
+      <a class="carte-decouvrir" href="./audit-application.html">
+        <span class="icone-ronde" style="background:#7C5CFF"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></span>
+        <strong>Auditer mon application mobile <span class="fleche">&#8594;</span></strong>
       </a>
-      <a class="carte carte-article" href="./test-avant-soumission.html">
-        <span class="cf-ico"><svg class="ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg></span>
-        <div class="pile g-1" style="margin-top:var(--e-3)">
-          <p class="t-h3" style="font-size:17px">Teste mon app avant soumission</p>
-          <p class="t-petit t-2">On passe ton app au crible des motifs de rejet d'Apple et de Google avant que tu soumettes. Retour écrit sous 7 jours ouvrés.</p>
-        </div>
-        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Voir l'offre</span>
+      <a class="carte-decouvrir" href="./test-avant-soumission.html">
+        <span class="icone-ronde" style="background:#E8590C"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>
+        <strong>Tester mon app avant Apple <span class="fleche">&#8594;</span></strong>
+      </a>
+      <a class="carte-decouvrir" href="https://academy.capmedia.app/">
+        <span class="icone-ronde" style="background:#12B76A"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10L12 5 2 10l10 5 10-5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg></span>
+        <strong>Apprendre à le faire moi-même <span class="fleche">&#8594;</span></strong>
+      </a>
+      <a class="carte-decouvrir" href="./blog/">
+        <span class="icone-ronde" style="background:#F2A50C"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span>
+        <strong>Lire le blog <span class="fleche">&#8594;</span></strong>
       </a>
     </div>
   </section>
