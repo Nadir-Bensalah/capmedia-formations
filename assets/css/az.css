@@ -967,3 +967,132 @@ td.nb, th.nb { text-align: right; font-variant-numeric: tabular-nums; }
 }
 .cf-possede .ico-coche { color: var(--valide); display: inline-flex; }
 .carte-formation.est-possedee { border-color: var(--valide); }
+
+
+/* --- Les icônes d'application, façon App Store ------------------------- */
+.icone-app {
+  --taille-icone: 96px;
+  position: relative;
+  isolation: isolate;
+  flex: none;
+  display: block;
+  width: var(--taille-icone);
+  height: var(--taille-icone);
+  border-radius: 22.5%;               /* le squircle Apple */
+  overflow: hidden;
+  background: var(--bg-3);
+  box-shadow:
+    0 0 0 1px rgba(15, 15, 15, 0.06),
+    0 2px 5px rgba(15, 15, 15, 0.10),
+    0 10px 26px rgba(15, 15, 15, 0.16);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.icone-app img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+/* Le dégradé de survol : une lumière qui bascule, jamais un aplat */
+.icone-app::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.22), rgba(0, 0, 0, 0.12));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+/* Le reflet : la moitié haute prend le jour, comme une icône de l'App Store */
+.icone-app::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 50% 0;
+  z-index: 2;
+  border-radius: inherit;
+  background: linear-gradient(to bottom,
+    rgba(255, 255, 255, 0.32) 0%,
+    rgba(255, 255, 255, 0.10) 58%,
+    rgba(255, 255, 255, 0) 100%);
+  pointer-events: none;
+}
+
+/* Trois tailles, une seule variable */
+.icone-app-p { --taille-icone: 56px; }
+.icone-app-m { --taille-icone: 96px; }
+.icone-app-g { --taille-icone: 128px; }
+
+/* --- Le lien d'application : icône, nom, une ligne de pitch ---------------- */
+.lien-app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--e-3);
+  padding: var(--e-4) var(--e-3);
+  border-radius: 18px;
+  text-decoration: none;
+  color: var(--texte);
+  transition: background 0.18s ease;
+}
+.lien-app:hover { background: var(--bg-2); text-decoration: none; color: var(--texte); }
+.lien-app:hover .icone-app,
+.icone-app-lien:hover .icone-app {
+  transform: scale(1.06);
+  box-shadow:
+    0 0 0 1px rgba(15, 15, 15, 0.06),
+    0 4px 10px rgba(15, 15, 15, 0.12),
+    0 16px 34px rgba(15, 15, 15, 0.20);
+}
+.lien-app:hover .icone-app::before,
+.icone-app-lien:hover .icone-app::before { opacity: 1; }
+.lien-app:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--anneau); }
+.lien-app .nom-app {
+  font-weight: 600;
+  font-size: 17px;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--texte);
+}
+.lien-app .pitch-app {
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--texte-2);
+  max-width: 26ch;
+}
+
+/* --- La grille des applications -------------------------------------------- */
+.grille-apps-icones {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(196px, 1fr));
+  gap: var(--e-4);
+}
+@media (max-width: 640px) {
+  .grille-apps-icones { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+}
+
+/* La rangée compacte, pour la bande de preuve de l'accueil */
+.rangee-apps {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: clamp(10px, 2.5vw, 26px);
+}
+.rangee-apps .lien-app { padding: var(--e-3) var(--e-2); gap: var(--e-2); }
+.rangee-apps .lien-app .nom-app { font-size: 14px; }
+.rangee-apps .lien-app .pitch-app { font-size: 12.5px; max-width: 18ch; }
+
+/* --- L'en-tête d'une page produit : grande icône à gauche ------------------ */
+.rangee-apps {
+  display: flex; flex-wrap: wrap; gap: var(--e-4); align-items: flex-start;
+}
+.lien-app {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  text-decoration: none; color: var(--texte); width: 92px; text-align: center;
+}
+.lien-app:hover { text-decoration: none; }
+.lien-app .nom-app { font-size: 13px; font-weight: 600; }
