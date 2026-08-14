@@ -1,3 +1,11 @@
+> **NOTE (14 août) : le site est passé au modèle Parcours** (3 formations
+> offertes, pack unique 297 €, 4 formations à part). Ce kit datait du modèle
+> précédent : le script outils/jour-j.py et outils/prix-jour-j.json sont à
+> REFONDRE avant usage. La logique du jour J reste bonne (fin du tarif de
+> lancement le 15 septembre : hausse du pack, par exemple 297 vers 397, et
+> des formations à part, à décider). Les e-mails ci-dessous restent valables
+> dans l'esprit : remplacer les exemples de prix par ceux du pack.
+
 # Jour J : 15 septembre
 
 Fin du tarif de lancement. Tout est préparé pour que la journée tienne en

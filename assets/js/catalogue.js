@@ -19,6 +19,7 @@ const CATALOGUE = {
   formations: [
     {
       slug: 'mobile',
+      acces: 'pack', ordre: 5,
       nom: "De Zéro à l'App Store",
       courte: 'Créer et publier sa première application mobile',
       accroche: "Ton application mobile en ligne sur l'App Store dans 30 jours, sans avoir jamais codé.",
@@ -33,6 +34,7 @@ const CATALOGUE = {
 
     {
       slug: 'github',
+      acces: 'gratuit', ordre: 1,
       nom: 'Git & GitHub, la maîtrise complète',
       courte: 'Le filet de sécurité de tout ton travail numérique',
       accroche: "Ne perds plus jamais une heure de travail. Versionne, sauvegarde, collabore et fais de ton GitHub une vitrine professionnelle.",
@@ -72,6 +74,7 @@ const CATALOGUE = {
 
     {
       slug: 'claude-code',
+      acces: 'gratuit', ordre: 3,
       nom: 'Claude Code, le développeur dans ton terminal',
       courte: "Faire produire l'IA à un niveau professionnel",
       accroche: "L'outil que les développeurs professionnels utilisent pour déléguer le code. Configuration, méthode, garde-fous : tout ce qui sépare le jouet de l'outil de production.",
@@ -113,6 +116,7 @@ const CATALOGUE = {
 
     {
       slug: 'site-web-ia',
+      acces: 'solo', prix: 97, prixBarre: 247,
       nom: "Ton site web professionnel avec l'IA",
       courte: 'Un vrai site en ligne, rapide, sans agence ni abonnement',
       accroche: "Un site professionnel, en ligne sur ton propre domaine, construit avec l'IA et hébergé gratuitement. Sans WordPress, sans agence à 3 000 €, sans abonnement mensuel.",
@@ -150,6 +154,7 @@ const CATALOGUE = {
 
     {
       slug: 'automatiser-ia',
+      acces: 'solo', prix: 147, prixBarre: 397,
       nom: "Automatiser son business avec l'IA",
       courte: 'Les tâches répétitives en pilote automatique',
       accroche: "Factures, relances, tri d'e-mails, réseaux sociaux, rapports : branche l'IA sur tes tâches répétitives et récupère des heures chaque semaine.",
@@ -189,6 +194,7 @@ const CATALOGUE = {
 
     {
       slug: 'prompting',
+      acces: 'gratuit', ordre: 2,
       nom: 'Le prompting professionnel',
       courte: "Obtenir de l'IA des résultats constants, pas des coups de chance",
       accroche: "La différence entre celui qui « essaie ChatGPT » et celui qui produit avec : une méthode. Structure, contexte, itération, vérification : le socle de tout travail avec l'IA.",
@@ -225,6 +231,7 @@ const CATALOGUE = {
 
     {
       slug: 'firebase',
+      acces: 'pack', ordre: 4,
       nom: 'Firebase, ton backend sans serveur',
       courte: "Comptes, données, paiements : l'arrière-boutique de ton app",
       accroche: "Comptes utilisateurs, base de données temps réel, fichiers, fonctions : tout ce qu'il faut derrière une app, sans serveur à administrer, pour 0 € au départ.",
@@ -263,6 +270,7 @@ const CATALOGUE = {
 
     {
       slug: 'stripe',
+      acces: 'solo', prix: 97, prixBarre: 247,
       nom: 'Encaisser en ligne avec Stripe',
       courte: 'Paiements, abonnements, factures : le circuit complet',
       accroche: "Du premier lien de paiement aux abonnements avec webhooks : encaisse proprement, conforme et sans y laisser tes nuits. Par quelqu'un qui encaisse réellement avec.",
@@ -300,6 +308,7 @@ const CATALOGUE = {
 
     {
       slug: 'aso',
+      acces: 'pack', ordre: 7,
       nom: 'ASO : être trouvé sur les stores',
       courte: "Le référencement App Store et Google Play, méthodiquement",
       accroche: "Ton app est bonne mais invisible ? L'ASO est le seul canal gratuit et durable des stores. Mots-clés, fiche, captures, avis : la méthode complète.",
@@ -335,6 +344,7 @@ const CATALOGUE = {
 
     {
       slug: 'design-app',
+      acces: 'pack', ordre: 6,
       nom: "Le design d'app qui fait payer",
       courte: "L'interface qui transforme un essai en abonnement",
       accroche: "90 % de l'écart entre une app d'amateur et une app pro tient à des règles mécaniques. Espace, typo, couleur, animations, paywall : applique-les sans être designer.",
@@ -371,6 +381,7 @@ const CATALOGUE = {
 
     {
       slug: 'micro-saas',
+      acces: 'solo', prix: 197, prixBarre: 497,
       nom: 'Lancer un micro-SaaS rentable',
       courte: "De l'idée au premier abonné récurrent, en solo",
       accroche: "Un petit logiciel par abonnement, un problème précis, des revenus récurrents. Le chemin complet du solopreneur : idée, construction IA, prix, lancement, premiers clients.",
@@ -411,6 +422,7 @@ const CATALOGUE = {
 
     {
       slug: 'seo-contenu',
+      acces: 'pack', ordre: 8,
       nom: 'SEO & contenu : le trafic qui revient',
       courte: 'Être trouvé sur Google, durablement, sans budget pub',
       accroche: "La publicité s'arrête quand tu arrêtes de payer. Le contenu bien référencé travaille pendant des années. Méthode complète : mots-clés, pages, technique, autorité.",
@@ -450,10 +462,10 @@ const CATALOGUE = {
   /* --- Le pack ------------------------------------------------------------ */
   pack: {
     slug: 'pack',
-    nom: 'Le Pack Academy',
-    accroche: "Toutes les formations, actuelles et à venir pendant un an, en un seul achat. Moins 30 % sur le total, et ton prorata déduit si tu as déjà acheté.",
-    remise: 0.30,
-    plancher: 19,
+    nom: "Le Parcours Développeur d'Apps",
+    accroche: "Un seul fil conducteur : de ta première ligne de code à ton application publiée sur les stores. Trois formations offertes pour commencer, un seul paiement pour tout le reste, accès à vie.",
+    prix: 297,
+    prixBarre: 675,
   },
 
   /* Prix du pack : somme des formations au niveau donné, moins la remise. */

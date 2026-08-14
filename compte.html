@@ -92,6 +92,25 @@
     d'un tiers de ses modules a été débloqué (<a href="./cgv.html#garantie">détails</a>).</p>
   </section>
 
+  <!-- Mes informations -->
+  <section class="compte-section">
+    <h2 class="t-h3" style="font-size:19px;margin-bottom:var(--e-3)">Mes informations</h2>
+    <div class="carte pile g-4">
+      <form class="rang-espace" id="form-infos" style="flex-wrap:wrap;gap:var(--e-3)">
+        <div class="pile g-1" style="flex:1;min-width:220px">
+          <label class="etiquette-champ" for="info-nom">Ton nom</label>
+          <input class="champ" id="info-nom" maxlength="80" autocomplete="name" placeholder="Ton nom">
+        </div>
+        <button type="submit" class="btn btn-secondaire" id="info-nom-ok" style="align-self:flex-end">Enregistrer</button>
+      </form>
+      <hr class="filet" style="margin:0">
+      <div class="pile g-1">
+        <p class="t-petit t-fort">E-mail du compte</p>
+        <p class="t-micro t-3" id="info-email">…</p>
+      </div>
+    </div>
+  </section>
+
   <!-- Profil et préférences -->
   <section class="compte-section">
     <h2 class="t-h3" style="font-size:19px;margin-bottom:var(--e-3)">Profil et préférences</h2>
@@ -157,5 +176,56 @@
 <script src="./assets/js/theme.js"></script>
 <script src="./assets/js/cookies.js"></script>
 <script type="module" src="./assets/js/compte.js"></script>
+<script type="module">
+  /* Mes informations : le nom (profils/{uid}, modifiable) et l'e-mail du
+     compte (lecture seule). Indépendant de compte.js, même app Firebase. */
+  import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js';
+  import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js';
+  import { getFirestore, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js';
+
+  const cfg = window.AZ;
+  if (cfg && cfg.firebase && cfg.firebase.apiKey) {
+    const app  = getApps().length ? getApps()[0] : initializeApp(cfg.firebase);
+    const auth = getAuth(app);
+    const bdd  = getFirestore(app);
+    const $i   = (id) => document.getElementById(id);
+
+    onAuthStateChanged(auth, async (u) => {
+      if (!u) return;
+      const email = (u.email || '').toLowerCase();
+      $i('info-email').textContent = email;
+      const ref = doc(bdd, 'profils', u.uid);
+
+      try {
+        const d = await getDoc(ref);
+        if (d.exists() && d.data().nom) {
+          $i('info-nom').value = d.data().nom;
+          const salut = $i('salut');
+          if (salut && !salut.textContent) salut.textContent = ' ' + d.data().nom;
+        }
+      } catch (e) {}
+
+      $i('form-infos').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const nom = $i('info-nom').value.trim().slice(0, 80);
+        if (!nom) { $i('info-nom').focus(); return; }
+        const b = $i('info-nom-ok');
+        const txt = b.textContent;
+        b.disabled = true;
+        b.textContent = 'Un instant…';
+        try {
+          await setDoc(ref, { nom, email, maj: new Date().toISOString() });
+          b.textContent = 'Enregistré';
+          const salut = $i('salut');
+          if (salut) salut.textContent = ' ' + nom;
+        } catch (err) {
+          console.error(err);
+          b.textContent = 'Réessaie';
+        }
+        setTimeout(() => { b.textContent = txt; b.disabled = false; }, 1800);
+      });
+    });
+  }
+</script>
 </body>
 </html>
