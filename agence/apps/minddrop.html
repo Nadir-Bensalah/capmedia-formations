@@ -86,7 +86,7 @@
     <div class="pile g-5">
       <nav class="fil-ariane" aria-label="Fil d'ariane">
         <a href="../index.html">Accueil</a><span class="sep">›</span>
-        <a href="./">Nos applications</a><span class="sep">›</span>
+        <a id="retour-intelligent" href="./">Nos applications</a><span class="sep">›</span>
         <span>MindDrop</span>
       </nav>
       <div class="entete-app">
@@ -217,5 +217,36 @@
 <script src="../assets/js/config-agence.js"></script>
 <script src="../assets/js/cookies.js"></script>
 <script src="../assets/js/theme.js"></script>
+<script>
+  /* Retour intelligent : on revient exactement d'où l'on vient (l'Academy,
+     l'accueil, la page fondateur…), et seulement si c'est un site à nous.
+     Sans référent utilisable, le lien reste le fil d'ariane par défaut. */
+  (function () {
+    var lien = document.getElementById('retour-intelligent');
+    if (!lien) return;
+    var libelles = {
+      'academy.capmedia.app': 'Capmedia Academy',
+      'capmedia.app': null,
+    };
+    try {
+      if (!document.referrer) return;
+      var r = new URL(document.referrer);
+      if (r.href === location.href) return;
+      var hote = r.hostname.replace(/^www\./, '');
+      if (!(hote in libelles)) return;
+      var nom = libelles[hote];
+      if (!nom) {
+        var p = r.pathname;
+        if (/\/apps\/?$/.test(p)) return;                       /* déjà le fil d'ariane */
+        nom = /fondateur|founder/.test(p) ? 'la page du fondateur'
+            : /academie|academy/.test(p) ? 'l\'académie'
+            : /blog/.test(p) ? 'le blog'
+            : 'la page précédente';
+      }
+      lien.href = r.href;
+      lien.textContent = 'Retour à ' + nom;
+    } catch (e) {}
+  })();
+</script>
 </body>
 </html>
