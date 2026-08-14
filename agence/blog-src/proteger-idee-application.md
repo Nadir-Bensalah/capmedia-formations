@@ -6,6 +6,9 @@ date: 2026-08-11
 auteur: Nadir Ben Salah
 categorie: Business
 motsCles: protéger idée application, nda application mobile, déposer une idée d'app, enveloppe soleau application, brevet application mobile
+image: https://images.unsplash.com/photo-1508666709797-f0bb3d96324d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8aWRlYSUyMGxpZ2h0YnVsYiUyMG5vdGVib29rfGVufDB8fHx8MTc4NjcyNTY2NHww&ixlib=rb-4.1.0&q=80&w=1600
+imageAuteur: Clever Visuals
+imageLien: https://unsplash.com/photos/bulb-with-string-lights-on-book-page-iMwiPZNX3SI
 ---
 
 La réponse directe, et elle surprend toujours : une idée d'application, en tant que telle, n'est protégeable par aucun droit. Pas de brevet sur un concept d'app, pas de droit d'auteur sur une idée. Ce que tu peux protéger, c'est son expression concrète (le code, le design, le nom, via le droit d'auteur, la marque et quelques dépôts à moins de 200 €) et, surtout, ce que personne ne peut te copier : l'avance que tu prends en exécutant vite.

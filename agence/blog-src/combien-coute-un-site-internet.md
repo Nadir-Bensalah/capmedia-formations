@@ -6,6 +6,9 @@ date: 2026-05-12
 auteur: Nadir Ben Salah
 categorie: Business
 motsCles: prix site internet, combien coûte un site web, tarif création site internet, devis site web, coût site vitrine
+image: https://images.unsplash.com/photo-1525547719571-a2d4ac8945e2?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8d2ViJTIwZGVzaWduJTIwbGFwdG9wfGVufDB8fHx8MTc4NjcyNTY0Mnww&ixlib=rb-4.1.0&q=80&w=1600
+imageAuteur: Andras Vas
+imageLien: https://unsplash.com/photos/macbook-pro-turned-on-Bd7gNnWJBkU
 ---
 
 Un site internet coûte entre 100 € par an avec un constructeur type Wix, 1 500 à 5 000 € avec un freelance, et 5 000 à 30 000 € et plus avec une agence, pour un site vitrine sérieux. L'e-commerce et les sites sur mesure montent bien au-delà. Et le prix affiché n'est jamais le prix total : domaine, hébergement et maintenance s'ajoutent chaque année, quelle que soit la voie choisie.

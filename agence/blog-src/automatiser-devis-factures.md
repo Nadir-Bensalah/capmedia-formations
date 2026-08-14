@@ -6,6 +6,9 @@ date: 2026-06-30
 auteur: Nadir Ben Salah
 categorie: Automatisation
 motsCles: automatiser devis factures, logiciel facturation artisan, facturation électronique 2026, plateforme agréée facture, relance facture automatique, zapier make facturation
+image: https://images.unsplash.com/photo-1554224154-26032ffc0d07?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8aW52b2ljZSUyMHBhcGVyd29yayUyMG9mZmljZXxlbnwwfHx8fDE3ODY3MjU2Nzl8MA&ixlib=rb-4.1.0&q=80&w=1600
+imageAuteur: Kelly Sikkema
+imageLien: https://unsplash.com/photos/black-android-smartphone-near-ballpoint-pen-tax-withholding-certificate-on-top-of-white-folder-M98NRBuzbpc
 ---
 
 Commence par un logiciel de facturation en ligne : c'est lui qui automatise d'un coup la numérotation, les mentions légales, la conversion devis-facture et les relances d'impayés, pour 0 à 30 € par mois. L'automatisation sur mesure (Zapier, Make, développement) ne vient qu'après, pour connecter ce logiciel au reste de ton activité. Et le calendrier ne te laisse plus le choix du statu quo : au 1er septembre 2026, toutes les entreprises françaises doivent pouvoir recevoir des factures électroniques, et les PME et TPE devront en émettre à partir de septembre 2027. La facture Word envoyée en PDF vit ses derniers mois.

@@ -6,6 +6,9 @@ date: 2026-07-14
 auteur: Nadir Ben Salah
 categorie: IA
 motsCles: quelle ia pour coder, meilleur assistant ia code, claude code, github copilot, cursor, agent ia développement, ia programmation 2026
+image: https://images.unsplash.com/photo-1542831371-29b0f74f9713?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8cHJvZ3JhbW1lciUyMHNjcmVlbiUyMHRlcm1pbmFsfGVufDB8fHx8MTc4NjcyNTY4M3ww&ixlib=rb-4.1.0&q=80&w=1600
+imageAuteur: Florian Olivo
+imageLien: https://unsplash.com/photos/lines-of-html-codes-4hbJ-eymZ1o
 ---
 
 En 2026, le choix ne se fait plus entre des marques mais entre trois familles : les assistants intégrés à l'éditeur (GitHub Copilot, Cursor) pour compléter et modifier du code pendant que tu tapes, les agents en terminal (Claude Code, Codex CLI, Gemini CLI) pour confier des tâches entières sur un vrai projet, et le chat (ChatGPT, Claude, Gemini) pour comprendre et débloquer. Pour construire un projet complet en partant de peu, l'agent en terminal est devenu l'outil central ; les critères qui départagent les offres sont le contexte, l'exactitude et le prix, pas le marketing.

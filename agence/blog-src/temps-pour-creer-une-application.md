@@ -6,6 +6,9 @@ date: 2026-05-26
 auteur: Nadir Ben Salah
 categorie: Développement
 motsCles: temps développement application, délai création application mobile, combien de temps pour créer une app, durée projet application, planning développement mobile
+image: https://images.unsplash.com/photo-1533749047139-189de3cf06d3?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8Y2xvY2slMjB0aW1lJTIwcHJvamVjdHxlbnwwfHx8fDE3ODY3MjU2NDV8MA&ixlib=rb-4.1.0&q=80&w=1600
+imageAuteur: Jon Tyson
+imageLien: https://unsplash.com/photos/brown-and-white-clocks-FlHdnPO6dlw
 ---
 
 Pour une application mobile publiée sur les stores, compte 2 à 3 mois pour un projet simple, 4 à 8 mois pour un projet moyen avec comptes utilisateurs et paiement, et 9 à 18 mois pour un projet complexe. Ces délais vont de la première maquette à l'app téléchargeable, validation des stores comprise. Le pur temps de code n'en représente qu'une partie : le reste, ce sont les décisions, les allers-retours et les validations.

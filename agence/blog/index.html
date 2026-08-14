@@ -12,6 +12,8 @@
 <meta property="og:title" content="Le blog · Capmedia Digital">
 <meta property="og:description" content="Des articles concrets sur le développement d'applications, les sites web, l'IA et le coût réel des choses. Écrits par un développeur qui publie, pas par une usine à contenu.">
 <meta property="og:url" content="https://capmedia.app/blog/">
+<meta property="og:image" content="https://capmedia.app/assets/img/og-agence.png">
+<meta name="twitter:card" content="summary_large_image">
 <meta property="og:locale" content="fr_FR">
 <meta name="twitter:card" content="summary">
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"Blog","name":"Le blog de Capmedia Digital","url":"https://capmedia.app/blog/","inLanguage":"fr","publisher":{"@type":"Organization","name":"Capmedia Digital","url":"https://capmedia.app/"},"blogPost":[{"@type":"BlogPosting","headline":"Combien coûte vraiment une application mobile ?","url":"https://capmedia.app/blog/combien-coute-une-application.html","datePublished":"2026-08-15","author":{"@type":"Person","name":"Nadir Ben Salah"}},{"@type":"BlogPosting","headline":"Quelle configuration pour développer en 2026 ?","url":"https://capmedia.app/blog/config-pc-developpement-2026.html","datePublished":"2026-08-15","author":{"@type":"Person","name":"Nadir Ben Salah"}},{"@type":"BlogPosting","headline":"Expo ou React Native CLI en 2026 : le vrai comparatif","url":"https://capmedia.app/blog/expo-ou-react-native-cli.html","datePublished":"2026-08-15","author":{"@type":"Person","name":"Nadir Ben Salah"}},{"@type":"BlogPosting","headline":"Pourquoi l'IA invente du code (et comment l'en empêcher)","url":"https://capmedia.app/blog/pourquoi-ia-hallucine-code.html","datePublished":"2026-08-15","author":{"@type":"Person","name":"Nadir Ben Salah"}},{"@type":"BlogPosting","headline":"PWA en 2026 : une vraie alternative aux stores ?","url":"https://capmedia.app/blog/progressive-web-app-pwa-2026.html","datePublished":"2026-08-13","author":{"@type":"Person","name":"Nadir Ben Salah"}},{"@type":"BlogPosting","headline":"Comment protéger l'idée de son application ?","url":"https://capmedia.app/blog/proteger-idee-application.html","datePublished":"2026-08-11","author":{"@type":"Person","name":"Nadir Ben Salah"}},{"@type":"BlogPosting","headline":"Pourquoi Apple rejette votre application (et comment répondre)","url":"https://capmedia.app/blog/pourquoi-apple-rejette-application.html","datePublished":"2026-08-06","author":{"@type":"Person","name":"Nadir Ben Salah"}},{"@type":"BlogPosting","headline":"Combien rapporte une application mobile ?","url":"https://capmedia.app/blog/combien-rapporte-une-application.html","datePublished":"2026-08-04","author":{"@type":"Person","name":"Nadir Ben Salah"}},{"@type":"BlogPosting","headline":"Combien coûte la maintenance d'une application mobile ?","url":"https://capmedia.app/blog/cout-maintenance-application.html","datePublished":"2026-07-28","author":{"@type":"Person","name":"Nadir Ben Salah"}},{"@type":"BlogPosting","headline":"Créer une application sans coder : ce qui est vraiment possible","url":"https://capmedia.app/blog/creer-application-sans-coder.html","datePublished":"2026-07-21","author":{"@type":"Person","name":"Nadir Ben Salah"}},{"@type":"BlogPosting","headline":"Quelle IA pour coder en 2026 : laquelle choisir ?","url":"https://capmedia.app/blog/ia-pour-coder-quel-outil.html","datePublished":"2026-07-14","author":{"@type":"Person","name":"Nadir Ben Salah"}},{"@type":"BlogPosting","headline":"Application native ou web app : que choisir pour votre business ?","url":"https://capmedia.app/blog/application-native-ou-web-app.html","datePublished":"2026-07-07","author":{"@type":"Person","name":"Nadir Ben Salah"}},{"@type":"BlogPosting","headline":"Automatiser ses devis et ses factures : par où commencer ?","url":"https://capmedia.app/blog/automatiser-devis-factures.html","datePublished":"2026-06-30","author":{"@type":"Person","name":"Nadir Ben Salah"}},{"@type":"BlogPosting","headline":"Compte développeur Apple : prix, inscription et pièges","url":"https://capmedia.app/blog/compte-developpeur-apple-prix-inscription.html","datePublished":"2026-06-23","author":{"@type":"Person","name":"Nadir Ben Salah"}},{"@type":"BlogPosting","headline":"Site vitrine ou réseaux sociaux : où investir en premier ?","url":"https://capmedia.app/blog/site-vitrine-ou-reseaux-sociaux.html","datePublished":"2026-06-16","author":{"@type":"Person","name":"Nadir Ben Salah"}},{"@type":"BlogPosting","headline":"Publier une application sur l'App Store : les étapes complètes","url":"https://capmedia.app/blog/publier-app-app-store-etapes.html","datePublished":"2026-06-09","author":{"@type":"Person","name":"Nadir Ben Salah"}},{"@type":"BlogPosting","headline":"Comment référencer son application sur les stores (ASO) ?","url":"https://capmedia.app/blog/referencement-application-aso.html","datePublished":"2026-06-02","author":{"@type":"Person","name":"Nadir Ben Salah"}},{"@type":"BlogPosting","headline":"Combien de temps pour créer une application mobile ?","url":"https://capmedia.app/blog/temps-pour-creer-une-application.html","datePublished":"2026-05-26","author":{"@type":"Person","name":"Nadir Ben Salah"}},{"@type":"BlogPosting","headline":"RGPD et application mobile : ce qui est vraiment obligatoire","url":"https://capmedia.app/blog/rgpd-application-mobile-obligations.html","datePublished":"2026-05-19","author":{"@type":"Person","name":"Nadir Ben Salah"}},{"@type":"BlogPosting","headline":"Combien coûte un site internet en 2026 ?","url":"https://capmedia.app/blog/combien-coute-un-site-internet.html","datePublished":"2026-05-12","author":{"@type":"Person","name":"Nadir Ben Salah"}}]}</script>
@@ -61,188 +63,334 @@
   </section>
 
   <section class="apparait">
-    <div class="grille grille-3">
+      <div class="pile g-3" style="margin:var(--e-5) 0 var(--e-4)">
+    <input type="search" id="blog-recherche" class="champ champ-large" autocomplete="off"
+           placeholder="Chercher un article : colle ta question…" style="max-width:520px">
+    <div class="rang" id="blog-filtres" style="flex-wrap:wrap;gap:8px">
+      <button type="button" class="btn btn-secondaire actif" data-cat="" style="padding:5px 14px;font-size:13px">Tous</button>
+      <button type="button" class="btn btn-secondaire" data-cat="Business" style="padding:5px 14px;font-size:13px">Business</button>
+      <button type="button" class="btn btn-secondaire" data-cat="Matériel" style="padding:5px 14px;font-size:13px">Matériel</button>
+      <button type="button" class="btn btn-secondaire" data-cat="Développement" style="padding:5px 14px;font-size:13px">Développement</button>
+      <button type="button" class="btn btn-secondaire" data-cat="IA" style="padding:5px 14px;font-size:13px">IA</button>
+      <button type="button" class="btn btn-secondaire" data-cat="Stores" style="padding:5px 14px;font-size:13px">Stores</button>
+      <button type="button" class="btn btn-secondaire" data-cat="Automatisation" style="padding:5px 14px;font-size:13px">Automatisation</button>
+      <button type="button" class="btn btn-secondaire" data-cat="Juridique" style="padding:5px 14px;font-size:13px">Juridique</button>
+    </div>
+  </div>
+  <p class="t-petit t-3 masque" id="blog-vide">Rien ne correspond : essaie moins de mots.</p>
+<div class="grille grille-3">
 
-      <a class="carte carte-article apparait" href="./combien-coute-une-application.html">
-        <p class="etiquette-mono">Business · 15 août 2026</p>
+      <a class="carte carte-article apparait" href="./combien-coute-une-application.html"
+         data-categorie="Business"
+         data-recherche="combien coûte vraiment une application mobile ? agence, freelance ou toi-même : les fourchettes honnêtes de 2026, les coûts cachés que personne ne met dans le devis, et comment choisir le chemin qui correspond à ton projet. prix application mobile,combien coûte une application,devis application mobile,coût développement app,créer une application prix"
+         style="overflow:hidden">
+        <img src="https://images.unsplash.com/photo-1533234944761-2f5337579079?crop=entropy&amp;cs=tinysrgb&amp;fit=max&amp;fm=jpg&amp;ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8c21hcnRwaG9uZSUyMG1vbmV5JTIwY29zdHxlbnwwfHx8fDE3ODY3MjU2Mzl8MA&amp;ixlib=rb-4.1.0&amp;q=80&amp;w=800" alt="" loading="lazy"
+             style="width:calc(100% + 2 * var(--e-4));margin:calc(-1 * var(--e-4)) calc(-1 * var(--e-4)) 0;aspect-ratio:16/8;object-fit:cover;display:block">
+        <p class="etiquette-mono" style="margin-top:var(--e-3)">Business · 15 août 2026</p>
         <div class="pile g-1" style="margin-top:var(--e-3)">
           <p class="t-h3" style="font-size:17px">Combien coûte vraiment une application mobile ?</p>
           <p class="t-petit t-2">Agence, freelance ou toi-même : les fourchettes honnêtes de 2026, les coûts cachés que personne ne met dans le devis, et comment choisir le chemin qui correspond à ton projet.</p>
         </div>
-        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Lire · 6 min</span>
+        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Temps de lecture 6 min</span>
       </a>
 
-      <a class="carte carte-article apparait" href="./config-pc-developpement-2026.html">
-        <p class="etiquette-mono">Matériel · 15 août 2026</p>
+      <a class="carte carte-article apparait" href="./config-pc-developpement-2026.html"
+         data-categorie="Matériel"
+         data-recherche="quelle configuration pour développer en 2026 ? mac ou pc, combien de ram vraiment, le piège du disque et des recommandations par budget. le guide honnête pour choisir ta machine de développement sans te ruiner. configuration pc développement,mac ou pc développeur,ram développement,ordinateur pour coder,machine développeur 2026"
+         style="overflow:hidden">
+        <img src="https://images.unsplash.com/photo-1587831990711-23ca6441447b?crop=entropy&amp;cs=tinysrgb&amp;fit=max&amp;fm=jpg&amp;ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8ZGVzayUyMHNldHVwJTIwY29tcHV0ZXIlMjBwcm9ncmFtbWluZ3xlbnwwfHx8fDE3ODY3MjU2Mjl8MA&amp;ixlib=rb-4.1.0&amp;q=80&amp;w=800" alt="" loading="lazy"
+             style="width:calc(100% + 2 * var(--e-4));margin:calc(-1 * var(--e-4)) calc(-1 * var(--e-4)) 0;aspect-ratio:16/8;object-fit:cover;display:block">
+        <p class="etiquette-mono" style="margin-top:var(--e-3)">Matériel · 15 août 2026</p>
         <div class="pile g-1" style="margin-top:var(--e-3)">
           <p class="t-h3" style="font-size:17px">Quelle configuration pour développer en 2026 ?</p>
           <p class="t-petit t-2">Mac ou PC, combien de RAM vraiment, le piège du disque et des recommandations par budget. Le guide honnête pour choisir ta machine de développement sans te ruiner.</p>
         </div>
-        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Lire · 7 min</span>
+        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Temps de lecture 7 min</span>
       </a>
 
-      <a class="carte carte-article apparait" href="./expo-ou-react-native-cli.html">
-        <p class="etiquette-mono">Développement · 15 août 2026</p>
+      <a class="carte carte-article apparait" href="./expo-ou-react-native-cli.html"
+         data-categorie="Développement"
+         data-recherche="expo ou react native cli en 2026 : le vrai comparatif la recommandation officielle a tranché, mais les forums continuent le débat. ce qu'expo fait vraiment en 2026, ce que le cli apporte encore, et comment choisir sans se tromper. expo ou react native cli,expo 2026,react native débutant,eas build,créer une application react native"
+         style="overflow:hidden">
+        <img src="https://images.unsplash.com/photo-1605379399642-870262d3d051?crop=entropy&amp;cs=tinysrgb&amp;fit=max&amp;fm=jpg&amp;ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8bW9iaWxlJTIwcGhvbmUlMjBkZXZlbG9wbWVudCUyMGNvZGV8ZW58MHx8fHwxNzg2NzI1NjM2fDA&amp;ixlib=rb-4.1.0&amp;q=80&amp;w=800" alt="" loading="lazy"
+             style="width:calc(100% + 2 * var(--e-4));margin:calc(-1 * var(--e-4)) calc(-1 * var(--e-4)) 0;aspect-ratio:16/8;object-fit:cover;display:block">
+        <p class="etiquette-mono" style="margin-top:var(--e-3)">Développement · 15 août 2026</p>
         <div class="pile g-1" style="margin-top:var(--e-3)">
           <p class="t-h3" style="font-size:17px">Expo ou React Native CLI en 2026 : le vrai comparatif</p>
           <p class="t-petit t-2">La recommandation officielle a tranché, mais les forums continuent le débat. Ce qu'Expo fait vraiment en 2026, ce que le CLI apporte encore, et comment choisir sans se tromper.</p>
         </div>
-        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Lire · 6 min</span>
+        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Temps de lecture 6 min</span>
       </a>
 
-      <a class="carte carte-article apparait" href="./pourquoi-ia-hallucine-code.html">
-        <p class="etiquette-mono">IA · 15 août 2026</p>
+      <a class="carte carte-article apparait" href="./pourquoi-ia-hallucine-code.html"
+         data-categorie="IA"
+         data-recherche="pourquoi l'ia invente du code (et comment l'en empêcher) bibliothèques imaginaires, fonctions qui n'existent pas, versions périmées : d'où viennent les hallucinations de code, et les 5 parades concrètes qui les font presque disparaître. hallucination ia code,ia invente du code,chatgpt code faux,claude code fiable,coder avec l'ia"
+         style="overflow:hidden">
+        <img src="https://images.unsplash.com/photo-1674027444485-cec3da58eef4?crop=entropy&amp;cs=tinysrgb&amp;fit=max&amp;fm=jpg&amp;ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8YXJ0aWZpY2lhbCUyMGludGVsbGlnZW5jZSUyMGFic3RyYWN0fGVufDB8fHx8MTc4NjcyNTYzM3ww&amp;ixlib=rb-4.1.0&amp;q=80&amp;w=800" alt="" loading="lazy"
+             style="width:calc(100% + 2 * var(--e-4));margin:calc(-1 * var(--e-4)) calc(-1 * var(--e-4)) 0;aspect-ratio:16/8;object-fit:cover;display:block">
+        <p class="etiquette-mono" style="margin-top:var(--e-3)">IA · 15 août 2026</p>
         <div class="pile g-1" style="margin-top:var(--e-3)">
           <p class="t-h3" style="font-size:17px">Pourquoi l'IA invente du code (et comment l'en empêcher)</p>
           <p class="t-petit t-2">Bibliothèques imaginaires, fonctions qui n'existent pas, versions périmées : d'où viennent les hallucinations de code, et les 5 parades concrètes qui les font presque disparaître.</p>
         </div>
-        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Lire · 6 min</span>
+        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Temps de lecture 6 min</span>
       </a>
 
-      <a class="carte carte-article apparait" href="./progressive-web-app-pwa-2026.html">
-        <p class="etiquette-mono">Développement · 13 août 2026</p>
+      <a class="carte carte-article apparait" href="./progressive-web-app-pwa-2026.html"
+         data-categorie="Développement"
+         data-recherche="pwa en 2026 : une vraie alternative aux stores ? installation, hors-ligne, notifications : ce qu'une pwa sait faire en 2026, ses limites réelles sur ios, et les cas où les stores restent imbattables. pwa 2026,progressive web app ou application native,pwa ios limites,notifications push pwa,installer pwa iphone,pwa ou app store"
+         style="overflow:hidden">
+        <img src="https://images.unsplash.com/photo-1655196601100-8bfb26cf99e9?crop=entropy&amp;cs=tinysrgb&amp;fit=max&amp;fm=jpg&amp;ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8d2ViJTIwYnJvd3NlciUyMG1vYmlsZXxlbnwwfHx8fDE3ODY3MjU2OTN8MA&amp;ixlib=rb-4.1.0&amp;q=80&amp;w=800" alt="" loading="lazy"
+             style="width:calc(100% + 2 * var(--e-4));margin:calc(-1 * var(--e-4)) calc(-1 * var(--e-4)) 0;aspect-ratio:16/8;object-fit:cover;display:block">
+        <p class="etiquette-mono" style="margin-top:var(--e-3)">Développement · 13 août 2026</p>
         <div class="pile g-1" style="margin-top:var(--e-3)">
           <p class="t-h3" style="font-size:17px">PWA en 2026 : une vraie alternative aux stores ?</p>
           <p class="t-petit t-2">Installation, hors-ligne, notifications : ce qu'une PWA sait faire en 2026, ses limites réelles sur iOS, et les cas où les stores restent imbattables.</p>
         </div>
-        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Lire · 7 min</span>
+        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Temps de lecture 7 min</span>
       </a>
 
-      <a class="carte carte-article apparait" href="./proteger-idee-application.html">
-        <p class="etiquette-mono">Business · 11 août 2026</p>
+      <a class="carte carte-article apparait" href="./proteger-idee-application.html"
+         data-categorie="Business"
+         data-recherche="comment protéger l'idée de son application ? une idée d'app ne se protège pas en soi : ce que valent vraiment le nda, l'e-soleau et la marque, et pourquoi la vitesse protège mieux que le secret. protéger idée application,nda application mobile,déposer une idée d'app,enveloppe soleau application,brevet application mobile"
+         style="overflow:hidden">
+        <img src="https://images.unsplash.com/photo-1508666709797-f0bb3d96324d?crop=entropy&amp;cs=tinysrgb&amp;fit=max&amp;fm=jpg&amp;ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8aWRlYSUyMGxpZ2h0YnVsYiUyMG5vdGVib29rfGVufDB8fHx8MTc4NjcyNTY2NHww&amp;ixlib=rb-4.1.0&amp;q=80&amp;w=800" alt="" loading="lazy"
+             style="width:calc(100% + 2 * var(--e-4));margin:calc(-1 * var(--e-4)) calc(-1 * var(--e-4)) 0;aspect-ratio:16/8;object-fit:cover;display:block">
+        <p class="etiquette-mono" style="margin-top:var(--e-3)">Business · 11 août 2026</p>
         <div class="pile g-1" style="margin-top:var(--e-3)">
           <p class="t-h3" style="font-size:17px">Comment protéger l'idée de son application ?</p>
           <p class="t-petit t-2">Une idée d'app ne se protège pas en soi : ce que valent vraiment le NDA, l'e-Soleau et la marque, et pourquoi la vitesse protège mieux que le secret.</p>
         </div>
-        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Lire · 7 min</span>
+        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Temps de lecture 7 min</span>
       </a>
 
-      <a class="carte carte-article apparait" href="./pourquoi-apple-rejette-application.html">
-        <p class="etiquette-mono">Stores · 6 août 2026</p>
+      <a class="carte carte-article apparait" href="./pourquoi-apple-rejette-application.html"
+         data-categorie="Stores"
+         data-recherche="pourquoi apple rejette votre application (et comment répondre) guidelines 2.1, 4.3, 5.1.1, 3.1.1 : les motifs de rejet app store les plus fréquents, comment lire le message du reviewer, y répondre, insister ou céder. rejet app store,apple rejette application,guideline 2.1 apple,guideline 4.3 spam,répondre reviewer apple,résolution center app store,appel app review"
+         style="overflow:hidden">
+        <img src="https://images.unsplash.com/photo-1619418602850-35ad20aa1700?crop=entropy&amp;cs=tinysrgb&amp;fit=max&amp;fm=jpg&amp;ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8cmVqZWN0ZWQlMjBzdGFtcCUyMGRvY3VtZW50fGVufDB8fHx8MTc4NjcyNTY5MHww&amp;ixlib=rb-4.1.0&amp;q=80&amp;w=800" alt="" loading="lazy"
+             style="width:calc(100% + 2 * var(--e-4));margin:calc(-1 * var(--e-4)) calc(-1 * var(--e-4)) 0;aspect-ratio:16/8;object-fit:cover;display:block">
+        <p class="etiquette-mono" style="margin-top:var(--e-3)">Stores · 6 août 2026</p>
         <div class="pile g-1" style="margin-top:var(--e-3)">
           <p class="t-h3" style="font-size:17px">Pourquoi Apple rejette votre application (et comment répondre)</p>
           <p class="t-petit t-2">Guidelines 2.1, 4.3, 5.1.1, 3.1.1 : les motifs de rejet App Store les plus fréquents, comment lire le message du reviewer, y répondre, insister ou céder.</p>
         </div>
-        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Lire · 7 min</span>
+        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Temps de lecture 7 min</span>
       </a>
 
-      <a class="carte carte-article apparait" href="./combien-rapporte-une-application.html">
-        <p class="etiquette-mono">Business · 4 août 2026</p>
+      <a class="carte carte-article apparait" href="./combien-rapporte-une-application.html"
+         data-categorie="Business"
+         data-recherche="combien rapporte une application mobile ? la médiane est proche de zéro, une minorité concentre presque tout : les vrais chiffres 2026, les modèles de revenus comparés et les maths d'un abonnement. combien rapporte une application,revenus application mobile,gagner de l'argent avec une app,monétisation application,abonnement application rentabilité"
+         style="overflow:hidden">
+        <img src="https://images.unsplash.com/photo-1543286386-2e659306cd6c?crop=entropy&amp;cs=tinysrgb&amp;fit=max&amp;fm=jpg&amp;ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8cmV2ZW51ZSUyMGNoYXJ0JTIwZ3Jvd3RofGVufDB8fHx8MTc4NjcyNTY2MXww&amp;ixlib=rb-4.1.0&amp;q=80&amp;w=800" alt="" loading="lazy"
+             style="width:calc(100% + 2 * var(--e-4));margin:calc(-1 * var(--e-4)) calc(-1 * var(--e-4)) 0;aspect-ratio:16/8;object-fit:cover;display:block">
+        <p class="etiquette-mono" style="margin-top:var(--e-3)">Business · 4 août 2026</p>
         <div class="pile g-1" style="margin-top:var(--e-3)">
           <p class="t-h3" style="font-size:17px">Combien rapporte une application mobile ?</p>
           <p class="t-petit t-2">La médiane est proche de zéro, une minorité concentre presque tout : les vrais chiffres 2026, les modèles de revenus comparés et les maths d'un abonnement.</p>
         </div>
-        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Lire · 7 min</span>
+        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Temps de lecture 7 min</span>
       </a>
 
-      <a class="carte carte-article apparait" href="./cout-maintenance-application.html">
-        <p class="etiquette-mono">Business · 28 juillet 2026</p>
+      <a class="carte carte-article apparait" href="./cout-maintenance-application.html"
+         data-categorie="Business"
+         data-recherche="combien coûte la maintenance d'une application mobile ? de 150 € par an en autonomie à 15-20 % du coût de développement en prestataire : les postes réels de la maintenance d'une app, et comment les contenir. coût maintenance application,maintenance app mobile prix,budget annuel application,mise à jour application coût,frais récurrents app,contrat maintenance application"
+         style="overflow:hidden">
+        <img src="https://images.unsplash.com/photo-1581166397057-235af2b3c6dd?crop=entropy&amp;cs=tinysrgb&amp;fit=max&amp;fm=jpg&amp;ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8ZW5naW5lZXIlMjBtYWludGVuYW5jZSUyMHRvb2xzfGVufDB8fHx8MTc4NjcyNTY4Nnww&amp;ixlib=rb-4.1.0&amp;q=80&amp;w=800" alt="" loading="lazy"
+             style="width:calc(100% + 2 * var(--e-4));margin:calc(-1 * var(--e-4)) calc(-1 * var(--e-4)) 0;aspect-ratio:16/8;object-fit:cover;display:block">
+        <p class="etiquette-mono" style="margin-top:var(--e-3)">Business · 28 juillet 2026</p>
         <div class="pile g-1" style="margin-top:var(--e-3)">
           <p class="t-h3" style="font-size:17px">Combien coûte la maintenance d'une application mobile ?</p>
           <p class="t-petit t-2">De 150 € par an en autonomie à 15-20 % du coût de développement en prestataire : les postes réels de la maintenance d'une app, et comment les contenir.</p>
         </div>
-        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Lire · 7 min</span>
+        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Temps de lecture 7 min</span>
       </a>
 
-      <a class="carte carte-article apparait" href="./creer-application-sans-coder.html">
-        <p class="etiquette-mono">Développement · 21 juillet 2026</p>
+      <a class="carte carte-article apparait" href="./creer-application-sans-coder.html"
+         data-categorie="Développement"
+         data-recherche="créer une application sans coder : ce qui est vraiment possible oui, c'est possible avec le no-code, jusqu'à un plafond bien réel. les limites, les coûts cachés des plateformes, et pourquoi l'ia a changé la question en 2026. créer application sans coder,no code application mobile,bubble glide flutterflow,créer une app sans programmer,application no code limites"
+         style="overflow:hidden">
+        <img src="https://images.unsplash.com/photo-1633469924738-52101af51d87?crop=entropy&amp;cs=tinysrgb&amp;fit=max&amp;fm=jpg&amp;ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8bm8lMjBjb2RlJTIwYnVpbGRpbmclMjBibG9ja3N8ZW58MHx8fHwxNzg2NzI1NjU3fDA&amp;ixlib=rb-4.1.0&amp;q=80&amp;w=800" alt="" loading="lazy"
+             style="width:calc(100% + 2 * var(--e-4));margin:calc(-1 * var(--e-4)) calc(-1 * var(--e-4)) 0;aspect-ratio:16/8;object-fit:cover;display:block">
+        <p class="etiquette-mono" style="margin-top:var(--e-3)">Développement · 21 juillet 2026</p>
         <div class="pile g-1" style="margin-top:var(--e-3)">
           <p class="t-h3" style="font-size:17px">Créer une application sans coder : ce qui est vraiment possible</p>
           <p class="t-petit t-2">Oui, c'est possible avec le no-code, jusqu'à un plafond bien réel. Les limites, les coûts cachés des plateformes, et pourquoi l'IA a changé la question en 2026.</p>
         </div>
-        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Lire · 7 min</span>
+        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Temps de lecture 7 min</span>
       </a>
 
-      <a class="carte carte-article apparait" href="./ia-pour-coder-quel-outil.html">
-        <p class="etiquette-mono">IA · 14 juillet 2026</p>
+      <a class="carte carte-article apparait" href="./ia-pour-coder-quel-outil.html"
+         data-categorie="IA"
+         data-recherche="quelle ia pour coder en 2026 : laquelle choisir ? assistants dans l'éditeur, agents en terminal, chat : les trois familles d'ia pour coder, et les critères qui comptent : contexte, exactitude, prix. quelle ia pour coder,meilleur assistant ia code,claude code,github copilot,cursor,agent ia développement,ia programmation 2026"
+         style="overflow:hidden">
+        <img src="https://images.unsplash.com/photo-1542831371-29b0f74f9713?crop=entropy&amp;cs=tinysrgb&amp;fit=max&amp;fm=jpg&amp;ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8cHJvZ3JhbW1lciUyMHNjcmVlbiUyMHRlcm1pbmFsfGVufDB8fHx8MTc4NjcyNTY4M3ww&amp;ixlib=rb-4.1.0&amp;q=80&amp;w=800" alt="" loading="lazy"
+             style="width:calc(100% + 2 * var(--e-4));margin:calc(-1 * var(--e-4)) calc(-1 * var(--e-4)) 0;aspect-ratio:16/8;object-fit:cover;display:block">
+        <p class="etiquette-mono" style="margin-top:var(--e-3)">IA · 14 juillet 2026</p>
         <div class="pile g-1" style="margin-top:var(--e-3)">
           <p class="t-h3" style="font-size:17px">Quelle IA pour coder en 2026 : laquelle choisir ?</p>
           <p class="t-petit t-2">Assistants dans l'éditeur, agents en terminal, chat : les trois familles d'IA pour coder, et les critères qui comptent : contexte, exactitude, prix.</p>
         </div>
-        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Lire · 7 min</span>
+        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Temps de lecture 7 min</span>
       </a>
 
-      <a class="carte carte-article apparait" href="./application-native-ou-web-app.html">
-        <p class="etiquette-mono">Développement · 7 juillet 2026</p>
+      <a class="carte carte-article apparait" href="./application-native-ou-web-app.html"
+         data-categorie="Développement"
+         data-recherche="application native ou web app : que choisir pour votre business ? web app si tes clients passent par le navigateur, app sur les stores si tu vis de l'engagement : critères concrets, coûts comparés et cas types 2026. application native ou web app,pwa ou application mobile,react native ou pwa,choisir application ou site web,cross platform 2026"
+         style="overflow:hidden">
+        <img src="https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?crop=entropy&amp;cs=tinysrgb&amp;fit=max&amp;fm=jpg&amp;ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8c21hcnRwaG9uZSUyMGJyb3dzZXIlMjBhcHBzfGVufDB8fHx8MTc4NjcyNTY1NHww&amp;ixlib=rb-4.1.0&amp;q=80&amp;w=800" alt="" loading="lazy"
+             style="width:calc(100% + 2 * var(--e-4));margin:calc(-1 * var(--e-4)) calc(-1 * var(--e-4)) 0;aspect-ratio:16/8;object-fit:cover;display:block">
+        <p class="etiquette-mono" style="margin-top:var(--e-3)">Développement · 7 juillet 2026</p>
         <div class="pile g-1" style="margin-top:var(--e-3)">
           <p class="t-h3" style="font-size:17px">Application native ou web app : que choisir pour votre business ?</p>
           <p class="t-petit t-2">Web app si tes clients passent par le navigateur, app sur les stores si tu vis de l'engagement : critères concrets, coûts comparés et cas types 2026.</p>
         </div>
-        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Lire · 7 min</span>
+        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Temps de lecture 7 min</span>
       </a>
 
-      <a class="carte carte-article apparait" href="./automatiser-devis-factures.html">
-        <p class="etiquette-mono">Automatisation · 30 juin 2026</p>
+      <a class="carte carte-article apparait" href="./automatiser-devis-factures.html"
+         data-categorie="Automatisation"
+         data-recherche="automatiser ses devis et ses factures : par où commencer ? logiciel de facturation d'abord, automatisation ensuite, sur mesure en dernier : la méthode, les outils, et la réforme 2026-2027 qui rend le sujet urgent. automatiser devis factures,logiciel facturation artisan,facturation électronique 2026,plateforme agréée facture,relance facture automatique,zapier make facturation"
+         style="overflow:hidden">
+        <img src="https://images.unsplash.com/photo-1554224154-26032ffc0d07?crop=entropy&amp;cs=tinysrgb&amp;fit=max&amp;fm=jpg&amp;ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8aW52b2ljZSUyMHBhcGVyd29yayUyMG9mZmljZXxlbnwwfHx8fDE3ODY3MjU2Nzl8MA&amp;ixlib=rb-4.1.0&amp;q=80&amp;w=800" alt="" loading="lazy"
+             style="width:calc(100% + 2 * var(--e-4));margin:calc(-1 * var(--e-4)) calc(-1 * var(--e-4)) 0;aspect-ratio:16/8;object-fit:cover;display:block">
+        <p class="etiquette-mono" style="margin-top:var(--e-3)">Automatisation · 30 juin 2026</p>
         <div class="pile g-1" style="margin-top:var(--e-3)">
           <p class="t-h3" style="font-size:17px">Automatiser ses devis et ses factures : par où commencer ?</p>
           <p class="t-petit t-2">Logiciel de facturation d'abord, automatisation ensuite, sur mesure en dernier : la méthode, les outils, et la réforme 2026-2027 qui rend le sujet urgent.</p>
         </div>
-        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Lire · 7 min</span>
+        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Temps de lecture 7 min</span>
       </a>
 
-      <a class="carte carte-article apparait" href="./compte-developpeur-apple-prix-inscription.html">
-        <p class="etiquette-mono">Stores · 23 juin 2026</p>
+      <a class="carte carte-article apparait" href="./compte-developpeur-apple-prix-inscription.html"
+         data-categorie="Stores"
+         data-recherche="compte développeur apple : prix, inscription et pièges 99 dollars par an, vérification d'identité, duns pour les sociétés : le parcours d'inscription au programme développeur apple en 2026, délais et blocages. compte développeur apple prix,apple developer program inscription,99 dollars apple,numéro duns apple,compte apple developer bloqué"
+         style="overflow:hidden">
+        <img src="https://images.unsplash.com/photo-1660485651003-39b761a38546?crop=entropy&amp;cs=tinysrgb&amp;fit=max&amp;fm=jpg&amp;ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8YXBwbGUlMjBtYWNib29rJTIwZGVza3xlbnwwfHx8fDE3ODY3MjU2NTF8MA&amp;ixlib=rb-4.1.0&amp;q=80&amp;w=800" alt="" loading="lazy"
+             style="width:calc(100% + 2 * var(--e-4));margin:calc(-1 * var(--e-4)) calc(-1 * var(--e-4)) 0;aspect-ratio:16/8;object-fit:cover;display:block">
+        <p class="etiquette-mono" style="margin-top:var(--e-3)">Stores · 23 juin 2026</p>
         <div class="pile g-1" style="margin-top:var(--e-3)">
           <p class="t-h3" style="font-size:17px">Compte développeur Apple : prix, inscription et pièges</p>
           <p class="t-petit t-2">99 dollars par an, vérification d'identité, DUNS pour les sociétés : le parcours d'inscription au programme développeur Apple en 2026, délais et blocages.</p>
         </div>
-        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Lire · 6 min</span>
+        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Temps de lecture 6 min</span>
       </a>
 
-      <a class="carte carte-article apparait" href="./site-vitrine-ou-reseaux-sociaux.html">
-        <p class="etiquette-mono">Business · 16 juin 2026</p>
+      <a class="carte carte-article apparait" href="./site-vitrine-ou-reseaux-sociaux.html"
+         data-categorie="Business"
+         data-recherche="site vitrine ou réseaux sociaux : où investir en premier ? les réseaux apportent la visibilité, le site apporte la crédibilité et l'indépendance : la réponse honnête selon ton métier, et le point de bascule. site vitrine ou réseaux sociaux,site internet artisan,présence en ligne entreprise,instagram ou site web,google business profile,visibilité locale"
+         style="overflow:hidden">
+        <img src="https://images.unsplash.com/photo-1724862936518-ae7fcfc052c1?crop=entropy&amp;cs=tinysrgb&amp;fit=max&amp;fm=jpg&amp;ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8c29jaWFsJTIwbWVkaWElMjBwaG9uZSUyMGFwcHN8ZW58MHx8fHwxNzg2NzI1Njc1fDA&amp;ixlib=rb-4.1.0&amp;q=80&amp;w=800" alt="" loading="lazy"
+             style="width:calc(100% + 2 * var(--e-4));margin:calc(-1 * var(--e-4)) calc(-1 * var(--e-4)) 0;aspect-ratio:16/8;object-fit:cover;display:block">
+        <p class="etiquette-mono" style="margin-top:var(--e-3)">Business · 16 juin 2026</p>
         <div class="pile g-1" style="margin-top:var(--e-3)">
           <p class="t-h3" style="font-size:17px">Site vitrine ou réseaux sociaux : où investir en premier ?</p>
           <p class="t-petit t-2">Les réseaux apportent la visibilité, le site apporte la crédibilité et l'indépendance : la réponse honnête selon ton métier, et le point de bascule.</p>
         </div>
-        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Lire · 7 min</span>
+        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Temps de lecture 7 min</span>
       </a>
 
-      <a class="carte carte-article apparait" href="./publier-app-app-store-etapes.html">
-        <p class="etiquette-mono">Stores · 9 juin 2026</p>
+      <a class="carte carte-article apparait" href="./publier-app-app-store-etapes.html"
+         data-categorie="Stores"
+         data-recherche="publier une application sur l'app store : les étapes complètes compte développeur à 99 $, fiche, captures, review en 24 à 48 h : les 7 étapes réelles pour publier sur l'app store en 2026, et les motifs de rejet fréquents. publier application app store,soumettre app apple,étapes publication app store,review apple délai,rejet app store"
+         style="overflow:hidden">
+        <img src="https://images.unsplash.com/photo-1510557880182-3d4d3cba35a5?crop=entropy&amp;cs=tinysrgb&amp;fit=max&amp;fm=jpg&amp;ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8aXBob25lJTIwYXBwcyUyMHNjcmVlbnxlbnwwfHx8fDE3ODY3MjU2NDl8MA&amp;ixlib=rb-4.1.0&amp;q=80&amp;w=800" alt="" loading="lazy"
+             style="width:calc(100% + 2 * var(--e-4));margin:calc(-1 * var(--e-4)) calc(-1 * var(--e-4)) 0;aspect-ratio:16/8;object-fit:cover;display:block">
+        <p class="etiquette-mono" style="margin-top:var(--e-3)">Stores · 9 juin 2026</p>
         <div class="pile g-1" style="margin-top:var(--e-3)">
           <p class="t-h3" style="font-size:17px">Publier une application sur l'App Store : les étapes complètes</p>
           <p class="t-petit t-2">Compte développeur à 99 $, fiche, captures, review en 24 à 48 h : les 7 étapes réelles pour publier sur l'App Store en 2026, et les motifs de rejet fréquents.</p>
         </div>
-        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Lire · 6 min</span>
+        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Temps de lecture 6 min</span>
       </a>
 
-      <a class="carte carte-article apparait" href="./referencement-application-aso.html">
-        <p class="etiquette-mono">Stores · 2 juin 2026</p>
+      <a class="carte carte-article apparait" href="./referencement-application-aso.html"
+         data-categorie="Stores"
+         data-recherche="comment référencer son application sur les stores (aso) ? mots-clés, titre, captures, avis : les leviers concrets de l'aso en 2026, ce que le référencement sur les stores peut apporter, et ce qu'il ne fera jamais. aso app store optimization,référencement application,mots-clés app store,référencer app google play,captures écran app store,avis application"
+         style="overflow:hidden">
+        <img src="https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?crop=entropy&amp;cs=tinysrgb&amp;fit=max&amp;fm=jpg&amp;ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8YXBwJTIwc3RvcmUlMjBzZWFyY2glMjBwaG9uZXxlbnwwfHx8fDE3ODY3MjU2NzF8MA&amp;ixlib=rb-4.1.0&amp;q=80&amp;w=800" alt="" loading="lazy"
+             style="width:calc(100% + 2 * var(--e-4));margin:calc(-1 * var(--e-4)) calc(-1 * var(--e-4)) 0;aspect-ratio:16/8;object-fit:cover;display:block">
+        <p class="etiquette-mono" style="margin-top:var(--e-3)">Stores · 2 juin 2026</p>
         <div class="pile g-1" style="margin-top:var(--e-3)">
           <p class="t-h3" style="font-size:17px">Comment référencer son application sur les stores (ASO) ?</p>
           <p class="t-petit t-2">Mots-clés, titre, captures, avis : les leviers concrets de l'ASO en 2026, ce que le référencement sur les stores peut apporter, et ce qu'il ne fera jamais.</p>
         </div>
-        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Lire · 7 min</span>
+        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Temps de lecture 7 min</span>
       </a>
 
-      <a class="carte carte-article apparait" href="./temps-pour-creer-une-application.html">
-        <p class="etiquette-mono">Développement · 26 mai 2026</p>
+      <a class="carte carte-article apparait" href="./temps-pour-creer-une-application.html"
+         data-categorie="Développement"
+         data-recherche="combien de temps pour créer une application mobile ? compte 2 à 3 mois pour une app simple, 4 à 8 pour une app moyenne, 9 et plus pour une app complexe. le détail honnête de ce qui allonge vraiment les délais. temps développement application,délai création application mobile,combien de temps pour créer une app,durée projet application,planning développement mobile"
+         style="overflow:hidden">
+        <img src="https://images.unsplash.com/photo-1533749047139-189de3cf06d3?crop=entropy&amp;cs=tinysrgb&amp;fit=max&amp;fm=jpg&amp;ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8Y2xvY2slMjB0aW1lJTIwcHJvamVjdHxlbnwwfHx8fDE3ODY3MjU2NDV8MA&amp;ixlib=rb-4.1.0&amp;q=80&amp;w=800" alt="" loading="lazy"
+             style="width:calc(100% + 2 * var(--e-4));margin:calc(-1 * var(--e-4)) calc(-1 * var(--e-4)) 0;aspect-ratio:16/8;object-fit:cover;display:block">
+        <p class="etiquette-mono" style="margin-top:var(--e-3)">Développement · 26 mai 2026</p>
         <div class="pile g-1" style="margin-top:var(--e-3)">
           <p class="t-h3" style="font-size:17px">Combien de temps pour créer une application mobile ?</p>
           <p class="t-petit t-2">Compte 2 à 3 mois pour une app simple, 4 à 8 pour une app moyenne, 9 et plus pour une app complexe. Le détail honnête de ce qui allonge vraiment les délais.</p>
         </div>
-        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Lire · 6 min</span>
+        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Temps de lecture 6 min</span>
       </a>
 
-      <a class="carte carte-article apparait" href="./rgpd-application-mobile-obligations.html">
-        <p class="etiquette-mono">Juridique · 19 mai 2026</p>
+      <a class="carte carte-article apparait" href="./rgpd-application-mobile-obligations.html"
+         data-categorie="Juridique"
+         data-recherche="rgpd et application mobile : ce qui est vraiment obligatoire politique de confidentialité, consentement, registre, questionnaires d'apple et google : les vraies obligations rgpd d'une app mobile, mythes compris. rgpd application mobile,politique de confidentialité app,consentement application,data safety google play,étiquettes confidentialité apple,cnil application"
+         style="overflow:hidden">
+        <img src="https://images.unsplash.com/photo-1614064641938-3bbee52942c7?crop=entropy&amp;cs=tinysrgb&amp;fit=max&amp;fm=jpg&amp;ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8cHJpdmFjeSUyMHNlY3VyaXR5JTIwbG9ja3xlbnwwfHx8fDE3ODY3MjU2Njd8MA&amp;ixlib=rb-4.1.0&amp;q=80&amp;w=800" alt="" loading="lazy"
+             style="width:calc(100% + 2 * var(--e-4));margin:calc(-1 * var(--e-4)) calc(-1 * var(--e-4)) 0;aspect-ratio:16/8;object-fit:cover;display:block">
+        <p class="etiquette-mono" style="margin-top:var(--e-3)">Juridique · 19 mai 2026</p>
         <div class="pile g-1" style="margin-top:var(--e-3)">
           <p class="t-h3" style="font-size:17px">RGPD et application mobile : ce qui est vraiment obligatoire</p>
           <p class="t-petit t-2">Politique de confidentialité, consentement, registre, questionnaires d'Apple et Google : les vraies obligations RGPD d'une app mobile, mythes compris.</p>
         </div>
-        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Lire · 7 min</span>
+        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Temps de lecture 7 min</span>
       </a>
 
-      <a class="carte carte-article apparait" href="./combien-coute-un-site-internet.html">
-        <p class="etiquette-mono">Business · 12 mai 2026</p>
+      <a class="carte carte-article apparait" href="./combien-coute-un-site-internet.html"
+         data-categorie="Business"
+         data-recherche="combien coûte un site internet en 2026 ? de 100 € par an à 30 000 € : les vraies fourchettes 2026 par chemin (constructeur, freelance, agence), les coûts cachés et le piège de la location à vie. prix site internet,combien coûte un site web,tarif création site internet,devis site web,coût site vitrine"
+         style="overflow:hidden">
+        <img src="https://images.unsplash.com/photo-1525547719571-a2d4ac8945e2?crop=entropy&amp;cs=tinysrgb&amp;fit=max&amp;fm=jpg&amp;ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8d2ViJTIwZGVzaWduJTIwbGFwdG9wfGVufDB8fHx8MTc4NjcyNTY0Mnww&amp;ixlib=rb-4.1.0&amp;q=80&amp;w=800" alt="" loading="lazy"
+             style="width:calc(100% + 2 * var(--e-4));margin:calc(-1 * var(--e-4)) calc(-1 * var(--e-4)) 0;aspect-ratio:16/8;object-fit:cover;display:block">
+        <p class="etiquette-mono" style="margin-top:var(--e-3)">Business · 12 mai 2026</p>
         <div class="pile g-1" style="margin-top:var(--e-3)">
           <p class="t-h3" style="font-size:17px">Combien coûte un site internet en 2026 ?</p>
           <p class="t-petit t-2">De 100 € par an à 30 000 € : les vraies fourchettes 2026 par chemin (constructeur, freelance, agence), les coûts cachés et le piège de la location à vie.</p>
         </div>
-        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Lire · 7 min</span>
+        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Temps de lecture 7 min</span>
       </a>
     </div>
+<script>
+  (function () {
+    var champ = document.getElementById('blog-recherche');
+    var filtres = document.getElementById('blog-filtres');
+    var vide = document.getElementById('blog-vide');
+    if (!champ || !filtres) return;
+    var cat = '';
+    function applique() {
+      var q = champ.value.toLowerCase().trim();
+      var visibles = 0;
+      document.querySelectorAll('.carte-article').forEach(function (c) {
+        var ok = (!cat || c.dataset.categorie === cat)
+              && (!q || (c.dataset.recherche || '').indexOf(q) !== -1);
+        c.style.display = ok ? '' : 'none';
+        if (ok) visibles++;
+      });
+      vide.classList.toggle('masque', visibles > 0);
+    }
+    champ.addEventListener('input', applique);
+    filtres.addEventListener('click', function (ev) {
+      var b = ev.target.closest('[data-cat]');
+      if (!b) return;
+      cat = b.dataset.cat;
+      filtres.querySelectorAll('[data-cat]').forEach(function (x) {
+        x.classList.toggle('actif', x === b);
+        x.style.outline = x === b ? '2px solid var(--texte)' : '';
+      });
+      applique();
+    });
+  })();
+</script>
   </section>
 
 </div>

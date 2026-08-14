@@ -6,6 +6,9 @@ date: 2026-07-28
 auteur: Nadir Ben Salah
 categorie: Business
 motsCles: coût maintenance application, maintenance app mobile prix, budget annuel application, mise à jour application coût, frais récurrents app, contrat maintenance application
+image: https://images.unsplash.com/photo-1581166397057-235af2b3c6dd?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8ZW5naW5lZXIlMjBtYWludGVuYW5jZSUyMHRvb2xzfGVufDB8fHx8MTc4NjcyNTY4Nnww&ixlib=rb-4.1.0&q=80&w=1600
+imageAuteur: Elena Rouame
+imageLien: https://unsplash.com/photos/red-and-silver-hand-tool-9JU2CKqtw0M
 ---
 
 La maintenance d'une application mobile coûte entre 150 et 500 € par an en frais fixes incompressibles (comptes développeur, serveurs, domaine) si tu fais le travail toi-même, de 1 000 à 6 000 € par an en forfait chez un prestataire pour une app simple, et la règle générale du marché situe la maintenance annuelle d'une app d'entreprise entre 15 et 20 % de son coût de développement initial. Une app « finie » qu'on ne touche plus n'existe pas : les systèmes d'exploitation, les règles des stores et les bibliothèques bougent chaque année, avec ou sans toi.

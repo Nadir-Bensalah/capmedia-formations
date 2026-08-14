@@ -6,6 +6,9 @@ date: 2026-05-19
 auteur: Nadir Ben Salah
 categorie: Juridique
 motsCles: rgpd application mobile, politique de confidentialité app, consentement application, data safety google play, étiquettes confidentialité apple, cnil application
+image: https://images.unsplash.com/photo-1614064641938-3bbee52942c7?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8cHJpdmFjeSUyMHNlY3VyaXR5JTIwbG9ja3xlbnwwfHx8fDE3ODY3MjU2Njd8MA&ixlib=rb-4.1.0&q=80&w=1600
+imageAuteur: FlyD
+imageLien: https://unsplash.com/photos/red-padlock-on-black-computer-keyboard-mT7lXZPjk7U
 ---
 
 Pour une application mobile, quatre choses sont réellement obligatoires : une politique de confidentialité accessible en ligne, une base légale pour chaque donnée collectée (le consentement n'en est qu'une parmi six), un registre des traitements, et des déclarations exactes dans les questionnaires de confidentialité d'Apple et de Google. Tout le reste, DPO obligatoire pour tous, hébergement imposé en France, consentement pour tout, relève du mythe. Et la première sanction concrète ne vient généralement pas de la CNIL : c'est le rejet de ton app par les stores.

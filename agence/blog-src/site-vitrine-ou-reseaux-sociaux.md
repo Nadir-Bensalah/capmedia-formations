@@ -6,6 +6,9 @@ date: 2026-06-16
 auteur: Nadir Ben Salah
 categorie: Business
 motsCles: site vitrine ou réseaux sociaux, site internet artisan, présence en ligne entreprise, instagram ou site web, google business profile, visibilité locale
+image: https://images.unsplash.com/photo-1724862936518-ae7fcfc052c1?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8c29jaWFsJTIwbWVkaWElMjBwaG9uZSUyMGFwcHN8ZW58MHx8fHwxNzg2NzI1Njc1fDA&ixlib=rb-4.1.0&q=80&w=1600
+imageAuteur: Berke Citak
+imageLien: https://unsplash.com/photos/a-person-holding-a-smart-phone-with-social-media-on-the-screen-0cpyFsSUiSc
 ---
 
 La réponse courte : commence par une fiche Google Business Profile gratuite et un réseau social bien tenu, puis investis dans un site vitrine dès que tu vis de ton activité. Les réseaux sociaux apportent la visibilité et le contact, le site apporte la crédibilité, le référencement Google et surtout l'indépendance : c'est le seul terrain en ligne dont tu es propriétaire. La vraie question n'est donc pas « lequel ? » mais « dans quel ordre ? », et l'ordre dépend de ton métier.

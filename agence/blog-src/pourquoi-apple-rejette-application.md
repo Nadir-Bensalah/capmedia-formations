@@ -6,6 +6,9 @@ date: 2026-08-06
 auteur: Nadir Ben Salah
 categorie: Stores
 motsCles: rejet app store, apple rejette application, guideline 2.1 apple, guideline 4.3 spam, répondre reviewer apple, résolution center app store, appel app review
+image: https://images.unsplash.com/photo-1619418602850-35ad20aa1700?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8cmVqZWN0ZWQlMjBzdGFtcCUyMGRvY3VtZW50fGVufDB8fHx8MTc4NjcyNTY5MHww&ixlib=rb-4.1.0&q=80&w=1600
+imageAuteur: Markus Spiske
+imageLien: https://unsplash.com/photos/brown-wooden-hand-tool-on-white-printer-paper-7PMGUqYQpYc
 ---
 
 Apple rejette votre application pour une poignée de motifs récurrents : l'app incomplète ou qui plante (guideline 2.1), le spam et les apps trop similaires (4.3), les manquements sur les données personnelles (5.1.1), et les paiements qui contournent le système d'Apple (3.1.1). Un rejet n'est ni rare ni grave : c'est un message dans le Resolution Center, avec le numéro de la règle, auquel on peut répondre, et une resoumission corrigée passe le plus souvent en 24 à 48 heures. La vraie compétence, c'est de savoir lire le motif, décider si on corrige ou si on argumente, et répondre proprement.
