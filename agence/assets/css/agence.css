@@ -1,0 +1,102 @@
+/* ==========================================================================
+   CAPMEDIA DIGITAL · agence.css
+   Compléments propres au site agence. Tout le reste vient de tokens.css
+   et az.css, copiés tels quels depuis l'Academy : ne rien dupliquer ici.
+   ========================================================================== */
+
+/* --- Fil d'ariane (blog) -------------------------------------------------- */
+.fil-ariane {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--texte-3);
+}
+.fil-ariane a { color: var(--texte-2); text-decoration: none; }
+.fil-ariane a:hover { color: var(--texte); text-decoration: underline; text-underline-offset: 2px; }
+.fil-ariane .sep { color: var(--texte-3); }
+
+/* --- En-tête d'article ----------------------------------------------------- */
+.article-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--e-3);
+}
+
+/* --- Corps d'article de blog ---------------------------------------------- */
+.article-corps { max-width: var(--colonne-lecture); }
+.article-corps > * + * { margin-top: var(--e-4); }
+.article-corps h2 {
+  font-weight: 600;
+  font-size: clamp(24px, 3vw, 32px);
+  line-height: 1.2;
+  letter-spacing: var(--ls-h2);
+  text-wrap: balance;
+  margin-top: var(--e-7);
+}
+.article-corps h3 {
+  font-weight: 600;
+  font-size: 19px;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  margin-top: var(--e-6);
+}
+.article-corps p { font-size: 16px; line-height: 1.6; color: var(--texte-2); }
+.article-corps p strong, .article-corps li strong { color: var(--texte); }
+.article-corps ul, .article-corps ol {
+  padding-left: 1.2em;
+  display: grid;
+  gap: var(--e-2);
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--texte-2);
+}
+.article-corps a { color: var(--action); text-decoration: none; }
+.article-corps a:hover { text-decoration: underline; text-underline-offset: 2px; }
+.article-corps code {
+  font-family: var(--police-mono);
+  font-size: 0.88em;
+  background: var(--bg-3);
+  border-radius: var(--r-1);
+  padding: 1px 5px;
+}
+.article-corps pre code { background: none; padding: 0; font-size: inherit; }
+.article-corps .encadre p { margin-top: 0; }
+.article-corps .encadre p + p { margin-top: var(--e-3); }
+
+/* --- Cartes d'articles (liste du blog + accueil) --------------------------- */
+.carte-article {
+  display: flex;
+  flex-direction: column;
+  text-decoration: none;
+  color: inherit;
+}
+.carte-article:hover .t-h3 { text-decoration: underline; text-underline-offset: 3px; }
+
+/* --- Page mentions (l'équivalent local de legal.css, en plus simple) ------- */
+.doc-simple { max-width: 760px; }
+.doc-simple h2 { margin-top: var(--e-7); }
+.bloc-info {
+  margin-top: var(--e-4);
+  border: 1px solid var(--trait);
+  border-radius: var(--r-3);
+  background: var(--bg-2);
+  padding: var(--e-4) var(--e-5);
+}
+.bloc-info dl {
+  display: grid;
+  grid-template-columns: minmax(150px, auto) 1fr;
+  gap: var(--e-2) var(--e-4);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+.bloc-info dt { color: var(--texte-3); }
+.bloc-info dd { color: var(--texte); margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 560px) {
+  .bloc-info dl { grid-template-columns: 1fr; gap: 2px; }
+  .bloc-info dd { margin-bottom: var(--e-2); }
+}
