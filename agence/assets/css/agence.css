@@ -121,9 +121,26 @@
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
   position: relative;
 }
-.tuile-app:nth-child(odd)  { transform: rotate(-5deg) translateY(2px); }
-.tuile-app:nth-child(even) { transform: rotate(4deg) translateY(-3px); }
-.tuile-app:nth-child(4)    { transform: rotate(-2deg) translateY(-6px) scale(1.08); }
+/* L'arc : un désordre ordonné. Chaque tuile suit la courbe (--y) et
+   s'incline en éventail (--r), puis flotte doucement, en décalé. */
+.tuile-app {
+  transform: rotate(var(--r, 0deg)) translateY(var(--y, 0px)) scale(var(--s, 1));
+  animation: tuile-flotte 4s ease-in-out infinite alternate;
+}
+.tuile-app:nth-child(1) { --r: -9deg; --y: 16px; animation-delay: 0s; }
+.tuile-app:nth-child(2) { --r: -6deg; --y: 6px;  animation-delay: 1.3s; }
+.tuile-app:nth-child(3) { --r: -3deg; --y: 0px;  animation-delay: 2.6s; }
+.tuile-app:nth-child(4) { --r: 0deg;  --y: -4px; --s: 1.07; animation-delay: 0.6s; }
+.tuile-app:nth-child(5) { --r: 3deg;  --y: 0px;  animation-delay: 1.9s; }
+.tuile-app:nth-child(6) { --r: 6deg;  --y: 6px;  animation-delay: 3.2s; }
+.tuile-app:nth-child(7) { --r: 9deg;  --y: 16px; animation-delay: 0.9s; }
+@keyframes tuile-flotte {
+  from { transform: rotate(var(--r, 0deg)) translateY(var(--y, 0px)) scale(var(--s, 1)); }
+  to   { transform: rotate(var(--r, 0deg)) translateY(calc(var(--y, 0px) - 7px)) scale(var(--s, 1)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tuile-app { animation: none; }
+}
 .tuile-app .badge-notif {
   position: absolute; top: -6px; right: -6px;
   min-width: 20px; height: 20px; border-radius: 10px;
