@@ -219,7 +219,8 @@ ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld)}</script
       <a href="../index.html#services">Services</a>
       <a href="../index.html#audits">Audits</a>
       <a href="./">Le blog</a>
-      <a href="https://academy.capmedia.app/">L'académie</a>
+      <a href="../academie.html">L'académie</a>
+      <a href="../fondateur.html">Le fondateur</a>
     </nav>
     <span style="margin-left:auto"></span>
     <a href="../devis.html" class="btn btn-principal">Demander un devis</a>
@@ -236,11 +237,17 @@ const pied = `
       <a href="../audit-application.html" class="t-petit">Audit d'application</a>
       <a href="../test-avant-soumission.html" class="t-petit">Test avant soumission</a>
       <a href="./" class="t-petit">Le blog</a>
-      <a href="https://academy.capmedia.app/" class="t-petit">Capmedia Academy</a>
+      <a href="../academie.html" class="t-petit">L'académie</a>
+      <a href="../fondateur.html" class="t-petit">Le fondateur</a>
       <a href="../mentions.html" class="t-petit">Mentions légales</a>
       <a href="mailto:contact@capmedia.tn" class="t-petit">Contact</a>
     </div>
     <hr class="filet" style="margin-block:var(--e-4)">
+    <div class="selecteur-theme" role="group" aria-label="Thème" style="margin-bottom:var(--e-4)">
+      <button type="button" data-theme-val="light" aria-pressed="false">Clair</button>
+      <button type="button" data-theme-val="dark" aria-pressed="false">Sombre</button>
+      <button type="button" data-theme-val="auto" aria-pressed="true">Auto</button>
+    </div>
     <p class="t-micro t-3" style="display:flex;align-items:center;gap:8px;margin-bottom:var(--e-3)"><img src="../assets/img/capmedia-digital.png" alt="Capmedia Digital" width="20" height="20">Capmedia Digital édite aussi Capmedia Academy, notre plateforme de formation.</p>
     <p class="t-micro t-3">© 2026 Capmedia Digital · Nadir Ben Salah · SIREN 814&nbsp;051&nbsp;769</p>
   </div>
@@ -252,7 +259,7 @@ const pied = `
   window.addEventListener('scroll',m,{passive:true});
   document.querySelectorAll('.apparait').forEach(function(x){x.classList.add('vu')});})();
 </script>
-<script src="../assets/js/config-agence.js"></script>\n<script src="../assets/js/cookies.js"></script>\n</body>
+<script src="../assets/js/config-agence.js"></script>\n<script src="../assets/js/cookies.js"></script>\n<script src="../assets/js/theme.js"></script>\n</body>
 </html>
 `;
 
@@ -462,10 +469,14 @@ function sitemap(articles) {
     { loc: `${SITE}/audit-site-web.html`, prio: '0.8' },
     { loc: `${SITE}/audit-application.html`, prio: '0.8' },
     { loc: `${SITE}/test-avant-soumission.html`, prio: '0.8' },
+    { loc: `${SITE}/academie.html`, prio: '0.8' },
+    { loc: `${SITE}/fondateur.html`, prio: '0.6' },
     { loc: `${SITE}/en/`, prio: '0.9' },
     { loc: `${SITE}/en/audit-site-web.html`, prio: '0.7' },
     { loc: `${SITE}/en/audit-application.html`, prio: '0.7' },
     { loc: `${SITE}/en/test-avant-soumission.html`, prio: '0.7' },
+    { loc: `${SITE}/en/academy.html`, prio: '0.7' },
+    { loc: `${SITE}/en/founder.html`, prio: '0.5' },
     { loc: `${SITE}/en/quote.html`, prio: '0.6' },
     { loc: `${SITE}/blog/`, prio: '0.7' },
     ...articles.map((a) => ({ loc: `${SITE}/blog/${a.meta.id}.html`, prio: '0.6', date: a.meta.date })),
