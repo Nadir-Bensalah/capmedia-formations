@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SOS Erreurs · Capmedia Academy</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#191919" media="(prefers-color-scheme: dark)">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="../../assets/css/tokens.css">
+<link rel="stylesheet" href="../../assets/css/az.css">
+<link rel="stylesheet" href="../../assets/css/lecture.css">
+<link rel="icon" type="image/png" sizes="32x32" href="../../assets/img/favicon-32.png">
+<link rel="apple-touch-icon" href="../../assets/img/apple-touch-icon.png">
+<script>
+  (function () {
+    try {
+      var t = localStorage.getItem('az:theme');
+      if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+    } catch (e) {}
+  })();
+</script>
+</head>
+<body>
+
+<!-- ── Écran d'attente ─────────────────────────────────────────────────── -->
+<div class="voile" id="voile">
+  <div class="rang" style="justify-content:center">
+    <svg class="tourne" width="18" height="18" viewBox="0 0 24 24" fill="none"
+         stroke="var(--texte-3)" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
+      <path d="M12 3a9 9 0 1 0 9 9"/>
+    </svg>
+    <span class="t-petit t-2" id="voile-texte">Vérification de ton accès…</span>
+  </div>
+</div>
+
+<!-- ── Barre mobile ────────────────────────────────────────────────────── -->
+<div class="barre-app">
+  <button class="bouton-icone" id="ouvrir-menu" aria-label="Ouvrir le sommaire">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+  <span class="logo" style="font-size:14px"><img class="marque" src="../../assets/img/logo-academy.png" alt="" width="20" height="20">SOS&nbsp;Erreurs</span>
+</div>
+
+<div class="agencement">
+
+  <!-- ── Sommaire ──────────────────────────────────────────────────────── -->
+  <aside class="sommaire" id="sommaire">
+    <div class="sommaire-haut">
+      <a href="../" class="logo"><img class="marque" src="../../assets/img/logo-academy.png" alt="" width="22" height="22">Capmedia&nbsp;Academy</a>
+      <button class="bouton-icone mobile-seul" id="fermer-menu" aria-label="Fermer le sommaire">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <div class="sommaire-progression">
+      <p class="etiquette" id="sos-etiquette">SOS Erreurs</p>
+      <input type="search" id="sos-champ" class="champ" autocomplete="off"
+             placeholder="Colle une erreur, ou tape quelques mots…"
+             style="width:100%;margin-top:var(--e-2);font-size:13px">
+    </div>
+
+    <nav class="liens-modules" id="sos-nav" aria-label="Les fiches SOS"></nav>
+
+    <div class="sommaire-bas">
+      <a class="lien-module" href="../" id="retour-formation">
+        <span class="num"><svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg></span>
+        <span class="titre-module" id="retour-texte">Retour à ma formation</span>
+      </a>
+      <span class="t-micro t-3" id="email-membre"></span>
+      <div class="selecteur-theme" role="group" aria-label="Thème" style="padding:2px;align-self:flex-start">
+        <button type="button" data-theme-val="light" aria-pressed="false" style="padding:2px 6px;font-size:11px">Clair</button>
+        <button type="button" data-theme-val="dark" aria-pressed="false" style="padding:2px 6px;font-size:11px">Sombre</button>
+        <button type="button" data-theme-val="auto" aria-pressed="true" style="padding:2px 6px;font-size:11px">Auto</button>
+      </div>
+    </div>
+  </aside>
+  <div class="ombre" id="ombre"></div>
+
+  <!-- ── Lecture ───────────────────────────────────────────────────────── -->
+  <main class="lecture">
+    <article class="page" id="page"></article>
+  </main>
+
+</div>
+
+<script src="../../assets/js/config.js"></script>
+<script src="../../assets/js/theme.js"></script>
+<script type="module" src="../../assets/js/sos.js"></script>
+</body>
+</html>
