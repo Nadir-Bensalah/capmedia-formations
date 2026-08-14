@@ -83,7 +83,7 @@ Et le mélange existe : beaucoup de nos clients construisent la première versio
 
 Tu l'auras compris, on est des deux côtés de ce comparatif, et c'est voulu :
 
-- **Tu veux le faire faire** : c'est le métier de l'agence. Application, site, automatisation : décris ton projet à [Capmedia Digital](https://capmedia.app/), et tu reçois sous 24 h une réponse honnête avec un prix ferme, y compris si la réponse est « ton projet n'a pas besoin de nous ».
+- **Tu veux le faire faire** : c'est le métier de l'agence. Application, site, automatisation : décris ton projet à [Capmedia Digital](https://capmedia.app/), et tu reçois rapidement une réponse honnête avec un prix ferme, y compris si la réponse est « ton projet n'a pas besoin de nous ».
 - **Tu veux le faire toi-même** : c'est le métier de [Capmedia Academy](https://academy.capmedia.app/). Le parcours complet, de ta première ligne de code à ton app publiée sur les stores, en français, avec les trois premières formations offertes pour juger sur pièces.
 
 Le bon chemin, c'est celui qui correspond à ton budget, ton temps et ton projet. Maintenant, tu as les vrais chiffres pour le choisir.

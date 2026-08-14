@@ -757,6 +757,27 @@ exports.admin = onRequest(
         await bdd.doc(`apps-membres/${id}`).delete();
         return res.status(200).json({ ok: true });
       }
+      /* --- Les demandes de devis (site agence) -------------------------- */
+      if (action === 'devisTous') {
+        const tous = await bdd.collection('devis').get();
+        const liste = tous.docs.map((d) => ({ id: d.id, ...d.data() }));
+        liste.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        return res.status(200).json(liste);
+      }
+      if (action === 'devisStatut') {
+        const { id, statut } = req.body || {};
+        if (!id || !['nouveau', 'traite'].includes(statut)) {
+          return res.status(400).send('id et statut (nouveau|traite) requis');
+        }
+        await bdd.doc(`devis/${id}`).set({ statut }, { merge: true });
+        return res.status(200).json({ ok: true, statut });
+      }
+      if (action === 'devisSupprimer') {
+        const { id } = req.body || {};
+        if (!id) return res.status(400).send('id requis');
+        await bdd.doc(`devis/${id}`).delete();
+        return res.status(200).json({ ok: true });
+      }
       if (action === 'repondre') {
         if (!uid || !texte) return res.status(400).send('uid et texte requis');
         const ref = bdd.doc(`conversations/${uid}`);

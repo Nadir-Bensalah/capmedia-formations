@@ -220,7 +220,7 @@ ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld)}</script
       <a href="https://academy.capmedia.app/">L'académie</a>
     </nav>
     <span style="margin-left:auto"></span>
-    <a href="mailto:contact@capmedia.tn?subject=Demande%20de%20devis" class="btn btn-principal">Demander un devis</a>
+    <a href="../devis.html" class="btn btn-principal">Demander un devis</a>
   </div>
 </header>
 `;
@@ -250,7 +250,7 @@ const pied = `
   window.addEventListener('scroll',m,{passive:true});
   document.querySelectorAll('.apparait').forEach(function(x){x.classList.add('vu')});})();
 </script>
-</body>
+<script src="../assets/js/config-agence.js"></script>\n<script src="../assets/js/cookies.js"></script>\n</body>
 </html>
 `;
 

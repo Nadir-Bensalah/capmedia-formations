@@ -236,6 +236,31 @@ service cloud.firestore {
       }
     }
 
+    // --- Les demandes de devis (site agence capmedia.app) ----------------
+    // Création anonyme, jamais de lecture publique : seules la console
+    // (Admin SDK) les lit. Le statut de départ est imposé.
+    match /devis/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['type', 'message', 'nom', 'email', 'telephone', 'entreprise', 'date', 'langue', 'statut'])
+        && request.resource.data.statut == 'nouveau'
+        && request.resource.data.type is string
+        && request.resource.data.type.size() > 0
+        && request.resource.data.type.size() <= 40
+        && request.resource.data.message is string
+        && request.resource.data.message.size() >= 10
+        && request.resource.data.message.size() <= 4000
+        && request.resource.data.nom is string
+        && request.resource.data.nom.size() > 0
+        && request.resource.data.nom.size() <= 80
+        && request.resource.data.email is string
+        && request.resource.data.email.matches('.+@.+[.].+')
+        && request.resource.data.email.size() <= 120
+        && request.resource.data.telephone is string
+        && request.resource.data.telephone.size() <= 30
+        && request.resource.data.entreprise is string
+        && request.resource.data.entreprise.size() <= 80;
+      allow read, update, delete: if false;
+    }
+
     // --- Tout le reste est fermé ---------------------------------------
     match /{document=**} {
       allow read, write: if false;
