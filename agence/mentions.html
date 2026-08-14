@@ -27,6 +27,13 @@
 <header class="entete" id="entete">
   <div class="enveloppe">
     <a href="./index.html" class="logo"><img class="marque" src="./assets/img/capmedia-digital.png" alt="" width="22" height="22">Capmedia&nbsp;Digital</a>
+    <nav class="nav-liens">
+      <a href="./index.html#services">Services</a>
+      <a href="./index.html#audits">Audits</a>
+      <a href="./blog/">Le blog</a>
+      <a href="./academie.html">L'académie</a>
+      <a href="./fondateur.html">Le fondateur</a>
+    </nav>
     <span style="margin-left:auto"></span>
     <nav class="sel-langue" aria-label="Langue">
       <a href="./mentions.html" hreflang="fr" aria-current="true">FR</a>
@@ -75,7 +82,7 @@
     <p class="t-corps t-2">Apple, App Store, iPhone, Xcode, TestFlight, Google, Google Play et les autres marques citées appartiennent à leurs détenteurs respectifs, qui ne sont ni partenaires ni garants des prestations de l'agence.</p>
 
     <h2 class="t-h2" id="donnees">Données personnelles</h2>
-    <p class="t-corps t-2">Ce site est statique : il ne dépose aucun cookie, ne contient aucun traceur et ne collecte aucune donnée de navigation. Les seules données personnelles traitées sont celles que tu transmets volontairement par e-mail (adresse, contenu du message) : elles servent uniquement à te répondre et à établir un devis, ne sont jamais transmises à des tiers, et sont supprimées sur simple demande à <a href="mailto:contact@capmedia.tn">contact@capmedia.tn</a>. Conformément au RGPD, tu disposes d'un droit d'accès, de rectification et d'effacement de tes données.</p>
+    <p class="t-corps t-2">Ce site est statique : il ne dépose aucun cookie, ne contient aucun traceur et ne collecte aucune donnée de navigation. Les seules données personnelles traitées sont celles que vous transmettez volontairement par e-mail (adresse, contenu du message) : elles servent uniquement à vous répondre et à établir un devis, ne sont jamais transmises à des tiers, et sont supprimées sur simple demande à <a href="mailto:contact@capmedia.tn">contact@capmedia.tn</a>. Conformément au RGPD, vous disposez d'un droit d'accès, de rectification et d'effacement de vos données.</p>
 
     <h2 class="t-h2" id="responsabilite">Responsabilité</h2>
     <p class="t-corps t-2">L'éditeur met tout en œuvre pour fournir des informations exactes et à jour, notamment dans les articles du blog, mais ne saurait garantir l'exhaustivité ou l'actualité des contenus : les règles des plateformes (Apple, Google), les prix et les technologies cités évoluent. Les prestations de l'agence sont des obligations de moyens : les audits et revues ne garantissent ni l'acceptation d'une application par les stores, ni un quelconque résultat commercial.</p>
@@ -94,11 +101,17 @@
       <a href="./audit-application.html" class="t-petit">Audit d'application</a>
       <a href="./test-avant-soumission.html" class="t-petit">Test avant soumission</a>
       <a href="./blog/" class="t-petit">Le blog</a>
-      <a href="https://academy.capmedia.app/" class="t-petit">Capmedia Academy</a>
+      <a href="./academie.html" class="t-petit">L'académie</a>
+      <a href="./fondateur.html" class="t-petit">Le fondateur</a>
       <a href="./mentions.html" class="t-petit">Mentions légales</a>
       <a href="mailto:contact@capmedia.tn" class="t-petit">Contact</a>
     </div>
     <hr class="filet" style="margin-block:var(--e-4)">
+    <div class="selecteur-theme" role="group" aria-label="Thème" style="margin-bottom:var(--e-4)">
+      <button type="button" data-theme-val="light" aria-pressed="false">Clair</button>
+      <button type="button" data-theme-val="dark" aria-pressed="false">Sombre</button>
+      <button type="button" data-theme-val="auto" aria-pressed="true">Auto</button>
+    </div>
     <p class="t-micro t-3" style="display:flex;align-items:center;gap:8px;margin-bottom:var(--e-3)"><img src="./assets/img/capmedia-digital.png" alt="Capmedia Digital" width="20" height="20">Capmedia Digital édite aussi Capmedia Academy, notre plateforme de formation.</p>
     <p class="t-micro t-3">© 2026 Capmedia Digital · Nadir Ben Salah · SIREN 814&nbsp;051&nbsp;769</p>
   </div>
@@ -111,5 +124,6 @@
 </script>
 <script src="./assets/js/config-agence.js"></script>
 <script src="./assets/js/cookies.js"></script>
+<script src="./assets/js/theme.js"></script>
 </body>
 </html>
