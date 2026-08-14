@@ -2,7 +2,7 @@
 id: config-pc-developpement-2026
 titre: Quelle configuration pour développer en 2026 ?
 description: Mac ou PC, combien de RAM vraiment, le piège du disque et des recommandations par budget. Le guide honnête pour choisir ta machine de développement sans te ruiner.
-date: 2026-08-15
+date: 2026-04-21
 auteur: Nadir Ben Salah
 categorie: Matériel
 motsCles: configuration pc développement, mac ou pc développeur, ram développement, ordinateur pour coder, machine développeur 2026

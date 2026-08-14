@@ -455,13 +455,18 @@ ${'\u003c'}/script>
 ` + pied;
 }
 
-/* --- Le sitemap du site agence --------------------------------------------- */
+/* --- Le sitemap du site agence (pages FR, pages EN, articles) -------------- */
 function sitemap(articles) {
   const pages = [
     { loc: `${SITE}/`, prio: '1.0' },
     { loc: `${SITE}/audit-site-web.html`, prio: '0.8' },
     { loc: `${SITE}/audit-application.html`, prio: '0.8' },
     { loc: `${SITE}/test-avant-soumission.html`, prio: '0.8' },
+    { loc: `${SITE}/en/`, prio: '0.9' },
+    { loc: `${SITE}/en/audit-site-web.html`, prio: '0.7' },
+    { loc: `${SITE}/en/audit-application.html`, prio: '0.7' },
+    { loc: `${SITE}/en/test-avant-soumission.html`, prio: '0.7' },
+    { loc: `${SITE}/en/quote.html`, prio: '0.6' },
     { loc: `${SITE}/blog/`, prio: '0.7' },
     ...articles.map((a) => ({ loc: `${SITE}/blog/${a.meta.id}.html`, prio: '0.6', date: a.meta.date })),
   ];
