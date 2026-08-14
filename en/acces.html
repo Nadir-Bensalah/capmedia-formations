@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Member area · Capmedia Academy</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#191919" media="(prefers-color-scheme: dark)">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="../assets/css/tokens.css">
+<link rel="stylesheet" href="../assets/css/az.css">
+<link rel="icon" type="image/png" sizes="32x32" href="../assets/img/favicon-32.png">
+<link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png">
+<script>
+  (function () {
+    try {
+      var t = localStorage.getItem('az:theme');
+      if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+    } catch (e) {}
+  })();
+  // The member area follows the language of the door you came in through.
+  try { localStorage.setItem('az:langue', 'en'); } catch (e) {}
+</script>
+<style>
+  body { display: grid; place-items: center; min-height: 100dvh; padding: var(--e-6) var(--marge-mobile); }
+  .boite { width: 100%; max-width: 420px; }
+</style>
+</head>
+<body>
+
+<main class="boite pile g-6">
+
+  <div class="pile g-4">
+    <a href="./index.html" class="logo"><img class="marque" src="../assets/img/logo-academy.png" alt="" width="22" height="22">Capmedia&nbsp;Academy</a>
+    <div class="pile g-2">
+      <h1 class="t-h2" id="titre">Your course space</h1>
+      <p class="t-petit t-2" id="sous-titre">
+        Enter your email address and you will receive a sign-in link: no
+        password to create or remember. An account is enough to start for
+        free, with three full courses included. Buying comes later, if you
+        want the rest.
+      </p>
+    </div>
+  </div>
+
+  <!-- State: form -->
+  <form class="pile g-4" id="formulaire" novalidate>
+    <div>
+      <label class="etiquette-champ" for="email">Email address</label>
+      <input class="champ champ-large" type="email" id="email" name="email"
+             placeholder="you@example.com" autocomplete="email"
+             inputmode="email" required>
+    </div>
+    <button class="btn btn-principal btn-large btn-bloc" type="submit" id="envoyer">
+      Get my sign-in link
+    </button>
+    <p class="t-micro t-3">The link is valid for 1 hour and works only once.</p>
+  </form>
+
+  <!-- State: messages -->
+  <div class="encadre encadre--action masque" id="msg-ok">
+    <span class="marqueur"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 16 16 12 12 8"/><line x1="8" y1="12" x2="16" y2="12"/></svg></span>
+    <div id="msg-ok-corps"></div>
+  </div>
+  <div class="encadre encadre--piege masque" id="msg-err">
+    <span class="marqueur"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span>
+    <div id="msg-err-corps"></div>
+  </div>
+
+  <!-- State: link verification on arrival -->
+  <div class="rang masque" id="chargement" style="justify-content:center">
+    <svg class="tourne" width="18" height="18" viewBox="0 0 24 24" fill="none"
+         stroke="var(--texte-3)" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
+      <path d="M12 3a9 9 0 1 0 9 9"/>
+    </svg>
+    <span class="t-petit t-2">Signing you in…</span>
+  </div>
+
+  <hr class="filet" style="margin:0">
+
+  <div class="pile g-3">
+    <p class="t-micro t-3">
+      New here? No purchase needed to get in: your account opens three
+      full courses, free. <a href="./formations/">Browse all the courses</a>
+    </p>
+    <p class="t-micro t-3">
+      Paid but cannot get in?
+      <a href="mailto:contact@capmedia.tn">Write to me</a>, I fix it within the day.
+    </p>
+    <div class="selecteur-theme" role="group" aria-label="Theme" style="align-self:flex-start">
+      <button type="button" data-theme-val="light" aria-pressed="false">Light</button>
+      <button type="button" data-theme-val="dark" aria-pressed="false">Dark</button>
+      <button type="button" data-theme-val="auto" aria-pressed="true">System</button>
+    </div>
+  </div>
+
+</main>
+
+<script src="../assets/js/config.js"></script>
+<script src="../assets/js/theme.js"></script>
+<script src="../assets/js/cookies.js"></script>
+<script type="module" src="../assets/js/auth.js"></script>
+</body>
+</html>

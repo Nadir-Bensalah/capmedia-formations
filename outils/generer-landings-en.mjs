@@ -103,7 +103,7 @@ ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld)}</script
     </nav>
     <span style="margin-left:auto"></span>
     <a href="../../compte.html" class="lien-discret">My account</a>
-    <a href="../../acces.html" class="btn btn-principal">Sign in</a>
+    <a href="../acces.html" class="btn btn-principal">Sign in</a>
   </div>
 </header>
 `;
@@ -445,7 +445,7 @@ ${gratuit ? `    <div class="section-tete">
         <li>Lifetime access, updates included</li>
         <li>Support by messaging</li>
       </ul>
-      <a href="../../acces.html" class="btn btn-principal btn-large btn-bloc">Start for free</a>
+      <a href="../acces.html" class="btn btn-principal btn-large btn-bloc">Start for free</a>
       <p class="t-micro t-3">Step ${f.ordre} of the path · no credit card required</p>
     </div>` : pack ? `    <div class="section-tete">
       <p class="etiquette">Pricing</p>

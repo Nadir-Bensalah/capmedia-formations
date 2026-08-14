@@ -23,6 +23,43 @@ import {
 
 const cfg = window.AZ;
 const CLE_EMAIL = 'az:email-en-attente';
+const EN = window.location.pathname.includes('/en/');
+
+const TXT = EN ? {
+  revoir: 'Good to see you again',
+  redirige: 'You are already signed in. Taking you to your course…',
+  confirme: 'Confirm your email address to finish signing in:',
+  manque: 'I need your email address to validate the link. Start again above.',
+  lienMort: 'This link has expired or was already used. Request a new one below, it is instant.',
+  emailInvalide: 'This address does not look valid.',
+  echecConnexion: 'Sign-in failed. Request a new link, or write to me if it persists.',
+  verifie: 'Check your email address, it looks incomplete.',
+  envoi: 'Sending…',
+  envoye: (email) => '<b>Sent.</b><br>Open the message received at <b>' + email
+    + '</b> and click the link to enter. Check your spam folder: that is often where it hides the first time.',
+  bouton: 'Get my sign-in link',
+  tropVite: 'Too many requests in a row. Wait two minutes and try again.',
+  domaine: 'This domain is not yet authorized in Firebase (Authentication, Settings, Authorized domains).',
+  echecEnvoi: (contact) => 'Sending failed. Try again in a moment, or write to <a href="mailto:'
+    + contact + '">' + contact + '</a>.',
+} : {
+  revoir: 'Content de te revoir',
+  redirige: 'Tu es déjà connecté. On te redirige vers ta formation…',
+  confirme: 'Confirme ton adresse e-mail pour terminer la connexion :',
+  manque: "Il me faut ton adresse e-mail pour valider le lien. Recommence ci-dessus.",
+  lienMort: "Ce lien a expiré ou a déjà été utilisé. Redemande-en un ci-dessous, c'est immédiat.",
+  emailInvalide: 'Cette adresse ne semble pas valide.',
+  echecConnexion: 'La connexion a échoué. Redemande un lien, ou écris-moi si ça persiste.',
+  verifie: 'Vérifie ton adresse e-mail, elle a l’air incomplète.',
+  envoi: 'Envoi en cours…',
+  envoye: (email) => '<b>C’est envoyé.</b><br>Ouvre le message reçu à <b>' + email
+    + '</b> et clique sur le lien pour entrer. Pense à regarder dans les indésirables : c’est souvent là qu’il se cache la première fois.',
+  bouton: 'Recevoir mon lien de connexion',
+  tropVite: 'Trop de demandes coup sur coup. Attends deux minutes et réessaie.',
+  domaine: "Le domaine de ce site n'est pas encore autorisé dans Firebase (Authentication → Settings → Authorized domains).",
+  echecEnvoi: (contact) => "L'envoi a échoué. Réessaie dans un instant, ou écris-moi à <a href=\"mailto:"
+    + contact + '">' + contact + '</a>.',
+};
 
 const $ = (id) => document.getElementById(id);
 const formulaire  = $('formulaire');
@@ -64,10 +101,13 @@ if (!cfg || !cfg.firebase || !cfg.firebase.apiKey) {
 
 const app  = initializeApp(cfg.firebase);
 const auth = getAuth(app);
-auth.languageCode = 'fr';
+auth.languageCode = EN ? 'en' : 'fr';
 
+const urlRetour = cfg.urlAcces
+  ? (EN ? cfg.urlAcces.replace('/acces.html', '/en/acces.html') : cfg.urlAcces)
+  : window.location.href.split('?')[0];
 const parametresLien = {
-  url: cfg.urlAcces || window.location.href.split('?')[0],
+  url: urlRetour,
   handleCodeInApp: true,
 };
 
@@ -80,18 +120,18 @@ if (isSignInWithEmailLink(auth, window.location.href)) {
 
   // Cas où il ouvre le lien sur un autre appareil que celui de la demande.
   if (!email) {
-    email = window.prompt('Confirme ton adresse e-mail pour terminer la connexion :');
+    email = window.prompt(TXT.confirme);
   }
 
   if (!email) {
     chargement.classList.add('masque');
     formulaire.classList.remove('masque');
-    afficherErreur("Il me faut ton adresse e-mail pour valider le lien. Recommence ci-dessus.");
+    afficherErreur(TXT.manque);
   } else {
     signInWithEmailLink(auth, email.trim().toLowerCase(), window.location.href)
       .then(() => {
         window.localStorage.removeItem(CLE_EMAIL);
-        window.location.replace('./app/');
+        window.location.replace(EN ? '../app/' : './app/');
       })
       .catch((err) => {
         chargement.classList.add('masque');
@@ -99,15 +139,10 @@ if (isSignInWithEmailLink(auth, window.location.href)) {
         console.error(err);
 
         const messages = {
-          'auth/invalid-action-code':
-            "Ce lien a expiré ou a déjà été utilisé. Redemande-en un ci-dessous, c'est immédiat.",
-          'auth/invalid-email':
-            "Cette adresse ne semble pas valide.",
+          'auth/invalid-action-code': TXT.lienMort,
+          'auth/invalid-email': TXT.emailInvalide,
         };
-        afficherErreur(
-          messages[err.code] ||
-          "La connexion a échoué. Redemande un lien, ou écris-moi si ça persiste."
-        );
+        afficherErreur(messages[err.code] || TXT.echecConnexion);
       });
   }
 }
@@ -116,11 +151,11 @@ if (isSignInWithEmailLink(auth, window.location.href)) {
 else {
   onAuthStateChanged(auth, (utilisateur) => {
     if (utilisateur) {
-      titre.textContent = 'Content de te revoir';
-      sousTitre.textContent = 'Tu es déjà connecté. On te redirige vers ta formation…';
+      titre.textContent = TXT.revoir;
+      sousTitre.textContent = TXT.redirige;
       masquerFormulaire();
       chargement.classList.remove('masque');
-      setTimeout(() => window.location.replace('./app/'), 500);
+      setTimeout(() => window.location.replace(EN ? '../app/' : './app/'), 500);
     }
   });
 }
@@ -131,43 +166,30 @@ formulaire.addEventListener('submit', async (e) => {
 
   const email = champEmail.value.trim().toLowerCase();
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
-    afficherErreur('Vérifie ton adresse e-mail, elle a l’air incomplète.');
+    afficherErreur(TXT.verifie);
     champEmail.focus();
     return;
   }
 
   bouton.disabled = true;
-  bouton.textContent = 'Envoi en cours…';
+  bouton.textContent = TXT.envoi;
 
   try {
     await sendSignInLinkToEmail(auth, email, parametresLien);
     window.localStorage.setItem(CLE_EMAIL, email);
 
     masquerFormulaire();
-    afficherOk(
-      '<b>C’est envoyé.</b><br>' +
-      'Ouvre le message reçu à <b>' + email + '</b> et clique sur le lien pour entrer. ' +
-      'Pense à regarder dans les indésirables : c’est souvent là qu’il se cache la première fois.'
-    );
+    afficherOk(TXT.envoye(email));
   } catch (err) {
     console.error(err);
     bouton.disabled = false;
-    bouton.textContent = 'Recevoir mon lien de connexion';
+    bouton.textContent = TXT.bouton;
 
     const messages = {
-      'auth/invalid-email':
-        'Cette adresse ne semble pas valide.',
-      'auth/too-many-requests':
-        'Trop de demandes coup sur coup. Attends deux minutes et réessaie.',
-      'auth/unauthorized-continue-uri':
-        "Le domaine de ce site n'est pas encore autorisé dans Firebase " +
-        '(Authentication → Settings → Authorized domains).',
+      'auth/invalid-email': TXT.emailInvalide,
+      'auth/too-many-requests': TXT.tropVite,
+      'auth/unauthorized-continue-uri': TXT.domaine,
     };
-    afficherErreur(
-      messages[err.code] ||
-      "L'envoi a échoué. Réessaie dans un instant, ou écris-moi à " +
-      '<a href="mailto:' + (cfg.contact || 'contact@capmedia.tn') + '">' +
-      (cfg.contact || 'contact@capmedia.tn') + '</a>.'
-    );
+    afficherErreur(messages[err.code] || TXT.echecEnvoi(cfg.contact || 'contact@capmedia.tn'));
   }
 });
