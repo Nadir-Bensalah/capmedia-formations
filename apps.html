@@ -116,6 +116,20 @@
 <script src="./assets/js/config.js"></script>
 <script src="./assets/js/theme.js"></script>
 <script src="./assets/js/cookies.js"></script>
+<script>
+  /* Révélation à l'apparition : la page n'embarque pas site.js, on déclenche ici. */
+  (function () {
+    var cibles = document.querySelectorAll('.apparait');
+    if (!('IntersectionObserver' in window)) {
+      cibles.forEach(function (c) { c.classList.add('vu'); });
+      return;
+    }
+    var o = new IntersectionObserver(function (entrees) {
+      entrees.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('vu'); o.unobserve(e.target); } });
+    }, { rootMargin: '0px 0px -10% 0px' });
+    cibles.forEach(function (c) { o.observe(c); });
+  })();
+</script>
 <script type="module" src="./assets/js/apps.js"></script>
 </body>
 </html>
