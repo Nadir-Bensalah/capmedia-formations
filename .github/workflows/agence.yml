@@ -1,0 +1,61 @@
+# Déploiement du site agence Capmedia Digital vers la RACINE de capmedia.app.
+# Le dossier agence/ du repo part dans public_html/ (l'Academy vit à côté,
+# dans public_html/academy/, gérée par deploiement.yml : les deux workflows
+# ont chacun leur fichier d'état FTP et ne se marchent pas dessus).
+
+name: Déploiement agence capmedia.app
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'agence/**'
+      - '.github/workflows/agence.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploiement-agence
+  cancel-in-progress: false
+
+jobs:
+  ftp:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupération du dépôt
+        uses: actions/checkout@v4
+
+      - name: Estampille de version sur le JS et le CSS
+        run: |
+          python3 - "$GITHUB_SHA" <<'PY'
+          import os, re, sys
+          v = sys.argv[1][:8]
+          motif = re.compile(r'((?:src|href)="[^"]*?assets/(?:js|css)/[^"?]+\.(?:js|css))"')
+          touches = 0
+          for racine, _, fichiers in os.walk('agence'):
+              for f in fichiers:
+                  if not f.endswith('.html'): continue
+                  chemin = os.path.join(racine, f)
+                  src = open(chemin, encoding='utf-8').read()
+                  neuf, n = motif.subn(lambda m: f'{m.group(1)}?v={v}"', src)
+                  if n:
+                      open(chemin, 'w', encoding='utf-8').write(neuf)
+                      touches += n
+          print(f'{touches} références estampillées en v={v}')
+          PY
+
+      - name: Envoi FTP vers la racine
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          timeout: 120000
+          local-dir: agence/
+          server-dir: ./
+          state-name: .ftp-deploy-agence.json
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/.DS_Store
+            blog-src/**
