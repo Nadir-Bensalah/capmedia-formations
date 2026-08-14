@@ -92,6 +92,34 @@
     d'un tiers de ses modules a été débloqué (<a href="./cgv.html#garantie">détails</a>).</p>
   </section>
 
+  <!-- Mon application : publier dans la galerie + demander de l'aide -->
+  <section class="compte-section" id="section-app">
+    <h2 class="t-h3" style="font-size:19px;margin-bottom:var(--e-3)">Ton application</h2>
+    <div class="carte pile g-3" style="padding:var(--e-4)">
+      <p class="t-petit t-2">
+        Tu as terminé la formation ? Tu as développé ton application ?
+        Publie-la dans la galerie des membres : elle sera visible par tout le
+        monde, avec ses captures, ses liens et les cœurs de la communauté.
+        C'est ta première base d'utilisateurs.
+      </p>
+      <div id="etat-mon-app"></div>
+      <div class="rang" style="gap:var(--e-2);flex-wrap:wrap">
+        <button type="button" class="btn btn-principal" id="publier-app">Publier mon application</button>
+        <a class="btn btn-secondaire" href="./apps.html">Voir la galerie</a>
+      </div>
+    </div>
+    <div class="carte pile g-3" style="padding:var(--e-4);margin-top:var(--e-3)">
+      <p class="t-petit t-2">
+        Bloqué quelque part ? Une erreur incompréhensible, un module qui
+        résiste, un doute : demande de l'aide, un humain répond.
+      </p>
+      <div class="rang" style="gap:var(--e-2);flex-wrap:wrap">
+        <a class="btn btn-secondaire" href="./app/#support">Demander de l'aide à Capmedia Academy</a>
+        <a class="btn btn-secondaire" href="./app/sos/">SOS Erreurs : la bible</a>
+      </div>
+    </div>
+  </section>
+
   <!-- Mes informations -->
   <section class="compte-section">
     <h2 class="t-h3" style="font-size:19px;margin-bottom:var(--e-3)">Mes informations</h2>
@@ -176,6 +204,7 @@
 <script src="./assets/js/theme.js"></script>
 <script src="./assets/js/cookies.js"></script>
 <script type="module" src="./assets/js/compte.js"></script>
+<script type="module" src="./assets/js/publier-app.js"></script>
 <script type="module">
   /* Mes informations : le nom (profils/{uid}, modifiable) et l'e-mail du
      compte (lecture seule). Indépendant de compte.js, même app Firebase. */

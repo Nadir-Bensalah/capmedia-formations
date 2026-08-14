@@ -1138,6 +1138,11 @@ const ombre    = $('ombre-menu');
 function ouvrirMenu()  { sommaire.classList.add('ouvert');  ombre.classList.add('actif'); }
 function fermerMenu()  { sommaire.classList.remove('ouvert'); ombre.classList.remove('actif'); }
 $('ouvrir-menu').addEventListener('click', ouvrirMenu);
+
+/* Lien direct vers l'aide : Mon compte renvoie vers ./app/#support */
+if (location.hash === '#support') {
+  setTimeout(() => { const b = $('ouvrir-support'); if (b) b.click(); }, 700);
+}
 $('fermer-menu').addEventListener('click', fermerMenu);
 ombre.addEventListener('click', fermerMenu);
 
