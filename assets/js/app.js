@@ -56,6 +56,14 @@ const T = LANGUE === 'en' ? {
   leParcours: 'The Path',
   aPart: 'My standalone courses',
   mesFormations: 'My courses',
+  sos: 'SOS Errors',
+  sosTitre: 'The common-errors bible',
+  sosIntro: 'Paste your error message: the right fix is probably already here, with a ready-to-copy AI prompt.',
+  sosChercher: 'Paste an error, or type a few words…',
+  sosAucun: 'Nothing found. Try fewer words, or a shorter piece of the error message.',
+  sosToutes: 'All',
+  sosRetour: 'Back to the list',
+  sosFamilles: { git: 'Git & GitHub', env: 'Environment', rn: 'React Native & Expo', ios: 'iOS & Xcode', android: 'Android', firebase: 'Firebase', stripe: 'Stripe', stores: 'The stores', ia: 'Working with AI' },
   lienEspace: 'My space: payments, receipts and account details',
   bienvenue: 'Welcome!',
   tonNom: "What's your name?",
@@ -89,6 +97,14 @@ const T = LANGUE === 'en' ? {
   leParcours: 'Le Parcours',
   aPart: 'Mes formations à part',
   mesFormations: 'Mes formations',
+  sos: 'SOS Erreurs',
+  sosTitre: 'La bible des erreurs communes',
+  sosIntro: "Colle ton message d'erreur : la solution est sans doute déjà là, avec un prompt prêt à copier pour ton IA.",
+  sosChercher: "Colle une erreur, ou tape quelques mots…",
+  sosAucun: "Rien trouvé. Essaie moins de mots, ou un morceau plus court du message d'erreur.",
+  sosToutes: 'Toutes',
+  sosRetour: 'Retour à la liste',
+  sosFamilles: { git: 'Git & GitHub', env: 'Environnement', rn: 'React Native & Expo', ios: 'iOS & Xcode', android: 'Android', firebase: 'Firebase', stripe: 'Stripe', stores: 'Les stores', ia: "Travailler avec l'IA" },
   lienEspace: 'Mon espace : paiements, reçus et informations',
   bienvenue: 'Bienvenue !',
   tonNom: "Comment tu t'appelles ?",
@@ -1062,6 +1078,144 @@ document.addEventListener('click', async (e) => {
   }
 });
 
+/* ==========================================================================
+   SOS Erreurs : la bible des erreurs communes, offerte à tous les membres.
+   Sommaire chargé au premier appel ; le texte intégral des fiches se charge
+   en arrière-plan pour permettre la recherche par message d'erreur collé.
+   ========================================================================== */
+let sosSommaire = null;      // [{id, titre, resume, famille, ordre}]
+let sosTexte = null;         // { id: markdown en minuscules } pour la recherche
+const sosMarkdown = {};      // { id: markdown brut } cache d'affichage
+
+async function chargerSOS() {
+  if (sosSommaire) return sosSommaire;
+  const instantane = await getDocs(
+    query(collection(bdd, 'formations/sos/lecons'), orderBy('ordre')));
+  sosSommaire = instantane.docs.map((d) => ({ id: d.id, ...d.data() }));
+  getDocs(collection(bdd, 'formations/sos/contenus')).then((s) => {
+    sosTexte = {};
+    s.docs.forEach((d) => {
+      sosMarkdown[d.id] = d.data().markdown || '';
+      sosTexte[d.id] = (d.data().markdown || '').toLowerCase();
+    });
+  }).catch(() => {});
+  return sosSommaire;
+}
+
+function afficherSOS() {
+  const sur = document.createElement('div');
+  sur.className = 'surcouche';
+  sur.innerHTML = `
+    <div class="panneau" role="dialog" aria-modal="true" aria-label="${T.sos}" style="max-width:720px">
+      <div class="pan-tete">
+        <div class="pile g-1">
+          <p class="etiquette">${T.sos}</p>
+          <h2 class="t-h3" style="font-size:20px">${T.sosTitre}</h2>
+        </div>
+        <button type="button" class="bouton-icone" id="sos-fermer" aria-label="${T.fermer}">${ico('fermer', 16)}</button>
+      </div>
+      <div class="pan-corps" id="sos-corps"></div>
+    </div>`;
+  document.body.appendChild(sur);
+  const fermer = () => sur.remove();
+  $('sos-fermer').addEventListener('click', fermer);
+  sur.addEventListener('click', (e) => { if (e.target === sur) fermer(); });
+
+  const corps = sur.querySelector('#sos-corps');
+  let familleActive = '';
+  let recherche = '';
+
+  function vueListe() {
+    corps.innerHTML = `
+      <p class="t-petit t-2">${T.sosIntro}</p>
+      <input type="search" id="sos-champ" class="champ" placeholder="${T.sosChercher}"
+             autocomplete="off" style="width:100%;margin:var(--e-3) 0">
+      <div id="sos-familles" class="rang" style="flex-wrap:wrap;gap:6px;margin-bottom:var(--e-3)"></div>
+      <div id="sos-liste"><p class="t-petit t-3">${T.instant}</p></div>`;
+    corps.querySelector('#sos-champ').value = recherche;
+    corps.querySelector('#sos-champ').addEventListener('input', (e) => {
+      recherche = e.target.value;
+      rendreListe();
+    });
+    rendreFamilles();
+    rendreListe();
+  }
+
+  function rendreFamilles() {
+    const conteneur = corps.querySelector('#sos-familles');
+    if (!conteneur || !sosSommaire) return;
+    const familles = [...new Set(sosSommaire.map((f) => f.famille).filter(Boolean))];
+    conteneur.innerHTML = ['', ...familles].map((fam) => `
+      <button type="button" class="btn btn-secondaire" data-fam="${fam}"
+              style="padding:3px 10px;font-size:12px${fam === familleActive ? ';outline:2px solid var(--texte)' : ''}">
+        ${fam ? echapper(T.sosFamilles[fam] || fam) : T.sosToutes}
+      </button>`).join('');
+    conteneur.querySelectorAll('[data-fam]').forEach((b) => {
+      b.addEventListener('click', () => {
+        familleActive = b.dataset.fam;
+        rendreFamilles(); rendreListe();
+      });
+    });
+  }
+
+  function rendreListe() {
+    const bloc = corps.querySelector('#sos-liste');
+    if (!bloc) return;
+    if (!sosSommaire) { bloc.innerHTML = `<p class="t-petit t-3">${T.instant}</p>`; return; }
+    const mots = recherche.toLowerCase().trim();
+    const fiches = sosSommaire.filter((f) => {
+      if (familleActive && f.famille !== familleActive) return false;
+      if (!mots) return true;
+      if (`${f.titre} ${f.resume} ${f.famille}`.toLowerCase().includes(mots)) return true;
+      return !!(sosTexte && sosTexte[f.id] && sosTexte[f.id].includes(mots));
+    });
+    if (!fiches.length) {
+      bloc.innerHTML = `<p class="t-petit t-3">${T.sosAucun}</p>`;
+      return;
+    }
+    bloc.innerHTML = fiches.map((f) => `
+      <button type="button" class="lien-module" data-fiche="${f.id}" style="align-items:flex-start">
+        <span class="num" style="margin-top:2px">${ico('attention', 12)}</span>
+        <span class="pile g-1" style="min-width:0">
+          <span class="titre-module t-fort">${echapper(f.titre)}</span>
+          <span class="t-micro t-3">${echapper(T.sosFamilles[f.famille] || f.famille || '')} · ${echapper(f.resume)}</span>
+        </span>
+      </button>`).join('');
+    bloc.querySelectorAll('[data-fiche]').forEach((b) => {
+      b.addEventListener('click', () => vueFiche(b.dataset.fiche));
+    });
+  }
+
+  async function vueFiche(id) {
+    const fiche = (sosSommaire || []).find((f) => f.id === id);
+    if (!fiche) return;
+    let markdown = sosMarkdown[id];
+    if (markdown === undefined) {
+      corps.innerHTML = `<p class="t-petit t-3">${T.instant}</p>`;
+      try {
+        const d = await getDoc(doc(bdd, 'formations/sos/contenus', id));
+        markdown = d.exists() ? (d.data().markdown || '') : '';
+        sosMarkdown[id] = markdown;
+      } catch { markdown = ''; }
+    }
+    corps.innerHTML = `
+      <button type="button" class="lien-nu t-petit" id="sos-retour">${T.sosRetour}</button>
+      <h2 class="t-h3" style="margin:var(--e-3) 0 var(--e-1)">${echapper(fiche.titre)}</h2>
+      <p class="t-micro t-3" style="margin-bottom:var(--e-3)">${echapper(T.sosFamilles[fiche.famille] || '')}</p>
+      <div class="corps">${markdown ? versHtml(markdown, null) : `<p class="t-petit t-3">${T.reessaie}</p>`}</div>`;
+    ajouterBoutonsCopier(corps);
+    corps.scrollTop = 0;
+    corps.querySelector('#sos-retour').addEventListener('click', vueListe);
+  }
+
+  vueListe();
+  chargerSOS().then(() => { rendreFamilles(); rendreListe(); })
+    .catch(() => {
+      const bloc = corps.querySelector('#sos-liste');
+      if (bloc) bloc.innerHTML = `<p class="t-petit t-3">${T.reessaie}</p>`;
+    });
+}
+
 function ajouterBoutonsCopier(racine) {
   racine.querySelectorAll('pre').forEach((pre) => {
     let hote = pre.closest('.bloc-code');
@@ -1390,6 +1544,7 @@ function afficherAvis() {
 $('ouvrir-support').addEventListener('click', afficherSupport);
 $('ouvrir-profil').addEventListener('click', afficherReglages);
 $('ouvrir-formations').addEventListener('click', afficherMesFormations);
+$('ouvrir-sos').addEventListener('click', afficherSOS);
 
 /* ==========================================================================
    8. Protection du contenu

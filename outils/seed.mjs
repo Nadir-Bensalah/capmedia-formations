@@ -104,6 +104,7 @@ for (const [slug, lecons] of Object.entries(formations)) {
     lot.set(bdd.doc(`${PREFIXE}/${slug}/lecons/${meta.id}`), {
       ordre: meta.ordre, titre: meta.titre, resume: meta.resume,
       duree: meta.duree || '', offre: meta.offre,
+      ...(meta.famille ? { famille: meta.famille } : {}),
     });
     lot.set(bdd.doc(`${PREFIXE}/${slug}/contenus/${meta.id}`), {
       offre: meta.offre, markdown,
