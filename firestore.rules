@@ -46,7 +46,8 @@ service cloud.firestore {
 
     // Le fil conducteur, côté sécurité.
     function estGratuite(slug) {
-      return slug in ['github', 'prompting', 'claude-code'];
+      // 'sos' : la bible des erreurs, offerte à tous les membres connectés.
+      return slug in ['github', 'prompting', 'claude-code', 'sos'];
     }
     function estParcours(slug) {
       return slug in ['firebase', 'mobile', 'design-app', 'aso', 'seo-contenu'];
