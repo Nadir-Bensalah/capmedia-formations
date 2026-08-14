@@ -27,8 +27,19 @@ window.AZ = {
     'micro-saas:complet': 'https://buy.stripe.com/6oUaEQgnadSgb9Egjy3cc0w',
   },
 
+  /* --- Firebase --------------------------------------------------------- */
+  // Console Firebase > Paramètres du projet > Tes applications > Web.
+  firebase: {
+    apiKey:            'AIzaSyBcVqIBbJnYUC2yTG_DxzOB4kXH0I8r0tE',
+    authDomain:        'capmedia-academy.firebaseapp.com',
+    projectId:         'capmedia-academy',
+    storageBucket:     'capmedia-academy.firebasestorage.app',
+    messagingSenderId: '501640815738',
+    appId:             '1:501640815738:web:1ac7082b16cf871d5687c3',
+  },
+
   /* --- Divers ----------------------------------------------------------- */
   // URL absolue de la page qui reçoit le lien magique.
-  urlAcces: 'https://nadir-bensalah.github.io/capmedia-formations/acces.html',
+  urlAcces: 'https://academy.capmedia.app/acces.html',
   contact:  'contact@capmedia.tn',
 };
