@@ -2,7 +2,7 @@
 id: combien-coute-une-application
 titre: Combien coûte vraiment une application mobile ?
 description: Agence, freelance ou toi-même : les fourchettes honnêtes de 2026, les coûts cachés que personne ne met dans le devis, et comment choisir le chemin qui correspond à ton projet.
-date: 2026-08-15
+date: 2026-06-05
 auteur: Nadir Ben Salah
 categorie: Business
 motsCles: prix application mobile, combien coûte une application, devis application mobile, coût développement app, créer une application prix

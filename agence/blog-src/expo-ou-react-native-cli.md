@@ -2,7 +2,7 @@
 id: expo-ou-react-native-cli
 titre: Expo ou React Native CLI en 2026 : le vrai comparatif
 description: La recommandation officielle a tranché, mais les forums continuent le débat. Ce qu'Expo fait vraiment en 2026, ce que le CLI apporte encore, et comment choisir sans se tromper.
-date: 2026-08-15
+date: 2026-05-06
 auteur: Nadir Ben Salah
 categorie: Développement
 motsCles: expo ou react native cli, expo 2026, react native débutant, eas build, créer une application react native

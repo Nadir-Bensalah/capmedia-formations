@@ -2,7 +2,7 @@
 id: pourquoi-ia-hallucine-code
 titre: Pourquoi l'IA invente du code (et comment l'en empêcher)
 description: Bibliothèques imaginaires, fonctions qui n'existent pas, versions périmées : d'où viennent les hallucinations de code, et les 5 parades concrètes qui les font presque disparaître.
-date: 2026-08-15
+date: 2026-04-29
 auteur: Nadir Ben Salah
 categorie: IA
 motsCles: hallucination ia code, ia invente du code, chatgpt code faux, claude code fiable, coder avec l'ia
