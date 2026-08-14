@@ -15,6 +15,8 @@
   'use strict';
 
   var EN = window.location.pathname.indexOf('/en/') !== -1;
+  // Le site agence (racine capmedia.app) vouvoie ; l'Academy tutoie.
+  var VOUS = /^(www\.)?capmedia\.app$/.test(window.location.hostname);
   var TXT = EN ? {
     bandeau: '<strong>We respect your device.</strong> This site only uses the strict ' +
       'necessary (keeping you signed in) and your preferences (theme, profile). ' +
@@ -34,6 +36,25 @@
     pubTexte: 'This site uses none. This line exists for transparency.',
     annuler: 'Cancel',
     enregistrer: 'Save my choices',
+  } : VOUS ? {
+    bandeau: '<strong>On respecte votre appareil.</strong> ' +
+      'Ce site n\'utilise que le strict nécessaire (vous garder connecté) et vos ' +
+      'préférences (thème). Aucun traceur publicitaire, jamais. ',
+    savoir: 'En savoir plus',
+    refuser: 'Préférences seulement refusées',
+    accepter: 'Tout accepter',
+    confidentialite: 'Confidentialité',
+    gerer: 'Gérer les cookies',
+    necessaires: 'Strictement nécessaires',
+    toujours: 'Toujours actifs',
+    necTexte: 'Sécurité et bon fonctionnement du site. Dispensés de consentement.',
+    prefs: 'Préférences',
+    prefsTexte: 'Thème (clair, sombre), mémorisé sur votre appareil. Aucune donnée transmise.',
+    pub: 'Mesure d\'audience et publicité',
+    pubOff: 'Non utilisées',
+    pubTexte: 'Ce site n\'en utilise aucune. Cette ligne existe pour la transparence.',
+    annuler: 'Annuler',
+    enregistrer: 'Enregistrer mes choix',
   } : {
     bandeau: '<strong>On respecte ton appareil.</strong> ' +
       'Ce site n\'utilise que le strict nécessaire (te garder connecté) et tes ' +
