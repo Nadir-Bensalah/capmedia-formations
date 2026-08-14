@@ -104,84 +104,98 @@
 /* ==========================================================================
    Le langage « produit » de l'accueil : héros typographique géant, mot
    surligné, maquette sous cadre navigateur, grandes cartes arrondies.
+   Tokens réels : --bg, --bg-2, --bg-3, --texte(-2/-3), --trait(-fort),
+   --action, --voile-*, --ombre-flottant.
    ========================================================================== */
+
+/* L'en-tête : logo à gauche, liens au centre, action à droite */
+.entete .nav-liens { margin-inline: auto; gap: 26px; }
+
 .heros-notion { text-align: center; display: flex; flex-direction: column; align-items: center; gap: var(--e-5); }
 
-.rangee-pastilles { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+/* Les pastilles rondes qui se chevauchent, façon rangée d'avatars */
+.rangee-pastilles { display: flex; justify-content: center; }
 .pastille-ronde {
-  width: 52px; height: 52px; border-radius: 50%;
+  width: 56px; height: 56px; border-radius: 50%;
   display: grid; place-items: center;
   border: 2.5px solid var(--texte);
-  color: var(--texte); background: var(--fond);
+  color: var(--texte); background: var(--bg);
+  box-shadow: 0 0 0 4px var(--bg);
 }
-.pastille-ronde.pr-bleu   { border-color: var(--action); color: var(--action); }
-.pastille-ronde.pr-violet { border-color: #7C5CFF; color: #7C5CFF; }
-.pastille-ronde.pr-vert   { border-color: #12B76A; color: #12B76A; }
+.pastille-ronde + .pastille-ronde { margin-left: -10px; }
+.pastille-ronde.pr-bleu   { border-color: var(--action); color: var(--action); background: var(--voile-bleu); }
+.pastille-ronde.pr-violet { border-color: #7C5CFF; color: #7C5CFF; background: #EFEAFF; }
+.pastille-ronde.pr-vert   { border-color: #12855F; color: #12855F; background: var(--voile-vert); }
+.pastille-ronde.pr-jaune  { border-color: #B8860B; color: #B8860B; background: var(--voile-jaune); }
 .pastille-ronde.pr-plein-bleu   { background: var(--action); border-color: var(--action); color: #fff; }
 .pastille-ronde.pr-plein-rouge  { background: #E8590C; border-color: #E8590C; color: #fff; }
-.pastille-ronde.pr-plein-violet { background: #7C5CFF; border-color: #7C5CFF; color: #fff; }
+.pastille-ronde.pr-plein-noir   { background: var(--texte); border-color: var(--texte); color: var(--bg); }
 
+/* Le titre géant et son mot surligné */
 .t-geant {
-  font-size: clamp(42px, 7.6vw, 92px);
-  font-weight: 800;
-  line-height: 1.03;
+  font: 800 clamp(46px, 8.4vw, 102px) / 1.0 var(--police);
   letter-spacing: -0.035em;
   text-wrap: balance;
   color: var(--texte);
 }
 .mot-surligne {
-  display: inline-flex; align-items: center; gap: 0.16em;
-  background: color-mix(in srgb, var(--action) 12%, var(--fond));
-  border-radius: 0.32em;
-  padding: 0.02em 0.18em 0.06em;
+  display: inline-flex; align-items: center; gap: 0.17em;
+  background: var(--voile-bleu);
+  border-radius: 0.42em;
+  padding: 0.04em 0.2em 0.08em 0.14em;
+  white-space: nowrap;
 }
 .mot-surligne .point {
-  width: 0.2em; height: 0.2em; border-radius: 50%;
+  width: 0.18em; height: 0.18em; border-radius: 50%;
   background: var(--action); flex: none;
 }
 
+.heros-notion .t-lead { font-size: 20px; color: var(--texte-2); }
+
+.heros-notion .btn-large { padding: 13px 26px; font-size: 16.5px; font-weight: 600; }
 .btn-clair {
-  background: color-mix(in srgb, var(--action) 11%, var(--fond));
+  background: var(--voile-bleu);
   color: var(--action);
   border: 0;
 }
-.btn-clair:hover { background: color-mix(in srgb, var(--action) 18%, var(--fond)); }
+.btn-clair:hover { filter: brightness(0.96); color: var(--action-survol); }
 
 /* --- La maquette sous cadre navigateur ------------------------------------ */
 .cadre-nav {
-  width: min(100%, 1000px); margin-inline: auto;
-  border: 1px solid var(--filet); border-radius: 16px; overflow: hidden;
-  background: var(--fond); text-align: left;
-  box-shadow: 0 30px 80px rgb(0 0 0 / 0.09);
+  width: min(100%, 1020px); margin-inline: auto;
+  border-radius: 16px; overflow: hidden;
+  background: var(--bg); text-align: left;
+  box-shadow: var(--ombre-flottant);
 }
 .cadre-nav-tete {
   display: flex; align-items: center; gap: 10px;
-  padding: 10px 16px; border-bottom: 1px solid var(--filet);
-  background: var(--fond-2);
+  padding: 10px 16px; border-bottom: 1px solid var(--trait);
+  background: var(--bg-2);
 }
-.cadre-nav-tete i { width: 10px; height: 10px; border-radius: 50%; background: var(--filet); }
+.cadre-nav-tete i { width: 10px; height: 10px; border-radius: 50%; background: var(--trait-fort); }
 .cadre-adresse {
-  font-size: 12px; color: var(--texte-3);
-  background: var(--fond); border: 1px solid var(--filet);
-  border-radius: 8px; padding: 3px 14px; margin-inline: auto;
+  font-size: 12.5px; color: var(--texte-3);
+  background: var(--bg); border: 1px solid var(--trait);
+  border-radius: 8px; padding: 3px 16px; margin-inline: auto;
 }
-.maquette { display: grid; grid-template-columns: 210px 1fr; min-height: 340px; }
+.maquette { display: grid; grid-template-columns: 215px 1fr; min-height: 360px; }
 .maquette-lat {
-  border-right: 1px solid var(--filet); background: var(--fond-2);
+  border-right: 1px solid var(--trait); background: var(--bg-2);
   padding: 14px 10px; display: flex; flex-direction: column; gap: 2px;
 }
 .maquette-lat .titre-lat { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--texte-3); padding: 6px 8px; }
-.maquette-lat span { font-size: 12.5px; color: var(--texte-2); padding: 5px 8px; border-radius: 6px; }
-.maquette-lat span.actif { background: var(--fond); font-weight: 600; color: var(--texte); box-shadow: 0 1px 2px rgb(0 0 0 / 0.05); }
-.maquette-corps { padding: 18px 20px; }
+.maquette-lat span { font-size: 13px; color: var(--texte-2); padding: 5px 8px; border-radius: 6px; }
+.maquette-lat span.actif { background: var(--bg); font-weight: 600; color: var(--texte); box-shadow: 0 1px 2px rgba(15, 15, 15, 0.06); }
+.maquette-corps { padding: 20px 22px; }
 .kanban { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 14px; }
-.kanban .titre-col { font-size: 11.5px; font-weight: 600; color: var(--texte-2); display: flex; align-items: center; gap: 6px; }
+.kanban .titre-col { font-size: 12px; font-weight: 600; color: var(--texte-2); display: flex; align-items: center; gap: 6px; }
 .kanban .titre-col i { width: 8px; height: 8px; border-radius: 50%; }
 .tuile {
-  border: 1px solid var(--filet); border-radius: 8px;
-  padding: 8px 10px; font-size: 12px; color: var(--texte-2);
-  background: var(--fond); margin-top: 8px;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+  border: 1px solid var(--trait);
+  border-radius: 8px;
+  padding: 9px 11px; font-size: 12.5px; color: var(--texte-2);
+  background: var(--bg); margin-top: 8px;
+  box-shadow: 0 1px 2px rgba(15, 15, 15, 0.04);
 }
 @media (max-width: 720px) {
   .maquette { grid-template-columns: 1fr; }
@@ -191,8 +205,8 @@
 
 .bande-logos {
   display: flex; justify-content: center; align-items: center;
-  gap: clamp(18px, 4vw, 42px); flex-wrap: wrap;
-  color: var(--texte-3); font-weight: 700; font-size: 15px; letter-spacing: 0.01em;
+  gap: clamp(18px, 4vw, 44px); flex-wrap: wrap;
+  color: var(--texte-3); font-weight: 700; font-size: 15px;
 }
 
 /* --- Les grandes cartes arrondies ------------------------------------------ */
@@ -201,69 +215,69 @@
 @media (max-width: 860px) { .grille-notion { grid-template-columns: 1fr; } }
 
 .carte-notion {
-  background: var(--fond-2); border-radius: 22px;
-  padding: clamp(24px, 3.5vw, 40px);
+  background: var(--bg-2); border-radius: 22px;
+  padding: clamp(26px, 3.5vw, 42px);
   display: flex; flex-direction: column; gap: var(--e-3);
-  border: 1px solid transparent;
-  transition: border-color 0.2s ease;
+  transition: background 0.2s ease;
 }
-.carte-notion:hover { border-color: var(--filet); }
-.carte-notion .sur-titre { font-size: 14px; color: var(--texte-3); }
+.carte-notion:hover { background: var(--bg-3); }
+.carte-notion .sur-titre { font-size: 14.5px; color: var(--texte-3); }
 .carte-notion h3 {
-  font-size: clamp(22px, 2.6vw, 30px); font-weight: 700;
-  letter-spacing: -0.02em; line-height: 1.15; text-wrap: balance; max-width: 24ch;
+  font: 700 clamp(22px, 2.6vw, 30px) / 1.14 var(--police);
+  letter-spacing: -0.02em; text-wrap: balance; max-width: 24ch;
+  color: var(--texte);
 }
 .btn-fleche {
-  width: 42px; height: 42px; border-radius: 50%; border: 0; cursor: pointer;
-  background: var(--texte); color: var(--fond);
+  width: 44px; height: 44px; border-radius: 50%; border: 0; cursor: pointer;
+  background: var(--texte); color: var(--bg);
   display: grid; place-items: center; flex: none;
   transition: transform 0.15s ease;
   text-decoration: none;
 }
-.carte-notion:hover .btn-fleche, .btn-fleche:hover { transform: translateX(3px); }
-.visuel-carte { margin-top: auto; padding-top: var(--e-3); }
+.carte-notion:hover .btn-fleche, .btn-fleche:hover { transform: translateX(3px); color: var(--bg); }
+.visuel-carte { margin-top: auto; padding-top: var(--e-4); }
 
 /* Les mini-maquettes dans les cartes */
 .mini-tel {
-  width: 156px; border: 1px solid var(--filet); border-radius: 22px;
-  padding: 12px 12px 16px; background: var(--fond); margin-inline: auto;
-  box-shadow: 0 12px 32px rgb(0 0 0 / 0.07);
+  width: 158px; border-radius: 24px;
+  padding: 12px 12px 16px; background: var(--bg); margin-inline: auto;
+  box-shadow: var(--ombre-flottant);
 }
-.mini-tel .encoche { width: 44px; height: 5px; border-radius: 3px; background: var(--fond-2); margin: 0 auto 10px; }
-.mini-ligne { height: 9px; border-radius: 5px; background: var(--fond-2); margin-top: 9px; }
+.mini-tel .encoche { width: 44px; height: 5px; border-radius: 3px; background: var(--bg-3); margin: 0 auto 10px; }
+.mini-ligne { height: 9px; border-radius: 5px; background: var(--bg-3); margin-top: 9px; }
 .mini-ligne.l-60 { width: 60%; } .mini-ligne.l-80 { width: 80%; } .mini-ligne.l-40 { width: 40%; }
-.mini-bloc { height: 44px; border-radius: 10px; background: color-mix(in srgb, var(--action) 12%, var(--fond)); margin-top: 10px; }
+.mini-bloc { height: 46px; border-radius: 10px; background: var(--voile-bleu); margin-top: 10px; }
 .mini-nav { display: flex; justify-content: space-around; margin-top: 12px; }
-.mini-nav i { width: 16px; height: 16px; border-radius: 5px; background: var(--fond-2); }
+.mini-nav i { width: 16px; height: 16px; border-radius: 5px; background: var(--bg-3); }
 .mini-nav i:first-child { background: var(--action); }
 
 .mini-fenetre {
-  border: 1px solid var(--filet); border-radius: 14px; background: var(--fond);
+  border-radius: 14px; background: var(--bg);
   padding: 12px 14px; max-width: 340px; margin-inline: auto;
-  box-shadow: 0 12px 32px rgb(0 0 0 / 0.07);
+  box-shadow: var(--ombre-flottant);
 }
 .mini-fenetre .barre { display: flex; gap: 5px; margin-bottom: 10px; }
-.mini-fenetre .barre i { width: 8px; height: 8px; border-radius: 50%; background: var(--filet); }
+.mini-fenetre .barre i { width: 8px; height: 8px; border-radius: 50%; background: var(--trait-fort); }
 
 .mini-bulle {
-  border: 1px solid var(--filet); border-radius: 14px 14px 14px 4px;
-  background: var(--fond); padding: 12px 16px; font-size: 13.5px; color: var(--texte-2);
-  max-width: 330px; box-shadow: 0 12px 32px rgb(0 0 0 / 0.07);
+  border-radius: 14px 14px 14px 4px;
+  background: var(--bg); padding: 13px 17px; font-size: 14px; color: var(--texte-2);
+  max-width: 330px; box-shadow: var(--ombre-flottant);
 }
 .mini-bulle strong { color: var(--texte); }
-.mini-bulle + .mini-bulle { margin-top: 10px; border-radius: 14px 14px 4px 14px; margin-left: 28px; background: color-mix(in srgb, var(--action) 9%, var(--fond)); }
+.mini-bulle + .mini-bulle { margin-top: 12px; border-radius: 14px 14px 4px 14px; margin-left: 28px; background: var(--voile-bleu); color: var(--texte); }
 
 /* --- La rangée « découvrir » ----------------------------------------------- */
 .titre-decouvrir { font-size: 17px; color: var(--texte-3); margin-bottom: var(--e-3); }
-.rangee-decouvrir { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--e-3); }
+.rangee-decouvrir { display: grid; grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); gap: var(--e-3); }
 .carte-decouvrir {
-  border: 1px solid var(--filet); border-radius: 16px;
-  padding: var(--e-4); min-height: 180px;
+  border: 1px solid var(--trait-fort); border-radius: 16px;
+  padding: var(--e-4); min-height: 185px;
   display: flex; flex-direction: column; gap: var(--e-3);
-  text-decoration: none; color: var(--texte); background: var(--fond);
-  transition: border-color 0.15s ease, transform 0.15s ease;
+  text-decoration: none; color: var(--texte); background: var(--bg);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
 }
-.carte-decouvrir:hover { border-color: var(--texte-3); transform: translateY(-2px); text-decoration: none; }
+.carte-decouvrir:hover { box-shadow: 0 6px 20px rgba(15, 15, 15, 0.08); transform: translateY(-2px); text-decoration: none; }
 .icone-ronde { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; color: #fff; flex: none; }
-.carte-decouvrir strong { font-size: 16.5px; line-height: 1.3; letter-spacing: -0.01em; margin-top: auto; }
+.carte-decouvrir strong { font-size: 17px; line-height: 1.3; letter-spacing: -0.01em; margin-top: auto; }
 .carte-decouvrir strong .fleche { white-space: nowrap; }
