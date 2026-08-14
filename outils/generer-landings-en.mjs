@@ -176,12 +176,13 @@ function cartePack() {
         </div>
         <p class="t-petit t-2">The five paid courses of the path, in a single purchase.</p>
       </div>
-      <div class="prix"><span class="montant">€${C.pack.prix}</span><span class="barre">€${C.pack.prixBarre}</span></div>
+      <div class="prix"><span class="montant">€${C.pack.prix}</span></div>
       <p class="t-micro t-3">One-time payment · Lifetime access · VAT not applicable</p>
       <hr class="filet" style="margin:0">
       <ul class="liste-marque">
 ${PACK_PAYANTES.map((x) => `        <li>Step ${x.ordre} · ${e(x.nom)}</li>`).join('\n')}
         <li>The first 3 steps (${GRATUITES.map((x) => e(nomCourt(x))).join(', ')}) are free to get you started</li>
+        <li><strong>A personal review of your app</strong> before you submit it to Apple: written feedback within 7 business days, included</li>
         <li>Lifetime access, updates included</li>
         <li>14-day money-back guarantee</li>
       </ul>
@@ -277,8 +278,8 @@ ${PARCOURS.map((f) => carte(f)).join('\n')}
       <p class="etiquette">The pack</p>
       <h2 class="t-h1">${e(C.pack.nom)}.<br>One purchase, the whole path.</h2>
       <p class="t-lead colonne" style="margin-top:var(--e-2)">The five paid
-      courses of the path, unlocked at once, for €${C.pack.prix} instead of
-      €${C.pack.prixBarre}. Lifetime access, updates included.</p>
+      courses of the path, unlocked at once, for €${C.pack.prix} (or 3
+      installments, no fees). Lifetime access, updates included.</p>
     </div>
 ${cartePack()}
   </section>
@@ -460,7 +461,7 @@ ${cartePack()}
         <p class="t-h3">${e(f.nom)}</p>
         <p class="t-petit t-2">The whole course, one price.</p>
       </div>
-      <div class="prix"><span class="montant">€${f.prix}</span><span class="barre">€${f.prixBarre}</span></div>
+      <div class="prix"><span class="montant">€${f.prix}</span></div>
       <p class="t-micro t-3">One-time payment · Lifetime access · VAT not applicable</p>
       <hr class="filet" style="margin:0">
       <ul class="liste-marque">

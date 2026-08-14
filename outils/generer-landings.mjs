@@ -176,12 +176,13 @@ function cartePack() {
         </div>
         <p class="t-petit t-2">Les cinq formations payantes du parcours, en un seul achat.</p>
       </div>
-      <div class="prix"><span class="montant">${C.pack.prix} €</span><span class="barre">${C.pack.prixBarre} €</span></div>
+      <div class="prix"><span class="montant">${C.pack.prix} €</span></div>
       <p class="t-micro t-3">Paiement unique · Accès à vie · TVA non applicable</p>
       <hr class="filet" style="margin:0">
       <ul class="liste-marque">
 ${PACK_PAYANTES.map((x) => `        <li>Étape ${x.ordre} · ${e(x.nom)}</li>`).join('\n')}
         <li>Les 3 premières étapes (${GRATUITES.map((x) => e(nomCourt(x))).join(', ')}) sont offertes pour commencer</li>
+        <li><strong>La revue personnelle de ton application</strong> avant sa soumission à Apple : retour écrit sous 7 jours ouvrés, incluse</li>
         <li>Accès à vie, mises à jour comprises</li>
         <li>Satisfait ou remboursé 14 jours</li>
       </ul>
@@ -277,8 +278,8 @@ ${PARCOURS.map((f) => carte(f)).join('\n')}
       <p class="etiquette">Le pack</p>
       <h2 class="t-h1">${e(C.pack.nom)}.<br>Un achat, tout le parcours.</h2>
       <p class="t-lead colonne" style="margin-top:var(--e-2)">Les cinq formations
-      payantes du parcours, débloquées d'un coup, pour ${C.pack.prix} € au lieu
-      de ${C.pack.prixBarre} €. Accès à vie, mises à jour comprises.</p>
+      payantes du parcours, débloquées d'un coup, pour ${C.pack.prix} € (ou
+      3 fois sans frais). Accès à vie, mises à jour comprises.</p>
     </div>
 ${cartePack()}
   </section>
@@ -461,7 +462,7 @@ ${cartePack()}
         <p class="t-h3">${e(f.nom)}</p>
         <p class="t-petit t-2">Tout le contenu de la formation, en un seul prix.</p>
       </div>
-      <div class="prix"><span class="montant">${f.prix} €</span><span class="barre">${f.prixBarre} €</span></div>
+      <div class="prix"><span class="montant">${f.prix} €</span></div>
       <p class="t-micro t-3">Paiement unique · Accès à vie · TVA non applicable</p>
       <hr class="filet" style="margin:0">
       <ul class="liste-marque">
