@@ -317,10 +317,10 @@
   z-index: 0;
   pointer-events: none;
   user-select: none;
-  margin-bottom: clamp(-130px, -8vw, -48px);
+  margin-bottom: clamp(-84px, -5.2vw, -30px);
 }
 .filigrane-zone span {
-  font: 800 clamp(88px, 15.5vw, 250px) / 0.82 var(--police);
+  font: 800 clamp(56px, 10vw, 160px) / 0.82 var(--police);
   letter-spacing: -0.045em;
   white-space: nowrap;
   color: var(--texte);
