@@ -229,6 +229,7 @@ ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld)}</script
 `;
 
 const pied = `
+<div class="bloc-pied">
 <div class="filigrane-zone" aria-hidden="true"><span>capmedia digital</span></div>
 <footer class="pied">
   <div class="enveloppe">
@@ -253,6 +254,7 @@ const pied = `
     <p class="t-micro t-3">© 2026 Capmedia Digital · Nadir Ben Salah · SIREN 814&nbsp;051&nbsp;769</p>
   </div>
 </footer>
+</div>
 
 <script>
   (function(){var h=document.getElementById('entete');if(!h)return;
