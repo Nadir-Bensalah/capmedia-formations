@@ -59,6 +59,7 @@ jobs:
             **/.git*
             **/.git*/**
             **/.DS_Store
+            agence/**
             fonctions/**
             outils/**
             docs/**

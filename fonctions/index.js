@@ -746,7 +746,7 @@ exports.admin = onRequest(
         const maj = { statut, moderation: new Date().toISOString() };
         if (statut === 'publiee') maj.datePublication = new Date().toISOString();
         await bdd.doc(`apps-membres/${id}`).set(maj, { merge: true });
-        return res.status(200).send('statut : ' + statut);
+        return res.status(200).json({ ok: true, statut });
       }
       if (action === 'appSupprimer') {
         const { id } = req.body || {};
@@ -755,7 +755,7 @@ exports.admin = onRequest(
           for (const ref of await bdd.collection(`apps-membres/${id}/${col}`).listDocuments()) await ref.delete();
         }
         await bdd.doc(`apps-membres/${id}`).delete();
-        return res.status(200).send('supprimée');
+        return res.status(200).json({ ok: true });
       }
       if (action === 'repondre') {
         if (!uid || !texte) return res.status(400).send('uid et texte requis');

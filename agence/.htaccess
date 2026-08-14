@@ -1,0 +1,19 @@
+# ============================================================================
+# CAPMEDIA DIGITAL · capmedia.app (racine)
+# Ne touche pas au chemin /academy : le site Academy vit dans son propre
+# sous-dossier avec sa propre configuration.
+# ============================================================================
+
+DirectoryIndex index.html index.php
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # www.capmedia.app -> https://capmedia.app (apex), en une seule redirection
+  RewriteCond %{HTTP_HOST} ^www\.capmedia\.app$ [NC]
+  RewriteRule ^(.*)$ https://capmedia.app/$1 [R=301,L]
+
+  # http -> https
+  RewriteCond %{HTTPS} !=on
+  RewriteRule ^(.*)$ https://capmedia.app/$1 [R=301,L]
+</IfModule>
