@@ -540,7 +540,7 @@
 .ico { display: inline-block; vertical-align: -0.15em; flex: none; }
 .encadre .marqueur { display: grid; place-items: center; width: 20px; height: 26px; color: var(--texte-2); }
 .encadre--astuce    .marqueur { color: var(--action); }
-.encadre--attention .marqueur { color: #B8860B; }
+.encadre--attention .marqueur { color: #E89D01; }
 .encadre--piege     .marqueur { color: var(--danger); }
 .encadre--action    .marqueur { color: var(--valide); }
 .lien-module .num .ico { vertical-align: -0.1em; }

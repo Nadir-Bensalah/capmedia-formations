@@ -81,7 +81,7 @@ async function demarrer() {
         if (!ok) return;
         arret();
         rendre(`<div class="pile g-3">
-          <p class="t-h3" style="color:var(--valide,#2E8B57)">${echapper(libelle)} est dans ton espace.</p>
+          <p class="t-h3" style="color:var(--valide,#1AAE39)">${echapper(libelle)} est dans ton espace.</p>
           <p class="t-petit t-2">Aucune manipulation à faire : ta session est déjà ouverte.</p>
           <div class="pile g-2">
             <a href="${lienOuverture}" class="btn btn-principal btn-large btn-bloc">Ouvrir maintenant</a>

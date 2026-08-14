@@ -161,7 +161,7 @@ function marquerCarteAchetee(bouton, texteBadge) {
   if (prix) prix.style.display = 'none';
   const mention = document.createElement('p');
   mention.className = 'mention-achetee t-petit t-fort';
-  mention.style.cssText = 'color:var(--valide,#2E8B57);display:flex;align-items:center;gap:6px';
+  mention.style.cssText = 'color:var(--valide,#1AAE39);display:flex;align-items:center;gap:6px';
   mention.textContent = texteBadge;
   if (prix && prix.parentNode) prix.parentNode.insertBefore(mention, prix);
   else carte.prepend(mention);

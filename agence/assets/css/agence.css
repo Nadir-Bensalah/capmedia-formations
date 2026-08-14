@@ -124,11 +124,11 @@
 }
 .pastille-ronde + .pastille-ronde { margin-left: -10px; }
 .pastille-ronde.pr-bleu   { border-color: var(--action); color: var(--action); background: var(--voile-bleu); }
-.pastille-ronde.pr-violet { border-color: #7C5CFF; color: #7C5CFF; background: #EFEAFF; }
-.pastille-ronde.pr-vert   { border-color: #12855F; color: #12855F; background: var(--voile-vert); }
-.pastille-ronde.pr-jaune  { border-color: #B8860B; color: #B8860B; background: var(--voile-jaune); }
+.pastille-ronde.pr-violet { border-color: #9849E8; color: #9849E8; background: #F8F5FC; }
+.pastille-ronde.pr-vert   { border-color: #1AAE39; color: #1AAE39; background: var(--voile-vert); }
+.pastille-ronde.pr-jaune  { border-color: #E89D01; color: #E89D01; background: var(--voile-jaune); }
 .pastille-ronde.pr-plein-bleu   { background: var(--action); border-color: var(--action); color: #fff; }
-.pastille-ronde.pr-plein-rouge  { background: #E8590C; border-color: #E8590C; color: #fff; }
+.pastille-ronde.pr-plein-rouge  { background: #FF6D00; border-color: #FF6D00; color: #fff; }
 .pastille-ronde.pr-plein-noir   { background: var(--texte); border-color: var(--texte); color: var(--bg); }
 
 /* Le titre géant et son mot surligné */
