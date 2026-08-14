@@ -337,3 +337,9 @@
 @supports not (backdrop-filter: blur(1px)) {
   .pied { background: var(--bg-2); }
 }
+
+/* En sombre, le filigrane a besoin d'un cran de présence en plus. */
+[data-theme="dark"] .filigrane-zone span { opacity: 0.16; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .filigrane-zone span { opacity: 0.16; }
+}
