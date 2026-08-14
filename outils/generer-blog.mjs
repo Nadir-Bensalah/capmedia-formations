@@ -182,7 +182,7 @@ function dateFr(iso) {
 }
 
 /* --- Gabarits (le moule de la charte, chemins depuis blog/) ---------------- */
-const tete = ({ titre, desc, canon, jsonld, motsCles }) => `<!DOCTYPE html>
+const tete = ({ titre, desc, canon, jsonld, motsCles, image }) => `<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="utf-8">
@@ -196,6 +196,8 @@ ${motsCles && motsCles.length ? `<meta name="keywords" content="${e(motsCles.joi
 <meta property="og:title" content="${e(titre)}">
 <meta property="og:description" content="${e(desc)}">
 <meta property="og:url" content="${canon}">
+<meta property="og:image" content="${image || 'https://capmedia.app/assets/img/og-agence.png'}">
+<meta name="twitter:card" content="summary_large_image">
 <meta property="og:locale" content="fr_FR">
 <meta name="twitter:card" content="summary">
 ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld)}</script>\n` : ''}<link rel="preconnect" href="https://fonts.googleapis.com">
@@ -290,6 +292,7 @@ function pageArticle(art) {
     canon,
     jsonld,
     motsCles: art.meta.motsCles,
+    image: art.meta.image || null,
   }) + `
 <main class="enveloppe" style="padding-top:clamp(40px,6vw,64px);padding-bottom:var(--e-10)">
   <article class="pile g-6" style="align-items:flex-start">
@@ -308,16 +311,36 @@ function pageArticle(art) {
         <span class="t-petit t-3">·</span>
         <time class="t-petit t-3" datetime="${e(art.meta.date)}">${dateFr(art.meta.date)}</time>
         <span class="t-petit t-3">·</span>
-        <span class="t-petit t-3">${art.lecture} min de lecture</span>
+        <span class="t-petit t-3">Temps de lecture ${art.lecture} min</span>
       </div>
       <hr class="filet" style="width:100%">
     </header>
+${art.meta.image ? `
+    <figure class="pile g-1" style="width:100%;max-width:880px;margin:0">
+      <img src="${e(art.meta.image)}" alt="" loading="eager" fetchpriority="high"
+           style="width:100%;aspect-ratio:1600/720;object-fit:cover;border-radius:18px">
+      ${art.meta.imageAuteur ? `<figcaption class="t-micro t-3">Photo : <a href="${e(art.meta.imageLien || 'https://unsplash.com')}" rel="noopener nofollow" target="_blank">${e(art.meta.imageAuteur)}</a> · Unsplash</figcaption>` : ''}
+    </figure>` : ''}
 
     <div class="article-corps">
 ${art.html}
     </div>
 ${BLOC_PRATIQUE}
   </article>
+<div id="progression-lecture" aria-hidden="true"
+     style="position:fixed;top:0;left:0;height:3px;width:0;background:var(--action);z-index:60;transition:width .1s linear"></div>
+<script>
+  (function () {
+    var barre = document.getElementById('progression-lecture');
+    function maj() {
+      var h = document.documentElement;
+      var total = h.scrollHeight - h.clientHeight;
+      barre.style.width = (total > 0 ? Math.min(100, (h.scrollTop || document.body.scrollTop) / total * 100) : 0) + '%';
+    }
+    addEventListener('scroll', maj, { passive: true });
+    maj();
+  })();
+</script>
 </main>
 ` + pied;
 }
@@ -342,13 +365,18 @@ function pageListe(articles) {
   };
 
   const cartes = articles.map((a) => `
-      <a class="carte carte-article apparait" href="./${a.meta.id}.html">
-        <p class="etiquette-mono">${e(a.meta.categorie)} · ${dateFr(a.meta.date)}</p>
+      <a class="carte carte-article apparait" href="./${a.meta.id}.html"
+         data-categorie="${e(a.meta.categorie)}"
+         data-recherche="${e((a.meta.titre + ' ' + a.meta.description + ' ' + (a.meta.motsCles || '')).toLowerCase())}"
+         style="overflow:hidden">
+        ${a.meta.image ? `<img src="${e(a.meta.image).replace('w=1600', 'w=800')}" alt="" loading="lazy"
+             style="width:calc(100% + 2 * var(--e-4));margin:calc(-1 * var(--e-4)) calc(-1 * var(--e-4)) 0;aspect-ratio:16/8;object-fit:cover;display:block">` : ''}
+        <p class="etiquette-mono" style="margin-top:var(--e-3)">${e(a.meta.categorie)} · ${dateFr(a.meta.date)}</p>
         <div class="pile g-1" style="margin-top:var(--e-3)">
           <p class="t-h3" style="font-size:17px">${e(a.meta.titre)}</p>
           <p class="t-petit t-2">${e(a.meta.description)}</p>
         </div>
-        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Lire · ${a.lecture} min</span>
+        <span class="t-petit t-fort" style="margin-top:auto;padding-top:var(--e-4);color:var(--action)">Temps de lecture ${a.lecture} min</span>
       </a>`).join('\n');
 
   return tete({
@@ -377,9 +405,49 @@ function pageListe(articles) {
   </section>
 
   <section class="apparait">
-    <div class="grille grille-3">
+      <div class="pile g-3" style="margin:var(--e-5) 0 var(--e-4)">
+    <input type="search" id="blog-recherche" class="champ champ-large" autocomplete="off"
+           placeholder="Chercher un article : colle ta question…" style="max-width:520px">
+    <div class="rang" id="blog-filtres" style="flex-wrap:wrap;gap:8px">
+      <button type="button" class="btn btn-secondaire actif" data-cat="" style="padding:5px 14px;font-size:13px">Tous</button>
+${[...new Set(articles.map((a) => a.meta.categorie))].map((c) => `      <button type="button" class="btn btn-secondaire" data-cat="${e(c)}" style="padding:5px 14px;font-size:13px">${e(c)}</button>`).join('\n')}
+    </div>
+  </div>
+  <p class="t-petit t-3 masque" id="blog-vide">Rien ne correspond : essaie moins de mots.</p>
+<div class="grille grille-3">
 ${cartes}
     </div>
+${'\u003c'}script>
+  (function () {
+    var champ = document.getElementById('blog-recherche');
+    var filtres = document.getElementById('blog-filtres');
+    var vide = document.getElementById('blog-vide');
+    if (!champ || !filtres) return;
+    var cat = '';
+    function applique() {
+      var q = champ.value.toLowerCase().trim();
+      var visibles = 0;
+      document.querySelectorAll('.carte-article').forEach(function (c) {
+        var ok = (!cat || c.dataset.categorie === cat)
+              && (!q || (c.dataset.recherche || '').indexOf(q) !== -1);
+        c.style.display = ok ? '' : 'none';
+        if (ok) visibles++;
+      });
+      vide.classList.toggle('masque', visibles > 0);
+    }
+    champ.addEventListener('input', applique);
+    filtres.addEventListener('click', function (ev) {
+      var b = ev.target.closest('[data-cat]');
+      if (!b) return;
+      cat = b.dataset.cat;
+      filtres.querySelectorAll('[data-cat]').forEach(function (x) {
+        x.classList.toggle('actif', x === b);
+        x.style.outline = x === b ? '2px solid var(--texte)' : '';
+      });
+      applique();
+    });
+  })();
+${'\u003c'}/script>
   </section>
 
 </div>

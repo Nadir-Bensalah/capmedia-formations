@@ -6,6 +6,9 @@ date: 2026-07-07
 auteur: Nadir Ben Salah
 categorie: Développement
 motsCles: application native ou web app, pwa ou application mobile, react native ou pwa, choisir application ou site web, cross platform 2026
+image: https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8c21hcnRwaG9uZSUyMGJyb3dzZXIlMjBhcHBzfGVufDB8fHx8MTc4NjcyNTY1NHww&ixlib=rb-4.1.0&q=80&w=1600
+imageAuteur: William Hook
+imageLien: https://unsplash.com/photos/space-gray-iphone-x-9e9PD9blAto
 ---
 
 La règle courte : si tes utilisateurs te découvrent et te consultent ponctuellement, une web app suffit et coûte deux à trois fois moins cher. Si tu as besoin de notifications, d'une icône sur l'écran d'accueil, d'un usage quotidien ou d'abonnements via les stores, il te faut une vraie application, et en 2026 le chemin raisonnable pour la construire s'appelle le cross-platform (React Native). Le natif pur, un code par plateforme, se réserve aux cas extrêmes.

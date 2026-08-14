@@ -6,6 +6,9 @@ date: 2026-08-15
 auteur: Nadir Ben Salah
 categorie: Matériel
 motsCles: configuration pc développement, mac ou pc développeur, ram développement, ordinateur pour coder, machine développeur 2026
+image: https://images.unsplash.com/photo-1587831990711-23ca6441447b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8ZGVzayUyMHNldHVwJTIwY29tcHV0ZXIlMjBwcm9ncmFtbWluZ3xlbnwwfHx8fDE3ODY3MjU2Mjl8MA&ixlib=rb-4.1.0&q=80&w=1600
+imageAuteur: Sebastian Bednarek
+imageLien: https://unsplash.com/photos/black-computer-keyboard-beside-silver-imac-x2Z0uNj-Quo
 ---
 
 Tu veux te mettre au développement, ou tu y es déjà et ta machine rame. Tu ouvres un forum, et en dix minutes tu lis tout et son contraire : « un Chromebook suffit », « en dessous de 64 Go de RAM n'y pense même pas », « il te faut un Mac », « surtout pas de Mac ». Résultat : tu ne sais toujours pas quoi acheter, et tu as peur de te tromper pour 1 500 €.

@@ -6,6 +6,9 @@ date: 2026-07-21
 auteur: Nadir Ben Salah
 categorie: Développement
 motsCles: créer application sans coder, no code application mobile, bubble glide flutterflow, créer une app sans programmer, application no code limites
+image: https://images.unsplash.com/photo-1633469924738-52101af51d87?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8bm8lMjBjb2RlJTIwYnVpbGRpbmclMjBibG9ja3N8ZW58MHx8fHwxNzg2NzI1NjU3fDA&ixlib=rb-4.1.0&q=80&w=1600
+imageAuteur: Sen
+imageLien: https://unsplash.com/photos/a-close-up-of-many-different-colored-legos-rgP93cPsVEc
 ---
 
 Oui, on peut créer une application sans coder : les plateformes no-code comme Glide, Bubble ou FlutterFlow permettent de construire une app fonctionnelle en quelques jours, sans écrire une ligne. Mais ce chemin a un plafond bien réel (personnalisation, performance, coûts qui grimpent avec l'usage, dépendance totale à la plateforme), et en 2026 il a un concurrent inattendu : créer une vraie application avec l'aide de l'IA, en apprenant juste ce qu'il faut, est devenu accessible à des gens qui ne se seraient jamais dits développeurs.

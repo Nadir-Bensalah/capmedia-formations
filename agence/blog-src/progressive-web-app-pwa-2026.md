@@ -6,6 +6,9 @@ date: 2026-08-13
 auteur: Nadir Ben Salah
 categorie: Développement
 motsCles: pwa 2026, progressive web app ou application native, pwa ios limites, notifications push pwa, installer pwa iphone, pwa ou app store
+image: https://images.unsplash.com/photo-1655196601100-8bfb26cf99e9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8d2ViJTIwYnJvd3NlciUyMG1vYmlsZXxlbnwwfHx8fDE3ODY3MjU2OTN8MA&ixlib=rb-4.1.0&q=80&w=1600
+imageAuteur: Denny Müller
+imageLien: https://unsplash.com/photos/logo-JySoEnr-eOg
 ---
 
 Oui, une PWA est une vraie alternative aux stores en 2026, mais pour certains usages seulement. Une Progressive Web App s'installe depuis le navigateur, fonctionne hors-ligne, envoie des notifications (y compris sur iPhone depuis iOS 16.4, avec des conditions), et se déploie sans review ni commission. Elle reste en revanche pénalisée sur iOS (installation cachée, stockage précaire, accès matériel limité) et invisible là où les gens cherchent des apps : sur les stores. La bonne lecture n'est pas « PWA contre native » mais « quel canal de distribution pour quel produit ».

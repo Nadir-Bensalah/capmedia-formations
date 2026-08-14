@@ -6,6 +6,9 @@ date: 2026-08-15
 auteur: Nadir Ben Salah
 categorie: IA
 motsCles: hallucination ia code, ia invente du code, chatgpt code faux, claude code fiable, coder avec l'ia
+image: https://images.unsplash.com/photo-1674027444485-cec3da58eef4?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8YXJ0aWZpY2lhbCUyMGludGVsbGlnZW5jZSUyMGFic3RyYWN0fGVufDB8fHx8MTc4NjcyNTYzM3ww&ixlib=rb-4.1.0&q=80&w=1600
+imageAuteur: Growtika
+imageLien: https://unsplash.com/photos/an-abstract-image-of-a-sphere-with-dots-and-lines-nGoCBxiaRO0
 ---
 
 Tu demandes à une IA de coder une fonctionnalité. Elle te répond avec assurance, le code est propre, bien commenté, convaincant. Tu le lances : erreur. La bibliothèque qu'elle importe n'existe pas. Ou la fonction qu'elle appelle a disparu il y a deux ans. Ou l'API qu'elle utilise n'a jamais eu ce paramètre.

@@ -6,6 +6,9 @@ date: 2026-06-02
 auteur: Nadir Ben Salah
 categorie: Stores
 motsCles: aso app store optimization, référencement application, mots-clés app store, référencer app google play, captures écran app store, avis application
+image: https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8YXBwJTIwc3RvcmUlMjBzZWFyY2glMjBwaG9uZXxlbnwwfHx8fDE3ODY3MjU2NzF8MA&ixlib=rb-4.1.0&q=80&w=1600
+imageAuteur: William Hook
+imageLien: https://unsplash.com/photos/space-gray-iphone-x-9e9PD9blAto
 ---
 
 Référencer une application sur les stores, c'est l'ASO (App Store Optimization) : choisir des mots-clés que les gens tapent vraiment, les placer dans le titre et le sous-titre, soigner des captures qui convertissent, et accumuler des notes au-dessus de 4 étoiles. C'est le levier d'acquisition le moins cher qui existe pour une app, puisque la majorité des téléchargements passent par la recherche sur les stores. Mais l'ASO amplifie une demande existante, il n'en crée pas : si personne ne cherche ce que fait ton app, aucun mot-clé ne te sauvera.

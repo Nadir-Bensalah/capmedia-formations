@@ -6,6 +6,9 @@ date: 2026-06-09
 auteur: Nadir Ben Salah
 categorie: Stores
 motsCles: publier application app store, soumettre app apple, étapes publication app store, review apple délai, rejet app store
+image: https://images.unsplash.com/photo-1510557880182-3d4d3cba35a5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8aXBob25lJTIwYXBwcyUyMHNjcmVlbnxlbnwwfHx8fDE3ODY3MjU2NDl8MA&ixlib=rb-4.1.0&q=80&w=1600
+imageAuteur: Bagus Hernawan
+imageLien: https://unsplash.com/photos/person-holding-space-gray-iphone-7-A6JxK37IlPo
 ---
 
 Publier sur l'App Store demande sept étapes : ouvrir un compte développeur Apple (99 dollars par an), préparer l'app et sa signature, créer la fiche dans App Store Connect, produire les captures d'écran, envoyer le build via TestFlight, remplir les déclarations de confidentialité, puis soumettre à la review, qui répond en général sous 24 à 48 heures. De l'app terminée à l'app en ligne, compte une à trois semaines si tout se passe bien, davantage en cas de rejet.

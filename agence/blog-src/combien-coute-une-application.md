@@ -6,6 +6,9 @@ date: 2026-08-15
 auteur: Nadir Ben Salah
 categorie: Business
 motsCles: prix application mobile, combien coûte une application, devis application mobile, coût développement app, créer une application prix
+image: https://images.unsplash.com/photo-1533234944761-2f5337579079?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8c21hcnRwaG9uZSUyMG1vbmV5JTIwY29zdHxlbnwwfHx8fDE3ODY3MjU2Mzl8MA&ixlib=rb-4.1.0&q=80&w=1600
+imageAuteur: Benjamin Dada
+imageLien: https://unsplash.com/photos/white-android-smartphone-beside-banknotes-Pao6YVk4s7U
 ---
 
 Pose la question « combien coûte une application mobile » à dix personnes, tu obtiendras dix réponses entre 500 € et 500 000 €. Et le pire, c'est qu'elles peuvent toutes être vraies : tout dépend de ce qu'on construit, avec qui, et de ce qu'on compte ou pas dans l'addition.

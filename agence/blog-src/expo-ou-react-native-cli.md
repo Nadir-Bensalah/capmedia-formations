@@ -6,6 +6,9 @@ date: 2026-08-15
 auteur: Nadir Ben Salah
 categorie: Développement
 motsCles: expo ou react native cli, expo 2026, react native débutant, eas build, créer une application react native
+image: https://images.unsplash.com/photo-1605379399642-870262d3d051?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8bW9iaWxlJTIwcGhvbmUlMjBkZXZlbG9wbWVudCUyMGNvZGV8ZW58MHx8fHwxNzg2NzI1NjM2fDA&ixlib=rb-4.1.0&q=80&w=1600
+imageAuteur: Fotis Fotopoulos
+imageLien: https://unsplash.com/photos/black-remote-control-on-red-table-6sAl6aQ4OWI
 ---
 
 C'est LA question que pose tout débutant en React Native, et une des rares où la réponse a vraiment changé ces dernières années. Si tu lis des discussions de 2021, tu trouveras « Expo c'est pour les jouets, les pros utilisent le CLI ». Si tu lis la documentation officielle de React Native aujourd'hui, tu trouveras l'inverse : elle recommande de démarrer avec un framework, et le framework qu'elle cite en premier, c'est Expo.

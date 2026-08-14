@@ -6,6 +6,9 @@ date: 2026-06-23
 auteur: Nadir Ben Salah
 categorie: Stores
 motsCles: compte développeur apple prix, apple developer program inscription, 99 dollars apple, numéro duns apple, compte apple developer bloqué
+image: https://images.unsplash.com/photo-1660485651003-39b761a38546?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3wxMjA3fDB8MXxzZWFyY2h8Mnx8YXBwbGUlMjBtYWNib29rJTIwZGVza3xlbnwwfHx8fDE3ODY3MjU2NTF8MA&ixlib=rb-4.1.0&q=80&w=1600
+imageAuteur: Klim Musalimov
+imageLien: https://unsplash.com/photos/a-black-and-white-photo-of-a-microphone-and-headphones-GjHN6nHUSyc
 ---
 
 Le compte développeur Apple coûte 99 dollars américains par an (environ 99 € HT, le prix exact dépend du taux de change et de la TVA), à renouveler chaque année sous peine de voir tes apps retirées de l'App Store. L'inscription se fait en ligne, demande une vérification d'identité, et prend de 48 heures à plusieurs semaines : rapide pour une personne physique avec un dossier propre, plus long pour une société qui doit fournir un numéro DUNS.
