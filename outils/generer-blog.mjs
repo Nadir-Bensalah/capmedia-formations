@@ -229,6 +229,7 @@ ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld)}</script
 `;
 
 const pied = `
+<div class="filigrane-zone" aria-hidden="true"><span>capmedia digital</span></div>
 <footer class="pied">
   <div class="enveloppe">
     <div class="rang" style="gap:var(--e-5);flex-wrap:wrap">
