@@ -76,6 +76,11 @@
     enregistrer: 'Enregistrer mes choix',
   };
 
+  // Le lien « En savoir plus » : absolu, pour rester juste depuis n'importe
+  // quelle profondeur (/apps/, /blog/…) et sur chacun des deux sites.
+  var LIEN_COOKIES = /(^|\.)capmedia\.app$/.test(location.hostname) && location.hostname.indexOf('academy') === -1
+    ? '/cookies' : '/cookies';
+
   var CLE = 'az:cookies';
   var VERSION = 1;                       // à incrémenter si les finalités changent
   var SIX_MOIS = 1000 * 60 * 60 * 24 * 182;
@@ -134,7 +139,7 @@
       '<div class="cookie-inner">' +
         '<div class="cookie-texte">' +
           '<p class="t-petit">' + TXT.bandeau +
-          '<a href="./cookies.html">' + TXT.savoir + '</a>.</p>' +
+          '<a href="' + LIEN_COOKIES + '">' + TXT.savoir + '</a>.</p>' +
         '</div>' +
         '<div class="cookie-actions">' +
           '<button type="button" class="btn btn-secondaire" data-c="refuser">' + TXT.refuser + '</button>' +
