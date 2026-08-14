@@ -18,6 +18,15 @@ DirectoryIndex index.html index.php
   RewriteRule ^(.*)$ https://capmedia.app/$1 [R=301,L]
 </IfModule>
 
+# --- index vers la racine ---------------------------------------------------
+# /index et /dossier/index n'ont pas lieu d'être : une page, une seule URL.
+# Cette règle passe AVANT la réécriture sans extension, sinon elle ne voit rien.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{REQUEST_URI} !^/academy/
+  RewriteRule ^(.*)index$ https://capmedia.app/$1 [R=301,L,NE]
+</IfModule>
+
 # --- URL sans extension ----------------------------------------------------
 # /fondateur sert fondateur.html. L'ancienne adresse en .html redirige une
 # fois pour toutes vers la propre : une seule URL par page, pour les visiteurs
@@ -34,9 +43,3 @@ DirectoryIndex index.html index.php
   RewriteRule ^(.+?)/?$ $1.html [L]
 </IfModule>
 
-# --- index vers la racine ---------------------------------------------------
-# /index et /dossier/index n'ont pas de raison d'exister : une page, une URL.
-<IfModule mod_rewrite.c>
-  RewriteCond %{REQUEST_URI} !^/academy/
-  RewriteRule ^(.*)index$ https://capmedia.app/$1 [R=301,L,NE]
-</IfModule>
