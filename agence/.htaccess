@@ -33,3 +33,10 @@ DirectoryIndex index.html index.php
   RewriteCond %{REQUEST_FILENAME}\.html -f
   RewriteRule ^(.+?)/?$ $1.html [L]
 </IfModule>
+
+# --- index vers la racine ---------------------------------------------------
+# /index et /dossier/index n'ont pas de raison d'exister : une page, une URL.
+<IfModule mod_rewrite.c>
+  RewriteCond %{REQUEST_URI} !^/academy/
+  RewriteRule ^(.*)index$ https://capmedia.app/$1 [R=301,L,NE]
+</IfModule>

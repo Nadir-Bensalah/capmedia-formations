@@ -57,3 +57,9 @@ RewriteRule ^ https://academy.capmedia.app%{REQUEST_URI} [R=301,L]
   ExpiresByType image/jpeg "access plus 7 days"
   ExpiresByType image/svg+xml "access plus 7 days"
 </IfModule>
+
+# --- index vers la racine ---------------------------------------------------
+# /index et /dossier/index n'ont pas de raison d'exister : une page, une URL.
+<IfModule mod_rewrite.c>
+  RewriteRule ^(.*)index$ https://academy.capmedia.app/$1 [R=301,L,NE]
+</IfModule>
