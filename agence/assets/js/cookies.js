@@ -14,6 +14,47 @@
 (function () {
   'use strict';
 
+  var EN = window.location.pathname.indexOf('/en/') !== -1;
+  var TXT = EN ? {
+    bandeau: '<strong>We respect your device.</strong> This site only uses the strict ' +
+      'necessary (keeping you signed in) and your preferences (theme, profile). ' +
+      'No advertising trackers, ever. ',
+    savoir: 'Learn more',
+    refuser: 'Preferences declined',
+    accepter: 'Accept all',
+    confidentialite: 'Privacy',
+    gerer: 'Manage cookies',
+    necessaires: 'Strictly necessary',
+    toujours: 'Always on',
+    necTexte: 'Authentication and session security. Without them, accessing the content is impossible. Exempt from consent.',
+    prefs: 'Preferences',
+    prefsTexte: 'Theme (light, dark) and device profile, stored on your device. No data transmitted.',
+    pub: 'Analytics and advertising',
+    pubOff: 'Not used',
+    pubTexte: 'This site uses none. This line exists for transparency.',
+    annuler: 'Cancel',
+    enregistrer: 'Save my choices',
+  } : {
+    bandeau: '<strong>On respecte ton appareil.</strong> ' +
+      'Ce site n\'utilise que le strict nécessaire (te garder connecté) et tes ' +
+      'préférences (thème, profil). Aucun traceur publicitaire, jamais. ',
+    savoir: 'En savoir plus',
+    refuser: 'Préférences seulement refusées',
+    accepter: 'Tout accepter',
+    confidentialite: 'Confidentialité',
+    gerer: 'Gérer les cookies',
+    necessaires: 'Strictement nécessaires',
+    toujours: 'Toujours actifs',
+    necTexte: 'Authentification et sécurité de session. Sans eux, l\'accès à la formation est impossible. Dispensés de consentement.',
+    prefs: 'Préférences',
+    prefsTexte: 'Thème (clair, sombre) et profil matériel, mémorisés sur ton appareil pour adapter la formation. Aucune donnée transmise.',
+    pub: 'Mesure d\'audience et publicité',
+    pubOff: 'Non utilisées',
+    pubTexte: 'Ce site n\'en utilise aucune. Cette ligne existe pour la transparence.',
+    annuler: 'Annuler',
+    enregistrer: 'Enregistrer mes choix',
+  };
+
   var CLE = 'az:cookies';
   var VERSION = 1;                       // à incrémenter si les finalités changent
   var SIX_MOIS = 1000 * 60 * 60 * 24 * 182;
@@ -71,14 +112,12 @@
     el.innerHTML =
       '<div class="cookie-inner">' +
         '<div class="cookie-texte">' +
-          '<p class="t-petit"><strong>On respecte ton appareil.</strong> ' +
-          'Ce site n\'utilise que le strict nécessaire (te garder connecté) et tes ' +
-          'préférences (thème, profil). Aucun traceur publicitaire, jamais. ' +
-          '<a href="./cookies.html">En savoir plus</a>.</p>' +
+          '<p class="t-petit">' + TXT.bandeau +
+          '<a href="./cookies.html">' + TXT.savoir + '</a>.</p>' +
         '</div>' +
         '<div class="cookie-actions">' +
-          '<button type="button" class="btn btn-secondaire" data-c="refuser">Préférences seulement refusées</button>' +
-          '<button type="button" class="btn btn-principal" data-c="accepter">Tout accepter</button>' +
+          '<button type="button" class="btn btn-secondaire" data-c="refuser">' + TXT.refuser + '</button>' +
+          '<button type="button" class="btn btn-principal" data-c="accepter">' + TXT.accepter + '</button>' +
         '</div>' +
       '</div>';
     document.body.appendChild(el);
@@ -100,31 +139,31 @@
     var sur = document.createElement('div');
     sur.className = 'cookie-surcouche';
     sur.innerHTML =
-      '<div class="cookie-panneau" role="dialog" aria-modal="true" aria-label="Gérer les cookies">' +
+      '<div class="cookie-panneau" role="dialog" aria-modal="true" aria-label="' + TXT.gerer + '">' +
         '<div class="cookie-pan-tete">' +
           '<span class="cookie-ico">' + ICO_COOKIE + '</span>' +
-          '<div><p class="etiquette">Confidentialité</p><h2 class="t-h3">Gérer les cookies</h2></div>' +
+          '<div><p class="etiquette">' + TXT.confidentialite + '</p><h2 class="t-h3">' + TXT.gerer + '</h2></div>' +
         '</div>' +
         '<div class="cookie-pan-corps">' +
           '<div class="cookie-cat">' +
-            '<div class="cookie-cat-tete"><p class="t-petit t-fort">Strictement nécessaires</p>' +
-              '<span class="cookie-fige">Toujours actifs</span></div>' +
-            '<p class="t-micro t-3">Authentification et sécurité de session. Sans eux, l\'accès à la formation est impossible. Dispensés de consentement.</p>' +
+            '<div class="cookie-cat-tete"><p class="t-petit t-fort">' + TXT.necessaires + '</p>' +
+              '<span class="cookie-fige">' + TXT.toujours + '</span></div>' +
+            '<p class="t-micro t-3">' + TXT.necTexte + '</p>' +
           '</div>' +
           '<div class="cookie-cat">' +
-            '<div class="cookie-cat-tete"><p class="t-petit t-fort">Préférences</p>' +
+            '<div class="cookie-cat-tete"><p class="t-petit t-fort">' + TXT.prefs + '</p>' +
               '<label class="cookie-switch"><input type="checkbox" id="c-prefs"' + (actuel ? ' checked' : '') + '><span></span></label></div>' +
-            '<p class="t-micro t-3">Thème (clair, sombre) et profil matériel, mémorisés sur ton appareil pour adapter la formation. Aucune donnée transmise.</p>' +
+            '<p class="t-micro t-3">' + TXT.prefsTexte + '</p>' +
           '</div>' +
           '<div class="cookie-cat cookie-cat--off">' +
-            '<div class="cookie-cat-tete"><p class="t-petit t-fort">Mesure d\'audience et publicité</p>' +
-              '<span class="cookie-fige">Non utilisées</span></div>' +
-            '<p class="t-micro t-3">Ce site n\'en utilise aucune. Cette ligne existe pour la transparence.</p>' +
+            '<div class="cookie-cat-tete"><p class="t-petit t-fort">' + TXT.pub + '</p>' +
+              '<span class="cookie-fige">' + TXT.pubOff + '</span></div>' +
+            '<p class="t-micro t-3">' + TXT.pubTexte + '</p>' +
           '</div>' +
         '</div>' +
         '<div class="cookie-pan-pied">' +
-          '<button type="button" class="btn btn-secondaire" data-c="fermer">Annuler</button>' +
-          '<button type="button" class="btn btn-principal" data-c="enregistrer">Enregistrer mes choix</button>' +
+          '<button type="button" class="btn btn-secondaire" data-c="fermer">' + TXT.annuler + '</button>' +
+          '<button type="button" class="btn btn-principal" data-c="enregistrer">' + TXT.enregistrer + '</button>' +
         '</div>' +
       '</div>';
     document.body.appendChild(sur);
