@@ -223,7 +223,7 @@ ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld)}</script
       <a href="../fondateur.html">Le fondateur</a>
     </nav>
     <span style="margin-left:auto"></span>
-    <a href="../devis.html" class="btn btn-principal">Demander un devis</a>
+    <div class="selecteur-theme" role="group" aria-label="Thème" style="padding:2px;margin-right:8px"><button type="button" data-theme-val="light" style="padding:3px 9px;font-size:12px">Clair</button><button type="button" data-theme-val="dark" style="padding:3px 9px;font-size:12px">Sombre</button><button type="button" data-theme-val="auto" style="padding:3px 9px;font-size:12px">Auto</button></div><a href="../devis.html" class="btn btn-principal">Demander un devis</a>
   </div>
 </header>
 `;

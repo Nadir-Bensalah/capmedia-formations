@@ -59,6 +59,7 @@
       <a href="./fondateur.html" hreflang="fr" aria-current="true">FR</a>
       <a href="./en/founder.html" hreflang="en">EN</a>
     </nav>
+    <div class="selecteur-theme" role="group" aria-label="Thème" style="padding:2px;margin-left:6px"><button type="button" data-theme-val="light" style="padding:3px 9px;font-size:12px">Clair</button><button type="button" data-theme-val="dark" style="padding:3px 9px;font-size:12px">Sombre</button><button type="button" data-theme-val="auto" style="padding:3px 9px;font-size:12px">Auto</button></div>
     <a href="./devis.html" class="btn btn-principal">Demander un devis</a>
   </div>
 </header>
@@ -72,95 +73,107 @@
       <p class="etiquette">Le fondateur</p>
       <h1 class="t-h1" style="font-size:clamp(32px,5vw,54px)">Nadir Ben Salah.</h1>
       <p class="t-lead" style="max-width:640px">
-        Développeur d'applications mobiles indépendant, fondateur de
-        Capmedia Digital et de Capmedia Academy. C'est lui que vous retrouvez
+        Lead développeur React Native, fondateur de Capmedia Digital et de
+        Capmedia Academy. Des systèmes d'information au mobile, du monde
+        industriel aux produits grand public : c'est lui que vous retrouvez
         derrière les projets de l'agence, du premier échange à la publication.
       </p>
       <div class="rang" style="gap:var(--e-3)">
         <a href="./devis.html" class="btn btn-principal btn-large">Discuter de votre projet</a>
-        <a href="./academie.html" class="btn btn-secondaire btn-large">Voir l'académie</a>
+        <a href="https://nadirbensalah.com" class="btn btn-secondaire btn-large" rel="noopener">Voir le portfolio complet</a>
       </div>
     </div>
   </section>
 
   <!-- ═══════ Le parcours ═══════ -->
   <section class="apparait">
-    <div class="colonne pile g-4">
-      <p class="etiquette">Le parcours</p>
-      <p class="t-lead">
-        Un développeur autodidacte, passé par le terrain plutôt que par les
-        amphis.
-      </p>
-      <p class="t-corps t-2">
-        Nadir a appris le métier en construisant : des projets réels, des
-        erreurs réelles, et la discipline d'aller à chaque fois jusqu'au bout,
-        jusqu'à la mise en ligne. L'IA fait partie de ses outils quotidiens
-        depuis des années, pas comme un argument de vitrine mais comme un
-        levier de travail : elle accélère ce qu'il sait déjà faire, elle ne
-        le remplace pas.
-      </p>
+    <h2 class="t-h1" style="font-size:clamp(30px,4.2vw,46px);letter-spacing:-0.03em;max-width:24ch">
+      Un parcours complet, de la théorie au terrain.
+    </h2>
+    <div class="grille-notion" style="margin-top:var(--e-5)">
+      <article class="carte-notion">
+        <p class="sur-titre">La formation</p>
+        <h3>Master MIAGE, puis la spécialisation mobile.</h3>
+        <p class="t-petit t-2" style="max-width:48ch">
+          Master MIAGE à l'UPJV (développement logiciel et gestion des
+          systèmes d'information), complété par un titre de concepteur
+          développeur d'applications et une spécialisation React Native à
+          LA MANU. La double culture : l'ingénierie ET le produit.
+        </p>
+      </article>
+      <article class="carte-notion">
+        <p class="sur-titre">L'expérience</p>
+        <h3>L'industrie d'abord, l'indépendance ensuite.</h3>
+        <p class="t-petit t-2" style="max-width:48ch">
+          Développeur mobile React Native chez Decayeux, en environnement
+          industriel exigeant : performances, fiabilité, collaboration entre
+          équipes. Indépendant depuis 2024 : applications mobiles, plateformes
+          web, APIs et bases de données, de bout en bout. L'IA fait partie
+          des outils quotidiens, comme accélérateur du travail bien fait,
+          jamais comme argument de vitrine.
+        </p>
+      </article>
     </div>
   </section>
 
-  <!-- ═══════ Ce qu'il construit ═══════ -->
+  <!-- ═══════ Les références ═══════ -->
   <section class="apparait">
     <div class="section-tete">
-      <p class="etiquette">Ce qu'il construit</p>
-      <h2 class="t-h1">Quatre applications en préparation pour les stores.</h2>
-      <p class="t-lead colonne" style="margin-top:var(--e-2)">
-        En parallèle des projets clients, Nadir prépare ses propres
-        applications pour l'App Store et Google Play. C'est ce qui nourrit
-        l'agence : les règles des stores, il les affronte d'abord pour
-        lui-même.
-      </p>
+      <p class="etiquette">Les références</p>
+      <h2 class="t-h1">Des projets livrés, pas des promesses.</h2>
     </div>
-    <div class="grille grille-2">
-      <div class="carte pile g-2">
-        <p class="t-h3">MindDrop</p>
-        <p class="t-petit t-2">Capturer une idée à la voix avant qu'elle ne s'échappe, et laisser l'app la ranger toute seule : notes, tâches, rappels, calendrier.</p>
+    <div class="grille grille-3">
+      <div class="carte pile g-3">
+        <p class="etiquette-mono">Perseus Capital</p>
+        <p class="t-h3" style="font-size:18px">FORGEME</p>
+        <p class="t-petit t-2">
+          Application mobile et web de productivité personnelle : objectifs,
+          tâches, habitudes et idées centralisés. React Native, React,
+          Firebase, Firestore, Cloud Functions.
+        </p>
       </div>
-      <div class="carte pile g-2">
-        <p class="t-h3">Qindil</p>
-        <p class="t-petit t-2">Un compagnon spirituel apaisé : lecture, écoute et repères quotidiens, avec une direction artistique soignée.</p>
+      <div class="carte pile g-3">
+        <p class="etiquette-mono">Capmedia Digital</p>
+        <p class="t-h3" style="font-size:18px">MYKORBA</p>
+        <p class="t-petit t-2">
+          Application mobile d'informations et de services locaux, avec
+          synchronisation en temps réel. La même stack que celle proposée
+          aux clients de l'agence.
+        </p>
       </div>
-      <div class="carte pile g-2">
-        <p class="t-h3">Flowi</p>
-        <p class="t-petit t-2">Visualiser ses revenus en temps réel, seconde après seconde, pour reprendre un rapport concret à ce qu'on gagne.</p>
-      </div>
-      <div class="carte pile g-2">
-        <p class="t-h3">Isogonic</p>
-        <p class="t-petit t-2">Un outil de calcul précis pensé pour un métier exigeant, construit pour fonctionner entièrement hors ligne.</p>
+      <div class="carte pile g-3">
+        <p class="etiquette-mono">Safran Tunisie</p>
+        <p class="t-h3" style="font-size:18px">Traçabilité industrielle RFID</p>
+        <p class="t-petit t-2">
+          Plateforme de suivi de pièces de production : React, Node.js,
+          PostgreSQL et capteurs RFID. Le niveau d'exigence de l'industrie,
+          appliqué depuis à chaque projet.
+        </p>
       </div>
     </div>
+    <p class="t-micro t-3" style="margin-top:var(--e-4)">
+      React Native · TypeScript · iOS · Android · Firebase · Supabase · PostgreSQL · Node.js · Publication App Store et Google Play
+    </p>
   </section>
 
-  <!-- ═══════ La stack et la conviction ═══════ -->
+  <!-- ═══════ La conviction ═══════ -->
   <section class="apparait">
-    <div class="grille grille-2" style="gap:clamp(32px,6vw,72px);align-items:start">
-      <div class="pile g-4">
-        <p class="etiquette">La stack</p>
-        <h2 class="t-h2">Des outils choisis, pas collectionnés.</h2>
-        <p class="t-corps t-2">
-          React Native et Expo pour construire une seule fois et publier sur
-          iPhone et Android. Firebase pour les fondations serveur. Stripe pour
-          les paiements. Une stack resserrée, maîtrisée à fond, la même pour
-          ses apps et pour les projets clients.
-        </p>
-        <div class="bande-logos" style="justify-content:flex-start">
-          <span>React&nbsp;Native</span><span>Expo</span><span>Firebase</span><span>Stripe</span>
+    <div class="carte-notion large">
+      <div class="grille grille-2" style="gap:clamp(24px,4vw,56px);align-items:center">
+        <div class="pile g-3">
+          <p class="sur-titre">La conviction</p>
+          <h3>Transformer une idée en application utilisable, mesurable et maintenable.</h3>
+          <p class="t-petit t-2" style="max-width:48ch">
+            C'est la définition du métier telle qu'il la pratique : pas de
+            prototype qui dort, pas de code sans propriétaire. Et ce qui se
+            pratique à l'agence s'enseigne à
+            <a href="./academie.html">Capmedia Academy</a>.
+          </p>
         </div>
-      </div>
-      <div class="pile g-4">
-        <p class="etiquette">La conviction</p>
-        <h2 class="t-h2">Publier plutôt que prototyper.</h2>
-        <p class="t-corps t-2">
-          Un prototype qui dort dans un tiroir n'apprend rien à personne. Tout
-          ce que fait Nadir vise la mise en ligne réelle : la revue d'Apple, la
-          fiche Google Play, les premiers utilisateurs. Et ce qu'il pratique,
-          il l'enseigne : c'est pour ça qu'il a fondé
-          <a href="./academie.html">Capmedia Academy</a>, où les formations
-          suivent exactement la méthode utilisée pour les clients.
-        </p>
+        <div>
+          <div class="mini-bulle">Publication iOS et Android gérée de bout en bout : certificats, revues, fiches, itérations courtes.</div>
+          <div class="mini-bulle"><strong>Ownership produit</strong> : cadrage, roadmap, delivery, qualité.</div>
+        </div>
       </div>
     </div>
   </section>
