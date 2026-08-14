@@ -25,6 +25,30 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://capmedia.app/apps/</loc>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://capmedia.app/apps/minddrop.html</loc>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://capmedia.app/apps/qindil.html</loc>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://capmedia.app/apps/flowi.html</loc>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://capmedia.app/apps/isogonic.html</loc>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://capmedia.app/apps/forgeme.html</loc>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://capmedia.app/en/</loc>
     <priority>0.9</priority>
   </url>
@@ -50,6 +74,30 @@
   </url>
   <url>
     <loc>https://capmedia.app/en/quote.html</loc>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://capmedia.app/en/apps/</loc>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://capmedia.app/en/apps/minddrop.html</loc>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://capmedia.app/en/apps/qindil.html</loc>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://capmedia.app/en/apps/flowi.html</loc>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://capmedia.app/en/apps/isogonic.html</loc>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://capmedia.app/en/apps/forgeme.html</loc>
     <priority>0.6</priority>
   </url>
   <url>
