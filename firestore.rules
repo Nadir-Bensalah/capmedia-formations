@@ -172,6 +172,70 @@ service cloud.firestore {
       allow read, update, delete: if false;
     }
 
+    // --- La galerie des apps membres -------------------------------------
+    // Chaque membre soumet son application (statut « attente ») ; seule la
+    // modération (console, Admin SDK) publie. Les apps publiées sont
+    // PUBLIQUES : lisibles sans compte, c'est la vitrine du site.
+    match /apps-membres/{appId} {
+      allow read: if resource.data.statut == 'publiee'
+                  || (connecte() && resource.data.uid == request.auth.uid);
+      allow create: if connecte()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == monEmail()
+        && request.resource.data.statut == 'attente'
+        && request.resource.data.keys().hasOnly(['uid', 'email', 'nom', 'pitch', 'description', 'lienApple', 'lienGoogle', 'lienWeb', 'captures', 'date', 'statut'])
+        && request.resource.data.nom is string
+        && request.resource.data.nom.size() > 0
+        && request.resource.data.nom.size() <= 60
+        && request.resource.data.pitch is string
+        && request.resource.data.pitch.size() <= 140
+        && request.resource.data.description is string
+        && request.resource.data.description.size() <= 2000
+        && request.resource.data.captures is list
+        && request.resource.data.captures.size() <= 6;
+      allow update: if connecte()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.statut == resource.data.statut
+        && request.resource.data.keys().hasOnly(['uid', 'email', 'nom', 'pitch', 'description', 'lienApple', 'lienGoogle', 'lienWeb', 'captures', 'date', 'statut'])
+        && request.resource.data.nom is string
+        && request.resource.data.nom.size() > 0
+        && request.resource.data.nom.size() <= 60
+        && request.resource.data.pitch.size() <= 140
+        && request.resource.data.description.size() <= 2000
+        && request.resource.data.captures.size() <= 6;
+      allow delete: if connecte() && resource.data.uid == request.auth.uid;
+
+      // Un j'aime par membre connecté, sur les apps publiées uniquement.
+      match /jaimes/{uid} {
+        allow read: if true;
+        allow create: if connecte()
+          && request.auth.uid == uid
+          && get(/databases/$(database)/documents/apps-membres/$(appId)).data.statut == 'publiee';
+        allow delete: if connecte() && request.auth.uid == uid;
+        allow update: if false;
+      }
+
+      // Un avis par membre connecté, public, sur les apps publiées.
+      match /avis/{uid} {
+        allow read: if true;
+        allow create, update: if connecte()
+          && request.auth.uid == uid
+          && get(/databases/$(database)/documents/apps-membres/$(appId)).data.statut == 'publiee'
+          && request.resource.data.keys().hasOnly(['nom', 'texte', 'note', 'date'])
+          && request.resource.data.nom is string
+          && request.resource.data.nom.size() > 0
+          && request.resource.data.nom.size() <= 60
+          && request.resource.data.texte is string
+          && request.resource.data.texte.size() > 0
+          && request.resource.data.texte.size() <= 600
+          && request.resource.data.note is int
+          && request.resource.data.note >= 1
+          && request.resource.data.note <= 5;
+        allow delete: if connecte() && request.auth.uid == uid;
+      }
+    }
+
     // --- Tout le reste est fermé ---------------------------------------
     match /{document=**} {
       allow read, write: if false;
