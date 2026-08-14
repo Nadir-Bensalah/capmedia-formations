@@ -218,6 +218,7 @@ ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld)}</script
     <nav class="nav-liens">
       <a href="../index.html#services">Services</a>
       <a href="../index.html#audits">Audits</a>
+      <a href="../apps/">Nos applications</a>
       <a href="./">Le blog</a>
       <a href="../academie.html">L'académie</a>
       <a href="../fondateur.html">Le fondateur</a>
@@ -474,6 +475,12 @@ function sitemap(articles) {
     { loc: `${SITE}/test-avant-soumission.html`, prio: '0.8' },
     { loc: `${SITE}/academie.html`, prio: '0.8' },
     { loc: `${SITE}/fondateur.html`, prio: '0.6' },
+    { loc: `${SITE}/apps/`, prio: '0.9' },
+    { loc: `${SITE}/apps/minddrop.html`, prio: '0.7' },
+    { loc: `${SITE}/apps/qindil.html`, prio: '0.7' },
+    { loc: `${SITE}/apps/flowi.html`, prio: '0.7' },
+    { loc: `${SITE}/apps/isogonic.html`, prio: '0.7' },
+    { loc: `${SITE}/apps/forgeme.html`, prio: '0.7' },
     { loc: `${SITE}/en/`, prio: '0.9' },
     { loc: `${SITE}/en/audit-site-web.html`, prio: '0.7' },
     { loc: `${SITE}/en/audit-application.html`, prio: '0.7' },
@@ -481,6 +488,12 @@ function sitemap(articles) {
     { loc: `${SITE}/en/academy.html`, prio: '0.7' },
     { loc: `${SITE}/en/founder.html`, prio: '0.5' },
     { loc: `${SITE}/en/quote.html`, prio: '0.6' },
+    { loc: `${SITE}/en/apps/`, prio: '0.8' },
+    { loc: `${SITE}/en/apps/minddrop.html`, prio: '0.6' },
+    { loc: `${SITE}/en/apps/qindil.html`, prio: '0.6' },
+    { loc: `${SITE}/en/apps/flowi.html`, prio: '0.6' },
+    { loc: `${SITE}/en/apps/isogonic.html`, prio: '0.6' },
+    { loc: `${SITE}/en/apps/forgeme.html`, prio: '0.6' },
     { loc: `${SITE}/blog/`, prio: '0.7' },
     ...articles.map((a) => ({ loc: `${SITE}/blog/${a.meta.id}.html`, prio: '0.6', date: a.meta.date })),
   ];
