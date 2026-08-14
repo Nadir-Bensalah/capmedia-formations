@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Les applications de nos membres · Capmedia Academy</title>
+<meta name="description" content="Les applications construites et publiées par les membres de Capmedia Academy. De vraies apps, faites par des gens qui partaient de zéro : la preuve par l'exemple.">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#191919" media="(prefers-color-scheme: dark)">
+<link rel="canonical" href="https://academy.capmedia.app/apps.html">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Les applications de nos membres">
+<meta property="og:description" content="De vraies apps, construites par des membres qui partaient de zéro. La preuve par l'exemple.">
+<meta property="og:image" content="https://academy.capmedia.app/assets/img/og.png">
+<meta property="og:url" content="https://academy.capmedia.app/apps.html">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="./assets/css/tokens.css">
+<link rel="stylesheet" href="./assets/css/az.css">
+<link rel="icon" type="image/png" sizes="32x32" href="./assets/img/favicon-32.png">
+<link rel="apple-touch-icon" href="./assets/img/apple-touch-icon.png">
+<script>
+  (function () {
+    try {
+      var t = localStorage.getItem('az:theme');
+      if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+    } catch (e) {}
+  })();
+</script>
+<style>
+  .grille-apps {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--e-4);
+  }
+  .carte-app {
+    text-align: left; cursor: pointer; padding: 0; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .carte-app .couverture {
+    width: 100%; aspect-ratio: 16 / 10; object-fit: cover; display: block;
+    background: var(--fond-2);
+  }
+  .carte-app .corps-carte { padding: var(--e-4); display: flex; flex-direction: column; gap: 8px; flex: 1; }
+  .jaime {
+    display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid var(--filet); border-radius: 999px;
+    padding: 4px 12px; background: none; color: var(--texte-2);
+    font-size: 13px; cursor: pointer;
+  }
+  .jaime[data-actif="1"] { color: #C0392B; border-color: currentColor; }
+  .jaime svg { display: block; }
+  .captures-defile {
+    display: flex; gap: var(--e-3); overflow-x: auto; padding-bottom: var(--e-2);
+    scroll-snap-type: x mandatory;
+  }
+  .captures-defile img {
+    height: 340px; border-radius: 14px; border: 1px solid var(--filet);
+    scroll-snap-align: start; flex: none; max-width: 85vw; object-fit: contain;
+    background: var(--fond-2);
+  }
+</style>
+</head>
+<body>
+
+<header class="entete">
+  <div class="enveloppe rang-espace">
+    <a href="./index.html" class="logo"><img class="marque" src="./assets/img/logo-academy.png" alt="" width="22" height="22">Capmedia&nbsp;Academy</a>
+    <nav class="nav-liens">
+      <a href="./index.html#parcours">Le parcours</a>
+      <a href="./formations/">Les formations</a>
+      <a href="./acces.html">Mon espace</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="apparait" style="padding-top:var(--e-7)">
+    <div class="enveloppe">
+      <div class="section-tete">
+        <p class="etiquette">La preuve par l'exemple</p>
+        <h1 class="t-h1">Les applications de nos membres</h1>
+        <p class="t-lead" style="max-width:640px">
+          De vraies applications, construites par des membres qui, pour la
+          plupart, partaient de zéro. Chaque carte est une promesse tenue.
+          Connecte-toi pour soutenir ton app préférée d'un cœur ou d'un avis.
+        </p>
+      </div>
+
+      <div id="galerie">
+        <p class="t-petit t-3">Chargement de la galerie…</p>
+      </div>
+
+      <div class="t-centre" style="margin-top:var(--e-6)">
+        <p class="t-petit t-2" style="margin-bottom:var(--e-3)">
+          Ton application mérite sa place ici.
+        </p>
+        <a class="btn btn-principal btn-large" href="./acces.html">Commence gratuitement</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="pied">
+  <div class="enveloppe">
+    <p class="t-micro t-3" style="display:flex;align-items:center;gap:8px;margin-bottom:var(--e-3)"><img src="./assets/img/capmedia-digital.png" alt="Capmedia Digital" width="20" height="20">Capmedia Academy est une plateforme de Capmedia Digital.</p>
+    <p class="t-micro t-3">
+      © 2026 Capmedia Academy · <a href="./mentions.html">Mentions légales</a> ·
+      <a href="./cgv.html">CGV</a> · <a href="./confidentialite.html">Confidentialité</a>
+    </p>
+  </div>
+</footer>
+
+<script src="./assets/js/config.js"></script>
+<script src="./assets/js/theme.js"></script>
+<script src="./assets/js/cookies.js"></script>
+<script type="module" src="./assets/js/apps.js"></script>
+</body>
+</html>
