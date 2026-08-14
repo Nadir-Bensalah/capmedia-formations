@@ -1,18 +1,22 @@
 rules_version = '2';
 
 /*
-  CAPMEDIA ACADEMY · Règles de sécurité Firestore (multi-formations)
+  CAPMEDIA ACADEMY · Règles de sécurité Firestore (modèle Parcours)
 
-  Principe inchangé et central : le contenu vit ici, pas dans le dépôt
-  public. La lecture exige un compte connecté À EMAIL VÉRIFIÉ et un
-  document acheteurs/{email} écrit uniquement par le webhook Stripe.
+  Principe central inchangé : le contenu vit ici, pas dans le dépôt
+  public. La lecture exige un compte connecté À EMAIL VÉRIFIÉ.
 
-  Nouveautés multi-formations :
-   · acheteurs/{email}.achats = { <slug>: 'essentiel'|'complet', ... }
-   · acheteurs/{email}.pack   = null | 'basic' | 'avance'
-     Le pack ouvre toutes les formations ('basic' = essentiel partout,
-     'avance' = complet partout).
-   · formations/{slug}/lecons + formations/{slug}/contenus
+  Le modèle d'accès :
+   · Formations GRATUITES (github, prompting, claude-code) : lisibles par
+     tout compte connecté vérifié. C'est le produit d'appel : le compte
+     (donc l'e-mail) est le prix d'entrée.
+   · Formations du PARCOURS (firebase, mobile, design-app, aso,
+     seo-contenu) : réservées au pack. acheteurs/{email}.pack = 'parcours'
+     (les anciens 'basic'/'avance' de la période de test restent honorés).
+   · Formations SÉPARÉES (site-web-ia, automatiser-ia, stripe,
+     micro-saas) : achat à l'unité. acheteurs/{email}.achats[slug].
+   · acheteurs/ n'est écrit QUE par le webhook Stripe et l'admin.
+   · profils/{uid} : le nom du membre, écrit par lui-même.
 
   Déployer :  firebase deploy --only firestore:rules
 */
@@ -40,21 +44,26 @@ service cloud.firestore {
           && exists(/databases/$(database)/documents/acheteurs/$(monEmail()));
     }
 
-    // Accès à une formation : achat direct, ou pack, ou l'ancien champ
-    // « offre » (comptes d'avant la migration, par prudence).
-    function accesFormation(slug) {
-      let fiche = maFiche();
-      return (fiche.achats != null && slug in fiche.achats)
-          || (fiche.pack != null)
-          || (slug == 'mobile' && fiche.offre != null);
+    // Le fil conducteur, côté sécurité.
+    function estGratuite(slug) {
+      return slug in ['github', 'prompting', 'claude-code'];
+    }
+    function estParcours(slug) {
+      return slug in ['firebase', 'mobile', 'design-app', 'aso', 'seo-contenu'];
     }
 
-    // Niveau « complet » sur une formation
-    function accesComplet(slug) {
+    // Accès payant à une formation : pack pour le parcours, achat à
+    // l'unité pour les séparées. Les anciens champs (pack basic/avance,
+    // « offre » mobile) restent honorés par prudence.
+    function accesFormation(slug) {
       let fiche = maFiche();
-      return (fiche.achats != null && slug in fiche.achats && fiche.achats[slug] == 'complet')
-          || fiche.pack == 'avance'
-          || (slug == 'mobile' && fiche.offre == 'complet');
+      return estParcours(slug)
+        ? (fiche.pack != null
+            || (fiche.achats != null && slug in fiche.achats)
+            || (slug == 'mobile' && fiche.offre != null))
+        : ((fiche.achats != null && slug in fiche.achats)
+            || fiche.pack == 'basic'
+            || fiche.pack == 'avance');
     }
 
     // --- Les acheteurs ------------------------------------------------
@@ -64,41 +73,54 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // --- Le profil du membre (le nom, saisi par lui-même) ---------------
+    match /profils/{uid} {
+      allow read: if connecte() && request.auth.uid == uid;
+      allow create, update: if connecte()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['nom', 'email', 'maj'])
+        && request.resource.data.nom is string
+        && request.resource.data.nom.size() > 0
+        && request.resource.data.nom.size() <= 80;
+      allow delete: if false;
+    }
+
     // --- Le contenu des formations --------------------------------------
+    // Une seule offre par formation : plus de découpage essentiel/complet,
+    // les anciens acheteurs Essentiel y gagnent les bonus.
     match /formations/{slug}/lecons/{leconId} {
-      allow read:  if aAchete() && accesFormation(slug);
+      allow read:  if connecte() && (estGratuite(slug) || (aAchete() && accesFormation(slug)));
       allow write: if false;   // seed Admin uniquement
     }
 
     match /formations/{slug}/contenus/{leconId} {
-      allow read: if aAchete()
-                  && accesFormation(slug)
-                  && (resource.data.offre != 'complet' || accesComplet(slug));
+      allow read:  if connecte() && (estGratuite(slug) || (aAchete() && accesFormation(slug)));
       allow write: if false;
     }
 
     // --- Le contenu anglais : mêmes droits que le français ---------------
     match /formations-en/{slug}/lecons/{leconId} {
-      allow read:  if aAchete() && accesFormation(slug);
+      allow read:  if connecte() && (estGratuite(slug) || (aAchete() && accesFormation(slug)));
       allow write: if false;
     }
     match /formations-en/{slug}/contenus/{leconId} {
-      allow read: if aAchete()
-                  && accesFormation(slug)
-                  && (resource.data.offre != 'complet' || accesComplet(slug));
+      allow read:  if connecte() && (estGratuite(slug) || (aAchete() && accesFormation(slug)));
       allow write: if false;
     }
 
     // --- La progression -----------------------------------------------
+    // Ouverte à tout membre connecté : les gratuites se suivent aussi.
     match /progression/{uid} {
-      allow read, write: if aAchete() && request.auth.uid == uid;
+      allow read, write: if connecte() && request.auth.uid == uid;
     }
 
     // --- Les avis --------------------------------------------------------
+    // Tout membre peut écrire un avis (gratuit compris) : rien ne se
+    // publie sans modération (publie=false imposé à l'écriture).
     match /avis/{uid} {
       allow read: if resource.data.publie == true
                   || (connecte() && request.auth.uid == uid);
-      allow create, update: if aAchete()
+      allow create, update: if connecte()
         && request.auth.uid == uid
         && request.resource.data.publie == false
         && request.resource.data.note is int
@@ -113,10 +135,11 @@ service cloud.firestore {
     }
 
     // --- Le support : un message à la fois -------------------------------
+    // Ouvert à tout membre connecté, gratuits compris.
     match /conversations/{uid} {
-      allow read: if aAchete() && request.auth.uid == uid;
+      allow read: if connecte() && request.auth.uid == uid;
 
-      allow create: if aAchete()
+      allow create: if connecte()
         && request.auth.uid == uid
         && request.resource.data.tour == 'nadir'
         && request.resource.data.messages.size() == 1
@@ -125,7 +148,7 @@ service cloud.firestore {
         && request.resource.data.dernier.texte.size() > 0
         && request.resource.data.dernier.texte.size() <= 2000;
 
-      allow update: if aAchete()
+      allow update: if connecte()
         && request.auth.uid == uid
         && resource.data.tour == 'membre'
         && request.resource.data.tour == 'nadir'
@@ -137,8 +160,6 @@ service cloud.firestore {
     }
 
     // --- La liste d'attente du lancement ---------------------------------
-    // Création anonyme (un e-mail = un document), jamais de lecture :
-    // les adresses ne sont visibles que par l'admin (SDK Admin).
     match /attente/{email} {
       allow create: if request.resource.data.keys().hasOnly(['email', 'date', 'source', 'langue'])
         && request.resource.data.email is string

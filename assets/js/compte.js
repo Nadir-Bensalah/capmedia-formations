@@ -52,18 +52,10 @@ onAuthStateChanged(auth, async (u) => {
     conversation = c && c.exists() ? c.data() : null;
   } catch (e) { console.error(e); }
 
-  if (!fiche) {
-    voile.innerHTML = `
-      <div class="pile g-4 t-centre" style="max-width:380px">
-        <h1 class="t-h2">Aucun achat sur ce compte</h1>
-        <p class="t-petit t-2">Connecté avec <strong>${echapper(email)}</strong>.
-        Si tu as payé avec une autre adresse, reconnecte-toi avec celle-là.</p>
-        <a href="./formations/" class="btn btn-principal btn-large btn-bloc">Découvrir les formations</a>
-        <button type="button" class="lien-nu" id="v-deco">Se déconnecter</button>
-      </div>`;
-    $('v-deco').addEventListener('click', () => signOut(auth).then(() => location.replace('./acces.html')));
-    return;
-  }
+  /* Membre 100 % gratuit : aucune fiche acheteur, et c'est normal.
+     Mon espace fonctionne quand même (formations offertes, profil). */
+  if (!fiche) fiche = {};
+  if (!progression) progression = {};
 
   /* --- Normalisation des achats (rétrocompat « offre ») ------------------- */
   const achats = { ...(fiche.achats || {}) };

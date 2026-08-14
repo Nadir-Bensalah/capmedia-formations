@@ -24,6 +24,24 @@ const SITE = 'https://academy.capmedia.app';
 const e = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+/* --- Le parcours et les solos ---------------------------------------------- */
+const PARCOURS = C.formations.filter((f) => f.acces !== 'solo').sort((a, b) => a.ordre - b.ordre);
+const SOLOS = C.formations.filter((f) => f.acces === 'solo');
+const PACK_PAYANTES = PARCOURS.filter((f) => f.acces === 'pack');
+const GRATUITES = PARCOURS.filter((f) => f.acces === 'gratuit');
+
+const NOMS_COURTS = {
+  github: 'Git & GitHub',
+  prompting: 'Prompting',
+  'claude-code': 'Claude Code',
+  firebase: 'Firebase',
+  mobile: 'Ton app mobile',
+  'design-app': "Design d'app",
+  aso: 'ASO',
+  'seo-contenu': 'SEO & contenu',
+};
+const nomCourt = (f) => NOMS_COURTS[f.slug] || f.nom;
+
 /* --- Icônes (extraites de icones.js, rendu statique) ---------------------- */
 const TRACES = {
   telephone: '<rect x="7" y="2" width="10" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>',
@@ -80,7 +98,7 @@ ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld)}</script
     <a href="../index.html" class="logo"><img class="marque" src="../assets/img/logo-academy.png" alt="" width="22" height="22">Capmedia&nbsp;Academy</a>
     <nav class="nav-liens">
       <a href="./">Formations</a>
-      <a href="./#pack">Le Pack</a>
+      <a href="./#pack">Le Parcours</a>
       <a href="../index.html#faq">FAQ</a>
     </nav>
     <span style="margin-left:auto"></span>
@@ -124,9 +142,13 @@ const pied = `
 `;
 
 /* --- Carte de formation (réutilisée catalogue + cross-sell) --------------- */
-function carte(f, depuis) {
+function carte(f) {
   const lien = f.slug === 'mobile' ? '../index.html' : `./${f.slug}.html`;
   const anticipe = f.statut === 'acces-anticipe';
+  const prixTxt = f.acces === 'gratuit' ? 'Offerte'
+    : f.acces === 'pack' ? 'Dans le pack'
+    : `${f.prix} €`;
+  const sousTitre = f.acces === 'solo' ? e(f.duree) : `Étape ${f.ordre} · ${e(f.duree)}`;
   return `      <a class="carte carte-formation" href="${lien}" data-slug="${f.slug}">
         <div class="rang-espace" style="align-items:flex-start">
           <span class="cf-ico">${ico(f.couleurIco || 'note', 17)}</span>
@@ -137,19 +159,70 @@ function carte(f, depuis) {
           <p class="t-petit t-2">${e(f.courte)}</p>
         </div>
         <div class="rang-espace" style="margin-top:auto;padding-top:var(--e-4)">
-          <span class="t-micro t-3">${e(f.duree)}</span>
-          <span class="t-petit t-fort cf-prix" data-prix>dès ${f.prixE} €</span>
+          <span class="t-micro t-3">${sousTitre}</span>
+          <span class="t-petit t-fort cf-prix" data-prix>${prixTxt}</span>
         </div>
         <span class="cf-possede masque"><span class="ico-coche">${ico('coche', 12)}</span> À toi</span>
       </a>`;
 }
 
+/* --- Carte du pack (catalogue + landings pack) ----------------------------- */
+function cartePack() {
+  return `    <div class="carte pile g-5" style="max-width:560px">
+      <div class="pile g-1">
+        <div class="rang-espace">
+          <p class="t-h3">${e(C.pack.nom)}</p>
+          <span class="pastille pastille--encours">Accès à vie</span>
+        </div>
+        <p class="t-petit t-2">Les cinq formations payantes du parcours, en un seul achat.</p>
+      </div>
+      <div class="prix"><span class="montant">${C.pack.prix} €</span><span class="barre">${C.pack.prixBarre} €</span></div>
+      <p class="t-micro t-3">Paiement unique · Accès à vie · TVA non applicable</p>
+      <hr class="filet" style="margin:0">
+      <ul class="liste-marque">
+${PACK_PAYANTES.map((x) => `        <li>Étape ${x.ordre} · ${e(x.nom)}</li>`).join('\n')}
+        <li>Les 3 premières étapes (${GRATUITES.map((x) => e(nomCourt(x))).join(', ')}) sont offertes pour commencer</li>
+        <li>Accès à vie, mises à jour comprises</li>
+        <li>Satisfait ou remboursé 14 jours</li>
+      </ul>
+      <button type="button" class="btn btn-principal btn-large btn-bloc" data-pack="parcours">Débloquer le parcours · ${C.pack.prix} €</button>
+    </div>`;
+}
+
+/* --- Le fil du parcours (landings gratuites et pack) ----------------------- */
+function sectionParcours(f) {
+  const etapes = PARCOURS.map((x) => {
+    const courant = x.slug === f.slug;
+    const lien = x.slug === 'mobile' ? '../index.html' : `./${x.slug}.html`;
+    const marque = courant
+      ? `<span class="pastille pastille--encours">Tu es ici${x.acces === 'gratuit' ? ' · Offerte' : ''}</span>`
+      : x.acces === 'gratuit'
+        ? `<span class="pastille pastille--termine">Offerte</span>`
+        : `<span class="t-micro t-3">Pack</span>`;
+    return `      <li><a class="carte rang-espace" style="padding:12px 16px" href="${lien}"${courant ? ' aria-current="page"' : ''}>
+        <span class="rang" style="gap:10px"><span class="num-acc">${String(x.ordre).padStart(2, '0')}</span><span class="t-petit ${courant ? 't-fort' : 't-2'}">${e(nomCourt(x))}</span></span>
+        ${marque}
+      </a></li>`;
+  }).join('\n');
+  return `
+  <section class="apparait">
+    <div class="section-tete">
+      <p class="etiquette">Le parcours</p>
+      <h2 class="t-h1">Étape ${f.ordre} sur ${PARCOURS.length}.</h2>
+      <p class="t-lead colonne" style="margin-top:var(--e-2)">Cette formation est une étape
+      du ${e(C.pack.nom)} : ${PARCOURS.length} formations qui se suivent, de ta première
+      ligne de code à ton app publiée sur les stores. Les trois premières sont offertes.</p>
+    </div>
+    <ol class="colonne" style="list-style:none;padding:0;margin:0;display:grid;gap:var(--e-2)">
+${etapes}
+    </ol>
+  </section>
+`;
+}
+
 /* ==========================================================================
    Page catalogue : formations/index.html
    ========================================================================== */
-const basic = C.prixPack('basic');
-const avance = C.prixPack('avance');
-
 const jsonldCat = {
   '@context': 'https://schema.org',
   '@type': 'ItemList',
@@ -158,14 +231,16 @@ const jsonldCat = {
     '@type': 'ListItem', position: i + 1,
     item: { '@type': 'Course', name: f.nom, description: f.courte,
       provider: { '@type': 'Organization', name: 'Capmedia Academy' },
-      offers: [{ '@type': 'Offer', price: String(f.prixE), priceCurrency: 'EUR', category: 'Paid' }],
+      offers: [{ '@type': 'Offer',
+        price: f.acces === 'gratuit' ? '0' : f.acces === 'pack' ? String(C.pack.prix) : String(f.prix),
+        priceCurrency: 'EUR', category: f.acces === 'gratuit' ? 'Free' : 'Paid' }],
       hasCourseInstance: { '@type': 'CourseInstance', courseMode: 'online' } },
   })),
 };
 
 let cat = tete(
   'Toutes les formations · Capmedia Academy',
-  "Créer une app, un site, automatiser avec l'IA, encaisser avec Stripe, être trouvé sur les stores : des formations en français qui partent vraiment de zéro. Et le Pack qui donne tout, moins 30 %.",
+  "Le Parcours Développeur d'Apps : huit formations dans l'ordre, les trois premières offertes, un seul achat de 297 € pour tout le reste. Plus quatre formations indépendantes, à l'unité.",
   'formations/', jsonldCat,
 );
 
@@ -176,79 +251,51 @@ cat += `
   <section>
     <div class="pile g-4" style="max-width:760px">
       <p class="etiquette">Le catalogue</p>
-      <h1 class="t-h1" style="font-size:clamp(32px,5vw,52px)">Des formations qui partent<br>vraiment de zéro.</h1>
-      <p class="t-lead">Une compétence par formation, en français, sans jargon,
-      avec l'IA comme outil de travail. Achète à l'unité, ou prends tout avec
-      le Pack. Ce que tu possèdes déjà se déduit automatiquement.</p>
+      <h1 class="t-h1" style="font-size:clamp(32px,5vw,52px)">Un parcours, huit étapes.<br>Les trois premières offertes.</h1>
+      <p class="t-lead">Le ${e(C.pack.nom)} t'emmène de ta première ligne de code
+      à ton app publiée sur les stores. Tu commences gratuitement, avec un simple
+      compte, et tu débloques la suite en un seul achat. À côté du parcours,
+      quatre formations indépendantes, à l'unité.</p>
     </div>
   </section>
 
   <section>
-    <div class="grille grille-3 grille-catalogue">
-${C.formations.map((f) => carte(f)).join('\n')}
+    <div class="section-tete">
+      <p class="etiquette">Le parcours</p>
+      <h2 class="t-h1">Huit étapes, dans l'ordre.</h2>
     </div>
-    <p class="t-micro t-3" style="margin-top:var(--e-4)">Les formations en accès
-    anticipé publient leurs modules chaque semaine : le premier est en ligne,
-    le prix de lancement couvre tout, à vie.</p>
+    <div class="grille grille-3 grille-catalogue">
+${PARCOURS.map((f) => carte(f)).join('\n')}
+    </div>
+    <p class="t-micro t-3" style="margin-top:var(--e-4)">Les étapes 1 à 3 sont
+    offertes à tout compte connecté : un e-mail suffit, aucune carte bancaire.
+    Les étapes 4 à 8 se débloquent ensemble, avec le pack.</p>
   </section>
 
   <section id="pack">
     <div class="section-tete">
-      <p class="etiquette">Le Pack Academy</p>
-      <h2 class="t-h1">Tout. Moins 30 %.<br>Et ton prorata déduit.</h2>
-      <p class="t-lead colonne" style="margin-top:var(--e-2)">Les ${C.formations.length} formations,
-      celles qui arrivent pendant un an incluses, en un seul achat. Et si tu as
-      déjà acheté des formations, leur prix se déduit du Pack, automatiquement.</p>
+      <p class="etiquette">Le pack</p>
+      <h2 class="t-h1">${e(C.pack.nom)}.<br>Un achat, tout le parcours.</h2>
+      <p class="t-lead colonne" style="margin-top:var(--e-2)">Les cinq formations
+      payantes du parcours, débloquées d'un coup, pour ${C.pack.prix} € au lieu
+      de ${C.pack.prixBarre} €. Accès à vie, mises à jour comprises.</p>
     </div>
+${cartePack()}
+  </section>
 
-    <div class="grille grille-2 cartes-prix" style="max-width:900px">
-      <div class="carte pile g-5">
-        <div class="pile g-1">
-          <p class="t-h3">Pack Basic</p>
-          <p class="t-petit t-2">Toutes les formations, offre Essentiel.</p>
-        </div>
-        <div class="prix"><span class="montant" data-prix-pack="basic">${basic.prix} €</span><span class="barre">${basic.plein} €</span></div>
-        <p class="t-micro t-3" data-note-pack="basic">Paiement unique · Accès à vie · Moins 30 % sur le total</p>
-        <hr class="filet" style="margin:0">
-        <ul class="liste-marque">
-          <li>Les ${C.formations.length} formations, offre Essentiel</li>
-          <li>Toutes les formations publiées dans les 12 prochains mois</li>
-          <li>Toutes les mises à jour, à vie</li>
-          <li>Le support par messagerie</li>
-        </ul>
-        <button type="button" class="btn btn-secondaire btn-large btn-bloc" data-pack="basic">Prendre le Pack Basic</button>
-      </div>
-      <div class="carte pile g-5">
-        <div class="pile g-1">
-          <div class="rang-espace">
-            <p class="t-h3">Pack Avancé</p>
-            <span class="pastille pastille--encours">Le meilleur rapport</span>
-          </div>
-          <p class="t-petit t-2">Toutes les formations, offre Complète.</p>
-        </div>
-        <div class="prix"><span class="montant" data-prix-pack="avance">${avance.prix} €</span><span class="barre">${avance.plein} €</span></div>
-        <p class="t-micro t-3" data-note-pack="avance">Paiement unique · Accès à vie · Moins 30 % sur le total</p>
-        <hr class="filet" style="margin:0">
-        <ul class="liste-marque">
-          <li>Les ${C.formations.length} formations, offre Complète</li>
-          <li>La revue personnelle de ton app (formation mobile)</li>
-          <li>Tous les codes sources, kits et bibliothèques de prompts</li>
-          <li>Toutes les formations à venir pendant 12 mois, en Complet</li>
-        </ul>
-        <button type="button" class="btn btn-principal btn-large btn-bloc" data-pack="avance">Prendre le Pack Avancé</button>
-      </div>
+  <section>
+    <div class="section-tete">
+      <p class="etiquette">À part</p>
+      <h2 class="t-h1">Les formations indépendantes.</h2>
+      <p class="t-lead colonne" style="margin-top:var(--e-2)">Hors parcours,
+      à l'unité, prix unique et accès à vie.</p>
     </div>
-
-    <div class="encadre encadre--astuce" style="max-width:900px">
-      <span class="marqueur">${ico('aide', 18)}</span>
-      <div>
-        <p><strong>Déjà client ? Ton prix est plus bas que celui affiché.</strong></p>
-        <p>Connecte-toi : chaque formation que tu possèdes se déduit du Pack,
-        en euros et en pourcentage. Le calcul se fait côté serveur, sur ton
-        compte, au moment du paiement. Un client qui a tout acheté sauf une
-        formation ne paie que le plancher de ${C.pack.plancher} €.</p>
-      </div>
+    <div class="grille grille-3 grille-catalogue">
+${SOLOS.map((f) => carte(f)).join('\n')}
     </div>
+    <p class="t-micro t-3" style="margin-top:var(--e-4)">Les formations en accès
+    anticipé publient leurs modules chaque semaine : le premier est en ligne,
+    le prix de lancement couvre tout, à vie.</p>
   </section>
 
 </div>
@@ -261,7 +308,10 @@ cat += pied;
    ========================================================================== */
 function landing(f) {
   const anticipe = f.statut === 'acces-anticipe';
-  const autres = C.formations.filter((x) => x.slug !== f.slug).slice(0, 6);
+  const gratuit = f.acces === 'gratuit';
+  const pack = f.acces === 'pack';
+  const autresParcours = PARCOURS.filter((x) => x.slug !== f.slug);
+  const autresSolos = SOLOS.filter((x) => x.slug !== f.slug);
 
   const jsonld = {
     '@context': 'https://schema.org',
@@ -271,13 +321,26 @@ function landing(f) {
     provider: { '@type': 'Organization', name: 'Capmedia Academy', url: `${SITE}/` },
     inLanguage: 'fr',
     hasCourseInstance: { '@type': 'CourseInstance', courseMode: 'online' },
-    offers: [
-      { '@type': 'Offer', name: 'Essentiel', price: String(f.prixE), priceCurrency: 'EUR', category: 'Paid' },
-      { '@type': 'Offer', name: 'Complet', price: String(f.prixC), priceCurrency: 'EUR', category: 'Paid' },
-    ],
+    offers: gratuit
+      ? [{ '@type': 'Offer', price: '0', priceCurrency: 'EUR', category: 'Free' }]
+      : pack
+        ? [{ '@type': 'Offer', name: C.pack.nom, price: String(C.pack.prix), priceCurrency: 'EUR', category: 'Paid' }]
+        : [{ '@type': 'Offer', price: String(f.prix), priceCurrency: 'EUR', category: 'Paid' }],
   };
 
   let h = tete(`${f.nom} · Capmedia Academy`, f.accroche, `formations/${f.slug}.html`, jsonld);
+
+  const pastilleStatut = anticipe
+    ? (gratuit ? 'Accès anticipé' : 'Accès anticipé · prix de lancement')
+    : 'Disponible';
+  const ctaHero = gratuit
+    ? 'Commencer gratuitement'
+    : pack
+      ? `Débloquer avec le parcours · ${C.pack.prix} €`
+      : `Rejoindre · ${f.prix} €`;
+  const sousHero = gratuit
+    ? 'Formation offerte, tous les modules · Un compte e-mail suffit, sans mot de passe · Aucune carte bancaire'
+    : 'Accès immédiat, à vie · Satisfait ou remboursé 14 jours · Paiement sécurisé Stripe';
 
   h += `
 <main class="enveloppe" style="padding-top:clamp(48px,7vw,80px);padding-bottom:var(--e-10)">
@@ -286,16 +349,16 @@ function landing(f) {
   <section>
     <div class="pile g-5" style="max-width:800px">
       <div class="rang" style="gap:10px">
-        <span class="pastille ${anticipe ? 'pastille--encours' : 'pastille--termine'}">${anticipe ? 'Accès anticipé · prix de lancement' : 'Disponible'}</span>
+        <span class="pastille ${anticipe ? 'pastille--encours' : 'pastille--termine'}">${pastilleStatut}</span>
         <span class="t-micro t-3">${e(f.niveau)} · ${e(f.duree)}</span>
       </div>
       <h1 class="t-h1" style="font-size:clamp(32px,5vw,54px)">${e(f.nom)}</h1>
       <p class="t-lead" style="max-width:640px">${e(f.accroche)}</p>
       <div class="rang" style="gap:var(--e-3)">
-        <a href="#tarifs" class="btn btn-principal btn-large">Rejoindre · ${f.prixE} €</a>
+        <a href="#tarifs" class="btn btn-principal btn-large">${ctaHero}</a>
         <a href="#programme" class="btn btn-secondaire btn-large">Voir le programme</a>
       </div>
-      <p class="t-petit t-3">Accès immédiat, à vie · Satisfait ou remboursé 14 jours · Paiement sécurisé Stripe</p>
+      <p class="t-petit t-3">${sousHero}</p>
     </div>
   </section>
 
@@ -321,7 +384,9 @@ ${(f.publics || []).map((p) => `          <li>${e(p)}</li>`).join('\n')}
           <li>Accès à vie, mises à jour comprises</li>
           <li>La formation s'adapte : avec IA (prompts prêts à copier) ou sans</li>
           <li>Le support par messagerie, un vrai humain qui répond</li>
-          <li>Satisfait ou remboursé 14 jours (moins d'un tiers débloqué : voir CGV)</li>
+${gratuit
+    ? `          <li>Le tout offert, entièrement : il te faut juste un compte, un e-mail sans mot de passe</li>`
+    : `          <li>Satisfait ou remboursé 14 jours (moins d'un tiers débloqué : voir CGV)</li>`}
         </ul>
       </div>
     </div>
@@ -349,64 +414,66 @@ ${anticipe ? `
         <p><strong>Accès anticipé : ce que ça veut dire, précisément.</strong></p>
         <p>Le module d'introduction est en ligne aujourd'hui. Les modules
         suivants sont publiés chaque semaine, dans l'ordre du programme
-        ci-dessus. Ton achat couvre tout, à vie, au prix de lancement : il
+        ci-dessus. ${gratuit
+          ? `La formation reste offerte, en entier : chaque module publié se
+        débloque sur ton compte, sans rien payer.`
+          : `Ton achat couvre tout, à vie, au prix de lancement : il
         augmentera à la publication complète. Et la garantie 14 jours
-        s'applique dès aujourd'hui.</p>
+        s'applique dès aujourd'hui.`}</p>
       </div>
     </div>
   </section>
-` : ''}
+` : ''}${f.acces === 'solo' ? '' : sectionParcours(f)}
   <section id="tarifs" class="apparait">
-    <div class="section-tete">
-      <p class="etiquette">Tarifs</p>
-      <h2 class="t-h1">Deux offres. Accès à vie.</h2>
+${gratuit ? `    <div class="section-tete">
+      <p class="etiquette">Accès</p>
+      <h2 class="t-h1">Offerte, entièrement.</h2>
     </div>
-    <div class="grille grille-2 cartes-prix" style="max-width:900px">
-      <div class="carte pile g-5">
-        <div class="pile g-1">
-          <p class="t-h3">Essentiel</p>
-          <p class="t-petit t-2">La formation complète.</p>
+    <div class="carte pile g-5" style="max-width:560px">
+      <div class="pile g-1">
+        <div class="rang-espace">
+          <p class="t-h3">Formation offerte</p>
+          <span class="pastille pastille--termine">0 €</span>
         </div>
-        <div class="prix"><span class="montant">${f.prixE} €</span><span class="barre">${f.prixEBarre} €</span></div>
-        <p class="t-micro t-3">Paiement unique · Accès à vie · TVA non applicable</p>
-        <hr class="filet" style="margin:0">
-        <ul class="liste-marque">
-          <li>Les ${f.modules.length} modules, en français</li>
-          <li>Mode avec IA ou sans IA, au choix</li>
-          <li>Toutes les mises à jour, à vie</li>
-          <li>Le support par messagerie</li>
-        </ul>
-        <button type="button" class="btn btn-secondaire btn-large btn-bloc" data-achat="${f.slug}:essentiel">Prendre l'Essentiel</button>
+        <p class="t-petit t-2">Cette formation fait partie du ${e(C.pack.nom)} et elle
+        est offerte, entièrement : tous les modules, sans rien payer.</p>
       </div>
-      <div class="carte pile g-5">
-        <div class="pile g-1">
-          <div class="rang-espace">
-            <p class="t-h3">Complet</p>
-            <span class="pastille pastille--encours">Recommandé</span>
-          </div>
-          <p class="t-petit t-2">La formation, plus les outils qui font gagner des semaines.</p>
-        </div>
-        <div class="prix"><span class="montant">${f.prixC} €</span><span class="barre">${f.prixCBarre} €</span></div>
-        <p class="t-micro t-3">Paiement unique · Accès à vie · TVA non applicable</p>
-        <hr class="filet" style="margin:0">
-        <ul class="liste-marque">
-          <li><strong>Tout l'Essentiel</strong>, plus :</li>
-          <li>Les gabarits, modèles et bibliothèques de prompts de la formation</li>
-          <li>Les études de cas complètes et leurs fichiers</li>
-          <li>La priorité sur le support</li>
-        </ul>
-        <button type="button" class="btn btn-principal btn-large btn-bloc" data-achat="${f.slug}:complet">Prendre le Complet</button>
-      </div>
+      <hr class="filet" style="margin:0">
+      <ul class="liste-marque">
+        <li>Les ${f.modules.length} modules, tous débloqués</li>
+        <li>Un compte suffit : ton e-mail, sans mot de passe</li>
+        <li>Accès à vie, mises à jour comprises</li>
+        <li>Le support par messagerie</li>
+      </ul>
+      <a href="../acces.html" class="btn btn-principal btn-large btn-bloc">Commencer gratuitement</a>
+      <p class="t-micro t-3">Étape ${f.ordre} du parcours · aucune carte bancaire demandée</p>
+    </div>` : pack ? `    <div class="section-tete">
+      <p class="etiquette">Tarif</p>
+      <h2 class="t-h1">Un seul achat : le parcours.</h2>
     </div>
-
-    <div class="encadre encadre--astuce" style="max-width:900px">
-      <span class="marqueur">${ico('etoile', 18)}</span>
-      <div>
-        <p><strong>Tu comptes en suivre plusieurs ? Regarde le Pack.</strong></p>
-        <p>Toutes les formations, moins 30 % sur le total, et ce que tu possèdes
-        déjà se déduit automatiquement. <a href="./#pack">Voir le Pack Academy</a>.</p>
-      </div>
+${cartePack()}
+    <p class="t-petit t-3" style="margin-top:var(--e-3)">Cette formation est l'étape ${f.ordre} du parcours : elle se débloque avec le pack.</p>` : `    <div class="section-tete">
+      <p class="etiquette">Tarif</p>
+      <h2 class="t-h1">Un prix unique. Accès à vie.</h2>
     </div>
+    <div class="carte pile g-5" style="max-width:560px">
+      <div class="pile g-1">
+        <p class="t-h3">${e(f.nom)}</p>
+        <p class="t-petit t-2">Tout le contenu de la formation, en un seul prix.</p>
+      </div>
+      <div class="prix"><span class="montant">${f.prix} €</span><span class="barre">${f.prixBarre} €</span></div>
+      <p class="t-micro t-3">Paiement unique · Accès à vie · TVA non applicable</p>
+      <hr class="filet" style="margin:0">
+      <ul class="liste-marque">
+        <li>Les ${f.modules.length} modules, tout inclus : gabarits, modèles et bibliothèques de prompts compris</li>
+        <li>Mode avec IA ou sans IA, au choix</li>
+        <li>Accès à vie, mises à jour comprises</li>
+        <li>Le support par messagerie</li>
+        <li>Satisfait ou remboursé 14 jours</li>
+      </ul>
+      <button type="button" class="btn btn-principal btn-large btn-bloc" data-achat="${f.slug}:complet">Rejoindre · ${f.prix} €</button>
+    </div>
+    <p class="t-micro t-3" style="margin-top:var(--e-3)">Formation indépendante, hors parcours.</p>`}
   </section>
 
   <section id="faq" class="apparait">
@@ -419,24 +486,41 @@ ${(f.faq || []).map((q) => `      <details class="acc">
         <summary><span class="chevron" aria-hidden="true">›</span><span class="titre-acc">${e(q.q)}</span></summary>
         <div class="corps-acc"><p class="t-corps t-2">${e(q.r)}</p></div>
       </details>`).join('\n')}
+${gratuit ? `      <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="titre-acc">C'est vraiment gratuit ?</span></summary>
+        <div class="corps-acc"><p class="t-corps t-2">Oui : cette formation est une étape offerte du ${e(C.pack.nom)}. Tous les modules sont ouverts, aucune carte bancaire n'est demandée. Si le parcours te plaît, la suite se débloque avec le pack.</p></div>
+      </details>
       <details class="acc">
+        <summary><span class="chevron" aria-hidden="true">›</span><span class="titre-acc">Comment j'accède à la formation ?</span></summary>
+        <div class="corps-acc"><p class="t-corps t-2">Crée ton compte avec ton e-mail, sans mot de passe : la formation se débloque immédiatement, en entier. Toutes tes formations vivent au même endroit, sous le même e-mail.</p></div>
+      </details>` : `      <details class="acc">
         <summary><span class="chevron" aria-hidden="true">›</span><span class="titre-acc">Comment j'accède à la formation après l'achat ?</span></summary>
         <div class="corps-acc"><p class="t-corps t-2">Accès immédiat : tu reçois un lien de connexion à l'adresse utilisée pour le paiement, sans mot de passe à créer. Toutes tes formations vivent au même endroit, sous le même e-mail.</p></div>
       </details>
       <details class="acc">
         <summary><span class="chevron" aria-hidden="true">›</span><span class="titre-acc">Et si ça ne me convient pas ?</span></summary>
         <div class="corps-acc"><p class="t-corps t-2">Satisfait ou remboursé 14 jours : un e-mail, remboursement intégral, tant que moins d'un tiers des modules a été débloqué (détails dans les CGV).</p></div>
-      </details>
+      </details>`}
     </div>
   </section>
 
   <section class="apparait">
     <div class="section-tete">
       <p class="etiquette">Continuer</p>
-      <h2 class="t-h1">Les autres formations.</h2>
+      <h2 class="t-h1">Continuer le parcours.</h2>
     </div>
     <div class="grille grille-3 grille-catalogue">
-${autres.map((x) => carte(x)).join('\n')}
+${autresParcours.map((x) => carte(x)).join('\n')}
+    </div>
+  </section>
+
+  <section class="apparait">
+    <div class="section-tete">
+      <p class="etiquette">À part</p>
+      <h2 class="t-h1">Les formations à part.</h2>
+    </div>
+    <div class="grille grille-3 grille-catalogue">
+${autresSolos.map((x) => carte(x)).join('\n')}
     </div>
     <p style="margin-top:var(--e-4)"><a href="./" class="btn btn-secondaire">Tout le catalogue</a></p>
   </section>

@@ -19,6 +19,7 @@ const CATALOGUE = {
   formations: [
     {
       slug: 'mobile',
+      acces: 'pack', ordre: 5,
       nom: 'From Zero to the App Store',
       courte: 'Build and publish your first mobile app',
       accroche: "Your mobile app live on the App Store in 30 days, even if you've never written a line of code.",
@@ -67,6 +68,7 @@ const CATALOGUE = {
 
     {
       slug: 'github',
+      acces: 'gratuit', ordre: 1,
       nom: 'Git & GitHub: Complete Mastery',
       courte: 'The safety net for all your digital work',
       accroche: "Never lose an hour of work again. Version, back up, collaborate, and turn your GitHub into a professional showcase.",
@@ -106,6 +108,7 @@ const CATALOGUE = {
 
     {
       slug: 'claude-code',
+      acces: 'gratuit', ordre: 3,
       nom: 'Claude Code: The Developer in Your Terminal',
       courte: "Get professional-grade output from AI",
       accroche: "The tool professional developers use to delegate code. Setup, method, guardrails: everything that separates the toy from the production tool.",
@@ -147,6 +150,7 @@ const CATALOGUE = {
 
     {
       slug: 'site-web-ia',
+      acces: 'solo', prix: 97, prixBarre: 247,
       nom: "Your Professional Website, Built with AI",
       courte: 'A real site online, fast, with no agency and no subscription',
       accroche: "A professional website, live on your own domain, built with AI and hosted for free. No WordPress, no 3,000 € agency, no monthly subscription.",
@@ -184,6 +188,7 @@ const CATALOGUE = {
 
     {
       slug: 'automatiser-ia',
+      acces: 'solo', prix: 147, prixBarre: 397,
       nom: "Automate Your Business with AI",
       courte: 'Your repetitive tasks on autopilot',
       accroche: "Invoices, follow-ups, email triage, social media, reports: plug AI into your repetitive tasks and win back hours every week.",
@@ -223,6 +228,7 @@ const CATALOGUE = {
 
     {
       slug: 'prompting',
+      acces: 'gratuit', ordre: 2,
       nom: 'Professional Prompting',
       courte: "Get consistent results from AI, not lucky breaks",
       accroche: 'The difference between someone who "tries ChatGPT" and someone who produces with it: a method. Structure, context, iteration, verification: the foundation of all work with AI.',
@@ -259,6 +265,7 @@ const CATALOGUE = {
 
     {
       slug: 'firebase',
+      acces: 'pack', ordre: 4,
       nom: 'Firebase: Your Serverless Backend',
       courte: "Accounts, data, payments: the back office of your app",
       accroche: "User accounts, real-time database, files, functions: everything an app needs behind the scenes, with no server to administer, for 0 € to start.",
@@ -297,6 +304,7 @@ const CATALOGUE = {
 
     {
       slug: 'stripe',
+      acces: 'solo', prix: 97, prixBarre: 247,
       nom: 'Get Paid Online with Stripe',
       courte: 'Payments, subscriptions, invoices: the complete circuit',
       accroche: "From your first payment link to subscriptions with webhooks: collect payments cleanly, compliantly, without losing sleep. Taught by someone who actually gets paid with it.",
@@ -334,6 +342,7 @@ const CATALOGUE = {
 
     {
       slug: 'aso',
+      acces: 'pack', ordre: 7,
       nom: 'ASO: Get Found on the App Stores',
       courte: "App Store and Google Play rankings, methodically",
       accroche: "Your app is good but invisible? ASO is the only free, durable channel on the stores. Keywords, listing, screenshots, reviews: the complete method.",
@@ -369,6 +378,7 @@ const CATALOGUE = {
 
     {
       slug: 'design-app',
+      acces: 'pack', ordre: 6,
       nom: "App Design That Makes People Pay",
       courte: "The interface that turns a trial into a subscription",
       accroche: "90% of the gap between an amateur app and a pro app comes down to mechanical rules. Spacing, type, color, animations, paywall: apply them without being a designer.",
@@ -405,6 +415,7 @@ const CATALOGUE = {
 
     {
       slug: 'micro-saas',
+      acces: 'solo', prix: 197, prixBarre: 497,
       nom: 'Launch a Profitable Micro-SaaS',
       courte: "From idea to your first recurring subscriber, solo",
       accroche: "A small subscription product, one precise problem, recurring revenue. The complete solopreneur path: idea, AI-powered build, pricing, launch, first customers.",
@@ -445,6 +456,7 @@ const CATALOGUE = {
 
     {
       slug: 'seo-contenu',
+      acces: 'pack', ordre: 8,
       nom: 'SEO & Content: Traffic That Compounds',
       courte: 'Get found on Google, durably, without an ad budget',
       accroche: "Advertising stops the moment you stop paying. Well-ranked content works for years. The complete method: keywords, pages, technical SEO, authority.",
@@ -484,10 +496,10 @@ const CATALOGUE = {
   /* --- The pack ----------------------------------------------------------- */
   pack: {
     slug: 'pack',
-    nom: 'The Academy Pack',
-    accroche: "Every course, current and upcoming for one year, in a single purchase. 30% off the total, with what you already own deducted pro rata.",
-    remise: 0.30,
-    plancher: 19,
+    nom: 'The App Developer Path',
+    accroche: "One guiding thread: from your first line of code to your app published on the stores. Three courses free to start, one payment for everything else, lifetime access.",
+    prix: 297,
+    prixBarre: 675,
   },
 
   /* Pack price: sum of the courses at the given tier, minus the discount. */

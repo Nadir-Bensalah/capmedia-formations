@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Jour J (15 septembre) : fin du tarif de lancement, hausse des prix.
+"""OBSOLETE depuis le passage au modele Parcours (14 aout) : A REFONDRE.
+Jour J (15 septembre) : fin du tarif de lancement, hausse des prix.
 
 Fait TOUT en une commande :
   1. lit outils/prix-jour-j.json (à valider avant)

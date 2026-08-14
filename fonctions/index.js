@@ -31,23 +31,6 @@ const ADMIN_CLE             = defineSecret('ADMIN_CLE');
 const SITE = 'https://academy.capmedia.app';
 
 /* --- Prix du pack, source de vérité serveur ------------------------------- */
-function prixPack(niveau) {
-  const cle = niveau === 'avance' ? 'prixC' : 'prixE';
-  const somme = CATALOGUE.formations.reduce((n, f) => n + f[cle], 0);
-  return { plein: somme, prix: Math.round(somme * (1 - CATALOGUE.pack.remise)) };
-}
-function prixPackPerso(niveau, achats) {
-  const cle = niveau === 'avance' ? 'prixC' : 'prixE';
-  const base = prixPack(niveau);
-  let deja = 0;
-  for (const f of CATALOGUE.formations) {
-    if (achats && achats[f.slug]) deja += f[cle];
-  }
-  const prix = Math.max(CATALOGUE.pack.plancher, base.prix - deja);
-  return { plein: base.plein, packPlein: base.prix, deja, prix,
-           remisePct: Math.round((1 - prix / base.plein) * 100) };
-}
-
 /* --- Normaliser une fiche acheteur (rétrocompat « offre ») ---------------- */
 function achatsDeFiche(fiche) {
   const achats = { ...(fiche.achats || {}) };
@@ -128,9 +111,10 @@ exports.stripeWebhook = onRequest(
     const meta = session.metadata || {};
     let credit;
     let libelle;
-    if (meta.pack === 'basic' || meta.pack === 'avance') {
+    if (meta.pack === 'parcours' || meta.pack === 'basic' || meta.pack === 'avance') {
       credit = { pack: meta.pack };
-      libelle = `Pack Academy (${meta.pack === 'avance' ? 'Avancé' : 'Basic'})`;
+      libelle = meta.pack === 'parcours' ? CATALOGUE.pack.nom
+        : `Pack Academy (${meta.pack === 'avance' ? 'Avancé' : 'Basic'})`;
     } else if (meta.formation && (meta.offre === 'essentiel' || meta.offre === 'complet')) {
       const f = CATALOGUE.formations.find((x) => x.slug === meta.formation);
       if (f) {
@@ -186,7 +170,7 @@ exports.stripeWebhook = onRequest(
         }
 
         const maj = { email, achats, maj: FieldValue.serverTimestamp() };
-        if (credit.pack) maj.pack = (fiche.pack === 'avance') ? 'avance' : credit.pack;
+        if (credit.pack) maj.pack = fiche.pack || credit.pack;
         else if (fiche.pack) maj.pack = fiche.pack;
         maj.paiements = dejaVu ? (fiche.paiements || []) : [...(fiche.paiements || []), paiement];
 
@@ -203,9 +187,10 @@ exports.stripeWebhook = onRequest(
 );
 
 /* ==========================================================================
-   2. Checkout du pack, prorata côté serveur
-   POST { idToken, niveau: 'basic'|'avance', apercu?: true }
-   apercu:true renvoie le calcul sans créer de session (affichage).
+   2. Checkout du Parcours (pack unique, prix fixe)
+   POST { idToken, apercu?: true }
+   Un seul forfait : tout le parcours payant, accès à vie. Pas de niveaux,
+   pas de prorata. L'e-mail est verrouillé sur celui du compte.
    ========================================================================== */
 exports.creerCheckoutPack = onRequest(
   { region: 'europe-west1', secrets: [STRIPE_SECRET], cors: true },
@@ -213,10 +198,8 @@ exports.creerCheckoutPack = onRequest(
     if (req.method === 'OPTIONS') return res.status(204).send('');
     if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
 
-    const { idToken, niveau, apercu } = req.body || {};
-    if (!idToken || !['basic', 'avance'].includes(niveau)) {
-      return res.status(400).json({ erreur: 'idToken et niveau (basic|avance) requis' });
-    }
+    const { idToken, apercu } = req.body || {};
+    if (!idToken) return res.status(400).json({ erreur: 'idToken requis' });
 
     let decode;
     try {
@@ -229,111 +212,15 @@ exports.creerCheckoutPack = onRequest(
 
     const d = await bdd.doc(`acheteurs/${email}`).get();
     const fiche = d.exists ? d.data() : {};
-    if (fiche.pack === 'avance' || (fiche.pack === 'basic' && niveau === 'basic')) {
-      return res.status(200).json({ deja: 'pack' });
-    }
+    if (fiche.pack) return res.status(200).json({ deja: 'pack' });
 
-    const achats = achatsDeFiche(fiche);
-    let calc = prixPackPerso(niveau, achats);
-    /* Montée basic vers avancé : le pack basic déjà payé se déduit aussi. */
-    if (fiche.pack === 'basic' && niveau === 'avance') {
-      const basicPaye = prixPack('basic').prix;
-      calc = { ...calc, deja: calc.deja + basicPaye,
-               prix: Math.max(CATALOGUE.pack.plancher, calc.prix - basicPaye) };
-      calc.remisePct = Math.round((1 - calc.prix / calc.plein) * 100);
-    }
-
-    if (apercu) {
-      return res.status(200).json({ prix: calc.prix, packPlein: calc.packPlein,
-        plein: calc.plein, deja: calc.deja, remisePct: calc.remisePct });
-    }
+    const prix = CATALOGUE.pack.prix;
+    if (apercu) return res.status(200).json({ prix, prixBarre: CATALOGUE.pack.prixBarre });
 
     const stripe = new Stripe(STRIPE_SECRET.value());
     const sessionStripe = await stripe.checkout.sessions.create({
       mode: 'payment',
-      /* Compte reel : Managed Payments (Stripe vendeur officiel) est actif
-         par defaut et exigerait un tax_code ; on vend en direct, comme en test. */
-      managed_payments: { enabled: false },
-      customer_email: email,
-      line_items: [{
-        quantity: 1,
-        price_data: {
-          currency: 'eur',
-          unit_amount: calc.prix * 100,
-          product_data: {
-            name: `Pack Academy · ${niveau === 'avance' ? 'Avancé' : 'Basic'} (toutes les formations)`,
-            description: calc.deja > 0
-              ? `Prix personnalisé : ${calc.deja} € déjà investis, déduits.`
-              : 'Toutes les formations, accès à vie.',
-          },
-        },
-      }],
-      metadata: { pack: niveau, email },
-      success_url: `${SITE}/merci.html?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${SITE}/formations/`,
-    });
-
-    return res.status(200).json({ url: sessionStripe.url, prix: calc.prix,
-      deja: calc.deja, remisePct: calc.remisePct });
-  },
-);
-
-/* ==========================================================================
-   2 bis. Checkout d'une formation, client connecté
-   POST { idToken, formation, offre: 'essentiel'|'complet', apercu?: true }
-
-   Pourquoi côté serveur : l'e-mail est VERROUILLÉ sur celui du compte
-   (impossible de payer avec la mauvaise adresse, y compris via Apple Pay
-   ou Google Pay), le double achat est refusé, et la montée Essentiel vers
-   Complet est facturée au prorata (différence de prix), calculée ici.
-   ========================================================================== */
-exports.creerCheckoutFormation = onRequest(
-  { region: 'europe-west1', secrets: [STRIPE_SECRET], cors: true },
-  async (req, res) => {
-    if (req.method === 'OPTIONS') return res.status(204).send('');
-    if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
-
-    const { idToken, formation, offre, apercu } = req.body || {};
-    const f = CATALOGUE.formations.find((x) => x.slug === formation);
-    if (!idToken || !f || !['essentiel', 'complet'].includes(offre)) {
-      return res.status(400).json({ erreur: 'idToken, formation et offre requis' });
-    }
-
-    let decode;
-    try {
-      decode = await getAuth().verifyIdToken(idToken);
-      if (!decode.email || !decode.email_verified) throw new Error('email non vérifié');
-    } catch (e) {
-      return res.status(401).json({ erreur: 'jeton invalide' });
-    }
-    const email = decode.email.toLowerCase();
-
-    const d = await bdd.doc(`acheteurs/${email}`).get();
-    const fiche = d.exists ? d.data() : {};
-    const achats = achatsDeFiche(fiche);
-    const possede = fiche.pack === 'avance' ? 'complet'
-      : (fiche.pack === 'basic' && !achats[formation]) ? 'essentiel'
-      : achats[formation] || null;
-
-    /* Déjà couvert : on refuse le double paiement, net. */
-    if (possede === 'complet' || (possede === 'essentiel' && offre === 'essentiel')) {
-      return res.status(200).json({ deja: true, possede });
-    }
-
-    /* Prix : plein tarif, ou prorata de montée Essentiel -> Complet. */
-    let prix = offre === 'complet' ? f.prixC : f.prixE;
-    let deduit = 0;
-    const upgrade = offre === 'complet' && possede === 'essentiel';
-    if (upgrade) { deduit = f.prixE; prix = Math.max(9, f.prixC - f.prixE); }
-
-    if (apercu) return res.status(200).json({ prix, deduit, upgrade });
-
-    const stripe = new Stripe(STRIPE_SECRET.value());
-    const nomOffre = offre === 'complet' ? 'Complète' : 'Essentiel';
-    const sessionStripe = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      /* Compte reel : Managed Payments (Stripe vendeur officiel) est actif
-         par defaut et exigerait un tax_code ; on vend en direct, comme en test. */
+      /* Compte réel : Managed Payments exigerait un tax_code ; on vend en direct. */
       managed_payments: { enabled: false },
       customer_email: email,
       line_items: [{
@@ -342,21 +229,81 @@ exports.creerCheckoutFormation = onRequest(
           currency: 'eur',
           unit_amount: prix * 100,
           product_data: {
-            name: upgrade
-              ? `${f.nom} · Passage à l'offre Complète`
-              : `${f.nom} · Offre ${nomOffre}`,
-            description: upgrade
-              ? `Prorata : ${deduit} € déjà payés sur l'offre Essentiel, déduits.`
-              : 'Accès à vie, mises à jour comprises.',
+            name: `${CATALOGUE.pack.nom} (accès à vie)`,
+            description: "Le parcours complet, jusqu'à ton application publiée sur les stores. Mises à jour comprises.",
           },
         },
       }],
-      metadata: { formation, offre, email },
+      metadata: { pack: 'parcours', email },
       success_url: `${SITE}/merci.html?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${SITE}/formations/${formation === 'mobile' ? '' : formation + '.html'}`,
+      cancel_url: `${SITE}/#parcours`,
     });
 
-    return res.status(200).json({ url: sessionStripe.url, prix, deduit, upgrade });
+    return res.status(200).json({ url: sessionStripe.url, prix });
+  },
+);
+
+/* ==========================================================================
+   2 bis. Checkout d'une formation hors parcours (prix unique), connecté
+   POST { idToken, formation, apercu?: true }
+   E-mail VERROUILLÉ (Apple Pay / Google Pay compris), double achat refusé.
+   Les gratuites ne s'achètent pas et les formations du parcours passent
+   par le pack : la réponse aiguille le client au lieu d'encaisser.
+   ========================================================================== */
+exports.creerCheckoutFormation = onRequest(
+  { region: 'europe-west1', secrets: [STRIPE_SECRET], cors: true },
+  async (req, res) => {
+    if (req.method === 'OPTIONS') return res.status(204).send('');
+    if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
+
+    const { idToken, formation, apercu } = req.body || {};
+    const f = CATALOGUE.formations.find((x) => x.slug === formation);
+    if (!idToken || !f) return res.status(400).json({ erreur: 'idToken et formation requis' });
+    if (f.acces === 'gratuit') return res.status(200).json({ gratuit: true });
+    if (f.acces === 'pack') return res.status(200).json({ parcours: true });
+
+    let decode;
+    try {
+      decode = await getAuth().verifyIdToken(idToken);
+      if (!decode.email || !decode.email_verified) throw new Error('email non vérifié');
+    } catch (e) {
+      return res.status(401).json({ erreur: 'jeton invalide' });
+    }
+    const email = decode.email.toLowerCase();
+
+    const d = await bdd.doc(`acheteurs/${email}`).get();
+    const fiche = d.exists ? d.data() : {};
+    const achats = achatsDeFiche(fiche);
+    if (achats[formation] || fiche.pack === 'avance') {
+      return res.status(200).json({ deja: true });
+    }
+
+    const prix = f.prix;
+    if (apercu) return res.status(200).json({ prix, prixBarre: f.prixBarre });
+
+    const stripe = new Stripe(STRIPE_SECRET.value());
+    const sessionStripe = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      /* Compte réel : Managed Payments exigerait un tax_code ; on vend en direct. */
+      managed_payments: { enabled: false },
+      customer_email: email,
+      line_items: [{
+        quantity: 1,
+        price_data: {
+          currency: 'eur',
+          unit_amount: prix * 100,
+          product_data: {
+            name: `${f.nom} (accès à vie)`,
+            description: 'Accès à vie, mises à jour comprises.',
+          },
+        },
+      }],
+      metadata: { formation, offre: 'complet', email },
+      success_url: `${SITE}/merci.html?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${SITE}/formations/${formation}.html`,
+    });
+
+    return res.status(200).json({ url: sessionStripe.url, prix });
   },
 );
 
@@ -378,6 +325,7 @@ exports.renoncerGarantie = onRequest(
     const { idToken, formation } = req.body || {};
     const f = CATALOGUE.formations.find((x) => x.slug === formation);
     if (!idToken || !f) return res.status(400).json({ erreur: 'idToken et formation requis' });
+    if (f.acces === 'gratuit') return res.status(200).json({ gratuit: true });
 
     let decode;
     try {
@@ -433,11 +381,12 @@ exports.infoSession = onRequest(
       let achat = null;
       if (meta.pack) {
         achat = { type: 'pack', niveau: meta.pack,
-          libelle: `Pack Academy (${meta.pack === 'avance' ? 'Avancé' : 'Basic'})` };
+          libelle: meta.pack === 'parcours' ? CATALOGUE.pack.nom
+            : `Pack Academy (${meta.pack === 'avance' ? 'Avancé' : 'Basic'})` };
       } else if (meta.formation) {
         const f = CATALOGUE.formations.find((x) => x.slug === meta.formation);
         achat = { type: 'formation', formation: meta.formation, offre: meta.offre,
-          libelle: f ? `${f.nom} (${meta.offre === 'complet' ? 'Complète' : 'Essentiel'})` : meta.formation };
+          libelle: f ? f.nom : meta.formation };
       }
 
       return res.status(200).json({

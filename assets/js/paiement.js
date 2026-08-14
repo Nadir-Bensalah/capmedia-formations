@@ -1,18 +1,21 @@
 /* ==========================================================================
-   CAPMEDIA ACADEMY · Paiement et badges de possession
+   CAPMEDIA ACADEMY · Paiement et badges de possession (modèle Parcours)
+
+   Trois façons d'accéder :
+   · GRATUITES (github, prompting, claude-code) : un compte suffit, aucun
+     paiement. Ces pages n'ont pas de bouton d'achat, seulement des liens
+     vers la connexion.
+   · LE PACK « Parcours Développeur d'Apps » : bouton [data-pack="parcours"],
+     prix unique 297 €.
+   · LES SOLOS (site-web-ia, automatiser-ia, stripe, micro-saas) : bouton
+     [data-achat="slug:complet"], prix unique par formation.
 
    Deux régimes, selon la session :
    · Visiteur anonyme : les liens de paiement statiques (window.AZ.liens).
    · Client CONNECTÉ : une session Checkout créée côté serveur, avec son
      e-mail VERROUILLÉ (Apple Pay / Google Pay ne peuvent plus imposer une
-     autre adresse), le double achat refusé, et la montée Essentiel vers
-     Complet au prorata. Le serveur est seul juge des prix.
-
-   États affichés quand on est connecté :
-   · Offre possédée -> « Déjà achetée · Ouvrir » (aucun re-paiement possible)
-   · Essentiel possédé -> le bouton Complet devient « Passer à la Complète »
-     au prix prorata calculé par le serveur
-   · Cartes cross-sell -> badge « À toi »
+     autre adresse) et le double achat refusé. Le serveur est seul juge
+     des prix, et aiguille : gratuit -> l'app, parcours -> le pack.
    ========================================================================== */
 
 import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js';
@@ -31,12 +34,33 @@ let utilisateurCourant = null;
    /en/formations/ : les liens vers l'app et la connexion se calculent. */
 const PREFIXE = location.pathname.includes('/en/formations/') ? '../../'
   : (location.pathname.includes('/formations/') || location.pathname.includes('/en/')) ? '../' : './';
+const EN = location.pathname.includes('/en/');
 const versApp = (slug) => `${PREFIXE}app/?f=${encodeURIComponent(slug)}`;
 const versAcces = () => `${PREFIXE}acces.html`;
+const versParcours = () => `${PREFIXE}index.html#parcours`;
+
+const T = EN ? {
+  instant: 'One moment…',
+  reessaie: 'Try again in a moment',
+  bientot: 'Payment available soon',
+  dejaPack: 'Already yours',
+  dejaOuvrir: 'Already yours · Open',
+  aToi: 'Yours',
+  dejaClient: (a) => `Already a member? <a href="${a}">Sign in</a> to find your
+      courses and avoid any double purchase.`,
+} : {
+  instant: 'Un instant…',
+  reessaie: 'Réessaie dans un instant',
+  bientot: 'Paiement bientôt disponible',
+  dejaPack: 'Déjà à toi',
+  dejaOuvrir: 'Déjà à toi · Ouvrir',
+  aToi: 'À toi',
+  dejaClient: (a) => `Déjà membre ? <a href="${a}">Connecte-toi</a> pour retrouver
+      tes formations et éviter tout double achat.`,
+};
 
 /* Anti-course : un clic d'achat dans la première seconde ne doit pas
-   partir en anonyme alors qu'une session existe. On attend le premier
-   état d'authentification (ou 1,6 s au pire). */
+   partir en anonyme alors qu'une session existe. */
 let resoudreAuth;
 const authPrete = new Promise((r) => { resoudreAuth = r; });
 setTimeout(() => resoudreAuth && resoudreAuth(), 1600);
@@ -48,7 +72,7 @@ const relache = (b, texte) => {
   if (texte) setTimeout(() => { b.textContent = b.dataset.txt; }, 2400);
 };
 
-/* --- 1. Boutons d'achat à l'unité ---------------------------------------- */
+/* --- 1. Boutons d'achat des formations à part (solos) --------------------- */
 document.querySelectorAll('[data-achat]').forEach((b) => {
   b.addEventListener('click', async (e) => {
     e.preventDefault();
@@ -57,35 +81,36 @@ document.querySelectorAll('[data-achat]').forEach((b) => {
 
     /* Connecté : session serveur, e-mail verrouillé, doublon refusé. */
     if (utilisateurCourant) {
-      patiente(b, 'Un instant…');
+      patiente(b, T.instant);
       try {
         const r = await fetch(URL_FORMATION, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             idToken: await utilisateurCourant.getIdToken(),
-            formation, offre,
+            formation,
           }),
         });
         const d = await r.json();
+        if (d.gratuit) { window.location.href = versApp(formation); return; }
+        if (d.parcours) { window.location.href = versParcours(); return; }
         if (d.deja) { window.location.href = versApp(formation); return; }
         if (d.url) { window.location.href = d.url; return; }
         throw new Error(d.erreur || 'réponse inattendue');
       } catch (err) {
         console.error(err);
-        relache(b, 'Réessaie dans un instant');
+        relache(b, T.reessaie);
       }
       return;
     }
 
     /* Anonyme : lien statique. */
-    const url = liens[`${formation}:${offre}`];
+    const url = liens[`${formation}:${offre || 'complet'}`];
     if (url) { window.location.href = url; return; }
-    relache(b, 'Paiement bientôt disponible');
+    relache(b, T.bientot);
   });
 });
 
-/* Rappel discret aux anciens clients non connectés : se connecter évite
-   le double achat et donne les prix personnalisés. */
+/* Rappel discret aux membres non connectés. */
 authPrete.then(() => setTimeout(() => {
   if (utilisateurCourant) return;
   document.querySelectorAll('.cartes-prix').forEach((grille) => {
@@ -93,41 +118,42 @@ authPrete.then(() => setTimeout(() => {
     const p = document.createElement('p');
     p.className = 'note-deja-client t-micro t-3 t-centre';
     p.style.marginTop = 'var(--e-3)';
-    p.innerHTML = `Déjà client ? <a href="${versAcces()}">Connecte-toi</a> pour retrouver
-      tes formations, tes prix personnalisés, et éviter tout double achat.`;
+    p.innerHTML = T.dejaClient(versAcces());
     grille.parentNode.insertBefore(p, grille.nextSibling);
   });
 }, 400));
 
-/* --- 2. Boutons pack ------------------------------------------------------ */
+/* --- 2. Le bouton du pack Parcours ---------------------------------------- */
 document.querySelectorAll('[data-pack]').forEach((b) => {
-  const niveau = b.getAttribute('data-pack');
   b.addEventListener('click', async (e) => {
     e.preventDefault();
-    patiente(b, 'Un instant…');
+    patiente(b, T.instant);
     await authPrete;
     try {
       if (utilisateurCourant) {
         const r = await fetch(URL_PACK, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ idToken: await utilisateurCourant.getIdToken(), niveau }),
+          body: JSON.stringify({ idToken: await utilisateurCourant.getIdToken() }),
         });
         const d = await r.json();
-        if (d.deja === 'pack') { relache(b, 'Déjà à toi'); return; }
+        if (d.deja === 'pack') { relache(b, T.dejaPack); return; }
         if (d.url) { window.location.href = d.url; return; }
         throw new Error(d.erreur || 'réponse inattendue');
       }
-      const url = liens[`pack:${niveau}`];
+      const url = liens['pack:parcours'];
       if (url) { window.location.href = url; return; }
       window.location.href = versAcces();
     } catch (err) {
       console.error(err);
-      relache(b, 'Réessaie dans un instant');
+      relache(b, T.reessaie);
     }
   });
 });
 
-/* --- 3. État connecté : badges, verrous, prorata --------------------------- */
+/* --- 3. État connecté : badges et verrous ---------------------------------- */
+const PARCOURS = ['firebase', 'mobile', 'design-app', 'aso', 'seo-contenu'];
+const GRATUITES = ['github', 'prompting', 'claude-code'];
+
 function marquerCarteAchetee(bouton, texteBadge) {
   const carte = bouton.closest('.carte');
   if (!carte || carte.querySelector('.mention-achetee')) return;
@@ -163,74 +189,47 @@ if (cfg.firebase && cfg.firebase.apiKey) {
       if (fiche.offre && !achats.mobile) achats.mobile = fiche.offre;
       const aLePack = !!fiche.pack;
 
-      /* Badges « À toi » sur les cartes cross-sell / catalogue */
+      const couvre = (slug) => GRATUITES.includes(slug)
+        || (PARCOURS.includes(slug) ? (aLePack || !!achats[slug])
+          : (!!achats[slug] || fiche.pack === 'avance'));
+
+      /* Badges « À toi » sur les cartes */
       document.querySelectorAll('[data-slug]').forEach((carte) => {
         const slug = carte.getAttribute('data-slug');
-        if (aLePack || achats[slug]) {
+        if (!GRATUITES.includes(slug) && couvre(slug)) {
           const badge = carte.querySelector('.cf-possede');
           if (badge) badge.classList.remove('masque');
           carte.classList.add('est-possedee');
         }
       });
 
-      /* Boutons de tarifs : verrou sur le possédé, prorata sur la montée */
+      /* Boutons solos : verrou sur le possédé */
       for (const b of document.querySelectorAll('[data-achat]')) {
-        const [slug, offre] = b.getAttribute('data-achat').split(':');
-        const niveau = achats[slug];
-        const possede = fiche.pack === 'avance' ? 'complet'
-          : (fiche.pack === 'basic' && !niveau) ? 'essentiel'
-          : niveau || null;
-
-        const couvert = possede === 'complet'
-          || (possede === 'essentiel' && offre === 'essentiel');
-
-        if (couvert) {
-          b.textContent = 'Déjà achetée · Ouvrir';
+        const [slug] = b.getAttribute('data-achat').split(':');
+        if (couvre(slug)) {
+          b.textContent = T.dejaOuvrir;
           b.classList.remove('btn-principal');
           b.classList.add('btn-secondaire');
-          marquerCarteAchetee(b, offre === 'complet' ? 'Offre Complète : à toi' : 'Offre Essentiel : à toi');
-          continue;
-        }
-
-        /* Essentiel possédé, bouton Complet : la montée au prorata. */
-        if (possede === 'essentiel' && offre === 'complet') {
-          try {
-            const r = await fetch(URL_FORMATION, {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                idToken: await u.getIdToken(), formation: slug, offre: 'complet', apercu: true,
-              }),
-            });
-            const d = await r.json();
-            if (d.upgrade && d.prix) {
-              b.textContent = `Passer à la Complète · ${d.prix} €`;
-              const carte = b.closest('.carte');
-              const note = carte && carte.querySelector('.t-micro');
-              if (note) note.textContent =
-                `Ton prix : ${d.deduit} € déjà payés sur l'Essentiel, déduits.`;
-            }
-          } catch (e) { /* le clic passera quand même par le serveur */ }
+          b.addEventListener('click', (e) => {
+            e.stopImmediatePropagation();
+            e.preventDefault();
+            window.location.href = versApp(slug);
+          }, true);
+          marquerCarteAchetee(b, T.aToi);
         }
       }
 
-      /* Prix du pack personnalisé (inchangé) */
-      const cibles = document.querySelectorAll('[data-prix-pack]');
-      if (cibles.length && !aLePack && Object.keys(achats).length) {
-        for (const el of cibles) {
-          const niveau = el.getAttribute('data-prix-pack');
-          try {
-            const r = await fetch(URL_PACK, {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ idToken: await u.getIdToken(), niveau, apercu: true }),
-            });
-            const d = await r.json();
-            if (d.prix) {
-              el.textContent = d.prix + ' €';
-              const note = document.querySelector(`[data-note-pack="${niveau}"]`);
-              if (note) note.innerHTML =
-                `<strong>Ton prix</strong> : ${d.deja} € déjà investis, déduits · remise totale ${d.remisePct} %`;
-            }
-          } catch (e) { /* silencieux */ }
+      /* Le pack possédé : les boutons deviennent des portes d'entrée. */
+      if (aLePack) {
+        for (const b of document.querySelectorAll('[data-pack]')) {
+          b.textContent = T.dejaOuvrir;
+          b.classList.remove('btn-principal');
+          b.classList.add('btn-secondaire');
+          b.addEventListener('click', (e) => {
+            e.stopImmediatePropagation();
+            e.preventDefault();
+            window.location.href = versApp('firebase');
+          }, true);
         }
       }
     });

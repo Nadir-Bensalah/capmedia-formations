@@ -1,95 +1,129 @@
 {
-  "pack": {
-    "slug": "pack",
-    "nom": "Le Pack Academy",
-    "accroche": "Toutes les formations, actuelles et à venir pendant un an, en un seul achat. Moins 30 % sur le total, et ton prorata déduit si tu as déjà acheté.",
-    "remise": 0.3,
-    "plancher": 19
-  },
   "formations": [
     {
       "slug": "mobile",
       "nom": "De Zéro à l'App Store",
+      "acces": "pack",
+      "ordre": 5,
+      "prix": null,
+      "prixBarre": null,
       "prixE": 97,
-      "prixC": 197,
-      "statut": "disponible"
+      "prixC": 197
     },
     {
       "slug": "github",
       "nom": "Git & GitHub, la maîtrise complète",
+      "acces": "gratuit",
+      "ordre": 1,
+      "prix": null,
+      "prixBarre": null,
       "prixE": 47,
-      "prixC": 97,
-      "statut": "disponible"
+      "prixC": 97
     },
     {
       "slug": "claude-code",
       "nom": "Claude Code, le développeur dans ton terminal",
+      "acces": "gratuit",
+      "ordre": 3,
+      "prix": null,
+      "prixBarre": null,
       "prixE": 97,
-      "prixC": 197,
-      "statut": "disponible"
+      "prixC": 197
     },
     {
       "slug": "site-web-ia",
       "nom": "Ton site web professionnel avec l'IA",
+      "acces": "solo",
+      "ordre": null,
+      "prix": 97,
+      "prixBarre": 247,
       "prixE": 67,
-      "prixC": 127,
-      "statut": "disponible"
+      "prixC": 127
     },
     {
       "slug": "automatiser-ia",
       "nom": "Automatiser son business avec l'IA",
+      "acces": "solo",
+      "ordre": null,
+      "prix": 147,
+      "prixBarre": 397,
       "prixE": 97,
-      "prixC": 197,
-      "statut": "disponible"
+      "prixC": 197
     },
     {
       "slug": "prompting",
       "nom": "Le prompting professionnel",
+      "acces": "gratuit",
+      "ordre": 2,
+      "prix": null,
+      "prixBarre": null,
       "prixE": 47,
-      "prixC": 97,
-      "statut": "disponible"
+      "prixC": 97
     },
     {
       "slug": "firebase",
       "nom": "Firebase, ton backend sans serveur",
+      "acces": "pack",
+      "ordre": 4,
+      "prix": null,
+      "prixBarre": null,
       "prixE": 67,
-      "prixC": 127,
-      "statut": "disponible"
+      "prixC": 127
     },
     {
       "slug": "stripe",
       "nom": "Encaisser en ligne avec Stripe",
+      "acces": "solo",
+      "ordre": null,
+      "prix": 97,
+      "prixBarre": 247,
       "prixE": 67,
-      "prixC": 127,
-      "statut": "disponible"
+      "prixC": 127
     },
     {
       "slug": "aso",
       "nom": "ASO : être trouvé sur les stores",
+      "acces": "pack",
+      "ordre": 7,
+      "prix": null,
+      "prixBarre": null,
       "prixE": 47,
-      "prixC": 97,
-      "statut": "disponible"
+      "prixC": 97
     },
     {
       "slug": "design-app",
       "nom": "Le design d'app qui fait payer",
+      "acces": "pack",
+      "ordre": 6,
+      "prix": null,
+      "prixBarre": null,
       "prixE": 67,
-      "prixC": 127,
-      "statut": "disponible"
+      "prixC": 127
     },
     {
       "slug": "micro-saas",
       "nom": "Lancer un micro-SaaS rentable",
+      "acces": "solo",
+      "ordre": null,
+      "prix": 197,
+      "prixBarre": 497,
       "prixE": 127,
-      "prixC": 247,
-      "statut": "disponible"
+      "prixC": 247
     },
     {
       "slug": "seo-contenu",
       "nom": "SEO & contenu : le trafic qui revient",
+      "acces": "pack",
+      "ordre": 8,
+      "prix": null,
+      "prixBarre": null,
       "prixE": 67,
-      "prixC": 127,
-      "statut": "disponible"
+      "prixC": 127
     }
-  ]
+  ],
+  "pack": {
+    "nom": "Le Parcours Développeur d'Apps",
+    "prix": 297,
+    "prixBarre": 675
+  }
 }

@@ -2,8 +2,9 @@
    CAPMEDIA ACADEMY · Espace membre
 
    Sécurité : le contenu des leçons vit dans Firestore, pas dans ce dépôt
-   public. Les règles Firestore n'autorisent la lecture qu'aux acheteurs
-   (document acheteurs/{email} écrit par le webhook Stripe).
+   public. Les règles Firestore ouvrent les formations gratuites à tout
+   compte à e-mail vérifié, et le reste aux acheteurs (document
+   acheteurs/{email} écrit par le webhook Stripe : pack ou achats à l'unité).
 
    Ce fichier gère aussi :
    : le PROFIL du lecteur (Mac/Windows, iPhone/Android, tablette, montre,
@@ -22,17 +23,97 @@ import {
 
 import { versHtml } from './markdown.js';
 import { ico, etoiles } from './icones.js';
+import CATALOGUE_FR from './catalogue.js';
+import CATALOGUE_EN from './catalogue-en.js';
 
 const cfg = window.AZ;
 const $ = (id) => document.getElementById(id);
 
-/* Quelle formation ? ?f=slug dans l'URL, mobile par défaut. */
-const FORMATION = new URLSearchParams(location.search).get('f') || 'mobile';
+/* Quelle formation ? ?f=slug dans l'URL, mobile par défaut. Sans ?f, un
+   compte qui n'a pas accès à mobile est aiguillé à la connexion vers la
+   première formation du parcours qui lui est ouverte. */
+const F_DEMANDEE = new URLSearchParams(location.search).get('f');
+let FORMATION = F_DEMANDEE || 'mobile';
 /* Langue du contenu : 'fr' ou 'en'. Les collections anglaises vivent dans
    formations-en/ ; si une formation n'y est pas encore, repli silencieux
    sur le francais. */
 let LANGUE = (localStorage.getItem('az:langue') === 'en') ? 'en' : 'fr';
 let BASE_FORMATIONS = LANGUE === 'en' ? 'formations-en' : 'formations';
+
+/* Le catalogue porte le modèle d'accès : gratuit, pack (Le Parcours), solo. */
+const CATALOGUE = LANGUE === 'en' ? CATALOGUE_EN : CATALOGUE_FR;
+const catFormation = (slug) => CATALOGUE.parSlug(slug) || CATALOGUE_FR.parSlug(slug);
+const formationsParcours = () =>
+  CATALOGUE.formations.filter((f) => f.ordre).sort((a, b) => a.ordre - b.ordre);
+
+/* Libellés bilingues des écrans liés au modèle Parcours. */
+const T = LANGUE === 'en' ? {
+  fermer: 'Close',
+  instant: 'One moment…',
+  reessaie: 'Something went wrong. Try again in a moment.',
+  offerte: 'Free',
+  dansLePack: 'In the pack',
+  leParcours: 'The Path',
+  aPart: 'My standalone courses',
+  mesFormations: 'My courses',
+  lienEspace: 'My space: payments, receipts and account details',
+  bienvenue: 'Welcome!',
+  tonNom: "What's your name?",
+  nomAide: "So your space greets you properly, and so I know who I'm talking to when I answer you.",
+  nomLabel: 'Your name',
+  cestParti: "Let's go",
+  modulePrecedent: 'Previous module',
+  moduleSuivant: 'Next module',
+  suivanteParcours: 'Next course in the path',
+  finTitre: 'End of the path.',
+  finTexte: "You just finished the last course of the Path. Everything stays open for life: come back whenever you need a reference.",
+  gratuitesFinies: (n) => `You have finished the ${n} free courses`,
+  resteTexte: (n, noms) => `${n} courses to go until your app is published: ${noms}.`,
+  accesVie: 'Lifetime access',
+  garantie: '14-day money-back guarantee',
+  prendrePack: (p) => `Continue the path · ${p} €`,
+  voirPagePack: 'See the full pack page',
+  packPitch: (noms) => `One payment, the whole road to your published app: ${noms}. Lifetime access, 14-day guarantee.`,
+  packTitreVoile: 'This course is part of the pack',
+  soloTitreVoile: 'This course is sold separately',
+  pasAccesTexte: (nom, email) => `You are signed in as <strong>${email}</strong>, but "${nom}" is not in your account yet. If you paid with another address, sign out and come back with that one.`,
+  voirFormation: 'See this course',
+  commencerGratuit: 'Start with the free courses',
+  seDeconnecter: 'Sign out',
+} : {
+  fermer: 'Fermer',
+  instant: 'Un instant…',
+  reessaie: 'Impossible pour le moment. Réessaie dans un instant.',
+  offerte: 'Offerte',
+  dansLePack: 'Dans le pack',
+  leParcours: 'Le Parcours',
+  aPart: 'Mes formations à part',
+  mesFormations: 'Mes formations',
+  lienEspace: 'Mon espace : paiements, reçus et informations',
+  bienvenue: 'Bienvenue !',
+  tonNom: "Comment tu t'appelles ?",
+  nomAide: "Pour que ton espace t'accueille par ton nom, et que je sache à qui je réponds.",
+  nomLabel: 'Ton nom',
+  cestParti: "C'est parti",
+  modulePrecedent: 'Module précédent',
+  moduleSuivant: 'Module suivant',
+  suivanteParcours: 'Formation suivante du parcours',
+  finTitre: 'Fin du parcours.',
+  finTexte: "Tu viens de terminer la dernière formation du parcours. Tout reste accessible à vie : reviens quand tu as besoin d'une référence.",
+  gratuitesFinies: (n) => `Tu as terminé les ${n} formations offertes`,
+  resteTexte: (n, noms) => `Il reste ${n} formations jusqu'à ton app publiée : ${noms}.`,
+  accesVie: 'Accès à vie',
+  garantie: 'Garantie 14 jours satisfait ou remboursé',
+  prendrePack: (p) => `Continuer le parcours · ${p} €`,
+  voirPagePack: 'Voir la page complète du pack',
+  packPitch: (noms) => `Un seul paiement, tout le chemin jusqu'à ton app publiée : ${noms}. Accès à vie, garantie 14 jours.`,
+  packTitreVoile: 'Cette formation fait partie du pack',
+  soloTitreVoile: "Cette formation s'achète à part",
+  pasAccesTexte: (nom, email) => `Tu es bien connecté avec <strong>${email}</strong>, mais « ${nom} » n'est pas encore dans ton compte. Si tu as payé avec une autre adresse, déconnecte-toi et reviens avec celle-là.`,
+  voirFormation: 'Voir cette formation',
+  commencerGratuit: 'Commencer par les formations offertes',
+  seDeconnecter: 'Se déconnecter',
+};
 
 const voile      = $('voile');
 const voileTexte = $('voile-texte');
@@ -179,6 +260,56 @@ function afficherOnboarding() {
   });
 }
 
+/* --- Premier passage : ton nom (profils/{uid}) -----------------------------
+   Panneau bloquant, une seule question. Le document écrit, on enchaîne sur
+   le questionnaire matériel si besoin. */
+function afficherDemandeNom() {
+  const sur = document.createElement('div');
+  sur.className = 'surcouche';
+  sur.innerHTML = `
+    <div class="panneau" role="dialog" aria-modal="true" aria-label="${T.tonNom}">
+      <div class="pan-tete">
+        <div class="pile g-1">
+          <p class="etiquette">${T.bienvenue}</p>
+          <h2 class="t-h3" style="font-size:20px">${T.tonNom}</h2>
+        </div>
+      </div>
+      <form class="pan-corps" id="form-nom">
+        <p class="t-petit t-2" style="padding-bottom:var(--e-3)">${T.nomAide}</p>
+        <label class="etiquette-champ" for="champ-nom">${T.nomLabel}</label>
+        <input class="champ champ-large" id="champ-nom" maxlength="80" autocomplete="name" required>
+      </form>
+      <div class="pan-pied">
+        <button type="submit" form="form-nom" class="btn btn-principal btn-large btn-bloc" id="nom-ok">${T.cestParti}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(sur);
+  $('champ-nom').focus();
+
+  $('form-nom').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const nom = $('champ-nom').value.trim().slice(0, 80);
+    if (!nom) { $('champ-nom').focus(); return; }
+    const b = $('nom-ok');
+    b.disabled = true;
+    b.textContent = T.instant;
+    try {
+      await setDoc(doc(bdd, 'profils', utilisateur.uid), {
+        nom,
+        email: (utilisateur.email || '').toLowerCase(),
+        maj: new Date().toISOString(),
+      });
+      sur.remove();
+      if (!profil) afficherOnboarding();
+    } catch (err) {
+      console.error(err);
+      b.disabled = false;
+      b.textContent = T.cestParti;
+      toast(T.reessaie);
+    }
+  });
+}
+
 /* --- Panneau de réglages « Matériel & mode » ------------------------------ */
 function afficherReglages() {
   const sur = document.createElement('div');
@@ -229,8 +360,22 @@ function afficherReglages() {
 
   $('tout-debloquer').addEventListener('click', () => {
     fermer();
+    /* Formation offerte : rien n'a été payé, il n'y a donc aucune garantie
+       à quoi renoncer. Le déblocage total est libre. */
+    const f = catFormation(FORMATION);
+    if (f && f.acces === 'gratuit') { toutDebloquer(); return; }
     afficherRenonciation();
   });
+}
+
+/* Débloque tous les modules d'un coup (définitif, rien ne se reverrouille). */
+function toutDebloquer() {
+  const avant = maxDebloque;
+  maxDebloque = Math.max(...lecons.map((l) => l.ordre));
+  enregistrerProgression();
+  majSommaire();
+  marquerPlouf(avant);
+  toast('Tous les modules sont débloqués');
 }
 
 /* --- Tout débloquer = renoncer à la garantie (CGV art. 7) ------------------
@@ -294,13 +439,8 @@ function afficherRenonciation() {
         });
       }
     } catch (e) { console.warn('Renonciation non enregistrée', e); }
-    const avant = maxDebloque;
-    maxDebloque = Math.max(...lecons.map((l) => l.ordre));
-    enregistrerProgression();
     fermer();
-    majSommaire();
-    marquerPlouf(avant);
-    toast('Tous les modules sont débloqués');
+    toutDebloquer();
   });
 }
 
@@ -318,30 +458,40 @@ onAuthStateChanged(auth, async (u) => {
 
   try {
     voileTexte.textContent = 'Vérification de ton accès…';
-    const fiche = await getDoc(doc(bdd, 'acheteurs', email));
+    /* La fiche acheteur peut ne pas exister : les formations offertes se
+       suivent avec un simple compte. Tout le reste tolère son absence. */
+    let fiche = null;
+    try { fiche = await getDoc(doc(bdd, 'acheteurs', email)); } catch (e) {}
+    acheteur = fiche && fiche.exists() ? fiche.data() : null;
 
-    if (!fiche.exists()) {
-      voile.innerHTML = gabaritPasAcheteur(email, false);
-      $('voile-deconnexion').addEventListener('click', deconnecter);
-      return;
+    if (acheteur) {
+      /* Multi-formations : achats { slug: offre } + pack, avec rétrocompat
+         de l'ancien champ « offre » (qui valait pour mobile). */
+      acheteur.achatsN = { ...(acheteur.achats || {}) };
+      if (acheteur.offre && !acheteur.achatsN.mobile) acheteur.achatsN.mobile = acheteur.offre;
     }
-    acheteur = fiche.data();
 
-    /* Multi-formations : achats { slug: offre } + pack, avec rétrocompat
-       de l'ancien champ « offre » (qui valait pour mobile). */
-    acheteur.achatsN = { ...(acheteur.achats || {}) };
-    if (acheteur.offre && !acheteur.achatsN.mobile) acheteur.achatsN.mobile = acheteur.offre;
+    /* Sans ?f explicite et sans accès à mobile : direction la première
+       formation du parcours qui est ouverte à ce compte. */
+    if (!F_DEMANDEE && !possedeFormation(catFormation(FORMATION))) {
+      const premiere = formationsParcours().find((f) => possedeFormation(f));
+      if (premiere) {
+        FORMATION = premiere.slug;
+        history.replaceState(null, '', '?f=' + FORMATION + location.hash);
+      }
+    }
 
-    const accesCetteFormation = acheteur.pack
-      || acheteur.achatsN[FORMATION];
-    if (!accesCetteFormation) {
-      voile.innerHTML = gabaritPasAcheteur(email, true);
+    if (!possedeFormation(catFormation(FORMATION))) {
+      voile.innerHTML = gabaritPasAcces(email);
       $('voile-deconnexion').addEventListener('click', deconnecter);
       return;
     }
 
     voileTexte.textContent = 'Chargement de ta formation…';
-    await Promise.all([chargerLecons(), chargerProgression()]);
+    const [, , ficheNom] = await Promise.all([
+      chargerLecons(), chargerProgression(),
+      getDoc(doc(bdd, 'profils', utilisateur.uid)).catch(() => null),
+    ]);
 
     majDeblocage(false);
     construireSommaire();
@@ -350,7 +500,8 @@ onAuthStateChanged(auth, async (u) => {
     await prendreLaSession();
     voile.classList.add('parti');
 
-    if (!profil) afficherOnboarding();
+    if (!ficheNom || !ficheNom.exists()) afficherDemandeNom();
+    else if (!profil) afficherOnboarding();
 
   } catch (err) {
     console.error(err);
@@ -360,30 +511,47 @@ onAuthStateChanged(auth, async (u) => {
   }
 });
 
-function gabaritPasAcheteur(email, aDautres) {
-  const lienAchat = FORMATION === 'mobile' ? '../index.html#tarifs' : `../formations/${FORMATION}.html`;
+/* --- Qui a accès à quoi ? -------------------------------------------------
+   gratuit : tout compte connecté. pack : la fiche acheteur porte un pack
+   ('parcours', ou les anciens 'basic'/'avance'). solo : achats[slug], ou un
+   ancien pack 'basic'/'avance' qui couvrait tout le catalogue. */
+function possedeFormation(f) {
+  if (!f) return false;
+  if (f.acces === 'gratuit') return true;
+  const achats = (acheteur && acheteur.achatsN) || {};
+  if (achats[f.slug]) return true;
+  const pack = acheteur && acheteur.pack;
+  if (!pack) return false;
+  if (f.acces === 'pack') return true;
+  return pack === 'basic' || pack === 'avance';
+}
+
+function gabaritPasAcces(email) {
+  const f = catFormation(FORMATION) || { nom: FORMATION, slug: FORMATION, acces: 'solo' };
+  const solo = f.acces === 'solo';
+  const gratuite = formationsParcours().find((x) => x.acces === 'gratuit');
+  const nomsPack = formationsParcours().filter((x) => x.acces === 'pack')
+    .map((x) => x.nom).join(', ');
+  const cta = solo
+    ? `<a href="../formations/${encodeURIComponent(f.slug)}.html" class="btn btn-principal btn-large btn-bloc">${T.voirFormation}</a>`
+    : `<button type="button" class="btn btn-principal btn-large btn-bloc" data-pack="parcours">${T.prendrePack(CATALOGUE.pack.prix)}</button>`;
   return `
-    <div class="pile g-5" style="max-width:420px">
+    <div class="pile g-5" style="max-width:440px">
       <div class="pile g-2">
-        <h1 class="t-h2">${aDautres ? "Cette formation n'est pas dans ton compte" : 'Aucun achat trouvé'}</h1>
-        <p class="t-petit t-2">
-          Tu es bien connecté avec <strong>${echapper(email)}</strong>, mais aucune
-          commande n'est associée à cette adresse.
-        </p>
+        <h1 class="t-h2">${solo ? T.soloTitreVoile : T.packTitreVoile}</h1>
+        <p class="t-petit t-2">${T.pasAccesTexte(echapper(f.nom), echapper(email))}</p>
       </div>
+      ${solo ? '' : `
       <div class="encadre encadre--astuce">
         <span class="marqueur">${ico('astuce', 18)}</span>
-        <div>
-          <p>Si tu as payé avec une <strong>autre adresse</strong>, déconnecte-toi et
-          reconnecte-toi avec celle-là. Si tu viens tout juste de payer, laisse une
-          minute et recharge la page.</p>
-        </div>
-      </div>
+        <div><p>${echapper(CATALOGUE.pack.nom)} · <strong>${CATALOGUE.pack.prix} €</strong>
+        <s>${CATALOGUE.pack.prixBarre} €</s> · ${T.packPitch(echapper(nomsPack))}</p></div>
+      </div>`}
       <div class="pile g-3">
-        <a href="${lienAchat}" class="btn btn-principal btn-large btn-bloc">Voir cette formation</a>
-        ${aDautres ? '<a href="../compte.html" class="btn btn-secondaire btn-bloc">Mes formations</a>' : ''}
+        ${cta}
+        ${gratuite ? `<a href="./?f=${encodeURIComponent(gratuite.slug)}" class="btn btn-secondaire btn-bloc">${T.commencerGratuit}</a>` : ''}
         <div class="rang-espace">
-          <button type="button" class="lien-nu" id="voile-deconnexion">Se déconnecter</button>
+          <button type="button" class="lien-nu" id="voile-deconnexion">${T.seDeconnecter}</button>
           <a class="t-micro" href="mailto:${cfg.contact}">${cfg.contact}</a>
         </div>
       </div>
@@ -455,11 +623,10 @@ async function enregistrerProgression() {
   } catch (e) { console.warn('Progression non enregistrée', e); }
 }
 
-/* --- Accès par offre (Essentiel / Complet) -------------------------------- */
-function accessible(lecon) {
-  if (lecon.offre !== 'complet') return true;
-  return acheteur.achatsN[FORMATION] === 'complet' || acheteur.pack === 'avance';
-}
+/* --- Accès aux modules : plus de distinction Essentiel / Complet -----------
+   Qui a accès à une formation voit tous ses modules, anciens bonus
+   « Complet » compris. La fonction reste pour la lisibilité des appels. */
+function accessible() { return true; }
 
 /* ==========================================================================
    3. Déblocage progressif
@@ -527,7 +694,7 @@ function construireSommaire() {
     if (l.offre === 'complet' && !bonusAnnonce) {
       const t = document.createElement('p');
       t.className = 'etiquette groupe';
-      t.textContent = 'Bonus · offre Complet';
+      t.textContent = 'Bonus';
       nav.appendChild(t);
       bonusAnnonce = true;
     }
@@ -617,11 +784,6 @@ async function aller(id, remplacer = false) {
   window.scrollTo({ top: 0, behavior: 'instant' });
   document.title = l.titre + ' · Capmedia Academy';
 
-  if (!accessible(l)) {
-    page.innerHTML = gabaritVerrouille(l);
-    return;
-  }
-
   page.innerHTML = chapeau +
     '<div class="squelette"><span></span><span></span><span></span><span></span><span></span></div>';
 
@@ -645,27 +807,6 @@ async function aller(id, remplacer = false) {
       `écris-moi à <a href="mailto:${cfg.contact}">${cfg.contact}</a>.</p>` +
       '</div></div>';
   }
-}
-
-function gabaritVerrouille(l) {
-  return `
-    <header class="chapeau">
-      <p class="etiquette-mono">Module ${String(l.ordre).padStart(2, '0')} · offre Complet</p>
-      <h1>${echapper(l.titre)}</h1>
-      <p class="resume">${echapper(l.resume || '')}</p>
-    </header>
-    <hr class="chapeau-filet">
-    <div class="corps">
-      <div class="encadre encadre--attention">
-        <span class="marqueur">${ico('cadenas', 18)}</span>
-        <div>
-          <p><strong>Ce module fait partie de l'offre Complet.</strong></p>
-          <p>Tu as pris l'offre Essentiel. Tu peux passer au Complet à tout moment
-             en ne payant que la différence : écris-moi à
-             <a href="mailto:${cfg.contact}">${cfg.contact}</a> et je t'envoie le lien.</p>
-        </div>
-      </div>
-    </div>`;
 }
 
 function ajouterBoutonFini(l) {
@@ -719,13 +860,207 @@ function construirePagination(l) {
   };
 
   $('pagination').innerHTML =
-    carte(prec, 'Précédent', false) +
-    carte(suiv, 'Suivant', true);
+    carte(prec, T.modulePrecedent, false) +
+    (suiv ? carte(suiv, T.moduleSuivant, true) : carteSuiteParcours());
+
+  majSuiteParcours(!suiv);
 
   $('pagination').querySelectorAll('[data-aller]').forEach((a) => {
     a.addEventListener('click', (e) => { e.preventDefault(); aller(a.dataset.aller); });
   });
 }
+
+/* --- Le fil du parcours au dernier module ----------------------------------
+   Formation dans le parcours (ordre 1 à 7) : la suivante en lien direct si
+   elle est ouverte. Verrouillée (fin des offertes sans pack) : le panneau
+   de passage au pack prend la place. Ordre 8 : message de fin. */
+function formationSuivante() {
+  const fc = catFormation(FORMATION);
+  if (!fc || !fc.ordre) return null;
+  return formationsParcours().find((x) => x.ordre === fc.ordre + 1) || null;
+}
+
+function carteSuiteParcours() {
+  const fc = catFormation(FORMATION);
+  if (!fc || !fc.ordre) return '<span class="vide"></span>';
+  const suivante = formationSuivante();
+  if (!suivante || !possedeFormation(suivante)) return '<span class="vide"></span>';
+  return `<a class="droite" href="./?f=${encodeURIComponent(suivante.slug)}">
+            <span class="sens">${T.suivanteParcours}</span>
+            <span class="titre">${echapper(suivante.nom)}</span>
+          </a>`;
+}
+
+function majSuiteParcours(estDernier) {
+  const zone = $('suite-parcours');
+  if (!zone) return;
+  zone.innerHTML = '';
+  const fc = catFormation(FORMATION);
+  if (!estDernier || !fc || !fc.ordre) return;
+  const suivante = formationSuivante();
+  if (!suivante) {
+    zone.innerHTML = `
+      <div class="encadre encadre--action">
+        <span class="marqueur">${ico('coche', 18)}</span>
+        <div><p><strong>${T.finTitre}</strong> ${T.finTexte}</p></div>
+      </div>`;
+    return;
+  }
+  if (!possedeFormation(suivante)) zone.innerHTML = gabaritPassagePack();
+}
+
+function gabaritPassagePack() {
+  const gratuites = formationsParcours().filter((x) => x.acces === 'gratuit');
+  const restantes = formationsParcours().filter((x) => x.acces === 'pack');
+  const noms = restantes.map((x) => x.nom).join(', ');
+  return `
+    <div class="carte pile g-4">
+      <div class="pile g-2">
+        <p class="etiquette">${echapper(CATALOGUE.pack.nom)}</p>
+        <h2 class="t-h3" style="font-size:20px">${T.gratuitesFinies(gratuites.length)}</h2>
+        <p class="t-petit t-2">${T.resteTexte(restantes.length, echapper(noms))}</p>
+      </div>
+      <div class="rang" style="gap:var(--e-2);align-items:baseline">
+        <span class="t-h2">${CATALOGUE.pack.prix} €</span>
+        <s class="t-petit t-3">${CATALOGUE.pack.prixBarre} €</s>
+      </div>
+      <p class="t-micro t-3">${T.accesVie} · ${T.garantie}</p>
+      <button type="button" class="btn btn-principal btn-large btn-bloc" data-pack="parcours">${T.prendrePack(CATALOGUE.pack.prix)}</button>
+      <a class="t-micro t-3" href="../index.html#parcours">${T.voirPagePack}</a>
+    </div>`;
+}
+
+/* ==========================================================================
+   5bis. Mes formations : le parcours en deux groupes
+   ========================================================================== */
+function afficherMesFormations() {
+  const sur = document.createElement('div');
+  sur.className = 'surcouche';
+
+  const ligne = (f) => {
+    const ouverte = possedeFormation(f);
+    const badge = f.acces === 'gratuit'
+      ? `<span class="etiquette" style="margin-left:auto;flex:none">${T.offerte}</span>`
+      : (!ouverte ? `<span class="t-micro t-3" style="margin-left:auto;flex:none">${T.dansLePack}</span>` : '');
+    return `
+      <button type="button" class="lien-module${ouverte ? '' : ' est-verrouille'}"
+              data-formation="${f.slug}" aria-current="${String(f.slug === FORMATION)}">
+        <span class="num">${ouverte
+          ? (f.ordre ? String(f.ordre).padStart(2, '0') : ico(f.couleurIco || 'note', 12))
+          : ico('cadenas', 11)}</span>
+        <span class="titre-module">${echapper(f.nom)}</span>
+        ${badge}
+      </button>`;
+  };
+
+  const parcours = formationsParcours();
+  const solos = CATALOGUE.formations.filter((f) => f.acces === 'solo' && possedeFormation(f));
+
+  sur.innerHTML = `
+    <div class="panneau" role="dialog" aria-modal="true" aria-label="${T.mesFormations}">
+      <div class="pan-tete">
+        <div class="pile g-1">
+          <p class="etiquette">${T.mesFormations}</p>
+          <h2 class="t-h3" style="font-size:20px">${echapper(CATALOGUE.pack.nom)}</h2>
+        </div>
+        <button type="button" class="bouton-icone" id="formations-fermer" aria-label="${T.fermer}">${ico('fermer', 16)}</button>
+      </div>
+      <div class="pan-corps">
+        <p class="etiquette" style="padding-bottom:var(--e-2)">${T.leParcours}</p>
+        ${parcours.map(ligne).join('')}
+        ${solos.length ? `
+        <p class="etiquette" style="padding:var(--e-4) 0 var(--e-2)">${T.aPart}</p>
+        ${solos.map(ligne).join('')}` : ''}
+      </div>
+      <div class="pan-pied">
+        <a class="lien-nu" href="../compte.html">${T.lienEspace}</a>
+      </div>
+    </div>`;
+  document.body.appendChild(sur);
+
+  const fermer = () => sur.remove();
+  $('formations-fermer').addEventListener('click', fermer);
+  sur.addEventListener('click', (e) => { if (e.target === sur) fermer(); });
+
+  sur.querySelectorAll('[data-formation]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const f = catFormation(b.dataset.formation);
+      if (!possedeFormation(f)) { fermer(); afficherPanneauPack(); return; }
+      if (f.slug === FORMATION) { fermer(); return; }
+      location.href = './?f=' + encodeURIComponent(f.slug);
+    });
+  });
+}
+
+/* Le panneau d'achat du pack, ouvert depuis une formation verrouillée. */
+function afficherPanneauPack() {
+  const noms = formationsParcours().filter((x) => x.acces === 'pack')
+    .map((x) => x.nom).join(', ');
+  const sur = document.createElement('div');
+  sur.className = 'surcouche';
+  sur.innerHTML = `
+    <div class="panneau" role="dialog" aria-modal="true" aria-label="${echapper(CATALOGUE.pack.nom)}">
+      <div class="pan-tete">
+        <div class="pile g-1">
+          <p class="etiquette">${T.leParcours}</p>
+          <h2 class="t-h3" style="font-size:20px">${echapper(CATALOGUE.pack.nom)}</h2>
+        </div>
+        <button type="button" class="bouton-icone" id="pack-fermer" aria-label="${T.fermer}">${ico('fermer', 16)}</button>
+      </div>
+      <div class="pan-corps">
+        <div class="pile g-3">
+          <p class="t-petit t-2">${T.packPitch(echapper(noms))}</p>
+          <div class="rang" style="gap:var(--e-2);align-items:baseline">
+            <span class="t-h2">${CATALOGUE.pack.prix} €</span>
+            <s class="t-petit t-3">${CATALOGUE.pack.prixBarre} €</s>
+          </div>
+          <p class="t-micro t-3">${T.accesVie} · ${T.garantie}</p>
+        </div>
+      </div>
+      <div class="pan-pied">
+        <div class="pile g-2">
+          <button type="button" class="btn btn-principal btn-large btn-bloc" data-pack="parcours">${T.prendrePack(CATALOGUE.pack.prix)}</button>
+          <a class="t-micro t-3" href="../index.html#parcours" style="align-self:center">${T.voirPagePack}</a>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(sur);
+
+  const fermer = () => sur.remove();
+  $('pack-fermer').addEventListener('click', fermer);
+  sur.addEventListener('click', (e) => { if (e.target === sur) fermer(); });
+}
+
+/* --- Achat du pack depuis l'app --------------------------------------------
+   Les boutons [data-pack="parcours"] naissent dynamiquement : un écouteur
+   délégué suffit, sur le même circuit serveur que paiement.js (e-mail
+   verrouillé, double achat refusé). En cas d'échec réseau, on rend le
+   bouton et on garde le lien vers la page du pack en repli. */
+const URL_PACK = 'https://europe-west1-capmedia-academy.cloudfunctions.net/creerCheckoutPack';
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-pack="parcours"]');
+  if (!b || b.disabled) return;
+  e.preventDefault();
+  const txt = b.textContent;
+  b.disabled = true;
+  b.textContent = T.instant;
+  try {
+    if (!utilisateur) { location.href = '../index.html#parcours'; return; }
+    const r = await fetch(URL_PACK, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken: await utilisateur.getIdToken() }),
+    });
+    const d = await r.json();
+    if (d.deja === 'pack') { location.reload(); return; }
+    if (d.url) { location.href = d.url; return; }
+    throw new Error(d.erreur || 'réponse inattendue');
+  } catch (err) {
+    console.warn(err);
+    b.disabled = false;
+    b.textContent = txt;
+    toast(T.reessaie);
+  }
+});
 
 function ajouterBoutonsCopier(racine) {
   racine.querySelectorAll('pre').forEach((pre) => {
@@ -1040,7 +1375,7 @@ function afficherAvis() {
       await setDoc(ref, {
         note, prenom, texte,
         publie: false,
-        offre: acheteur.offre || 'essentiel',
+        offre: (acheteur && acheteur.offre) || 'essentiel',
         date: new Date().toISOString(),
       });
       $('avis-etat').textContent = 'Merci. Ton avis part en relecture avant publication.';
@@ -1054,6 +1389,7 @@ function afficherAvis() {
 
 $('ouvrir-support').addEventListener('click', afficherSupport);
 $('ouvrir-profil').addEventListener('click', afficherReglages);
+$('ouvrir-formations').addEventListener('click', afficherMesFormations);
 
 /* ==========================================================================
    8. Protection du contenu
@@ -1114,7 +1450,7 @@ document.addEventListener('keydown', (e) => {
   if (document.querySelector('.surcouche')) {
     if (e.key === 'Escape') {
       const sur = document.querySelector('.surcouche');
-      if (sur && sur.querySelector('#reglages-fermer')) sur.remove();
+      if (sur && sur.querySelector('#reglages-fermer, #formations-fermer, #pack-fermer')) sur.remove();
     }
     return;
   }
