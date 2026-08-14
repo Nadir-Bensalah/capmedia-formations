@@ -220,11 +220,11 @@ ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld)}</script
       <a href="../#audits">Audits</a>
       <a href="../apps/">Nos applications</a>
       <a href="./">Le blog</a>
-      <a href="../academie.html">L'académie</a>
-      <a href="../fondateur.html">Le fondateur</a>
+      <a href="../academie">L'académie</a>
+      <a href="../fondateur">Le fondateur</a>
     </nav>
     <span style="margin-left:auto"></span>
-    <div class="selecteur-theme" role="group" aria-label="Thème" style="padding:2px;margin-right:8px"><button type="button" data-theme-val="light" style="padding:3px 9px;font-size:12px">Clair</button><button type="button" data-theme-val="dark" style="padding:3px 9px;font-size:12px">Sombre</button><button type="button" data-theme-val="auto" style="padding:3px 9px;font-size:12px">Auto</button></div><a href="../devis.html" class="btn btn-principal">Demander un devis</a>
+    <div class="selecteur-theme" role="group" aria-label="Thème" style="padding:2px;margin-right:8px"><button type="button" data-theme-val="light" style="padding:3px 9px;font-size:12px">Clair</button><button type="button" data-theme-val="dark" style="padding:3px 9px;font-size:12px">Sombre</button><button type="button" data-theme-val="auto" style="padding:3px 9px;font-size:12px">Auto</button></div><a href="../devis" class="btn btn-principal">Demander un devis</a>
   </div>
 </header>
 `;
@@ -236,13 +236,13 @@ const pied = `
   <div class="enveloppe">
     <div class="rang" style="gap:var(--e-5);flex-wrap:wrap">
       <a href="../" class="t-petit">Accueil</a>
-      <a href="../audit-site-web.html" class="t-petit">Audit de site web</a>
-      <a href="../audit-application.html" class="t-petit">Audit d'application</a>
-      <a href="../test-avant-soumission.html" class="t-petit">Test avant soumission</a>
+      <a href="../audit-site-web" class="t-petit">Audit de site web</a>
+      <a href="../audit-application" class="t-petit">Audit d'application</a>
+      <a href="../test-avant-soumission" class="t-petit">Test avant soumission</a>
       <a href="./" class="t-petit">Le blog</a>
-      <a href="../academie.html" class="t-petit">L'académie</a>
-      <a href="../fondateur.html" class="t-petit">Le fondateur</a>
-      <a href="../mentions.html" class="t-petit">Mentions légales</a>
+      <a href="../academie" class="t-petit">L'académie</a>
+      <a href="../fondateur" class="t-petit">Le fondateur</a>
+      <a href="../mentions" class="t-petit">Mentions légales</a>
       <a href="mailto:contact@capmedia.tn" class="t-petit">Contact</a>
     </div>
     <hr class="filet" style="margin-block:var(--e-4)">
@@ -282,7 +282,7 @@ const BLOC_PRATIQUE = `
 
 /* --- Une page article ------------------------------------------------------ */
 function pageArticle(art) {
-  const canon = `${SITE}/blog/${art.meta.id}.html`;
+  const canon = `${SITE}/blog/${art.meta.id}`;
   const jsonld = {
     '@context': 'https://schema.org',
     '@type': 'Article',
@@ -369,14 +369,14 @@ function pageListe(articles) {
     blogPost: articles.map((a) => ({
       '@type': 'BlogPosting',
       headline: a.meta.titre,
-      url: `${SITE}/blog/${a.meta.id}.html`,
+      url: `${SITE}/blog/${a.meta.id}`,
       datePublished: a.meta.date,
       author: { '@type': 'Person', name: a.meta.auteur },
     })),
   };
 
   const cartes = articles.map((a) => `
-      <a class="carte carte-article apparait" href="./${a.meta.id}.html"
+      <a class="carte carte-article apparait" href="./${a.meta.id}"
          data-categorie="${e(a.meta.categorie)}"
          data-recherche="${e((a.meta.titre + ' ' + a.meta.description + ' ' + (a.meta.motsCles || '')).toLowerCase())}"
          style="overflow:hidden">
@@ -470,32 +470,32 @@ ${'\u003c'}/script>
 function sitemap(articles) {
   const pages = [
     { loc: `${SITE}/`, prio: '1.0' },
-    { loc: `${SITE}/audit-site-web.html`, prio: '0.8' },
-    { loc: `${SITE}/audit-application.html`, prio: '0.8' },
-    { loc: `${SITE}/test-avant-soumission.html`, prio: '0.8' },
-    { loc: `${SITE}/academie.html`, prio: '0.8' },
-    { loc: `${SITE}/fondateur.html`, prio: '0.6' },
+    { loc: `${SITE}/audit-site-web`, prio: '0.8' },
+    { loc: `${SITE}/audit-application`, prio: '0.8' },
+    { loc: `${SITE}/test-avant-soumission`, prio: '0.8' },
+    { loc: `${SITE}/academie`, prio: '0.8' },
+    { loc: `${SITE}/fondateur`, prio: '0.6' },
     { loc: `${SITE}/apps/`, prio: '0.9' },
-    { loc: `${SITE}/apps/minddrop.html`, prio: '0.7' },
-    { loc: `${SITE}/apps/qindil.html`, prio: '0.7' },
-    { loc: `${SITE}/apps/flowi.html`, prio: '0.7' },
-    { loc: `${SITE}/apps/isogonic.html`, prio: '0.7' },
-    { loc: `${SITE}/apps/forgeme.html`, prio: '0.7' },
+    { loc: `${SITE}/apps/minddrop`, prio: '0.7' },
+    { loc: `${SITE}/apps/qindil`, prio: '0.7' },
+    { loc: `${SITE}/apps/flowi`, prio: '0.7' },
+    { loc: `${SITE}/apps/isogonic`, prio: '0.7' },
+    { loc: `${SITE}/apps/forgeme`, prio: '0.7' },
     { loc: `${SITE}/en/`, prio: '0.9' },
-    { loc: `${SITE}/en/audit-site-web.html`, prio: '0.7' },
-    { loc: `${SITE}/en/audit-application.html`, prio: '0.7' },
-    { loc: `${SITE}/en/test-avant-soumission.html`, prio: '0.7' },
-    { loc: `${SITE}/en/academy.html`, prio: '0.7' },
-    { loc: `${SITE}/en/founder.html`, prio: '0.5' },
-    { loc: `${SITE}/en/quote.html`, prio: '0.6' },
+    { loc: `${SITE}/en/audit-site-web`, prio: '0.7' },
+    { loc: `${SITE}/en/audit-application`, prio: '0.7' },
+    { loc: `${SITE}/en/test-avant-soumission`, prio: '0.7' },
+    { loc: `${SITE}/en/academy`, prio: '0.7' },
+    { loc: `${SITE}/en/founder`, prio: '0.5' },
+    { loc: `${SITE}/en/quote`, prio: '0.6' },
     { loc: `${SITE}/en/apps/`, prio: '0.8' },
-    { loc: `${SITE}/en/apps/minddrop.html`, prio: '0.6' },
-    { loc: `${SITE}/en/apps/qindil.html`, prio: '0.6' },
-    { loc: `${SITE}/en/apps/flowi.html`, prio: '0.6' },
-    { loc: `${SITE}/en/apps/isogonic.html`, prio: '0.6' },
-    { loc: `${SITE}/en/apps/forgeme.html`, prio: '0.6' },
+    { loc: `${SITE}/en/apps/minddrop`, prio: '0.6' },
+    { loc: `${SITE}/en/apps/qindil`, prio: '0.6' },
+    { loc: `${SITE}/en/apps/flowi`, prio: '0.6' },
+    { loc: `${SITE}/en/apps/isogonic`, prio: '0.6' },
+    { loc: `${SITE}/en/apps/forgeme`, prio: '0.6' },
     { loc: `${SITE}/blog/`, prio: '0.7' },
-    ...articles.map((a) => ({ loc: `${SITE}/blog/${a.meta.id}.html`, prio: '0.6', date: a.meta.date })),
+    ...articles.map((a) => ({ loc: `${SITE}/blog/${a.meta.id}`, prio: '0.6', date: a.meta.date })),
   ];
   const lignes = pages.map((p) =>
     `  <url>\n    <loc>${p.loc}</loc>\n${p.date ? `    <lastmod>${p.date}</lastmod>\n` : ''}    <priority>${p.prio}</priority>\n  </url>`

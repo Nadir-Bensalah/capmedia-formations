@@ -40,6 +40,6 @@ window.AZ = {
 
   /* --- Divers ----------------------------------------------------------- */
   // URL absolue de la page qui reçoit le lien magique.
-  urlAcces: 'https://academy.capmedia.app/acces.html',
+  urlAcces: 'https://academy.capmedia.app/acces',
   contact:  'contact@capmedia.tn',
 };
