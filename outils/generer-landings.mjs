@@ -95,11 +95,11 @@ ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld)}</script
 
 <header class="entete" id="entete">
   <div class="enveloppe">
-    <a href="../index.html" class="logo"><img class="marque" src="../assets/img/logo-academy.png" alt="" width="22" height="22">Capmedia&nbsp;Academy</a>
+    <a href="../" class="logo"><img class="marque" src="../assets/img/logo-academy.png" alt="" width="22" height="22">Capmedia&nbsp;Academy</a>
     <nav class="nav-liens">
       <a href="./">Formations</a>
       <a href="./#pack">Le Parcours</a>
-      <a href="../index.html#faq">FAQ</a>
+      <a href="../#faq">FAQ</a>
     </nav>
     <span style="margin-left:auto"></span>
     <a href="../compte.html" class="lien-discret">Mon espace</a>

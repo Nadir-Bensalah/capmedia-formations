@@ -214,10 +214,10 @@ ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld)}</script
 
 <header class="entete" id="entete">
   <div class="enveloppe">
-    <a href="../index.html" class="logo"><img class="marque" src="../assets/img/capmedia-digital.png" alt="" width="22" height="22">Capmedia&nbsp;Digital</a>
+    <a href="../" class="logo"><img class="marque" src="../assets/img/capmedia-digital.png" alt="" width="22" height="22">Capmedia&nbsp;Digital</a>
     <nav class="nav-liens">
-      <a href="../index.html#services">Services</a>
-      <a href="../index.html#audits">Audits</a>
+      <a href="../#services">Services</a>
+      <a href="../#audits">Audits</a>
       <a href="../apps/">Nos applications</a>
       <a href="./">Le blog</a>
       <a href="../academie.html">L'académie</a>
@@ -235,7 +235,7 @@ const pied = `
 <footer class="pied">
   <div class="enveloppe">
     <div class="rang" style="gap:var(--e-5);flex-wrap:wrap">
-      <a href="../index.html" class="t-petit">Accueil</a>
+      <a href="../" class="t-petit">Accueil</a>
       <a href="../audit-site-web.html" class="t-petit">Audit de site web</a>
       <a href="../audit-application.html" class="t-petit">Audit d'application</a>
       <a href="../test-avant-soumission.html" class="t-petit">Test avant soumission</a>
@@ -310,7 +310,7 @@ function pageArticle(art) {
 
     <header class="pile g-4" style="max-width:${'var(--colonne-lecture)'}">
       <nav class="fil-ariane" aria-label="Fil d'ariane">
-        <a href="../index.html">Accueil</a><span class="sep">›</span>
+        <a href="../">Accueil</a><span class="sep">›</span>
         <a href="./">Blog</a><span class="sep">›</span>
         <span>${e(art.meta.titre)}</span>
       </nav>
@@ -402,7 +402,7 @@ function pageListe(articles) {
   <section>
     <div class="pile g-4" style="max-width:800px">
       <nav class="fil-ariane" aria-label="Fil d'ariane">
-        <a href="../index.html">Accueil</a><span class="sep">›</span>
+        <a href="../">Accueil</a><span class="sep">›</span>
         <span>Blog</span>
       </nav>
       <p class="etiquette">Le blog</p>
