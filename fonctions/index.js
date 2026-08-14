@@ -726,6 +726,37 @@ exports.admin = onRequest(
         const tousAvis = await bdd.collection('avis').get();
         return res.status(200).json(tousAvis.docs.map((d) => ({ uid: d.id, ...d.data() })));
       }
+      /* --- La galerie des apps membres --------------------------------- */
+      if (action === 'appsMembres') {
+        const toutes = await bdd.collection('apps-membres').get();
+        const liste = [];
+        for (const d of toutes.docs) {
+          const jaimes = await bdd.collection(`apps-membres/${d.id}/jaimes`).get();
+          const avisApp = await bdd.collection(`apps-membres/${d.id}/avis`).get();
+          liste.push({ id: d.id, ...d.data(), jaimes: jaimes.size, nbAvis: avisApp.size });
+        }
+        liste.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        return res.status(200).json(liste);
+      }
+      if (action === 'appStatut') {
+        const { id, statut } = req.body || {};
+        if (!id || !['publiee', 'refusee', 'attente'].includes(statut)) {
+          return res.status(400).send('id et statut (publiee|refusee|attente) requis');
+        }
+        const maj = { statut, moderation: new Date().toISOString() };
+        if (statut === 'publiee') maj.datePublication = new Date().toISOString();
+        await bdd.doc(`apps-membres/${id}`).set(maj, { merge: true });
+        return res.status(200).send('statut : ' + statut);
+      }
+      if (action === 'appSupprimer') {
+        const { id } = req.body || {};
+        if (!id) return res.status(400).send('id requis');
+        for (const col of ['jaimes', 'avis']) {
+          for (const ref of await bdd.collection(`apps-membres/${id}/${col}`).listDocuments()) await ref.delete();
+        }
+        await bdd.doc(`apps-membres/${id}`).delete();
+        return res.status(200).send('supprimée');
+      }
       if (action === 'repondre') {
         if (!uid || !texte) return res.status(400).send('uid et texte requis');
         const ref = bdd.doc(`conversations/${uid}`);
