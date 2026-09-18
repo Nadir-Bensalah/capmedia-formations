@@ -103,8 +103,21 @@ forme.addEventListener('submit', async (e) => {
     try { localStorage.setItem(CLE_EMAIL, email); } catch (e2) { /* rien */ }
     montrer('#parti');
   } catch (e3) {
-    // On ne dit jamais si l'adresse est connue : ce serait renseigner un curieux.
-    erreur("L'envoi a échoué. Réessayez dans un instant.");
+    // On ne dit jamais si l'adresse est connue : ce serait renseigner un
+    // curieux. Une panne de configuration, en revanche, n'a rien de secret,
+    // et la taire fait perdre du temps à tout le monde.
+    const code = (e3 && e3.code) || '';
+    console.error('[suivi] envoi du lien impossible :', code, e3 && e3.message);
+    if (code === 'auth/unauthorized-continue-uri' || code === 'auth/operation-not-allowed'
+        || code === 'auth/invalid-api-key' || code === 'auth/configuration-not-found') {
+      erreur("L'espace n'est pas encore ouvert sur ce domaine. Prévenez-nous, nous corrigeons tout de suite.");
+    } else if (code === 'auth/too-many-requests') {
+      erreur('Trop de demandes depuis cet appareil. Patientez quelques minutes.');
+    } else if (code === 'auth/network-request-failed') {
+      erreur('La connexion au réseau a échoué. Vérifiez votre accès à Internet.');
+    } else {
+      erreur("L'envoi a échoué. Réessayez dans un instant.");
+    }
   } finally {
     bouton.disabled = false;
     bouton.textContent = 'Recevoir mon lien de connexion';
