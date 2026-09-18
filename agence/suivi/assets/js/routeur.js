@@ -1,6 +1,6 @@
 /* ==========================================================================
    CAPMEDIA CLIENT HUB · le routeur
-   Des adresses lisibles derrière le dièse : #/projets/forgeme/roadmap.
+   Des adresses lisibles derrière le dièse : #/projets/{projet}/roadmap.
    Chaque élément important a son adresse directe, qu'un e-mail peut ouvrir.
 
    Une route : { chemin: '/projets/:id/taches', vue: async (ctx) => nettoyage }.

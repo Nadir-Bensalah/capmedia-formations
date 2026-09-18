@@ -42,7 +42,7 @@ document sont auto-générés, sauf mention.
 
 ### `equipe/{uid}`
 ```
-nom      string          Nadir Ben Salah
+nom      string          le nom du membre d équipe
 email    string
 role     'admin' | 'agent'
 actif    bool
@@ -50,8 +50,8 @@ actif    bool
 
 ### `projets/{projetId}`
 ```
-ref         string        'FORGEME'  (majuscules, sert de préfixe aux numéros)
-nom         string        'ForgeMe'
+ref         string        'ATELIER'  (majuscules, sert de préfixe aux numéros)
+nom         string        'Atelier'
 client      map           { nom, email, entreprise }
 membres     list<string>  les uid autorisés côté client
 plateformes list<string>  ['ios','android','web']
@@ -63,7 +63,7 @@ cree, maj   timestamp
 
 ### `tickets/{ticketId}`
 ```
-numero      string|null   'FORGEME-014', posé par la fonction, null à la création
+numero      string|null   'ATELIER-014', posé par la fonction, null à la création
 projet      string        projetId
 titre       string        <= 120
 description string         <= 6000

@@ -89,6 +89,11 @@ export const ICONES = {
   sante:        T('<path d="M3 12h4l2-5 4 10 2-5h6"/>'),
   play:         T('<path d="M7 5v14l11-7z"/>'),
   pause:        T('<path d="M8 5v14"/><path d="M16 5v14"/>'),
+  apple:        T('<path d="M16 3c0 1.5-.6 2.6-1.5 3.4-.9.8-2 1.3-2.9 1.2-.1-1.4.6-2.7 1.4-3.5C13.9 3.3 15.2 2.8 16 3z"/><path d="M19.5 16.8c-.5 1.2-.8 1.7-1.5 2.7-.9 1.4-2.2 3.1-3.9 3.1-1.4 0-1.8-.9-3.8-.9s-2.4.9-3.8.9c-1.6 0-2.9-1.5-3.8-2.9C.9 16 .6 11.5 2.3 9.1c1.2-1.7 3-2.7 4.8-2.7 1.8 0 2.9 1 4.4 1 1.4 0 2.3-1 4.4-1 1.6 0 3.2.9 4.4 2.4-3.9 2.1-3.2 7.6-.8 8z"/>'),
+  android:      T('<path d="M4 16h16v-2a8 8 0 0 0-16 0z"/><path d="m6 8-1.5-2.5"/><path d="m18 8 1.5-2.5"/><circle cx="9" cy="12" r=".6" fill="currentColor"/><circle cx="15" cy="12" r=".6" fill="currentColor"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>'),
+  globe:        T('<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 0 1 0 18"/><path d="M12 3a15 15 0 0 0 0 18"/>'),
+  serveur:      T('<rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01"/><path d="M7 17h.01"/>'),
+  etincelle:    T('<path d="m12 3 2.2 5.3L20 10l-5.3 2.2L12 18l-2.2-5.8L4 10l5.8-1.7z"/>'),
   langue:       T('<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18"/><path d="M12 3a14 14 0 0 0 0 18"/>'),
 };
 

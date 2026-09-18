@@ -4,8 +4,8 @@
    Firestore, une écoute onSnapshot. Deux vues qui demandent la même clé
    partagent la même écoute ; la dernière à se retirer la referme.
 
-     const arreter = abonner('taches:forgeme', () => query(...));
-     sur('taches:forgeme', (taches) => rendre(taches));
+     const arreter = abonner('taches:{projet}', () => query(...));
+     sur('taches:{projet}', (taches) => rendre(taches));
      arreter();
 
    Les documents arrivent sous la forme { id, ...donnees }.

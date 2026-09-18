@@ -76,11 +76,11 @@ const photographier = async () => {
   /* 1. Création d un ticket : numéro, historique, e-mail à l équipe -------- */
   console.log('\n== Un ticket arrive');
   const ref = await bdd.collection('tickets').add({
-    projet: 'forgeme', numero: null, titre: 'Essai serveur de la numérotation',
+    projet: 'atelier', numero: null, titre: 'Essai serveur de la numérotation',
     description: 'Créé par la vérification automatique.',
     type: 'bug', urgence: 'important', statut: 'nouveau',
     plateforme: 'ios', version: '1.4.2', pieces: [], archive: false,
-    auteur: { uid: 'essai', nom: 'Sébastien Horemans', email: 'sebastien.essai@exemple.test', cote: 'client' },
+    auteur: { uid: 'essai', nom: 'Camille Martin', email: 'camille.essai@exemple.test', cote: 'client' },
     cree: FieldValue.serverTimestamp(), maj: FieldValue.serverTimestamp(),
     lu: { client: FieldValue.serverTimestamp(), equipe: null },
   });
@@ -90,7 +90,7 @@ const photographier = async () => {
     return d.data() && d.data().numero ? d.data().numero : null;
   });
   if (!numerote) dire('le ticket ne reçoit aucun numéro');
-  else if (!/^FORGEME-\d{3}$/.test(numerote)) dire('numéro inattendu : ' + numerote);
+  else if (!/^ATELIER-\d{3}$/.test(numerote)) dire('numéro inattendu : ' + numerote);
   else ok('numéro attribué : ' + numerote);
 
   const histo = await attendre(async () => {
@@ -110,7 +110,7 @@ const photographier = async () => {
   /* 2. Un message de l équipe ------------------------------------------- */
   console.log('\n== Une réponse de l équipe');
   await ref.collection('messages').add({
-    de: { uid: 'nadir', nom: 'Nadir Ben Salah', cote: 'equipe' },
+    de: { uid: 'agent', nom: 'Alex Durand', cote: 'equipe' },
     texte: 'Réponse de vérification.', pieces: [], interne: false,
     date: FieldValue.serverTimestamp(),
   });
@@ -124,7 +124,7 @@ const photographier = async () => {
   /* 3. Une note interne ne doit prévenir personne côté client ------------- */
   const avantNote = (await envoisDepuis(debut, 'message')).length;
   await ref.collection('messages').add({
-    de: { uid: 'nadir', nom: 'Nadir Ben Salah', cote: 'equipe' },
+    de: { uid: 'agent', nom: 'Alex Durand', cote: 'equipe' },
     texte: 'Note interne de vérification.', pieces: [], interne: true,
     date: FieldValue.serverTimestamp(),
   });
@@ -157,9 +157,9 @@ const photographier = async () => {
   /* 5. Un devis déposé --------------------------------------------------- */
   console.log('\n== Un devis est déposé');
   const dref = await bdd.collection('documents').add({
-    projet: 'forgeme', type: 'devis', numero: 'D-ESSAI-1',
+    projet: 'atelier', type: 'devis', numero: 'D-ESSAI-1',
     libelle: 'Devis de vérification', montant: 1200, statut: 'envoye',
-    fichier: { chemin: 'documents/forgeme/essai.pdf', nom: 'essai.pdf', taille: 1024 },
+    fichier: { chemin: 'documents/atelier/essai.pdf', nom: 'essai.pdf', taille: 1024 },
     cree: FieldValue.serverTimestamp(), maj: FieldValue.serverTimestamp(),
   });
   const filDevis = await attendre(async () => {

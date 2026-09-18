@@ -1106,3 +1106,33 @@ input, select, textarea { font: inherit; color: inherit; }
   .coq { grid-template-columns: 1fr; }
   .page { max-width: none; padding: 0; }
 }
+
+/* --- Les plateformes : une icône, un libellé, une couleur ---------------- */
+.plateforme {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 26px; padding: 0 10px;
+  border-radius: var(--r-pilule);
+  font: var(--t-micro); font-weight: 600;
+  background: var(--gris-voile); color: var(--encre-2);
+  white-space: nowrap;
+}
+.plateforme svg { width: 14px; height: 14px; }
+.plateforme--bleu   { background: var(--accent-voile); color: var(--accent); }
+.plateforme--vert   { background: var(--ok-voile); color: var(--ok); }
+.plateforme--ambre  { background: var(--attention-voile); color: var(--attention); }
+.plateforme--rouge  { background: var(--alerte-voile); color: var(--alerte); }
+.plateforme--violet { background: var(--violet-voile); color: var(--violet); }
+.plateforme--gris   { background: var(--gris-voile); color: var(--encre-2); }
+
+/* Le choix d'une plateforme dans un formulaire : des pastilles, pas un menu. */
+.choix-plateformes { display: flex; flex-wrap: wrap; gap: 8px; }
+.choix-plateformes label { cursor: pointer; }
+.choix-plateformes input { position: absolute; opacity: 0; width: 0; height: 0; }
+.choix-plateformes .plateforme {
+  height: 36px; padding: 0 14px; font-size: 13px;
+  border: 1.5px solid transparent;
+  transition: border-color var(--vite), transform var(--vite);
+}
+.choix-plateformes input:checked + .plateforme { border-color: currentColor; }
+.choix-plateformes input:focus-visible + .plateforme { box-shadow: 0 0 0 3px var(--anneau); }
+.choix-plateformes label:hover .plateforme { transform: translateY(-1px); }

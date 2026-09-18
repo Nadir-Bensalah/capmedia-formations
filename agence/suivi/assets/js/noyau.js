@@ -107,13 +107,17 @@ export const URGENCES = {
 };
 
 export const PLATEFORMES = {
-  'ios':     'iPhone',
-  'android': 'Android',
-  'web':     'Web',
-  'admin':   'Tableau de bord',
-  'backend': 'Serveur',
-  '':        'Non précisée',
+  'ios':     { libelle: 'iPhone',          court: 'iOS',       icone: 'apple',    voile: 'gris',   composant: 'ios' },
+  'android': { libelle: 'Android',         court: 'Android',   icone: 'android',  voile: 'vert',   composant: 'android' },
+  'web':     { libelle: 'Web',             court: 'Web',       icone: 'globe',    voile: 'bleu',   composant: 'web' },
+  'admin':   { libelle: 'Tableau de bord', court: 'Dashboard', icone: 'kanban',   voile: 'violet', composant: 'admin' },
+  'backend': { libelle: 'Serveur',         court: 'Serveur',   icone: 'serveur',  voile: 'ambre',  composant: 'backend' },
+  'landing': { libelle: 'Site vitrine',    court: 'Vitrine',   icone: 'etincelle', voile: 'rouge', composant: 'landing' },
 };
+/* Le sélecteur d'une demande ajoute « non précisée » ; la fiche d'un projet
+   n'énumère que de vraies plateformes. */
+export const PLATEFORMES_CHOIX = { ...PLATEFORMES, '': { libelle: 'Non précisée', court: '', icone: 'help', voile: 'gris' } };
+export const libellePlateforme = (cle) => ((PLATEFORMES_CHOIX[cle] || {}).libelle || cle || '');
 
 export const QUALIFICATIONS = {
   'incluse':        { libelle: 'Incluse au contrat', voile: 'vert' },

@@ -10,7 +10,7 @@ import {
   STATUTS, TYPES, URGENCES, PLATEFORMES, QUALIFICATIONS, OUVERTS, ATTEND_CLIENT,
 } from '../noyau.js';
 import {
-  icone, pastille, puce, avatar, fait, vide, squelette, titrePage, modale, confirmer, toast, sur, depot, lireForme, valider, obligatoire, longueurMax, agir, optionsDe, messageHtml, brancherPieces, encart, pieceHtml, chronoItem,
+  icone, pastille, puce, pucePlateforme, choixPlateformes, avatar, fait, vide, squelette, titrePage, modale, confirmer, toast, sur, depot, lireForme, valider, obligatoire, longueurMax, agir, optionsDe, messageHtml, brancherPieces, encart, pieceHtml, chronoItem,
 } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K, ecrire, abonnerProjet } from '../donnees.js';
@@ -47,6 +47,11 @@ export const nouvelle = async (ctx, env) => {
   filAriane([{ libelle: projet.nom, chemin: `/projets/${pid}` }, { libelle: 'Demandes', chemin: `/projets/${pid}/demandes` }, { libelle: 'Nouvelle demande' }]);
   const typeInitial = ctx.requete.type && TYPES[ctx.requete.type] ? ctx.requete.type : 'bug';
   const composants = magasin.lire(K.composants(pid)) || [];
+  /* On ne propose que les plateformes du projet : demander « Android » sur un
+     projet qui n'en a pas n'aide personne. */
+  const plateformesProjet = (projet.plateformes || []).length
+    ? projet.plateformes
+    : Array.from(new Set(composants.map((c) => c.type).filter((t) => PLATEFORMES[t])));
 
   sortie.innerHTML = `<div class="page" style="max-width:820px">
     <div class="page-tete"><div><p class="surtitre">${echapper(projet.nom)}</p><h1>Nouvelle demande</h1><p class="chapo">Dites-nous ce dont vous avez besoin. Plus c'est précis, plus vite on avance. Vous recevrez un e-mail à chaque mouvement.</p></div></div>
@@ -66,10 +71,11 @@ export const nouvelle = async (ctx, env) => {
         <div class="groupe"><label class="etiquette-champ" for="urgence">Urgence</label><select class="select" id="urgence" name="urgence">${optionsDe(URGENCES, 'important')}</select><p class="aide">Bloquant : vous ne pouvez plus travailler. Critique : une fonction majeure est cassée.</p></div>
         ${composants.length ? `<div class="groupe"><label class="etiquette-champ" for="composant">Composant concerné</label><select class="select" id="composant" name="composant"><option value="">Je ne sais pas</option>${composants.map((c) => `<option value="${echapper(c.id)}">${echapper(c.nom)}</option>`).join('')}</select></div>` : ''}
       </div>
-      <div class="forme-rang" data-champ="plateforme">
-        <div class="groupe"><label class="etiquette-champ" for="plateforme">Plateforme</label><select class="select" id="plateforme" name="plateforme">${optionsDe(PLATEFORMES, '')}</select></div>
-        <div class="groupe" data-champ="version"><label class="etiquette-champ" for="version">Version de l'application <span class="facultatif">(facultatif)</span></label><input class="champ" id="version" name="version" maxlength="40" placeholder="1.4.2"></div>
+      <div class="groupe" data-champ="plateforme">
+        <span class="etiquette-champ">Sur quelle plateforme ?</span>
+        ${choixPlateformes('plateforme', [''], { genre: 'radio', limiter: plateformesProjet, avecVide: true })}
       </div>
+      <div class="groupe" data-champ="version"><label class="etiquette-champ" for="version">Version de l'application <span class="facultatif">(facultatif)</span></label><input class="champ" id="version" name="version" maxlength="40" placeholder="1.4.2"></div>
       <div class="groupe" data-champ="appareil"><label class="etiquette-champ" for="appareil">Appareil, système, navigateur <span class="facultatif">(facultatif)</span></label><input class="champ" id="appareil" name="appareil" maxlength="120" placeholder="iPhone 15, iOS 18 · Chrome sur Mac"></div>
       <div class="groupe" data-champ="contexte"><label class="etiquette-champ" for="contexte">Contexte <span class="facultatif">(facultatif)</span></label><textarea class="zone" id="contexte" name="contexte" rows="3" maxlength="2000" placeholder="Pourquoi cette demande, pour qui, avec quel objectif."></textarea></div>
       <div class="groupe" data-champ="etapes"><label class="etiquette-champ" for="etapes">Étapes pour reproduire <span class="facultatif">(facultatif)</span></label><textarea class="zone" id="etapes" name="etapes" rows="3" maxlength="4000" placeholder="1. J'ouvre l'application&#10;2. Je touche le bouton Compte&#10;3. ..."></textarea></div>
@@ -170,7 +176,7 @@ export const detail = async (ctx, env) => {
           <div class="rang" style="margin-top:10px">
             ${pastille(STATUTS, t.statut, { client: !equipe })}${puce(URGENCES, t.urgence || 'important')}
             ${t.qualification ? pastille(QUALIFICATIONS, t.qualification) : ''}
-            ${t.plateforme ? `<span class="puce">${echapper(PLATEFORMES[t.plateforme] || t.plateforme)}${t.version ? ` · ${echapper(t.version)}` : ''}</span>` : ''}
+            ${t.plateforme ? `${pucePlateforme(t.plateforme)}${t.version ? `<span class="puce t-3">version ${echapper(t.version)}</span>` : ''}` : ''}
             <span class="puce t-3">${icone('horloge')} ouverte ${echapper(depuis(t.cree))}</span>
           </div>
         </div>

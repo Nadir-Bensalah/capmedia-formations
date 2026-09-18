@@ -7,7 +7,7 @@
 
 import {
   $, $$, echapper, initiales, borner, poids, depuis, enParagraphes, avecLiens,
-  envoyerPiece, lienPiece, jourRelatif, enDate,
+  envoyerPiece, lienPiece, jourRelatif, enDate, PLATEFORMES_CHOIX,
 } from './noyau.js';
 import { icone } from './icones.js';
 
@@ -33,6 +33,27 @@ export const pastilleTexte = (texte, voile = 'gris') =>
 export const puce = (carte, cle) => {
   const fiche = (carte && carte[cle]) || { libelle: cle, voile: 'gris' };
   return `<span class="puce puce--${fiche.voile}"><i aria-hidden="true"></i>${echapper(fiche.libelle)}</span>`;
+};
+
+/** Une plateforme : son icône, son libellé, sa couleur. */
+export const pucePlateforme = (cle, options = {}) => {
+  const f = PLATEFORMES_CHOIX[cle];
+  if (!f) return '';
+  return `<span class="plateforme plateforme--${f.voile}"${options.titre ? ` title="${echapper(f.libelle)}"` : ''}>${icone(f.icone)}${options.court === true ? echapper(f.court) : options.court === false ? '' : echapper(f.libelle)}</span>`;
+};
+
+/**
+ * Un choix de plateformes en pastilles. `genre` : 'checkbox' pour en cocher
+ * plusieurs (un projet), 'radio' pour une seule (une demande).
+ */
+export const choixPlateformes = (nom, choisies = [], { genre = 'checkbox', limiter = null, avecVide = false } = {}) => {
+  const cles = Object.keys(limiter && limiter.length ? Object.fromEntries(limiter.filter((c) => PLATEFORMES_CHOIX[c]).map((c) => [c, PLATEFORMES_CHOIX[c]])) : PLATEFORMES_CHOIX)
+    .filter((c) => c !== '' || avecVide);
+  const prises = Array.isArray(choisies) ? choisies : [choisies];
+  return `<div class="choix-plateformes">${cles.map((c) => {
+    const f = PLATEFORMES_CHOIX[c];
+    return `<label><input type="${genre}" name="${echapper(nom)}" value="${echapper(c)}"${prises.includes(c) ? ' checked' : ''}><span class="plateforme plateforme--${f.voile}">${icone(f.icone)}${echapper(f.libelle)}</span></label>`;
+  }).join('')}</div>`;
 };
 
 export const badge = (n, vif = false) => (n > 0
@@ -421,7 +442,15 @@ export const lireForme = (forme) => {
   for (const el of forme.elements) {
     if (!el.name) continue;
     if (el.type === 'radio') { if (el.checked) donnees[el.name] = el.value; continue; }
-    if (el.type === 'checkbox') donnees[el.name] = el.checked;
+    if (el.type === 'checkbox') {
+      // Plusieurs cases sous le même nom forment une liste de valeurs ; une
+      // case seule reste un oui ou un non.
+      if (forme.querySelectorAll(`[type="checkbox"][name="${CSS.escape(el.name)}"]`).length > 1) {
+        if (!Array.isArray(donnees[el.name])) donnees[el.name] = [];
+        if (el.checked) donnees[el.name].push(el.value);
+      } else donnees[el.name] = el.checked;
+      continue;
+    }
     else if (el.type === 'number') donnees[el.name] = el.value === '' ? null : Number(el.value);
     else if (el.multiple && el.tagName === 'SELECT') donnees[el.name] = Array.from(el.selectedOptions).map((o) => o.value);
     else donnees[el.name] = el.value.trim();

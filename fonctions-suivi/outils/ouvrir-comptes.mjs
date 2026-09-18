@@ -21,11 +21,9 @@ if (!CLE) {
 
 /* Les comptes à ouvrir. Modifiez les adresses ici, rien ailleurs.
    Chaque compte d'équipe en rôle « admin » voit tous les projets. */
-const ADMINS = [
-  { email: 'contact@capmedia.app', nom: 'Nadir Ben Salah' },
-  { email: 'contact@nadirbensalah.fr', nom: 'Nadir Ben Salah' },
-  { email: 'contact@nadirbensalah.com', nom: 'Nadir Ben Salah' },
-];
+const ADMINS = (process.env.ADMINS || 'contact@capmedia.app')
+  .split(',').map((e) => ({ email: e.trim(), nom: process.env.ADMIN_NOM || '' }))
+  .filter((a) => a.email);
 const DEMO = {
   ref: 'DEMO',
   nom: 'Projet de démonstration',
