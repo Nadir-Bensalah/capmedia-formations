@@ -3,7 +3,7 @@
    ses projets, ses pièces comptables, ses notes internes.
    ========================================================================== */
 
-import { echapper, dateCourte, montant, pluriel, parDateDesc, STATUTS_PROJET, STATUTS_FACTURE, STATUTS_DEVIS } from '../noyau.js';
+import { echapper, dateCourte, montant, pluriel, parDateDesc, STATUTS_PROJET, STATUTS_FACTURE, STATUTS_DEVIS, statutProjet, projetEstActif} from '../noyau.js';
 import { icone, pastille, avatar, avatarProjet, ligne, vide, squelette, titrePage, modale, confirmer, toast, sur, agir, lireForme, valider, obligatoire, emailValide, fait, metrique, menu } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K, resteAPayer } from '../donnees.js';
@@ -26,7 +26,7 @@ export const liste = async (ctx, env) => {
       <div class="page-tete"><div><h1>Clients</h1><p class="chapo">${pluriel(organisations.length, 'organisation cliente', 'organisations clientes')}.</p></div><div class="actions"><a class="btn btn-principal" href="#/clients/nouveau">${icone('plus')} Nouveau client</a></div></div>
       ${organisations.length ? `<div class="liste">${organisations.map((o) => {
         const sesProjets = projets.filter((p) => p.organisation === o.id);
-        const actifs = sesProjets.filter((p) => !p.archive && p.statut !== 'termine');
+        const actifs = sesProjets.filter(projetEstActif);
         const { total } = resteAPayer(documents.filter((d) => sesProjets.some((p) => p.id === d.projet)), paiements);
         return ligne({ href: `#/clients/${echapper(o.id)}`, titre: `<span class="rang" style="gap:10px">${avatar(o.entreprise || o.nom)} ${echapper(o.entreprise || o.nom)}</span>`, sous: `${echapper([o.nom !== o.entreprise ? o.nom : '', o.email, pluriel(actifs.length, 'projet actif', 'projets actifs')].filter(Boolean).join(' · '))}`, fin: total > 0 ? `<span class="puce puce--ambre"><i></i>${echapper(montant(total))} dû</span>` : '' });
       }).join('')}</div>` : vide({ icone: 'entreprise', titre: 'Aucun client', texte: 'Créez la première organisation, puis rattachez-lui ses projets.', action: '<a class="btn btn-principal" href="#/clients/nouveau">Nouveau client</a>' })}
@@ -90,7 +90,7 @@ export const detail = async (ctx, env) => {
       <div class="metriques">${metrique(projets.filter((p) => !p.archive).length, 'Projets')}${metrique(montant(total), 'Reste dû', { ton: total > 0 ? 'ambre' : 'vert', nuance: factures.length ? pluriel(factures.length, 'facture') : '' })}${metrique(montant(totalPaye), 'Réglé au total')}${metrique(contacts.length, 'Contacts')}</div>
       <div class="grille grille-tiers section">
         <div class="pile" style="gap:var(--e-7)">
-          <section><div class="section-tete"><h2>Projets</h2></div>${projets.length ? `<div class="liste">${projets.map((p) => ligne({ href: `#/projets/${echapper(p.id)}`, titre: `<span class="rang" style="gap:10px">${avatarProjet(p.nom, 'petit')} ${echapper(p.nom)}</span>`, sous: echapper(p.ref || ''), fin: pastille(STATUTS_PROJET, p.statut || 'en-cours') })).join('')}</div>` : vide({ icone: 'projets', titre: 'Aucun projet', compact: true, action: `<a class="btn btn-secondaire" href="#/projets/nouveau?organisation=${echapper(id)}">Créer un projet</a>` })}</section>
+          <section><div class="section-tete"><h2>Projets</h2></div>${projets.length ? `<div class="liste">${projets.map((p) => ligne({ href: `#/projets/${echapper(p.id)}`, titre: `<span class="rang" style="gap:10px">${avatarProjet(p.nom, 'petit')} ${echapper(p.nom)}</span>`, sous: echapper(p.ref || ''), fin: pastille(STATUTS_PROJET, statutProjet(p)) })).join('')}</div>` : vide({ icone: 'projets', titre: 'Aucun projet', compact: true, action: `<a class="btn btn-secondaire" href="#/projets/nouveau?organisation=${echapper(id)}">Créer un projet</a>` })}</section>
           <section><div class="section-tete"><h2>Contacts et accès</h2><button class="btn btn-secondaire btn-petit" type="button" data-action="inviter">${icone('plus')} Ajouter un contact</button></div>
             ${contacts.length ? `<div class="liste">${contacts.map((c) => ligne({ titre: `<span class="rang" style="gap:10px">${avatar(c.nom || c.email)} ${echapper(c.nom || c.email)}</span>`, sous: `${echapper(c.email)}${c.role ? ` · ${echapper(c.role === 'owner' ? 'Responsable' : 'Collaborateur')}` : ''}${c.uid ? ' · compte ouvert' : ''}`, fin: `<button class="btn-icone" type="button" data-action="menu-contact" data-email="${echapper(c.email)}" aria-label="Actions">${icone('points')}</button>`, attrs: 'style="cursor:default"' })).join('')}</div>` : vide({ icone: 'utilisateurs', titre: 'Aucun contact', texte: 'Ajoutez les personnes qui doivent accéder aux projets.', compact: true })}
             <p class="t-micro t-3" style="margin-top:8px">Un contact ajouté est membre de tous les projets de ce client. Retirez-le pour fermer l'accès.</p></section>

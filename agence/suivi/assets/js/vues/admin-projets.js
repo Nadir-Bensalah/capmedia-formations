@@ -3,7 +3,7 @@
    étapes qui pose d'un coup la structure initiale.
    ========================================================================== */
 
-import { echapper, dateCourte, pluriel, joursAvant, parDateDesc, STATUTS_PROJET, TYPES_PROJET, TYPES_COMPOSANT, CATEGORIES_LIEN, PROJETS_ACTIFS } from '../noyau.js';
+import { echapper, dateCourte, pluriel, joursAvant, parDateDesc, STATUTS_PROJET, TYPES_PROJET, TYPES_COMPOSANT, CATEGORIES_LIEN, projetEstActif, statutProjet} from '../noyau.js';
 import { icone, pastille, avatarProjet, progression, ligne, vide, squelette, titrePage, toast, sur, agir, lireForme, valider, obligatoire, emailValide, urlValide, optionsDe, encart } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K, ecrire, progressionProjet } from '../donnees.js';
@@ -24,12 +24,17 @@ export const liste = async (ctx, env) => {
     const tickets = (magasin.lire(K.ticketsTous) || []).filter((t) => !t.archive);
     const jalons = magasin.lire(K.jalonsTous) || [];
     const nomOrg = (id) => ((organisations.find((o) => o.id === id) || {}).entreprise || (organisations.find((o) => o.id === id) || {}).nom || '');
-    const groupes = { actifs: projets.filter((p) => !p.archive && PROJETS_ACTIFS.includes(p.statut || 'en-cours')), tous: projets.filter((p) => !p.archive), termines: projets.filter((p) => p.statut === 'termine'), archives: projets.filter((p) => p.archive) };
+    const groupes = {
+      actifs: projets.filter(projetEstActif),
+      tous: projets.filter((p) => !p.archive),
+      termines: projets.filter((p) => !p.archive && statutProjet(p) === 'termine'),
+      archives: projets.filter((p) => p.archive),
+    };
     const liste = groupes[etat.filtre] || groupes.actifs;
     sortie.innerHTML = `<div class="page">
       <div class="page-tete"><div><h1>Projets</h1><p class="chapo">${pluriel(groupes.actifs.length, 'projet actif', 'projets actifs')} sur ${projets.length}.</p></div><div class="actions"><a class="btn btn-principal" href="#/projets/nouveau">${icone('plus')} Nouveau projet</a></div></div>
       <div class="filtres" style="margin-bottom:16px">${[['actifs', 'Actifs'], ['tous', 'Tous'], ['termines', 'Terminés'], ['archives', 'Archivés']].map(([cle, lib]) => `<button class="filtre${etat.filtre === cle ? ' actif' : ''}" type="button" data-filtre="${cle}">${lib}<span class="compte">${groupes[cle].length}</span></button>`).join('')}</div>
-      ${liste.length ? `<div class="liste">${liste.map((p) => { const prog = progressionProjet(p, jalons.filter((j) => j.projet === p.id)); const ouverts = tickets.filter((t) => t.projet === p.id && !['resolu', 'ferme', 'refuse', 'annulee'].includes(t.statut)).length; return ligne({ href: `#/projets/${echapper(p.id)}`, titre: `<span class="rang" style="gap:10px">${avatarProjet(p.nom, 'petit')} ${echapper(p.nom)} <span class="t-3 t-petit" style="font-weight:400">${echapper(p.ref || '')}</span></span>`, sous: `${echapper([nomOrg(p.organisation) || (p.client || {}).entreprise || (p.client || {}).nom, TYPES_PROJET[p.type], p.cible ? `cible ${dateCourte(p.cible)}` : '', ouverts ? pluriel(ouverts, 'demande ouverte', 'demandes ouvertes') : ''].filter(Boolean).join(' · '))}`, fin: `<span style="width:90px">${progression(prog.valeur)}</span>${pastille(STATUTS_PROJET, p.statut || 'en-cours')}${p.cible && joursAvant(p.cible) < 0 && p.statut !== 'termine' ? '<span class="puce puce--rouge"><i></i>Retard</span>' : ''}` }); }).join('')}</div>` : vide({ icone: 'projets', titre: 'Aucun projet ici', compact: true })}
+      ${liste.length ? `<div class="liste">${liste.map((p) => { const prog = progressionProjet(p, jalons.filter((j) => j.projet === p.id)); const ouverts = tickets.filter((t) => t.projet === p.id && !['resolu', 'ferme', 'refuse', 'annulee'].includes(t.statut)).length; return ligne({ href: `#/projets/${echapper(p.id)}`, titre: `<span class="rang" style="gap:10px">${avatarProjet(p.nom, 'petit')} ${echapper(p.nom)} <span class="t-3 t-petit" style="font-weight:400">${echapper(p.ref || '')}</span></span>`, sous: `${echapper([nomOrg(p.organisation) || (p.client || {}).entreprise || (p.client || {}).nom, TYPES_PROJET[p.type], p.cible ? `cible ${dateCourte(p.cible)}` : '', ouverts ? pluriel(ouverts, 'demande ouverte', 'demandes ouvertes') : ''].filter(Boolean).join(' · '))}`, fin: `<span style="width:90px">${progression(prog.valeur)}</span>${pastille(STATUTS_PROJET, statutProjet(p))}${p.cible && joursAvant(p.cible) < 0 && statutProjet(p) !== 'termine' ? '<span class="puce puce--rouge"><i></i>Retard</span>' : ''}` }); }).join('')}</div>` : vide({ icone: 'projets', titre: 'Aucun projet ici', compact: true })}
     </div>`;
   };
   const gestes = sur(sortie, 'click', '[data-filtre]', (el) => { etat.filtre = el.dataset.filtre; rendre(); });

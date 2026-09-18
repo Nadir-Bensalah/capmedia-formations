@@ -509,3 +509,11 @@ exports.hubComposantEcrit = onDocumentWritten({ region: REGION, document: 'proje
   else if (apres && avant && avant.statut !== apres.statut && apres.statut === 'livre') await activite({ projet: projetId, type: 'projet', texte: `a livré le composant « ${apres.nom} »`, lien });
   else if (apres && avant && avant.version !== apres.version && apres.version) await activite({ projet: projetId, type: 'projet', texte: `a passé « ${apres.nom} » en version ${apres.version}`, lien });
 });
+
+/* Un projet qui s'ouvre laisse une trace, comme tout le reste. */
+exports.hubProjetCree = onDocumentCreated({ region: REGION, document: 'projets/{projetId}' }, async (evenement) => {
+  const p = evenement.data.data();
+  const projetId = evenement.params.projetId;
+  await activite({ projet: projetId, organisation: p.organisation || null, type: 'projet', texte: `a ouvert le projet « ${p.nom} »`, lien: `/projets/${projetId}` });
+  await notifier(p.membres || [], { type: 'projet', titre: 'Votre espace projet est ouvert', texte: p.nom, lien: `#/projets/${projetId}`, projet: projetId });
+});

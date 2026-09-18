@@ -4,7 +4,7 @@
    transforme en projet sans rien perdre.
    ========================================================================== */
 
-import { echapper, dateHeure, depuis, parDateDesc, avecLiens, bdd, collection, query, orderBy, doc, TYPES_PROJET, STATUTS_PREPROJET } from '../noyau.js';
+import { echapper, dateHeure, depuis, pluriel, parDateDesc, avecLiens, bdd, collection, query, orderBy, doc, TYPES_PROJET, STATUTS_PREPROJET } from '../noyau.js';
 import { icone, pastille, ligne, vide, squelette, titrePage, toast, depot, lireForme, valider, obligatoire, agir, optionsDe, messageHtml, brancherPieces, fait, pieceHtml, sur, encart } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K, ecrire } from '../donnees.js';
@@ -17,7 +17,7 @@ export const nouvelle = async (ctx, env) => {
   filAriane([{ libelle: 'Accueil', chemin: '/' }, { libelle: 'Demander un nouveau projet' }]);
   const org = env.session.organisations[0] || {};
   sortie.innerHTML = `<div class="page" style="max-width:820px">
-    <div class="page-tete"><div><p class="surtitre">Cadrage</p><h1>Demander un nouveau projet</h1><p class="chapo">Décrivez l'idée avec vos mots. On en discute ici, on qualifie, on chiffre, puis le projet s'ouvre avec tout l'historique conservé.</p></div></div>
+    <div class="page-tete"><div><p class="surtitre">Cadrage</p><h1>Demander un projet</h1><p class="chapo">Décrivez l'idée avec vos mots. Nous en discutons ici, nous la chiffrons, et nous ouvrons le projet une fois d'accord. Rien de ce que vous écrivez n'est perdu en route.</p></div></div>
     <form class="forme" id="forme-preprojet" novalidate>
       <div class="groupe"><label class="etiquette-champ" for="titre">Le projet en une phrase</label><input class="champ" id="titre" name="titre" maxlength="120" placeholder="Une application de réservation pour mon restaurant"></div>
       <div class="forme-rang">
@@ -63,10 +63,14 @@ export const liste = async (ctx, env) => {
     const demandes = (magasin.lire(K.demandesProjet) || []).slice().sort(parDateDesc('maj'));
     const enCours = demandes.filter((d) => !['projet', 'refusee'].includes(d.statut));
     const closes = demandes.filter((d) => ['projet', 'refusee'].includes(d.statut));
-    const bloc = (d) => ligne({ href: `#/nouveaux-projets/${echapper(d.id)}`, icone: 'sparkle', ton: d.statut === 'nouvelle' ? 'violet' : '', titre: echapper(d.titre), sous: `${echapper((d.par || {}).nom || '')} · ${echapper(TYPES_PROJET[d.type] || d.type || '')} · ${echapper(depuis(d.maj))}`, fin: pastille(STATUTS_PREPROJET, d.statut) });
+    const bloc = (d) => ligne({ href: `#/nouveaux-projets/${echapper(d.id)}`, icone: 'sparkle', ton: d.statut === 'nouvelle' ? 'violet' : '', titre: echapper(d.titre), sous: `${echapper((d.par || {}).nom || '')} · ${echapper((d.par || {}).email || '')} · ${echapper(TYPES_PROJET[d.type] || d.type || '')} · ${echapper(depuis(d.maj))}`, fin: pastille(STATUTS_PREPROJET, d.statut) });
     sortie.innerHTML = `<div class="page">
-      <div class="page-tete"><div><h1>Nouveaux projets</h1><p class="chapo">Les idées des clients, de la première discussion jusqu'au projet créé.</p></div></div>
-      ${enCours.length ? `<div class="liste">${enCours.map(bloc).join('')}</div>` : vide({ icone: 'sparkle', titre: 'Aucune demande en cours', texte: 'Quand un client décrit un nouveau projet, il apparaît ici.' })}
+      <div class="page-tete">
+        <div><h1>Nouveaux projets</h1><p class="chapo">Vous créez les projets. Les clients, eux, décrivent leur idée ici : vous la qualifiez, vous chiffrez, puis vous ouvrez le projet quand vous le décidez.</p></div>
+        <div class="actions"><a class="btn btn-principal" href="#/projets/nouveau">${icone('plus')} Créer un projet</a></div>
+      </div>
+      ${enCours.length ? `<section class="section" style="margin-top:0"><div class="section-tete"><h2>Demandes des clients</h2><span class="t-petit t-3">${pluriel(enCours.length, 'à traiter')}</span></div><div class="liste">${enCours.map(bloc).join('')}</div></section>`
+      : vide({ icone: 'sparkle', titre: 'Aucune demande de client en attente', texte: "Quand un client décrit un nouveau projet depuis son espace, il arrive ici. Vous pouvez aussi ouvrir un projet directement, sans passer par une demande.", action: '<a class="btn btn-principal" href="#/projets/nouveau">Créer un projet</a>' })}
       ${closes.length ? `<section class="section"><div class="section-tete"><h2>Clôturées</h2></div><div class="liste">${closes.map(bloc).join('')}</div></section>` : ''}
     </div>`;
   };
