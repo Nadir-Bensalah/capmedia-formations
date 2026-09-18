@@ -160,6 +160,9 @@ const PLATEFORMES = {
   'ios': 'iPhone',
   'android': 'Android',
   'web': 'Web',
+  'admin': 'Tableau de bord',
+  'backend': 'Serveur',
+  'landing': 'Site vitrine',
 };
 
 const libelle = (table, cle, defaut = '') => table[valeurTexte(cle)] || defaut;

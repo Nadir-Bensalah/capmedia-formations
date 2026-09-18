@@ -8,9 +8,9 @@ import {
   echapper, dateISO, dateHeureISO, borner, enDate,
   TYPES_COMPOSANT, STATUTS_COMPOSANT, STATUTS_JALON, STATUTS_TACHE, PRIORITES, CATEGORIES_LIEN,
   STATUTS_RELEASE, TYPES_CHANGEMENT, TYPES_NOTE, TYPES_VALIDATION, CATEGORIES_FICHIER,
-  STATUTS_PROJET, TYPES_PROJET, SANTES, STATUTS, URGENCES, QUALIFICATIONS, PLATEFORMES,
+  STATUTS_PROJET, TYPES_PROJET, SANTES, STATUTS, URGENCES, QUALIFICATIONS, PLATEFORMES_CHOIX,
 } from '../noyau.js';
-import { modale, confirmer, toast, lireForme, valider, obligatoire, longueurMax, urlValide, optionsDe, depot, agir, lisible } from '../ui.js';
+import { modale, confirmer, toast, lireForme, valider, obligatoire, longueurMax, urlValide, optionsDe, depot, agir, lisible, choixPlateformes } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K, ecrire } from '../donnees.js';
 
@@ -83,6 +83,7 @@ const editeurs = {
       ${select('statut', 'Statut', STATUTS_PROJET, fiche.statut || 'en-cours')}
       ${select('type', 'Type', TYPES_PROJET, fiche.type || 'application-mobile')}
       ${zone('description', 'Description', fiche.description, { facultatif: true, lignes: 3 })}
+      <div class="groupe"><span class="etiquette-champ">Plateformes</span>${choixPlateformes('plateformes', fiche.plateformes || [])}</div>
       <div class="forme-rang">
         ${champ('debut', 'Début', dateISO(fiche.debut), { type: 'date', facultatif: true })}
         ${champ('cible', 'Date cible', dateISO(fiche.cible), { type: 'date', facultatif: true })}
@@ -99,13 +100,16 @@ const editeurs = {
       ${champ('pulseEnCours', 'Capmedia travaille sur', (fiche.pulse || {}).enCours, { facultatif: true, placeholder: 'ex. Authentification Android' })}
       ${champ('pulseDerniereLivraison', 'Dernière livraison', (fiche.pulse || {}).derniereLivraison, { facultatif: true, placeholder: 'ex. iOS 2.4.1' })}
       ${champ('pulseProchaineEtape', 'Prochaine étape', (fiche.pulse || {}).prochaineEtape, { facultatif: true, placeholder: 'ex. Validation TestFlight' })}
-      ${champ('pulseAttenteClient', 'Attente client', (fiche.pulse || {}).attenteClient, { facultatif: true, placeholder: 'Laissez vide si rien' })}`,
+      ${champ('pulseAttenteClient', 'Attente client', (fiche.pulse || {}).attenteClient, { facultatif: true, placeholder: 'Laissez vide si rien' })}
+      <label class="interrupteur" style="margin-top:8px"><input type="checkbox" name="silence" ${fiche.silence ? 'checked' : ''}><i></i> Préparer sans prévenir le client</label>
+      <p class="aide">En sourdine, le client garde l'accès mais ne reçoit aucun e-mail. À lever quand l'espace est prêt.</p>`,
     regles: { nom: obligatoire(), progressionValeur: (v) => (v !== null && (v < 0 || v > 100) ? 'Entre 0 et 100.' : '') },
     enregistrer: (d) => ecrire.majProjet(pid, {
       nom: d.nom, statut: d.statut, type: d.type, description: d.description,
+      plateformes: Array.isArray(d.plateformes) ? d.plateformes : (d.plateformes ? [d.plateformes] : []),
       debut: d.debut ? new Date(d.debut) : null, cible: d.cible ? new Date(d.cible) : null,
       progression: { mode: d.progressionMode, valeur: borner(d.progressionValeur) },
-      responsable: d.responsable, sante: d.sante,
+      responsable: d.responsable, sante: d.sante, silence: Boolean(d.silence),
       pulse: { enCours: d.pulseEnCours, derniereLivraison: d.pulseDerniereLivraison, prochaineEtape: d.pulseProchaineEtape, attenteClient: d.pulseAttenteClient },
     }).then(() => toast('Projet mis à jour.')),
   }),
@@ -288,7 +292,7 @@ const editeurs = {
       </div>
       ${champ('titre', 'Titre', fiche ? fiche.titre : '', { placeholder: 'Conserver Stripe pour les paiements' })}
       ${zone('contenu', 'Contenu', fiche ? fiche.contenu : '', { lignes: 4 })}
-      ${champ('decidePar', 'Décidé par', fiche ? fiche.decidePar : '', { facultatif: true, placeholder: '[nom retire] et Nadir' })}
+      ${champ('decidePar', 'Décidé par', fiche ? fiche.decidePar : '', { facultatif: true, placeholder: 'Les personnes qui ont tranché' })}
       ${zone('contexte', 'Contexte', fiche ? fiche.contexte : '', { facultatif: true, lignes: 2 })}
       ${zone('impact', 'Impact', fiche ? fiche.impact : '', { facultatif: true, lignes: 2 })}
       ${visibilite(fiche ? fiche.visibilite : 'client')}`,
@@ -370,7 +374,7 @@ const editeurs = {
       </div>
       <div class="forme-rang">
         ${select('qualification', 'Qualification', QUALIFICATIONS, fiche.qualification || '', { vide: 'Pas encore qualifiée', aide: 'Hors périmètre ou à chiffrer : le client en est informé.' })}
-        ${select('plateforme', 'Plateforme', PLATEFORMES, fiche.plateforme || '')}
+        ${select('plateforme', 'Plateforme', PLATEFORMES_CHOIX, fiche.plateforme || '')}
       </div>
       ${champ('titre', 'Titre', fiche.titre)}`,
     regles: { titre: obligatoire(), plateforme: () => '' },

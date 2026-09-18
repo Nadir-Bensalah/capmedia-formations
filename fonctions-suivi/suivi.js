@@ -166,6 +166,9 @@ async function lireTicket(ticketId) {
  * s'il s'agit d'une autre personne (une équipe cliente à plusieurs mains).
  */
 function contactsClient(projet, auteur) {
+  /* Un projet en sourdine se prépare sans rien envoyer au client. Le
+     drapeau se lève depuis le cockpit quand l'espace est prêt. */
+  if (projet && projet.silence === true) return [];
   const liste = [];
   const client = (projet && projet.client) || {};
   if (client.email) {
@@ -795,7 +798,7 @@ async function synchroniserMembres(orgId) {
 const STATUTS_FACTURE = ['brouillon', 'envoyee', 'a-payer', 'partielle', 'payee', 'en-retard', 'annulee', 'avoir'];
 const STATUTS_DEVIS = ['brouillon', 'envoye', 'consulte', 'accepte', 'refuse', 'expire', 'annule'];
 const MOYENS = ['virement', 'carte', 'stripe', 'cheque', 'especes', 'autre'];
-const PLATEFORMES_CONNUES = ['ios', 'android', 'web'];
+const PLATEFORMES_CONNUES = ['ios', 'android', 'web', 'admin', 'backend', 'landing'];
 
 exports.suiviAdmin = onRequest(
   { region: REGION, secrets: [ADMIN_CLE], cors: true },
@@ -1220,6 +1223,111 @@ exports.suiviAdmin = onRequest(
           organisations: organisations.docs.map((d) => ({ id: d.id, nom: d.data().entreprise || d.data().nom, email: d.data().email, membres: (d.data().membres || []).length })),
           equipe: equipe.docs.map((d) => ({ uid: d.id, email: d.data().email, role: d.data().role })),
         });
+      }
+
+      /* --- Amorcer un projet avec son contenu ------------------------------
+         Un outil d ouverture : il ecrit composants, jalons, liens, versions,
+         reunions, notes, blocages et taches d un coup. Le garde-fou est
+         volontairement strict : l appel doit enumerer les adresses attendues
+         sur le projet, et l action refuse si une autre apparait. On ne
+         remplit pas l espace d un client par accident. */
+      if (action === 'remplirProjet') {
+        const { contenu, adressesAttendues } = req.body || {};
+        if (!id) return res.status(400).send('id du projet requis');
+        if (!Array.isArray(adressesAttendues) || !adressesAttendues.length) {
+          return res.status(400).send('adressesAttendues requises : la liste des adresses autorisees sur ce projet');
+        }
+        const refProjet = bdd.doc(`projets/${String(id)}`);
+        const docProjet = await refProjet.get();
+        if (!docProjet.exists) return res.status(404).send('projet inconnu');
+        const projet = docProjet.data();
+
+        const permises = adressesAttendues.map(normaliserEmail);
+        const presentes = [];
+        if (projet.client && projet.client.email) presentes.push(normaliserEmail(projet.client.email));
+        for (const uid of (projet.membres || [])) {
+          try { const u = await getAuth().getUser(uid); if (u.email) presentes.push(normaliserEmail(u.email)); }
+          catch (err) { return res.status(409).send(`membre ${uid} illisible, remplissage refuse`); }
+        }
+        const intruses = presentes.filter((e) => !permises.includes(e));
+        if (intruses.length) {
+          return res.status(409).send(`remplissage refuse : ${intruses.join(', ')} n est pas dans la liste attendue`);
+        }
+
+        const c = contenu && typeof contenu === 'object' ? contenu : {};
+        const enDate = (v) => { if (!v) return null; const d = new Date(v); return Number.isNaN(d.getTime()) ? null : d; };
+        const compte = {};
+
+        if (c.projet && typeof c.projet === 'object') {
+          const p = c.projet;
+          await refProjet.update(sansIndefini({
+            nom: p.nom, description: p.description, type: p.type, statut: p.statut,
+            plateformes: Array.isArray(p.plateformes) ? p.plateformes.filter((x) => PLATEFORMES_CONNUES.includes(x)) : undefined,
+            debut: enDate(p.debut), cible: enDate(p.cible), progression: p.progression, pulse: p.pulse,
+            sante: p.sante, budget: p.budget, budgetNote: p.budgetNote, silence: p.silence,
+            maj: FieldValue.serverTimestamp(),
+          }));
+          compte.projet = 1;
+        }
+
+        /* Chaque collection est reecrite a l identique si l element porte un
+           identifiant : relancer l outil ne cree pas de doublon. */
+        const poser = async (liste, chemin, transforme) => {
+          if (!Array.isArray(liste) || !liste.length) return 0;
+          for (const item of liste) {
+            const donnees = sansIndefini({ ...transforme(item), maj: FieldValue.serverTimestamp() });
+            if (item.id) await bdd.doc(`${chemin}/${item.id}`).set({ ...donnees, cree: donnees.cree || FieldValue.serverTimestamp() }, { merge: true });
+            else await bdd.collection(chemin).add({ ...donnees, cree: FieldValue.serverTimestamp() });
+          }
+          return liste.length;
+        };
+
+        compte.composants = await poser(c.composants, `projets/${id}/composants`, (x) => ({
+          nom: x.nom, type: x.type, statut: x.statut || 'en-cours', progression: Number(x.progression) || 0,
+          version: x.version || '', versionPrep: x.versionPrep || '', environnement: x.environnement || '',
+          techno: x.techno || [], responsable: x.responsable || '', description: x.description || '', ordre: Number(x.ordre) || 0,
+        }));
+        compte.jalons = await poser(c.jalons, `projets/${id}/jalons`, (x) => ({
+          projet: String(id), titre: x.titre, description: x.description || '', phase: x.phase || '',
+          statut: x.statut || 'a-venir', progression: Number(x.progression) || 0,
+          debut: enDate(x.debut), fin: enDate(x.fin), composants: x.composants || [], dependances: [], ordre: Number(x.ordre) || 0,
+        }));
+        compte.liens = await poser(c.liens, `projets/${id}/liens`, (x) => ({
+          nom: x.nom, categorie: x.categorie || 'autre', url: x.url, environnement: x.environnement || '',
+          composant: x.composant || '', description: x.description || '', visibilite: x.visibilite || 'client', etat: 'actif',
+        }));
+        compte.releases = await poser(c.releases, 'releases', (x) => ({
+          projet: String(id), composant: x.composant || '', plateforme: x.plateforme, version: x.version,
+          titre: x.titre || '', statut: x.statut || 'disponible', date: enDate(x.date), notes: x.notes || [],
+          liens: x.liens || {}, visibilite: x.visibilite || 'client', par: { uid: null, nom: EQUIPE_NOM },
+        }));
+        compte.reunions = await poser(c.reunions, 'reunions', (x) => ({
+          projet: String(id), titre: x.titre, date: enDate(x.date), duree: Number(x.duree) || 60,
+          participants: x.participants || [], lien: x.lien || '', ordreDuJour: x.ordreDuJour || '',
+          notes: '', compteRendu: x.compteRendu || '', decisions: x.decisions || '', actions: x.actions || [],
+          visibilite: x.visibilite || 'client', par: { uid: null, nom: EQUIPE_NOM },
+        }));
+        compte.notes = await poser(c.notes, 'notes', (x) => ({
+          projet: String(id), type: x.type || 'information', titre: x.titre, contenu: x.contenu || '',
+          contexte: x.contexte || '', impact: x.impact || '', decidePar: x.decidePar || '',
+          date: enDate(x.date) || FieldValue.serverTimestamp(), visibilite: x.visibilite || 'client', par: { uid: null, nom: EQUIPE_NOM },
+        }));
+        compte.blocages = await poser(c.blocages, 'blocages', (x) => ({
+          projet: String(id), titre: x.titre, description: x.description || '', responsable: x.responsable || 'client',
+          impact: x.impact || '', depuis: enDate(x.depuis) || FieldValue.serverTimestamp(), resolu: enDate(x.resolu),
+          visibilite: x.visibilite || 'client',
+        }));
+        compte.taches = await poser(c.taches, 'taches', (x) => ({
+          projet: String(id), composant: x.composant || '', jalon: x.jalon || '', ticket: '',
+          titre: x.titre, description: x.description || '', statut: x.statut || 'a-faire', priorite: x.priorite || 'normale',
+          assigne: x.assigne || '', echeance: enDate(x.echeance), estimation: x.estimation || '',
+          progression: Number(x.progression) || 0, checklist: x.checklist || [], pieces: [],
+          visibilite: x.visibilite || 'client', ordre: Number(x.ordre) || 0, archive: false, par: { uid: null, nom: EQUIPE_NOM },
+        }));
+
+        await bdd.collection('audit').add({ action: 'projet-rempli', projet: String(id), compte, date: FieldValue.serverTimestamp() });
+        console.log(`Projet ${id} rempli :`, JSON.stringify(compte));
+        return res.status(200).json({ ok: true, compte, adressesVues: presentes });
       }
 
       return res.status(400).send('action inconnue');

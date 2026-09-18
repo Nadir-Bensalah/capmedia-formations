@@ -60,6 +60,9 @@ async function lireEquipe() {
 
 /** Les contacts e-mail du client d'un projet : le contact principal, puis les membres qui ont une adresse. */
 async function contactsClient(projet) {
+  /* Un projet en sourdine se prépare sans rien envoyer au client. Le
+     drapeau se lève depuis le cockpit quand l'espace est prêt. */
+  if (projet && projet.silence === true) return [];
   const liste = [];
   const client = (projet && projet.client) || {};
   if (emailPlausible(client.email)) liste.push({ email: normaliserEmail(client.email), nom: client.nom || client.entreprise || '' });

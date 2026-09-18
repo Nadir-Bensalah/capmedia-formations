@@ -3,8 +3,8 @@
    étapes qui pose d'un coup la structure initiale.
    ========================================================================== */
 
-import { echapper, dateCourte, pluriel, joursAvant, parDateDesc, STATUTS_PROJET, TYPES_PROJET, TYPES_COMPOSANT, CATEGORIES_LIEN, projetEstActif, statutProjet} from '../noyau.js';
-import { icone, pastille, avatarProjet, progression, ligne, vide, squelette, titrePage, toast, sur, agir, lireForme, valider, obligatoire, emailValide, urlValide, optionsDe, encart } from '../ui.js';
+import { echapper, dateCourte, pluriel, joursAvant, parDateDesc, STATUTS_PROJET, TYPES_PROJET, TYPES_COMPOSANT, CATEGORIES_LIEN, PLATEFORMES, projetEstActif, statutProjet } from '../noyau.js';
+import { icone, pastille, avatarProjet, progression, ligne, vide, squelette, titrePage, toast, sur, agir, lireForme, valider, obligatoire, emailValide, urlValide, optionsDe, encart, choixPlateformes, pucePlateforme } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K, ecrire, progressionProjet } from '../donnees.js';
 import { filAriane } from '../coquille.js';
@@ -34,7 +34,7 @@ export const liste = async (ctx, env) => {
     sortie.innerHTML = `<div class="page">
       <div class="page-tete"><div><h1>Projets</h1><p class="chapo">${pluriel(groupes.actifs.length, 'projet actif', 'projets actifs')} sur ${projets.length}.</p></div><div class="actions"><a class="btn btn-principal" href="#/projets/nouveau">${icone('plus')} Nouveau projet</a></div></div>
       <div class="filtres" style="margin-bottom:16px">${[['actifs', 'Actifs'], ['tous', 'Tous'], ['termines', 'Terminés'], ['archives', 'Archivés']].map(([cle, lib]) => `<button class="filtre${etat.filtre === cle ? ' actif' : ''}" type="button" data-filtre="${cle}">${lib}<span class="compte">${groupes[cle].length}</span></button>`).join('')}</div>
-      ${liste.length ? `<div class="liste">${liste.map((p) => { const prog = progressionProjet(p, jalons.filter((j) => j.projet === p.id)); const ouverts = tickets.filter((t) => t.projet === p.id && !['resolu', 'ferme', 'refuse', 'annulee'].includes(t.statut)).length; return ligne({ href: `#/projets/${echapper(p.id)}`, titre: `<span class="rang" style="gap:10px">${avatarProjet(p.nom, 'petit')} ${echapper(p.nom)} <span class="t-3 t-petit" style="font-weight:400">${echapper(p.ref || '')}</span></span>`, sous: `${echapper([nomOrg(p.organisation) || (p.client || {}).entreprise || (p.client || {}).nom, TYPES_PROJET[p.type], p.cible ? `cible ${dateCourte(p.cible)}` : '', ouverts ? pluriel(ouverts, 'demande ouverte', 'demandes ouvertes') : ''].filter(Boolean).join(' · '))}`, fin: `<span style="width:90px">${progression(prog.valeur)}</span>${pastille(STATUTS_PROJET, statutProjet(p))}${p.cible && joursAvant(p.cible) < 0 && statutProjet(p) !== 'termine' ? '<span class="puce puce--rouge"><i></i>Retard</span>' : ''}` }); }).join('')}</div>` : vide({ icone: 'projets', titre: 'Aucun projet ici', compact: true })}
+      ${liste.length ? `<div class="liste">${liste.map((p) => { const prog = progressionProjet(p, jalons.filter((j) => j.projet === p.id)); const ouverts = tickets.filter((t) => t.projet === p.id && !['resolu', 'ferme', 'refuse', 'annulee'].includes(t.statut)).length; return ligne({ href: `#/projets/${echapper(p.id)}`, titre: `<span class="rang" style="gap:10px">${avatarProjet(p.nom, 'petit')} ${echapper(p.nom)} <span class="t-3 t-petit" style="font-weight:400">${echapper(p.ref || '')}</span></span>`, sous: `${echapper([nomOrg(p.organisation) || (p.client || {}).entreprise || (p.client || {}).nom, p.cible ? `cible ${dateCourte(p.cible)}` : '', ouverts ? pluriel(ouverts, 'demande ouverte', 'demandes ouvertes') : ''].filter(Boolean).join(' · '))} ${(p.plateformes || []).map((x) => pucePlateforme(x, { court: true })).join('')}`, fin: `<span style="width:90px">${progression(prog.valeur)}</span>${pastille(STATUTS_PROJET, statutProjet(p))}${p.cible && joursAvant(p.cible) < 0 && statutProjet(p) !== 'termine' ? '<span class="puce puce--rouge"><i></i>Retard</span>' : ''}` }); }).join('')}</div>` : vide({ icone: 'projets', titre: 'Aucun projet ici', compact: true })}
     </div>`;
   };
   const gestes = sur(sortie, 'click', '[data-filtre]', (el) => { etat.filtre = el.dataset.filtre; rendre(); });
@@ -59,7 +59,8 @@ export const nouveau = async (ctx, env) => {
     nom: depuis ? depuis.titre : '', ref: '', description: depuis ? depuis.idee : '',
     organisation: ctx.requete.organisation || (depuis && depuis.organisation) || '', clientNom: '', clientEmail: '', clientEntreprise: '',
     type: depuis ? depuis.type : 'application-mobile', statut: 'cadrage',
-    composants: depuis && depuis.plateformes && depuis.plateformes.length ? depuis.plateformes.map((p) => ({ nom: TYPES_COMPOSANT[p] || p, type: p })) : [{ nom: 'Application iOS', type: 'ios' }, { nom: 'Application Android', type: 'android' }],
+    plateformes: depuis && depuis.plateformes && depuis.plateformes.length ? depuis.plateformes.slice() : ['ios', 'android'],
+    composants: (depuis && depuis.plateformes && depuis.plateformes.length ? depuis.plateformes : ['ios', 'android']).map((p) => ({ nom: TYPES_COMPOSANT[p] || p, type: p })),
     responsable: env.session.equipe.uid, debut: '', cible: '', budget: '', budgetNote: depuis ? depuis.budget : '',
     liens: [], inviter: true, demandeProjet: depuis ? depuis.id : '',
   };
@@ -68,13 +69,14 @@ export const nouveau = async (ctx, env) => {
   const orgChoisie = () => organisations.find((o) => o.id === d.organisation);
   const corps = () => {
     switch (etape) {
-      case 0: return `<div class="groupe"><label class="etiquette-champ" for="nom">Nom du projet</label><input class="champ" id="nom" name="nom" value="${echapper(d.nom)}" maxlength="80" placeholder="ForgeMe"></div>
-        <div class="groupe"><label class="etiquette-champ" for="ref">Référence</label><input class="champ" id="ref" name="ref" value="${echapper(d.ref)}" maxlength="16" placeholder="FORGEME" style="text-transform:uppercase"><p class="aide">Préfixe des numéros de demande : FORGEME-001. Lettres et chiffres, sans espace, unique.</p></div>
+      case 0: return `<div class="groupe"><label class="etiquette-champ" for="nom">Nom du projet</label><input class="champ" id="nom" name="nom" value="${echapper(d.nom)}" maxlength="80" placeholder="Nom du projet"></div>
+        <div class="groupe"><label class="etiquette-champ" for="ref">Référence</label><input class="champ" id="ref" name="ref" value="${echapper(d.ref)}" maxlength="16" placeholder="Ex. ATELIER" style="text-transform:uppercase"><p class="aide">Préfixe des numéros de demande, par exemple ATELIER-001. Lettres et chiffres, sans espace, unique.</p></div>
         <div class="groupe"><label class="etiquette-champ" for="description">Description <span class="facultatif">(facultatif)</span></label><textarea class="zone" id="description" name="description" rows="3" maxlength="2000">${echapper(d.description)}</textarea></div>`;
       case 1: return `<div class="groupe"><label class="etiquette-champ" for="organisation">Client</label><select class="select" id="organisation" name="organisation"><option value="">Nouveau client</option>${organisations.map((o) => `<option value="${echapper(o.id)}" ${d.organisation === o.id ? 'selected' : ''}>${echapper(o.entreprise || o.nom)}</option>`).join('')}</select></div>
         <div id="nouveau-client" class="${d.organisation ? 'masque' : ''}"><div class="forme-rang"><div class="groupe"><label class="etiquette-champ" for="clientEntreprise">Société</label><input class="champ" id="clientEntreprise" name="clientEntreprise" value="${echapper(d.clientEntreprise)}"></div><div class="groupe"><label class="etiquette-champ" for="clientNom">Contact principal</label><input class="champ" id="clientNom" name="clientNom" value="${echapper(d.clientNom)}"></div></div><div class="groupe"><label class="etiquette-champ" for="clientEmail">E-mail du contact</label><input class="champ" id="clientEmail" name="clientEmail" type="email" value="${echapper(d.clientEmail)}"></div></div>`;
-      case 2: return `<div class="forme-rang"><div class="groupe"><label class="etiquette-champ" for="type">Type</label><select class="select" id="type" name="type">${optionsDe(TYPES_PROJET, d.type)}</select></div><div class="groupe"><label class="etiquette-champ" for="statut">Statut de départ</label><select class="select" id="statut" name="statut">${optionsDe(STATUTS_PROJET, d.statut, { exclure: ['archive'] })}</select></div></div>`;
-      case 3: return `<p class="t-petit t-2">Les briques du projet. Chacune aura sa progression, sa version, ses tâches.</p><div id="liste-composants" class="pile" style="margin-top:12px">${d.composants.map((c, i) => `<div class="forme-rang" data-i="${i}"><input class="champ" name="cnom" value="${echapper(c.nom)}" placeholder="Nom"><div class="rang" style="gap:6px"><select class="select" name="ctype">${optionsDe(TYPES_COMPOSANT, c.type)}</select><button class="btn-icone" type="button" data-retirer="${i}" aria-label="Retirer">${icone('fermer')}</button></div></div>`).join('')}</div><button class="btn btn-doux btn-petit" type="button" data-ajouter-composant style="margin-top:12px">${icone('plus')} Ajouter un composant</button>`;
+      case 2: return `<div class="forme-rang"><div class="groupe"><label class="etiquette-champ" for="type">Type</label><select class="select" id="type" name="type">${optionsDe(TYPES_PROJET, d.type)}</select></div><div class="groupe"><label class="etiquette-champ" for="statut">Statut de départ</label><select class="select" id="statut" name="statut">${optionsDe(STATUTS_PROJET, d.statut, { exclure: ['archive'] })}</select></div></div>
+        <div class="groupe"><span class="etiquette-champ">Plateformes du projet</span>${choixPlateformes('plateformes', d.plateformes)}<p class="aide">Un projet peut en réunir plusieurs : iPhone, Android, web, tableau de bord. Chacune devient un composant que vous suivez à part, et que le client peut désigner dans ses demandes.</p></div>`;
+      case 3: return `<p class="t-petit t-2">Les briques du projet, posées d'après les plateformes choisies. Chacune aura sa progression, sa version, ses tâches. Vous pouvez en ajouter d'autres.</p><div id="liste-composants" class="pile" style="margin-top:12px">${d.composants.map((c, i) => `<div class="forme-rang" data-i="${i}"><input class="champ" name="cnom" value="${echapper(c.nom)}" placeholder="Nom"><div class="rang" style="gap:6px"><select class="select" name="ctype">${optionsDe(TYPES_COMPOSANT, c.type)}</select><button class="btn-icone" type="button" data-retirer="${i}" aria-label="Retirer">${icone('fermer')}</button></div></div>`).join('')}</div><button class="btn btn-doux btn-petit" type="button" data-ajouter-composant style="margin-top:12px">${icone('plus')} Ajouter un composant</button>`;
       case 4: return `<div class="groupe"><label class="etiquette-champ" for="responsable">Responsable Capmedia</label><select class="select" id="responsable" name="responsable">${equipe.map((e) => `<option value="${echapper(e.id)}" ${d.responsable === e.id ? 'selected' : ''}>${echapper(e.nom || e.email)}</option>`).join('')}</select><p class="aide">D'autres membres pourront être assignés tâche par tâche.</p></div>`;
       case 5: return `<div class="forme-rang"><div class="groupe"><label class="etiquette-champ" for="debut">Début</label><input class="champ" id="debut" name="debut" type="date" value="${echapper(d.debut)}"></div><div class="groupe"><label class="etiquette-champ" for="cible">Date cible <span class="facultatif">(facultatif)</span></label><input class="champ" id="cible" name="cible" type="date" value="${echapper(d.cible)}"></div></div>`;
       case 6: return `<div class="forme-rang"><div class="groupe"><label class="etiquette-champ" for="budget">Budget HT <span class="facultatif">(facultatif, interne)</span></label><input class="champ" id="budget" name="budget" type="number" min="0" step="100" value="${echapper(d.budget)}"></div><div class="groupe"><label class="etiquette-champ" for="budgetNote">Note <span class="facultatif">(facultatif)</span></label><input class="champ" id="budgetNote" name="budgetNote" value="${echapper(d.budgetNote)}" placeholder="Forfait, régie, phases"></div></div><p class="aide">Le budget reste interne. Le client voit ses devis et ses factures.</p>`;
@@ -100,7 +102,7 @@ export const nouveau = async (ctx, env) => {
       if (etape < ETAPES.length - 1) { etape += 1; rendre(); return; }
       await agir(forme.querySelector('[type="submit"]'), async () => {
         const r = await appelServeur('creerProjet', {
-          nom: d.nom, ref: d.ref.toUpperCase(), description: d.description, type: d.type, statut: d.statut,
+          nom: d.nom, ref: d.ref.toUpperCase(), description: d.description, type: d.type, statut: d.statut, plateformes: d.plateformes,
           organisation: d.organisation || null, client: d.organisation ? null : { nom: d.clientNom, email: d.clientEmail, entreprise: d.clientEntreprise },
           responsable: d.responsable, debut: d.debut || null, cible: d.cible || null, budget: d.budget ? Number(d.budget) : null, budgetNote: d.budgetNote,
           inviter: d.inviter, demandeProjet: d.demandeProjet || null,
@@ -117,7 +119,16 @@ export const nouveau = async (ctx, env) => {
     const v = lireForme(forme);
     if (etape === 0) Object.assign(d, { nom: v.nom, ref: v.ref, description: v.description });
     if (etape === 1) Object.assign(d, { organisation: v.organisation, clientEntreprise: v.clientEntreprise, clientNom: v.clientNom, clientEmail: v.clientEmail });
-    if (etape === 2) Object.assign(d, { type: v.type, statut: v.statut });
+    if (etape === 2) {
+      const choisies = Array.from(forme.querySelectorAll('[name="plateformes"]:checked')).map((c) => c.value);
+      Object.assign(d, { type: v.type, statut: v.statut, plateformes: choisies });
+      /* Les composants suivent les plateformes : on ajoute les manquants et on
+         retire ceux d'une plateforme décochée, sans toucher aux composants
+         ajoutés à la main. */
+      const parType = new Map(d.composants.map((c) => [c.type, c]));
+      d.composants = choisies.map((t) => parType.get(t) || { nom: TYPES_COMPOSANT[t] || t, type: t })
+        .concat(d.composants.filter((c) => !PLATEFORMES[c.type]));
+    }
     if (etape === 3) d.composants = Array.from(forme.querySelectorAll('#liste-composants [data-i]')).map((r) => ({ nom: r.querySelector('[name="cnom"]').value.trim(), type: r.querySelector('[name="ctype"]').value }));
     if (etape === 4) d.responsable = v.responsable;
     if (etape === 5) Object.assign(d, { debut: v.debut, cible: v.cible });

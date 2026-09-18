@@ -11,7 +11,7 @@ import {
   CATEGORIES_FICHIER, CATEGORIES_LIEN, STATUTS_RELEASE, TYPES_CHANGEMENT, TYPES_NOTE, SANTES, STATUTS_VALIDATION, QUALIFICATIONS, statutProjet
 } from '../noyau.js';
 import {
-  icone, pastille, pastilleTexte, puce, avatarProjet, avatar, progression, anneau, ligne, vide, fait, chronoItem, parJour, squelette, titrePage,
+  icone, pastille, pastilleTexte, puce, pucePlateforme, avatarProjet, avatar, progression, anneau, ligne, vide, fait, chronoItem, parJour, squelette, titrePage,
   echeanceHtml, modale, confirmer, toast, sur, menu, fichierHtml, brancherPieces, depot, lireForme, valider, obligatoire, agir, encart, optionsDe,
 } from '../ui.js';
 import * as magasin from '../magasin.js';
@@ -111,6 +111,7 @@ export const vue = async (ctx, env) => {
             <h1 style="margin-top:2px">${echapper(projet.nom)}</h1>
             <div class="rang" style="margin-top:8px">
               ${pastille(STATUTS_PROJET, statutProjet(projet))}
+              ${(projet.plateformes || []).map((x) => pucePlateforme(x)).join('')}
               ${equipe && projet.sante ? pastille(SANTES, projet.sante) : ''}
               ${projet.cible ? `<span class="puce">${icone('cible')} Cible ${echapper(dateCourte(projet.cible))}</span>` : ''}
               ${projet.responsable ? `<span class="puce">${icone('utilisateur')} ${echapper(nomEquipe(d.equipe, projet.responsable) || 'Capmedia')}</span>` : ''}

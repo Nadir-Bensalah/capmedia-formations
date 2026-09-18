@@ -1,0 +1,10 @@
+{
+  "name": "capmedia-suivi-outils",
+  "description": "Les outils du banc d'essai : jeu de données, essais de règles, vérification serveur. Jamais déployés (firebase.suivi.json ignore ce dossier), leurs dépendances restent donc hors du paquet des fonctions.",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "firebase": "^11.0.0"
+  }
+}

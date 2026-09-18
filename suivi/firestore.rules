@@ -122,7 +122,7 @@ service cloud.firestore {
       allow update: if estEquipe()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
              'nom', 'description', 'type', 'statut', 'progression', 'debut', 'cible',
-             'responsable', 'pulse', 'sante', 'archive', 'client', 'plateformes', 'logo', 'budget', 'budgetNote', 'maj'
+             'responsable', 'pulse', 'sante', 'archive', 'client', 'plateformes', 'logo', 'budget', 'budgetNote', 'silence', 'maj'
            ])
         && texteRequis(request.resource.data.nom, 120)
         && request.resource.data.statut in ['prospect', 'cadrage', 'planifie', 'en-cours', 'attente-client',
@@ -177,7 +177,7 @@ service cloud.firestore {
         return request.resource.data.type in ['bug', 'modification', 'fonctionnalite', 'amelioration', 'question',
                                               'technique', 'contenu', 'devis', 'demande', 'autre']
             && request.resource.data.urgence in ['bloquant', 'critique', 'important', 'mineur']
-            && request.resource.data.plateforme in ['ios', 'android', 'web', 'admin', 'backend', ''];
+            && request.resource.data.plateforme in ['ios', 'android', 'web', 'admin', 'backend', 'landing', ''];
       }
 
       function taillesTenues() {

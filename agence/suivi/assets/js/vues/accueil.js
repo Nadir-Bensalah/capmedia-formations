@@ -40,7 +40,14 @@ export const vue = async (ctx, env) => {
   titrePage('Accueil');
   sortie.innerHTML = `<div class="page">${squelette('page', 5)}</div>`;
 
+  /* Tant que les écoutes n'ont pas rendu leur première valeur, on garde le
+     squelette : un accueil qui se complète par morceaux donne l'impression
+     que des choses manquent. Passé le délai de garde, on montre ce qu'on a. */
+  let impatient = false;
+  setTimeout(() => { impatient = true; planifier(); }, 2500);
+
   const rendre = () => {
+    if (!impatient && !cles.every((c) => magasin.chargee(c))) return;
     const projets = (magasin.lire(K.projets) || session.projets).filter((p) => !p.archive);
     const profil = magasin.lire(K.profil);
     const tickets = agreger(session, G.tickets);

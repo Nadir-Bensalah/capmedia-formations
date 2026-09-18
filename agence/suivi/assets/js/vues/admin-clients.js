@@ -38,8 +38,8 @@ export const liste = async (ctx, env) => {
 
 const formulaireOrganisation = (o = {}) => `
   <div class="forme-rang">
-    <div class="groupe"><label class="etiquette-champ" for="entreprise">Société</label><input class="champ" id="entreprise" name="entreprise" value="${echapper(o.entreprise || '')}" maxlength="120" placeholder="[nom retire] Capital"></div>
-    <div class="groupe"><label class="etiquette-champ" for="nom">Contact principal</label><input class="champ" id="nom" name="nom" value="${echapper(o.nom || '')}" maxlength="120" placeholder="[nom retire] [nom retire]"></div>
+    <div class="groupe"><label class="etiquette-champ" for="entreprise">Société</label><input class="champ" id="entreprise" name="entreprise" value="${echapper(o.entreprise || '')}" maxlength="120" placeholder="Nom de la société"></div>
+    <div class="groupe"><label class="etiquette-champ" for="nom">Contact principal</label><input class="champ" id="nom" name="nom" value="${echapper(o.nom || '')}" maxlength="120" placeholder="Prénom et nom"></div>
   </div>
   <div class="forme-rang">
     <div class="groupe"><label class="etiquette-champ" for="email">E-mail du contact</label><input class="champ" id="email" name="email" type="email" value="${echapper(o.email || '')}" maxlength="120"></div>
