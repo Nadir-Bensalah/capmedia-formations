@@ -806,3 +806,19 @@ exports.admin = onRequest(
     }
   },
 );
+
+/* ==========================================================================
+   5. Espace de suivi client (contrat : docs/suivi.md)
+   Les fonctions vivent dans suivi.js, et leurs gabarits d'e-mail dans
+   courriels.js. Elles sont seulement réexportées ici, parce que Firebase ne
+   déploie que ce que le point d'entrée expose.
+   ========================================================================== */
+const suivi = require('./suivi');
+
+exports.suiviTicketCree      = suivi.suiviTicketCree;
+exports.suiviTicketModifie   = suivi.suiviTicketModifie;
+exports.suiviMessageCree     = suivi.suiviMessageCree;
+exports.suiviDocumentCree    = suivi.suiviDocumentCree;
+exports.suiviDocumentModifie = suivi.suiviDocumentModifie;
+exports.suiviFacteur         = suivi.suiviFacteur;
+exports.suiviAdmin           = suivi.suiviAdmin;

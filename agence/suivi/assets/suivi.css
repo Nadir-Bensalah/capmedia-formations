@@ -1,0 +1,747 @@
+/* ==========================================================================
+   ESPACE DE SUIVI · les composants propres à l'application
+   Contrat : docs/suivi.md
+
+   tokens.css et az.css font déjà le gros du travail (carte, btn, champ,
+   etiquette, grille, enveloppe, filet, t-*). Ce fichier n'ajoute que ce
+   qui manque à une application de suivi : la charpente à deux colonnes,
+   les listes de tickets, les pastilles d'état, le fil de discussion,
+   l'historique et le dépôt de fichiers.
+
+   Aucune valeur en dur. Uniquement les variables de tokens.css.
+   ========================================================================== */
+
+/* --- L'extension du jeu de jetons pour cette application ---------------
+   tokens.css porte les couleurs du site. Une application de suivi a en
+   plus besoin d'une échelle d'urgence et d'une teinte de note interne.
+   Elles sont déclarées ici, une seule fois, avec les trois états de thème
+   que le site utilise : clair par défaut, automatique, et forcé.
+   ---------------------------------------------------------------------- */
+
+:root {
+  --urgence-critique:  #C2410C;
+  --urgence-important: #B8860B;
+  --note-interne:      #92400E;
+  --sur-action:        #FFFFFF;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --urgence-critique:  #FB923C;
+    --urgence-important: #E3B341;
+    --note-interne:      #E3B341;
+  }
+}
+
+[data-theme="dark"] {
+  --urgence-critique:  #FB923C;
+  --urgence-important: #E3B341;
+  --note-interne:      #E3B341;
+}
+
+/* --- La charpente ------------------------------------------------------- */
+
+.appli {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.appli-barre {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: var(--e-4);
+  min-height: 56px;
+  padding: var(--e-3) var(--marge-mobile);
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  -webkit-backdrop-filter: saturate(180%) blur(16px);
+  backdrop-filter: saturate(180%) blur(16px);
+  border-bottom: 1px solid var(--trait);
+}
+
+.appli-marque {
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.appli-marque span { color: var(--texte-3); font-weight: 400; }
+
+.appli-barre .appli-fin { margin-left: auto; display: flex; align-items: center; gap: var(--e-3); }
+
+.appli-corps {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+.appli-lateral {
+  padding: var(--e-4) var(--e-3);
+  border-bottom: 1px solid var(--trait);
+  background: var(--bg-2);
+}
+
+.appli-vue {
+  min-width: 0;
+  padding: var(--e-5) var(--marge-mobile) var(--e-8);
+}
+
+@media (min-width: 900px) {
+  .appli-corps { grid-template-columns: var(--barre-laterale) minmax(0, 1fr); }
+  .appli-lateral {
+    position: sticky;
+    top: 56px;
+    height: calc(100vh - 56px);
+    overflow-y: auto;
+    border-bottom: 0;
+    border-right: 1px solid var(--trait);
+    padding: var(--e-5) var(--e-4);
+  }
+  .appli-vue { padding: var(--e-6) var(--e-6) var(--e-9); max-width: 1180px; }
+}
+
+/* --- La navigation latérale --------------------------------------------- */
+
+.nav-suivi { display: flex; flex-direction: column; gap: 2px; }
+
+.nav-suivi a,
+.nav-suivi button {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  width: 100%;
+  text-align: left;
+  font: var(--t-app-petit);
+  font-weight: 500;
+  color: var(--texte-2);
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-2);
+  padding: 8px var(--e-3);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background var(--t-survol), color var(--t-survol);
+}
+.nav-suivi a:hover,
+.nav-suivi button:hover { background: var(--survol); color: var(--texte); }
+.nav-suivi .actif { background: var(--bg); color: var(--texte); font-weight: 600; box-shadow: 0 0 0 1px var(--trait); }
+
+.nav-suivi .compte {
+  margin-left: auto;
+  font: var(--t-app-micro);
+  color: var(--texte-3);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 899px) {
+  .nav-suivi { flex-direction: row; overflow-x: auto; scrollbar-width: none; }
+  .nav-suivi::-webkit-scrollbar { display: none; }
+  .nav-suivi a, .nav-suivi button { width: auto; flex: 0 0 auto; white-space: nowrap; }
+}
+
+/* Sous 600 px, les onglets se replient : mieux vaut deux lignes qu'un
+   libellé coupé au bord de l'écran. */
+@media (max-width: 599px) {
+  .nav-suivi { flex-wrap: wrap; overflow-x: visible; }
+}
+
+/* --- Les pastilles d'état ----------------------------------------------- */
+
+.pastille {
+  display: inline-flex;
+  align-items: center;
+  font: var(--t-app-micro);
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: var(--r-rond);
+  white-space: nowrap;
+  color: var(--texte);
+  background: var(--voile-gris);
+}
+.pastille--bleu   { background: var(--voile-bleu); }
+.pastille--orange { background: var(--voile-orange); }
+.pastille--jaune  { background: var(--voile-jaune); }
+.pastille--vert   { background: var(--voile-vert); }
+.pastille--rouge  { background: var(--voile-rouge); }
+.pastille--gris   { background: var(--voile-gris); color: var(--texte-2); }
+
+/* L'urgence : un point coloré et un mot. Jamais de bloc rouge plein. */
+.urgence {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: var(--t-app-micro);
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--texte-2);
+}
+.urgence i {
+  width: 7px; height: 7px;
+  border-radius: var(--r-rond);
+  background: var(--texte-3);
+  flex: 0 0 auto;
+}
+.urgence--bloquant  { color: var(--danger); }
+.urgence--bloquant i { background: var(--danger); }
+.urgence--critique  { color: var(--urgence-critique); }
+.urgence--critique i { background: var(--urgence-critique); }
+.urgence--important i { background: var(--urgence-important); }
+.urgence--mineur    { color: var(--texte-3); }
+
+/* --- La liste des tickets ------------------------------------------------ */
+
+.liste-tickets { display: flex; flex-direction: column; border-top: 1px solid var(--trait); }
+
+.ticket-ligne {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--e-2) var(--e-4);
+  align-items: start;
+  padding: var(--e-4) var(--e-2);
+  border-bottom: 1px solid var(--trait);
+  text-decoration: none;
+  color: inherit;
+  transition: background var(--t-survol);
+}
+.ticket-ligne:hover { background: var(--survol); }
+.ticket-ligne:focus-visible { outline: 2px solid var(--action); outline-offset: -2px; }
+
+.ticket-numero {
+  font: var(--t-app-micro);
+  font-family: var(--police-mono);
+  color: var(--texte-3);
+  letter-spacing: 0;
+}
+.ticket-titre {
+  font: var(--t-app-corps);
+  font-weight: 600;
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+.ticket-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--e-3);
+  flex-wrap: wrap;
+  margin-top: 6px;
+  font: var(--t-app-micro);
+  color: var(--texte-3);
+}
+.ticket-droite {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  text-align: right;
+}
+.ticket-ligne.non-lu .ticket-titre::after {
+  content: "";
+  display: inline-block;
+  width: 7px; height: 7px;
+  margin-left: 8px;
+  border-radius: var(--r-rond);
+  background: var(--action);
+  vertical-align: middle;
+}
+
+/* --- Les tuiles de compte ------------------------------------------------ */
+
+.tuiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--e-3); }
+@media (min-width: 700px) { .tuiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+.tuile {
+  background: var(--bg-2);
+  border-radius: var(--r-3);
+  padding: var(--e-4);
+  min-width: 0;
+}
+.tuile-valeur {
+  font: var(--t-app-titre);
+  font-size: 30px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.tuile-libelle { font: var(--t-app-micro); color: var(--texte-2); margin-top: 2px; }
+.tuile--alerte .tuile-valeur { color: var(--danger); }
+
+/* --- La barre de filtres ------------------------------------------------- */
+
+.filtres {
+  display: flex;
+  align-items: center;
+  gap: var(--e-2);
+  flex-wrap: wrap;
+  margin-block: var(--e-4);
+}
+.filtre {
+  font: var(--t-app-petit);
+  font-weight: 500;
+  color: var(--texte-2);
+  background: var(--bg-2);
+  border: 1px solid transparent;
+  border-radius: var(--r-rond);
+  padding: 6px 13px;
+  cursor: pointer;
+  transition: background var(--t-survol), color var(--t-survol);
+}
+.filtre:hover { color: var(--texte); background: var(--survol); }
+.filtre.actif { background: var(--texte); color: var(--bg); }
+.filtre .compte { margin-left: 6px; opacity: 0.6; font-variant-numeric: tabular-nums; }
+
+/* --- Le fil de discussion ----------------------------------------------- */
+
+.fil { display: flex; flex-direction: column; gap: var(--e-5); }
+
+.message { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: var(--e-3); }
+
+.jeton {
+  width: 36px; height: 36px;
+  border-radius: var(--r-rond);
+  display: grid;
+  place-items: center;
+  font: var(--t-app-micro);
+  font-weight: 600;
+  background: var(--bg-3);
+  color: var(--texte-2);
+}
+.message--equipe .jeton { background: var(--action); color: var(--sur-action); }
+
+.message-tete {
+  display: flex;
+  align-items: baseline;
+  gap: var(--e-3);
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.message-auteur { font: var(--t-app-petit); font-weight: 600; }
+.message-date { font: var(--t-app-micro); color: var(--texte-3); }
+.message-corps { font: var(--t-app-corps); overflow-wrap: anywhere; }
+.message-corps p + p { margin-top: var(--e-3); }
+
+.message--interne .message-corps {
+  background: var(--voile-jaune);
+  border-radius: var(--r-3);
+  padding: var(--e-3) var(--e-4);
+}
+.marque-interne {
+  font: var(--t-app-micro);
+  font-weight: 600;
+  color: var(--note-interne);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* --- L'historique ------------------------------------------------------- */
+
+.historique { list-style: none; margin: 0; padding: 0; }
+.historique li {
+  position: relative;
+  padding-left: var(--e-5);
+  padding-block: 7px;
+  font: var(--t-app-petit);
+  color: var(--texte-2);
+}
+.historique li::before {
+  content: "";
+  position: absolute;
+  left: 4px; top: 15px;
+  width: 7px; height: 7px;
+  border-radius: var(--r-rond);
+  background: var(--trait-fort);
+}
+.historique li::after {
+  content: "";
+  position: absolute;
+  left: 7px; top: 22px; bottom: -7px;
+  width: 1px;
+  background: var(--trait);
+}
+.historique li:last-child::after { display: none; }
+.historique time { color: var(--texte-3); }
+
+/* --- Les pièces jointes ------------------------------------------------- */
+
+.depot {
+  display: block;
+  border: 1.5px dashed var(--trait-fort);
+  border-radius: var(--r-3);
+  padding: var(--e-5);
+  text-align: center;
+  cursor: pointer;
+  color: var(--texte-2);
+  font: var(--t-app-petit);
+  transition: border-color var(--t-survol), background var(--t-survol);
+}
+.depot:hover, .depot.survol { border-color: var(--action); background: var(--voile-bleu); }
+.depot input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+/* L'input est masqué : c'est donc l'étiquette qui porte le focus visible. */
+.depot:focus-within { border-color: var(--action); box-shadow: 0 0 0 3px var(--anneau); }
+
+.pieces { display: flex; flex-wrap: wrap; gap: var(--e-2); margin-top: var(--e-3); }
+.piece {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-2);
+  max-width: 100%;
+  font: var(--t-app-micro);
+  background: var(--bg-2);
+  border-radius: var(--r-2);
+  padding: 6px 10px;
+  color: var(--texte-2);
+  text-decoration: none;
+}
+.piece:hover { background: var(--survol); color: var(--texte); }
+.piece span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+.piece b { color: var(--texte-3); font-weight: 400; }
+.piece-retirer { border: 0; background: none; color: var(--texte-3); cursor: pointer; padding: 0 2px; font-size: 15px; line-height: 1; }
+.piece-retirer:hover { color: var(--danger); }
+button.piece { border: 0; font-family: var(--police); cursor: pointer; }
+button.piece:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--anneau); }
+
+/* --- Les documents : devis et factures ---------------------------------- */
+
+.documents { display: flex; flex-direction: column; border-top: 1px solid var(--trait); }
+.document {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--e-2) var(--e-4);
+  align-items: center;
+  padding: var(--e-4) var(--e-2);
+  border-bottom: 1px solid var(--trait);
+}
+.document-libelle { font: var(--t-app-corps); font-weight: 600; overflow-wrap: anywhere; }
+.document-meta { display: flex; gap: var(--e-3); flex-wrap: wrap; margin-top: 4px; font: var(--t-app-micro); color: var(--texte-3); }
+.document-montant { font: var(--t-app-h3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.document-actions { display: flex; align-items: center; gap: var(--e-2); flex-wrap: wrap; justify-content: flex-end; }
+.document-droite { display: flex; flex-direction: column; align-items: flex-end; gap: var(--e-2); }
+
+/* --- Un tableau qui ne déborde jamais de son cadre ---------------------- */
+
+.cadre-defile { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* --- Rien à afficher ---------------------------------------------------- */
+
+.vide {
+  border: 1.5px dashed var(--trait);
+  border-radius: var(--r-3);
+  padding: var(--e-7) var(--e-5);
+  text-align: center;
+}
+.vide-titre { font: var(--t-app-corps); font-weight: 600; }
+.vide-texte { font: var(--t-app-petit); color: var(--texte-2); margin-top: 4px; max-width: 46ch; margin-inline: auto; }
+
+/* --- Le message éphémère ------------------------------------------------ */
+
+.avis {
+  position: fixed;
+  left: 50%;
+  bottom: var(--e-5);
+  transform: translate(-50%, 12px);
+  z-index: 90;
+  max-width: calc(100vw - 2 * var(--marge-mobile));
+  font: var(--t-app-petit);
+  font-weight: 500;
+  color: var(--bg);
+  background: var(--texte);
+  border-radius: var(--r-rond);
+  padding: 10px var(--e-5);
+  box-shadow: var(--ombre-flottant);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--t-apparition), transform var(--t-apparition);
+}
+.avis--visible { opacity: 1; transform: translate(-50%, 0); }
+.avis--erreur { background: var(--danger); color: var(--sur-action); }
+
+/* --- La porte d'entrée -------------------------------------------------- */
+
+.porte-suivi {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--e-6) var(--marge-mobile);
+}
+.porte-boite { width: 100%; max-width: 420px; }
+.porte-boite .champ { margin-top: var(--e-2); }
+.porte-boite .btn { margin-top: var(--e-4); }
+
+/* --- Détails ------------------------------------------------------------ */
+
+.masque { display: none !important; }
+
+/* Le lien d'évitement : hors de l'écran, mais visible dès qu'il a le focus. */
+.saut-contenu {
+  position: absolute;
+  left: var(--e-3);
+  top: -100px;
+  z-index: 100;
+  font: var(--t-app-petit);
+  font-weight: 600;
+  color: var(--texte);
+  background: var(--bg);
+  border-radius: var(--r-2);
+  padding: 10px var(--e-4);
+  box-shadow: var(--ombre-flottant);
+  text-decoration: none;
+  transition: top var(--t-apparition);
+}
+.saut-contenu:focus { top: var(--e-3); }
+
+/* L'adresse du compte n'a pas de place dans une barre de 360 px. */
+@media (max-width: 599px) { .masque-etroit { display: none; } }
+
+.fiche-tete { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--e-4); flex-wrap: wrap; }
+.fiche-champs { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--e-4); }
+@media (min-width: 700px) { .fiche-champs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.fiche-champ .etiquette-champ { display: block; font: var(--t-app-micro); color: var(--texte-3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
+.fiche-champ p { font: var(--t-app-petit); overflow-wrap: anywhere; }
+
+.zone { width: 100%; background: var(--bg); color: var(--texte); border: 1px solid var(--trait-fort); border-radius: var(--r-3); font: var(--t-app-corps); padding: var(--e-3) var(--e-4); resize: vertical; min-height: 120px; }
+.zone:focus { outline: none; border-color: var(--action); box-shadow: 0 0 0 3px var(--anneau); }
+
+select.champ { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--texte-2) 50%), linear-gradient(135deg, var(--texte-2) 50%, transparent 50%); background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; padding-right: var(--e-7); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 0.001ms !important; animation-duration: 0.001ms !important; }
+}
+
+/* ==========================================================================
+   LA CONSOLE D'ÉQUIPE
+   Ajouts pour console.html : un poste de pilotage dense, lisible au
+   téléphone comme au grand écran. Toujours sans valeur en dur.
+   ========================================================================== */
+
+/* --- Les écrans de la console -------------------------------------------- */
+
+.ecran > .section-suivi:first-of-type { margin-top: var(--e-6); }
+
+.section-suivi { margin-top: var(--e-7); min-width: 0; }
+
+.tete-ecran {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--e-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--e-3);
+}
+.tete-ecran h1, .tete-ecran h2 { min-width: 0; }
+
+.titre-bloc {
+  font: var(--t-app-h3);
+  margin-bottom: var(--e-3);
+}
+
+/* Le pied de la barre latérale : identité, clé, thème, sortie. */
+.lateral-pied {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--e-3);
+  margin-top: var(--e-5);
+}
+.lateral-pied .filet { margin-block: 0; width: 100%; }
+
+.btn-menu { display: none; }
+
+@media (max-width: 899px) {
+  .btn-menu { display: inline-flex; }
+  .appli-lateral .lateral-pied { display: none; }
+  .appli-lateral.pied-ouvert .lateral-pied { display: flex; }
+}
+
+/* --- L'état de la clé d'administration ---------------------------------- */
+
+.etat-cle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: var(--t-app-micro);
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: var(--r-rond);
+  white-space: nowrap;
+}
+.etat-cle::before {
+  content: "";
+  width: 7px; height: 7px;
+  border-radius: var(--r-rond);
+  background: currentColor;
+}
+.etat-cle--posee   { background: var(--voile-vert); color: var(--valide); }
+.etat-cle--absente { background: var(--voile-gris); color: var(--texte-3); }
+
+/* --- Les pastilles de compteur de la navigation -------------------------- */
+
+.nav-suivi .compte--alerte {
+  background: var(--danger);
+  color: var(--sur-action);
+  padding: 1px 7px;
+  border-radius: var(--r-rond);
+  font-weight: 700;
+}
+
+/* --- Trois tuiles par rangée sur grand écran ---------------------------- */
+
+@media (min-width: 700px) {
+  .tuiles--trois { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* --- Les formulaires en grille ------------------------------------------ */
+
+.filtres-forme {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--e-3);
+}
+@media (min-width: 620px) {
+  .filtres-forme { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .filtre-champ--large { grid-column: 1 / -1; }
+}
+@media (min-width: 1000px) {
+  .filtres-forme { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+.filtre-champ { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.filtre-champ .etiquette-champ { margin-bottom: 0; }
+.filtre-champ .champ { width: 100%; }
+
+.champ-compact { font: var(--t-app-micro); padding: 6px 10px; }
+select.champ-compact { padding-right: var(--e-6); background-position: calc(100% - 14px) 50%, calc(100% - 9px) 50%; }
+
+.case {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: var(--t-app-petit);
+  color: var(--texte-2);
+  cursor: pointer;
+}
+.case input { accent-color: var(--action); }
+
+/* --- Les lignes de ticket dans la console ------------------------------- */
+
+button.ticket-ligne {
+  width: 100%;
+  font: inherit;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--trait);
+  cursor: pointer;
+  text-align: left;
+}
+.ticket-gauche { min-width: 0; display: block; }
+.ticket-numero, .ticket-titre { display: block; }
+
+/* Une ligne d'archive : le ticket, puis son bouton de sortie. */
+.ligne-archive {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--e-2);
+  border-bottom: 1px solid var(--trait);
+  padding-bottom: var(--e-3);
+}
+.ligne-archive > .ticket-ligne { border-bottom: 0; padding-bottom: 0; }
+.ligne-archive > .btn { justify-self: start; margin-left: var(--e-2); }
+@media (min-width: 700px) {
+  .ligne-archive { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  .ligne-archive > .btn { justify-self: end; }
+}
+
+/* --- Les actions empilées d'un tableau ---------------------------------- */
+
+.pile-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--e-2);
+  min-width: 160px;
+}
+.pile-actions .btn { justify-content: center; }
+
+/* --- Le bloc de réponse de la fiche ------------------------------------- */
+
+.repondre {
+  margin-top: var(--e-6);
+  padding-top: var(--e-5);
+  border-top: 1px solid var(--trait);
+}
+.onglets-reponse { display: flex; gap: var(--e-2); flex-wrap: wrap; }
+
+/* --- La boîte de la clé ------------------------------------------------- */
+
+.boite {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  height: fit-content;
+  width: min(460px, calc(100vw - 2 * var(--marge-mobile)));
+  border: 1px solid var(--trait);
+  border-radius: var(--r-3);
+  background: var(--bg);
+  color: var(--texte);
+  padding: var(--e-5);
+  box-shadow: var(--ombre-flottant);
+}
+.boite::backdrop { background: rgba(0, 0, 0, 0.4); }
+
+/* --- Le tableau reste dans son cadre, toujours -------------------------- */
+
+.cadre-defile table { min-width: 620px; }
+.cadre-defile { max-width: 100%; }
+
+/* --- Le téléphone : la barre du haut reste sur une seule ligne ---------- */
+
+@media (max-width: 599px) {
+  .appli-barre { gap: var(--e-2); padding-inline: var(--e-4); }
+  .appli-marque { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .appli-marque span { display: none; }
+  .appli-barre .etat-cle { display: none; }   /* repris dans le pied latéral */
+  .appli-barre .btn { padding-inline: var(--e-3); }
+}
+
+/* L'état de la clé dans le pied latéral prend toute la largeur utile. */
+.lateral-pied .etat-cle { max-width: 100%; }
+
+/* --- Derniers réglages de densité de la console -------------------------- */
+
+/* Le projet d'où vient la ligne, et son dernier mouvement : pas de mono,
+   ce sont des mots, pas des identifiants. */
+.ticket-projet {
+  display: block;
+  font: var(--t-app-micro);
+  color: var(--texte-2);
+  margin-top: 1px;
+}
+.ticket-quand { font: var(--t-app-micro); color: var(--texte-3); white-space: nowrap; }
+
+/* Le sélecteur de statut d'une facture reste à côté du montant. */
+.document-actions select { width: auto; min-width: 132px; max-width: 180px; }
+
+/* Les actions d'une ligne de tableau : compactes, pour des lignes courtes. */
+.pile-actions { gap: var(--e-1); }
+.pile-actions .btn { padding: 5px var(--e-3); font-size: 13px; }
+
+/* Le pied latéral : serré, pour laisser la place à la navigation. */
+.lateral-pied { gap: var(--e-2); }
+.lateral-pied .btn { padding: 5px var(--e-3); font-size: 13px; }
+
+/* Au téléphone, une ligne de document passe sur une seule colonne : sinon
+   ses actions écrasent le libellé jusqu'à une lettre par ligne. */
+@media (max-width: 699px) {
+  .document { grid-template-columns: minmax(0, 1fr); align-items: start; }
+  .document-actions { justify-content: flex-start; }
+  .document-actions select { max-width: 100%; flex: 1 1 100%; }
+}
+
+/* Un tableau large a besoin d'air : sinon ses cellules se coupent mot à mot. */
+.cadre-defile table.table-large { min-width: 820px; }
+
+/* Le rappel de défilement, utile seulement quand le tableau dépasse. */
+.indice-defile { display: none; font: var(--t-app-micro); color: var(--texte-3); margin-bottom: var(--e-2); }
+@media (max-width: 899px) { .indice-defile { display: block; } }
