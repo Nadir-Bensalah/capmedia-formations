@@ -12,46 +12,6 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*');
       allow delete: if request.auth != null && request.auth.uid == uid;
     }
-    // ================================================================
-    // ESPACE DE SUIVI CLIENT · pièces jointes, devis et factures
-    // Contrat : docs/suivi.md
-    //
-    // La liste des membres d'un projet vit dans Firestore ; les règles de
-    // stockage ne peuvent pas la lire. On s'appuie donc sur le jeton : le
-    // client reçoit une revendication « projets » à son invitation, posée
-    // par l'Admin SDK. L'équipe reçoit « equipe: true ».
-    // ================================================================
-
-    function estEquipe() {
-      return request.auth != null && request.auth.token.equipe == true;
-    }
-
-    function surSonProjet(projetId) {
-      return request.auth != null
-          && request.auth.token.projets != null
-          && projetId in request.auth.token.projets;
-    }
-
-    function fichierAccepte() {
-      return request.resource.size < 10 * 1024 * 1024
-          && (request.resource.contentType.matches('image/.*')
-              || request.resource.contentType == 'application/pdf');
-    }
-
-    // Les pièces jointes des tickets : l'équipe et le client du projet.
-    match /projets/{projetId}/tickets/{ticketId}/{fichier=**} {
-      allow read:   if estEquipe() || surSonProjet(projetId);
-      allow write:  if (estEquipe() || surSonProjet(projetId)) && fichierAccepte();
-      allow delete: if estEquipe();
-    }
-
-    // Les devis et les factures : déposés par l'équipe, lus par le client.
-    match /projets/{projetId}/documents/{documentId}/{fichier=**} {
-      allow read:   if estEquipe() || surSonProjet(projetId);
-      allow write:  if estEquipe() && fichierAccepte();
-      allow delete: if estEquipe();
-    }
-
     match /{tout=**} {
       allow read, write: if false;
     }

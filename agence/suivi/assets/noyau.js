@@ -22,8 +22,10 @@ import {
 
 /* --- Le raccordement ---------------------------------------------------- */
 
-const config = (window.AZ || {}).firebase;
-if (!config) throw new Error('config-agence.js doit être chargé avant le noyau');
+/* L'espace de suivi a son propre projet Firebase. La configuration du site
+   agence ne sert que de filet, le temps qu'une page oublie le fichier. */
+const config = (window.AZ_SUIVI || {}).firebase;
+if (!config) throw new Error('config-suivi.js doit être chargé avant le noyau');
 
 export const app = getApps().length ? getApps()[0] : initializeApp(config);
 export const auth = getAuth(app);
