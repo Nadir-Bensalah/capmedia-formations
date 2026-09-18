@@ -10,7 +10,7 @@ import { K, resteAPayer } from '../donnees.js';
 import { filAriane } from '../coquille.js';
 import { naviguer } from '../routeur.js';
 import { appelServeur } from '../serveur.js';
-import { ouvrirDocument } from './finances.js';
+import { ouvrirDocument, joindreFichier, editerLiens } from './finances.js';
 
 const ttcDe = (d) => (typeof d.ttc === 'number' ? d.ttc : (Number(d.montant) || 0) * (1 + (Number(d.tva) || 0) / 100));
 
@@ -24,6 +24,7 @@ const deposer = (env, projets, type) => {
       <div class="forme-rang"><div class="groupe"><label class="etiquette-champ" for="d-montant">Montant HT (€)</label><input class="champ" id="d-montant" name="montant" type="number" min="0" step="0.01"></div><div class="groupe"><label class="etiquette-champ" for="d-tva">TVA (%)</label><input class="champ" id="d-tva" name="tva" type="number" min="0" step="0.1" value="0"><p class="aide">0 pour une auto-entreprise sans TVA.</p></div></div>
       <div class="groupe"><label class="etiquette-champ" for="d-echeance">${type === 'devis' ? 'Valable jusqu\'au' : 'Échéance de paiement'}</label><input class="champ" id="d-echeance" name="echeance" type="date"></div>
       <div class="groupe"><label class="etiquette-champ" for="d-desc">Détail <span class="facultatif">(facultatif)</span></label><textarea class="zone" id="d-desc" name="description" rows="2" maxlength="2000"></textarea></div>
+      <div class="groupe"><label class="etiquette-champ" for="d-lien">Lien <span class="facultatif">(facultatif)</span></label><input class="champ" id="d-lien" name="lien" type="url" placeholder="https://... proposition en ligne, détail, justificatif"></div>
       <div class="groupe"><span class="etiquette-champ">Le PDF</span><div id="d-depot"></div></div></form>`,
     pied: `<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button><button class="btn btn-principal" type="submit" form="f-doc">Déposer</button>`,
   });
@@ -38,7 +39,8 @@ const deposer = (env, projets, type) => {
     if (boite.occupe) { toast('Attendez la fin de l\'envoi.', 'erreur'); return; }
     const d = lireForme(forme);
     const fichier = boite.pieces[0] || null;
-    if (await agir(m.pied.querySelector('[type="submit"]'), () => appelServeur('deposerDocument', { projet: d.projet, type, numero: d.numero, libelle: d.libelle, montant: d.montant, tva: d.tva || 0, echeance: d.echeance || null, date: d.date || null, description: d.description, fichier }), `${type === 'devis' ? 'Devis' : 'Facture'} déposé.`)) m.fermer(true);
+    const liens = d.lien ? [{ nom: type === 'devis' ? 'La proposition en ligne' : 'Le justificatif', url: d.lien }] : [];
+    if (await agir(m.pied.querySelector('[type="submit"]'), () => appelServeur('deposerDocument', { projet: d.projet, type, numero: d.numero, libelle: d.libelle, montant: d.montant, tva: d.tva || 0, echeance: d.echeance || null, date: d.date || null, description: d.description, fichier, liens }), `${type === 'devis' ? 'Devis' : 'Facture'} déposé.`)) m.fermer(true);
   });
 };
 
@@ -83,7 +85,7 @@ export const vue = async (ctx, env) => {
 
     const ligneDoc = (d) => ligne({ icone: d.type === 'devis' ? 'receipt' : 'euro', ton: d.type === 'devis' ? (['envoye', 'consulte'].includes(d.statut) ? 'ambre' : d.statut === 'accepte' ? 'vert' : '') : (d.statut === 'en-retard' || (d.statut === 'a-payer' && d.echeance && joursAvant(d.echeance) < 0) ? 'rouge' : FACTURES_DUES.includes(d.statut) ? 'ambre' : d.statut === 'payee' ? 'vert' : ''),
       titre: `<span class="t-mono t-3" style="font-weight:400">${echapper(d.numero || '')}</span> ${echapper(d.libelle || '')}`, sous: `${echapper(nomProjet(d.projet))} · ${echapper(dateCourte(d.date))}${d.echeance ? ` · ${d.type === 'devis' ? 'expire' : 'échéance'} ${echapper(dateCourte(d.echeance))}` : ''}`,
-      fin: `<span class="nb t-fort">${echapper(montant(ttcDe(d)))}</span>${pastille(d.type === 'devis' ? STATUTS_DEVIS : STATUTS_FACTURE, d.statut, { equipe: true })}<button class="btn-icone" type="button" data-menu-doc="${echapper(d.id)}" aria-label="Actions">${icone('points')}</button>`, action: 'ouvrir', attrs: `data-id="${echapper(d.id)}"` });
+      fin: `${d.fichier && d.fichier.chemin ? '' : '<span class="etiquette" title="Le client ne peut rien télécharger">Sans PDF</span>'}${(d.liens || []).length ? `<span class="puce puce--bleu"><i></i>${d.liens.length} lien${d.liens.length > 1 ? 's' : ''}</span>` : ''}<span class="nb t-fort">${echapper(montant(ttcDe(d)))}</span>${pastille(d.type === 'devis' ? STATUTS_DEVIS : STATUTS_FACTURE, d.statut, { equipe: true })}<button class="btn-icone" type="button" data-menu-doc="${echapper(d.id)}" aria-label="Actions">${icone('points')}</button>`, action: 'ouvrir', attrs: `data-id="${echapper(d.id)}"` });
 
     sortie.innerHTML = `<div class="page">
       <div class="page-tete"><div><h1>Finances</h1><p class="chapo">Devis, factures et paiements de tous les projets.</p></div><div class="actions"><select class="select" id="f-projet" style="width:auto"><option value="">Tous les projets</option>${projets.map((p) => `<option value="${echapper(p.id)}" ${etat.projet === p.id ? 'selected' : ''}>${echapper(p.nom)}</option>`).join('')}</select><button class="btn btn-secondaire" type="button" data-deposer="devis">${icone('receipt')} Devis</button><button class="btn btn-principal" type="button" data-deposer="facture">${icone('euro')} Facture</button></div></div>
@@ -115,6 +117,11 @@ export const vue = async (ctx, env) => {
       const items = d.type === 'facture'
         ? [{ libelle: 'Enregistrer un paiement', icone: 'paiement', action: () => enregistrerPaiement(env, d, projets) }, { titre: 'Statut' }, ...['envoyee', 'a-payer', 'partielle', 'payee', 'en-retard', 'annulee'].map((s) => ({ libelle: STATUTS_FACTURE[s].libelle, cle: `s-${s}`, action: () => agir(null, () => appelServeur('statutFacture', { id: d.id, statut: s }), 'Statut mis à jour.') }))]
         : [{ titre: 'Statut' }, ...['envoye', 'accepte', 'refuse', 'expire', 'annule'].map((s) => ({ libelle: STATUTS_DEVIS[s].equipe || STATUTS_DEVIS[s].libelle, cle: `s-${s}`, action: () => agir(null, () => appelServeur('statutDevis', { id: d.id, statut: s }), 'Statut mis à jour.') }))];
+      items.unshift(
+        { libelle: d.fichier && d.fichier.chemin ? 'Remplacer le PDF' : 'Joindre le PDF', icone: 'trombone', action: () => joindreFichier(d) },
+        { libelle: (d.liens || []).length ? `Liens (${d.liens.length})` : 'Ajouter un lien', icone: 'liens', action: () => editerLiens(d) },
+        '-',
+      );
       items.push('-', { libelle: 'Archiver', icone: 'archive', danger: true, action: async () => { if (await confirmer({ titre: 'Archiver cette pièce ?', texte: 'Elle reste consultable dans les archives.', ok: 'Archiver' })) agir(null, () => appelServeur('archiverDocument', { id: d.id, archive: true }), 'Pièce archivée.'); } });
       menu(el, items);
       return;

@@ -795,6 +795,15 @@ async function synchroniserMembres(orgId) {
   return membres;
 }
 
+/** Des liens de piece : un nom, une adresse, rien d autre, dix au plus. */
+function nettoyerLiens(liste) {
+  if (!Array.isArray(liste)) return [];
+  return liste
+    .filter((l) => l && typeof l.url === 'string' && /^https?:\/\/\S+$/.test(l.url.trim()))
+    .slice(0, 10)
+    .map((l) => ({ nom: String(l.nom || '').trim().slice(0, 80) || l.url.trim(), url: l.url.trim() }));
+}
+
 const STATUTS_FACTURE = ['brouillon', 'envoyee', 'a-payer', 'partielle', 'payee', 'en-retard', 'annulee', 'avoir'];
 const STATUTS_DEVIS = ['brouillon', 'envoye', 'consulte', 'accepte', 'refuse', 'expire', 'annule'];
 const MOYENS = ['virement', 'carte', 'stripe', 'cheque', 'especes', 'autre'];
@@ -807,7 +816,7 @@ exports.suiviAdmin = onRequest(
     if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
 
     const { cle, action, projet, email, nom, uid, ref, client, plateformes,
-      type, numero, libelle, montant, echeance, fichier, id, statut, role,
+      type, numero, libelle, montant, echeance, fichier, liens, id, statut, role,
       entreprise, telephone, adresse, notesInternes, organisation, description, responsable,
       debut, cible, budget, budgetNote, inviter, demandeProjet, tva, date, facture, moyen, reference, note, archive } = req.body || {};
 
@@ -970,11 +979,34 @@ exports.suiviAdmin = onRequest(
           echeance: type === 'facture' ? dateEcheance : null,
           expiration: type === 'devis' ? dateEcheance : null,
           fichier: fichier && fichier.chemin ? { chemin: String(fichier.chemin).trim(), nom: String(fichier.nom || '').trim(), taille: Number(fichier.taille || 0) || 0 } : null,
+          liens: nettoyerLiens(liens),
           reponse: null, archive: false,
         });
         const nouveau = await bdd.collection('documents').add(fiche);
         console.log(`${type} ${fiche.numero} depose sur le projet ${projet} : ${nouveau.id}`);
         return res.status(200).json({ ok: true, id: nouveau.id });
+      }
+
+      /* --- Completer une piece : son PDF, ses liens, son detail -------------
+         Un devis renvoie souvent vers une proposition en ligne, une facture
+         vers son justificatif. Les montants et le numero, eux, ne bougent
+         pas ici : une piece comptable ne se reecrit pas. */
+      if (action === 'majDocument') {
+        if (!id) return res.status(400).send('id requis');
+        const refDocument = bdd.doc(`documents/${String(id)}`);
+        if (!(await refDocument.get()).exists) return res.status(404).send('document inconnu');
+        const changements = sansIndefini({
+          description: description !== undefined ? String(description).slice(0, 2000) : undefined,
+          liens: liens !== undefined ? nettoyerLiens(liens) : undefined,
+          fichier: fichier !== undefined
+            ? (fichier && fichier.chemin ? { chemin: String(fichier.chemin).trim(), nom: String(fichier.nom || '').trim(), taille: Number(fichier.taille || 0) || 0 } : null)
+            : undefined,
+          libelle: libelle !== undefined ? String(libelle).trim().slice(0, 160) : undefined,
+          echeance: echeance !== undefined ? (echeance ? new Date(echeance) : null) : undefined,
+        });
+        if (!Object.keys(changements).length) return res.status(400).send('rien a changer');
+        await refDocument.update(changements);
+        return res.status(200).json({ ok: true, changements: Object.keys(changements) });
       }
 
       /* --- Changer le statut d'un devis (equipe) ---------------------------- */
@@ -1222,6 +1254,7 @@ exports.suiviAdmin = onRequest(
           projets: projets.docs.map((d) => { const p = d.data(); return { id: d.id, nom: p.nom, ref: p.ref, statut: p.statut, archive: Boolean(p.archive), organisation: p.organisation || null, membres: (p.membres || []).length, client: (p.client || {}).email || null, progression: p.progression || null, silence: p.silence === true, plateformes: p.plateformes || [] }; }),
           organisations: organisations.docs.map((d) => ({ id: d.id, nom: d.data().entreprise || d.data().nom, email: d.data().email, membres: (d.data().membres || []).length })),
           equipe: equipe.docs.map((d) => ({ uid: d.id, email: d.data().email, role: d.data().role })),
+          documents: (await bdd.collection('documents').get()).docs.map((d) => { const x = d.data(); return { id: d.id, projet: x.projet, type: x.type, numero: x.numero, montant: x.montant, statut: x.statut, pdf: Boolean(x.fichier && x.fichier.chemin), liens: (x.liens || []).length }; }),
         });
       }
 
