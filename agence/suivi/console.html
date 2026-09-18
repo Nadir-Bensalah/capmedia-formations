@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Console d'équipe · Espace de suivi</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#191919" media="(prefers-color-scheme: dark)">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="../assets/css/tokens.css">
+<link rel="stylesheet" href="../assets/css/az.css">
+<link rel="stylesheet" href="./assets/suivi.css">
+<link rel="icon" type="image/png" sizes="32x32" href="../assets/img/favicon-agence-32.png">
+<script>(function(){try{var t=localStorage.getItem('az:theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+</head>
+<body>
+
+<!-- Pendant que la session et les données arrivent -->
+<div id="attente-chargement" class="porte-suivi">
+  <div class="porte-boite t-centre">
+    <p class="etiquette">Capmedia Digital</p>
+    <p class="t-petit t-2" style="margin-top:var(--e-3)" role="status" aria-live="polite">Ouverture de la console...</p>
+  </div>
+</div>
+
+<!-- Session ouverte, mais sans fiche d'équipe : on le dit franchement -->
+<div id="refus" class="porte-suivi masque">
+  <div class="porte-boite">
+    <p class="etiquette">Capmedia Digital</p>
+    <h1 class="t-h2" style="margin-top:var(--e-2)">Console d'équipe</h1>
+    <aside class="encadre encadre--piege" style="margin-top:var(--e-5)">
+      <div>
+        <p class="t-petit t-fort">Ce compte n'est pas un compte d'équipe.</p>
+        <p class="t-petit">La console est réservée aux membres de l'équipe. Votre espace client se trouve sur la page d'accueil du suivi.</p>
+      </div>
+    </aside>
+    <div class="rang" style="margin-top:var(--e-5)">
+      <a class="btn btn-secondaire" href="./">Retour à l'espace de suivi</a>
+      <button class="btn btn-fantome" type="button" id="refus-quitter">Se déconnecter</button>
+    </div>
+  </div>
+</div>
+
+<!-- La console -->
+<div id="appli" class="appli masque">
+
+  <header class="appli-barre">
+    <button class="btn btn-fantome btn-menu" type="button" id="bouton-menu"
+            aria-expanded="false" aria-controls="lateral">Réglages</button>
+    <p class="appli-marque">Capmedia <span>· console de suivi</span></p>
+    <div class="appli-fin">
+      <span class="etat-cle" id="etat-cle" title="Clé d'administration"></span>
+      <button class="btn btn-fantome" type="button" id="bouton-recharger">Recharger</button>
+    </div>
+  </header>
+
+  <div class="appli-corps">
+
+    <aside class="appli-lateral" id="lateral">
+      <nav class="nav-suivi" aria-label="Sections de la console">
+        <button type="button" data-vue="vue" class="actif" aria-current="page">
+          Vue d'ensemble <span class="compte masque" id="compte-vue"></span>
+        </button>
+        <button type="button" data-vue="tickets">
+          Tickets <span class="compte masque" id="compte-tickets"></span>
+        </button>
+        <button type="button" data-vue="projets">
+          Projets <span class="compte masque" id="compte-projets"></span>
+        </button>
+        <button type="button" data-vue="documents">
+          Devis et factures <span class="compte masque" id="compte-documents"></span>
+        </button>
+        <button type="button" data-vue="archives">
+          Archives <span class="compte masque" id="compte-archives"></span>
+        </button>
+      </nav>
+
+      <div class="lateral-pied">
+        <hr class="filet">
+        <p class="t-micro t-3" id="qui-suis-je"></p>
+        <span class="etat-cle" id="etat-cle-pied"></span>
+        <div class="rang" style="gap:var(--e-2)">
+          <button class="btn btn-fantome" type="button" id="bouton-cle">Clé d'administration</button>
+          <button class="btn btn-fantome masque" type="button" id="bouton-verrouiller">Verrouiller</button>
+        </div>
+        <div class="selecteur-theme" role="group" aria-label="Thème">
+          <button type="button" data-theme-val="light" aria-pressed="false">Clair</button>
+          <button type="button" data-theme-val="dark" aria-pressed="false">Sombre</button>
+          <button type="button" data-theme-val="auto" aria-pressed="true">Auto</button>
+        </div>
+        <button class="btn btn-fantome" type="button" id="bouton-quitter">Se déconnecter</button>
+      </div>
+    </aside>
+
+    <main class="appli-vue" id="zone-vue">
+      <section id="ecran-vue"       class="ecran" aria-live="polite"></section>
+      <section id="ecran-tickets"   class="ecran masque"></section>
+      <section id="ecran-projets"   class="ecran masque"></section>
+      <section id="ecran-documents" class="ecran masque"></section>
+      <section id="ecran-archives"  class="ecran masque"></section>
+      <section id="ecran-fiche"     class="ecran masque" aria-live="polite"></section>
+    </main>
+
+  </div>
+</div>
+
+<!-- La clé d'administration : saisie une fois, gardée dans ce navigateur -->
+<dialog id="boite-cle" class="boite">
+  <form method="dialog" id="forme-cle">
+    <h2 class="t-h3">Clé d'administration</h2>
+    <p class="t-petit t-2" style="margin-top:var(--e-2)">
+      Elle ne sert qu'aux actions que le navigateur n'a pas le droit de faire : créer un projet,
+      inviter un client, déposer un devis ou une facture, changer le statut d'une facture.
+      Elle ne part que vers la fonction de suivi, et reste dans ce navigateur.
+    </p>
+    <label class="etiquette-champ" for="champ-cle" style="margin-top:var(--e-4);display:block">Clé</label>
+    <input class="champ" type="password" id="champ-cle" autocomplete="off" spellcheck="false">
+    <div class="rang" style="margin-top:var(--e-4);justify-content:flex-end">
+      <button class="btn btn-fantome" type="button" id="cle-annuler">Annuler</button>
+      <button class="btn btn-principal" type="submit" id="cle-garder">Garder la clé</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="../assets/js/config-agence.js"></script>
+<script src="../assets/js/theme.js"></script>
+<script type="module" src="./assets/console.js"></script>
+</body>
+</html>

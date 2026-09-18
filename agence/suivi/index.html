@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Espace de suivi · Capmedia Digital</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#191919" media="(prefers-color-scheme: dark)">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="../assets/css/tokens.css">
+<link rel="stylesheet" href="../assets/css/az.css">
+<link rel="stylesheet" href="./assets/suivi.css">
+<link rel="icon" type="image/png" sizes="32x32" href="../assets/img/favicon-agence-32.png">
+<script>(function(){try{var t=localStorage.getItem('az:theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+</head>
+<body>
+
+<main class="porte-suivi">
+  <div class="porte-boite">
+
+    <p class="etiquette">Capmedia Digital</p>
+    <h1 class="t-h2" style="margin-top:var(--e-2)">Espace de suivi</h1>
+    <p class="t-petit t-2" style="margin-top:var(--e-3)">Vos tickets, vos échanges, vos devis et vos factures.</p>
+
+    <!-- Étape 1 : la demande de lien -->
+    <form id="forme" style="margin-top:var(--e-6)" novalidate>
+      <label class="etiquette-champ" for="email">Votre adresse e-mail</label>
+      <input class="champ" type="email" id="email" name="email" autocomplete="email"
+             inputmode="email" placeholder="vous@exemple.com" required>
+      <button class="btn btn-principal btn-bloc" type="submit" id="envoyer">Recevoir mon lien de connexion</button>
+      <p class="t-micro t-3" style="margin-top:var(--e-3)">
+        Pas de mot de passe à retenir. Vous recevez un lien valable une heure, à ouvrir sur cet appareil.
+      </p>
+    </form>
+
+    <!-- Étape 2 : le lien est parti -->
+    <div id="parti" class="masque" style="margin-top:var(--e-6)">
+      <aside class="encadre encadre--action">
+        <div>
+          <p class="t-petit t-fort">Le lien est parti.</p>
+          <p class="t-petit" style="margin-top:var(--e-2)">Ouvrez votre boîte, puis cliquez sur le lien depuis cet appareil. Pensez aux indésirables si rien n'arrive.</p>
+        </div>
+      </aside>
+      <button class="btn btn-fantome" type="button" id="recommencer" style="margin-top:var(--e-4)">Changer d'adresse</button>
+    </div>
+
+    <!-- Étape 3 : connexion en cours -->
+    <div id="entree" class="masque" style="margin-top:var(--e-6)">
+      <p class="t-petit t-2">Connexion en cours...</p>
+    </div>
+
+    <!-- Compte connu, mais aucun projet rattaché -->
+    <div id="attente" class="masque" style="margin-top:var(--e-6)">
+      <aside class="encadre encadre--note">
+        <div>
+          <p class="t-petit t-fort">Votre compte est bien connecté.</p>
+          <p class="t-petit" style="margin-top:var(--e-2)">Aucun projet n'y est encore rattaché. Nous vous prévenons dès que votre espace est ouvert.</p>
+        </div>
+      </aside>
+      <button class="btn btn-fantome" type="button" id="deconnexion" style="margin-top:var(--e-4)">Se déconnecter</button>
+    </div>
+
+    <p id="erreur" class="masque" style="margin-top:var(--e-4)"></p>
+
+    <hr class="filet">
+    <div class="rang" style="justify-content:space-between">
+      <a class="lien-discret t-micro" href="../">Retour au site</a>
+      <div class="selecteur-theme" role="group" aria-label="Thème">
+        <button type="button" data-theme-val="light" aria-pressed="false">Clair</button>
+        <button type="button" data-theme-val="dark" aria-pressed="false">Sombre</button>
+        <button type="button" data-theme-val="auto" aria-pressed="true">Auto</button>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script src="../assets/js/config-agence.js"></script>
+<script src="../assets/js/theme.js"></script>
+<script type="module" src="./assets/connexion.js"></script>
+</body>
+</html>

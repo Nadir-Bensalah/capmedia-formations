@@ -8,6 +8,8 @@
 contenu/
 
 # Clés et secrets
+.secret.local
+**/.secret.local
 *serviceAccount*.json
 *service-account*.json
 *.pem
