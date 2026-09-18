@@ -96,8 +96,8 @@ async function main() {
 
   /* --- Les liens ---------------------------------------------------------- */
   const liens = [
-    { nom: 'Application web', categorie: 'production', url: 'https://app.atelier.net', environnement: 'Production', visibilite: 'client' },
-    { nom: 'App Store', categorie: 'mobile', url: 'https://apps.apple.com/app/atelier', environnement: 'Production', visibilite: 'client' },
+    { nom: 'Application web', categorie: 'production', url: 'https://app.atelier.net', environnement: 'Production', composant: 'web', visibilite: 'client' },
+    { nom: 'App Store', categorie: 'mobile', url: 'https://apps.apple.com/app/atelier', environnement: 'Production', composant: 'ios', visibilite: 'client' },
     { nom: 'TestFlight', categorie: 'test', url: 'https://testflight.apple.com/join/atelier', environnement: 'Test', visibilite: 'client' },
     { nom: 'Maquettes Figma', categorie: 'design', url: 'https://figma.com/file/atelier', visibilite: 'client' },
     { nom: 'Dépôt GitHub', categorie: 'code', url: 'https://github.com/capmedia/atelier', visibilite: 'interne' },

@@ -430,22 +430,68 @@ input, select, textarea { font: inherit; color: inherit; }
 .page-tete .chapo { font: var(--t-corps); color: var(--encre-2); margin-top: var(--e-2); max-width: 60ch; }
 .page-tete .actions { display: flex; gap: var(--e-2); flex-wrap: wrap; align-items: center; }
 
-/* L'en-tête d'un projet tient sur deux lignes : d'abord l'état du suivi,
-   puis, mise à part, la liste des plateformes que le projet réunit. Les
-   deux familles de pastilles ne se confondent plus. */
+/* L'en-tête d'un projet : le titre à gauche, les actions toujours à droite,
+   quelle que soit la hauteur de la colonne de gauche. */
+.page-tete--projet { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
+.page-tete--projet > .actions { justify-content: flex-end; }
 .tete-suivi { margin-top: var(--e-2); row-gap: var(--e-2); }
-.tete-plateformes {
-  display: flex; align-items: center; flex-wrap: wrap;
-  gap: var(--e-2); margin-top: var(--e-3);
-  padding-top: var(--e-3); border-top: 1px solid var(--trait);
+
+/* Les plateformes du projet, en cartes : une tuile colorée, l'état de la
+   brique, et le geste qui mène à l'application publiée. */
+.cartes-plateformes {
+  display: grid; gap: var(--e-2);
+  margin: calc(var(--e-5) * -1) 0 var(--e-5);
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
 }
-.tete-plateformes-titre {
-  font: var(--t-micro); font-weight: 600; letter-spacing: 0.06em;
-  text-transform: uppercase; color: var(--encre-3);
-  margin-right: var(--e-1);
+.carte-plateforme {
+  display: grid; grid-template-columns: 36px minmax(0, 1fr) 16px;
+  align-items: center; gap: var(--e-3);
+  padding: 10px 12px;
+  border: 1px solid var(--trait); border-radius: var(--r-champ);
+  background: var(--fond);
+  color: inherit; text-decoration: none;
+  transition: border-color var(--vite), transform var(--vite), box-shadow var(--vite), background var(--vite);
 }
-.tete-plateformes .plateforme { transition: transform var(--vite), box-shadow var(--vite); }
-.tete-plateformes .plateforme:hover { transform: translateY(-1px); }
+.carte-plateforme:hover {
+  text-decoration: none;
+  transform: translateY(-2px);
+  border-color: currentColor;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.07);
+}
+.carte-plateforme-tuile {
+  width: 36px; height: 36px; border-radius: 10px;
+  display: grid; place-items: center; flex: none;
+  transition: transform var(--doux);
+}
+.carte-plateforme-tuile svg { width: 18px; height: 18px; }
+.carte-plateforme:hover .carte-plateforme-tuile { transform: scale(1.06) rotate(-2deg); }
+.carte-plateforme-corps { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.carte-plateforme-nom { font: var(--t-corps-fort); font-size: 14px; color: var(--encre); }
+.carte-plateforme-etat {
+  font: var(--t-micro); color: var(--encre-3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.carte-plateforme-fleche {
+  display: grid; place-items: center; color: var(--encre-3);
+  opacity: 0; transform: translateX(-4px);
+  transition: opacity var(--vite), transform var(--vite);
+}
+.carte-plateforme-fleche svg { width: 15px; height: 15px; }
+.carte-plateforme:hover .carte-plateforme-fleche { opacity: 1; transform: none; }
+.carte-plateforme:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--anneau); }
+
+.carte-plateforme--bleu   { color: var(--accent); }
+.carte-plateforme--vert   { color: var(--ok); }
+.carte-plateforme--ambre  { color: var(--attention); }
+.carte-plateforme--rouge  { color: var(--alerte); }
+.carte-plateforme--violet { color: var(--violet); }
+.carte-plateforme--gris   { color: var(--encre-2); }
+.carte-plateforme--bleu   .carte-plateforme-tuile { background: var(--accent-voile); }
+.carte-plateforme--vert   .carte-plateforme-tuile { background: var(--ok-voile); }
+.carte-plateforme--ambre  .carte-plateforme-tuile { background: var(--attention-voile); }
+.carte-plateforme--rouge  .carte-plateforme-tuile { background: var(--alerte-voile); }
+.carte-plateforme--violet .carte-plateforme-tuile { background: var(--violet-voile); }
+.carte-plateforme--gris   .carte-plateforme-tuile { background: var(--gris-voile); }
 
 .section { margin-top: var(--e-7); }
 .section:first-child { margin-top: 0; }
@@ -671,6 +717,9 @@ input, select, textarea { font: inherit; color: inherit; }
 .ligne-titre { font: var(--t-corps-fort); overflow-wrap: anywhere; }
 .ligne-sous { font: var(--t-petit); color: var(--encre-3); margin-top: 2px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .ligne-fin { display: flex; align-items: center; gap: var(--e-3); flex: none; }
+.ligne-fin .boutons-edition { flex-wrap: nowrap; gap: 2px; }
+.ligne--inerte { cursor: default; }
+.ligne--inerte:hover { background: transparent; transform: none; }
 .ligne-fin .chevron { width: 16px; height: 16px; color: var(--encre-4); }
 .ligne.non-lu .ligne-titre::before {
   content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%;
@@ -762,6 +811,16 @@ input, select, textarea { font: inherit; color: inherit; }
 .kanban-carte .sous { display: flex; align-items: center; gap: 8px; margin-top: 8px; font: var(--t-micro); color: var(--encre-3); }
 
 /* Les onglets : un trait sous l'actif, rien d'autre. */
+/* La barre d'onglets défile sans ascenseur ; un dégradé au bord droit dit
+   qu'il en reste, et s'efface quand on arrive au bout. */
+.onglets-enveloppe { position: relative; margin-bottom: var(--e-5); }
+.onglets-enveloppe::after {
+  content: ""; position: absolute; top: 0; right: 0; bottom: 1px; width: 48px;
+  pointer-events: none; opacity: 0; transition: opacity var(--doux);
+  background: linear-gradient(to right, transparent, var(--fond) 80%);
+}
+.onglets-enveloppe.deborde::after { opacity: 1; }
+.onglets-enveloppe .onglets { margin-bottom: 0; scroll-behavior: smooth; }
 .onglets { display: flex; gap: var(--e-1); border-bottom: 1px solid var(--trait); overflow-x: auto; scrollbar-width: none; margin-bottom: var(--e-5); }
 .onglets::-webkit-scrollbar { display: none; }
 .onglet {

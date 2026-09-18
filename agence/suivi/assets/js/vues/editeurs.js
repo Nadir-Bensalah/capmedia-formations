@@ -179,9 +179,10 @@ const editeurs = {
         ${champ('environnement', 'Environnement', fiche ? fiche.environnement : '', { facultatif: true, placeholder: 'Production, TestFlight...' })}
         ${select('responsable', 'Responsable', equipeCarte(), fiche ? fiche.responsable : '', { vide: 'Non défini' })}
       </div>
+      ${champ('lien', 'Adresse publique', fiche ? fiche.lien : '', { type: 'url', facultatif: true, placeholder: 'https://apps.apple.com/...', aide: 'La fiche du store, le site en ligne, le tableau de bord. Elle rend la carte de la plateforme cliquable en tête du projet.' })}
       ${champ('techno', 'Technologies', fiche ? (fiche.techno || []).join(', ') : '', { facultatif: true, aide: 'Séparées par des virgules.' })}
       ${zone('description', 'Description', fiche ? fiche.description : '', { facultatif: true, lignes: 3 })}`,
-    regles: { nom: obligatoire() },
+    regles: { nom: obligatoire(), lien: urlValide() },
     enregistrer: async (d) => {
       const donnees = { ...d, techno: d.techno ? d.techno.split(',').map((t) => t.trim()).filter(Boolean) : [], progression: borner(d.progression) };
       if (fiche) await ecrire.majComposant(pid, fiche.id, donnees); else await ecrire.creerComposant(pid, donnees);

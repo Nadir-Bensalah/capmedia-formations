@@ -8,7 +8,7 @@
 import {
   echapper, dateCourte, dateHeure, depuis, heure, montant, pluriel, joursAvant, echeance as calcEcheance, enParagraphes, avecLiens, parDateDesc, parDateAsc, borner,
   STATUTS_PROJET, STATUTS_COMPOSANT, TYPES_COMPOSANT, STATUTS_JALON, STATUTS_TACHE, PRIORITES, STATUTS, TYPES, URGENCES, OUVERTS, ATTEND_CLIENT,
-  CATEGORIES_FICHIER, CATEGORIES_LIEN, STATUTS_RELEASE, TYPES_CHANGEMENT, TYPES_NOTE, SANTES, STATUTS_VALIDATION, QUALIFICATIONS, statutProjet
+  CATEGORIES_FICHIER, CATEGORIES_LIEN, STATUTS_RELEASE, TYPES_CHANGEMENT, TYPES_NOTE, SANTES, STATUTS_VALIDATION, QUALIFICATIONS, statutProjet, PLATEFORMES
 } from '../noyau.js';
 import {
   icone, pastille, pastilleTexte, puce, pucePlateforme, iconePlateforme, tonPlateforme, avatarProjet, avatar, progression, anneau, ligne, vide, fait, chronoItem, parJour, squelette, titrePage,
@@ -99,7 +99,7 @@ export const vue = async (ctx, env) => {
     };
 
     sortie.innerHTML = `<div class="page">
-      <header class="page-tete" style="align-items:flex-start">
+      <header class="page-tete page-tete--projet">
         <div class="rang" style="gap:16px;align-items:flex-start;min-width:0">
           ${avatarProjet(projet, 'grand')}
           <div style="min-width:0">
@@ -112,10 +112,6 @@ export const vue = async (ctx, env) => {
               ${projet.responsable ? `<span class="puce">${icone('utilisateur')} ${echapper(nomEquipe(d.equipe, projet.responsable) || 'Capmedia')}</span>` : ''}
               <span class="puce t-3">${icone('horloge')} ${d.activite[0] ? `Dernière activité ${echapper(depuis(d.activite[0].date))}` : 'Pas encore d\'activité'}</span>
             </div>
-            ${(projet.plateformes || []).length ? `<div class="tete-plateformes">
-              <span class="tete-plateformes-titre">${(projet.plateformes || []).length > 1 ? 'Plateformes' : 'Plateforme'}</span>
-              ${(projet.plateformes || []).map((x) => pucePlateforme(x)).join('')}
-            </div>` : ''}
           </div>
         </div>
         <div class="actions">
@@ -125,14 +121,17 @@ export const vue = async (ctx, env) => {
         </div>
       </header>
 
-      <nav class="onglets" aria-label="Sections du projet">
+      ${cartesPlateformes(projet, d, pid)}
+
+      <div class="onglets-enveloppe"><nav class="onglets" id="onglets-projet" aria-label="Sections du projet">
         ${ONGLETS.map((o) => `<a class="onglet${o.cle === onglet ? ' actif' : ''}" href="#/projets/${echapper(pid)}${o.cle === 'apercu' ? '' : `/${o.cle}`}">${o.libelle}${comptes[o.cle] ? `<span class="badge">${comptes[o.cle]}</span>` : ''}</a>`).join('')}
         ${equipe ? `<a class="onglet${onglet === 'composants' ? ' actif' : ''}" href="#/projets/${echapper(pid)}/composants">Composants</a>` : ''}
-      </nav>
+      </nav></div>
 
       <div id="onglet-corps">${rendreOnglet(onglet, d, { pid, env, prog, attente, ouverts })}</div>
     </div>`;
     derniereEmpreinte = magasin.empreinte(cles) + '|' + onglet;
+    reglerOnglets(sortie);
 
     if (detailOuvert) {
       const t = d.taches.find((x) => x.id === detailOuvert);
@@ -227,6 +226,56 @@ export const vue = async (ctx, env) => {
   };
 };
 
+/* La barre d'onglets : l'onglet actif se ramène dans le champ de vision, et
+   le dégradé du bord droit ne s'affiche que s'il reste quelque chose à voir. */
+const reglerOnglets = (sortie) => {
+  const barre = sortie.querySelector('#onglets-projet');
+  if (!barre) return;
+  const enveloppe = barre.parentElement;
+  const jauger = () => enveloppe.classList.toggle('deborde', barre.scrollWidth - barre.clientWidth - barre.scrollLeft > 8);
+  const actif = barre.querySelector('.onglet.actif');
+  if (actif) {
+    const g = actif.offsetLeft;
+    const d = g + actif.offsetWidth;
+    if (g < barre.scrollLeft + 8 || d > barre.scrollLeft + barre.clientWidth - 8) {
+      barre.scrollTo({ left: Math.max(0, g - 24), behavior: 'smooth' });
+    }
+  }
+  barre.addEventListener('scroll', jauger, { passive: true });
+  jauger();
+};
+
+/* Les plateformes du projet, en cartes : l'icône dans sa couleur, l'état de
+   la brique, et le lien qui y mène. Un clic ouvre l'application publiée si
+   son adresse est renseignée, sinon la liste des versions. */
+const cartesPlateformes = (projet, d, pid) => {
+  const cles = (projet.plateformes || []).filter((c) => PLATEFORMES[c]);
+  if (!cles.length) return '';
+  projet = { ...projet, liensPublics: (d.liens || []).filter((l) => l.url && l.visibilite !== 'interne' && ['production', 'mobile'].includes(l.categorie || '')) };
+  return `<div class="cartes-plateformes" role="list">${cles.map((cle) => {
+    const f = PLATEFORMES[cle];
+    const c = d.composants.find((x) => x.type === (f.composant || cle)) || null;
+    /* L'adresse publique de la brique, sinon le lien du projet qui lui est
+       rattaché : la fiche du store, le site en ligne. Jamais un dépôt. */
+    const rattache = c ? (projet.liensPublics || []).find((l) => l.composant === c.id) : null;
+    const adresse = (c && c.lien) || (rattache ? rattache.url : '') || '';
+    const etat = c
+      ? [c.version && `Version ${c.version}`, (STATUTS_COMPOSANT[c.statut || 'en-cours'] || {}).libelle].filter(Boolean).join(' · ')
+      : 'Pas encore suivie';
+    const att = adresse
+      ? `href="${echapper(adresse)}" target="_blank" rel="noopener noreferrer"`
+      : `href="#/projets/${echapper(pid)}/versions"`;
+    return `<a class="carte-plateforme carte-plateforme--${f.voile}" role="listitem" ${att} data-astuce="${echapper(adresse ? 'Ouvrir' : 'Voir les versions')}">
+      <span class="carte-plateforme-tuile">${icone(f.icone)}</span>
+      <span class="carte-plateforme-corps">
+        <span class="carte-plateforme-nom">${echapper(f.libelle)}</span>
+        <span class="carte-plateforme-etat">${echapper(etat)}</span>
+      </span>
+      <span class="carte-plateforme-fleche">${icone(adresse ? 'externe' : 'fleche')}</span>
+    </a>`;
+  }).join('')}</div>`;
+};
+
 const trouver = (d, genre, id) => ({
   composant: d.composants, jalon: d.jalons, lien: d.liens, tache: d.taches, release: d.releases, reunion: d.reunions, note: d.notes, blocage: d.blocages, fichier: d.fichiers,
 }[genre] || []).find((x) => x.id === id);
@@ -239,7 +288,7 @@ const boutonNouveau = (env, genre, libelle, defaut) => (env.role === 'equipe'
   ? `<button class="btn btn-secondaire btn-petit" type="button" data-action="nouveau" data-genre="${genre}"${defaut ? ` data-defaut='${echapper(JSON.stringify(defaut))}'` : ''}>${icone('plus')} ${echapper(libelle)}</button>`
   : '');
 const boutonsEdition = (env, genre, id, libelle) => (env.role === 'equipe'
-  ? `<span class="rang" style="gap:2px"><button class="btn-icone" type="button" data-action="editer" data-genre="${genre}" data-id="${echapper(id)}" aria-label="Modifier" data-astuce="Modifier">${icone('edit')}</button><button class="btn-icone" type="button" data-action="supprimer" data-genre="${genre}" data-id="${echapper(id)}" data-libelle="${echapper(libelle || '')}" aria-label="Supprimer" data-astuce="Supprimer">${icone('corbeille')}</button></span>`
+  ? `<span class="rang boutons-edition"><button class="btn-icone" type="button" data-action="editer" data-genre="${genre}" data-id="${echapper(id)}" aria-label="Modifier" data-astuce="Modifier">${icone('edit')}</button><button class="btn-icone" type="button" data-action="supprimer" data-genre="${genre}" data-id="${echapper(id)}" data-libelle="${echapper(libelle || '')}" aria-label="Supprimer" data-astuce="Supprimer">${icone('corbeille')}</button></span>`
   : '');
 
 const rendreOnglet = (onglet, d, c) => {

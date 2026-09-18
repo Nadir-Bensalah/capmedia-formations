@@ -1347,6 +1347,7 @@ exports.suiviAdmin = onRequest(
           nom: x.nom, type: x.type, statut: x.statut || 'en-cours', progression: Number(x.progression) || 0,
           version: x.version || '', versionPrep: x.versionPrep || '', environnement: x.environnement || '',
           techno: x.techno || [], responsable: x.responsable || '', description: x.description || '', ordre: Number(x.ordre) || 0,
+          lien: x.lien || '',
         }));
         compte.jalons = await poser(c.jalons, `projets/${id}/jalons`, (x) => ({
           projet: String(id), titre: x.titre, description: x.description || '', phase: x.phase || '',
