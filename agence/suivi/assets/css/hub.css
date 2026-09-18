@@ -1293,3 +1293,23 @@ input, select, textarea { font: inherit; color: inherit; }
 /* Le voile du tiroir et les pastilles de compte. */
 .badge--vif { transition: transform var(--vite); }
 .lat-lien:hover .badge--vif { transform: scale(1.06); }
+
+/* --- Les projets d'un client, en logos ------------------------------------
+   Posés en bout de ligne, juste avant le chevron : on voit d'un coup d'œil
+   ce que le client suit, et de quelle nature est chaque application. */
+.pile-projets { display: inline-flex; align-items: center; gap: 10px; margin-right: 4px; }
+.pile-projet { position: relative; display: inline-grid; line-height: 0; transition: transform var(--vite); }
+.pile-projet:hover { transform: translateY(-2px); }
+.pile-projet .avatar-projet { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); }
+.pile-badge {
+  position: absolute; right: -4px; bottom: -4px;
+  width: 16px; height: 16px; border-radius: 50%;
+  display: grid; place-items: center;
+  border: 2px solid var(--fond);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+.pile-badge svg { width: 9px; height: 9px; }
+.pile-badge--bleu   { background: var(--accent-voile); color: var(--accent); }
+.pile-badge--violet { background: var(--violet-voile); color: var(--violet); }
+.pile-badge--ambre  { background: var(--attention-voile); color: var(--attention); }
+.pile-reste { font: var(--t-micro); font-weight: 600; color: var(--encre-3); }
