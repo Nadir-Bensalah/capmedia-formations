@@ -7,7 +7,7 @@
 
 import {
   $, $$, echapper, initiales, borner, poids, depuis, enParagraphes, avecLiens,
-  envoyerPiece, lienPiece, jourRelatif, enDate, PLATEFORMES_CHOIX,
+  envoyerPiece, lienPiece, jourRelatif, enDate, PLATEFORMES_CHOIX, libellePlateforme,
 } from './noyau.js';
 import { icone } from './icones.js';
 
@@ -81,6 +81,38 @@ export const avatarProjet = (projet, taille = '') => {
   const classes = `avatar-projet${taille ? ` avatar-projet--${taille}` : ''}${logo ? ' avatar-projet--logo' : ''}`;
   if (logo) return `<span class="${classes}" aria-hidden="true"><img src="${echapper(logo)}" alt=""></span>`;
   return `<span class="${classes}" aria-hidden="true">${echapper(initiales(nom))}</span>`;
+};
+
+/* Les familles de plateformes, pour la pastille posée sur un logo de projet :
+   une application mobile, un site ou une interface web, un serveur. */
+const FAMILLES = {
+  mobile:  { cles: ['ios', 'android'],           icone: 'smartphone', voile: 'bleu',   libelle: 'Mobile' },
+  web:     { cles: ['web', 'landing', 'admin'],  icone: 'globe',      voile: 'violet', libelle: 'Web' },
+  backend: { cles: ['backend'],                  icone: 'serveur',    voile: 'ambre',  libelle: 'Serveur' },
+};
+export const familleProjet = (projet) => {
+  const p = (projet && projet.plateformes) || [];
+  return Object.keys(FAMILLES).find((f) => FAMILLES[f].cles.some((c) => p.includes(c))) || '';
+};
+
+/**
+ * Les projets d'un client, en logos alignés. Chaque logo porte la pastille
+ * de sa famille : mobile, web ou serveur. Au-delà de quatre, le reste est
+ * compté. Purement indicatif : la ligne entière reste le seul lien.
+ */
+export const pileProjets = (projets, { max = 4 } = {}) => {
+  const liste = (projets || []).filter(Boolean);
+  if (!liste.length) return '';
+  const vus = liste.slice(0, max);
+  const reste = liste.length - vus.length;
+  return `<span class="pile-projets" aria-hidden="true">${vus.map((p) => {
+    const f = FAMILLES[familleProjet(p)];
+    const noms = (p.plateformes || []).map((c) => libellePlateforme(c)).filter(Boolean).join(', ');
+    return `<span class="pile-projet" data-astuce="${echapper(noms ? `${p.nom} · ${noms}` : p.nom)}">
+      ${avatarProjet(p, 'petit')}
+      ${f ? `<span class="pile-badge pile-badge--${f.voile}" title="${echapper(f.libelle)}">${icone(f.icone)}</span>` : ''}
+    </span>`;
+  }).join('')}${reste > 0 ? `<span class="pile-reste">+${reste}</span>` : ''}</span>`;
 };
 
 export const progression = (valeur, ton = '') =>
