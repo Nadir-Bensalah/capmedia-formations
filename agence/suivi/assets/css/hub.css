@@ -449,8 +449,9 @@ input, select, textarea { font: inherit; color: inherit; }
   .page { padding: var(--e-6) var(--marge-page) var(--e-9); }
   .haut { padding: 0 var(--marge-page); }
   .btn-plier { display: inline-grid; }
-  /* Pliée, la barre disparaît et le bouton reste dans la barre haute. */
-  .coq.pliee { grid-template-columns: 0 minmax(0, 1fr); }
+  /* Pliée, la barre disparaît : la grille n'a plus qu'une colonne, sinon le
+     contenu se retrouverait seul dans une colonne de zéro pixel. */
+  .coq.pliee { grid-template-columns: minmax(0, 1fr); }
   .coq.pliee .lat { display: none; }
   .coq.pliee .btn-deplier { display: inline-grid; }
 }
