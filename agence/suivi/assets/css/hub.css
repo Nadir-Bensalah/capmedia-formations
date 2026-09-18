@@ -353,9 +353,11 @@ input, select, textarea { font: inherit; color: inherit; }
 }
 .haut.decollee { border-bottom-color: var(--trait); }
 .haut .fil {
-  display: flex; align-items: center; gap: 6px; min-width: 0;
-  font: var(--t-petit); color: var(--encre-3);
+  display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1 1 auto;
+  font: var(--t-petit); color: var(--encre-3); white-space: nowrap; overflow: hidden;
 }
+.haut .fil > * { flex: none; }
+.haut .fil .courant { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .haut .fil a { color: var(--encre-2); text-decoration: none; }
 .haut .fil a:hover { color: var(--encre); }
 .haut .fil .courant { color: var(--encre); font-weight: 600; }
@@ -498,6 +500,7 @@ input, select, textarea { font: inherit; color: inherit; }
 
 .puce { display: inline-flex; align-items: center; gap: 6px; font: var(--t-petit); font-weight: 500; color: var(--encre-2); }
 .puce i { width: 8px; height: 8px; border-radius: 50%; background: var(--encre-4); flex: none; }
+.puce svg { width: 14px; height: 14px; flex: none; }
 .puce--rouge i { background: var(--alerte); } .puce--rouge { color: var(--alerte); }
 .puce--ambre i { background: var(--attention); } .puce--ambre { color: var(--attention); }
 .puce--vert i { background: var(--ok); }
@@ -942,6 +945,10 @@ input, select, textarea { font: inherit; color: inherit; }
   z-index: 50;
 }
 [data-astuce]:hover::after, [data-astuce]:focus-visible::after { opacity: 1; }
+/* Dans la barre haute, l'info-bulle s'aligne à droite pour ne jamais déborder. */
+.haut [data-astuce]::after { left: auto; right: 0; transform: none; }
+/* Sans souris, pas d'info-bulle : elle ne s'afficherait jamais et élargirait la page. */
+@media (hover: none) { [data-astuce]::after { display: none; } }
 
 /* ==========================================================================
    9. États : squelette, vide, erreur, chargement

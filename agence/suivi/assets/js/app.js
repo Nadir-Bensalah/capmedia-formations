@@ -61,7 +61,7 @@ const construireNavigation = () => {
       titre: 'Vos projets',
       items: [
         ...projets.filter((p) => !p.archive).map((p) => ({ chemin: `/projets/${p.id}`, libelle: p.nom, icone: 'projets', compte: { n: parProjet(p.id), vif: parProjet(p.id) > 0 } })),
-        { chemin: '/nouveau-projet', libelle: 'Demander un nouveau projet', icone: 'plus' },
+        { chemin: '/nouveau-projet', libelle: 'Nouveau projet', icone: 'plus' },
       ],
     },
     {

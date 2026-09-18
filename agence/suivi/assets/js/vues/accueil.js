@@ -20,7 +20,8 @@ const iconeActivite = {
 };
 const tonActivite = { 'validation': 'violet', 'facture': 'ambre', 'paiement': 'vert', 'release': 'vert', 'blocage': 'rouge', 'devis': 'bleu' };
 
-export const activiteHtml = (activite, options = {}) => {
+export const activiteHtml = (liste, options = {}) => {
+  const activite = liste.filter((a) => a.date);
   if (!activite.length) return vide({ icone: 'activite', titre: "Pas encore d'activité", texte: 'Chaque mouvement du projet apparaîtra ici.', compact: true });
   return parJour(activite, 'date').map((g) => `
     <p class="chrono-jour">${echapper(g.jour)}</p>
@@ -164,7 +165,7 @@ export const vue = async (ctx, env) => {
           ${dernieresReleases.length ? `<div class="carte carte--creuse">
             <p class="surtitre">Dernières versions</p>
             <div class="pile" style="margin-top:10px;gap:8px">${dernieresReleases.map((r) => `
-              <a class="rang" style="gap:10px;color:inherit" href="#/projets/${echapper(r.projet)}/releases">
+              <a class="rang" style="gap:10px;color:inherit;flex-wrap:nowrap" href="#/projets/${echapper(r.projet)}/releases">
                 <span class="ligne-icone ligne-icone--vert" style="width:30px;height:30px">${icone('releases')}</span>
                 <span style="min-width:0"><span class="t-petit t-fort" style="display:block">${echapper(`${r.plateforme || ''} ${r.version || ''}`.trim())}</span><span class="t-micro t-3">${echapper(dateCourte(r.date))}</span></span>
               </a>`).join('')}</div>

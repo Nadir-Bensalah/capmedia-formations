@@ -420,6 +420,7 @@ export const lireForme = (forme) => {
   const donnees = {};
   for (const el of forme.elements) {
     if (!el.name) continue;
+    if (el.type === 'radio') { if (el.checked) donnees[el.name] = el.value; continue; }
     if (el.type === 'checkbox') donnees[el.name] = el.checked;
     else if (el.type === 'number') donnees[el.name] = el.value === '' ? null : Number(el.value);
     else if (el.multiple && el.tagName === 'SELECT') donnees[el.name] = Array.from(el.selectedOptions).map((o) => o.value);

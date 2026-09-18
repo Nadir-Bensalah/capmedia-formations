@@ -217,3 +217,13 @@ Pour déployer et vérifier en vrai :
 
 Sans ces trois éléments, tout se développe et se teste sur les émulateurs
 locaux, ce qui est fait.
+
+## 9. Le Client Hub (septembre 2026)
+
+L'espace de suivi est devenu le Client Hub : un espace client (`suivi/app.html`) et un cockpit d'équipe (`suivi/admin.html`), tous deux sur `assets/js/` avec un routeur par dièse, un magasin temps réel (`magasin.js`) et une couche de données (`donnees.js`) qui est la seule à parler à Firestore.
+
+Collections ajoutées : `organisations`, `profils`, `projets/{p}/composants|jalons|liens|messages`, `taches`, `validations`, `fichiers`, `releases`, `reunions`, `notes`, `blocages`, `paiements`, `activite`, `boites/{uid}/notifications`, `audit`, `demandesProjet`. Les règles sont dans `suivi/firestore.rules` et prouvées par `fonctions-suivi/outils/regles.test.mjs` (69 contrôles). La visibilité `client | interne` est appliquée par les règles, pas seulement à l'écran.
+
+Les automatisations (`fonctions-suivi/hub.js`) écrivent l'activité, les notifications et la file d'e-mails à partir des vrais événements. Sur les émulateurs, le facteur ne contacte jamais Brevo : les envois sont marqués `simule`.
+
+Banc d'essai : `fonctions-suivi/outils/semer-suivi.mjs` (adresses fictives uniquement), `regles.test.mjs`, `verifier-suivi.mjs`, et le parcours navigateur Playwright.

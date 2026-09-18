@@ -48,7 +48,13 @@ export const abonner = (cle, fabrique) => {
       e.arreter = onSnapshot(
         fabrique(),
         (inst) => { e.valeur = normaliser(inst); e.chargee = true; e.erreur = null; diffuser(cle); },
-        (err) => { console.error(`[magasin] écoute de « ${cle} » en échec`, err); e.erreur = err; e.chargee = true; diffuser(cle); },
+        (err) => {
+          // Un accès refusé est un cas prévu (adresse d'un projet qui n'est pas
+          // le sien) : on le note sans crier. Le reste est une vraie panne.
+          if (err && err.code === 'permission-denied') console.warn(`[magasin] accès refusé sur « ${cle} »`);
+          else console.error(`[magasin] écoute de « ${cle} » en échec`, err);
+          e.erreur = err; e.chargee = true; diffuser(cle);
+        },
       );
     } catch (err) {
       e.erreur = err; e.chargee = true; diffuser(cle);
@@ -70,6 +76,27 @@ export const abonner = (cle, fabrique) => {
 export const lire = (cle) => (entrees.get(cle) || {}).valeur;
 
 export const chargee = (cle) => Boolean((entrees.get(cle) || {}).chargee);
+
+/** L'erreur d'une clé, ou null. Un accès refusé vaut mieux qu'un écran qui attend. */
+export const erreur = (cle) => (entrees.get(cle) || {}).erreur || null;
+
+const marque = (v) => {
+  if (!v) return '';
+  const t = v.maj || v.date || v.cree;
+  return t && typeof t.seconds === 'number' ? t.seconds : '';
+};
+
+/**
+ * Une empreinte courte de plusieurs clés : identifiants et dates de
+ * modification. Deux empreintes égales, c'est un redessin inutile.
+ */
+export const empreinte = (cles) => cles.map((cle) => {
+  const e = entrees.get(cle);
+  if (!e) return '';
+  const v = e.valeur;
+  if (Array.isArray(v)) return `${cle}=${v.length}:${v.map((x) => `${x.id}${marque(x)}`).join(',')}`;
+  return `${cle}=${v ? `${v.id}${marque(v)}${JSON.stringify(v.pulse || '')}${v.statut || ''}${v.progression ? JSON.stringify(v.progression) : ''}` : 'x'}${e.erreur ? '!' : ''}`;
+}).join('|');
 
 /** Écoute une clé. Appelle tout de suite si une valeur existe déjà. */
 export const sur = (cle, fn) => {
