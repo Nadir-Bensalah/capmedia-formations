@@ -24,6 +24,12 @@
 
   <!-- La barre du haut : le projet à gauche, le compte à droite -->
   <header class="appli-barre">
+    <a class="appli-marque" href="../">
+      <img class="marque" src="../assets/img/capmedia-digital.png" alt="" width="22" height="22">
+      Capmedia&nbsp;Digital
+    </a>
+    <span class="separateur-barre" aria-hidden="true"></span>
+    <span class="jeton-projet" id="jeton-projet" aria-hidden="true"></span>
     <p class="appli-marque" id="nom-projet">Espace de suivi</p>
     <div class="appli-fin">
       <span class="t-micro t-3 masque-etroit" id="courriel-compte"></span>
@@ -41,6 +47,7 @@
         <select class="champ" id="choix-projet"></select>
       </div>
 
+      <p class="titre-lateral">Votre espace</p>
       <nav class="nav-suivi" id="nav" aria-label="Sections de l'espace">
         <button type="button" class="actif" data-vue="tickets" aria-current="page">
           Tickets <span class="compte" id="compte-tickets" aria-hidden="true"></span>
@@ -82,12 +89,17 @@
       </section>
 
       <!-- ===== Vue Tickets ===== -->
-      <section id="vue-tickets" style="margin-top:var(--e-6)">
+      <section id="vue-tickets" style="margin-top:var(--e-7)">
 
-        <div class="rang-espace">
-          <h1 class="t-h2">Tickets</h1>
-          <button class="btn btn-principal" type="button" id="ouvrir-creation"
-                  aria-expanded="false" aria-controls="carte-creation">Signaler une anomalie</button>
+        <div class="tete-vue">
+          <p class="surtitre">Vos demandes</p>
+          <h1 class="titre-vue">Tickets</h1>
+          <p class="chapo">Chaque anomalie, chaque question et chaque demande a son fil.
+             Vous suivez son avancement ici, et vous recevez un e-mail à chaque mouvement.</p>
+          <div class="rang-tete">
+            <button class="btn btn-principal btn-large" type="button" id="ouvrir-creation"
+                    aria-expanded="false" aria-controls="carte-creation">Signaler une anomalie</button>
+          </div>
         </div>
 
         <!-- Le formulaire de création, replié par défaut -->
@@ -174,13 +186,18 @@
       </section>
 
       <!-- ===== Vue Devis et factures ===== -->
-      <section id="vue-documents" class="masque" style="margin-top:var(--e-6)">
-        <h1 class="t-h2">Devis et factures</h1>
+      <section id="vue-documents" class="masque" style="margin-top:var(--e-7)">
+        <div class="tete-vue">
+          <p class="surtitre">Vos documents</p>
+          <h1 class="titre-vue">Devis et factures</h1>
+          <p class="chapo">Tout ce qui a été émis pour ce projet, à télécharger quand vous voulez.
+             Un devis accepté ici vaut accord, et nous en sommes prévenus aussitôt.</p>
+        </div>
 
-        <h2 class="t-h3" style="margin-top:var(--e-6)">Devis</h2>
+        <p class="intertitre" style="margin-top:var(--e-7)">Devis</p>
         <div class="documents" id="liste-devis" aria-live="polite" style="margin-top:var(--e-3)"></div>
 
-        <h2 class="t-h3" style="margin-top:var(--e-7)">Factures</h2>
+        <p class="intertitre" style="margin-top:var(--e-7)">Factures</p>
         <div class="documents" id="liste-factures" aria-live="polite" style="margin-top:var(--e-3)"></div>
       </section>
 

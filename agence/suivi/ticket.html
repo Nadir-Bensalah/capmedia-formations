@@ -23,6 +23,11 @@
 <div class="appli">
 
   <header class="appli-barre">
+    <a class="appli-marque" href="../">
+      <img class="marque" src="../assets/img/capmedia-digital.png" alt="" width="22" height="22">
+      Capmedia&nbsp;Digital
+    </a>
+    <span class="separateur-barre" aria-hidden="true"></span>
     <a class="lien-discret t-petit" id="retour" href="./projet.html">Retour aux tickets</a>
     <div class="appli-fin">
       <span class="t-micro t-3 masque-etroit" id="courriel-compte"></span>
@@ -51,23 +56,19 @@
       <!-- Ce que le client peut faire, et rien d'autre -->
       <div id="actions" aria-live="polite"></div>
 
-      <hr class="filet">
-
       <!-- Le contenu du ticket -->
-      <section aria-labelledby="titre-detail">
+      <section class="panneau" aria-labelledby="titre-detail">
         <h2 class="t-h3" id="titre-detail">Le signalement</h2>
         <div id="detail" class="fiche-champs" style="margin-top:var(--e-4)"></div>
         <div class="pieces" id="pieces-ticket" style="margin-top:var(--e-4)"></div>
       </section>
 
-      <hr class="filet">
-
       <!-- Le fil de discussion -->
-      <section aria-labelledby="titre-fil">
+      <section class="panneau" aria-labelledby="titre-fil">
         <h2 class="t-h3" id="titre-fil">Échanges</h2>
         <div class="fil" id="fil" aria-live="polite" aria-busy="true" style="margin-top:var(--e-5)"></div>
 
-        <form id="forme-message" style="margin-top:var(--e-6)" novalidate>
+        <form id="forme-message" class="repondre" novalidate>
           <label class="etiquette-champ" for="texte">Votre réponse</label>
           <textarea class="zone" id="texte" name="texte" maxlength="6000"
                     placeholder="Écrivez ici. Une capture aide souvent plus qu'un paragraphe."></textarea>
@@ -91,10 +92,8 @@
         </form>
       </section>
 
-      <hr class="filet">
-
       <!-- Le journal -->
-      <section aria-labelledby="titre-historique">
+      <section class="panneau panneau--creux" aria-labelledby="titre-historique">
         <h2 class="t-h3" id="titre-historique">Historique</h2>
         <ul class="historique" id="historique" aria-live="polite" style="margin-top:var(--e-4)"></ul>
       </section>

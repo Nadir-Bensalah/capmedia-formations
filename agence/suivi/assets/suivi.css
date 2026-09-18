@@ -23,6 +23,15 @@
   --urgence-important: #B8860B;
   --note-interne:      #92400E;
   --sur-action:        #FFFFFF;
+
+  /* Le site marie des rayons généreux et des fonds gris doux. L'espace de
+     suivi reprend ce vocabulaire plutôt que les rayons courts de tokens.css,
+     hérités de l'esthétique document de l'académie. */
+  --r-carte:   16px;
+  --r-panneau: 22px;
+  --r-tuile:   18px;
+  --levee:     0 1px 2px rgba(15, 15, 15, 0.04), 0 8px 24px rgba(15, 15, 15, 0.07);
+  --levee-forte: 0 2px 4px rgba(15, 15, 15, 0.05), 0 14px 38px rgba(15, 15, 15, 0.11);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -55,8 +64,8 @@
   display: flex;
   align-items: center;
   gap: var(--e-4);
-  min-height: 56px;
-  padding: var(--e-3) var(--marge-mobile);
+  min-height: 64px;
+  padding: var(--e-3) var(--e-5);
   background: color-mix(in srgb, var(--bg) 86%, transparent);
   -webkit-backdrop-filter: saturate(180%) blur(16px);
   backdrop-filter: saturate(180%) blur(16px);
@@ -64,14 +73,46 @@
 }
 
 .appli-marque {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-2);
   font-weight: 600;
   font-size: 15px;
   letter-spacing: -0.01em;
   white-space: nowrap;
+  color: inherit;
+  text-decoration: none;
 }
 .appli-marque span { color: var(--texte-3); font-weight: 400; }
+.appli-marque .marque { width: 22px; height: 22px; border-radius: 6px; flex: none; }
+
+/* Le point de projet : une initiale dans une pastille colorée, comme les
+   tuiles d'application de la page d'accueil. */
+.jeton-projet {
+  width: 30px; height: 30px;
+  border-radius: 9px;
+  display: grid; place-items: center;
+  font: var(--t-app-micro);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--sur-action);
+  background: linear-gradient(140deg, var(--action), #6E56CF);
+  flex: none;
+}
 
 .appli-barre .appli-fin { margin-left: auto; display: flex; align-items: center; gap: var(--e-3); }
+
+/* Un trait fin sépare l'agence du projet, comme le fil d'Ariane du site. */
+.separateur-barre {
+  width: 1px;
+  height: 20px;
+  background: var(--trait);
+  flex: none;
+}
+@media (max-width: 640px) {
+  .separateur-barre { display: none; }
+  .appli-barre > .appli-marque:first-child { display: none; }
+}
 
 .appli-corps {
   display: grid;
@@ -91,17 +132,24 @@
 }
 
 @media (min-width: 900px) {
-  .appli-corps { grid-template-columns: var(--barre-laterale) minmax(0, 1fr); }
+  .appli-corps {
+    grid-template-columns: var(--barre-laterale) minmax(0, 1fr);
+    background:
+      linear-gradient(to right,
+        var(--bg-2) 0 calc(var(--barre-laterale) - 1px),
+        var(--trait) calc(var(--barre-laterale) - 1px) var(--barre-laterale),
+        var(--bg) var(--barre-laterale));
+  }
   .appli-lateral {
     position: sticky;
-    top: 56px;
-    height: calc(100vh - 56px);
+    top: 64px;
+    max-height: calc(100vh - 64px);
     overflow-y: auto;
+    background: transparent;
     border-bottom: 0;
-    border-right: 1px solid var(--trait);
-    padding: var(--e-5) var(--e-4);
+    padding: var(--e-6) var(--e-4);
   }
-  .appli-vue { padding: var(--e-6) var(--e-6) var(--e-9); max-width: 1180px; }
+  .appli-vue { padding: var(--e-7) var(--e-7) var(--e-9); max-width: 1180px; }
 }
 
 /* --- La navigation latérale --------------------------------------------- */
@@ -128,7 +176,22 @@
 }
 .nav-suivi a:hover,
 .nav-suivi button:hover { background: var(--survol); color: var(--texte); }
-.nav-suivi .actif { background: var(--bg); color: var(--texte); font-weight: 600; box-shadow: 0 0 0 1px var(--trait); }
+.nav-suivi .actif {
+  background: var(--bg);
+  color: var(--texte);
+  font-weight: 600;
+  box-shadow: 0 0 0 1px var(--trait), 0 1px 2px rgba(15, 15, 15, 0.06);
+}
+
+/* Le libellé de section, en petites capitales, comme les colonnes du site. */
+.titre-lateral {
+  font: var(--t-app-micro);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--texte-3);
+  padding: 0 10px var(--e-2);
+}
 
 .nav-suivi .compte {
   margin-left: auto;
@@ -194,21 +257,34 @@
 
 /* --- La liste des tickets ------------------------------------------------ */
 
-.liste-tickets { display: flex; flex-direction: column; border-top: 1px solid var(--trait); }
+.liste-tickets { display: flex; flex-direction: column; gap: var(--e-3); }
 
 .ticket-ligne {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--e-2) var(--e-4);
   align-items: start;
-  padding: var(--e-4) var(--e-2);
-  border-bottom: 1px solid var(--trait);
+  padding: var(--e-5);
+  background: var(--bg);
+  border: 1px solid var(--trait);
+  border-radius: var(--r-carte);
   text-decoration: none;
   color: inherit;
-  transition: background var(--t-survol);
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+  transition: border-color var(--t-survol), box-shadow var(--t-survol), transform var(--t-survol);
 }
-.ticket-ligne:hover { background: var(--survol); }
-.ticket-ligne:focus-visible { outline: 2px solid var(--action); outline-offset: -2px; }
+.ticket-ligne:hover {
+  border-color: var(--trait-fort);
+  box-shadow: var(--levee);
+  transform: translateY(-1px);
+}
+.ticket-ligne:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--anneau); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ticket-ligne, .ticket-ligne:hover { transform: none; }
+}
 
 .ticket-numero {
   font: var(--t-app-micro);
@@ -217,9 +293,9 @@
   letter-spacing: 0;
 }
 .ticket-titre {
-  font: var(--t-app-corps);
-  font-weight: 600;
-  margin-top: 2px;
+  font: 600 17px / 1.35 var(--police);
+  letter-spacing: -0.01em;
+  margin-top: 4px;
   overflow-wrap: anywhere;
 }
 .ticket-meta {
@@ -227,8 +303,8 @@
   align-items: center;
   gap: var(--e-3);
   flex-wrap: wrap;
-  margin-top: 6px;
-  font: var(--t-app-micro);
+  margin-top: var(--e-3);
+  font: var(--t-app-petit);
   color: var(--texte-3);
 }
 .ticket-droite {
@@ -248,25 +324,69 @@
   vertical-align: middle;
 }
 
+/* --- L'ouverture d'une vue ----------------------------------------------
+   Le site ouvre chacune de ses pages de la même façon : un surtitre en
+   petites capitales, un grand titre serré, une phrase de contexte. L'espace
+   de suivi reprend ce trio, faute de quoi on tombe directement dans les
+   chiffres sans savoir où l'on est.
+   ---------------------------------------------------------------------- */
+
+.tete-vue { margin-bottom: var(--e-6); }
+.tete-vue .surtitre {
+  font: var(--t-app-micro);
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--texte-3);
+}
+.tete-vue h1,
+.tete-vue .titre-vue {
+  font: 700 clamp(30px, 3.4vw, 42px) / 1.1 var(--police);
+  letter-spacing: var(--ls-h1);
+  margin-top: var(--e-2);
+}
+.tete-vue .chapo {
+  font: 400 17px / 1.55 var(--police);
+  color: var(--texte-2);
+  margin-top: var(--e-3);
+  max-width: 62ch;
+}
+.tete-vue .rang-tete {
+  display: flex;
+  align-items: center;
+  gap: var(--e-4);
+  flex-wrap: wrap;
+  margin-top: var(--e-5);
+}
+
 /* --- Les tuiles de compte ------------------------------------------------ */
 
-.tuiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--e-3); }
+.tuiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--e-4); }
 @media (min-width: 700px) { .tuiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 
 .tuile {
   background: var(--bg-2);
-  border-radius: var(--r-3);
-  padding: var(--e-4);
+  border-radius: var(--r-tuile);
+  padding: var(--e-5);
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: background var(--t-survol);
 }
 .tuile-valeur {
-  font: var(--t-app-titre);
-  font-size: 30px;
+  font: 700 38px / 1 var(--police);
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
 }
-.tuile-libelle { font: var(--t-app-micro); color: var(--texte-2); margin-top: 2px; }
+.tuile-libelle { font: var(--t-app-petit); color: var(--texte-2); }
+
+/* La couleur ne sert qu'à ce qui demande un geste. Tout le reste reste noir,
+   sinon plus rien ne ressort. */
+.tuile--alerte { background: var(--voile-rouge); }
 .tuile--alerte .tuile-valeur { color: var(--danger); }
+.tuile--attente { background: var(--voile-jaune); }
+.tuile--attente .tuile-valeur { color: var(--urgence-important); }
 
 /* --- La barre de filtres ------------------------------------------------- */
 
@@ -319,12 +439,27 @@
 }
 .message-auteur { font: var(--t-app-petit); font-weight: 600; }
 .message-date { font: var(--t-app-micro); color: var(--texte-3); }
-.message-corps { font: var(--t-app-corps); overflow-wrap: anywhere; }
+.message-corps {
+  font: var(--t-app-corps);
+  overflow-wrap: anywhere;
+  background: var(--bg-2);
+  border-radius: 14px 14px 14px 4px;
+  padding: var(--e-3) var(--e-4);
+  display: inline-block;
+  max-width: 100%;
+}
 .message-corps p + p { margin-top: var(--e-3); }
+
+/* La parole de l'équipe se distingue de celle du client, comme dans une
+   conversation : deux voix, deux fonds. */
+.message--equipe .message-corps {
+  background: var(--voile-bleu);
+  border-radius: 14px 14px 4px 14px;
+}
 
 .message--interne .message-corps {
   background: var(--voile-jaune);
-  border-radius: var(--r-3);
+  border-radius: 14px 14px 4px 14px;
   padding: var(--e-3) var(--e-4);
 }
 .marque-interne {
@@ -333,6 +468,34 @@
   color: var(--note-interne);
   text-transform: uppercase;
   letter-spacing: 0.06em;
+}
+
+/* La valeur d'un champ n'est pas une parole : pas de bulle, juste du texte. */
+.texte-champ { font: var(--t-app-corps); overflow-wrap: anywhere; }
+.texte-champ p + p { margin-top: var(--e-3); }
+
+/* --- Les panneaux d'une fiche -------------------------------------------
+   Le site pose ses contenus sur des cartes rondes et généreuses plutôt que
+   de les séparer par des filets. La fiche d'un ticket suit la même règle.
+   ---------------------------------------------------------------------- */
+
+.panneau {
+  background: var(--bg);
+  border: 1px solid var(--trait);
+  border-radius: var(--r-panneau);
+  padding: var(--e-6);
+  margin-top: var(--e-5);
+}
+.panneau--creux { background: var(--bg-2); border-color: transparent; }
+@media (max-width: 640px) {
+  .panneau { padding: var(--e-5) var(--e-4); border-radius: var(--r-carte); }
+}
+
+/* Le champ de réponse, détaché du fil par un trait et de l'air. */
+.repondre {
+  margin-top: var(--e-6);
+  padding-top: var(--e-6);
+  border-top: 1px solid var(--trait);
 }
 
 /* --- L'historique ------------------------------------------------------- */
@@ -404,20 +567,47 @@ button.piece:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--anneau);
 
 /* --- Les documents : devis et factures ---------------------------------- */
 
-.documents { display: flex; flex-direction: column; border-top: 1px solid var(--trait); }
+.documents { display: flex; flex-direction: column; gap: var(--e-3); }
 .document {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--e-2) var(--e-4);
-  align-items: center;
-  padding: var(--e-4) var(--e-2);
-  border-bottom: 1px solid var(--trait);
+  gap: var(--e-4) var(--e-6);
+  align-items: start;
+  padding: var(--e-5) var(--e-6);
+  background: var(--bg);
+  border: 1px solid var(--trait);
+  border-radius: var(--r-carte);
+  transition: border-color var(--t-survol), box-shadow var(--t-survol);
 }
-.document-libelle { font: var(--t-app-corps); font-weight: 600; overflow-wrap: anywhere; }
-.document-meta { display: flex; gap: var(--e-3); flex-wrap: wrap; margin-top: 4px; font: var(--t-app-micro); color: var(--texte-3); }
-.document-montant { font: var(--t-app-h3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.document:hover { border-color: var(--trait-fort); box-shadow: var(--levee); }
+.document-libelle { font: 600 17px / 1.35 var(--police); letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.document-meta { display: flex; gap: var(--e-3); flex-wrap: wrap; margin-top: 6px; font: var(--t-app-petit); color: var(--texte-3); }
+.document-montant {
+  font: 700 30px / 1 var(--police);
+  letter-spacing: -0.025em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .document-actions { display: flex; align-items: center; gap: var(--e-2); flex-wrap: wrap; justify-content: flex-end; }
-.document-droite { display: flex; flex-direction: column; align-items: flex-end; gap: var(--e-2); }
+.document-droite {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--e-3);
+}
+/* Le montant et son état forment un bloc, les gestes viennent dessous. */
+.document-droite .document-montant + .pastille { margin-top: -4px; }
+.document-droite .document-actions { margin-top: var(--e-2); }
+
+/* Les sous-ensembles d'une vue : un intertitre discret, puis les cartes. */
+.intertitre {
+  font: var(--t-app-micro);
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--texte-3);
+  margin-bottom: var(--e-3);
+}
 
 /* --- Un tableau qui ne déborde jamais de son cadre ---------------------- */
 
@@ -526,15 +716,27 @@ select.champ { appearance: none; background-image: linear-gradient(45deg, transp
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: var(--e-3);
+  gap: var(--e-4);
   flex-wrap: wrap;
-  margin-bottom: var(--e-3);
+  margin-bottom: var(--e-6);
 }
 .tete-ecran h1, .tete-ecran h2 { min-width: 0; }
 
+/* La console ouvre ses écrans comme le site ouvre ses pages : un titre
+   large et serré, puis la ligne de contexte en retrait. */
+.tete-ecran h1 {
+  font: 700 clamp(28px, 3vw, 38px) / 1.1 var(--police);
+  letter-spacing: var(--ls-h1);
+}
+.tete-ecran h1 + .t-petit { margin-top: var(--e-2); font-size: 15px; }
+
 .titre-bloc {
-  font: var(--t-app-h3);
-  margin-bottom: var(--e-3);
+  font: var(--t-app-micro);
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--texte-3);
+  margin-bottom: var(--e-2);
 }
 
 /* Le pied de la barre latérale : identité, clé, thème, sortie. */
