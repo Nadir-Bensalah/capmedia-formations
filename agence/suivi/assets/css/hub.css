@@ -430,6 +430,23 @@ input, select, textarea { font: inherit; color: inherit; }
 .page-tete .chapo { font: var(--t-corps); color: var(--encre-2); margin-top: var(--e-2); max-width: 60ch; }
 .page-tete .actions { display: flex; gap: var(--e-2); flex-wrap: wrap; align-items: center; }
 
+/* L'en-tête d'un projet tient sur deux lignes : d'abord l'état du suivi,
+   puis, mise à part, la liste des plateformes que le projet réunit. Les
+   deux familles de pastilles ne se confondent plus. */
+.tete-suivi { margin-top: var(--e-2); row-gap: var(--e-2); }
+.tete-plateformes {
+  display: flex; align-items: center; flex-wrap: wrap;
+  gap: var(--e-2); margin-top: var(--e-3);
+  padding-top: var(--e-3); border-top: 1px solid var(--trait);
+}
+.tete-plateformes-titre {
+  font: var(--t-micro); font-weight: 600; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--encre-3);
+  margin-right: var(--e-1);
+}
+.tete-plateformes .plateforme { transition: transform var(--vite), box-shadow var(--vite); }
+.tete-plateformes .plateforme:hover { transform: translateY(-1px); }
+
 .section { margin-top: var(--e-7); }
 .section:first-child { margin-top: 0; }
 .section-tete {
@@ -449,10 +466,14 @@ input, select, textarea { font: inherit; color: inherit; }
   .page { padding: var(--e-6) var(--marge-page) var(--e-9); }
   .haut { padding: 0 var(--marge-page); }
   .btn-plier { display: inline-grid; }
-  /* Pliée, la barre disparaît : la grille n'a plus qu'une colonne, sinon le
-     contenu se retrouverait seul dans une colonne de zéro pixel. */
-  .coq.pliee { grid-template-columns: minmax(0, 1fr); }
-  .coq.pliee .lat { display: none; }
+  /* Le pliage : la colonne de la barre fond jusqu'à zéro et la barre glisse
+     vers la gauche en s'effaçant. Ses blocs gardent leur largeur pendant le
+     mouvement, sinon la navigation se tasserait au lieu de se retirer. */
+  .coq { transition: grid-template-columns var(--doux); }
+  .lat { width: auto; overflow-x: hidden; transition: transform var(--doux), opacity var(--doux); }
+  .lat-tete, .lat-corps, .lat-pied { min-width: calc(var(--lat) - 1px); }
+  .coq.pliee { grid-template-columns: 0 minmax(0, 1fr); }
+  .coq.pliee .lat { transform: translateX(-24px); opacity: 0; pointer-events: none; }
   .coq.pliee .btn-deplier { display: inline-grid; }
 }
 .btn-deplier { display: none; }
@@ -874,6 +895,7 @@ input, select, textarea { font: inherit; color: inherit; }
   animation: apparait var(--vite) both;
 }
 @keyframes apparait { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pose { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @keyframes monte { from { opacity: 0; transform: translateY(12px) scale(0.985); } to { opacity: 1; transform: none; } }
 @keyframes glisse { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
 
@@ -1164,3 +1186,51 @@ input, select, textarea { font: inherit; color: inherit; }
 .choix-plateformes input:checked + .plateforme { border-color: currentColor; }
 .choix-plateformes input:focus-visible + .plateforme { box-shadow: 0 0 0 3px var(--anneau); }
 .choix-plateformes label:hover .plateforme { transform: translateY(-1px); }
+
+/* ==========================================================================
+   19. Micro-animations
+   Rien de spectaculaire : de courts mouvements qui expliquent ce qui vient
+   de changer. Tout reste sous 240 ms et tout se tait si la personne a
+   demandé moins de mouvement (voir la règle en tête de fichier).
+   ========================================================================== */
+
+/* Le corps d'un onglet se pose quand on change de section. */
+#onglet-corps { animation: pose 200ms cubic-bezier(0.2, 0, 0, 1) both; }
+
+/* Les onglets : le trait glisse sous celui qu'on survole avant d'être actif. */
+.onglet { position: relative; }
+.onglet::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
+  background: var(--encre); border-radius: 2px;
+  transform: scaleX(0); transform-origin: center;
+  transition: transform var(--vite);
+}
+.onglet:hover::after { transform: scaleX(0.6); }
+.onglet.actif::after { transform: scaleX(1); }
+.onglet.actif { border-bottom-color: transparent; }
+
+/* Les boutons s'enfoncent légèrement sous le doigt. */
+.btn:active:not(:disabled) { transform: translateY(1px) scale(0.985); }
+.btn-icone:active:not(:disabled), .btn-plier:active, .btn-deplier:active { transform: scale(0.92); }
+.btn-icone, .btn-deplier { transition: background var(--vite), color var(--vite), transform var(--vite); }
+
+/* La navigation : l'icône avance d'un cheveu au survol. */
+.lat-lien svg { transition: transform var(--vite), opacity var(--vite); }
+.lat-lien:hover svg { transform: translateX(1px); opacity: 1; }
+.lat-lien .compte { transition: background var(--vite), color var(--vite); }
+
+/* Les lignes de liste répondent au survol sans bouger la mise en page. */
+.ligne { transition: background var(--vite), transform var(--vite); }
+.ligne:hover { transform: translateX(2px); }
+.ligne .ligne-fin svg { transition: transform var(--vite); }
+.ligne:hover .ligne-fin svg { transform: translateX(2px); }
+
+/* Les métriques et les cartes d'accueil arrivent l'une après l'autre. */
+.metriques > .metrique { animation: pose 240ms cubic-bezier(0.2, 0, 0, 1) both; }
+.metriques > .metrique:nth-child(2) { animation-delay: 30ms; }
+.metriques > .metrique:nth-child(3) { animation-delay: 60ms; }
+.metriques > .metrique:nth-child(4) { animation-delay: 90ms; }
+
+/* Le voile du tiroir et les pastilles de compte. */
+.badge--vif { transition: transform var(--vite); }
+.lat-lien:hover .badge--vif { transform: scale(1.06); }
