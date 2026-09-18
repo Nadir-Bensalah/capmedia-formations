@@ -19,8 +19,13 @@ if (!CLE) {
   process.exit(1);
 }
 
-/* Les comptes à ouvrir. Modifiez les adresses ici, rien ailleurs. */
-const ADMIN = { email: 'contact@capmedia.app', nom: 'Nadir Ben Salah' };
+/* Les comptes à ouvrir. Modifiez les adresses ici, rien ailleurs.
+   Chaque compte d'équipe en rôle « admin » voit tous les projets. */
+const ADMINS = [
+  { email: 'contact@capmedia.app', nom: 'Nadir Ben Salah' },
+  { email: 'contact@nadirbensalah.fr', nom: 'Nadir Ben Salah' },
+  { email: 'contact@nadirbensalah.com', nom: 'Nadir Ben Salah' },
+];
 const DEMO = {
   ref: 'DEMO',
   nom: 'Projet de démonstration',
@@ -47,16 +52,18 @@ const appeler = async (corps) => {
 (async () => {
   console.log('Porte :', PORTE, '\n');
 
-  /* 1. Le compte d'équipe. La fiche equipe/{uid} ouvre l'accès à tous les
+  /* 1. Les comptes d'équipe. La fiche equipe/{uid} ouvre l'accès à tous les
         projets côté Firestore, la revendication « equipe » côté stockage. */
-  const equipe = await appeler({
-    action: 'ajouterEquipe', email: ADMIN.email, nom: ADMIN.nom, role: 'admin',
-  });
-  if (equipe.code !== 200) {
-    console.error('Compte d équipe refusé :', equipe.code, equipe.texte);
-    process.exit(1);
+  for (const admin of ADMINS) {
+    const equipe = await appeler({
+      action: 'ajouterEquipe', email: admin.email, nom: admin.nom, role: 'admin',
+    });
+    if (equipe.code !== 200) {
+      console.error('Compte d équipe refusé :', admin.email, equipe.code, equipe.texte);
+      process.exit(1);
+    }
+    console.log('Compte d équipe  :', admin.email, '→', equipe.json.uid);
   }
-  console.log('Compte d équipe  :', ADMIN.email, '→', equipe.json.uid);
 
   /* 2. Le projet de démonstration. Une référence déjà prise est refusée :
         on le relit alors plutôt que d'échouer. */
