@@ -61,7 +61,7 @@ const nomEquipe = (equipe, uid) => ((equipe.find((e) => e.id === uid) || {}).nom
 
 export const vue = async (ctx, env) => {
   const pid = ctx.params.id;
-  const onglet = ONGLETS.some((o) => o.cle === ctx.onglet) ? ctx.onglet : (ctx.onglet === 'composants' ? 'composants' : 'apercu');
+  let onglet = ONGLETS.some((o) => o.cle === ctx.onglet) ? ctx.onglet : (ctx.onglet === 'composants' ? 'composants' : 'apercu');
   const equipe = env.role === 'equipe';
   const lot = magasin.lot();
   const sortie = ctx.sortie;
@@ -77,11 +77,7 @@ export const vue = async (ctx, env) => {
     const d = lireTout(pid);
     const projet = d.projet;
     if (projet === undefined && !magasin.erreur(K.projet(pid))) return;
-    if (!force) {
-      const e = magasin.empreinte(cles);
-      if (e === derniereEmpreinte) return;
-      derniereEmpreinte = e;
-    }
+    if (!force && magasin.empreinte(cles) + '|' + onglet === derniereEmpreinte) return;
     if (projet === null || projet === undefined) {
       sortie.innerHTML = `<div class="page">${vide({ icone: 'projets', titre: 'Ce projet est introuvable', texte: "Il a peut-être été archivé, ou vous n'y avez plus accès.", action: '<a class="btn btn-secondaire" href="#/">Retour à l\'accueil</a>' })}</div>`;
       return;
@@ -105,7 +101,7 @@ export const vue = async (ctx, env) => {
     sortie.innerHTML = `<div class="page">
       <header class="page-tete" style="align-items:flex-start">
         <div class="rang" style="gap:16px;align-items:flex-start;min-width:0">
-          ${avatarProjet(projet.nom, 'grand')}
+          ${avatarProjet(projet, 'grand')}
           <div style="min-width:0">
             <p class="surtitre">${echapper([projet.ref, (projet.client || {}).entreprise || (projet.client || {}).nom, projet.type && ({ ...TYPES_COMPOSANT, ...{ 'application-mobile': 'Application mobile', 'site-vitrine': 'Site vitrine', 'e-commerce': 'E-commerce', 'saas': 'SaaS' } })[projet.type]].filter(Boolean).join(' · '))}</p>
             <h1 style="margin-top:2px">${echapper(projet.nom)}</h1>
@@ -133,6 +129,7 @@ export const vue = async (ctx, env) => {
 
       <div id="onglet-corps">${rendreOnglet(onglet, d, { pid, env, prog, attente, ouverts })}</div>
     </div>`;
+    derniereEmpreinte = magasin.empreinte(cles) + '|' + onglet;
 
     if (detailOuvert) {
       const t = d.taches.find((x) => x.id === detailOuvert);
@@ -213,7 +210,18 @@ export const vue = async (ctx, env) => {
   cles.forEach((c) => lot.sur(c, planifier));
   planifier();
 
-  return () => { clearTimeout(minuteur); gestes(); gestesFichiers(); gestesFiltres(); lot.fin(); };
+  return {
+    fin: () => { clearTimeout(minuteur); gestes(); gestesFichiers(); gestesFiltres(); lot.fin(); },
+    /* Changer d'onglet ne recharge pas la page : on redessine, les écoutes
+       restent ouvertes et le défilement ne saute pas. */
+    maj: (suite) => {
+      const voulu = suite.params.onglet || (suite.params.tid ? 'taches' : 'apercu');
+      onglet = ONGLETS.some((o) => o.cle === voulu) ? voulu : (voulu === 'composants' ? 'composants' : 'apercu');
+      if (suite.params.tid && onglet === 'taches') detailOuvert = suite.params.tid;
+      rendre(true);
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    },
+  };
 };
 
 const trouver = (d, genre, id) => ({

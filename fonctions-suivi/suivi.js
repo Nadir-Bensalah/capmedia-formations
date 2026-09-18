@@ -26,6 +26,7 @@ const { defineSecret } = require('firebase-functions/params');
 const { getApps, initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getAuth } = require('firebase-admin/auth');
+const { getStorage } = require('firebase-admin/storage');
 const courriels = require('./courriels');
 
 /* index.js initialise déjà l'application ; la garde permet de charger ce
@@ -985,6 +986,33 @@ exports.suiviAdmin = onRequest(
         const nouveau = await bdd.collection('documents').add(fiche);
         console.log(`${type} ${fiche.numero} depose sur le projet ${projet} : ${nouveau.id}`);
         return res.status(200).json({ ok: true, id: nouveau.id });
+      }
+
+      /* --- Le logo d un projet ---------------------------------------------
+         Recu en base64, ecrit dans le stockage, rendu lisible par tous : le
+         logo s affiche dans un <img>, sans jeton ni appel supplementaire. */
+      if (action === 'poserLogo') {
+        if (!id) return res.status(400).send('id du projet requis');
+        const refProjet = bdd.doc(`projets/${String(id)}`);
+        if (!(await refProjet.get()).exists) return res.status(404).send('projet inconnu');
+        if (req.body.retirer === true) {
+          await refProjet.update({ logo: null, maj: FieldValue.serverTimestamp() });
+          return res.status(200).json({ ok: true, logo: null });
+        }
+        const { donnees, typeFichier } = req.body || {};
+        if (typeof donnees !== 'string' || !donnees) return res.status(400).send('donnees du logo requises, en base64');
+        if (!/^image\/(png|jpeg|webp|svg\+xml)$/.test(String(typeFichier || ''))) return res.status(400).send('image png, jpeg, webp ou svg attendue');
+        const octets = Buffer.from(donnees, 'base64');
+        if (octets.length > 2 * 1024 * 1024) return res.status(400).send('logo trop lourd : 2 Mo au maximum');
+        const extension = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/svg+xml': 'svg' }[typeFichier];
+        const chemin = `projets/${id}/logo-${Date.now()}.${extension}`;
+        const fichierStockage = getStorage().bucket().file(chemin);
+        await fichierStockage.save(octets, { contentType: typeFichier, metadata: { cacheControl: 'public, max-age=86400' } });
+        await fichierStockage.makePublic();
+        const url = `https://storage.googleapis.com/${fichierStockage.bucket.name}/${encodeURI(chemin)}`;
+        await refProjet.update({ logo: url, maj: FieldValue.serverTimestamp() });
+        console.log(`Logo pose sur le projet ${id} : ${url}`);
+        return res.status(200).json({ ok: true, logo: url });
       }
 
       /* --- Completer une piece : son PDF, ses liens, son detail -------------
