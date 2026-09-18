@@ -9,7 +9,7 @@
 import {
   auth, session, $, echapper, avis, quitter,
   sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink,
-} from './noyau.js';
+} from './js/noyau.js';
 
 const CLE_EMAIL = 'suivi:email';
 const forme = $('#forme');
@@ -40,13 +40,16 @@ const orienter = async () => {
   // Une destination demandée avant la connexion est honorée, à condition
   // qu'elle reste dans cet espace : jamais de redirection vers l'extérieur.
   const demande = new URLSearchParams(location.search).get('retour');
-  if (demande && /^\/suivi\/[\w./?=&-]*$/.test(demande)) {
+  if (demande && /^\/suivi\/[\w./?=&#%-]*$/.test(demande)) {
     location.replace(demande);
     return;
   }
 
-  if (equipe) { location.replace('./console'); return; }
-  if (projets.length) { location.replace(`./projet?p=${encodeURIComponent(projets[0].id)}`); return; }
+  if (equipe) { location.replace('./admin'); return; }
+  // Un client sans projet a quand même son espace : il y voit l'état exact
+  // de son compte et peut décrire un nouveau projet.
+  if (!erreur) { location.replace('./app'); return; }
+  void projets;
 
   // Liste vide par manque d’accès : le dire, plutôt que laisser croire
   // que le compte n'a simplement aucun projet.

@@ -571,6 +571,142 @@ function facture(v) {
    elle doit se voir dans les journaux plutôt que partir chez un client.
    ========================================================================== */
 
+
+/* ==========================================================================
+   5. Les modeles du hub : taches, versions, fichiers, reunions, validations,
+   conversation, qualification, nouveaux projets
+   ========================================================================== */
+
+const QUALIFS = { 'incluse': 'incluse au contrat', 'hors-perimetre': 'hors du perimetre prevu', 'a-chiffrer': 'a chiffrer', 'offerte': 'offerte' };
+const CHANGEMENTS = { nouveau: 'Nouveau', amelioration: 'Amelioration', correction: 'Correction', technique: 'Technique' };
+
+function tacheAttente(v) {
+  const projet = valeurTexte(v.projetNom).trim();
+  return {
+    objet: `${projet ? `${projet} · ` : ''}Nous attendons votre retour : ${valeurTexte(v.titre)}`,
+    ...rendreGabarit({
+      titre: 'Nous attendons votre retour',
+      intro: `Bonjour,\n\nPour avancer sur ${projet || 'votre projet'}, nous avons besoin de vous sur le point suivant.`,
+      faits: [['Tache', valeurTexte(v.titre)], ['Detail', valeurTexte(v.description)]],
+      bouton: { libelle: 'Voir et repondre', url: valeurTexte(v.lien) || lienEspace() },
+      note: 'Repondez depuis votre espace ou dans la conversation du projet.',
+    }),
+  };
+}
+
+function release(v) {
+  const projet = valeurTexte(v.projetNom).trim();
+  const notes = Array.isArray(v.notes) ? v.notes : [];
+  return {
+    objet: `${projet ? `${projet} · ` : ''}Version ${valeurTexte(v.version)} disponible`,
+    ...rendreGabarit({
+      titre: `Version ${valeurTexte(v.version)} disponible`,
+      intro: `Bonjour,\n\nUne nouvelle version${projet ? ` de ${projet}` : ''} est en ligne${v.titre ? ` : ${valeurTexte(v.titre)}` : ''}.`,
+      faits: notes.slice(0, 12).map((n) => [CHANGEMENTS[n.type] || 'Changement', valeurTexte(n.texte)]),
+      bouton: { libelle: v.lienStore ? 'Ouvrir dans le store' : 'Voir les changements', url: valeurTexte(v.lienStore) || valeurTexte(v.lien) || lienEspace() },
+      note: v.lienStore ? `Le detail des changements est dans votre espace : ${valeurTexte(v.lien)}` : '',
+    }),
+  };
+}
+
+function fichier(v) {
+  const projet = valeurTexte(v.projetNom).trim();
+  const versEquipe = v.cote === 'equipe';
+  return {
+    objet: versEquipe ? `${projet} · Fichier recu de ${valeurTexte(v.par)}` : `${projet ? `${projet} · ` : ''}Nouveau fichier disponible`,
+    ...rendreGabarit({
+      titre: versEquipe ? 'Un client a depose un fichier' : 'Un nouveau fichier vous attend',
+      intro: versEquipe ? `${valeurTexte(v.par)} a depose un fichier sur ${projet}.` : `Bonjour,\n\nUn fichier vient d'etre ajoute a votre espace${projet ? ` ${projet}` : ''}.`,
+      faits: [['Fichier', valeurTexte(v.nom)], ['Categorie', valeurTexte(v.categorie)]],
+      bouton: { libelle: 'Ouvrir les fichiers', url: valeurTexte(v.lien) || lienEspace() },
+    }),
+  };
+}
+
+function reunion(v) {
+  const projet = valeurTexte(v.projetNom).trim();
+  return {
+    objet: `${projet ? `${projet} · ` : ''}${v.deplacee ? 'Reunion deplacee' : 'Reunion programmee'} : ${valeurTexte(v.titre)}`,
+    ...rendreGabarit({
+      titre: v.deplacee ? 'Reunion deplacee' : 'Reunion programmee',
+      intro: `Bonjour,\n\n${v.deplacee ? 'La reunion suivante change de date.' : 'Une reunion est programmee.'}`,
+      faits: [['Objet', valeurTexte(v.titre)], ['Quand', valeurTexte(v.date)], ['Duree', v.duree ? `${valeurTexte(v.duree)} min` : ''], ['Visio', valeurTexte(v.lienVisio)], ['Ordre du jour', valeurTexte(v.ordreDuJour)]],
+      bouton: { libelle: v.lienVisio ? 'Rejoindre la reunion' : 'Voir la reunion', url: valeurTexte(v.lienVisio) || valeurTexte(v.lien) || lienEspace() },
+      note: `Le fichier d'agenda est disponible dans votre espace : ${valeurTexte(v.lien)}`,
+    }),
+  };
+}
+
+function validationDemandee(v) {
+  const projet = valeurTexte(v.projetNom).trim();
+  return {
+    objet: `${projet ? `${projet} · ` : ''}Votre validation est attendue : ${valeurTexte(v.titre)}`,
+    ...rendreGabarit({
+      titre: 'Votre validation est attendue',
+      intro: `Bonjour,\n\nNous avons besoin de votre accord pour continuer.`,
+      faits: [['A valider', valeurTexte(v.titre)], ['Ce qu\'il faut regarder', valeurTexte(v.description)]],
+      bouton: { libelle: 'Examiner et repondre', url: valeurTexte(v.lien) || lienEspace() },
+      note: 'Vous pouvez approuver, ou demander des modifications en un commentaire.',
+    }),
+  };
+}
+
+function validationReponse(v) {
+  const approuvee = v.statut === 'approuvee';
+  return {
+    objet: `${valeurTexte(v.projetNom)} · ${approuvee ? 'Validation approuvee' : 'Modifications demandees'} : ${valeurTexte(v.titre)}`,
+    ...rendreGabarit({
+      titre: approuvee ? 'Validation approuvee' : 'Modifications demandees',
+      intro: `${valeurTexte(v.par) || 'Le client'} a repondu sur « ${valeurTexte(v.titre)} ».`,
+      faits: [['Reponse', approuvee ? 'Approuvee' : 'Modifications demandees'], ['Commentaire', valeurTexte(v.commentaire)]],
+      bouton: { libelle: 'Ouvrir dans le cockpit', url: valeurTexte(v.lien) || lienEspace() },
+    }),
+  };
+}
+
+function messageProjet(v) {
+  const projet = valeurTexte(v.projetNom).trim();
+  const versEquipe = v.cote === 'equipe';
+  const texte = valeurTexte(v.texte);
+  return {
+    objet: `${projet ? `${projet} · ` : ''}Message de ${valeurTexte(v.auteur)}`,
+    ...rendreGabarit({
+      titre: `${valeurTexte(v.auteur)} vous ecrit`,
+      intro: texte.length > 1200 ? `${texte.slice(0, 1200)}…` : texte,
+      faits: v.pieces ? [['Pieces jointes', String(v.pieces)]] : [],
+      bouton: { libelle: 'Repondre', url: valeurTexte(v.lien) || lienEspace() },
+      note: versEquipe ? '' : 'Repondez depuis votre espace : la conversation y reste au complet.',
+    }),
+  };
+}
+
+function qualification(v) {
+  const projet = valeurTexte(v.projetNom).trim();
+  const q = QUALIFS[v.qualification] || valeurTexte(v.qualification);
+  return {
+    objet: `${projet ? `${projet} · ` : ''}${valeurTexte(v.numero)} : demande ${q}`,
+    ...rendreGabarit({
+      titre: v.qualification === 'a-chiffrer' ? 'Un devis va vous etre propose' : 'Cette demande sort du perimetre prevu',
+      intro: `Bonjour,\n\nNous avons etudie votre demande « ${valeurTexte(v.titre)} ». Elle est ${q}. ${v.qualification === 'a-chiffrer' ? 'Nous vous proposons un devis avant tout developpement.' : 'Nous revenons vers vous pour en discuter ou vous proposer un chiffrage.'}`,
+      faits: [['Demande', valeurTexte(v.numero)], ['Titre', valeurTexte(v.titre)]],
+      bouton: { libelle: 'Voir la demande', url: valeurTexte(v.lien) || lienEspace() },
+    }),
+  };
+}
+
+function preprojet(v) {
+  const versEquipe = v.cote === 'equipe';
+  return {
+    objet: versEquipe ? `Nouveau projet demande : ${valeurTexte(v.titre)}` : `Bien recu : ${valeurTexte(v.titre)}`,
+    ...rendreGabarit({
+      titre: versEquipe ? 'Un client decrit un nouveau projet' : 'Votre demande est bien recue',
+      intro: versEquipe ? `${valeurTexte(v.par)} (${valeurTexte(v.email)}) vient de decrire un projet.` : `Bonjour ${valeurTexte(v.par)},\n\nMerci pour votre demande. Nous la lisons, puis nous en discutons ensemble dans votre espace.`,
+      faits: versEquipe ? [['Titre', valeurTexte(v.titre)], ['Type', valeurTexte(v.type)], ['Budget', valeurTexte(v.budget)], ['Delai', valeurTexte(v.delai)], ['Idee', valeurTexte(v.idee).slice(0, 600)]] : [['Projet', valeurTexte(v.titre)]],
+      bouton: { libelle: versEquipe ? 'Ouvrir la demande' : 'Suivre ma demande', url: valeurTexte(v.lien) || lienEspace() },
+    }),
+  };
+}
+
 const MODELES = {
   'invitation': invitation,
   'ticket-cree': ticketCree,
@@ -582,6 +718,15 @@ const MODELES = {
   'devis': devis,
   'devis-reponse': devisReponse,
   'facture': facture,
+  'tache-attente': tacheAttente,
+  'release': release,
+  'fichier': fichier,
+  'reunion': reunion,
+  'validation-demandee': validationDemandee,
+  'validation-reponse': validationReponse,
+  'message-projet': messageProjet,
+  'qualification': qualification,
+  'preprojet': preprojet,
 };
 
 /**

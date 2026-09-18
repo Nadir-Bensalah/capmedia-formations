@@ -666,6 +666,13 @@ exports.suiviFacteur = onDocumentCreated(
       return;
     }
 
+    /* Verrou absolu : sur le banc d'essai, aucun e-mail ne part jamais, quelle
+       que soit la cle disponible. Les envois sont marques « simule ». */
+    if (process.env.FUNCTIONS_EMULATOR === 'true' || process.env.FIRESTORE_EMULATOR_HOST) {
+      await ref.update({ etat: 'simule', envoye: FieldValue.serverTimestamp(), erreur: null });
+      console.log(`E-mail « ${envoi.modele} » simule sur le banc d essai (aucun envoi)`);
+      return;
+    }
     const cle = String(BREVO_CLE.value() || '').trim();
     if (!cle) {
       await marquerEchec(ref, Number(envoi.essais || 0), new Error('secret BREVO_CLE absent'));
@@ -735,6 +742,9 @@ async function poserRevendications(uid) {
     equipe: ficheEquipe.exists && ficheEquipe.data().actif !== false,
     projets: projetsDuClient.docs.map((d) => d.id),
   };
+  /* La liste « projets » du jeton est bornee par la taille d un jeton :
+     au-dela de deux cents projets, on garde les plus recents. */
+  if (revendications.projets.length > 200) revendications.projets = revendications.projets.slice(-200);
 
   await getAuth().setCustomUserClaims(uid, revendications);
   console.log(`Revendications posées pour ${uid} :`, JSON.stringify(revendications));
@@ -760,7 +770,31 @@ async function compteAuth(email, nom) {
   }
 }
 
-const STATUTS_FACTURE = ['a-payer', 'payee', 'en-retard', 'annulee'];
+
+/**
+ * Un membre d'organisation est membre de chacun de ses projets. Cette
+ * fonction realigne la liste « membres » des projets sur celle de
+ * l'organisation, puis recalcule les jetons des personnes touchees.
+ */
+async function synchroniserMembres(orgId) {
+  const org = await bdd.doc(`organisations/${orgId}`).get();
+  if (!org.exists) return [];
+  const membres = org.data().membres || [];
+  const projets = await bdd.collection('projets').where('organisation', '==', orgId).get();
+  const touches = new Set(membres);
+  for (const p of projets.docs) {
+    const actuels = p.data().membres || [];
+    actuels.forEach((u) => touches.add(u));
+    const fusion = Array.from(new Set([...actuels.filter((u) => !(p.data().membresOrganisation || []).includes(u)), ...membres]));
+    await p.ref.update({ membres: fusion, membresOrganisation: membres, maj: FieldValue.serverTimestamp() });
+  }
+  for (const uid of touches) { try { await poserRevendications(uid); } catch (err) { console.error(`Jeton de ${uid} non recalcule`, err); } }
+  return membres;
+}
+
+const STATUTS_FACTURE = ['brouillon', 'envoyee', 'a-payer', 'partielle', 'payee', 'en-retard', 'annulee', 'avoir'];
+const STATUTS_DEVIS = ['brouillon', 'envoye', 'consulte', 'accepte', 'refuse', 'expire', 'annule'];
+const MOYENS = ['virement', 'carte', 'stripe', 'cheque', 'especes', 'autre'];
 const PLATEFORMES_CONNUES = ['ios', 'android', 'web'];
 
 exports.suiviAdmin = onRequest(
@@ -770,7 +804,9 @@ exports.suiviAdmin = onRequest(
     if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
 
     const { cle, action, projet, email, nom, uid, ref, client, plateformes,
-      type, numero, libelle, montant, echeance, fichier, id, statut, role } = req.body || {};
+      type, numero, libelle, montant, echeance, fichier, id, statut, role,
+      entreprise, telephone, adresse, notesInternes, organisation, description, responsable,
+      debut, cible, budget, budgetNote, inviter, demandeProjet, tva, date, facture, moyen, reference, note, archive } = req.body || {};
 
     const attendu = String(ADMIN_CLE.value() || '').trim();
     if (!attendu || String(cle || '').trim() !== attendu) return res.status(403).send('interdit');
@@ -783,33 +819,72 @@ exports.suiviAdmin = onRequest(
       if (action === 'creerProjet') {
         const reference = String(ref || '').trim().toUpperCase();
         if (!/^[A-Z][A-Z0-9]{1,15}$/.test(reference)) {
-          return res.status(400).send('ref requise : 2 à 16 lettres ou chiffres, sans espace');
+          return res.status(400).send('ref requise : 2 a 16 lettres ou chiffres, sans espace');
         }
         if (!String(nom || '').trim()) return res.status(400).send('nom du projet requis');
 
         const deja = await bdd.collection('projets').where('ref', '==', reference).limit(1).get();
-        if (!deja.empty) return res.status(409).send(`référence ${reference} déjà prise`);
+        if (!deja.empty) return res.status(409).send(`la reference ${reference} est deja prise`);
 
-        const fiche = {
-          ref: reference,
-          nom: String(nom).trim(),
-          client: {
-            nom: String((client && client.nom) || '').trim(),
-            email: normaliserEmail(client && client.email),
-            entreprise: String((client && client.entreprise) || '').trim(),
-          },
-          membres: [],
-          plateformes: (Array.isArray(plateformes) ? plateformes : [])
-            .filter((p) => PLATEFORMES_CONNUES.includes(p)),
-          statut: 'actif',
-          compteur: 0,
-          archive: false,
-          cree: FieldValue.serverTimestamp(),
-          maj: FieldValue.serverTimestamp(),
-        };
-        const nouveau = await bdd.collection('projets').add(fiche);
-        console.log(`Projet ${reference} créé : ${nouveau.id}`);
-        return res.status(200).json({ ok: true, id: nouveau.id, ref: reference });
+        /* Le client : une organisation existante, ou une nouvelle creee a la volee. */
+        let orgId = organisation ? String(organisation) : null;
+        let ficheClient = client && typeof client === 'object' ? client : {};
+        if (orgId) {
+          const org = await bdd.doc(`organisations/${orgId}`).get();
+          if (!org.exists) return res.status(404).send('organisation inconnue');
+          const o = org.data();
+          ficheClient = { nom: o.nom || '', email: o.email || '', entreprise: o.entreprise || '' };
+        } else {
+          if (!emailPlausible(ficheClient.email)) return res.status(400).send('email du client requis');
+          const orgRef = await bdd.collection('organisations').add({
+            nom: String(ficheClient.nom || '').trim(), entreprise: String(ficheClient.entreprise || '').trim(),
+            email: normaliserEmail(ficheClient.email), telephone: '', adresse: '', notesInternes: '',
+            contacts: [{ nom: String(ficheClient.nom || '').trim(), email: normaliserEmail(ficheClient.email), role: 'owner', uid: null }],
+            membres: [], roles: {}, cree: FieldValue.serverTimestamp(), maj: FieldValue.serverTimestamp(),
+          });
+          orgId = orgRef.id;
+        }
+
+        const plateformesValides = Array.isArray(plateformes)
+          ? plateformes.filter((p) => PLATEFORMES_CONNUES.includes(p)) : [];
+        const enDate = (v) => { if (!v) return null; const d = new Date(v); return Number.isNaN(d.getTime()) ? null : d; };
+
+        const nouveau = await bdd.collection('projets').add(sansIndefini({
+          nom: String(nom).trim(), ref: reference, description: String(description || '').trim(),
+          type: String(type || 'application-mobile'), statut: String(statut || 'cadrage'),
+          organisation: orgId, client: ficheClient, plateformes: plateformesValides,
+          membres: [], membresOrganisation: [], compteur: 0,
+          progression: { mode: 'manuel', valeur: 0 },
+          debut: enDate(debut), cible: enDate(cible), responsable: String(responsable || ''),
+          budget: Number.isFinite(Number(budget)) && budget !== null && budget !== '' ? Number(budget) : null, budgetNote: String(budgetNote || ''),
+          pulse: { enCours: '', derniereLivraison: '', prochaineEtape: '', attenteClient: '' }, sante: 'ok',
+          archive: false, cree: FieldValue.serverTimestamp(), maj: FieldValue.serverTimestamp(),
+        }));
+
+        /* Les membres de l'organisation deviennent membres du projet. */
+        await synchroniserMembres(orgId);
+
+        /* L'invitation du contact principal, si demandee. */
+        if (inviter !== false && emailPlausible(ficheClient.email)) {
+          const { utilisateur } = await compteAuth(ficheClient.email, ficheClient.nom);
+          await bdd.doc(`organisations/${orgId}`).update({ membres: FieldValue.arrayUnion(utilisateur.uid), [`roles.${utilisateur.uid}`]: 'owner', maj: FieldValue.serverTimestamp() });
+          const org = await bdd.doc(`organisations/${orgId}`).get();
+          const contacts = (org.data().contacts || []).map((c) => (memeEmail(c.email, ficheClient.email) ? { ...c, uid: utilisateur.uid } : c));
+          await org.ref.update({ contacts });
+          await synchroniserMembres(orgId);
+          await mettreEnFile('invitation', [{ email: ficheClient.email, nom: ficheClient.nom || '' }], {
+            projetNom: String(nom).trim(), clientNom: ficheClient.nom || '', email: normaliserEmail(ficheClient.email), lien: `${courriels.BASE}app#/projets/${nouveau.id}`,
+          });
+        }
+
+        /* Une demande de nouveau projet transformee garde son fil. */
+        if (demandeProjet) {
+          try { await bdd.doc(`demandesProjet/${String(demandeProjet)}`).update({ statut: 'projet', projet: nouveau.id, maj: FieldValue.serverTimestamp() }); } catch (err) { console.warn('Demande de projet non liee', err); }
+        }
+
+        await bdd.collection('audit').add({ action: 'projet-cree', projet: nouveau.id, ref: reference, organisation: orgId, date: FieldValue.serverTimestamp() });
+        console.log(`Projet ${reference} cree : ${nouveau.id}`);
+        return res.status(200).json({ ok: true, id: nouveau.id, organisation: orgId });
       }
 
       /* --- Inviter un client sur un projet -------------------------------- */
@@ -869,46 +944,148 @@ exports.suiviAdmin = onRequest(
          Le fichier est déjà dans le stockage (règles : écriture réservée à
          l'équipe). Ici on crée la fiche, et le déclencheur envoie l'e-mail. */
       if (action === 'deposerDocument') {
-        if (type !== 'devis' && type !== 'facture') {
-          return res.status(400).send('type requis : devis ou facture');
-        }
+        if (type !== 'devis' && type !== 'facture') return res.status(400).send('type requis : devis ou facture');
         if (!projet) return res.status(400).send('projet requis');
         if (!String(numero || '').trim()) return res.status(400).send('numero requis');
         if (!String(libelle || '').trim()) return res.status(400).send('libelle requis');
-
         const somme = Number(montant);
-        if (!Number.isFinite(somme) || somme < 0) {
-          return res.status(400).send('montant requis, en euros hors taxes');
-        }
-        if (!(await bdd.doc(`projets/${String(projet)}`).get()).exists) {
-          return res.status(404).send('projet inconnu');
-        }
+        if (!Number.isFinite(somme) || somme < 0) return res.status(400).send('montant requis, en euros hors taxes');
+        const taux = Number(tva) || 0;
+        if (taux < 0 || taux > 100) return res.status(400).send('tva entre 0 et 100');
+        const projetDoc = await bdd.doc(`projets/${String(projet)}`).get();
+        if (!projetDoc.exists) return res.status(404).send('projet inconnu');
+        const enDate = (v) => { if (!v) return null; const d = new Date(v); return Number.isNaN(d.getTime()) ? null : d; };
+        const dateEcheance = enDate(echeance);
+        if (echeance && !dateEcheance) return res.status(400).send('echeance illisible');
 
-        const dateEcheance = echeance ? new Date(echeance) : null;
-        if (dateEcheance && Number.isNaN(dateEcheance.getTime())) {
-          return res.status(400).send('echeance illisible');
-        }
-
-        const fiche = {
-          projet: String(projet),
-          type,
-          numero: String(numero).trim(),
-          libelle: String(libelle).trim().slice(0, 160),
-          montant: somme,
+        const fiche = sansIndefini({
+          projet: String(projet), type, numero: String(numero).trim(), libelle: String(libelle).trim().slice(0, 160),
+          description: String(description || '').slice(0, 2000),
+          montant: somme, tva: taux, ttc: Math.round(somme * (1 + taux / 100) * 100) / 100,
           statut: type === 'devis' ? 'envoye' : 'a-payer',
-          date: FieldValue.serverTimestamp(),
-          echeance: dateEcheance,
-          fichier: {
-            chemin: String((fichier && fichier.chemin) || '').trim(),
-            nom: String((fichier && fichier.nom) || '').trim(),
-            taille: Number((fichier && fichier.taille) || 0) || 0,
-          },
-          reponse: null,
-          archive: false,
-        };
+          date: enDate(date) || FieldValue.serverTimestamp(),
+          echeance: type === 'facture' ? dateEcheance : null,
+          expiration: type === 'devis' ? dateEcheance : null,
+          fichier: fichier && fichier.chemin ? { chemin: String(fichier.chemin).trim(), nom: String(fichier.nom || '').trim(), taille: Number(fichier.taille || 0) || 0 } : null,
+          reponse: null, archive: false,
+        });
         const nouveau = await bdd.collection('documents').add(fiche);
-        console.log(`${type} ${fiche.numero} déposé sur le projet ${projet} : ${nouveau.id}`);
+        console.log(`${type} ${fiche.numero} depose sur le projet ${projet} : ${nouveau.id}`);
         return res.status(200).json({ ok: true, id: nouveau.id });
+      }
+
+      /* --- Changer le statut d'un devis (equipe) ---------------------------- */
+      if (action === 'statutDevis') {
+        if (!id) return res.status(400).send('id requis');
+        if (!STATUTS_DEVIS.includes(statut)) return res.status(400).send(`statut requis parmi : ${STATUTS_DEVIS.join(', ')}`);
+        const refDocument = bdd.doc(`documents/${String(id)}`);
+        const doc = await refDocument.get();
+        if (!doc.exists) return res.status(404).send('document inconnu');
+        if (doc.data().type !== 'devis') return res.status(400).send('ce document n est pas un devis');
+        await refDocument.update({ statut });
+        return res.status(200).json({ ok: true, statut });
+      }
+
+      /* --- Archiver ou restaurer une piece --------------------------------- */
+      if (action === 'archiverDocument') {
+        if (!id) return res.status(400).send('id requis');
+        const refDocument = bdd.doc(`documents/${String(id)}`);
+        if (!(await refDocument.get()).exists) return res.status(404).send('document inconnu');
+        await refDocument.update({ archive: archive !== false });
+        return res.status(200).json({ ok: true, archive: archive !== false });
+      }
+
+      /* --- Enregistrer un paiement ----------------------------------------- */
+      if (action === 'enregistrerPaiement') {
+        if (!facture) return res.status(400).send('facture requise');
+        const somme = Number(montant);
+        if (!Number.isFinite(somme) || somme <= 0) return res.status(400).send('montant requis');
+        const refFacture = bdd.doc(`documents/${String(facture)}`);
+        const docFacture = await refFacture.get();
+        if (!docFacture.exists || docFacture.data().type !== 'facture') return res.status(404).send('facture inconnue');
+        const f = docFacture.data();
+        const enDate = (v) => { if (!v) return null; const d = new Date(v); return Number.isNaN(d.getTime()) ? null : d; };
+        const paiement = await bdd.collection('paiements').add(sansIndefini({
+          projet: f.projet, facture: String(facture), montant: Math.round(somme * 100) / 100,
+          date: enDate(date) || FieldValue.serverTimestamp(), moyen: MOYENS.includes(moyen) ? moyen : 'autre',
+          reference: String(reference || '').slice(0, 80), note: String(note || '').slice(0, 200), statut: 'valide',
+          cree: FieldValue.serverTimestamp(),
+        }));
+        /* Le statut de la facture suit le total paye. */
+        const tous = await bdd.collection('paiements').where('facture', '==', String(facture)).get();
+        const paye = tous.docs.reduce((t, d) => t + (d.data().statut !== 'annule' ? Number(d.data().montant) || 0 : 0), 0);
+        const du = typeof f.ttc === 'number' ? f.ttc : Number(f.montant) || 0;
+        await refFacture.update({ statut: paye + 0.005 >= du ? 'payee' : 'partielle' });
+        return res.status(200).json({ ok: true, id: paiement.id, paye, statut: paye + 0.005 >= du ? 'payee' : 'partielle' });
+      }
+
+      /* --- Les organisations ----------------------------------------------- */
+      if (action === 'creerOrganisation') {
+        if (!String(entreprise || nom || '').trim()) return res.status(400).send('nom requis');
+        if (!emailPlausible(email)) return res.status(400).send('email valide requis');
+        const orgRef = await bdd.collection('organisations').add(sansIndefini({
+          nom: String(nom || '').trim(), entreprise: String(entreprise || '').trim(), email: normaliserEmail(email),
+          telephone: String(telephone || '').trim(), adresse: String(adresse || '').trim(), notesInternes: String(notesInternes || ''),
+          contacts: [{ nom: String(nom || '').trim(), email: normaliserEmail(email), role: 'owner', uid: null }],
+          membres: [], roles: {}, cree: FieldValue.serverTimestamp(), maj: FieldValue.serverTimestamp(),
+        }));
+        await bdd.collection('audit').add({ action: 'organisation-creee', organisation: orgRef.id, date: FieldValue.serverTimestamp() });
+        return res.status(200).json({ ok: true, id: orgRef.id });
+      }
+
+      if (action === 'majOrganisation') {
+        if (!id) return res.status(400).send('id requis');
+        const orgRef = bdd.doc(`organisations/${String(id)}`);
+        if (!(await orgRef.get()).exists) return res.status(404).send('organisation inconnue');
+        if (email && !emailPlausible(email)) return res.status(400).send('email invalide');
+        await orgRef.update(sansIndefini({
+          nom: nom !== undefined ? String(nom).trim() : undefined, entreprise: entreprise !== undefined ? String(entreprise).trim() : undefined,
+          email: email !== undefined ? normaliserEmail(email) : undefined, telephone: telephone !== undefined ? String(telephone).trim() : undefined,
+          adresse: adresse !== undefined ? String(adresse).trim() : undefined, notesInternes: notesInternes !== undefined ? String(notesInternes) : undefined,
+          maj: FieldValue.serverTimestamp(),
+        }));
+        return res.status(200).json({ ok: true });
+      }
+
+      if (action === 'inviterMembreOrganisation') {
+        if (!id || !emailPlausible(email)) return res.status(400).send('organisation et email valides requis');
+        const orgRef = bdd.doc(`organisations/${String(id)}`);
+        const org = await orgRef.get();
+        if (!org.exists) return res.status(404).send('organisation inconnue');
+        const { utilisateur, cree } = await compteAuth(email, nom);
+        const fonction = role === 'owner' ? 'owner' : 'member';
+        const contacts = (org.data().contacts || []).filter((c) => !memeEmail(c.email, email));
+        contacts.push({ nom: String(nom || '').trim(), email: normaliserEmail(email), role: fonction, uid: utilisateur.uid });
+        await orgRef.update({ membres: FieldValue.arrayUnion(utilisateur.uid), [`roles.${utilisateur.uid}`]: fonction, contacts, maj: FieldValue.serverTimestamp() });
+        await synchroniserMembres(String(id));
+        const premierProjet = await bdd.collection('projets').where('organisation', '==', String(id)).limit(1).get();
+        const projetNom = premierProjet.empty ? '' : premierProjet.docs[0].data().nom;
+        await mettreEnFile('invitation', [{ email, nom: String(nom || '').trim() }], {
+          projetNom, clientNom: String(nom || '').trim(), email: normaliserEmail(email), lien: `${courriels.BASE}app`,
+        });
+        await bdd.collection('audit').add({ action: 'membre-invite', organisation: String(id), uid: utilisateur.uid, email: normaliserEmail(email), date: FieldValue.serverTimestamp() });
+        return res.status(200).json({ ok: true, uid: utilisateur.uid, compteCree: cree });
+      }
+
+      if (action === 'retirerMembreOrganisation') {
+        if (!id) return res.status(400).send('organisation requise');
+        let identifiant = String(uid || '').trim();
+        if (!identifiant) {
+          if (!emailPlausible(email)) return res.status(400).send('uid ou email requis');
+          const { utilisateur } = await compteAuth(email, null);
+          identifiant = utilisateur.uid;
+        }
+        const orgRef = bdd.doc(`organisations/${String(id)}`);
+        const org = await orgRef.get();
+        if (!org.exists) return res.status(404).send('organisation inconnue');
+        const contacts = (org.data().contacts || []).filter((c) => c.uid !== identifiant && !(email && memeEmail(c.email, email)));
+        await orgRef.update({ membres: FieldValue.arrayRemove(identifiant), [`roles.${identifiant}`]: FieldValue.delete(), contacts, maj: FieldValue.serverTimestamp() });
+        /* Retire aussi des projets, puis recalcule le jeton : l'acces aux fichiers se ferme tout de suite. */
+        const projets = await bdd.collection('projets').where('organisation', '==', String(id)).get();
+        for (const p of projets.docs) await p.ref.update({ membres: FieldValue.arrayRemove(identifiant), membresOrganisation: FieldValue.arrayRemove(identifiant), maj: FieldValue.serverTimestamp() });
+        await poserRevendications(identifiant);
+        await bdd.collection('audit').add({ action: 'membre-retire', organisation: String(id), uid: identifiant, date: FieldValue.serverTimestamp() });
+        return res.status(200).json({ ok: true, uid: identifiant });
       }
 
       /* --- Changer le statut d'une facture -------------------------------- */

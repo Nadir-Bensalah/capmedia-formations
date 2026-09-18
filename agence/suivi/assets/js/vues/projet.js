@@ -1,0 +1,629 @@
+/* ==========================================================================
+   La page d'un projet : aperçu, composants, feuille de route, tâches,
+   demandes, fichiers, versions, liens, réunions, notes, activité.
+   Partagée par le client et par l'équipe. L'équipe voit en plus les
+   éditeurs, l'interne, les points bloquants et la santé.
+   ========================================================================== */
+
+import {
+  echapper, dateCourte, dateHeure, depuis, heure, montant, pluriel, joursAvant, echeance as calcEcheance, enParagraphes, avecLiens, parDateDesc, parDateAsc, borner,
+  STATUTS_PROJET, STATUTS_COMPOSANT, TYPES_COMPOSANT, STATUTS_JALON, STATUTS_TACHE, PRIORITES, STATUTS, TYPES, URGENCES, OUVERTS, ATTEND_CLIENT,
+  CATEGORIES_FICHIER, CATEGORIES_LIEN, STATUTS_RELEASE, TYPES_CHANGEMENT, TYPES_NOTE, SANTES, STATUTS_VALIDATION, QUALIFICATIONS,
+} from '../noyau.js';
+import {
+  icone, pastille, pastilleTexte, puce, avatarProjet, avatar, progression, anneau, ligne, vide, fait, chronoItem, parJour, squelette, titrePage,
+  echeanceHtml, modale, confirmer, toast, sur, menu, fichierHtml, brancherPieces, depot, lireForme, valider, obligatoire, agir, encart, optionsDe,
+} from '../ui.js';
+import * as magasin from '../magasin.js';
+import { K, ecrire, abonnerProjet, progressionProjet, jalonCourant, jalonSuivant, prochaineReunion, enAttenteDeVous, parStatut } from '../donnees.js';
+import { filAriane } from '../coquille.js';
+import { naviguer } from '../routeur.js';
+import { editer, supprimer } from './editeurs.js';
+import { activiteHtml } from './accueil.js';
+
+const ONGLETS = [
+  { cle: 'apercu', libelle: 'Aperçu', icone: 'accueil' },
+  { cle: 'roadmap', libelle: 'Feuille de route', icone: 'route' },
+  { cle: 'taches', libelle: 'Tâches', icone: 'taches' },
+  { cle: 'demandes', libelle: 'Demandes', icone: 'demandes' },
+  { cle: 'fichiers', libelle: 'Fichiers', icone: 'fichiers' },
+  { cle: 'releases', libelle: 'Versions', icone: 'releases' },
+  { cle: 'liens', libelle: 'Liens', icone: 'liens' },
+  { cle: 'reunions', libelle: 'Réunions', icone: 'reunions' },
+  { cle: 'notes', libelle: 'Décisions', icone: 'note' },
+  { cle: 'activite', libelle: 'Activité', icone: 'activite' },
+];
+
+const lireTout = (pid) => ({
+  projet: magasin.lire(K.projet(pid)),
+  composants: (magasin.lire(K.composants(pid)) || []).slice().sort((a, b) => (a.ordre || 0) - (b.ordre || 0)),
+  jalons: (magasin.lire(K.jalons(pid)) || []).slice().sort((a, b) => (a.ordre || 0) - (b.ordre || 0)),
+  liens: magasin.lire(K.liens(pid)) || [],
+  taches: (magasin.lire(K.taches(pid)) || []).filter((t) => !t.archive),
+  tickets: (magasin.lire(K.tickets(pid)) || []).filter((t) => !t.archive),
+  validations: magasin.lire(K.validations(pid)) || [],
+  fichiers: (magasin.lire(K.fichiers(pid)) || []).filter((f) => !f.archive),
+  releases: magasin.lire(K.releases(pid)) || [],
+  reunions: magasin.lire(K.reunions(pid)) || [],
+  notes: magasin.lire(K.notes(pid)) || [],
+  blocages: magasin.lire(K.blocages(pid)) || [],
+  documents: magasin.lire(K.documents(pid)) || [],
+  paiements: magasin.lire(K.paiements(pid)) || [],
+  activite: (magasin.lire(K.activite(pid)) || []).slice().sort(parDateDesc('date')),
+  equipe: magasin.lire(K.equipe) || [],
+});
+
+const nomEquipe = (equipe, uid) => ((equipe.find((e) => e.id === uid) || {}).nom || '');
+
+/* ==========================================================================
+   La vue
+   ========================================================================== */
+
+export const vue = async (ctx, env) => {
+  const pid = ctx.params.id;
+  const onglet = ONGLETS.some((o) => o.cle === ctx.onglet) ? ctx.onglet : (ctx.onglet === 'composants' ? 'composants' : 'apercu');
+  const equipe = env.role === 'equipe';
+  const lot = magasin.lot();
+  const sortie = ctx.sortie;
+  sortie.innerHTML = `<div class="page">${squelette('page', 6)}</div>`;
+
+  abonnerProjet(lot, pid, env.role);
+  if (equipe) lot.abonner(K.equipe, () => magasin.lire(K.equipe) ? null : null);
+
+  let detailOuvert = ctx.params.tid && onglet === 'taches' ? ctx.params.tid : null;
+
+  const rendre = () => {
+    const d = lireTout(pid);
+    const projet = d.projet;
+    if (projet === undefined) return;
+    if (projet === null) {
+      sortie.innerHTML = `<div class="page">${vide({ icone: 'projets', titre: 'Ce projet est introuvable', texte: "Il a peut-être été archivé, ou vous n'y avez plus accès.", action: '<a class="btn btn-secondaire" href="#/">Retour à l\'accueil</a>' })}</div>`;
+      return;
+    }
+    titrePage(projet.nom);
+    filAriane([{ libelle: equipe ? 'Projets' : 'Accueil', chemin: equipe ? '/projets' : '/' }, { libelle: projet.nom, chemin: `/projets/${pid}` }, ...(onglet !== 'apercu' ? [{ libelle: (ONGLETS.find((o) => o.cle === onglet) || { libelle: 'Composants' }).libelle }] : [])]);
+
+    const prog = progressionProjet(projet, d.jalons);
+    const ouverts = d.tickets.filter((t) => OUVERTS.includes(t.statut));
+    const attente = enAttenteDeVous({ projets: [projet], tickets: d.tickets, validations: d.validations, documents: d.documents, taches: d.taches, blocages: d.blocages });
+    const comptes = {
+      taches: d.taches.filter((t) => t.statut !== 'terminee').length,
+      demandes: ouverts.length,
+      fichiers: d.fichiers.length,
+      releases: d.releases.length,
+      liens: d.liens.length,
+      reunions: d.reunions.filter((r) => joursAvant(r.date) >= 0).length,
+      notes: d.notes.length,
+    };
+
+    sortie.innerHTML = `<div class="page">
+      <header class="page-tete" style="align-items:flex-start">
+        <div class="rang" style="gap:16px;align-items:flex-start;min-width:0">
+          ${avatarProjet(projet.nom, 'grand')}
+          <div style="min-width:0">
+            <p class="surtitre">${echapper([projet.ref, (projet.client || {}).entreprise || (projet.client || {}).nom, projet.type && ({ ...TYPES_COMPOSANT, ...{ 'application-mobile': 'Application mobile', 'site-vitrine': 'Site vitrine', 'e-commerce': 'E-commerce', 'saas': 'SaaS' } })[projet.type]].filter(Boolean).join(' · '))}</p>
+            <h1 style="margin-top:2px">${echapper(projet.nom)}</h1>
+            <div class="rang" style="margin-top:8px">
+              ${pastille(STATUTS_PROJET, projet.statut || 'en-cours')}
+              ${equipe && projet.sante ? pastille(SANTES, projet.sante) : ''}
+              ${projet.cible ? `<span class="puce">${icone('cible')} Cible ${echapper(dateCourte(projet.cible))}</span>` : ''}
+              ${projet.responsable ? `<span class="puce">${icone('utilisateur')} ${echapper(nomEquipe(d.equipe, projet.responsable) || 'Capmedia')}</span>` : ''}
+              <span class="puce t-3">${icone('horloge')} ${d.activite[0] ? `Dernière activité ${echapper(depuis(d.activite[0].date))}` : 'Pas encore d\'activité'}</span>
+            </div>
+          </div>
+        </div>
+        <div class="actions">
+          ${equipe ? `<button class="btn btn-secondaire" type="button" data-action="editer-projet">${icone('edit')} Modifier</button>` : ''}
+          <a class="btn btn-principal" href="#/projets/${echapper(pid)}/nouvelle-demande">${icone('plus')} Nouvelle demande</a>
+          ${equipe ? `<button class="btn-icone" type="button" data-action="menu-projet" aria-label="Plus">${icone('points')}</button>` : ''}
+        </div>
+      </header>
+
+      <nav class="onglets" aria-label="Sections du projet">
+        ${ONGLETS.map((o) => `<a class="onglet${o.cle === onglet ? ' actif' : ''}" href="#/projets/${echapper(pid)}${o.cle === 'apercu' ? '' : `/${o.cle}`}">${o.libelle}${comptes[o.cle] ? `<span class="badge">${comptes[o.cle]}</span>` : ''}</a>`).join('')}
+        ${equipe ? `<a class="onglet${onglet === 'composants' ? ' actif' : ''}" href="#/projets/${echapper(pid)}/composants">Composants</a>` : ''}
+      </nav>
+
+      <div id="onglet-corps">${rendreOnglet(onglet, d, { pid, env, prog, attente, ouverts })}</div>
+    </div>`;
+
+    if (detailOuvert) {
+      const t = d.taches.find((x) => x.id === detailOuvert);
+      if (t) { ouvrirTache(t, d, { pid, env }); }
+      detailOuvert = null;
+    }
+  };
+
+  /* --- Les gestes ------------------------------------------------------ */
+  const gestes = sur(sortie, 'click', '[data-action]', async (el) => {
+    const d = lireTout(pid);
+    const action = el.dataset.action;
+    const id = el.dataset.id;
+    if (action === 'editer-projet') return editer('projet', env, { pid, fiche: d.projet });
+    if (action === 'menu-projet') {
+      return menu(el, [
+        { libelle: d.projet.archive ? 'Restaurer le projet' : 'Archiver le projet', icone: 'archive', action: async () => {
+          const ok = await confirmer({ titre: d.projet.archive ? 'Restaurer ce projet ?' : 'Archiver ce projet ?', texte: d.projet.archive ? 'Il redevient visible pour le client.' : "Il disparaît de l'accueil du client, rien n'est supprimé.", ok: d.projet.archive ? 'Restaurer' : 'Archiver' });
+          if (ok) await agir(null, () => ecrire.majProjet(pid, { archive: !d.projet.archive, statut: d.projet.archive ? 'en-cours' : 'archive' }), d.projet.archive ? 'Projet restauré.' : 'Projet archivé.');
+        } },
+        { libelle: 'Signaler un point bloquant', icone: 'alerte', action: () => editer('blocage', env, { pid }) },
+        { libelle: 'Demander une validation', icone: 'valider', action: () => editer('validation', env, { pid }) },
+        { libelle: 'Nouvelle note ou décision', icone: 'note', action: () => editer('note', env, { pid }) },
+      ]);
+    }
+    if (action === 'nouveau') return editer(el.dataset.genre, env, { pid, defaut: el.dataset.defaut ? JSON.parse(el.dataset.defaut) : {} });
+    if (action === 'editer') {
+      const genre = el.dataset.genre;
+      const fiche = trouver(d, genre, id);
+      return fiche ? editer(genre, env, { pid, fiche }) : null;
+    }
+    if (action === 'supprimer') {
+      const genre = el.dataset.genre;
+      const fiche = trouver(d, genre, id);
+      return fiche ? supprimer(genre, env, { pid, fiche, libelle: el.dataset.libelle }) : null;
+    }
+    if (action === 'ouvrir-tache') {
+      const t = d.taches.find((x) => x.id === id);
+      if (t) ouvrirTache(t, d, { pid, env });
+      return null;
+    }
+    if (action === 'statut-tache') {
+      return agir(null, () => ecrire.majTache(id, { statut: el.dataset.statut, progression: el.dataset.statut === 'terminee' ? 100 : undefined }));
+    }
+    if (action === 'resoudre-blocage') {
+      return agir(null, () => ecrire.majBlocage(id, { resolu: new Date() }), 'Point bloquant levé.');
+    }
+    if (action === 'deposer-client') return ouvrirDepotClient(pid, env);
+    if (action === 'menu-fichier') {
+      const f = d.fichiers.find((x) => x.id === id);
+      if (!f) return null;
+      const items = [{ libelle: 'Modifier la fiche', icone: 'edit', action: () => editer('fichier', env, { pid, fiche: f }) },
+        { libelle: 'Archiver', icone: 'archive', danger: true, action: async () => { if (await confirmer({ titre: 'Archiver ce fichier ?', texte: 'Il reste dans les archives, rien n\'est effacé.', ok: 'Archiver' })) agir(null, () => ecrire.majFichier(f.id, { archive: true }), 'Fichier archivé.'); } }];
+      return menu(el, items);
+    }
+    if (action === 'ouvrir-reunion') { const r = d.reunions.find((x) => x.id === id); if (r) ouvrirReunion(r, { pid, env }); return null; }
+    if (action === 'ouvrir-note') { const n = d.notes.find((x) => x.id === id); if (n) ouvrirNote(n, { pid, env }); return null; }
+    if (action === 'ouvrir-release') { const r = d.releases.find((x) => x.id === id); if (r) ouvrirRelease(r, { pid, env }); return null; }
+    if (action === 'ouvrir-validation') return naviguer(equipe ? `/validations/${id}` : `/valider/${id}`);
+    return null;
+  });
+  const gestesFichiers = sur(sortie, 'click', '[data-menu-fichier]', (el) => {
+    el.dataset.action = 'menu-fichier'; el.dataset.id = el.dataset.menuFichier; el.click();
+  });
+  // Les filtres et les bascules d'affichage se souviennent, puis redessinent.
+  const gestesFiltres = sur(sortie, 'click', '[data-vue-taches], [data-filtre-demandes], [data-filtre-fichiers]', (el) => {
+    try {
+      if (el.dataset.vueTaches !== undefined) localStorage.setItem('suivi:taches-vue', el.dataset.vueTaches);
+      if (el.dataset.filtreDemandes !== undefined) sessionStorage.setItem(`suivi:filtre-demandes:${pid}`, el.dataset.filtreDemandes);
+      if (el.dataset.filtreFichiers !== undefined) sessionStorage.setItem(`suivi:filtre-fichiers:${pid}`, el.dataset.filtreFichiers);
+    } catch (e) { /* stockage refusé */ }
+    rendre();
+  });
+  brancherPieces(sortie);
+
+  const cles = [K.projet(pid), K.composants(pid), K.jalons(pid), K.liens(pid), K.taches(pid), K.tickets(pid), K.validations(pid), K.fichiers(pid), K.releases(pid), K.reunions(pid), K.notes(pid), K.blocages(pid), K.documents(pid), K.paiements(pid), K.activite(pid), K.equipe];
+  let minuteur = null;
+  const planifier = () => { clearTimeout(minuteur); minuteur = setTimeout(rendre, 40); };
+  cles.forEach((c) => lot.sur(c, planifier));
+  planifier();
+
+  return () => { clearTimeout(minuteur); gestes(); gestesFichiers(); gestesFiltres(); lot.fin(); };
+};
+
+const trouver = (d, genre, id) => ({
+  composant: d.composants, jalon: d.jalons, lien: d.liens, tache: d.taches, release: d.releases, reunion: d.reunions, note: d.notes, blocage: d.blocages, fichier: d.fichiers,
+}[genre] || []).find((x) => x.id === id);
+
+/* ==========================================================================
+   Les onglets
+   ========================================================================== */
+
+const boutonNouveau = (env, genre, libelle, defaut) => (env.role === 'equipe'
+  ? `<button class="btn btn-secondaire btn-petit" type="button" data-action="nouveau" data-genre="${genre}"${defaut ? ` data-defaut='${echapper(JSON.stringify(defaut))}'` : ''}>${icone('plus')} ${echapper(libelle)}</button>`
+  : '');
+const boutonsEdition = (env, genre, id, libelle) => (env.role === 'equipe'
+  ? `<span class="rang" style="gap:2px"><button class="btn-icone" type="button" data-action="editer" data-genre="${genre}" data-id="${echapper(id)}" aria-label="Modifier" data-astuce="Modifier">${icone('edit')}</button><button class="btn-icone" type="button" data-action="supprimer" data-genre="${genre}" data-id="${echapper(id)}" data-libelle="${echapper(libelle || '')}" aria-label="Supprimer" data-astuce="Supprimer">${icone('corbeille')}</button></span>`
+  : '');
+
+const rendreOnglet = (onglet, d, c) => {
+  switch (onglet) {
+    case 'apercu': return apercu(d, c);
+    case 'composants': return composants(d, c);
+    case 'roadmap': return roadmap(d, c);
+    case 'taches': return taches(d, c);
+    case 'demandes': return demandes(d, c);
+    case 'fichiers': return fichiers(d, c);
+    case 'releases': return releases(d, c);
+    case 'liens': return liens(d, c);
+    case 'reunions': return reunions(d, c);
+    case 'notes': return notes(d, c);
+    case 'activite': return `<section class="section" style="margin-top:0"><div class="section-tete"><h2>Activité du projet</h2></div>${activiteHtml(d.activite.slice(0, 80))}</section>`;
+    default: return '';
+  }
+};
+
+/* --- Aperçu --------------------------------------------------------------- */
+const apercu = (d, { pid, env, prog, attente, ouverts }) => {
+  const equipe = env.role === 'equipe';
+  const projet = d.projet;
+  const pulse = projet.pulse || {};
+  const courant = jalonCourant(d.jalons);
+  const suivant = jalonSuivant(d.jalons);
+  const termines = d.jalons.filter((j) => j.statut === 'termine');
+  const dernierTermine = termines.length ? termines[termines.length - 1] : null;
+  const enCours = d.taches.filter((t) => t.statut === 'en-cours').slice(0, 4);
+  const reunion = prochaineReunion(d.reunions);
+  const blocagesOuverts = d.blocages.filter((b) => !b.resolu);
+  const derniereRelease = d.releases.filter((r) => r.statut === 'disponible').sort(parDateDesc('date'))[0];
+  const validationsAttente = d.validations.filter((v) => v.statut === 'en-attente');
+  const echeances = [
+    ...d.jalons.filter((j) => j.fin && j.statut !== 'termine').map((j) => ({ date: j.fin, titre: j.titre, genre: 'Jalon', icone: 'drapeau', chemin: `/projets/${pid}/roadmap` })),
+    ...d.taches.filter((t) => t.echeance && t.statut !== 'terminee').map((t) => ({ date: t.echeance, titre: t.titre, genre: 'Tâche', icone: 'taches', chemin: `/projets/${pid}/taches/${t.id}` })),
+    ...d.reunions.filter((r) => joursAvant(r.date) >= 0).map((r) => ({ date: r.date, titre: r.titre, genre: 'Réunion', icone: 'reunions', chemin: `/projets/${pid}/reunions` })),
+    ...d.documents.filter((x) => x.type === 'facture' && x.echeance && ['a-payer', 'partielle', 'en-retard'].includes(x.statut)).map((x) => ({ date: x.echeance, titre: x.libelle, genre: 'Facture', icone: 'euro', chemin: equipe ? `/finances/${x.id}` : `/finances/${x.id}` })),
+  ].filter((e) => joursAvant(e.date) >= -30).sort(parDateAsc('date')).slice(0, 6);
+
+  return `
+    ${attente.length ? `<section class="section" style="margin-top:0"><div class="attente">
+      <p class="attente-tete">${icone('alerte')} ${equipe ? 'En attente du client' : 'En attente de vous'} <span class="badge badge--vif" style="margin-left:4px">${attente.length}</span></p>
+      <div class="liste" style="margin-top:8px">${attente.slice(0, 5).map((a) => ligne({ href: `#${a.chemin}`, icone: a.icone, ton: a.ton, titre: echapper(a.titre), sous: echapper(a.sous) })).join('')}</div>
+    </div></section>` : ''}
+
+    <section class="section${attente.length ? '' : ' section--premiere'}" style="${attente.length ? '' : 'margin-top:0'}">
+      <div class="section-tete"><h2>Votre projet en un coup d'œil</h2>${equipe ? `<button class="btn btn-fantome btn-petit" type="button" data-action="editer-projet">${icone('edit')} Le pouls</button>` : ''}</div>
+      <div class="grille grille-tiers">
+        <div class="pouls">
+          <div><p class="quoi">${icone('play')} En ce moment</p><p class="texte${pulse.enCours ? '' : ' rien'}">${echapper(pulse.enCours || (enCours[0] ? enCours[0].titre : (courant ? courant.titre : 'Rien de renseigné')))}</p></div>
+          <div><p class="quoi">${icone('check')} Dernière livraison</p><p class="texte${pulse.derniereLivraison || derniereRelease || dernierTermine ? '' : ' rien'}">${echapper(pulse.derniereLivraison || (derniereRelease ? `${derniereRelease.plateforme || ''} ${derniereRelease.version || ''}`.trim() : (dernierTermine ? dernierTermine.titre : 'Rien encore')))}</p></div>
+          <div><p class="quoi">${icone('fleche')} Prochaine étape</p><p class="texte${pulse.prochaineEtape || suivant ? '' : ' rien'}">${echapper(pulse.prochaineEtape || (suivant ? suivant.titre : 'À définir'))}</p></div>
+          <div><p class="quoi">${icone('horloge')} ${equipe ? 'Attente client' : 'Attendu de vous'}</p><p class="texte${pulse.attenteClient || attente.length ? '' : ' rien'}">${echapper(pulse.attenteClient || (attente.length ? pluriel(attente.length, 'point à traiter', 'points à traiter') : 'Rien'))}</p></div>
+        </div>
+        <div class="carte carte--creuse rang" style="gap:18px;align-items:center">
+          ${anneau(prog.valeur, true)}
+          <div>
+            <p class="t-titre-3">Progression</p>
+            <p class="t-petit t-2" style="margin-top:2px">${prog.mode === 'jalons' ? 'Calculée sur les jalons' : 'Estimée par Capmedia'}</p>
+            ${courant ? `<p class="t-petit" style="margin-top:8px"><span class="t-3">Étape en cours ·</span> ${echapper(courant.titre)}</p>` : ''}
+          </div>
+        </div>
+      </div>
+    </section>
+
+    ${blocagesOuverts.length ? `<section class="section">
+      <div class="section-tete"><h2>Points bloquants</h2>${boutonNouveau(env, 'blocage', 'Signaler')}</div>
+      <div class="pile">${blocagesOuverts.map((b) => `<div class="encart encart--alerte">${icone('alerte')}<div style="flex:1">
+        <strong>${echapper(b.titre)}</strong>${b.description ? ` · ${echapper(b.description)}` : ''}
+        <div class="rang t-micro t-3" style="margin-top:6px;gap:12px"><span>Responsable : ${echapper({ client: 'le client', capmedia: 'Capmedia', tiers: 'un tiers' }[b.responsable] || b.responsable)}</span><span>Depuis ${echapper(dateCourte(b.depuis))}</span>${b.impact ? `<span>Impact : ${echapper(b.impact)}</span>` : ''}</div>
+      </div>${equipe ? `<span class="rang" style="gap:2px"><button class="btn btn-petit btn-doux" type="button" data-action="resoudre-blocage" data-id="${echapper(b.id)}">Levé</button>${boutonsEdition(env, 'blocage', b.id, b.titre)}</span>` : ''}</div>`).join('')}</div>
+    </section>` : ''}
+
+    ${d.composants.length ? `<section class="section">
+      <div class="section-tete"><h2>Composants</h2><a class="lien" href="#/projets/${echapper(pid)}/${equipe ? 'composants' : 'roadmap'}">${equipe ? 'Gérer' : 'Feuille de route'}</a></div>
+      <div class="grille grille-3">${d.composants.map((c) => `<div class="carte carte--serree">
+        <div class="rang-espace"><p class="t-corps-fort">${echapper(c.nom)}</p>${pastille(STATUTS_COMPOSANT, c.statut || 'en-cours')}</div>
+        <div class="rang-espace t-micro t-3" style="margin:10px 0 6px"><span>${echapper(TYPES_COMPOSANT[c.type] || c.type || '')}</span><span class="nb">${borner(c.progression)} %</span></div>
+        ${progression(c.progression, borner(c.progression) >= 100 ? 'vert' : '')}
+        ${c.version || c.environnement ? `<p class="t-micro t-3" style="margin-top:8px">${echapper([c.version && `v${c.version}`, c.versionPrep && `${c.versionPrep} en préparation`, c.environnement].filter(Boolean).join(' · '))}</p>` : ''}
+      </div>`).join('')}</div>
+    </section>` : (equipe ? `<section class="section"><div class="section-tete"><h2>Composants</h2>${boutonNouveau(env, 'composant', 'Ajouter un composant')}</div>${vide({ icone: 'composants', titre: 'Aucun composant', texte: 'Découpez le projet : iOS, Android, web, backend...', compact: true })}</section>` : '')}
+
+    <div class="grille grille-tiers section">
+      <div class="pile" style="gap:var(--e-7)">
+        <section>
+          <div class="section-tete"><h2>Feuille de route</h2><a class="lien" href="#/projets/${echapper(pid)}/roadmap">Tout voir</a></div>
+          ${d.jalons.length ? `<div class="route">${d.jalons.slice(0, 6).map((j) => phaseHtml(j)).join('')}</div>` : vide({ icone: 'route', titre: 'Pas encore de feuille de route', texte: equipe ? 'Ajoutez les jalons du projet.' : 'Elle apparaîtra ici dès que les étapes seront posées.', compact: true, action: boutonNouveau(env, 'jalon', 'Premier jalon') })}
+        </section>
+        <section>
+          <div class="section-tete"><h2>Activité récente</h2><a class="lien" href="#/projets/${echapper(pid)}/activite">Tout voir</a></div>
+          ${activiteHtml(d.activite.slice(0, 8))}
+        </section>
+      </div>
+      <aside class="pile" style="gap:var(--e-5)">
+        <div class="carte carte--creuse">
+          <p class="surtitre">Prochaine réunion</p>
+          ${reunion ? `<p class="t-titre-3" style="margin-top:8px">${echapper(reunion.titre)}</p><p class="t-petit t-2" style="margin-top:4px">${echapper(dateHeure(reunion.date))}</p>${reunion.lien ? `<a class="btn btn-secondaire btn-petit" style="margin-top:12px" href="${echapper(reunion.lien)}" target="_blank" rel="noopener">${icone('video')} Rejoindre</a>` : ''}` : `<p class="t-petit t-2" style="margin-top:8px">Aucune réunion programmée.</p>${boutonNouveau(env, 'reunion', 'Programmer')}`}
+        </div>
+        <div class="carte carte--creuse">
+          <p class="surtitre">Échéances</p>
+          ${echeances.length ? `<div class="pile" style="margin-top:10px;gap:10px">${echeances.map((e) => { const f = calcEcheance(e.date); return `<a class="rang" style="gap:10px;color:inherit;align-items:flex-start" href="#${echapper(e.chemin)}"><span class="ligne-icone" style="width:28px;height:28px;border-radius:8px">${icone(e.icone)}</span><span style="min-width:0"><span class="t-petit t-fort tronque" style="display:block">${echapper(e.titre)}</span><span class="t-micro puce puce--${f.ton}" style="margin-top:2px"><i></i>${echapper(f.texte)}</span></span></a>`; }).join('')}</div>` : '<p class="t-petit t-2" style="margin-top:8px">Rien de daté pour le moment.</p>'}
+        </div>
+        ${validationsAttente.length ? `<div class="carte carte--creuse"><p class="surtitre">Validations</p><div class="pile" style="margin-top:10px;gap:8px">${validationsAttente.map((v) => `<button class="rang" type="button" style="gap:10px;text-align:left" data-action="ouvrir-validation" data-id="${echapper(v.id)}"><span class="ligne-icone ligne-icone--violet" style="width:28px;height:28px;border-radius:8px">${icone('valider')}</span><span class="t-petit t-fort">${echapper(v.titre)}</span></button>`).join('')}</div></div>` : ''}
+        <div class="carte carte--creuse">
+          <p class="surtitre">Demandes</p>
+          <p class="t-petit" style="margin-top:8px">${pluriel(ouverts.length, 'demande ouverte', 'demandes ouvertes')}${ouverts.filter((t) => ATTEND_CLIENT.includes(t.statut)).length ? `, ${ouverts.filter((t) => ATTEND_CLIENT.includes(t.statut)).length} de votre côté` : ''}</p>
+          <p style="margin-top:8px"><a class="t-petit" href="#/projets/${echapper(pid)}/demandes">Voir les demandes</a></p>
+        </div>
+      </aside>
+    </div>`;
+};
+
+const phaseHtml = (j) => {
+  const classe = j.statut === 'termine' ? 'phase--terminee' : j.statut === 'en-cours' ? 'phase--en-cours' : j.statut === 'bloque' ? 'phase--bloquee' : '';
+  return `<div class="phase ${classe}">
+    <div class="phase-etat"><i aria-hidden="true"></i><span class="t-micro t-3">${echapper((STATUTS_JALON[j.statut] || {}).libelle || '')}</span></div>
+    <p class="phase-nom">${echapper(j.titre)}</p>
+    <p class="phase-sous">${echapper([j.phase, j.fin ? `fin ${dateCourte(j.fin)}` : ''].filter(Boolean).join(' · '))}</p>
+    ${j.statut !== 'termine' && borner(j.progression) > 0 ? progression(j.progression) : ''}
+  </div>`;
+};
+
+/* --- Composants (équipe) -------------------------------------------------- */
+const composants = (d, { env }) => `
+  <section class="section" style="margin-top:0">
+    <div class="section-tete"><h2>Composants</h2>${boutonNouveau(env, 'composant', 'Ajouter')}</div>
+    ${d.composants.length ? `<div class="liste">${d.composants.map((c) => ligne({
+      icone: 'composants', titre: `${echapper(c.nom)} <span class="t-3 t-petit" style="font-weight:400">· ${echapper(TYPES_COMPOSANT[c.type] || c.type || '')}</span>`,
+      sous: `${echapper([c.version && `v${c.version}`, c.versionPrep && `${c.versionPrep} en prépa.`, c.environnement, (c.techno || []).join(', ')].filter(Boolean).join(' · '))}`,
+      fin: `<span class="nb t-petit" style="min-width:44px;text-align:right">${borner(c.progression)} %</span>${pastille(STATUTS_COMPOSANT, c.statut || 'en-cours')}${boutonsEdition(env, 'composant', c.id, c.nom)}`,
+    })).join('')}</div>` : vide({ icone: 'composants', titre: 'Aucun composant', texte: 'Découpez le projet en briques pour suivre chacune.', compact: true })}
+  </section>`;
+
+/* --- Feuille de route ----------------------------------------------------- */
+const roadmap = (d, { env, pid }) => {
+  const phases = [];
+  for (const j of d.jalons) {
+    const nom = j.phase || 'Sans phase';
+    let p = phases.find((x) => x.nom === nom);
+    if (!p) { p = { nom, jalons: [] }; phases.push(p); }
+    p.jalons.push(j);
+  }
+  return `
+  <section class="section" style="margin-top:0">
+    <div class="section-tete"><h2>Feuille de route</h2>${boutonNouveau(env, 'jalon', 'Nouveau jalon', { ordre: d.jalons.length + 1 })}</div>
+    ${d.jalons.length ? `<div class="route" style="margin-bottom:var(--e-6)">${d.jalons.map(phaseHtml).join('')}</div>
+    ${phases.map((p) => `<div class="section" style="margin-top:var(--e-5)">
+      <p class="surtitre" style="margin-bottom:8px">${echapper(p.nom)}</p>
+      <div class="liste">${p.jalons.map((j) => {
+        const tachesDuJalon = d.taches.filter((t) => t.jalon === j.id);
+        const faites = tachesDuJalon.filter((t) => t.statut === 'terminee').length;
+        return ligne({
+          icone: j.statut === 'termine' ? 'check' : j.statut === 'bloque' ? 'alerte' : 'drapeau', ton: j.statut === 'termine' ? 'vert' : j.statut === 'bloque' ? 'rouge' : j.statut === 'en-cours' ? 'bleu' : '',
+          titre: echapper(j.titre),
+          sous: `${echapper([j.debut && dateCourte(j.debut), j.fin && `→ ${dateCourte(j.fin)}`, tachesDuJalon.length ? `${faites}/${tachesDuJalon.length} tâches` : '', j.description].filter(Boolean).join(' · '))}`,
+          fin: `${j.statut !== 'termine' ? `<span style="width:80px">${progression(j.progression)}</span>` : ''}${pastille(STATUTS_JALON, j.statut || 'a-venir')}${boutonsEdition(env, 'jalon', j.id, j.titre)}`,
+        });
+      }).join('')}</div>
+    </div>`).join('')}`
+    : vide({ icone: 'route', titre: 'Aucun jalon pour le moment', texte: env.role === 'equipe' ? 'Posez les grandes étapes : cadrage, design, développement, tests, publication.' : 'Les étapes du projet apparaîtront ici.' })}
+  </section>`;
+};
+
+/* --- Tâches ----------------------------------------------------------------- */
+const taches = (d, { env, pid }) => {
+  const equipe = env.role === 'equipe';
+  const mode = (() => { try { return localStorage.getItem('suivi:taches-vue') || 'liste'; } catch (e) { return 'liste'; } })();
+  const liste = d.taches.slice().sort((a, b) => ((STATUTS_TACHE[a.statut] || {}).ordre || 9) - ((STATUTS_TACHE[b.statut] || {}).ordre || 9) || ((PRIORITES[a.priorite] || {}).rang || 9) - ((PRIORITES[b.priorite] || {}).rang || 9));
+  const ligneTache = (t) => {
+    const f = t.echeance && t.statut !== 'terminee' ? calcEcheance(t.echeance) : null;
+    return ligne({
+      icone: t.statut === 'terminee' ? 'check' : t.statut === 'bloquee' ? 'alerte' : 'taches', ton: t.statut === 'terminee' ? 'vert' : t.statut === 'bloquee' ? 'rouge' : t.statut === 'attente-client' ? 'ambre' : t.statut === 'en-cours' ? 'bleu' : '',
+      titre: `${echapper(t.titre)}${t.visibilite === 'interne' ? ' <span class="etiquette" style="vertical-align:middle">Interne</span>' : ''}`,
+      sous: `${echapper([(d.composants.find((c) => c.id === t.composant) || {}).nom, t.assigne && nomEquipe(d.equipe, t.assigne), t.estimation].filter(Boolean).join(' · '))}${f ? ` ${echeanceHtml(f)}` : ''}${t.checklist && t.checklist.length ? ` <span class="t-3">${t.checklist.filter((c) => c.fait).length}/${t.checklist.length}</span>` : ''}`,
+      fin: `${puce(PRIORITES, t.priorite || 'normale')}${pastille(STATUTS_TACHE, t.statut || 'a-faire')}`,
+      action: 'ouvrir-tache', attrs: `data-id="${echapper(t.id)}"`,
+    });
+  };
+  return `
+  <section class="section" style="margin-top:0">
+    <div class="section-tete">
+      <h2>Tâches</h2>
+      <div class="rang">
+        <div class="segments" role="group" aria-label="Affichage"><button type="button" data-vue-taches="liste" aria-pressed="${mode === 'liste'}">${icone('liste')} Liste</button><button type="button" data-vue-taches="kanban" aria-pressed="${mode === 'kanban'}">${icone('kanban')} Kanban</button></div>
+        ${boutonNouveau(env, 'tache', 'Nouvelle tâche')}
+      </div>
+    </div>
+    ${!liste.length ? vide({ icone: 'taches', titre: 'Aucune tâche visible', texte: equipe ? 'Créez la première tâche du projet.' : 'Les tâches partagées avec vous apparaîtront ici.' })
+    : mode === 'kanban' ? `<div class="kanban">${parStatut(liste, STATUTS_TACHE).map((col) => `<div class="kanban-col"><div class="kanban-tete"><span class="puce puce--${col.fiche.voile}"><i></i></span>${echapper(col.fiche.libelle)}<span class="badge">${col.items.length}</span></div>
+      ${col.items.map((t) => `<button class="kanban-carte" type="button" data-action="ouvrir-tache" data-id="${echapper(t.id)}"><p class="titre">${echapper(t.titre)}</p><div class="sous">${puce(PRIORITES, t.priorite || 'normale')}${t.echeance ? `<span>${echapper(dateCourte(t.echeance))}</span>` : ''}${t.assigne ? avatar(nomEquipe(d.equipe, t.assigne) || 'C', { equipe: true, taille: 'petit' }) : ''}</div></button>`).join('')}
+    </div>`).join('')}</div>`
+    : `<div class="liste">${liste.map(ligneTache).join('')}</div>`}
+  </section>`;
+};
+
+const ouvrirTache = (t, d, { pid, env }) => {
+  const equipe = env.role === 'equipe';
+  const composant = d.composants.find((c) => c.id === t.composant);
+  const jalon = d.jalons.find((j) => j.id === t.jalon);
+  const f = t.echeance ? calcEcheance(t.echeance) : null;
+  const m = modale({
+    titre: t.titre, sousTitre: [composant && composant.nom, jalon && jalon.titre].filter(Boolean).join(' · '), feuille: true,
+    corps: `
+      <div class="rang" style="margin-bottom:16px">${pastille(STATUTS_TACHE, t.statut || 'a-faire')}${puce(PRIORITES, t.priorite || 'normale')}${f ? echeanceHtml(f) : ''}${t.visibilite === 'interne' ? '<span class="etiquette">Interne</span>' : ''}</div>
+      ${t.description ? `<div class="prose t-corps">${avecLiens(t.description)}</div>` : '<p class="t-petit t-3">Pas de description.</p>'}
+      <dl class="faits" style="margin-top:20px">${fait('Assignée à', echapper(t.assigne ? nomEquipe(d.equipe, t.assigne) || 'Capmedia' : 'Personne'))}${fait('Échéance', t.echeance ? echapper(dateCourte(t.echeance)) : '')}${fait('Estimation', echapper(t.estimation || ''))}${fait('Progression', `${borner(t.progression)} %`)}</dl>
+      ${t.checklist && t.checklist.length ? `<div style="margin-top:20px"><p class="surtitre">Liste de contrôle</p><div style="margin-top:6px">${t.checklist.map((c, i) => `<label class="coche${c.fait ? ' faite' : ''}"><input type="checkbox" data-coche="${i}" ${c.fait ? 'checked' : ''} ${equipe ? '' : 'disabled'}><span>${echapper(c.texte)}</span></label>`).join('')}</div></div>` : ''}
+      ${equipe ? `<div style="margin-top:24px"><p class="surtitre">Changer le statut</p><div class="rang" style="margin-top:8px">${Object.entries(STATUTS_TACHE).map(([cle, s]) => `<button class="filtre${t.statut === cle ? ' actif' : ''}" type="button" data-statut="${cle}">${echapper(s.libelle)}</button>`).join('')}</div></div>` : ''}
+      ${t.statut === 'attente-client' && !equipe ? encart('Nous attendons votre retour sur cette tâche. Répondez-nous dans la conversation du projet.', 'attention', 'alerte') : ''}`,
+    pied: equipe ? `<button class="btn btn-danger" type="button" data-suppr>Supprimer</button><span class="pousse"></span><button class="btn btn-secondaire" type="button" data-fermer>Fermer</button><button class="btn btn-principal" type="button" data-editer>Modifier</button>` : `<a class="btn btn-secondaire" href="#/messages/${echapper(pid)}">Écrire à Capmedia</a><button class="btn btn-principal" type="button" data-fermer>Fermer</button>`,
+  });
+  sur(m.el, 'click', '[data-statut]', (el) => agir(null, () => ecrire.majTache(t.id, { statut: el.dataset.statut, progression: el.dataset.statut === 'terminee' ? 100 : undefined })).then(() => m.fermer()));
+  sur(m.el, 'click', '[data-editer]', () => { m.fermer(); editer('tache', env, { pid, fiche: t }); });
+  sur(m.el, 'click', '[data-suppr]', async () => { const ok = await supprimer('tache', env, { pid, fiche: t, libelle: 'cette tâche' }); if (ok) m.fermer(); });
+  sur(m.el, 'change', '[data-coche]', (el) => {
+    const checklist = (t.checklist || []).map((c, i) => (i === Number(el.dataset.coche) ? { ...c, fait: el.checked } : c));
+    agir(null, () => ecrire.majTache(t.id, { checklist }));
+  });
+};
+
+/* --- Demandes ----------------------------------------------------------------- */
+const demandes = (d, { env, pid }) => {
+  const equipe = env.role === 'equipe';
+  const filtre = (() => { try { return sessionStorage.getItem(`suivi:filtre-demandes:${pid}`) || 'ouvertes'; } catch (e) { return 'ouvertes'; } })();
+  const tous = d.tickets.slice().sort(parDateDesc('maj'));
+  const groupes = {
+    ouvertes: tous.filter((t) => OUVERTS.includes(t.statut)),
+    moi: tous.filter((t) => ATTEND_CLIENT.includes(t.statut)),
+    terminees: tous.filter((t) => !OUVERTS.includes(t.statut)),
+    toutes: tous,
+  };
+  const liste = groupes[filtre] || groupes.ouvertes;
+  const nonLu = (t) => { const l = t.lu || {}; const marque = equipe ? l.equipe : l.client; return !marque || ((t.maj && t.maj.toMillis ? t.maj.toMillis() : 0) > (marque.toMillis ? marque.toMillis() : 0)); };
+  return `
+  <section class="section" style="margin-top:0">
+    <div class="section-tete"><h2>Demandes</h2><a class="btn btn-principal btn-petit" href="#/projets/${echapper(pid)}/nouvelle-demande">${icone('plus')} Nouvelle demande</a></div>
+    <div class="filtres" style="margin-bottom:16px">
+      ${[['ouvertes', 'Ouvertes'], ['moi', equipe ? 'Côté client' : 'Pour vous'], ['terminees', 'Terminées'], ['toutes', 'Toutes']].map(([cle, lib]) => `<button class="filtre${filtre === cle ? ' actif' : ''}" type="button" data-filtre-demandes="${cle}">${lib}<span class="compte">${groupes[cle].length}</span></button>`).join('')}
+    </div>
+    ${liste.length ? `<div class="liste">${liste.map((t) => ligne({
+      href: `#/projets/${echapper(pid)}/demandes/${echapper(t.id)}`,
+      icone: (TYPES[t.type] || {}).icone || 'inbox', ton: ATTEND_CLIENT.includes(t.statut) ? 'ambre' : t.statut === 'resolu' ? 'vert' : t.urgence === 'bloquant' || t.urgence === 'critique' ? 'rouge' : '',
+      nonLu: nonLu(t) && OUVERTS.includes(t.statut),
+      titre: `${t.numero ? `<span class="t-mono t-3" style="font-weight:400">${echapper(t.numero)}</span> ` : ''}${echapper(t.titre)}`,
+      sous: `${echapper((TYPES[t.type] || {}).libelle || t.type)} · ${puce(URGENCES, t.urgence || 'important')} · ${echapper(depuis(t.maj))}${t.qualification ? ` · ${pastille(QUALIFICATIONS, t.qualification)}` : ''}`,
+      fin: pastille(STATUTS, t.statut, { client: !equipe }),
+    })).join('')}</div>`
+    : vide({ icone: 'demandes', titre: filtre === 'ouvertes' ? 'Aucune demande en cours' : 'Rien ici', texte: filtre === 'ouvertes' ? 'Tout semble en ordre pour le moment.' : '', action: `<a class="btn btn-secondaire" href="#/projets/${echapper(pid)}/nouvelle-demande">Créer une demande</a>` })}
+  </section>`;
+};
+
+/* --- Fichiers --------------------------------------------------------------- */
+const fichiers = (d, { env, pid }) => {
+  const equipe = env.role === 'equipe';
+  const filtre = (() => { try { return sessionStorage.getItem(`suivi:filtre-fichiers:${pid}`) || ''; } catch (e) { return ''; } })();
+  const liste = d.fichiers.filter((f) => !filtre || f.categorie === filtre).sort(parDateDesc('cree'));
+  const categories = Object.entries(CATEGORIES_FICHIER).filter(([cle]) => d.fichiers.some((f) => f.categorie === cle));
+  return `
+  <section class="section" style="margin-top:0">
+    <div class="section-tete"><h2>Fichiers</h2><div class="rang">${equipe ? boutonNouveau(env, 'fichier', 'Déposer') : `<button class="btn btn-secondaire btn-petit" type="button" data-action="deposer-client">${icone('plus')} Envoyer un fichier</button>`}</div></div>
+    ${categories.length > 1 ? `<div class="filtres" style="margin-bottom:16px"><button class="filtre${!filtre ? ' actif' : ''}" type="button" data-filtre-fichiers="">Tous<span class="compte">${d.fichiers.length}</span></button>${categories.map(([cle, lib]) => `<button class="filtre${filtre === cle ? ' actif' : ''}" type="button" data-filtre-fichiers="${cle}">${echapper(lib)}<span class="compte">${d.fichiers.filter((f) => f.categorie === cle).length}</span></button>`).join('')}</div>` : ''}
+    ${liste.length ? `<div class="grille grille-2">${liste.map((f) => fichierHtml({ ...f, categorieLibelle: CATEGORIES_FICHIER[f.categorie] || f.categorie, par: f.par }, { menu: equipe })).join('')}</div>`
+    : vide({ icone: 'fichiers', titre: 'Aucun fichier', texte: equipe ? 'Déposez maquettes, livrables, documents.' : 'Vos maquettes, livrables et documents seront rangés ici. Vous pouvez aussi nous envoyer des captures ou des logos.' })}
+  </section>`;
+};
+
+const ouvrirDepotClient = (pid, env) => {
+  const m = modale({
+    titre: 'Envoyer des fichiers', sousTitre: 'Captures, logos, documents : ils arrivent directement chez Capmedia.', feuille: true,
+    corps: `<form class="forme" id="forme-depot" novalidate>
+      <div class="groupe"><label class="etiquette-champ" for="cat-depot">Catégorie</label><select class="select" id="cat-depot" name="categorie">${optionsDe({ captures: 'Captures', logos: 'Logos', assets: 'Assets (images, textes)', cahier: 'Cahier des charges', autres: 'Autres' }, 'captures')}</select></div>
+      <div class="groupe"><label class="etiquette-champ" for="desc-depot">Un mot pour nous <span class="facultatif">(facultatif)</span></label><input class="champ" id="desc-depot" name="description" maxlength="200"></div>
+      <div id="zone-depot"></div>
+    </form>`,
+    pied: `<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button><button class="btn btn-principal" type="submit" form="forme-depot">Envoyer</button>`,
+  });
+  const boite = depot(m.el.querySelector('#zone-depot'), { chemin: `projets/${pid}/documents/client`, max: 20 });
+  m.el.querySelector('#forme-depot').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (boite.occupe) { toast('Attendez la fin des envois.', 'erreur'); return; }
+    const pieces = boite.pieces;
+    if (!pieces.length) { toast('Choisissez au moins un fichier.', 'erreur'); return; }
+    const d = lireForme(e.target);
+    await agir(m.pied.querySelector('[type="submit"]'), async () => {
+      for (const p of pieces) await ecrire.deposerFichier(env.session, pid, p, { categorie: d.categorie, description: d.description });
+      m.fermer(true);
+    }, pieces.length > 1 ? `${pieces.length} fichiers envoyés.` : 'Fichier envoyé.');
+  });
+};
+
+/* --- Versions ------------------------------------------------------------------ */
+const releases = (d, { env }) => {
+  const liste = d.releases.slice().sort(parDateDesc('date'));
+  return `
+  <section class="section" style="margin-top:0">
+    <div class="section-tete"><h2>Versions et changements</h2>${boutonNouveau(env, 'release', 'Nouvelle version')}</div>
+    ${liste.length ? `<div class="pile" style="gap:var(--e-4)">${liste.map((r) => `<div class="carte">
+      <div class="rang-espace" style="align-items:flex-start">
+        <div class="rang" style="gap:12px"><span class="ligne-icone ${r.statut === 'disponible' ? 'ligne-icone--vert' : ''}">${icone('releases')}</span><div><p class="t-titre-3">${echapper(`${({ ios: 'iOS', android: 'Android', web: 'Web', backend: 'Backend', admin: 'Tableau de bord' })[r.plateforme] || r.plateforme || ''} ${r.version || ''}`.trim())}${r.titre ? ` <span class="t-2" style="font-weight:400">· ${echapper(r.titre)}</span>` : ''}</p><p class="t-petit t-3" style="margin-top:2px">${echapper([r.statut === 'disponible' ? `Publiée le ${dateCourte(r.date)}` : dateCourte(r.date), (d.composants.find((c) => c.id === r.composant) || {}).nom].filter(Boolean).join(' · '))}${r.visibilite === 'interne' ? ' · Interne' : ''}</p></div></div>
+        <div class="rang">${pastille(STATUTS_RELEASE, r.statut || 'developpement')}${env.role === 'equipe' ? `<button class="btn-icone" type="button" data-action="editer" data-genre="release" data-id="${echapper(r.id)}" aria-label="Modifier">${icone('edit')}</button>` : ''}</div>
+      </div>
+      ${(r.notes || []).length ? `<ul style="margin-top:14px" class="pile" style="gap:6px">${r.notes.map((n) => `<li class="rang" style="gap:10px;align-items:flex-start"><span style="flex:none">${pastille(TYPES_CHANGEMENT, n.type || 'amelioration')}</span><span class="t-petit">${echapper(n.texte)}</span></li>`).join('')}</ul>` : ''}
+      ${(r.liens && (r.liens.store || r.liens.test)) ? `<div class="rang" style="margin-top:14px">${r.liens.store ? `<a class="btn btn-secondaire btn-petit" href="${echapper(r.liens.store)}" target="_blank" rel="noopener">${icone('externe')} Ouvrir dans le store</a>` : ''}${r.liens.test ? `<a class="btn btn-doux btn-petit" href="${echapper(r.liens.test)}" target="_blank" rel="noopener">${icone('externe')} Version de test</a>` : ''}</div>` : ''}
+    </div>`).join('')}</div>`
+    : vide({ icone: 'releases', titre: 'Aucune version publiée', texte: 'Chaque mise en ligne sera listée ici avec ce qui change.' })}
+  </section>`;
+};
+const ouvrirRelease = () => {};
+
+/* --- Liens --------------------------------------------------------------------- */
+const liens = (d, { env }) => {
+  const groupes = Object.entries(CATEGORIES_LIEN).map(([cle, lib]) => ({ cle, lib, items: d.liens.filter((l) => l.categorie === cle) })).filter((g) => g.items.length);
+  return `
+  <section class="section" style="margin-top:0">
+    <div class="section-tete"><h2>Liens et environnements</h2>${boutonNouveau(env, 'lien', 'Ajouter un lien')}</div>
+    ${groupes.length ? groupes.map((g) => `<div style="margin-bottom:var(--e-5)"><p class="surtitre" style="margin-bottom:8px">${echapper(g.lib)}</p><div class="grille grille-2">${g.items.map((l) => `<a class="lien-env" href="${echapper(l.url)}" target="_blank" rel="noopener">
+      <span class="ligne-icone">${icone(l.categorie === 'code' ? 'code' : l.categorie === 'design' ? 'sparkle' : l.categorie === 'mobile' ? 'releases' : 'externe')}</span>
+      <span style="min-width:0"><span class="t-corps-fort" style="display:block">${echapper(l.nom)}${l.environnement ? ` <span class="etiquette" style="vertical-align:middle">${echapper(l.environnement)}</span>` : ''}${l.visibilite === 'interne' ? ' <span class="etiquette">Interne</span>' : ''}</span><span class="url" style="display:block">${echapper(l.url.replace(/^https?:\/\//, ''))}</span>${l.description ? `<span class="t-micro t-3" style="display:block">${echapper(l.description)}</span>` : ''}</span>
+      <span class="rang" style="gap:2px">${env.role === 'equipe' ? `<button class="btn-icone" type="button" data-action="editer" data-genre="lien" data-id="${echapper(l.id)}" aria-label="Modifier" onclick="event.preventDefault()">${icone('edit')}</button>` : ''}<span class="chevron" style="color:var(--encre-4)">${icone('externe')}</span></span>
+    </a>`).join('')}</div></div>`).join('')
+    : vide({ icone: 'liens', titre: 'Aucun lien', texte: 'Production, stores, environnements de test, maquettes : tout au même endroit.' })}
+  </section>`;
+};
+
+/* --- Réunions -------------------------------------------------------------------- */
+const reunions = (d, { env, pid }) => {
+  const aVenir = d.reunions.filter((r) => joursAvant(r.date) >= 0).sort(parDateAsc('date'));
+  const passees = d.reunions.filter((r) => joursAvant(r.date) < 0).sort(parDateDesc('date'));
+  const bloc = (r) => ligne({
+    icone: 'reunions', ton: joursAvant(r.date) >= 0 ? 'bleu' : '',
+    titre: echapper(r.titre), sous: `${echapper(dateHeure(r.date))}${r.duree ? ` · ${r.duree} min` : ''}${(r.participants || []).length ? ` · ${echapper(r.participants.map((p) => p.nom || p.email).join(', '))}` : ''}${r.visibilite === 'interne' ? ' · Interne' : ''}`,
+    fin: `${r.lien && joursAvant(r.date) >= 0 ? `<a class="btn btn-secondaire btn-petit" href="${echapper(r.lien)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${icone('video')} Rejoindre</a>` : ''}${r.compteRendu ? '<span class="etiquette">Compte rendu</span>' : ''}`,
+    action: 'ouvrir-reunion', attrs: `data-id="${echapper(r.id)}"`,
+  });
+  return `
+  <section class="section" style="margin-top:0">
+    <div class="section-tete"><h2>Réunions</h2><div class="rang">${env.role === 'equipe' ? boutonNouveau(env, 'reunion', 'Programmer') : `<a class="btn btn-secondaire btn-petit" href="#/messages/${echapper(pid)}">${icone('messages')} Demander un créneau</a>`}</div></div>
+    ${aVenir.length ? `<p class="surtitre" style="margin-bottom:8px">À venir</p><div class="liste" style="margin-bottom:var(--e-6)">${aVenir.map(bloc).join('')}</div>` : ''}
+    ${passees.length ? `<p class="surtitre" style="margin-bottom:8px">Passées</p><div class="liste">${passees.map(bloc).join('')}</div>` : ''}
+    ${!d.reunions.length ? vide({ icone: 'reunions', titre: 'Aucune réunion', texte: 'Les rendez-vous, leur ordre du jour et leur compte rendu seront ici.' }) : ''}
+  </section>`;
+};
+
+const ouvrirReunion = (r, { pid, env }) => {
+  const equipe = env.role === 'equipe';
+  const m = modale({
+    titre: r.titre, sousTitre: `${dateHeure(r.date)}${r.duree ? ` · ${r.duree} min` : ''}`, feuille: true,
+    corps: `
+      ${r.lien ? `<a class="btn btn-principal" href="${echapper(r.lien)}" target="_blank" rel="noopener">${icone('video')} Rejoindre la réunion</a>` : ''}
+      <button class="btn btn-secondaire" type="button" data-ics style="margin-left:8px">${icone('calendrier')} Ajouter à mon agenda</button>
+      ${(r.participants || []).length ? `<div style="margin-top:20px"><p class="surtitre">Participants</p><p class="t-petit" style="margin-top:6px">${echapper(r.participants.map((p) => p.nom || p.email).join(', '))}</p></div>` : ''}
+      ${r.ordreDuJour ? `<div style="margin-top:20px"><p class="surtitre">Ordre du jour</p><div class="prose t-corps" style="margin-top:6px">${enParagraphes(r.ordreDuJour)}</div></div>` : ''}
+      ${r.compteRendu ? `<div style="margin-top:20px"><p class="surtitre">Compte rendu</p><div class="prose t-corps" style="margin-top:6px">${avecLiens(r.compteRendu)}</div></div>` : ''}
+      ${r.decisions ? `<div style="margin-top:20px"><p class="surtitre">Décisions</p><div class="prose t-corps" style="margin-top:6px">${enParagraphes(r.decisions)}</div></div>` : ''}
+      ${(r.actions || []).length ? `<div style="margin-top:20px"><p class="surtitre">Actions</p>${r.actions.map((a) => `<label class="coche${a.fait ? ' faite' : ''}"><input type="checkbox" ${a.fait ? 'checked' : ''} disabled><span>${echapper(a.texte)}</span></label>`).join('')}</div>` : ''}
+      ${!r.ordreDuJour && !r.compteRendu ? '<p class="t-petit t-3" style="margin-top:20px">Pas encore de contenu pour cette réunion.</p>' : ''}`,
+    pied: equipe ? `<button class="btn btn-danger" type="button" data-suppr>Supprimer</button><span class="pousse"></span><button class="btn btn-secondaire" type="button" data-fermer>Fermer</button><button class="btn btn-principal" type="button" data-editer>Modifier</button>` : `<button class="btn btn-principal" type="button" data-fermer>Fermer</button>`,
+  });
+  sur(m.el, 'click', '[data-editer]', () => { m.fermer(); editer('reunion', env, { pid, fiche: r }); });
+  sur(m.el, 'click', '[data-suppr]', async () => { const ok = await supprimer('reunion', env, { pid, fiche: r, libelle: 'cette réunion' }); if (ok) m.fermer(); });
+  sur(m.el, 'click', '[data-ics]', () => telechargerICS(r));
+};
+
+const telechargerICS = (r) => {
+  const debut = r.date && r.date.toDate ? r.date.toDate() : new Date(r.date);
+  const fin = new Date(debut.getTime() + (Number(r.duree) || 60) * 60000);
+  const f = (d) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+  const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Capmedia//Hub//FR', 'BEGIN:VEVENT', `UID:${r.id}@capmedia.app`, `DTSTAMP:${f(new Date())}`, `DTSTART:${f(debut)}`, `DTEND:${f(fin)}`, `SUMMARY:${(r.titre || '').replace(/\n/g, ' ')}`, r.lien ? `URL:${r.lien}` : '', r.ordreDuJour ? `DESCRIPTION:${r.ordreDuJour.replace(/\n/g, '\\n')}` : '', 'END:VEVENT', 'END:VCALENDAR'].filter(Boolean).join('\r\n');
+  const url = URL.createObjectURL(new Blob([ics], { type: 'text/calendar' }));
+  const a = document.createElement('a'); a.href = url; a.download = `${(r.titre || 'reunion').replace(/[^\w-]+/g, '-')}.ics`; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+};
+
+/* --- Notes et décisions ------------------------------------------------------------ */
+const notes = (d, { env }) => {
+  const liste = d.notes.slice().sort(parDateDesc('date'));
+  return `
+  <section class="section" style="margin-top:0">
+    <div class="section-tete"><h2>Décisions et notes</h2>${boutonNouveau(env, 'note', 'Nouvelle note')}</div>
+    ${liste.length ? `<div class="liste">${liste.map((n) => ligne({
+      icone: n.type === 'decision' ? 'drapeau' : n.type === 'risque' ? 'alerte' : n.type === 'idee' ? 'ampoule' : 'note', ton: (TYPES_NOTE[n.type] || {}).voile === 'violet' ? 'violet' : (TYPES_NOTE[n.type] || {}).voile === 'rouge' ? 'rouge' : '',
+      titre: echapper(n.titre), sous: `${echapper(dateCourte(n.date))}${n.decidePar ? ` · ${echapper(n.decidePar)}` : ''}${n.visibilite === 'interne' ? ' · Interne' : ''}`,
+      fin: pastille(TYPES_NOTE, n.type || 'information'), action: 'ouvrir-note', attrs: `data-id="${echapper(n.id)}"`,
+    })).join('')}</div>`
+    : vide({ icone: 'note', titre: 'Aucune décision consignée', texte: 'Les décisions importantes vivent ici plutôt que dans une conversation.' })}
+  </section>`;
+};
+
+const ouvrirNote = (n, { pid, env }) => {
+  const equipe = env.role === 'equipe';
+  const m = modale({
+    titre: n.titre, sousTitre: `${(TYPES_NOTE[n.type] || {}).libelle || ''} · ${dateCourte(n.date)}${n.decidePar ? ` · ${n.decidePar}` : ''}`, feuille: true,
+    corps: `<div class="prose t-corps">${avecLiens(n.contenu || '')}</div>
+      ${n.contexte ? `<div style="margin-top:20px"><p class="surtitre">Contexte</p><div class="prose t-corps t-2" style="margin-top:6px">${enParagraphes(n.contexte)}</div></div>` : ''}
+      ${n.impact ? `<div style="margin-top:20px"><p class="surtitre">Impact</p><div class="prose t-corps t-2" style="margin-top:6px">${enParagraphes(n.impact)}</div></div>` : ''}`,
+    pied: equipe ? `<button class="btn btn-danger" type="button" data-suppr>Supprimer</button><span class="pousse"></span><button class="btn btn-secondaire" type="button" data-fermer>Fermer</button><button class="btn btn-principal" type="button" data-editer>Modifier</button>` : `<button class="btn btn-principal" type="button" data-fermer>Fermer</button>`,
+  });
+  sur(m.el, 'click', '[data-editer]', () => { m.fermer(); editer('note', env, { pid, fiche: n }); });
+  sur(m.el, 'click', '[data-suppr]', async () => { const ok = await supprimer('note', env, { pid, fiche: n, libelle: 'cette note' }); if (ok) m.fermer(); });
+};
+
+void montant; void pastilleTexte; void chronoItem; void parJour; void valider; void obligatoire; void heure; void STATUTS_VALIDATION;

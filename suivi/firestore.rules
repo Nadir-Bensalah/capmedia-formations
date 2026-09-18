@@ -1,15 +1,19 @@
 rules_version = '2';
 
 /*
-  CAPMEDIA DIGITAL · Règles Firestore de l'espace de suivi client
+  CAPMEDIA CLIENT HUB · Règles Firestore
 
   Projet Firebase : capmedia-1f90d, distinct de capmedia-academy qui porte
   les formations. Contrat de données : docs/suivi.md
 
-  Deux publics, une seule porte. L'équipe voit tout ; le client voit son
-  projet et rien d'autre. Toute écriture qui engage (numéro de ticket,
-  statut d'une facture, journal d'audit) est refusée au navigateur et
-  passe par l'Admin SDK ou par la fonction suiviAdmin.
+  Deux publics, une seule porte. L'équipe voit tout ; le client voit ses
+  projets et rien d'autre. Toute écriture qui engage (numéro, statut d'une
+  facture, journal d'audit, activité, notifications, membres) est refusée
+  au navigateur et passe par l'Admin SDK ou par la fonction suiviAdmin.
+
+  La visibilité « interne » est appliquée ici, pas seulement à l'écran :
+  un client ne peut lire une tâche, un fichier, une note ou un lien interne
+  ni par la liste, ni par l'adresse directe.
 
   Déployer :
     firebase deploy --config firebase.suivi.json --only firestore:rules --project capmedia-1f90d
@@ -18,7 +22,10 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // --- Fonctions communes -------------------------------------------
+    // ================================================================
+    // Fonctions communes
+    // ================================================================
+
     function connecte() {
       return request.auth != null
           && request.auth.token.email != null
@@ -29,11 +36,15 @@ service cloud.firestore {
       return request.auth.token.email.lower();
     }
 
+    function moi() {
+      return request.auth.uid;
+    }
+
     // Membre de l'équipe : le document existe, donc l'accès est total.
     // Il n'est créé que par l'Admin SDK, jamais depuis le navigateur.
     function estEquipe() {
       return connecte()
-          && exists(/databases/$(database)/documents/equipe/$(request.auth.uid));
+          && exists(/databases/$(database)/documents/equipe/$(moi()));
     }
 
     function ficheProjet(projetId) {
@@ -42,55 +53,145 @@ service cloud.firestore {
 
     // Client autorisé sur ce projet.
     function membreDuProjet(projetId) {
-      return connecte() && request.auth.uid in ficheProjet(projetId).membres;
+      return connecte() && moi() in ficheProjet(projetId).membres;
     }
 
-    function ficheTicket(ticketId) {
-      return get(/databases/$(database)/documents/tickets/$(ticketId)).data;
+    function accesProjet(projetId) {
+      return estEquipe() || membreDuProjet(projetId);
     }
 
-    function accesTicket(ticketId) {
-      return estEquipe() || membreDuProjet(ficheTicket(ticketId).projet);
+    // Un client ne lit que ce qui lui est destiné.
+    function visiblePourMoi() {
+      return estEquipe() || resource.data.visibilite == 'client';
     }
 
-    // --- L'équipe ---------------------------------------------------
+    function texteBorne(valeur, max) {
+      return valeur is string && valeur.size() <= max;
+    }
+
+    function texteRequis(valeur, max) {
+      return valeur is string && valeur.size() > 0 && valeur.size() <= max;
+    }
+
+    function auteurCoherent(champ) {
+      return champ.uid == moi()
+          && champ.cote == (estEquipe() ? 'equipe' : 'client');
+    }
+
+    // ================================================================
+    // L'équipe, les profils, les organisations
+    // ================================================================
+
     match /equipe/{uid} {
-      // Chacun lit sa propre fiche : c'est ce qui décide du rôle à l'écran.
-      allow read:  if connecte() && request.auth.uid == uid;
+      // L'équipe lit toute l'équipe (pour assigner) ; un client ne lit rien.
+      allow read:  if estEquipe();
       allow write: if false;
     }
 
-    // --- Les projets ------------------------------------------------
+    // Le profil d'une personne : le sien, et rien d'autre. Les champs sont
+    // bornés pour qu'un profil ne devienne pas un fourre-tout.
+    match /profils/{uid} {
+      allow read: if connecte() && (moi() == uid || estEquipe());
+      allow write: if connecte() && moi() == uid
+        && request.resource.data.keys().hasOnly([
+             'nom', 'telephone', 'entreprise', 'langue', 'fuseau', 'notifications',
+             'lus', 'epingles', 'derniereVisite', 'maj'
+           ])
+        && (!('nom' in request.resource.data) || texteBorne(request.resource.data.nom, 120))
+        && (!('telephone' in request.resource.data) || texteBorne(request.resource.data.telephone, 40))
+        && (!('entreprise' in request.resource.data) || texteBorne(request.resource.data.entreprise, 120))
+        && (!('epingles' in request.resource.data) || (request.resource.data.epingles is list && request.resource.data.epingles.size() <= 50));
+    }
+
+    match /organisations/{orgId} {
+      allow read:  if estEquipe() || (connecte() && moi() in resource.data.membres);
+      allow write: if false;
+    }
+
+    // ================================================================
+    // Les projets et leurs sous-collections
+    // ================================================================
+
     match /projets/{projetId} {
-      allow read:  if estEquipe()
-                   || (connecte() && request.auth.uid in resource.data.membres);
-      allow write: if false;
+      allow read:  if estEquipe() || (connecte() && moi() in resource.data.membres);
+      allow create, delete: if false;
+
+      // L'équipe pilote le contenu du projet. L'identité (référence,
+      // membres, compteur, organisation) reste au serveur : c'est elle
+      // qui porte l'accès et la numérotation.
+      allow update: if estEquipe()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+             'nom', 'description', 'type', 'statut', 'progression', 'debut', 'cible',
+             'responsable', 'pulse', 'sante', 'archive', 'client', 'plateformes', 'logo', 'budget', 'budgetNote', 'maj'
+           ])
+        && texteRequis(request.resource.data.nom, 120)
+        && request.resource.data.statut in ['prospect', 'cadrage', 'planifie', 'en-cours', 'attente-client',
+                                            'en-revue', 'livraison', 'maintenance', 'termine', 'suspendu', 'archive'];
+
+      match /composants/{composantId} {
+        allow read:   if accesProjet(projetId);
+        allow write:  if estEquipe();
+      }
+
+      match /jalons/{jalonId} {
+        allow read:   if accesProjet(projetId);
+        allow write:  if estEquipe();
+      }
+
+      match /liens/{lienId} {
+        allow read:   if accesProjet(projetId) && visiblePourMoi();
+        allow write:  if estEquipe()
+          && request.resource.data.url is string
+          && request.resource.data.url.matches('https?://.*');
+      }
+
+      // La conversation du projet : deux voix, jamais de note interne ici.
+      match /messages/{messageId} {
+        allow read: if accesProjet(projetId);
+        allow create: if accesProjet(projetId)
+          && request.resource.data.keys().hasOnly(['de', 'texte', 'pieces', 'date'])
+          && auteurCoherent(request.resource.data.de)
+          && texteRequis(request.resource.data.texte, 6000)
+          && request.resource.data.pieces is list
+          && request.resource.data.pieces.size() <= 10;
+        allow update, delete: if false;
+      }
     }
 
-    // --- Les tickets ------------------------------------------------
+    // Les jalons se lisent aussi en groupe, pour le planning de l'équipe.
+    match /{chemin=**}/jalons/{jalonId} {
+      allow read: if estEquipe();
+    }
+
+    // ================================================================
+    // Les demandes (collection « tickets »)
+    // ================================================================
+
     match /tickets/{ticketId} {
 
+      function ficheTicket() {
+        return get(/databases/$(database)/documents/tickets/$(ticketId)).data;
+      }
+
       function valeursConnues() {
-        return request.resource.data.type in ['bug', 'demande', 'question']
+        return request.resource.data.type in ['bug', 'modification', 'fonctionnalite', 'amelioration', 'question',
+                                              'technique', 'contenu', 'devis', 'demande', 'autre']
             && request.resource.data.urgence in ['bloquant', 'critique', 'important', 'mineur']
-            && request.resource.data.plateforme in ['ios', 'android', 'web', ''];
+            && request.resource.data.plateforme in ['ios', 'android', 'web', 'admin', 'backend', ''];
       }
 
       function taillesTenues() {
-        return request.resource.data.titre is string
-            && request.resource.data.titre.size() > 0
-            && request.resource.data.titre.size() <= 120
-            && request.resource.data.description is string
-            && request.resource.data.description.size() > 0
-            && request.resource.data.description.size() <= 6000
-            && request.resource.data.etapes is string
-            && request.resource.data.etapes.size() <= 4000
-            && request.resource.data.attendu is string
-            && request.resource.data.attendu.size() <= 2000
-            && request.resource.data.obtenu is string
-            && request.resource.data.obtenu.size() <= 2000
-            && request.resource.data.version is string
-            && request.resource.data.version.size() <= 40
+        return texteRequis(request.resource.data.titre, 120)
+            && texteRequis(request.resource.data.description, 6000)
+            && texteBorne(request.resource.data.etapes, 4000)
+            && texteBorne(request.resource.data.attendu, 2000)
+            && texteBorne(request.resource.data.obtenu, 2000)
+            && texteBorne(request.resource.data.contexte, 2000)
+            && texteBorne(request.resource.data.appareil, 160)
+            && texteBorne(request.resource.data.version, 40)
+            && texteBorne(request.resource.data.composant, 80)
+            && request.resource.data.liens is list
+            && request.resource.data.liens.size() <= 10
             && request.resource.data.pieces is list
             && request.resource.data.pieces.size() <= 10;
       }
@@ -99,35 +200,40 @@ service cloud.firestore {
       // L'auteur est forcément celui qui écrit.
       function creationValide() {
         return request.resource.data.keys().hasOnly([
-                 'numero', 'projet', 'titre', 'description', 'type', 'urgence',
-                 'statut', 'plateforme', 'version', 'etapes', 'attendu', 'obtenu',
-                 'assigne', 'auteur', 'pieces', 'archive', 'cree', 'maj', 'resolu', 'lu'
+                 'numero', 'projet', 'composant', 'titre', 'description', 'type', 'urgence',
+                 'statut', 'plateforme', 'version', 'etapes', 'attendu', 'obtenu', 'contexte', 'appareil', 'liens',
+                 'assigne', 'auteur', 'pieces', 'archive', 'cree', 'maj', 'resolu', 'lu', 'qualification', 'devis'
                ])
             && request.resource.data.numero == null
             && request.resource.data.statut == 'nouveau'
             && request.resource.data.archive == false
             && request.resource.data.assigne == null
             && request.resource.data.resolu == null
-            && request.resource.data.auteur.uid == request.auth.uid
+            && request.resource.data.qualification == null
+            && request.resource.data.devis == null
+            && request.resource.data.auteur.uid == moi()
             && request.resource.data.auteur.email == monEmail()
             && request.resource.data.projet is string
             && valeursConnues()
             && taillesTenues();
       }
 
-      // L'équipe pilote : statut, urgence, assignation, archive, lecture.
-      // Le numéro, le projet, l'auteur et la date de création sont figés.
+      // L'équipe pilote : statut, urgence, assignation, qualification,
+      // archive, lecture. Le numéro, le projet, l'auteur et la date de
+      // création sont figés.
       function majEquipe() {
         return request.resource.data.diff(resource.data).affectedKeys()
-                 .hasOnly(['statut', 'urgence', 'assigne', 'archive', 'maj',
-                           'resolu', 'lu', 'titre', 'type', 'plateforme', 'pieces'])
-            && request.resource.data.statut in ['nouveau', 'en-cours', 'en-attente-client',
-                                                'a-valider', 'resolu', 'ferme', 'refuse']
-            && request.resource.data.urgence in ['bloquant', 'critique', 'important', 'mineur'];
+                 .hasOnly(['statut', 'urgence', 'assigne', 'archive', 'maj', 'resolu', 'lu', 'titre',
+                           'type', 'plateforme', 'pieces', 'composant', 'qualification', 'devis'])
+            && request.resource.data.statut in ['nouveau', 'a-analyser', 'en-attente-client', 'acceptee', 'planifiee',
+                                                'en-cours', 'en-revue', 'a-valider', 'resolu', 'refuse', 'annulee', 'ferme']
+            && request.resource.data.urgence in ['bloquant', 'critique', 'important', 'mineur']
+            && (request.resource.data.qualification == null
+                || request.resource.data.qualification in ['incluse', 'hors-perimetre', 'a-chiffrer', 'offerte']);
       }
 
-      // Le client ne fait que trois choses : marquer comme lu, valider une
-      // correction, ou rouvrir dans les sept jours. Rien d'autre ne bouge.
+      // Le client ne fait que quatre choses : marquer comme lu, valider une
+      // correction, rouvrir dans les sept jours, ajouter des pièces.
       function clientMarqueLu() {
         return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lu']);
       }
@@ -166,56 +272,234 @@ service cloud.firestore {
 
       allow delete: if false;
 
-      // --- Les messages du ticket ---------------------------------
       // Une note interne est invisible au client : les règles la refusent,
       // le client interroge la sous-collection avec interne == false.
       match /messages/{messageId} {
         allow read: if estEquipe()
-                    || (membreDuProjet(ficheTicket(ticketId).projet)
-                        && resource.data.interne == false);
+                    || (membreDuProjet(ficheTicket().projet) && resource.data.interne == false);
 
-        allow create: if accesTicket(ticketId)
+        allow create: if (estEquipe() || membreDuProjet(ficheTicket().projet))
           && request.resource.data.keys().hasOnly(['de', 'texte', 'pieces', 'interne', 'date'])
-          && request.resource.data.de.uid == request.auth.uid
-          && request.resource.data.de.cote == (estEquipe() ? 'equipe' : 'client')
+          && auteurCoherent(request.resource.data.de)
           && request.resource.data.interne == (estEquipe() ? request.resource.data.interne : false)
-          && request.resource.data.texte is string
-          && request.resource.data.texte.size() > 0
-          && request.resource.data.texte.size() <= 6000
+          && texteRequis(request.resource.data.texte, 6000)
           && request.resource.data.pieces is list
           && request.resource.data.pieces.size() <= 10;
 
         allow update, delete: if false;
       }
 
-      // --- Le journal d'audit --------------------------------------
-      // Lecture seule, écrit par les fonctions. C'est ce qui rend
-      // l'historique digne de confiance.
+      // Le journal d'audit : lecture seule, écrit par les fonctions.
       match /evenements/{evenementId} {
-        allow read:  if accesTicket(ticketId);
+        allow read:  if estEquipe() || membreDuProjet(ficheTicket().projet);
         allow write: if false;
       }
     }
 
-    // --- Les devis et les factures ----------------------------------
-    // Déposés par l'équipe. Le client lit, et répond à un devis. Il ne
-    // touche jamais un montant, un numéro ni une facture.
+    // ================================================================
+    // Les tâches : l'équipe écrit, le client lit ce qui lui est destiné
+    // ================================================================
+
+    match /taches/{tacheId} {
+      allow read: if estEquipe()
+                  || (membreDuProjet(resource.data.projet) && resource.data.visibilite == 'client');
+      allow create: if estEquipe()
+        && texteRequis(request.resource.data.titre, 160)
+        && request.resource.data.statut in ['a-faire', 'en-cours', 'en-revue', 'bloquee', 'attente-client', 'terminee']
+        && request.resource.data.priorite in ['faible', 'normale', 'importante', 'bloquante']
+        && request.resource.data.visibilite in ['client', 'interne']
+        && request.resource.data.projet is string;
+      allow update: if estEquipe()
+        && (!('statut' in request.resource.data) || request.resource.data.statut in ['a-faire', 'en-cours', 'en-revue', 'bloquee', 'attente-client', 'terminee'])
+        && (!('visibilite' in request.resource.data) || request.resource.data.visibilite in ['client', 'interne'])
+        && request.resource.data.projet == resource.data.projet;
+      allow delete: if estEquipe();
+    }
+
+    // ================================================================
+    // Les validations : l'équipe demande, le client répond une fois
+    // ================================================================
+
+    match /validations/{validationId} {
+      allow read: if estEquipe() || membreDuProjet(resource.data.projet);
+      allow create: if estEquipe()
+        && texteRequis(request.resource.data.titre, 160)
+        && request.resource.data.statut == 'en-attente'
+        && request.resource.data.projet is string;
+      allow update: if estEquipe()
+        ? request.resource.data.projet == resource.data.projet
+        : (membreDuProjet(resource.data.projet)
+           && resource.data.statut == 'en-attente'
+           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statut', 'reponse', 'maj'])
+           && request.resource.data.statut in ['approuvee', 'modifications']
+           && request.resource.data.reponse.par == moi()
+           && texteBorne(request.resource.data.reponse.commentaire, 4000));
+      allow delete: if false;
+    }
+
+    // ================================================================
+    // Les fichiers : l'équipe range tout, le client dépose dans ses
+    // catégories, en visibilité client, à son nom
+    // ================================================================
+
+    match /fichiers/{fichierId} {
+      function categoriesClient() {
+        return ['assets', 'logos', 'captures', 'cahier', 'autres'];
+      }
+      allow read: if estEquipe()
+                  || (membreDuProjet(resource.data.projet) && resource.data.visibilite == 'client');
+      allow create: if request.resource.data.keys().hasOnly([
+             'projet', 'composant', 'categorie', 'nom', 'chemin', 'taille', 'type', 'description',
+             'tags', 'par', 'visibilite', 'version', 'archive', 'cree'
+           ])
+        && texteRequis(request.resource.data.nom, 240)
+        && texteRequis(request.resource.data.chemin, 500)
+        && request.resource.data.chemin.matches('projets/' + request.resource.data.projet + '/.*')
+        && request.resource.data.par.uid == moi()
+        && request.resource.data.archive == false
+        && (estEquipe()
+            || (membreDuProjet(request.resource.data.projet)
+                && request.resource.data.categorie in categoriesClient()
+                && request.resource.data.visibilite == 'client'
+                && request.resource.data.par.cote == 'client'));
+      allow update: if estEquipe()
+        && request.resource.data.projet == resource.data.projet
+        && request.resource.data.chemin == resource.data.chemin;
+      allow delete: if false;
+    }
+
+    // ================================================================
+    // Versions, réunions, notes, blocages : l'équipe écrit, le client lit
+    // ce qui lui est destiné
+    // ================================================================
+
+    match /releases/{releaseId} {
+      allow read: if estEquipe()
+                  || (membreDuProjet(resource.data.projet) && resource.data.visibilite == 'client');
+      allow create: if estEquipe() && request.resource.data.projet is string
+        && request.resource.data.statut in ['developpement', 'test', 'soumise', 'revue', 'disponible', 'retiree'];
+      allow update: if estEquipe() && request.resource.data.projet == resource.data.projet;
+      allow delete: if estEquipe();
+    }
+
+    match /reunions/{reunionId} {
+      allow read: if estEquipe()
+                  || (membreDuProjet(resource.data.projet) && resource.data.visibilite == 'client');
+      allow create: if estEquipe() && request.resource.data.projet is string && texteRequis(request.resource.data.titre, 160);
+      allow update: if estEquipe() && request.resource.data.projet == resource.data.projet;
+      allow delete: if estEquipe();
+    }
+
+    match /notes/{noteId} {
+      allow read: if estEquipe()
+                  || (membreDuProjet(resource.data.projet) && resource.data.visibilite == 'client');
+      allow create: if estEquipe() && request.resource.data.projet is string && texteRequis(request.resource.data.titre, 160);
+      allow update: if estEquipe() && request.resource.data.projet == resource.data.projet;
+      allow delete: if estEquipe();
+    }
+
+    match /blocages/{blocageId} {
+      allow read: if estEquipe()
+                  || (membreDuProjet(resource.data.projet) && resource.data.visibilite == 'client');
+      allow create: if estEquipe() && request.resource.data.projet is string && texteRequis(request.resource.data.titre, 160);
+      allow update: if estEquipe() && request.resource.data.projet == resource.data.projet;
+      allow delete: if estEquipe();
+    }
+
+    // ================================================================
+    // Les pièces comptables et les paiements
+    // ================================================================
+
+    // Déposés par le serveur. Le client lit, marque un devis consulté et y
+    // répond. Il ne touche jamais un montant, un numéro ni une facture.
     match /documents/{documentId} {
       allow read: if estEquipe() || membreDuProjet(resource.data.projet);
 
       allow update: if !estEquipe()
         && membreDuProjet(resource.data.projet)
         && resource.data.type == 'devis'
-        && resource.data.statut == 'envoye'
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statut', 'reponse'])
-        && request.resource.data.statut in ['accepte', 'refuse']
-        && request.resource.data.reponse.par == request.auth.uid;
+        && (
+             (resource.data.statut == 'envoye'
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statut'])
+              && request.resource.data.statut == 'consulte')
+          || (resource.data.statut in ['envoye', 'consulte']
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statut', 'reponse'])
+              && request.resource.data.statut in ['accepte', 'refuse']
+              && request.resource.data.reponse.par == moi()
+              && texteBorne(request.resource.data.reponse.commentaire, 2000))
+        );
 
       allow create, delete: if false;
     }
 
-    // --- La file des e-mails ----------------------------------------
-    // Personne n'y touche depuis le navigateur.
+    match /paiements/{paiementId} {
+      allow read:  if estEquipe() || membreDuProjet(resource.data.projet);
+      allow write: if false;
+    }
+
+    // ================================================================
+    // Les demandes de nouveau projet
+    // ================================================================
+
+    match /demandesProjet/{demandeId} {
+      function ficheDemande() {
+        return get(/databases/$(database)/documents/demandesProjet/$(demandeId)).data;
+      }
+      allow read: if estEquipe() || (connecte() && resource.data.par.uid == moi());
+      allow create: if connecte()
+        && request.resource.data.keys().hasOnly([
+             'organisation', 'par', 'titre', 'idee', 'objectifs', 'type', 'plateformes', 'budget', 'delai',
+             'description', 'fonctionnalites', 'exemples', 'liens', 'pieces', 'statut', 'projet', 'cree', 'maj'
+           ])
+        && request.resource.data.par.uid == moi()
+        && request.resource.data.par.email == monEmail()
+        && texteRequis(request.resource.data.titre, 160)
+        && texteBorne(request.resource.data.idee, 6000)
+        && request.resource.data.statut == 'nouvelle'
+        && request.resource.data.projet == null
+        && request.resource.data.pieces is list
+        && request.resource.data.pieces.size() <= 10;
+      allow update: if estEquipe()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statut', 'projet', 'maj'])
+        && request.resource.data.statut in ['nouvelle', 'discussion', 'qualification', 'estimation', 'devis', 'acceptee', 'projet', 'refusee'];
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow read: if estEquipe() || (connecte() && ficheDemande().par.uid == moi());
+        allow create: if (estEquipe() || (connecte() && ficheDemande().par.uid == moi()))
+          && request.resource.data.keys().hasOnly(['de', 'texte', 'pieces', 'date'])
+          && auteurCoherent(request.resource.data.de)
+          && texteRequis(request.resource.data.texte, 6000)
+          && request.resource.data.pieces is list
+          && request.resource.data.pieces.size() <= 10;
+        allow update, delete: if false;
+      }
+    }
+
+    // ================================================================
+    // Ce que seul le serveur écrit : activité, notifications, audit, file
+    // ================================================================
+
+    // L'activité vient des vrais événements : personne ne l'écrit à la main.
+    match /activite/{activiteId} {
+      allow read: if estEquipe()
+                  || (membreDuProjet(resource.data.projet) && resource.data.visibilite == 'client');
+      allow write: if false;
+    }
+
+    // Chacun lit sa boîte et ne fait qu'y marquer comme lu.
+    match /boites/{uid}/notifications/{notificationId} {
+      allow read: if connecte() && moi() == uid;
+      allow update: if connecte() && moi() == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lu']);
+      allow create, delete: if false;
+    }
+
+    match /audit/{auditId} {
+      allow read: if estEquipe();
+      allow write: if false;
+    }
+
     match /envois/{envoiId} {
       allow read, write: if false;
     }
@@ -223,10 +507,9 @@ service cloud.firestore {
     // ================================================================
     // FORMULAIRES PUBLICS DU SITE (déjà en service sur ce projet)
     //
-    // Le visiteur dépose sa demande sans compte. La lecture était ouverte
-    // à tout compte connecté : depuis que l'espace de suivi crée des
-    // comptes clients sur le même projet, cela reviendrait à leur ouvrir
-    // le fichier des prospects. La lecture est donc réservée à l'équipe.
+    // Le visiteur dépose sa demande sans compte. La lecture est réservée à
+    // l'équipe : des comptes clients existent sur ce projet et ne doivent
+    // pas voir le fichier des prospects.
     // ================================================================
 
     match /project-requests/{demandeId} {
