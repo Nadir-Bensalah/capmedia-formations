@@ -133,11 +133,17 @@ export const detail = async (ctx, env) => {
 
   let luMarque = false;
   let composeur = null;
+  let derniereEmpreinte = '';
+  const cles = [K.projet(pid), K.ticket(tid), K.messagesTicket(tid), K.evenementsTicket(tid), K.composants(pid), K.taches(pid), K.equipe];
 
   const rendre = () => {
     const projet = magasin.lire(K.projet(pid));
     const t = magasin.lire(K.ticket(tid));
-    if (projet === undefined || t === undefined) return;
+    const refuse = magasin.erreur(K.projet(pid)) || magasin.erreur(K.ticket(tid));
+    if ((projet === undefined || t === undefined) && !refuse) return;
+    const e = magasin.empreinte(cles);
+    if (e === derniereEmpreinte) return;
+    derniereEmpreinte = e;
     if (!t || !projet) { sortie.innerHTML = `<div class="page">${vide({ icone: 'demandes', titre: 'Demande introuvable', texte: "Elle a peut-être été archivée, ou vous n'y avez plus accès.", action: `<a class="btn btn-secondaire" href="#/projets/${echapper(pid)}/demandes">Retour aux demandes</a>` })}</div>`; return; }
     const messages = magasin.lire(K.messagesTicket(tid)) || [];
     const evenements = magasin.lire(K.evenementsTicket(tid)) || [];
@@ -270,7 +276,6 @@ export const detail = async (ctx, env) => {
   });
   brancherPieces(sortie);
 
-  const cles = [K.projet(pid), K.ticket(tid), K.messagesTicket(tid), K.evenementsTicket(tid), K.composants(pid), K.taches(pid), K.equipe];
   let minuteur = null;
   const planifier = () => { clearTimeout(minuteur); minuteur = setTimeout(rendre, 40); };
   cles.forEach((c) => lot.sur(c, planifier));

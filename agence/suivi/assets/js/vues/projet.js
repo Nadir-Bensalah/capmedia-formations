@@ -67,16 +67,22 @@ export const vue = async (ctx, env) => {
   const sortie = ctx.sortie;
   sortie.innerHTML = `<div class="page">${squelette('page', 6)}</div>`;
 
+  const cles = [K.projet(pid), K.composants(pid), K.jalons(pid), K.liens(pid), K.taches(pid), K.tickets(pid), K.validations(pid), K.fichiers(pid), K.releases(pid), K.reunions(pid), K.notes(pid), K.blocages(pid), K.documents(pid), K.paiements(pid), K.activite(pid), K.equipe];
   abonnerProjet(lot, pid, env.role);
-  if (equipe) lot.abonner(K.equipe, () => magasin.lire(K.equipe) ? null : null);
 
   let detailOuvert = ctx.params.tid && onglet === 'taches' ? ctx.params.tid : null;
+  let derniereEmpreinte = '';
 
-  const rendre = () => {
+  const rendre = (force = false) => {
     const d = lireTout(pid);
     const projet = d.projet;
-    if (projet === undefined) return;
-    if (projet === null) {
+    if (projet === undefined && !magasin.erreur(K.projet(pid))) return;
+    if (!force) {
+      const e = magasin.empreinte(cles);
+      if (e === derniereEmpreinte) return;
+      derniereEmpreinte = e;
+    }
+    if (projet === null || projet === undefined) {
       sortie.innerHTML = `<div class="page">${vide({ icone: 'projets', titre: 'Ce projet est introuvable', texte: "Il a peut-être été archivé, ou vous n'y avez plus accès.", action: '<a class="btn btn-secondaire" href="#/">Retour à l\'accueil</a>' })}</div>`;
       return;
     }
@@ -197,13 +203,12 @@ export const vue = async (ctx, env) => {
       if (el.dataset.filtreDemandes !== undefined) sessionStorage.setItem(`suivi:filtre-demandes:${pid}`, el.dataset.filtreDemandes);
       if (el.dataset.filtreFichiers !== undefined) sessionStorage.setItem(`suivi:filtre-fichiers:${pid}`, el.dataset.filtreFichiers);
     } catch (e) { /* stockage refusé */ }
-    rendre();
+    rendre(true);
   });
   brancherPieces(sortie);
 
-  const cles = [K.projet(pid), K.composants(pid), K.jalons(pid), K.liens(pid), K.taches(pid), K.tickets(pid), K.validations(pid), K.fichiers(pid), K.releases(pid), K.reunions(pid), K.notes(pid), K.blocages(pid), K.documents(pid), K.paiements(pid), K.activite(pid), K.equipe];
   let minuteur = null;
-  const planifier = () => { clearTimeout(minuteur); minuteur = setTimeout(rendre, 40); };
+  const planifier = () => { clearTimeout(minuteur); minuteur = setTimeout(() => rendre(false), 60); };
   cles.forEach((c) => lot.sur(c, planifier));
   planifier();
 
@@ -325,7 +330,7 @@ const apercu = (d, { pid, env, prog, attente, ouverts }) => {
         </div>
         <div class="carte carte--creuse">
           <p class="surtitre">Échéances</p>
-          ${echeances.length ? `<div class="pile" style="margin-top:10px;gap:10px">${echeances.map((e) => { const f = calcEcheance(e.date); return `<a class="rang" style="gap:10px;color:inherit;align-items:flex-start" href="#${echapper(e.chemin)}"><span class="ligne-icone" style="width:28px;height:28px;border-radius:8px">${icone(e.icone)}</span><span style="min-width:0"><span class="t-petit t-fort tronque" style="display:block">${echapper(e.titre)}</span><span class="t-micro puce puce--${f.ton}" style="margin-top:2px"><i></i>${echapper(f.texte)}</span></span></a>`; }).join('')}</div>` : '<p class="t-petit t-2" style="margin-top:8px">Rien de daté pour le moment.</p>'}
+          ${echeances.length ? `<div class="pile" style="margin-top:10px;gap:10px">${echeances.map((e) => { const f = calcEcheance(e.date); return `<a class="rang" style="gap:10px;color:inherit;align-items:flex-start;flex-wrap:nowrap" href="#${echapper(e.chemin)}"><span class="ligne-icone" style="width:28px;height:28px;border-radius:8px">${icone(e.icone)}</span><span style="min-width:0"><span class="t-petit t-fort tronque" style="display:block">${echapper(e.titre)}</span><span class="t-micro puce puce--${f.ton}" style="margin-top:2px"><i></i>${echapper(f.texte)}</span></span></a>`; }).join('')}</div>` : '<p class="t-petit t-2" style="margin-top:8px">Rien de daté pour le moment.</p>'}
         </div>
         ${validationsAttente.length ? `<div class="carte carte--creuse"><p class="surtitre">Validations</p><div class="pile" style="margin-top:10px;gap:8px">${validationsAttente.map((v) => `<button class="rang" type="button" style="gap:10px;text-align:left" data-action="ouvrir-validation" data-id="${echapper(v.id)}"><span class="ligne-icone ligne-icone--violet" style="width:28px;height:28px;border-radius:8px">${icone('valider')}</span><span class="t-petit t-fort">${echapper(v.titre)}</span></button>`).join('')}</div></div>` : ''}
         <div class="carte carte--creuse">
