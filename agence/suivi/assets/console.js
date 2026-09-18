@@ -342,11 +342,20 @@ const brancherLignes = (racine) => {
 
 /* --- Vue d'ensemble ------------------------------------------------------ */
 
-const tuile = (valeur, libelle, alerte = false) => `
-  <div class="tuile${alerte && valeur > 0 ? ' tuile--alerte' : ''}">
+/* Le ton d'une tuile : 'neutre' pour un simple décompte, 'attente' pour ce
+   qui traîne, 'alerte' pour ce qui coûte ou qui bloque. Tout colorer revient
+   à ne rien signaler. */
+const tuile = (valeur, libelle, ton = 'neutre') => {
+  // Une tuile ne prend sa couleur que si elle compte vraiment quelque chose.
+  // Un montant arrive en texte déjà mis en forme : on le prend au mot.
+  const compte = typeof valeur === 'number' ? valeur > 0 : Boolean(valeur);
+  const vif = ton !== 'neutre' && compte ? ` tuile--${ton}` : '';
+  return `
+  <div class="tuile${vif}">
     <p class="tuile-valeur">${echapper(valeur)}</p>
     <p class="tuile-libelle">${echapper(libelle)}</p>
   </div>`;
+};
 
 const rendreTableauDeBord = () => {
   const zone = $('#ecran-vue');
@@ -373,11 +382,11 @@ const rendreTableauDeBord = () => {
 
     <div class="tuiles tuiles--trois" style="margin-top:var(--e-5)">
       ${tuile(ouverts.length, 'Tickets ouverts, tous projets')}
-      ${tuile(aNous.length, "En attente de l'équipe", true)}
-      ${tuile(graves.length, 'Bloquants et critiques ouverts', true)}
-      ${tuile(orphelins.length, 'Ouverts sans assigné', true)}
-      ${tuile(dormants.length, 'Ouverts immobiles depuis plus de 48 h', true)}
-      ${tuile(facturesDues.length, `Factures impayées${totalDu ? ` · ${montant(totalDu)}` : ''}`, true)}
+      ${tuile(aNous.length, "En attente de l'équipe", 'attente')}
+      ${tuile(graves.length, 'Bloquants et critiques ouverts', 'alerte')}
+      ${tuile(orphelins.length, 'Ouverts sans assigné', 'attente')}
+      ${tuile(dormants.length, 'Ouverts immobiles depuis plus de 48 h', 'alerte')}
+      ${tuile(facturesDues.length, `Factures impayées${totalDu ? ` · ${montant(totalDu)}` : ''}`, 'attente')}
     </div>
 
     <section class="section-suivi">
@@ -618,7 +627,7 @@ const champFiche = (libelle, valeurHtml) => `
 const blocTexte = (titre, texte) => texte
   ? `<section class="section-suivi">
        <h3 class="titre-bloc">${echapper(titre)}</h3>
-       <div class="message-corps">${enParagraphes(texte)}</div>
+       <div class="texte-champ">${enParagraphes(texte)}</div>
      </section>`
   : '';
 
@@ -1217,8 +1226,8 @@ const rendreDocuments = () => {
     </div>
 
     <div class="tuiles tuiles--trois" style="margin-top:var(--e-5)">
-      ${tuile(impayes.length, 'Factures impayées', true)}
-      ${tuile(totalDu ? montant(totalDu) : '0 €', 'Total impayé, hors taxes', totalDu > 0)}
+      ${tuile(impayes.length, 'Factures impayées', 'alerte')}
+      ${tuile(totalDu ? montant(totalDu) : '0 €', 'Total impayé, hors taxes', totalDu > 0 ? 'alerte' : 'neutre')}
       ${tuile(etat.documents.filter((d) => !d.archive && d.type === 'devis' && d.statut === 'envoye').length, 'Devis en attente de réponse')}
     </div>
 

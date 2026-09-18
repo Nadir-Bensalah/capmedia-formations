@@ -15,7 +15,7 @@
 
 import {
   bdd, exigerSession, quitter, $, $$, echapper, avis, rienAAfficher,
-  dateCourte, depuis, montant, poids,
+  dateCourte, depuis, montant, poids, initiales,
   pastilleStatut, pastilleUrgence, etiquetteType,
   envoyerPiece, lienPiece, TAILLE_MAX,
   URGENCES, TYPES, PLATEFORMES, OUVERTS, ATTEND_CLIENT,
@@ -145,7 +145,8 @@ const majChiffres = () => {
   $('#tuile-attente').textContent  = attente;
   $('#tuile-resolus').textContent  = resolus;
   $('#tuile-factures').textContent = aRegler;
-  $('#tuile-attente').closest('.tuile').classList.toggle('tuile--alerte', attente > 0);
+  // Ce qui attend le client se signale en ambre, ce qui coûte de l'argent en rouge.
+  $('#tuile-attente').closest('.tuile').classList.toggle('tuile--attente', attente > 0);
   $('#tuile-factures').closest('.tuile').classList.toggle('tuile--alerte', aRegler > 0);
 
   const aTraiter = aDecider + aRegler;
@@ -544,6 +545,9 @@ const choisirProjet = (identifiant) => {
   const trouve = etat.session.projets.find((p) => p.id === identifiant);
   etat.projet = trouve || etat.session.projets[0];
   $('#nom-projet').innerHTML = `${echapper(etat.projet.nom || 'Projet')} <span>· suivi</span>`;
+  // La pastille du projet reprend ses initiales, comme les tuiles du site.
+  const pastilleProjet = $('#jeton-projet');
+  if (pastilleProjet) pastilleProjet.textContent = initiales(etat.projet.nom || 'Projet');
   document.title = `${etat.projet.nom || 'Projet'} · Suivi Capmedia`;
   const url = new URL(location.href);
   url.searchParams.set('p', etat.projet.id);
