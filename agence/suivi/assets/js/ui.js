@@ -56,6 +56,10 @@ export const choixPlateformes = (nom, choisies = [], { genre = 'checkbox', limit
   }).join('')}</div>`;
 };
 
+/** L'icône et la couleur d'une plateforme, pour une pastille de liste. */
+export const iconePlateforme = (cle) => (PLATEFORMES_CHOIX[cle] || {}).icone || '';
+export const tonPlateforme = (cle) => (PLATEFORMES_CHOIX[cle] || {}).voile || '';
+
 export const badge = (n, vif = false) => (n > 0
   ? `<span class="badge${vif ? ' badge--vif' : ''}">${echapper(n)}</span>`
   : '');
