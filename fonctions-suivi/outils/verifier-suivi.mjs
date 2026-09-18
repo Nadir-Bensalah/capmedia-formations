@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
 if (!process.env.FIRESTORE_EMULATOR_HOST) { console.error('émulateurs requis'); process.exit(1); }
-initializeApp({ projectId: process.env.GCLOUD_PROJECT || 'capmedia-academy' });
+initializeApp({ projectId: process.env.GCLOUD_PROJECT || 'capmedia-1f90d' });
 const bdd = getFirestore();
 
 const soucis = [];
@@ -44,9 +44,14 @@ const envoisDepuis = async (_ignore, modele) => {
     arrivent apres coup, et fausseraient la photo de depart. */
 const fileCalme = async () => {
   let dernier = -1;
-  for (let i = 0; i < 40; i++) {
+  let stable = 0;
+  for (let i = 0; i < 60; i++) {
     const n = (await bdd.collection('envois').get()).size;
-    if (n === dernier && n > 0) return n;
+    if (n === dernier && n > 0) stable += 1;
+    else stable = 0;
+    // Trois lectures identiques d affilee : les declencheurs du jeu de
+    // donnees ont fini d arriver.
+    if (stable >= 3) return n;
     dernier = n;
     await pause(1000);
   }
@@ -186,7 +191,7 @@ const photographier = async () => {
 
   /* 8. La porte d administration ----------------------------------------- */
   console.log('\n== La console écrit par la fonction serveur');
-  const PORTE = `http://127.0.0.1:5001/${process.env.GCLOUD_PROJECT || 'capmedia-academy'}/europe-west1/suiviAdmin`;
+  const PORTE = `http://127.0.0.1:5001/${process.env.GCLOUD_PROJECT || 'capmedia-1f90d'}/europe-west1/suiviAdmin`;
   const CLE = process.env.ADMIN_CLE_ESSAI || 'cle-essai-locale';
   const appeler = async (corps) => {
     const r = await fetch(PORTE, {

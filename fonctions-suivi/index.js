@@ -1,0 +1,22 @@
+/* ==========================================================================
+   CAPMEDIA DIGITAL · Fonctions de l'espace de suivi client
+
+   Projet Firebase : capmedia-1f90d, distinct de capmedia-academy qui porte
+   les formations et le webhook Stripe. Les deux ne partagent rien.
+
+   Contrat de données et cycle de vie d'un ticket : docs/suivi.md
+   Gabarits d'e-mail : courriels.js
+
+   Déployer :
+     firebase deploy --config firebase.suivi.json --only functions --project capmedia-1f90d
+   ========================================================================== */
+
+const suivi = require('./suivi');
+
+exports.suiviTicketCree      = suivi.suiviTicketCree;
+exports.suiviTicketModifie   = suivi.suiviTicketModifie;
+exports.suiviMessageCree     = suivi.suiviMessageCree;
+exports.suiviDocumentCree    = suivi.suiviDocumentCree;
+exports.suiviDocumentModifie = suivi.suiviDocumentModifie;
+exports.suiviFacteur         = suivi.suiviFacteur;
+exports.suiviAdmin           = suivi.suiviAdmin;

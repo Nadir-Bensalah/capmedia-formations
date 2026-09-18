@@ -31,8 +31,8 @@ import {
 /* Sur le banc d'essai local, les écritures d'administration doivent partir
    vers l'émulateur, jamais vers la production. */
 const URL_SUIVI = surEmulateur
-  ? 'http://127.0.0.1:5001/capmedia-academy/europe-west1/suiviAdmin'
-  : 'https://europe-west1-capmedia-academy.cloudfunctions.net/suiviAdmin';
+  ? 'http://127.0.0.1:5001/capmedia-1f90d/europe-west1/suiviAdmin'
+  : 'https://europe-west1-capmedia-1f90d.cloudfunctions.net/suiviAdmin';
 const CLE_STOCKAGE = 'suivi:cle-admin';
 
 const DELAI_SANS_MOUVEMENT = 48 * 3600 * 1000;
