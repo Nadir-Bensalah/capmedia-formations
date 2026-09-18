@@ -43,6 +43,29 @@ jobs:
           print(f'{touches} références estampillées en v={v}')
           PY
 
+      - name: Estampille de version sur les imports entre modules
+        run: |
+          python3 - "$GITHUB_SHA" <<'PY'
+          import os, re, sys
+          v = sys.argv[1][:8]
+          # Le navigateur met en cache chaque module. Sans version sur les
+          # imports relatifs, une mise en ligne ne change que le fichier
+          # d'entree : tout le reste reste l'ancien. On estampille donc les
+          # « from './x.js' » et les « import('./x.js') ».
+          motif = re.compile(r"((?:from|import)\s*\(?\s*['\"])(\.{1,2}/[^'\"?]+\.js)(['\"])")
+          touches = 0
+          for racine, _, fichiers in os.walk('agence/suivi/assets/js'):
+              for f in fichiers:
+                  if not f.endswith('.js'): continue
+                  chemin = os.path.join(racine, f)
+                  src = open(chemin, encoding='utf-8').read()
+                  neuf, n = motif.subn(lambda m: f'{m.group(1)}{m.group(2)}?v={v}{m.group(3)}', src)
+                  if n:
+                      open(chemin, 'w', encoding='utf-8').write(neuf)
+                      touches += n
+          print(f'{touches} import(s) estampilles en v={v}')
+          PY
+
       - name: Envoi FTP vers la racine
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:

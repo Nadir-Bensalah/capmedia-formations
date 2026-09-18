@@ -11,6 +11,7 @@ import {
   STATUTS_PROJET, TYPES_PROJET, SANTES, STATUTS, URGENCES, QUALIFICATIONS, PLATEFORMES_CHOIX,
 } from '../noyau.js';
 import { modale, confirmer, toast, lireForme, valider, obligatoire, longueurMax, urlValide, optionsDe, depot, agir, lisible, choixPlateformes } from '../ui.js';
+import { appelServeur } from '../serveur.js';
 import * as magasin from '../magasin.js';
 import { K, ecrire } from '../donnees.js';
 
@@ -48,7 +49,39 @@ const jalonsDe = (pid) => (magasin.lire(K.jalons(pid)) || []).reduce((c, x) => (
 const equipeCarte = () => (magasin.lire(K.equipe) || []).reduce((c, x) => ({ ...c, [x.id]: x.nom || x.email }), {});
 
 /** Ouvre une feuille, branche le formulaire, résout la valeur d'`enregistrer`. */
-const feuille = ({ titre, sousTitre, corps, enregistrer, libelle = 'Enregistrer', regles = {}, avecDepot = null }) => {
+/** Le choix d'un logo : on l'envoie tout de suite, l'aperçu suit. */
+const brancherLogo = (racine, pid) => {
+  const entree = $('#ed-logo', racine);
+  if (!entree) return;
+  const apercu = $('#apercu-logo', racine);
+  const poser = async (corps, message) => {
+    apercu.style.opacity = '0.4';
+    try {
+      const r = await appelServeur('poserLogo', { id: pid, ...corps });
+      if (r.logo) { apercu.classList.add('avatar-projet--logo'); apercu.innerHTML = `<img src="${r.logo}" alt="">`; }
+      else { apercu.classList.remove('avatar-projet--logo'); apercu.textContent = ''; }
+      toast(message);
+    } catch (e) { toast(lisible(e), 'erreur'); }
+    finally { apercu.style.opacity = ''; }
+  };
+  entree.addEventListener('change', async () => {
+    const f = entree.files[0];
+    if (!f) return;
+    if (f.size > 2 * 1024 * 1024) { toast('2 Mo au maximum.', 'erreur'); return; }
+    const donnees = await new Promise((ok, ko) => {
+      const l = new FileReader();
+      l.onload = () => ok(String(l.result).split(',')[1]);
+      l.onerror = ko;
+      l.readAsDataURL(f);
+    });
+    await poser({ donnees, typeFichier: f.type }, 'Logo posé.');
+    entree.value = '';
+  });
+  const retirer = $('#ed-logo-retirer', racine);
+  if (retirer) retirer.addEventListener('click', () => poser({ retirer: true }, 'Logo retiré.'));
+};
+
+const feuille = ({ titre, sousTitre, corps, enregistrer, libelle = 'Enregistrer', regles = {}, avecDepot = null, surMontage = null }) => {
   const m = modale({
     titre, sousTitre, feuille: true,
     corps: `<form class="forme" id="ed-forme" novalidate>${corps}${avecDepot ? '<div id="ed-depot"></div>' : ''}</form>`,
@@ -56,6 +89,7 @@ const feuille = ({ titre, sousTitre, corps, enregistrer, libelle = 'Enregistrer'
   });
   let boiteDepot = null;
   if (avecDepot) boiteDepot = depot($('#ed-depot', m.el), avecDepot);
+  if (surMontage) surMontage(m.el);
   const forme = $('#ed-forme', m.el);
   forme.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -79,6 +113,16 @@ const editeurs = {
   projet: (env, { pid, fiche }) => feuille({
     titre: 'Le projet', sousTitre: fiche.nom,
     corps: `
+      <div class="groupe"><span class="etiquette-champ">Logo</span>
+        <div class="rang" style="gap:14px">
+          <span class="avatar-projet avatar-projet--grand${fiche.logo ? ' avatar-projet--logo' : ''}" id="apercu-logo">${fiche.logo ? `<img src="${echapper(fiche.logo)}" alt="">` : echapper((fiche.nom || '?').slice(0, 2).toUpperCase())}</span>
+          <div class="rang" style="gap:8px">
+            <label class="btn btn-secondaire btn-petit" style="position:relative;overflow:hidden">Choisir une image<input type="file" id="ed-logo" accept="image/png,image/jpeg,image/webp,image/svg+xml" style="position:absolute;inset:0;opacity:0;cursor:pointer"></label>
+            ${fiche.logo ? '<button class="btn btn-fantome btn-petit" type="button" id="ed-logo-retirer">Retirer</button>' : ''}
+          </div>
+        </div>
+        <p class="aide">PNG, JPEG, WebP ou SVG, 2 Mo au maximum. Il remplace les initiales partout.</p>
+      </div>
       ${champ('nom', 'Nom', fiche.nom)}
       ${select('statut', 'Statut', STATUTS_PROJET, fiche.statut || 'en-cours')}
       ${select('type', 'Type', TYPES_PROJET, fiche.type || 'application-mobile')}
@@ -103,6 +147,7 @@ const editeurs = {
       ${champ('pulseAttenteClient', 'Attente client', (fiche.pulse || {}).attenteClient, { facultatif: true, placeholder: 'Laissez vide si rien' })}
       <label class="interrupteur" style="margin-top:8px"><input type="checkbox" name="silence" ${fiche.silence ? 'checked' : ''}><i></i> Préparer sans prévenir le client</label>
       <p class="aide">En sourdine, le client garde l'accès mais ne reçoit aucun e-mail. À lever quand l'espace est prêt.</p>`,
+    surMontage: (racine) => brancherLogo(racine, pid),
     regles: { nom: obligatoire(), progressionValeur: (v) => (v !== null && (v < 0 || v > 100) ? 'Entre 0 et 100.' : '') },
     enregistrer: (d) => ecrire.majProjet(pid, {
       nom: d.nom, statut: d.statut, type: d.type, description: d.description,

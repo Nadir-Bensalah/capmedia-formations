@@ -124,7 +124,7 @@ export const vue = async (ctx, env) => {
           const attenteProjet = attente.filter((a) => (a.chemin || '').startsWith(`/projets/${p.id}`)).length;
           return `<a class="carte carte--cliquable" href="#/projets/${echapper(p.id)}">
             <div class="rang" style="gap:14px;align-items:flex-start">
-              ${avatarProjet(p.nom)}
+              ${avatarProjet(p)}
               <div style="min-width:0;flex:1">
                 <div class="rang-espace" style="gap:8px">
                   <p class="t-titre-3 tronque">${echapper(p.nom)}</p>

@@ -71,8 +71,17 @@ export const avatar = (nom, options = {}) => {
   return `<span class="${classes.join(' ')}" aria-hidden="true">${echapper(initiales(nom))}</span>`;
 };
 
-export const avatarProjet = (nom, taille = '') =>
-  `<span class="avatar-projet${taille ? ` avatar-projet--${taille}` : ''}" aria-hidden="true">${echapper(initiales(nom))}</span>`;
+/**
+ * L'écusson d'un projet : son logo s'il en a un, ses initiales sinon.
+ * `projet` accepte aussi une simple chaîne, pour les anciens appels.
+ */
+export const avatarProjet = (projet, taille = '') => {
+  const nom = typeof projet === 'string' ? projet : (projet && projet.nom) || '';
+  const logo = typeof projet === 'object' && projet ? projet.logo : '';
+  const classes = `avatar-projet${taille ? ` avatar-projet--${taille}` : ''}${logo ? ' avatar-projet--logo' : ''}`;
+  if (logo) return `<span class="${classes}" aria-hidden="true"><img src="${echapper(logo)}" alt=""></span>`;
+  return `<span class="${classes}" aria-hidden="true">${echapper(initiales(nom))}</span>`;
+};
 
 export const progression = (valeur, ton = '') =>
   `<div class="progression${ton ? ` progression--${ton}` : ''}" role="progressbar" aria-valuenow="${borner(valeur)}" aria-valuemin="0" aria-valuemax="100"><i style="width:${borner(valeur)}%"></i></div>`;

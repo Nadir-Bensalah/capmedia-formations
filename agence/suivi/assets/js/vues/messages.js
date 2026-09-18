@@ -55,12 +55,12 @@ export const vue = async (ctx, env) => {
       ${liste.length ? `<div class="grille" style="grid-template-columns:${liste.length > 1 ? 'minmax(0,280px) minmax(0,1fr)' : 'minmax(0,1fr)'}">
         ${liste.length > 1 ? `<div class="liste" style="align-self:start">${liste.map((p) => { const nb = nonLusProjet(magasin.lire(K.messages(p.id)) || [], profil, p.id, uid); const dernier = (magasin.lire(K.messages(p.id)) || []).slice(-1)[0]; return `
           <a class="ligne${p.id === pid ? ' actif' : ''}${nb ? ' non-lu' : ''}" href="#/messages/${echapper(p.id)}" style="${p.id === pid ? 'background:var(--fond-2)' : ''}">
-            ${avatarProjet(p.nom)}
+            ${avatarProjet(p)}
             <span class="ligne-corps"><span class="ligne-titre">${echapper(p.nom)}</span><span class="ligne-sous tronque" style="display:block">${dernier ? echapper(`${dernier.de && dernier.de.cote === 'equipe' ? 'Capmedia' : (dernier.de || {}).nom || ''} : ${dernier.texte || ''}`) : 'Aucun message'}</span></span>
             <span class="ligne-fin">${nb ? `<span class="badge badge--vif">${nb}</span>` : `<span class="t-micro t-3">${dernier ? echapper(depuis(dernier.date)) : ''}</span>`}</span>
           </a>`; }).join('')}</div>` : ''}
         <section class="carte" style="display:flex;flex-direction:column;min-height:60vh">
-          <div class="rang-espace" style="padding-bottom:12px;border-bottom:1px solid var(--trait)"><div class="rang">${avatarProjet(courant.nom, 'petit')}<p class="t-titre-3">${echapper(courant.nom)}</p></div><a class="t-petit" href="#/projets/${echapper(pid)}">Ouvrir le projet</a></div>
+          <div class="rang-espace" style="padding-bottom:12px;border-bottom:1px solid var(--trait)"><div class="rang">${avatarProjet(courant, 'petit')}<p class="t-titre-3">${echapper(courant.nom)}</p></div><a class="t-petit" href="#/projets/${echapper(pid)}">Ouvrir le projet</a></div>
           <div class="fil" id="fil" style="flex:1;padding:16px 0;overflow-y:auto;max-height:60vh">
             ${messages.length ? messages.map((m) => messageHtml(m, { moi: uid })).join('') : `<div class="vide vide--compact"><span class="vide-icone">${icone('messages')}</span><p class="vide-titre">Commencez la conversation</p><p class="vide-texte">${equipe ? 'Le client reçoit un e-mail à chaque message.' : 'Capmedia reçoit un e-mail à chaque message et vous répond ici.'}</p></div>`}
           </div>

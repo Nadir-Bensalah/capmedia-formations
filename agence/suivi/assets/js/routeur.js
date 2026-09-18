@@ -11,6 +11,8 @@
 let routes = [];
 let routeDefaut = '/';
 let nettoyage = null;
+let majEnPlace = null;
+let cleCourante = null;
 let sortie = null;
 const ecouteurs = new Set();
 let routeCourante = { chemin: '/', params: {}, requete: {} };
@@ -50,18 +52,42 @@ const rendre = async () => {
     if (chemin !== routeDefaut) { naviguer(routeDefaut, { remplacer: true }); return; }
     return;
   }
+  /* Une route peut declarer une cle : deux adresses qui partagent la meme
+     cle sont la meme vue. On lui passe alors la main plutot que de tout
+     detruire, ce qui evite la secousse d un rechargement complet. */
+  const cle = typeof trouve.route.cle === 'function' ? trouve.route.cle({ chemin, params: trouve.params, requete }) : null;
+  if (cle && cle === cleCourante && typeof majEnPlace === 'function') {
+    routeCourante = { chemin, params: trouve.params, requete };
+    ecouteurs.forEach((fn) => { try { fn(routeCourante); } catch (e) { console.error(e); } });
+    try { majEnPlace({ ...routeCourante, sortie }); } catch (e) { console.error('[routeur] mise a jour en place', e); }
+    return;
+  }
+
   if (typeof nettoyage === 'function') { try { nettoyage(); } catch (e) { console.error(e); } }
   nettoyage = null;
+  majEnPlace = null;
+  cleCourante = cle;
   routeCourante = { chemin, params: trouve.params, requete };
   ecouteurs.forEach((fn) => { try { fn(routeCourante); } catch (e) { console.error(e); } });
   window.scrollTo({ top: 0 });
   try {
-    nettoyage = await trouve.route.vue({ ...routeCourante, sortie });
+    const rendu = await trouve.route.vue({ ...routeCourante, sortie });
+    if (rendu && typeof rendu === 'object' && typeof rendu.fin === 'function') {
+      nettoyage = rendu.fin;
+      majEnPlace = typeof rendu.maj === 'function' ? rendu.maj : null;
+    } else {
+      nettoyage = rendu;
+    }
   } catch (e) {
     console.error('[routeur] la vue a échoué', e);
     sortie.innerHTML = `<div class="page"><div class="vide"><p class="vide-titre">Cette page n'a pas pu s'ouvrir.</p><p class="vide-texte">Réessayez dans un instant. Si cela continue, prévenez-nous.</p><button class="btn btn-secondaire" type="button" onclick="location.reload()">Recharger</button></div></div>`;
   }
 };
+
+/**
+ * Une vue renvoie soit une fonction de nettoyage, soit
+ * { fin, maj } : `maj` est appelée quand on reste dans la même vue.
+ */
 
 /** Déclare les routes et l'élément qui reçoit les vues. */
 export const definir = (liste, { defaut = '/', cible } = {}) => {

@@ -275,17 +275,34 @@ input, select, textarea { font: inherit; color: inherit; }
 }
 .voile-lat.visible { opacity: 1; pointer-events: auto; }
 
+.lat-tete {
+  display: flex; align-items: center; justify-content: space-between;
+  height: var(--haut); padding: 0 var(--e-4) 0 var(--e-5);
+  flex: none;
+}
 .lat-marque {
   display: flex; align-items: center; gap: 10px;
-  height: var(--haut);
-  padding: 0 var(--e-5);
+  min-width: 0;
   font-weight: 600; font-size: 15px; letter-spacing: -0.01em;
   color: var(--encre); text-decoration: none;
-  flex: none;
 }
 .lat-marque:hover { text-decoration: none; }
 .lat-marque img { width: 24px; height: 24px; border-radius: 7px; }
-.lat-marque span { color: var(--encre-3); font-weight: 400; }
+.lat-marque .service {
+  font: var(--t-micro); font-weight: 600; letter-spacing: 0.04em;
+  padding: 2px 8px; border-radius: var(--r-pilule);
+  background: var(--accent-voile); color: var(--accent);
+  text-transform: uppercase;
+}
+
+/* Le bouton qui plie la barre latérale, à sa place : en haut à gauche. */
+.btn-plier {
+  width: 34px; height: 34px; border-radius: 9px; flex: none;
+  display: none; place-items: center; color: var(--encre-2);
+  transition: background var(--vite), color var(--vite);
+}
+.btn-plier svg { width: 18px; height: 18px; }
+.btn-plier:hover { background: var(--survol); color: var(--encre); }
 
 .lat-corps { flex: 1; padding: var(--e-2) var(--e-4) var(--e-5); display: flex; flex-direction: column; gap: var(--e-5); }
 
@@ -352,16 +369,17 @@ input, select, textarea { font: inherit; color: inherit; }
   transition: border-color var(--vite);
 }
 .haut.decollee { border-bottom-color: var(--trait); }
-.haut .fil {
-  display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1 1 auto;
+.ariane {
+  display: flex; flex-direction: row; align-items: center; gap: 6px;
+  min-width: 0; flex: 1 1 auto;
   font: var(--t-petit); color: var(--encre-3); white-space: nowrap; overflow: hidden;
 }
-.haut .fil > * { flex: none; }
-.haut .fil .courant { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.haut .fil a { color: var(--encre-2); text-decoration: none; }
-.haut .fil a:hover { color: var(--encre); }
-.haut .fil .courant { color: var(--encre); font-weight: 600; }
-.haut .fil .sep { color: var(--encre-4); }
+.ariane > * { flex: none; }
+.ariane a { color: var(--encre-2); text-decoration: none; }
+.ariane a:hover { color: var(--encre); }
+.ariane .courant { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--encre); font-weight: 600; }
+.ariane .sep { color: var(--encre-4); display: inline-flex; }
+.ariane .sep svg { width: 14px; height: 14px; }
 .haut .fin { margin-left: auto; display: flex; align-items: center; gap: var(--e-2); }
 
 .btn-icone {
@@ -424,13 +442,19 @@ input, select, textarea { font: inherit; color: inherit; }
 
 @media (min-width: 1024px) {
   .coq { grid-template-columns: var(--lat) minmax(0, 1fr); }
-  .lat { position: sticky; top: 0; height: 100vh; height: 100dvh; transform: none; box-shadow: none; inset: auto; }
+  .lat { inset: auto; position: sticky; top: 0; height: 100vh; height: 100dvh; transform: none; box-shadow: none; }
   .voile-lat { display: none; }
   .btn-menu { display: none; }
   .btn-recherche { display: inline-flex; }
   .page { padding: var(--e-6) var(--marge-page) var(--e-9); }
   .haut { padding: 0 var(--marge-page); }
+  .btn-plier { display: inline-grid; }
+  /* Pliée, la barre disparaît et le bouton reste dans la barre haute. */
+  .coq.pliee { grid-template-columns: 0 minmax(0, 1fr); }
+  .coq.pliee .lat { display: none; }
+  .coq.pliee .btn-deplier { display: inline-grid; }
 }
+.btn-deplier { display: none; }
 
 /* ==========================================================================
    4. Boutons
@@ -544,6 +568,9 @@ input, select, textarea { font: inherit; color: inherit; }
 }
 .avatar-projet--grand { width: 64px; height: 64px; border-radius: 18px; font-size: 20px; }
 .avatar-projet--petit { width: 28px; height: 28px; border-radius: 8px; font-size: 11px; }
+/* Avec un logo, l'écusson devient un cadre neutre : le logo parle seul. */
+.avatar-projet--logo { background: var(--fond-2); padding: 0; overflow: hidden; border: 1px solid var(--trait); }
+.avatar-projet--logo img { width: 100%; height: 100%; object-fit: contain; }
 
 .progression { height: 6px; border-radius: 3px; background: var(--fond-3); overflow: hidden; }
 .progression > i { display: block; height: 100%; border-radius: 3px; background: var(--accent); transition: width var(--doux); }

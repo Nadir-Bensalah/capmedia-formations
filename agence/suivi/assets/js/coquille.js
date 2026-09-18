@@ -32,10 +32,13 @@ export const monterCoquille = ({ session, role, groupes, sortie }) => {
     <a class="saut" href="#vue">Aller au contenu</a>
     <div class="coq">
       <aside class="lat" id="lat" aria-label="Navigation principale">
-        <a class="lat-marque" href="#/">
-          <img src="../assets/img/capmedia-digital.png" alt="" width="24" height="24">
-          Capmedia <span>${role === 'equipe' ? '· cockpit' : '· hub'}</span>
-        </a>
+        <div class="lat-tete">
+          <a class="lat-marque" href="#/">
+            <img src="../assets/img/capmedia-digital.png" alt="" width="24" height="24">
+            Capmedia <span class="service">${role === 'equipe' ? 'Cockpit' : 'Hub'}</span>
+          </a>
+          <button class="btn-plier" type="button" id="bouton-plier" aria-label="Replier la navigation" data-astuce="Replier">${icone('plier')}</button>
+        </div>
         <div class="lat-corps" id="lat-corps"></div>
         <div class="lat-pied">
           <button class="lat-compte" type="button" id="bouton-compte" aria-haspopup="menu">
@@ -52,7 +55,8 @@ export const monterCoquille = ({ session, role, groupes, sortie }) => {
       <div style="min-width:0">
         <header class="haut" id="haut">
           <button class="btn-icone btn-menu" type="button" id="bouton-menu" aria-label="Ouvrir la navigation" aria-controls="lat" aria-expanded="false">${icone('menu')}</button>
-          <nav class="fil" id="fil" aria-label="Fil d'Ariane"></nav>
+          <button class="btn-icone btn-deplier" type="button" id="bouton-deplier" aria-label="Déplier la navigation" data-astuce="Déplier">${icone('hub')}</button>
+          <nav class="ariane" id="ariane" aria-label="Fil d'Ariane"></nav>
           <div class="fin">
             <button class="btn-recherche" type="button" id="bouton-recherche">${icone('recherche')}<span>Rechercher</span><kbd>⌘K</kbd></button>
             <button class="btn-icone" type="button" id="bouton-recherche-mobile" aria-label="Rechercher" style="display:inline-grid">${icone('recherche')}</button>
@@ -122,7 +126,7 @@ const marquerActif = () => {
 
 /** Le fil d'Ariane : [{libelle, chemin?}]. Le dernier est la page courante. */
 export const filAriane = (items) => {
-  const fil = $('#fil');
+  const fil = $('#ariane');
   if (!fil) return;
   fil.innerHTML = items.map((it, i) => {
     const dernier = i === items.length - 1;
@@ -150,9 +154,22 @@ const fermerTiroir = () => {
   $('#bouton-menu').setAttribute('aria-expanded', 'false');
 };
 
+const CLE_PLIEE = 'suivi:lat-pliee';
+
 const brancherTiroir = () => {
   $('#bouton-menu').addEventListener('click', () => ($('#lat').classList.contains('ouverte') ? fermerTiroir() : ouvrirTiroir()));
   $('#voile-lat').addEventListener('click', fermerTiroir);
+
+  /* Sur grand écran, la barre se replie pour laisser toute la place au
+     contenu. Le choix se retient d'une visite à l'autre. */
+  const coq = $('.coq');
+  const plier = (oui) => {
+    coq.classList.toggle('pliee', oui);
+    try { localStorage.setItem(CLE_PLIEE, oui ? '1' : '0'); } catch (e) { /* stockage refusé */ }
+  };
+  try { if (localStorage.getItem(CLE_PLIEE) === '1') coq.classList.add('pliee'); } catch (e) { /* rien */ }
+  $('#bouton-plier').addEventListener('click', () => plier(true));
+  $('#bouton-deplier').addEventListener('click', () => plier(false));
 };
 
 const brancherHaut = () => {
