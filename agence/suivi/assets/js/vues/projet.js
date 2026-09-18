@@ -105,14 +105,17 @@ export const vue = async (ctx, env) => {
           <div style="min-width:0">
             <p class="surtitre">${echapper([projet.ref, (projet.client || {}).entreprise || (projet.client || {}).nom, projet.type && ({ ...TYPES_COMPOSANT, ...{ 'application-mobile': 'Application mobile', 'site-vitrine': 'Site vitrine', 'e-commerce': 'E-commerce', 'saas': 'SaaS' } })[projet.type]].filter(Boolean).join(' · '))}</p>
             <h1 style="margin-top:2px">${echapper(projet.nom)}</h1>
-            <div class="rang" style="margin-top:8px">
+            <div class="rang tete-suivi">
               ${pastille(STATUTS_PROJET, statutProjet(projet))}
-              ${(projet.plateformes || []).map((x) => pucePlateforme(x)).join('')}
               ${equipe && projet.sante ? pastille(SANTES, projet.sante) : ''}
               ${projet.cible ? `<span class="puce">${icone('cible')} Cible ${echapper(dateCourte(projet.cible))}</span>` : ''}
               ${projet.responsable ? `<span class="puce">${icone('utilisateur')} ${echapper(nomEquipe(d.equipe, projet.responsable) || 'Capmedia')}</span>` : ''}
               <span class="puce t-3">${icone('horloge')} ${d.activite[0] ? `Dernière activité ${echapper(depuis(d.activite[0].date))}` : 'Pas encore d\'activité'}</span>
             </div>
+            ${(projet.plateformes || []).length ? `<div class="tete-plateformes">
+              <span class="tete-plateformes-titre">${(projet.plateformes || []).length > 1 ? 'Plateformes' : 'Plateforme'}</span>
+              ${(projet.plateformes || []).map((x) => pucePlateforme(x)).join('')}
+            </div>` : ''}
           </div>
         </div>
         <div class="actions">
