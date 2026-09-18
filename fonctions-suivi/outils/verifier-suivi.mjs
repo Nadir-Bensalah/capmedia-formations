@@ -80,7 +80,7 @@ const photographier = async () => {
     description: 'Créé par la vérification automatique.',
     type: 'bug', urgence: 'important', statut: 'nouveau',
     plateforme: 'ios', version: '1.4.2', pieces: [], archive: false,
-    auteur: { uid: 'essai', nom: 'Sébastien Horemans', email: 'sebastien@horemans.eu', cote: 'client' },
+    auteur: { uid: 'essai', nom: 'Sébastien Horemans', email: 'sebastien.essai@exemple.test', cote: 'client' },
     cree: FieldValue.serverTimestamp(), maj: FieldValue.serverTimestamp(),
     lu: { client: FieldValue.serverTimestamp(), equipe: null },
   });

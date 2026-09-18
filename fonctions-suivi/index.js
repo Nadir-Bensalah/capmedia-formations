@@ -20,3 +20,7 @@ exports.suiviDocumentCree    = suivi.suiviDocumentCree;
 exports.suiviDocumentModifie = suivi.suiviDocumentModifie;
 exports.suiviFacteur         = suivi.suiviFacteur;
 exports.suiviAdmin           = suivi.suiviAdmin;
+
+/* Les automatisations du hub : activité, notifications, e-mails, progression. */
+const hub = require('./hub');
+Object.assign(exports, hub);

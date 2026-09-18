@@ -1,0 +1,511 @@
+/* ==========================================================================
+   CAPMEDIA CLIENT HUB · les briques d'interface
+   Tout ce qui se dessine plus d'une fois vit ici : pastilles, avatars,
+   états vides, squelettes, modales, menus, toasts, dépôt de fichiers.
+   Chaque brique renvoie du HTML sûr : tout texte passe par `echapper`.
+   ========================================================================== */
+
+import {
+  $, $$, echapper, initiales, borner, poids, depuis, enParagraphes, avecLiens,
+  envoyerPiece, lienPiece, jourRelatif, enDate,
+} from './noyau.js';
+import { icone } from './icones.js';
+
+export { icone };
+
+/* ==========================================================================
+   1. Les petites briques
+   ========================================================================== */
+
+/** Une pastille d'état. `carte` est un vocabulaire du noyau, `cle` sa valeur. */
+export const pastille = (carte, cle, options = {}) => {
+  const fiche = (carte && carte[cle]) || null;
+  const libelle = fiche
+    ? (options.client && fiche.client) || (options.equipe && fiche.equipe) || fiche.libelle
+    : (cle || '');
+  const voile = fiche ? fiche.voile : 'gris';
+  return `<span class="pastille pastille--${voile}">${echapper(libelle)}</span>`;
+};
+
+export const pastilleTexte = (texte, voile = 'gris') =>
+  `<span class="pastille pastille--${voile}">${echapper(texte)}</span>`;
+
+export const puce = (carte, cle) => {
+  const fiche = (carte && carte[cle]) || { libelle: cle, voile: 'gris' };
+  return `<span class="puce puce--${fiche.voile}"><i aria-hidden="true"></i>${echapper(fiche.libelle)}</span>`;
+};
+
+export const badge = (n, vif = false) => (n > 0
+  ? `<span class="badge${vif ? ' badge--vif' : ''}">${echapper(n)}</span>`
+  : '');
+
+export const avatar = (nom, options = {}) => {
+  const classes = ['avatar'];
+  if (options.equipe) classes.push('avatar--equipe');
+  if (options.taille) classes.push(`avatar--${options.taille}`);
+  return `<span class="${classes.join(' ')}" aria-hidden="true">${echapper(initiales(nom))}</span>`;
+};
+
+export const avatarProjet = (nom, taille = '') =>
+  `<span class="avatar-projet${taille ? ` avatar-projet--${taille}` : ''}" aria-hidden="true">${echapper(initiales(nom))}</span>`;
+
+export const progression = (valeur, ton = '') =>
+  `<div class="progression${ton ? ` progression--${ton}` : ''}" role="progressbar" aria-valuenow="${borner(valeur)}" aria-valuemin="0" aria-valuemax="100"><i style="width:${borner(valeur)}%"></i></div>`;
+
+export const anneau = (valeur, grand = false) =>
+  `<div class="anneau${grand ? ' anneau--grand' : ''}" style="--v:${borner(valeur)}" role="img" aria-label="${borner(valeur)} %"><span>${borner(valeur)}%</span></div>`;
+
+export const metrique = (valeur, libelle, options = {}) => `
+  <div class="metrique${options.ton ? ` metrique--${options.ton}` : ''}">
+    <p class="metrique-valeur">${echapper(valeur)}</p>
+    <p class="metrique-libelle">${echapper(libelle)}</p>
+    ${options.nuance ? `<p class="metrique-nuance">${echapper(options.nuance)}</p>` : ''}
+  </div>`;
+
+/** Une ligne de liste : icône, titre, sous-titre, fin. */
+export const ligne = ({ href, icone: nomIcone, ton, titre, sous, fin, nonLu, action, attrs = '' }) => {
+  const balise = href ? 'a' : 'button';
+  const lien = href ? ` href="${echapper(href)}"` : ' type="button"';
+  const classes = ['ligne'];
+  if (!nomIcone) classes.push('ligne--sans-icone');
+  if (nonLu) classes.push('non-lu');
+  return `<${balise} class="${classes.join(' ')}"${lien}${action ? ` data-action="${echapper(action)}"` : ''} ${attrs}>
+    ${nomIcone ? `<span class="ligne-icone${ton ? ` ligne-icone--${ton}` : ''}">${icone(nomIcone)}</span>` : ''}
+    <span class="ligne-corps">
+      <span class="ligne-titre">${titre}</span>
+      ${sous ? `<span class="ligne-sous">${sous}</span>` : ''}
+    </span>
+    <span class="ligne-fin">${fin || ''}${href ? `<span class="chevron">${icone('chevronDroite')}</span>` : ''}</span>
+  </${balise}>`;
+};
+
+/** Un fait : libellé au-dessus, valeur en dessous. */
+export const fait = (libelle, valeur) => (valeur
+  ? `<div class="fait"><dt>${echapper(libelle)}</dt><dd>${valeur}</dd></div>`
+  : '');
+
+/** Un bloc vide utile : il dit ce qui manque et propose le geste suivant. */
+export const vide = ({ icone: nomIcone = 'inbox', titre, texte = '', action = '', compact = false }) => `
+  <div class="vide${compact ? ' vide--compact' : ''}">
+    <span class="vide-icone">${icone(nomIcone)}</span>
+    <p class="vide-titre">${echapper(titre)}</p>
+    ${texte ? `<p class="vide-texte">${echapper(texte)}</p>` : ''}
+    ${action}
+  </div>`;
+
+export const encart = (texte, ton = '', nomIcone = 'info') =>
+  `<div class="encart${ton ? ` encart--${ton}` : ''}">${icone(nomIcone)}<div>${texte}</div></div>`;
+
+/** Le squelette d'attente. `genre` : lignes, cartes, page. */
+export const squelette = (genre = 'lignes', n = 4) => {
+  if (genre === 'page') {
+    return `<div class="squelette" aria-busy="true" aria-live="polite">
+      <div class="os os--titre"></div><div class="os os--texte"></div>
+      <div style="height:16px"></div>
+      ${'<div class="os os--ligne"></div>'.repeat(n)}
+    </div>`;
+  }
+  if (genre === 'cartes') {
+    return `<div class="grille grille-3" aria-busy="true">${'<div class="os os--carte"></div>'.repeat(n)}</div>`;
+  }
+  return `<div class="squelette" aria-busy="true">${'<div class="os os--ligne"></div>'.repeat(n)}</div>`;
+};
+
+/** Un <select> prêt à l'emploi depuis un vocabulaire. */
+export const optionsDe = (carte, valeur = '', options = {}) => Object.entries(carte)
+  .filter(([cle]) => !options.exclure || !options.exclure.includes(cle))
+  .map(([cle, fiche]) => {
+    const libelle = typeof fiche === 'string' ? fiche : fiche.libelle;
+    return `<option value="${echapper(cle)}"${cle === valeur ? ' selected' : ''}>${echapper(libelle)}</option>`;
+  }).join('');
+
+/** L'échéance colorée d'une date. */
+export const echeanceHtml = (fiche) => (fiche && fiche.texte
+  ? `<span class="puce puce--${fiche.ton}"><i aria-hidden="true"></i>${echapper(fiche.texte)}</span>`
+  : '');
+
+/* ==========================================================================
+   2. La chronologie
+   ========================================================================== */
+
+/** Groupe une liste par jour, dans l'ordre reçu. */
+export const parJour = (items, champ = 'date') => {
+  const groupes = [];
+  for (const item of items) {
+    const jour = jourRelatif(item[champ]);
+    const dernier = groupes[groupes.length - 1];
+    if (dernier && dernier.jour === jour) dernier.items.push(item);
+    else groupes.push({ jour, items: [item] });
+  }
+  return groupes;
+};
+
+export const chronoItem = ({ icone: nomIcone = 'point', ton = '', texte, date, lien }) => `
+  <div class="chrono-item">
+    <span class="chrono-point${ton ? ` chrono-point--${ton}` : ''}">${icone(nomIcone) || ''}</span>
+    <div>
+      <div class="chrono-texte">${lien ? `<a href="${echapper(lien)}" style="color:inherit">${texte}</a>` : texte}</div>
+      ${date ? `<div class="chrono-date">${echapper(date)}</div>` : ''}
+    </div>
+  </div>`;
+
+/* ==========================================================================
+   3. La conversation
+   ========================================================================== */
+
+export const messageHtml = (m, options = {}) => {
+  const de = m.de || {};
+  const equipe = de.cote === 'equipe';
+  const moi = options.moi && de.uid === options.moi;
+  const classes = ['message'];
+  if (equipe) classes.push('message--equipe');
+  if (m.interne) classes.push('message--interne');
+  const pieces = Array.isArray(m.pieces) && m.pieces.length
+    ? `<div class="pieces">${m.pieces.map((p) => pieceHtml(p)).join('')}</div>` : '';
+  return `<article class="${classes.join(' ')}" data-id="${echapper(m.id || '')}">
+    ${avatar(de.nom || (equipe ? 'Capmedia' : 'Client'), { equipe })}
+    <div>
+      <div class="message-tete">
+        <span class="message-auteur">${echapper(de.nom || (equipe ? 'Capmedia' : 'Vous'))}${moi ? ' <span class="t-3">(vous)</span>' : ''}</span>
+        <span class="message-date">${echapper(depuis(m.date))}</span>
+        ${m.interne ? '<span class="marque-interne">Note interne</span>' : ''}
+      </div>
+      <div class="message-corps">${avecLiens(m.texte || '')}</div>
+      ${pieces}
+    </div>
+  </article>`;
+};
+
+/* ==========================================================================
+   4. Les fichiers
+   ========================================================================== */
+
+const genreFichier = (type = '', nom = '') => {
+  if (/^image\//.test(type)) return { classe: 'image', court: 'IMG' };
+  if (/pdf/.test(type)) return { classe: 'pdf', court: 'PDF' };
+  if (/^video\//.test(type)) return { classe: 'image', court: 'VID' };
+  const ext = (nom.split('.').pop() || '').slice(0, 4);
+  return { classe: '', court: ext.toUpperCase() || 'DOC' };
+};
+
+export const pieceHtml = (p) => {
+  const g = genreFichier(p.type, p.nom);
+  return `<a class="piece" href="#" data-piece="${echapper(p.chemin)}" title="${echapper(p.nom)}">${icone(g.classe === 'image' ? 'image' : 'file')}<span class="nom">${echapper(p.nom)}</span><span class="t-3">${echapper(poids(p.taille))}</span></a>`;
+};
+
+export const fichierHtml = (f, options = {}) => {
+  const g = genreFichier(f.type, f.nom);
+  return `<div class="fichier" data-id="${echapper(f.id || '')}">
+    <span class="fichier-icone${g.classe ? ` fichier-icone--${g.classe}` : ''}">${echapper(g.court)}</span>
+    <div style="min-width:0">
+      <p class="fichier-nom">${echapper(f.nom)}</p>
+      <p class="fichier-sous">${echapper([f.categorieLibelle, poids(f.taille), f.par && f.par.nom, depuis(f.cree || f.date)].filter(Boolean).join(' · '))}</p>
+    </div>
+    <div class="rang" style="gap:4px">
+      <button class="btn-icone" type="button" data-piece="${echapper(f.chemin)}" data-astuce="Télécharger" aria-label="Télécharger">${icone('telecharger')}</button>
+      ${options.menu ? `<button class="btn-icone" type="button" data-menu-fichier="${echapper(f.id || '')}" aria-label="Plus d'actions">${icone('points')}</button>` : ''}
+    </div>
+  </div>`;
+};
+
+/** Ouvre une pièce dans un nouvel onglet, depuis n'importe quel clic [data-piece]. */
+export const brancherPieces = (racine) => {
+  racine.addEventListener('click', async (ev) => {
+    const cible = ev.target.closest('[data-piece]');
+    if (!cible) return;
+    ev.preventDefault();
+    try {
+      const url = await lienPiece({ chemin: cible.dataset.piece });
+      window.open(url, '_blank', 'noopener');
+    } catch (e) {
+      toast("Ce fichier n'est pas accessible.", 'erreur');
+    }
+  });
+};
+
+/**
+ * Un dépôt de fichiers : glisser-déposer, sélection, envoi avec progression,
+ * retrait. `chemin` est le dossier de stockage. Renvoie l'état des pièces.
+ */
+export const depot = (zone, { chemin, max = 10, texte = 'Déposez vos fichiers ici, ou <strong>choisissez-les</strong>.', aide = 'Images, PDF, vidéos courtes. 10 Mo par fichier.' } = {}) => {
+  const etat = { pieces: [], enCours: 0 };
+  zone.innerHTML = `
+    <label class="depot">
+      <span>${texte}</span><br><span class="t-micro t-3">${echapper(aide)}</span>
+      <input type="file" multiple>
+    </label>
+    <div class="pieces" aria-live="polite"></div>`;
+  const entree = $('input', zone);
+  const liste = $('.pieces', zone);
+  const label = $('.depot', zone);
+
+  const rendre = () => {
+    liste.innerHTML = etat.pieces.map((p, i) => p.envoi
+      ? `<span class="piece piece--envoi" style="--p:${p.progres || 0}%">${icone('file')}<span class="nom">${echapper(p.nom)}</span><span class="t-3">${p.progres || 0}%</span></span>`
+      : `<span class="piece">${icone(/^image\//.test(p.type) ? 'image' : 'file')}<span class="nom">${echapper(p.nom)}</span><span class="t-3">${echapper(poids(p.taille))}</span><button type="button" data-retirer="${i}" aria-label="Retirer">${icone('fermer')}</button></span>`)
+      .join('');
+  };
+
+  const ajouter = async (fichiers) => {
+    for (const f of Array.from(fichiers)) {
+      if (etat.pieces.length >= max) { toast(`${max} fichiers au maximum.`, 'erreur'); break; }
+      const provisoire = { nom: f.name, type: f.type, taille: f.size, envoi: true, progres: 0 };
+      etat.pieces.push(provisoire);
+      etat.enCours += 1;
+      rendre();
+      try {
+        const fiche = await envoyerPiece(f, chemin, (p) => { provisoire.progres = p; rendre(); });
+        Object.assign(provisoire, fiche, { envoi: false });
+      } catch (e) {
+        etat.pieces = etat.pieces.filter((p) => p !== provisoire);
+        toast(e.message || "L'envoi a échoué.", 'erreur');
+      } finally {
+        etat.enCours -= 1;
+        rendre();
+      }
+    }
+  };
+
+  entree.addEventListener('change', () => { ajouter(entree.files); entree.value = ''; });
+  ['dragenter', 'dragover'].forEach((n) => label.addEventListener(n, (e) => { e.preventDefault(); label.classList.add('survole'); }));
+  ['dragleave', 'drop'].forEach((n) => label.addEventListener(n, (e) => { e.preventDefault(); label.classList.remove('survole'); }));
+  label.addEventListener('drop', (e) => ajouter(e.dataTransfer.files));
+  liste.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-retirer]');
+    if (!b) return;
+    etat.pieces.splice(Number(b.dataset.retirer), 1);
+    rendre();
+  });
+
+  return {
+    get pieces() { return etat.pieces.filter((p) => !p.envoi).map(({ nom, chemin: c, taille, type }) => ({ nom, chemin: c, taille, type })); },
+    get occupe() { return etat.enCours > 0; },
+    vider() { etat.pieces = []; rendre(); },
+  };
+};
+
+/* ==========================================================================
+   5. Les surfaces flottantes
+   ========================================================================== */
+
+let piles = [];
+
+const fermerDerniere = () => {
+  const d = piles[piles.length - 1];
+  if (d) d.fermer();
+};
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') fermerDerniere();
+});
+
+/**
+ * Une modale ou une feuille latérale. Renvoie { el, corps, fermer, fin }.
+ * `fin` est une promesse résolue à la fermeture avec la valeur passée.
+ */
+export const modale = ({ titre, sousTitre = '', corps = '', pied = '', large = false, feuille = false, fermable = true }) => {
+  const voile = document.createElement('div');
+  voile.className = `voile${feuille ? ' voile--feuille' : ''}`;
+  voile.setAttribute('role', 'dialog');
+  voile.setAttribute('aria-modal', 'true');
+  voile.setAttribute('aria-label', titre);
+  voile.innerHTML = `
+    <div class="${feuille ? 'feuille' : `modale${large ? ' modale--large' : ''}`}">
+      <div class="modale-tete">
+        <div><h2>${echapper(titre)}</h2>${sousTitre ? `<p>${echapper(sousTitre)}</p>` : ''}</div>
+        ${fermable ? `<button class="btn-icone" type="button" data-fermer aria-label="Fermer">${icone('fermer')}</button>` : ''}
+      </div>
+      <div class="modale-corps">${corps}</div>
+      ${pied ? `<div class="modale-pied">${pied}</div>` : ''}
+    </div>`;
+  document.body.appendChild(voile);
+  document.body.style.overflow = 'hidden';
+
+  let resoudre;
+  const fin = new Promise((r) => { resoudre = r; });
+  const fermer = (valeur) => {
+    if (!voile.isConnected) return;
+    voile.remove();
+    piles = piles.filter((p) => p.voile !== voile);
+    if (!piles.length) document.body.style.overflow = '';
+    resoudre(valeur);
+  };
+  const entree = { voile, fermer };
+  piles.push(entree);
+
+  voile.addEventListener('click', (e) => {
+    if (fermable && (e.target === voile || e.target.closest('[data-fermer]'))) fermer(undefined);
+  });
+  const premier = $('input, select, textarea, button:not([data-fermer])', voile);
+  if (premier) setTimeout(() => premier.focus(), 30);
+
+  return { el: voile, corps: $('.modale-corps', voile), pied: $('.modale-pied', voile), fermer, fin };
+};
+
+/** Une confirmation. Résout true ou false. */
+export const confirmer = ({ titre, texte = '', ok = 'Confirmer', annuler = 'Annuler', danger = false }) => {
+  const m = modale({
+    titre,
+    corps: texte ? `<p class="t-corps t-2">${echapper(texte)}</p>` : '',
+    pied: `<button class="btn btn-secondaire" type="button" data-non>${echapper(annuler)}</button>
+           <button class="btn ${danger ? 'btn-danger' : 'btn-principal'}" type="button" data-oui>${echapper(ok)}</button>`,
+  });
+  $('[data-non]', m.el).addEventListener('click', () => m.fermer(false));
+  $('[data-oui]', m.el).addEventListener('click', () => m.fermer(true));
+  return m.fin.then((v) => v === true);
+};
+
+/** Un menu contextuel ancré sous un élément. `items` : [{libelle, icone, action, danger, titre}]. */
+export const menu = (ancre, items) => {
+  $$('.menu').forEach((m) => m.remove());
+  const boite = document.createElement('div');
+  boite.className = 'menu';
+  boite.setAttribute('role', 'menu');
+  boite.innerHTML = items.map((it) => {
+    if (it === '-') return '<hr>';
+    if (it.titre) return `<div class="titre">${echapper(it.titre)}</div>`;
+    return `<button type="button" role="menuitem" class="${it.danger ? 'danger' : ''}" data-cle="${echapper(it.cle || it.libelle)}">${it.icone ? icone(it.icone) : ''}${echapper(it.libelle)}</button>`;
+  }).join('');
+  document.body.appendChild(boite);
+
+  const r = ancre.getBoundingClientRect();
+  const largeur = boite.offsetWidth;
+  const hauteur = boite.offsetHeight;
+  let gauche = r.right - largeur;
+  if (gauche < 8) gauche = 8;
+  let haut = r.bottom + 6;
+  if (haut + hauteur > window.innerHeight - 8) haut = r.top - hauteur - 6;
+  boite.style.left = `${Math.round(gauche)}px`;
+  boite.style.top = `${Math.round(Math.max(8, haut))}px`;
+
+  const fermer = () => { boite.remove(); document.removeEventListener('click', horsClic, true); };
+  const horsClic = (e) => { if (!boite.contains(e.target)) fermer(); };
+  setTimeout(() => document.addEventListener('click', horsClic, true), 0);
+
+  boite.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-cle]');
+    if (!b) return;
+    const it = items.find((x) => x && (x.cle || x.libelle) === b.dataset.cle);
+    fermer();
+    if (it && it.action) it.action();
+  });
+  return fermer;
+};
+
+/** Le toast : court, en bas, disparaît seul. */
+export const toast = (texte, genre = 'ok', duree = 4200) => {
+  let zone = $('.toasts');
+  if (!zone) {
+    zone = document.createElement('div');
+    zone.className = 'toasts';
+    zone.setAttribute('aria-live', 'polite');
+    document.body.appendChild(zone);
+  }
+  const t = document.createElement('div');
+  t.className = `toast toast--${genre}`;
+  t.setAttribute('role', 'status');
+  t.innerHTML = `${icone(genre === 'erreur' ? 'alerte' : 'check')}<span>${echapper(texte)}</span><button type="button" aria-label="Fermer">${icone('fermer')}</button>`;
+  zone.appendChild(t);
+  const retirer = () => t.remove();
+  $('button', t).addEventListener('click', retirer);
+  setTimeout(retirer, duree);
+};
+
+/* ==========================================================================
+   6. Les formulaires
+   ========================================================================== */
+
+/** Les valeurs d'un formulaire, en objet. Les cases à cocher donnent true/false. */
+export const lireForme = (forme) => {
+  const donnees = {};
+  for (const el of forme.elements) {
+    if (!el.name) continue;
+    if (el.type === 'checkbox') donnees[el.name] = el.checked;
+    else if (el.type === 'number') donnees[el.name] = el.value === '' ? null : Number(el.value);
+    else if (el.multiple && el.tagName === 'SELECT') donnees[el.name] = Array.from(el.selectedOptions).map((o) => o.value);
+    else donnees[el.name] = el.value.trim();
+  }
+  return donnees;
+};
+
+/**
+ * Vérifie un formulaire contre des règles { champ: (valeur, donnees) => message | '' }.
+ * Marque les champs fautifs et renvoie true si tout est bon.
+ */
+export const valider = (forme, regles) => {
+  const donnees = lireForme(forme);
+  let premier = null;
+  $$('.erreur-champ', forme).forEach((e) => e.remove());
+  $$('[aria-invalid]', forme).forEach((e) => e.removeAttribute('aria-invalid'));
+  for (const [nom, regle] of Object.entries(regles)) {
+    const el = forme.elements[nom];
+    if (!el) continue;
+    const message = regle(donnees[nom], donnees);
+    if (!message) continue;
+    el.setAttribute('aria-invalid', 'true');
+    const note = document.createElement('p');
+    note.className = 'erreur-champ';
+    note.textContent = message;
+    (el.closest('.groupe') || el.parentElement).appendChild(note);
+    if (!premier) premier = el;
+  }
+  if (premier) premier.focus();
+  return !premier;
+};
+
+export const obligatoire = (message = 'Ce champ est obligatoire.') => (v) => (v === '' || v === null || v === undefined ? message : '');
+export const longueurMax = (n) => (v) => (typeof v === 'string' && v.length > n ? `${n} caractères au maximum.` : '');
+export const emailValide = () => (v) => (v && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v) ? 'Cette adresse a l\'air incomplète.' : '');
+export const urlValide = () => (v) => (v && !/^https?:\/\/\S+$/.test(v) ? 'Une adresse commence par http:// ou https://.' : '');
+
+/** Exécute une promesse en tenant un bouton occupé. Renvoie true si elle a réussi. */
+export const agir = async (bouton, promesse, messageOk = '') => {
+  if (bouton) { bouton.classList.add('btn-charge'); bouton.disabled = true; }
+  try {
+    await promesse();
+    if (messageOk) toast(messageOk);
+    return true;
+  } catch (e) {
+    console.error(e);
+    toast(lisible(e), 'erreur');
+    return false;
+  } finally {
+    if (bouton) { bouton.classList.remove('btn-charge'); bouton.disabled = false; }
+  }
+};
+
+/** Un message d'erreur qu'un humain comprend, jamais « Error 500 ». */
+export const lisible = (e) => {
+  const code = (e && e.code) || '';
+  if (code === 'permission-denied') return "Vous n'avez pas le droit de faire cela.";
+  if (code === 'unavailable' || code === 'auth/network-request-failed') return 'La connexion au réseau a échoué. Réessayez dans un instant.';
+  if (code === 'not-found') return 'Cet élément n\'existe plus.';
+  if (code === 'storage/unauthorized') return "Ce fichier n'est pas accessible.";
+  if (code === 'storage/canceled') return 'Envoi annulé.';
+  const m = (e && e.message) || '';
+  if (/injoignable|Clé refusée|demande la clé/.test(m)) return m;
+  if (m && m.length < 140 && !/^Firebase/.test(m)) return m;
+  return "Quelque chose n'a pas fonctionné. Réessayez, et prévenez-nous si cela continue.";
+};
+
+/** Délégation d'événements : `sur(racine, 'click', '[data-action]', (el, ev) => ...)`. */
+export const sur = (racine, type, selecteur, gestion) => {
+  const ecoute = (ev) => {
+    const el = ev.target.closest(selecteur);
+    if (el && racine.contains(el)) gestion(el, ev);
+  };
+  racine.addEventListener(type, ecoute);
+  return () => racine.removeEventListener(type, ecoute);
+};
+
+/** Copie un texte, et le dit. */
+export const copier = async (texte) => {
+  try { await navigator.clipboard.writeText(texte); toast('Copié.'); }
+  catch (e) { toast('Impossible de copier.', 'erreur'); }
+};
+
+/** Un titre de page pour l'onglet du navigateur. */
+export const titrePage = (texte) => { document.title = `${texte} · Capmedia`; };
+
+/** Défilement doux vers un élément, s'il existe. */
+export const defilerVers = (sel) => { const el = $(sel); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
