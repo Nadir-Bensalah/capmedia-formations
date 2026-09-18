@@ -1125,6 +1125,103 @@ exports.suiviAdmin = onRequest(
         return res.status(200).json({ ok: true, uid: utilisateur.uid, compteCree: cree, revendications });
       }
 
+      /* --- Remettre d aplomb les projets d avant le hub ---------------------
+         Les projets crees par l ancienne console portent « actif », un statut
+         qui n existe plus, et n ont pas d organisation. Sans cela ils
+         disparaissent du filtre des projets actifs et de la fiche client. */
+      if (action === 'migrerProjets') {
+        const STATUTS_PROJET = ['prospect', 'cadrage', 'planifie', 'en-cours', 'attente-client',
+          'en-revue', 'livraison', 'maintenance', 'termine', 'suspendu', 'archive'];
+        const ALIAS = { actif: 'en-cours', inactif: 'suspendu', 'en-pause': 'suspendu' };
+        const projets = await bdd.collection('projets').get();
+        const rapport = [];
+
+        for (const doc of projets.docs) {
+          const p = doc.data();
+          const changements = {};
+
+          const statutActuel = String(p.statut || '');
+          if (!STATUTS_PROJET.includes(statutActuel)) {
+            changements.statut = ALIAS[statutActuel] || 'en-cours';
+          }
+          if (!p.progression || typeof p.progression !== 'object') changements.progression = { mode: 'manuel', valeur: 0 };
+          if (!p.pulse || typeof p.pulse !== 'object') changements.pulse = { enCours: '', derniereLivraison: '', prochaineEtape: '', attenteClient: '' };
+          if (!p.type) changements.type = 'application-mobile';
+          if (!p.sante) changements.sante = 'ok';
+          if (!Array.isArray(p.membresOrganisation)) changements.membresOrganisation = [];
+          if (typeof p.description !== 'string') changements.description = '';
+          if (p.archive === undefined) changements.archive = false;
+
+          /* L organisation : celle qui porte deja cette adresse, sinon une neuve. */
+          let orgId = p.organisation || null;
+          const email = normaliserEmail((p.client || {}).email);
+          if (!orgId && emailPlausible(email)) {
+            const deja = await bdd.collection('organisations').where('email', '==', email).limit(1).get();
+            if (!deja.empty) orgId = deja.docs[0].id;
+            else {
+              const orgRef = await bdd.collection('organisations').add({
+                nom: String((p.client || {}).nom || '').trim(),
+                entreprise: String((p.client || {}).entreprise || '').trim(),
+                email, telephone: '', adresse: '', notesInternes: '',
+                contacts: [{ nom: String((p.client || {}).nom || '').trim(), email, role: 'owner', uid: null }],
+                membres: [], roles: {}, cree: FieldValue.serverTimestamp(), maj: FieldValue.serverTimestamp(),
+              });
+              orgId = orgRef.id;
+            }
+            changements.organisation = orgId;
+          }
+
+          if (Object.keys(changements).length) {
+            changements.maj = FieldValue.serverTimestamp();
+            await doc.ref.update(changements);
+          }
+
+          /* Les membres deja presents sur le projet deviennent membres de
+             l organisation, pour que la fiche client soit juste. */
+          if (orgId && (p.membres || []).length) {
+            const orgRef = bdd.doc(`organisations/${orgId}`);
+            const org = await orgRef.get();
+            if (org.exists) {
+              const contacts = org.data().contacts || [];
+              const roles = org.data().roles || {};
+              for (const uid of p.membres) {
+                roles[uid] = roles[uid] || 'owner';
+                if (!contacts.some((c) => c.uid === uid)) {
+                  let fiche = {};
+                  try { const u = await getAuth().getUser(uid); fiche = { nom: u.displayName || '', email: normaliserEmail(u.email) }; } catch (err) { fiche = {}; }
+                  if (fiche.email) contacts.push({ nom: fiche.nom, email: fiche.email, role: 'owner', uid });
+                }
+              }
+              await orgRef.update({ membres: FieldValue.arrayUnion(...p.membres), roles, contacts, maj: FieldValue.serverTimestamp() });
+            }
+          }
+          if (orgId) await synchroniserMembres(orgId);
+
+          rapport.push({
+            id: doc.id, nom: p.nom, ref: p.ref,
+            statutAvant: statutActuel || '(vide)', statutApres: changements.statut || statutActuel,
+            organisation: orgId, membres: (p.membres || []).length,
+            champsAjoutes: Object.keys(changements).filter((c) => c !== 'maj'),
+          });
+        }
+
+        console.log(`Migration de ${rapport.length} projet(s)`);
+        return res.status(200).json({ ok: true, projets: rapport });
+      }
+
+      /* --- Un etat des lieux, pour verifier sans deviner -------------------- */
+      if (action === 'diagnostic') {
+        const [projets, organisations, equipe] = await Promise.all([
+          bdd.collection('projets').get(), bdd.collection('organisations').get(), bdd.collection('equipe').get(),
+        ]);
+        return res.status(200).json({
+          ok: true,
+          projets: projets.docs.map((d) => { const p = d.data(); return { id: d.id, nom: p.nom, ref: p.ref, statut: p.statut, archive: Boolean(p.archive), organisation: p.organisation || null, membres: (p.membres || []).length, client: (p.client || {}).email || null, progression: p.progression || null }; }),
+          organisations: organisations.docs.map((d) => ({ id: d.id, nom: d.data().entreprise || d.data().nom, email: d.data().email, membres: (d.data().membres || []).length })),
+          equipe: equipe.docs.map((d) => ({ uid: d.id, email: d.data().email, role: d.data().role })),
+        });
+      }
+
       return res.status(400).send('action inconnue');
     } catch (err) {
       console.error(`suiviAdmin, action « ${action} »`, err);

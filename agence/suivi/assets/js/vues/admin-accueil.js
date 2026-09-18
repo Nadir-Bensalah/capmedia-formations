@@ -2,7 +2,7 @@
    L'accueil du cockpit : que dois-je traiter aujourd'hui ?
    ========================================================================== */
 
-import { echapper, prenom, nomAffiche, dateCourte, dateHeure, montant, pluriel, joursAvant, parDateDesc, parDateAsc, OUVERTS, ATTEND_EQUIPE, ATTEND_CLIENT, FACTURES_DUES, STATUTS_PROJET, URGENCES } from '../noyau.js';
+import { echapper, prenom, nomAffiche, dateCourte, dateHeure, montant, pluriel, joursAvant, parDateDesc, parDateAsc, OUVERTS, ATTEND_EQUIPE, ATTEND_CLIENT, FACTURES_DUES, STATUTS_PROJET, URGENCES, statutProjet} from '../noyau.js';
 import { icone, pastille, puce, avatarProjet, ligne, vide, squelette, titrePage, metrique, progression } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K, enAttenteDeNous, enAttenteDuClient, projetsActifs, prochaineReunion, progressionProjet, resteAPayer } from '../donnees.js';
@@ -70,7 +70,7 @@ export const vue = async (ctx, env) => {
           </section>
           <section>
             <div class="section-tete"><h2>Projets</h2><a class="lien" href="#/projets">Tous</a></div>
-            ${actifs.length ? `<div class="liste">${actifs.slice(0, 8).map((p) => { const prog = progressionProjet(p, jalons.filter((j) => j.projet === p.id)); const ouvertsP = ouverts.filter((t) => t.projet === p.id).length; return ligne({ href: `#/projets/${echapper(p.id)}`, titre: `<span class="rang" style="gap:10px">${avatarProjet(p.nom, 'petit')} ${echapper(p.nom)}</span>`, sous: `${echapper((p.client || {}).entreprise || (p.client || {}).nom || '')}${p.pulse && p.pulse.enCours ? ` · ${echapper(p.pulse.enCours)}` : ''}${ouvertsP ? ` · ${pluriel(ouvertsP, 'demande ouverte', 'demandes ouvertes')}` : ''}`, fin: `<span style="width:90px">${progression(prog.valeur)}</span>${pastille(STATUTS_PROJET, p.statut || 'en-cours')}${p.cible && joursAvant(p.cible) < 0 ? '<span class="puce puce--rouge"><i></i>Retard</span>' : ''}` }); }).join('')}</div>` : vide({ icone: 'projets', titre: 'Aucun projet actif', action: '<a class="btn btn-principal" href="#/projets/nouveau">Créer un projet</a>', compact: true })}
+            ${actifs.length ? `<div class="liste">${actifs.slice(0, 8).map((p) => { const prog = progressionProjet(p, jalons.filter((j) => j.projet === p.id)); const ouvertsP = ouverts.filter((t) => t.projet === p.id).length; return ligne({ href: `#/projets/${echapper(p.id)}`, titre: `<span class="rang" style="gap:10px">${avatarProjet(p.nom, 'petit')} ${echapper(p.nom)}</span>`, sous: `${echapper((p.client || {}).entreprise || (p.client || {}).nom || '')}${p.pulse && p.pulse.enCours ? ` · ${echapper(p.pulse.enCours)}` : ''}${ouvertsP ? ` · ${pluriel(ouvertsP, 'demande ouverte', 'demandes ouvertes')}` : ''}`, fin: `<span style="width:90px">${progression(prog.valeur)}</span>${pastille(STATUTS_PROJET, statutProjet(p))}${p.cible && joursAvant(p.cible) < 0 ? '<span class="puce puce--rouge"><i></i>Retard</span>' : ''}` }); }).join('')}</div>` : vide({ icone: 'projets', titre: 'Aucun projet actif', action: '<a class="btn btn-principal" href="#/projets/nouveau">Créer un projet</a>', compact: true })}
             ${enRetard.length ? `<p class="t-petit t-2" style="margin-top:8px">${pluriel(enRetard.length, 'projet a dépassé sa date cible', 'projets ont dépassé leur date cible')}.</p>` : ''}
           </section>
           <section>

@@ -144,6 +144,20 @@ export const STATUTS_PROJET = {
   'archive':        { libelle: 'Archivé',           voile: 'gris' },
 };
 export const PROJETS_ACTIFS = ['cadrage', 'planifie', 'en-cours', 'attente-client', 'en-revue', 'livraison', 'maintenance'];
+/* Un projet est actif tant qu'il n'est pas terminé, suspendu ou archivé.
+   Dire ce qui sort de la liste, plutôt qu'énumérer ce qui y entre : un
+   statut inconnu ne fait ainsi jamais disparaître un projet de l'écran. */
+export const PROJETS_CLOS = ['termine', 'suspendu', 'archive'];
+
+/* Les projets créés avant le Client Hub portent « actif », un statut qui
+   n'existe plus. On le traduit à la lecture, sans attendre la migration. */
+const ALIAS_STATUT_PROJET = { actif: 'en-cours', inactif: 'suspendu', 'en-pause': 'suspendu' };
+export const statutProjet = (p) => {
+  const brut = (p && p.statut) || '';
+  if (STATUTS_PROJET[brut]) return brut;
+  return ALIAS_STATUT_PROJET[brut] || 'en-cours';
+};
+export const projetEstActif = (p) => Boolean(p) && !p.archive && !PROJETS_CLOS.includes(statutProjet(p));
 
 export const TYPES_PROJET = {
   'application-mobile': 'Application mobile',

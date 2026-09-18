@@ -13,7 +13,7 @@ import {
   bdd, collection, collectionGroup, query, where, orderBy, limit, doc, addDoc, updateDoc, setDoc, deleteDoc,
   serverTimestamp, arrayUnion, arrayRemove, Timestamp,
   nomAffiche, enDate, parDateDesc, parDateAsc, joursAvant, borner,
-  OUVERTS, ATTEND_CLIENT, ATTEND_EQUIPE, FACTURES_DUES, PROJETS_ACTIFS, CATEGORIES_CLIENT,
+  OUVERTS, ATTEND_CLIENT, ATTEND_EQUIPE, FACTURES_DUES, PROJETS_ACTIFS, CATEGORIES_CLIENT, projetEstActif,
 } from './noyau.js';
 import * as magasin from './magasin.js';
 
@@ -472,7 +472,7 @@ export const enAttenteDeNous = ({ projets = [], tickets = [], validations = [], 
 export const enAttenteDuClient = (donnees) => enAttenteDeVous(donnees);
 
 /** Les projets actifs. */
-export const projetsActifs = (projets = []) => projets.filter((p) => !p.archive && PROJETS_ACTIFS.includes(p.statut || 'en-cours'));
+export const projetsActifs = (projets = []) => projets.filter(projetEstActif);
 
 /** Ce qui s'est passé depuis une date. */
 export const depuisVisite = (activite = [], depuisDate) => {

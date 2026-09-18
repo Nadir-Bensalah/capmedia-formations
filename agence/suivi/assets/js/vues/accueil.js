@@ -5,7 +5,7 @@
 
 import {
   echapper, prenom, nomAffiche, depuis, dateCourte, heure, dateHeure, montant, enDate, parDateDesc,
-  OUVERTS, STATUTS_PROJET, pluriel,
+  OUVERTS, STATUTS_PROJET, pluriel, statutProjet
 } from '../noyau.js';
 import { icone, pastille, avatarProjet, progression, ligne, vide, chronoItem, parJour, titrePage, echeanceHtml, squelette } from '../ui.js';
 import * as magasin from '../magasin.js';
@@ -121,7 +121,7 @@ export const vue = async (ctx, env) => {
               <div style="min-width:0;flex:1">
                 <div class="rang-espace" style="gap:8px">
                   <p class="t-titre-3 tronque">${echapper(p.nom)}</p>
-                  ${pastille(STATUTS_PROJET, p.statut || 'en-cours')}
+                  ${pastille(STATUTS_PROJET, statutProjet(p))}
                 </div>
                 <p class="t-petit t-2" style="margin-top:2px">${echapper(courant ? `Étape en cours : ${courant.titre}` : (pulse.enCours ? `En ce moment : ${pulse.enCours}` : (p.description || 'Aucune étape renseignée')))}</p>
               </div>

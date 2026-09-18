@@ -67,6 +67,12 @@ async function main() {
     client: { nom: 'Claire Dupont', email: 'claire.essai@exemple.test', entreprise: 'Menuo SARL' }, plateformes: ['web'], membres: [claire], membresOrganisation: [claire], compteur: 1,
     progression: { mode: 'manuel', valeur: 15 }, responsable: nadir, pulse: {}, sante: 'attention', archive: false, cree: ilYA(60), maj: ilYA(3),
   });
+  /* Un projet tel que l'ancienne console les creait : statut « actif », sans
+     organisation ni progression. Il doit rester visible partout. */
+  await bdd.doc('projets/ancien').set({
+    nom: 'ANCIEN', ref: 'ANCIEN', client: { nom: 'Claire Dupont', email: 'claire.essai@exemple.test', entreprise: 'Menuo SARL' },
+    membres: [claire], plateformes: ['web'], statut: 'actif', compteur: 0, archive: false, cree: ilYA(90), maj: ilYA(90),
+  });
 
   /* --- Les composants ---------------------------------------------------- */
   const composants = [
