@@ -98,9 +98,14 @@ export const metrique = (valeur, libelle, options = {}) => `
 
 /** Une ligne de liste : icône, titre, sous-titre, fin. */
 export const ligne = ({ href, icone: nomIcone, ton, titre, sous, fin, nonLu, action, attrs = '' }) => {
-  const balise = href ? 'a' : 'button';
-  const lien = href ? ` href="${echapper(href)}"` : ' type="button"';
+  /* Une ligne qui ne mène nulle part n'est pas un bouton : sinon les boutons
+     d'édition qu'elle porte se retrouveraient imbriqués, et le navigateur
+     les rejetterait hors de la ligne, l'un sous l'autre. */
+  const agissante = Boolean(href || action || /data-action/.test(attrs));
+  const balise = href ? 'a' : (agissante ? 'button' : 'div');
+  const lien = href ? ` href="${echapper(href)}"` : (agissante ? ' type="button"' : '');
   const classes = ['ligne'];
+  if (!agissante) classes.push('ligne--inerte');
   if (!nomIcone) classes.push('ligne--sans-icone');
   if (nonLu) classes.push('non-lu');
   return `<${balise} class="${classes.join(' ')}"${lien}${action ? ` data-action="${echapper(action)}"` : ''} ${attrs}>
