@@ -11,7 +11,7 @@ import {
   CATEGORIES_FICHIER, CATEGORIES_LIEN, STATUTS_RELEASE, TYPES_CHANGEMENT, TYPES_NOTE, SANTES, STATUTS_VALIDATION, QUALIFICATIONS, statutProjet
 } from '../noyau.js';
 import {
-  icone, pastille, pastilleTexte, puce, pucePlateforme, avatarProjet, avatar, progression, anneau, ligne, vide, fait, chronoItem, parJour, squelette, titrePage,
+  icone, pastille, pastilleTexte, puce, pucePlateforme, iconePlateforme, tonPlateforme, avatarProjet, avatar, progression, anneau, ligne, vide, fait, chronoItem, parJour, squelette, titrePage,
   echeanceHtml, modale, confirmer, toast, sur, menu, fichierHtml, brancherPieces, depot, lireForme, valider, obligatoire, agir, encart, optionsDe,
 } from '../ui.js';
 import * as magasin from '../magasin.js';
@@ -306,7 +306,7 @@ const apercu = (d, { pid, env, prog, attente, ouverts }) => {
     ${d.composants.length ? `<section class="section">
       <div class="section-tete"><h2>Composants</h2><a class="lien" href="#/projets/${echapper(pid)}/${equipe ? 'composants' : 'roadmap'}">${equipe ? 'Gérer' : 'Feuille de route'}</a></div>
       <div class="grille grille-3">${d.composants.map((c) => `<div class="carte carte--serree">
-        <div class="rang-espace"><p class="t-corps-fort">${echapper(c.nom)}</p>${pastille(STATUTS_COMPOSANT, c.statut || 'en-cours')}</div>
+        <div class="rang-espace"><p class="t-corps-fort rang" style="gap:8px">${iconePlateforme(c.type) ? `<span class="ligne-icone ligne-icone--${tonPlateforme(c.type)}" style="width:28px;height:28px;border-radius:8px">${icone(iconePlateforme(c.type))}</span>` : ''}${echapper(c.nom)}</p>${pastille(STATUTS_COMPOSANT, c.statut || 'en-cours')}</div>
         <div class="rang-espace t-micro t-3" style="margin:10px 0 6px"><span>${echapper(TYPES_COMPOSANT[c.type] || c.type || '')}</span><span class="nb">${borner(c.progression)} %</span></div>
         ${progression(c.progression, borner(c.progression) >= 100 ? 'vert' : '')}
         ${c.version || c.environnement ? `<p class="t-micro t-3" style="margin-top:8px">${echapper([c.version && `v${c.version}`, c.versionPrep && `${c.versionPrep} en préparation`, c.environnement].filter(Boolean).join(' · '))}</p>` : ''}
@@ -358,7 +358,8 @@ const composants = (d, { env }) => `
   <section class="section" style="margin-top:0">
     <div class="section-tete"><h2>Composants</h2>${boutonNouveau(env, 'composant', 'Ajouter')}</div>
     ${d.composants.length ? `<div class="liste">${d.composants.map((c) => ligne({
-      icone: 'composants', titre: `${echapper(c.nom)} <span class="t-3 t-petit" style="font-weight:400">· ${echapper(TYPES_COMPOSANT[c.type] || c.type || '')}</span>`,
+      icone: iconePlateforme(c.type) || 'composants', ton: tonPlateforme(c.type),
+      titre: `${echapper(c.nom)} <span class="t-3 t-petit" style="font-weight:400">· ${echapper(TYPES_COMPOSANT[c.type] || c.type || '')}</span>`,
       sous: `${echapper([c.version && `v${c.version}`, c.versionPrep && `${c.versionPrep} en prépa.`, c.environnement, (c.techno || []).join(', ')].filter(Boolean).join(' · '))}`,
       fin: `<span class="nb t-petit" style="min-width:44px;text-align:right">${borner(c.progression)} %</span>${pastille(STATUTS_COMPOSANT, c.statut || 'en-cours')}${boutonsEdition(env, 'composant', c.id, c.nom)}`,
     })).join('')}</div>` : vide({ icone: 'composants', titre: 'Aucun composant', texte: 'Découpez le projet en briques pour suivre chacune.', compact: true })}
@@ -404,7 +405,7 @@ const taches = (d, { env, pid }) => {
     return ligne({
       icone: t.statut === 'terminee' ? 'check' : t.statut === 'bloquee' ? 'alerte' : 'taches', ton: t.statut === 'terminee' ? 'vert' : t.statut === 'bloquee' ? 'rouge' : t.statut === 'attente-client' ? 'ambre' : t.statut === 'en-cours' ? 'bleu' : '',
       titre: `${echapper(t.titre)}${t.visibilite === 'interne' ? ' <span class="etiquette" style="vertical-align:middle">Interne</span>' : ''}`,
-      sous: `${echapper([(d.composants.find((c) => c.id === t.composant) || {}).nom, t.assigne && nomEquipe(d.equipe, t.assigne), t.estimation].filter(Boolean).join(' · '))}${f ? ` ${echeanceHtml(f)}` : ''}${t.checklist && t.checklist.length ? ` <span class="t-3">${t.checklist.filter((c) => c.fait).length}/${t.checklist.length}</span>` : ''}`,
+      sous: `${(() => { const c = d.composants.find((x) => x.id === t.composant); return c && iconePlateforme(c.type) ? pucePlateforme(c.type, { court: true }) : ''; })()}${echapper([(d.composants.find((c) => c.id === t.composant) || {}).nom, t.assigne && nomEquipe(d.equipe, t.assigne), t.estimation].filter(Boolean).join(' · '))}${f ? ` ${echeanceHtml(f)}` : ''}${t.checklist && t.checklist.length ? ` <span class="t-3">${t.checklist.filter((c) => c.fait).length}/${t.checklist.length}</span>` : ''}`,
       fin: `${puce(PRIORITES, t.priorite || 'normale')}${pastille(STATUTS_TACHE, t.statut || 'a-faire')}`,
       action: 'ouvrir-tache', attrs: `data-id="${echapper(t.id)}"`,
     });
@@ -472,7 +473,8 @@ const demandes = (d, { env, pid }) => {
     </div>
     ${liste.length ? `<div class="liste">${liste.map((t) => ligne({
       href: `#/projets/${echapper(pid)}/demandes/${echapper(t.id)}`,
-      icone: (TYPES[t.type] || {}).icone || 'inbox', ton: ATTEND_CLIENT.includes(t.statut) ? 'ambre' : t.statut === 'resolu' ? 'vert' : t.urgence === 'bloquant' || t.urgence === 'critique' ? 'rouge' : '',
+      icone: iconePlateforme(t.plateforme) || (TYPES[t.type] || {}).icone || 'inbox',
+      ton: tonPlateforme(t.plateforme) || (ATTEND_CLIENT.includes(t.statut) ? 'ambre' : t.statut === 'resolu' ? 'vert' : ''),
       nonLu: nonLu(t) && OUVERTS.includes(t.statut),
       titre: `${t.numero ? `<span class="t-mono t-3" style="font-weight:400">${echapper(t.numero)}</span> ` : ''}${echapper(t.titre)}`,
       sous: `${echapper((TYPES[t.type] || {}).libelle || t.type)} · ${puce(URGENCES, t.urgence || 'important')} · ${echapper(depuis(t.maj))}${t.qualification ? ` · ${pastille(QUALIFICATIONS, t.qualification)}` : ''}`,
@@ -529,7 +531,7 @@ const releases = (d, { env }) => {
     <div class="section-tete"><h2>Versions et changements</h2>${boutonNouveau(env, 'release', 'Nouvelle version')}</div>
     ${liste.length ? `<div class="pile" style="gap:var(--e-4)">${liste.map((r) => `<div class="carte">
       <div class="rang-espace" style="align-items:flex-start">
-        <div class="rang" style="gap:12px"><span class="ligne-icone ${r.statut === 'disponible' ? 'ligne-icone--vert' : ''}">${icone('releases')}</span><div><p class="t-titre-3">${echapper(`${({ ios: 'iOS', android: 'Android', web: 'Web', backend: 'Backend', admin: 'Tableau de bord' })[r.plateforme] || r.plateforme || ''} ${r.version || ''}`.trim())}${r.titre ? ` <span class="t-2" style="font-weight:400">· ${echapper(r.titre)}</span>` : ''}</p><p class="t-petit t-3" style="margin-top:2px">${echapper([r.statut === 'disponible' ? `Publiée le ${dateCourte(r.date)}` : dateCourte(r.date), (d.composants.find((c) => c.id === r.composant) || {}).nom].filter(Boolean).join(' · '))}${r.visibilite === 'interne' ? ' · Interne' : ''}</p></div></div>
+        <div class="rang" style="gap:12px"><span class="ligne-icone${tonPlateforme(r.plateforme) ? ` ligne-icone--${tonPlateforme(r.plateforme)}` : ''}">${icone(iconePlateforme(r.plateforme) || 'releases')}</span><div><p class="t-titre-3 rang" style="gap:8px">${pucePlateforme(r.plateforme, { court: true })}${echapper(r.version || '')}${r.titre ? ` <span class="t-2" style="font-weight:400">· ${echapper(r.titre)}</span>` : ''}</p><p class="t-petit t-3" style="margin-top:2px">${echapper([r.statut === 'disponible' ? `Publiée le ${dateCourte(r.date)}` : dateCourte(r.date), (d.composants.find((c) => c.id === r.composant) || {}).nom].filter(Boolean).join(' · '))}${r.visibilite === 'interne' ? ' · Interne' : ''}</p></div></div>
         <div class="rang">${pastille(STATUTS_RELEASE, r.statut || 'developpement')}${env.role === 'equipe' ? `<button class="btn-icone" type="button" data-action="editer" data-genre="release" data-id="${echapper(r.id)}" aria-label="Modifier">${icone('edit')}</button>` : ''}</div>
       </div>
       ${(r.notes || []).length ? `<ul style="margin-top:14px" class="pile" style="gap:6px">${r.notes.map((n) => `<li class="rang" style="gap:10px;align-items:flex-start"><span style="flex:none">${pastille(TYPES_CHANGEMENT, n.type || 'amelioration')}</span><span class="t-petit">${echapper(n.texte)}</span></li>`).join('')}</ul>` : ''}
@@ -547,7 +549,7 @@ const liens = (d, { env }) => {
   <section class="section" style="margin-top:0">
     <div class="section-tete"><h2>Liens et environnements</h2>${boutonNouveau(env, 'lien', 'Ajouter un lien')}</div>
     ${groupes.length ? groupes.map((g) => `<div style="margin-bottom:var(--e-5)"><p class="surtitre" style="margin-bottom:8px">${echapper(g.lib)}</p><div class="grille grille-2">${g.items.map((l) => `<a class="lien-env" href="${echapper(l.url)}" target="_blank" rel="noopener">
-      <span class="ligne-icone">${icone(l.categorie === 'code' ? 'code' : l.categorie === 'design' ? 'sparkle' : l.categorie === 'mobile' ? 'releases' : 'externe')}</span>
+      <span class="ligne-icone${tonPlateforme(l.composant) ? ` ligne-icone--${tonPlateforme(l.composant)}` : ''}">${icone(iconePlateforme(l.composant) || (l.categorie === 'code' ? 'code' : l.categorie === 'design' ? 'sparkle' : l.categorie === 'mobile' ? 'releases' : 'externe'))}</span>
       <span style="min-width:0"><span class="t-corps-fort" style="display:block">${echapper(l.nom)}${l.environnement ? ` <span class="etiquette" style="vertical-align:middle">${echapper(l.environnement)}</span>` : ''}${l.visibilite === 'interne' ? ' <span class="etiquette">Interne</span>' : ''}</span><span class="url" style="display:block">${echapper(l.url.replace(/^https?:\/\//, ''))}</span>${l.description ? `<span class="t-micro t-3" style="display:block">${echapper(l.description)}</span>` : ''}</span>
       <span class="rang" style="gap:2px">${env.role === 'equipe' ? `<button class="btn-icone" type="button" data-action="editer" data-genre="lien" data-id="${echapper(l.id)}" aria-label="Modifier" onclick="event.preventDefault()">${icone('edit')}</button>` : ''}<span class="chevron" style="color:var(--encre-4)">${icone('externe')}</span></span>
     </a>`).join('')}</div></div>`).join('')
