@@ -98,7 +98,10 @@ const compteHtml = (valeur) => {
   const total = Number(v.total !== undefined ? v.total : (v.vif ? 0 : v.n)) || 0;
   const neuf = Number(v.neuf !== undefined ? v.neuf : (v.vif ? v.n : 0)) || 0;
   if (!total && !neuf) return '';
-  return `<span class="comptes">${total ? `<span class="compte">${echapper(total)}</span>` : ''}${neuf ? `<span class="compte vif" aria-label="${echapper(neuf)} à traiter">${echapper(neuf > 99 ? '99+' : neuf)}</span>` : ''}</span>`;
+  /* Quand les deux chiffres sont les mêmes, le gris ne dit rien de plus
+     que le rouge : il ne fait que voler la place du libellé. */
+  const gris = total && total !== neuf;
+  return `<span class="comptes">${gris ? `<span class="compte">${echapper(total)}</span>` : ''}${neuf ? `<span class="compte vif" aria-label="${echapper(neuf)} à traiter">${echapper(neuf > 99 ? '99+' : neuf)}</span>` : ''}</span>`;
 };
 
 export const rendreNavigation = () => {
