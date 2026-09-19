@@ -1253,8 +1253,10 @@ input, select, textarea { font: inherit; color: inherit; }
    demandé moins de mouvement (voir la règle en tête de fichier).
    ========================================================================== */
 
-/* Le corps d'un onglet se pose quand on change de section. */
-#onglet-corps { animation: pose 200ms cubic-bezier(0.2, 0, 0, 1) both; }
+/* Le corps d'un onglet se pose quand on change de section, et seulement
+   alors : une donnée qui arrive en temps réel redessine la page sans que
+   rien ne clignote. */
+#onglet-corps.corps-anime { animation: pose 200ms cubic-bezier(0.2, 0, 0, 1) both; }
 
 /* Les onglets : le trait glisse sous celui qu'on survole avant d'être actif. */
 .onglet { position: relative; }
@@ -1285,10 +1287,10 @@ input, select, textarea { font: inherit; color: inherit; }
 .ligne:hover .ligne-fin svg { transform: translateX(2px); }
 
 /* Les métriques et les cartes d'accueil arrivent l'une après l'autre. */
-.metriques > .metrique { animation: pose 240ms cubic-bezier(0.2, 0, 0, 1) both; }
-.metriques > .metrique:nth-child(2) { animation-delay: 30ms; }
-.metriques > .metrique:nth-child(3) { animation-delay: 60ms; }
-.metriques > .metrique:nth-child(4) { animation-delay: 90ms; }
+.corps-anime .metriques > .metrique { animation: pose 240ms cubic-bezier(0.2, 0, 0, 1) both; }
+.corps-anime .metriques > .metrique:nth-child(2) { animation-delay: 30ms; }
+.corps-anime .metriques > .metrique:nth-child(3) { animation-delay: 60ms; }
+.corps-anime .metriques > .metrique:nth-child(4) { animation-delay: 90ms; }
 
 /* Le voile du tiroir et les pastilles de compte. */
 .badge--vif { transition: transform var(--vite); }
@@ -1313,3 +1315,99 @@ input, select, textarea { font: inherit; color: inherit; }
 .pile-badge--violet { background: var(--violet-voile); color: var(--violet); }
 .pile-badge--ambre  { background: var(--attention-voile); color: var(--attention); }
 .pile-reste { font: var(--t-micro); font-weight: 600; color: var(--encre-3); }
+
+/* ==========================================================================
+   20. La bulle de discussion d'un projet
+   Posée en bas à droite, elle ne recouvre jamais le contenu tant qu'elle
+   est fermée, et se plie en plein écran sur un téléphone.
+   ========================================================================== */
+
+.bulle { position: fixed; right: var(--e-5); bottom: var(--e-5); z-index: 70; display: flex; flex-direction: column-reverse; align-items: flex-end; gap: var(--e-3); }
+
+.bulle-pastille {
+  position: relative; width: 52px; height: 52px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--accent); color: #fff; border: 0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  transition: transform var(--doux), box-shadow var(--doux), background var(--vite);
+}
+.bulle-pastille svg { width: 22px; height: 22px; transition: transform var(--doux); }
+.bulle-pastille:hover { transform: translateY(-2px) scale(1.04); box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22); }
+.bulle-pastille:active { transform: scale(0.94); }
+.bulle--ouverte .bulle-pastille svg { transform: rotate(-8deg) scale(0.9); }
+.bulle-compte {
+  position: absolute; top: -2px; right: -2px; min-width: 20px; height: 20px;
+  padding: 0 5px; border-radius: 10px;
+  background: var(--alerte); color: #fff;
+  font: var(--t-micro); font-weight: 700; line-height: 20px; text-align: center;
+  border: 2px solid var(--fond);
+  animation: pose var(--doux) both;
+}
+/* Tant qu'un message attend, la pastille respire, sans jamais s'agiter. */
+.bulle--alerte .bulle-pastille { animation: respire 2.4s ease-in-out infinite; }
+@keyframes respire {
+  0%, 100% { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18), 0 0 0 0 var(--accent-voile); }
+  50%      { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18), 0 0 0 10px transparent; }
+}
+
+.bulle-panneau {
+  width: min(380px, calc(100vw - var(--e-5) * 2));
+  height: min(560px, calc(100dvh - 140px));
+  display: flex; flex-direction: column;
+  background: var(--fond); border: 1px solid var(--trait);
+  border-radius: 18px; overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.22);
+  transform-origin: bottom right;
+  animation: bulleEntre 220ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+@keyframes bulleEntre { from { opacity: 0; transform: translateY(12px) scale(0.96); } to { opacity: 1; transform: none; } }
+.bulle-panneau.survole { outline: 2px dashed var(--accent); outline-offset: -6px; }
+
+.bulle-tete {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--e-2);
+  padding: 12px 10px 12px 14px; border-bottom: 1px solid var(--trait);
+  background: var(--fond-2); flex: none;
+}
+.bulle-tete-qui { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.bulle-tete-gestes { display: flex; align-items: center; gap: 2px; flex: none; }
+.bulle-titre { font: var(--t-corps-fort); font-size: 14px; }
+.bulle-sous { font: var(--t-micro); color: var(--encre-3); }
+.bulle-point { width: 8px; height: 8px; border-radius: 50%; background: var(--trait-fort); flex: none; transition: background var(--vite); }
+.bulle-point.vif { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-voile); }
+#bulle-son.actif { color: var(--accent); }
+
+.bulle-fil { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: var(--e-4); display: flex; flex-direction: column; gap: var(--e-4); }
+/* Pas d'animation d'entrée sur les messages : le fil se remplit parfois
+   pendant que le panneau est replié, et une animation qui ne démarre pas
+   laisserait le message invisible une fois le panneau rouvert. */
+.bulle-accuse { align-self: flex-end; display: flex; align-items: center; gap: 4px; font: var(--t-micro); color: var(--encre-3); }
+.bulle-accuse svg { width: 13px; height: 13px; color: var(--accent); }
+.bulle-vide { margin: auto; text-align: center; color: var(--encre-3); display: grid; gap: 10px; justify-items: center; padding: var(--e-5); }
+.bulle-vide svg { width: 28px; height: 28px; opacity: 0.5; }
+.bulle-vide p { font: var(--t-petit); max-width: 28ch; }
+
+/* Les trois points de la frappe : ils montent l'un après l'autre. */
+.bulle-frappe { display: flex; align-items: center; gap: 4px; padding: 0 var(--e-4) 8px; font: var(--t-micro); color: var(--encre-3); }
+.bulle-frappe i { width: 5px; height: 5px; border-radius: 50%; background: var(--encre-4); animation: saute 1.1s infinite; }
+.bulle-frappe i:nth-child(2) { animation-delay: 0.15s; }
+.bulle-frappe i:nth-child(3) { animation-delay: 0.3s; }
+.bulle-frappe span { margin-left: 4px; }
+@keyframes saute { 0%, 60%, 100% { transform: none; opacity: 0.45; } 30% { transform: translateY(-4px); opacity: 1; } }
+
+.bulle-pied { border-top: 1px solid var(--trait); padding: 10px; flex: none; background: var(--fond); }
+.bulle-saisie { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: end; gap: 6px; }
+.bulle-saisie .zone {
+  min-height: 40px; max-height: 132px; resize: none; padding: 10px 12px;
+  border-radius: 14px; overflow-y: auto;
+}
+.bulle-envoyer { width: 40px; height: 40px; padding: 0; border-radius: 50%; background: var(--accent); color: #fff; flex: none; }
+.bulle-envoyer svg { width: 17px; height: 17px; }
+.bulle-joindre { width: 40px; height: 40px; flex: none; }
+.depot--compact { display: none; }
+#bulle-pieces .pieces:not(:empty) { margin-bottom: 8px; }
+
+@media (max-width: 640px) {
+  .bulle { right: var(--e-4); bottom: var(--e-4); left: var(--e-4); align-items: flex-end; }
+  .bulle-panneau { width: 100%; height: min(72dvh, 560px); }
+}

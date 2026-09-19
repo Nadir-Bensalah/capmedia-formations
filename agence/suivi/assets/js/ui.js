@@ -298,10 +298,10 @@ export const brancherPieces = (racine) => {
  * Un dépôt de fichiers : glisser-déposer, sélection, envoi avec progression,
  * retrait. `chemin` est le dossier de stockage. Renvoie l'état des pièces.
  */
-export const depot = (zone, { chemin, max = 10, texte = 'Déposez vos fichiers ici, ou <strong>choisissez-les</strong>.', aide = 'Images, PDF, vidéos courtes. 10 Mo par fichier.' } = {}) => {
+export const depot = (zone, { chemin, max = 10, texte = 'Déposez vos fichiers ici, ou <strong>choisissez-les</strong>.', aide = 'Images, PDF, vidéos courtes. 10 Mo par fichier.', compact = false, cible = null } = {}) => {
   const etat = { pieces: [], enCours: 0 };
   zone.innerHTML = `
-    <label class="depot">
+    <label class="depot${compact ? ' depot--compact' : ''}">
       <span>${texte}</span><br><span class="t-micro t-3">${echapper(aide)}</span>
       <input type="file" multiple>
     </label>
@@ -338,9 +338,12 @@ export const depot = (zone, { chemin, max = 10, texte = 'Déposez vos fichiers i
   };
 
   entree.addEventListener('change', () => { ajouter(entree.files); entree.value = ''; });
-  ['dragenter', 'dragover'].forEach((n) => label.addEventListener(n, (e) => { e.preventDefault(); label.classList.add('survole'); }));
-  ['dragleave', 'drop'].forEach((n) => label.addEventListener(n, (e) => { e.preventDefault(); label.classList.remove('survole'); }));
-  label.addEventListener('drop', (e) => ajouter(e.dataTransfer.files));
+  /* La zone de dépôt peut être toute une boîte, pas seulement l'étiquette :
+     dans une bulle de discussion, on lâche le fichier n'importe où. */
+  const accueil = cible || label;
+  ['dragenter', 'dragover'].forEach((n) => accueil.addEventListener(n, (e) => { e.preventDefault(); accueil.classList.add('survole'); }));
+  ['dragleave', 'drop'].forEach((n) => accueil.addEventListener(n, (e) => { e.preventDefault(); accueil.classList.remove('survole'); }));
+  accueil.addEventListener('drop', (e) => ajouter(e.dataTransfer.files));
   liste.addEventListener('click', (e) => {
     const b = e.target.closest('[data-retirer]');
     if (!b) return;
@@ -464,7 +467,11 @@ export const menu = (ancre, items) => {
 };
 
 /** Le toast : court, en bas, disparaît seul. */
-export const toast = (texte, genre = 'ok', duree = 4200) => {
+export const toast = (texte, genre = 'ok', options = 4200) => {
+  /* Troisième argument : une durée, ou bien un geste proposé dans le toast
+     (« Répondre »), utile quand le message vient d'arriver ailleurs. */
+  const duree = typeof options === 'number' ? options : (options.duree || 6000);
+  const geste = typeof options === 'object' && options.libelle ? options : null;
   let zone = $('.toasts');
   if (!zone) {
     zone = document.createElement('div');
@@ -475,10 +482,11 @@ export const toast = (texte, genre = 'ok', duree = 4200) => {
   const t = document.createElement('div');
   t.className = `toast toast--${genre}`;
   t.setAttribute('role', 'status');
-  t.innerHTML = `${icone(genre === 'erreur' ? 'alerte' : 'check')}<span>${echapper(texte)}</span><button type="button" aria-label="Fermer">${icone('fermer')}</button>`;
+  t.innerHTML = `${icone(genre === 'erreur' ? 'alerte' : genre === 'info' ? 'messages' : 'check')}<span>${echapper(texte)}</span>${geste ? `<button class="toast-geste" type="button">${echapper(geste.libelle)}</button>` : ''}<button type="button" aria-label="Fermer">${icone('fermer')}</button>`;
   zone.appendChild(t);
   const retirer = () => t.remove();
-  $('button', t).addEventListener('click', retirer);
+  if (geste) $('.toast-geste', t).addEventListener('click', () => { retirer(); geste.action(); });
+  t.querySelector('button[aria-label="Fermer"]').addEventListener('click', retirer);
   setTimeout(retirer, duree);
 };
 

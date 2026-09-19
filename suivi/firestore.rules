@@ -156,6 +156,16 @@ service cloud.firestore {
           && request.resource.data.pieces.size() <= 10;
         allow update, delete: if false;
       }
+
+      // L'accusé de lecture : chacun tient le sien, les deux le lisent. Il
+      // porte l'instant de la dernière lecture et celui de la dernière
+      // frappe, rien d'autre : aucun texte n'y transite.
+      match /lectures/{personneId} {
+        allow read:   if accesProjet(projetId);
+        allow write:  if accesProjet(projetId)
+          && request.auth.uid == personneId
+          && request.resource.data.keys().hasOnly(['lu', 'frappe', 'cote', 'nom']);
+      }
     }
 
     // Les jalons se lisent aussi en groupe, pour le planning de l'équipe.
