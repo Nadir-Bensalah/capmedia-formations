@@ -63,9 +63,20 @@ async function contactsClient(projet) {
   /* Un projet en sourdine se prépare sans rien envoyer au client. Le
      drapeau se lève depuis le cockpit quand l'espace est prêt. */
   if (projet && projet.silence === true) return [];
+  /* Un projet à moi n'a pas de client : rien ne sort. */
+  if (projet && projet.interne === true) return [];
   const liste = [];
+  /* Un projet peut compter plusieurs interlocuteurs. Ne lire que le contact
+     principal laissait le second sans aucun e-mail. */
+  for (const c of ((projet && projet.contacts) || [])) {
+    if (emailPlausible(c.email) && !liste.some((x) => x.email === normaliserEmail(c.email))) {
+      liste.push({ email: normaliserEmail(c.email), nom: c.nom || '' });
+    }
+  }
   const client = (projet && projet.client) || {};
-  if (emailPlausible(client.email)) liste.push({ email: normaliserEmail(client.email), nom: client.nom || client.entreprise || '' });
+  if (emailPlausible(client.email) && !liste.some((x) => x.email === normaliserEmail(client.email))) {
+    liste.push({ email: normaliserEmail(client.email), nom: client.nom || client.entreprise || '' });
+  }
   if (projet && projet.organisation) {
     try {
       const org = await bdd.doc(`organisations/${projet.organisation}`).get();

@@ -552,8 +552,11 @@ exports.suiviDocumentModifie = onDocumentUpdated(
     /* Seul cas notable : le client répond à un devis qui lui était soumis.
        Les changements de statut d'une facture viennent de nous, nous n'avons
        pas besoin de nous les annoncer. */
+    /* Ouvrir le devis le passe en « consulté » avant même que le bouton
+       Accepter n'existe à l'écran : ne guetter que « envoyé » faisait rater
+       toutes les réponses. */
     const repondu = apres.type === 'devis'
-      && avant.statut === 'envoye'
+      && ['envoye', 'consulte'].includes(avant.statut)
       && (apres.statut === 'accepte' || apres.statut === 'refuse');
     if (!repondu) return;
 
@@ -567,7 +570,7 @@ exports.suiviDocumentModifie = onDocumentUpdated(
       projetNom: nomProjet(projet),
       clientNom: nomClient(projet),
       reponse: apres.statut,
-      date: reponse.le || apres.date || null,
+      date: reponse.date || reponse.le || apres.date || null,
       lien: courriels.lienProjet(apres.projet),
     });
 
@@ -1104,7 +1107,9 @@ exports.suiviAdmin = onRequest(
         /* Le statut de la facture suit le total paye. */
         const tous = await bdd.collection('paiements').where('facture', '==', String(facture)).get();
         const paye = tous.docs.reduce((t, d) => t + (d.data().statut !== 'annule' ? Number(d.data().montant) || 0 : 0), 0);
-        const du = typeof f.ttc === 'number' ? f.ttc : Number(f.montant) || 0;
+        /* Sans champ ttc, la TVA se recalcule : la retomber au HT faisait
+           passer une facture pour payée alors qu'il restait la taxe. */
+        const du = typeof f.ttc === 'number' ? f.ttc : (Number(f.montant) || 0) * (1 + (Number(f.tva) || 0) / 100);
         await refFacture.update({ statut: paye + 0.005 >= du ? 'payee' : 'partielle' });
         return res.status(200).json({ ok: true, id: paiement.id, paye, statut: paye + 0.005 >= du ? 'payee' : 'partielle' });
       }
@@ -1367,7 +1372,12 @@ exports.suiviAdmin = onRequest(
           if (!Array.isArray(liste) || !liste.length) return 0;
           for (const item of liste) {
             const donnees = sansIndefini({ ...transforme(item), maj: FieldValue.serverTimestamp() });
-            if (item.id) await bdd.doc(`${chemin}/${item.id}`).set({ ...donnees, cree: donnees.cree || FieldValue.serverTimestamp() }, { merge: true });
+            /* Les identifiants du catalogue ne sont uniques qu'à l'intérieur
+               d'une fiche : dans une collection globale, « client » écrasait
+               la note d'un autre projet. Le projet préfixe donc l'identifiant. */
+            const global = !chemin.includes('/');
+            const cle = global ? `${id}-${item.id}` : item.id;
+            if (item.id) await bdd.doc(`${chemin}/${cle}`).set({ ...donnees, cree: donnees.cree || FieldValue.serverTimestamp() }, { merge: true });
             else await bdd.collection(chemin).add({ ...donnees, cree: FieldValue.serverTimestamp() });
           }
           return liste.length;
@@ -1389,7 +1399,12 @@ exports.suiviAdmin = onRequest(
               ? tous.docs.filter((d) => f.composants.includes(d.id))
               : tous.docs;
             for (const d of vises) {
-              await d.ref.set({ technique: sansIndefini({ ...f.technique, releve: enDate(f.technique && f.technique.releve) }), maj: FieldValue.serverTimestamp() }, { merge: true });
+              /* Hors du composant : la fiche porte des comptes et des accès,
+                 et le composant, lui, est lisible par le client. */
+              await bdd.doc(`projets/${id}/technique/${d.id}`).set(
+                sansIndefini({ ...f.technique, releve: enDate(f.technique && f.technique.releve), maj: FieldValue.serverTimestamp() }),
+                { merge: true },
+              );
               n += 1;
             }
           }

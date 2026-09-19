@@ -96,6 +96,13 @@ await refuse('Camille ne lit pas une note interne de demande', getDoc(doc(camill
 await doit('Camille lit un message public de demande', getDoc(doc(camille(), 'tickets/t1/messages/m-public')));
 await doit("L'équipe lit tout, interne compris", getDoc(doc(equipe(), 'taches/t-interne')));
 
+console.log('\n== La fiche technique reste côté équipe');
+await doit("L'équipe écrit une fiche technique", setDoc(doc(equipe(), 'projets/atelier/technique/ios'), { lignes: 100, acces: [{ nom: 'App Store Connect', compte: 'capmedia' }] }));
+await doit("L'équipe relit la fiche technique", getDoc(doc(equipe(), 'projets/atelier/technique/ios')));
+await refuse('Camille ne lit pas la fiche technique de son projet', getDoc(doc(camille(), 'projets/atelier/technique/ios')));
+await refuse('Camille ne liste pas les fiches techniques', getDocs(collection(camille(), 'projets/atelier/technique')));
+await refuse("Camille n'écrit pas de fiche technique", setDoc(doc(camille(), 'projets/atelier/technique/ios'), { lignes: 1 }));
+
 console.log('\n== Les accusés de lecture');
 await doit('Camille pose son accusé de lecture', setDoc(doc(camille(), 'projets/atelier/lectures/' + CAMILLE), { lu: serverTimestamp(), frappe: null, cote: 'client', nom: 'Camille' }));
 await doit("L'équipe lit les accusés du projet", getDocs(collection(equipe(), 'projets/atelier/lectures')));

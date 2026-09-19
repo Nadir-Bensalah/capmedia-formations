@@ -75,7 +75,7 @@ const construireNavigation = () => {
       titre: 'Portefeuille',
       items: [
         { chemin: '/clients', libelle: 'Clients', icone: 'entreprise', compte: { total: organisations.length } },
-        { chemin: '/projets', libelle: 'Projets', icone: 'projets', compte: { total: projets.filter(projetEstActif).length } },
+        { chemin: '/projets', libelle: 'Projets', icone: 'projets', compte: { total: projets.filter((p) => projetEstActif(p) && !p.interne).length } },
         { chemin: '/nouveaux-projets', libelle: 'Nouveaux projets', icone: 'sparkle', compte: { total: preprojets, neuf: nouveauxPreprojets } },
       ],
     },
@@ -85,7 +85,7 @@ const construireNavigation = () => {
         { chemin: '/demandes', libelle: 'Demandes', icone: 'inbox', compte: { total: ouvertes, neuf: nouvelles } },
         { chemin: '/taches', libelle: 'Tâches', icone: 'taches', compte: { total: aFaire, neuf: enRetard } },
         { chemin: '/planning', libelle: 'Planning', icone: 'calendrier', compte: { total: reunions.length } },
-        { chemin: '/messages', libelle: 'Messages', icone: 'messages', compte: { total: projets.filter((p) => !p.archive).length, neuf: nonLus } },
+        { chemin: '/messages', libelle: 'Messages', icone: 'messages', compte: { total: projets.filter((p) => !p.archive && !p.interne).length, neuf: nonLus } },
         { chemin: '/validations', libelle: 'Validations', icone: 'valider', compte: { total: attendues } },
         { chemin: '/documents', libelle: 'Documents', icone: 'documents', compte: { total: fichiers.length } },
       ],
@@ -107,9 +107,11 @@ const construireNavigation = () => {
 const conversationsSuivies = new Set();
 const suivreConversations = () => {
   for (const p of (magasin.lire(K.projets) || [])) {
-    if (p.archive || conversationsSuivies.has(p.id)) continue;
+    /* Un projet à moi n'a pas de client, donc pas de conversation : l'écouter
+       coûterait cinquante abonnements pour une pastille toujours vide. */
+    if (p.archive || p.interne || conversationsSuivies.has(p.id)) continue;
     conversationsSuivies.add(p.id);
-    lotGlobal.abonner(K.messages(p.id), () => query(collection(bdd, 'projets', p.id, 'messages'), orderBy('date', 'asc'), limit(300)));
+    lotGlobal.abonner(K.messages(p.id), () => query(collection(bdd, 'projets', p.id, 'messages'), orderBy('date', 'desc'), limit(40)));
     lotGlobal.sur(K.messages(p.id), () => planifierNav());
   }
 };
@@ -122,7 +124,10 @@ construireNavigation();
 
 enregistrerRecherche((terme) => {
   const projets = magasin.lire(K.projets) || [];
-  const nomProjet = (pid) => ((projets.find((p) => p.id === pid) || {}).nom || '');
+  /* Une table plutôt qu'une recherche linéaire par élément : à cinquante
+     projets et quelques milliers d'items, la frappe devenait saccadée. */
+  const nomsProjets = new Map(projets.map((p) => [p.id, p.nom]));
+  const nomProjet = (pid) => nomsProjets.get(pid) || '';
   const items = [];
   if (!terme) {
     items.push({ groupe: 'Créer', libelle: 'Nouveau projet', icone: 'plus', chemin: '/projets/nouveau' });

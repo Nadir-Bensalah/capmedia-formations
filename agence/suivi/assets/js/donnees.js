@@ -28,6 +28,7 @@ export const K = {
   liens: (p) => `liens:${p}`,
   messages: (p) => `messages:${p}`,
   lectures: (p) => `lectures:${p}`,
+  technique: (p) => `technique:${p}`,
   taches: (p) => `taches:${p}`,
   tickets: (p) => `tickets:${p}`,
   validations: (p) => `validations:${p}`,
@@ -85,6 +86,9 @@ export const abonnerProjet = (lot, pid, role) => {
   lot.abonner(K.liens(pid), () => visible(col('projets', pid, 'liens')));
   lot.abonner(K.messages(pid), () => query(col('projets', pid, 'messages'), orderBy('date', 'asc'), limit(300)));
   lot.abonner(K.lectures(pid), () => col('projets', pid, 'lectures'));
+  /* La fiche technique ne se lit que côté équipe : les règles refuseraient
+     la requête à un client, et elle ne lui sert à rien. */
+  if (!client) lot.abonner(K.technique(pid), () => col('projets', pid, 'technique'));
   lot.abonner(K.taches(pid), () => surProjetVisible('taches'));
   lot.abonner(K.tickets(pid), () => surProjet('tickets'));
   lot.abonner(K.validations(pid), () => surProjet('validations'));
@@ -123,6 +127,8 @@ export const abonnerGlobal = (lot, session) => {
     lot.abonner(K.projets, () => query(col('projets'), where('membres', 'array-contains', uid)));
     lot.abonner(K.organisations, () => query(col('organisations'), where('membres', 'array-contains', uid)));
     lot.abonner(K.demandesProjet, () => query(col('demandesProjet'), where('par.uid', '==', uid)));
+    /* Pour mettre un nom sur le responsable du projet, au lieu de « Capmedia ». */
+    lot.abonner(K.equipe, () => col('equipe'));
     for (const p of session.projets) abonnerProjet(lot, p.id, 'client');
   }
 };
@@ -223,6 +229,9 @@ export const ecrire = {
       { merge: true });
   },
 
+  /* La fiche technique d'une brique, rangée hors du composant. */
+  majTechnique: (pid, cid, technique) => setDoc(doc(bdd, 'projets', pid, 'technique', cid), nettoyer({ ...technique, maj: serverTimestamp() }), { merge: true }),
+
   /* --- Le profil de la personne connectée ----------------------------- */
   majProfil: (uid, changements) => setDoc(doc(bdd, 'profils', uid), nettoyer({ ...changements, maj: serverTimestamp() }), { merge: true }),
   marquerVu: (uid, cle) => setDoc(doc(bdd, 'profils', uid), { lus: { [cle]: serverTimestamp() } }, { merge: true }),
@@ -294,6 +303,7 @@ export const ecrire = {
   majProjet: (pid, changements) => updateDoc(doc(bdd, 'projets', pid), nettoyer({ ...changements, maj: serverTimestamp() })),
 
   creerComposant: (pid, d) => addDoc(col('projets', pid, 'composants'), nettoyer({
+    lien: d.lien || '',
     nom: d.nom, type: d.type || 'autre', statut: d.statut || 'a-venir', progression: borner(d.progression),
     version: d.version || '', versionPrep: d.versionPrep || '', environnement: d.environnement || '',
     techno: d.techno || [], responsable: d.responsable || '', description: d.description || '', ordre: Number(d.ordre) || 0,
@@ -419,12 +429,19 @@ export const prochaineReunion = (reunions = []) => {
 };
 
 /** Le total dû sur des factures. */
+/* Le montant réellement dû : le TTC enregistré, ou le hors taxes augmenté
+   de sa TVA. Retomber sur le HT faisait disparaître la taxe du reste à
+   payer, et l'écran de la pièce annonçait un autre chiffre. */
+export const ttcDe = (d) => (typeof d.ttc === 'number'
+  ? d.ttc
+  : (Number(d.montant) || 0) * (1 + (Number(d.tva) || 0) / 100));
+
 export const resteAPayer = (documents = [], paiements = []) => {
-  const factures = documents.filter((d) => d.type === 'facture' && FACTURES_DUES.includes(d.statut));
+  const factures = documents.filter((d) => d.type === 'facture' && !d.archive && FACTURES_DUES.includes(d.statut));
   let total = 0;
   for (const f of factures) {
     const paye = paiements.filter((p) => p.facture === f.id && p.statut !== 'annule').reduce((s, p) => s + (Number(p.montant) || 0), 0);
-    total += Math.max(0, (Number(f.ttc) || Number(f.montant) || 0) - paye);
+    total += Math.max(0, ttcDe(f) - paye);
   }
   return { total, factures };
 };
@@ -432,6 +449,23 @@ export const resteAPayer = (documents = [], paiements = []) => {
 /**
  * Ce qui attend le client. Une liste d'éléments { genre, titre, sous, chemin, ton }.
  */
+/* L'ordre de ce qui attend quelqu'un : d'abord ce qui est en retard, du
+   plus ancien retard au plus récent, puis ce qui a une échéance proche,
+   puis le reste du plus récent au plus ancien. Trier par date décroissante
+   enterrait la facture en retard sous les nouveautés du jour. */
+const trierParUrgence = (items) => items.slice().sort((a, b) => {
+  const ja = a.date ? joursAvant(a.date) : null;
+  const jb = b.date ? joursAvant(b.date) : null;
+  const retardA = ja !== null && ja < 0;
+  const retardB = jb !== null && jb < 0;
+  if (retardA !== retardB) return retardA ? -1 : 1;
+  if (retardA && retardB) return ja - jb;
+  if (ja !== null && jb !== null) return ja - jb;
+  if (ja !== null) return -1;
+  if (jb !== null) return 1;
+  return 0;
+});
+
 export const enAttenteDeVous = ({ projets = [], tickets = [], validations = [], documents = [], taches = [], blocages = [] }) => {
   const nomProjet = (pid) => ((projets.find((p) => p.id === pid) || {}).nom || '');
   const items = [];
@@ -455,7 +489,7 @@ export const enAttenteDeVous = ({ projets = [], tickets = [], validations = [], 
   blocages.filter((b) => !b.resolu && b.responsable === 'client').forEach((b) => items.push({
     genre: 'blocage', icone: 'alerte', ton: 'rouge', titre: b.titre, sous: `Point bloquant de votre côté · ${nomProjet(b.projet)}`, chemin: `/projets/${b.projet}`, date: b.depuis,
   }));
-  return items.sort(parDateDesc('date'));
+  return trierParUrgence(items);
 };
 
 /** Ce qui attend l'équipe. */
@@ -476,7 +510,7 @@ export const enAttenteDeNous = ({ projets = [], tickets = [], validations = [], 
     genre: 'preprojet', icone: 'sparkle', ton: 'violet', titre: d.titre, sous: `Nouveau projet demandé par ${d.par && d.par.nom}`, chemin: `/nouveaux-projets/${d.id}`, date: d.maj,
   }));
   void validations; void equipeUid;
-  return items.sort(parDateDesc('date'));
+  return trierParUrgence(items);
 };
 
 /** Ce qui attend le client, vu par l'équipe. */

@@ -83,8 +83,10 @@ service cloud.firestore {
     // ================================================================
 
     match /equipe/{uid} {
-      // L'équipe lit toute l'équipe (pour assigner) ; un client ne lit rien.
-      allow read:  if estEquipe();
+      // Toute personne connectée lit la fiche d'un membre de l'équipe : un
+      // client doit pouvoir mettre un nom et une adresse professionnelle en
+      // face de son projet. La fiche ne porte que nom, adresse et rôle.
+      allow read:  if connecte();
       allow write: if false;
     }
 
@@ -131,6 +133,14 @@ service cloud.firestore {
 
       match /composants/{composantId} {
         allow read:   if accesProjet(projetId);
+        allow write:  if estEquipe();
+      }
+
+      // La fiche technique d'une brique : comptes, accès, dépendances et
+      // leurs versions. Rien de cela ne regarde le client, et le masquer à
+      // l'écran ne suffisait pas : la donnée partait quand même.
+      match /technique/{composantId} {
+        allow read:   if estEquipe();
         allow write:  if estEquipe();
       }
 
@@ -424,6 +434,9 @@ service cloud.firestore {
     // Déposés par le serveur. Le client lit, marque un devis consulté et y
     // répond. Il ne touche jamais un montant, un numéro ni une facture.
     match /documents/{documentId} {
+      // À faire : ranger les brouillons hors de cette collection. Une clause
+      // « statut != brouillon » ici ferait rejeter la requête du client, qui
+      // ne peut pas la porter. En attendant, l'écran les masque.
       allow read: if estEquipe() || membreDuProjet(resource.data.projet);
 
       allow update: if !estEquipe()
