@@ -3,7 +3,7 @@
    statuts, enregistrer un paiement, voir ce qui reste dû.
    ========================================================================== */
 
-import { echapper, dateCourte, dateISO, montant, pluriel, parDateDesc, joursAvant, STATUTS_DEVIS, STATUTS_FACTURE, FACTURES_DUES, MOYENS_PAIEMENT } from '../noyau.js';
+import { echapper, dateCourte, dateISO, montant, pluriel, parDateDesc, joursAvant, STATUTS_DEVIS, STATUTS_FACTURE, FACTURES_DUES, MOYENS_PAIEMENT, age, retard } from '../noyau.js';
 import { icone, pastille, ligne, vide, squelette, titrePage, sur, modale, toast, agir, lireForme, valider, obligatoire, optionsDe, depot, metrique, menu, confirmer } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K, resteAPayer } from '../donnees.js';
@@ -84,7 +84,7 @@ export const vue = async (ctx, env) => {
     const enRetardNonMarquees = factures.filter((d) => d.statut === 'a-payer' && d.echeance && joursAvant(d.echeance) < 0);
 
     const ligneDoc = (d) => ligne({ icone: d.type === 'devis' ? 'receipt' : 'euro', ton: d.type === 'devis' ? (['envoye', 'consulte'].includes(d.statut) ? 'ambre' : d.statut === 'accepte' ? 'vert' : '') : (d.statut === 'en-retard' || (d.statut === 'a-payer' && d.echeance && joursAvant(d.echeance) < 0) ? 'rouge' : FACTURES_DUES.includes(d.statut) ? 'ambre' : d.statut === 'payee' ? 'vert' : ''),
-      titre: `<span class="t-mono t-3" style="font-weight:400">${echapper(d.numero || '')}</span> ${echapper(d.libelle || '')}`, sous: `${echapper(nomProjet(d.projet))} · ${echapper(dateCourte(d.date))}${d.echeance ? ` · ${d.type === 'devis' ? 'expire' : 'échéance'} ${echapper(dateCourte(d.echeance))}` : ''}`,
+      titre: `<span class="t-mono t-3" style="font-weight:400">${echapper(d.numero || '')}</span> ${echapper(d.libelle || '')}`, sous: `${echapper(nomProjet(d.projet))} · ${echapper(dateCourte(d.date))}${d.echeance ? ` · ${retard(d.echeance) && d.statut !== 'payee' ? `en retard de ${echapper(retard(d.echeance))}` : `${d.type === 'devis' ? 'expire' : 'échéance'} ${echapper(dateCourte(d.echeance))}`}` : ''}${['envoye', 'consulte'].includes(d.statut) ? ` · envoyé il y a ${echapper(age(d.date))}` : ''}`,
       fin: `${d.fichier && d.fichier.chemin ? '' : '<span class="etiquette" title="Le client ne peut rien télécharger">Sans PDF</span>'}${(d.liens || []).length ? `<span class="puce puce--bleu"><i></i>${d.liens.length} lien${d.liens.length > 1 ? 's' : ''}</span>` : ''}<span class="nb t-fort">${echapper(montant(ttcDe(d)))}</span>${pastille(d.type === 'devis' ? STATUTS_DEVIS : STATUTS_FACTURE, d.statut, { equipe: true })}<button class="btn-icone" type="button" data-menu-doc="${echapper(d.id)}" aria-label="Actions">${icone('points')}</button>`, action: 'ouvrir', attrs: `data-id="${echapper(d.id)}"` });
 
     sortie.innerHTML = `<div class="page">

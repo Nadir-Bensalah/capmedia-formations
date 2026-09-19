@@ -12,7 +12,7 @@
 import {
   bdd, collection, collectionGroup, query, where, orderBy, limit, doc, addDoc, updateDoc, setDoc, deleteDoc,
   serverTimestamp, arrayUnion, arrayRemove, Timestamp,
-  nomAffiche, enDate, parDateDesc, parDateAsc, joursAvant, borner,
+  nomAffiche, enDate, parDateDesc, parDateAsc, joursAvant, borner, age, retard, dateCourte,
   OUVERTS, ATTEND_CLIENT, ATTEND_EQUIPE, FACTURES_DUES, PROJETS_ACTIFS, CATEGORIES_CLIENT, projetEstActif,
 } from './noyau.js';
 import * as magasin from './magasin.js';
@@ -470,7 +470,7 @@ export const enAttenteDeVous = ({ projets = [], tickets = [], validations = [], 
   const nomProjet = (pid) => ((projets.find((p) => p.id === pid) || {}).nom || '');
   const items = [];
   validations.filter((v) => v.statut === 'en-attente').forEach((v) => items.push({
-    genre: 'validation', icone: 'valider', ton: 'violet', titre: v.titre, sous: `Validation · ${nomProjet(v.projet)}`, chemin: `/valider/${v.id}`, date: v.cree,
+    genre: 'validation', icone: 'valider', ton: 'violet', titre: v.titre, sous: `À valider depuis ${age(v.cree)} · ${nomProjet(v.projet)}`, chemin: `/valider/${v.id}`, date: v.cree,
   }));
   tickets.filter((t) => ATTEND_CLIENT.includes(t.statut) && !t.archive).forEach((t) => items.push({
     genre: 'demande', icone: t.statut === 'a-valider' ? 'check' : 'help', ton: 'ambre',
@@ -478,16 +478,16 @@ export const enAttenteDeVous = ({ projets = [], tickets = [], validations = [], 
     chemin: `/projets/${t.projet}/demandes/${t.id}`, date: t.maj,
   }));
   documents.filter((d) => d.type === 'devis' && ['envoye', 'consulte'].includes(d.statut) && !d.archive).forEach((d) => items.push({
-    genre: 'devis', icone: 'receipt', ton: 'bleu', titre: d.libelle, sous: `Devis à décider · ${nomProjet(d.projet)}`, chemin: `/finances/${d.id}`, date: d.date,
+    genre: 'devis', icone: 'receipt', ton: 'bleu', titre: d.libelle, sous: `Devis à décider, envoyé il y a ${age(d.date)} · ${nomProjet(d.projet)}`, chemin: `/finances/${d.id}`, date: d.date,
   }));
   documents.filter((d) => d.type === 'facture' && FACTURES_DUES.includes(d.statut) && !d.archive).forEach((d) => items.push({
-    genre: 'facture', icone: 'euro', ton: d.statut === 'en-retard' ? 'rouge' : 'ambre', titre: d.libelle, sous: `Facture à régler · ${nomProjet(d.projet)}`, chemin: `/finances/${d.id}`, date: d.echeance || d.date,
+    genre: 'facture', icone: 'euro', ton: d.statut === 'en-retard' ? 'rouge' : 'ambre', titre: d.libelle, sous: `Facture à régler${retard(d.echeance) ? `, en retard de ${retard(d.echeance)}` : d.echeance ? `, échéance ${dateCourte(d.echeance)}` : ''} · ${nomProjet(d.projet)}`, chemin: `/finances/${d.id}`, date: d.echeance || d.date,
   }));
   taches.filter((t) => t.statut === 'attente-client' && !t.archive).forEach((t) => items.push({
-    genre: 'tache', icone: 'taches', ton: 'ambre', titre: t.titre, sous: `Nous attendons votre retour · ${nomProjet(t.projet)}`, chemin: `/projets/${t.projet}/taches/${t.id}`, date: t.echeance || t.maj,
+    genre: 'tache', icone: 'taches', ton: 'ambre', titre: t.titre, sous: `Nous attendons votre retour${retard(t.echeance) ? `, en retard de ${retard(t.echeance)}` : ''} · ${nomProjet(t.projet)}`, chemin: `/projets/${t.projet}/taches/${t.id}`, date: t.echeance || t.maj,
   }));
   blocages.filter((b) => !b.resolu && b.responsable === 'client').forEach((b) => items.push({
-    genre: 'blocage', icone: 'alerte', ton: 'rouge', titre: b.titre, sous: `Point bloquant de votre côté · ${nomProjet(b.projet)}`, chemin: `/projets/${b.projet}`, date: b.depuis,
+    genre: 'blocage', icone: 'alerte', ton: 'rouge', titre: b.titre, sous: `Point bloquant de votre côté depuis ${age(b.depuis)} · ${nomProjet(b.projet)}`, chemin: `/projets/${b.projet}`, date: b.depuis,
   }));
   return trierParUrgence(items);
 };
@@ -498,13 +498,13 @@ export const enAttenteDeNous = ({ projets = [], tickets = [], validations = [], 
   const items = [];
   tickets.filter((t) => ATTEND_EQUIPE.includes(t.statut) && !t.archive).forEach((t) => items.push({
     genre: 'demande', icone: 'demandes', ton: t.statut === 'nouveau' ? 'bleu' : 'gris', titre: t.titre,
-    sous: `${t.numero || 'Sans numéro'} · ${nomProjet(t.projet)}`, chemin: `/projets/${t.projet}/demandes/${t.id}`, date: t.maj, urgence: t.urgence,
+    sous: `${t.numero || 'Sans numéro'} · ouverte depuis ${age(t.cree)} · ${nomProjet(t.projet)}`, chemin: `/projets/${t.projet}/demandes/${t.id}`, date: t.maj, urgence: t.urgence,
   }));
   taches.filter((t) => !t.archive && t.statut !== 'terminee' && t.echeance && joursAvant(t.echeance) < 0).forEach((t) => items.push({
-    genre: 'tache', icone: 'taches', ton: 'rouge', titre: t.titre, sous: `Tâche en retard · ${nomProjet(t.projet)}`, chemin: `/projets/${t.projet}/taches/${t.id}`, date: t.echeance,
+    genre: 'tache', icone: 'taches', ton: 'rouge', titre: t.titre, sous: `En retard de ${retard(t.echeance)} · ${nomProjet(t.projet)}`, chemin: `/projets/${t.projet}/taches/${t.id}`, date: t.echeance,
   }));
   blocages.filter((b) => !b.resolu && b.responsable === 'capmedia').forEach((b) => items.push({
-    genre: 'blocage', icone: 'alerte', ton: 'rouge', titre: b.titre, sous: `Point bloquant · ${nomProjet(b.projet)}`, chemin: `/projets/${b.projet}`, date: b.depuis,
+    genre: 'blocage', icone: 'alerte', ton: 'rouge', titre: b.titre, sous: `Point bloquant depuis ${age(b.depuis)} · ${nomProjet(b.projet)}`, chemin: `/projets/${b.projet}`, date: b.depuis,
   }));
   demandesProjet.filter((d) => ['nouvelle', 'discussion', 'qualification', 'estimation'].includes(d.statut)).forEach((d) => items.push({
     genre: 'preprojet', icone: 'sparkle', ton: 'violet', titre: d.titre, sous: `Nouveau projet demandé par ${d.par && d.par.nom}`, chemin: `/nouveaux-projets/${d.id}`, date: d.maj,

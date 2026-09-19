@@ -548,6 +548,25 @@ export const jourRelatif = (valeur) => {
 };
 
 /* Un nombre lisible : les milliers séparés, sans unité. */
+/* L'âge d'une chose, en clair et en court : « 12 j », « 3 mois ». C'est le
+   chiffre qui dit s'il faut relancer, et il manquait partout. */
+export const age = (valeur) => {
+  const d = enDate(valeur);
+  if (!d) return '';
+  const jours = Math.floor((Date.now() - d.getTime()) / 86400000);
+  if (jours <= 0) return "aujourd'hui";
+  if (jours === 1) return 'hier';
+  if (jours < 31) return `${jours} j`;
+  const mois = Math.round(jours / 30);
+  return mois < 12 ? `${mois} mois` : `${Math.round(jours / 365)} an${jours >= 730 ? 's' : ''}`;
+};
+
+/* Le retard d'une échéance, toujours positif, ou une chaîne vide. */
+export const retard = (valeur) => {
+  const n = joursAvant(valeur);
+  return n !== null && n < 0 ? `${Math.abs(n)} j` : '';
+};
+
 export const nombre = (valeur) => (typeof valeur === 'number' && Number.isFinite(valeur)
   ? valeur.toLocaleString('fr-FR')
   : String(valeur || ''));
