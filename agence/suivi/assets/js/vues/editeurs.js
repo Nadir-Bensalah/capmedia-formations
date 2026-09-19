@@ -17,12 +17,28 @@ import { K, ecrire } from '../donnees.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 
-const champ = (nom, libelle, valeur = '', { type = 'text', aide = '', placeholder = '', facultatif = false, attrs = '' } = {}) => `
+/* Un champ de date affiche le format du navigateur, souvent américain. On
+   ne peut pas le changer, alors on écrit la date en français juste en
+   dessous : c'est elle qu'on relit avant d'enregistrer. */
+const champ = (nom, libelle, valeur = '', { type = 'text', aide = '', placeholder = '', facultatif = false, attrs = '' } = {}) => {
+  const estDate = type === 'date' || type === 'datetime-local';
+  return `
   <div class="groupe">
     <label class="etiquette-champ" for="ed-${nom}">${echapper(libelle)}${facultatif ? ' <span class="facultatif">(facultatif)</span>' : ''}</label>
-    <input class="champ" id="ed-${nom}" name="${nom}" type="${type}" value="${echapper(valeur ?? '')}" placeholder="${echapper(placeholder)}" ${attrs}>
+    <input class="champ" id="ed-${nom}" name="${nom}" type="${type}" value="${echapper(valeur ?? '')}" placeholder="${echapper(placeholder)}"${estDate ? ' lang="fr-FR" data-date-fr' : ''} ${attrs}>
+    ${estDate ? `<p class="aide aide--date" data-echo-pour="ed-${nom}">${echapper(valeur ? lisibleDate(valeur) : 'Aucune date')}</p>` : ''}
     ${aide ? `<p class="aide">${echapper(aide)}</p>` : ''}
   </div>`;
+};
+
+/* La lecture française d'une valeur de champ date ou date-heure. */
+const lisibleDate = (v) => {
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return 'Aucune date';
+  return String(v).includes('T')
+    ? d.toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+};
 const zone = (nom, libelle, valeur = '', { aide = '', placeholder = '', facultatif = false, lignes = 4 } = {}) => `
   <div class="groupe">
     <label class="etiquette-champ" for="ed-${nom}">${echapper(libelle)}${facultatif ? ' <span class="facultatif">(facultatif)</span>' : ''}</label>
@@ -536,6 +552,17 @@ const editeurs = {
 };
 
 /** Ouvre l'éditeur d'un genre. Résout true (ou l'identifiant) si enregistré. */
+/* L'écho français se met à jour à chaque frappe, une fois pour toutes. */
+if (typeof document !== 'undefined' && !document.__echoDates) {
+  document.__echoDates = true;
+  document.addEventListener('input', (e) => {
+    const el = e.target;
+    if (!el || !el.matches || !el.matches('[data-date-fr]')) return;
+    const echo = document.querySelector(`[data-echo-pour="${el.id}"]`);
+    if (echo) echo.textContent = el.value ? lisibleDate(el.value) : 'Aucune date';
+  });
+}
+
 export const editer = (genre, env, options = {}) => {
   const fabrique = editeurs[genre];
   if (!fabrique) { toast(`Éditeur inconnu : ${genre}`, 'erreur'); return Promise.resolve(undefined); }

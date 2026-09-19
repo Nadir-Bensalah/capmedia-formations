@@ -1571,3 +1571,6 @@ input, select, textarea { font: inherit; color: inherit; }
 
 .etiquette--techno { text-transform: none; letter-spacing: 0; }
 .etiquette--techno b { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* La lecture française d'une date, sous le champ natif du navigateur. */
+.aide--date { color: var(--encre-2); font-weight: 500; }

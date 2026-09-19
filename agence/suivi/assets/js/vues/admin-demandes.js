@@ -3,7 +3,7 @@
    étape de traitement, avec filtres par projet, urgence et assignation.
    ========================================================================== */
 
-import { echapper, depuis, pluriel, parDateDesc, STATUTS, TYPES, URGENCES, QUALIFICATIONS, OUVERTS, ATTEND_EQUIPE, ATTEND_CLIENT } from '../noyau.js';
+import { echapper, depuis, pluriel, parDateDesc, STATUTS, TYPES, URGENCES, QUALIFICATIONS, OUVERTS, ATTEND_EQUIPE, ATTEND_CLIENT, age } from '../noyau.js';
 import { icone, pastille, puce, pucePlateforme, iconePlateforme, tonPlateforme, ligne, vide, squelette, titrePage, sur } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K } from '../donnees.js';
@@ -48,7 +48,7 @@ export const vue = async (ctx, env) => {
         ton: tonPlateforme(t.plateforme) || (t.urgence === 'bloquant' || t.urgence === 'critique' ? 'rouge' : ATTEND_CLIENT.includes(t.statut) ? 'ambre' : ''),
         nonLu: nonLu(t) && OUVERTS.includes(t.statut),
         titre: `${t.numero ? `<span class="t-mono t-3" style="font-weight:400">${echapper(t.numero)}</span> ` : ''}${echapper(t.titre)}`,
-        sous: `${echapper(nomProjet(t.projet))} · ${echapper((TYPES[t.type] || {}).libelle || t.type)} · ${echapper(depuis(t.maj))}${t.plateforme ? ` ${pucePlateforme(t.plateforme, { court: true })}` : ''}${t.qualification ? ` ${pastille(QUALIFICATIONS, t.qualification)}` : ''}`,
+        sous: `${echapper(nomProjet(t.projet))} · ${echapper((TYPES[t.type] || {}).libelle || t.type)} · ${echapper(OUVERTS.includes(t.statut) ? `ouverte depuis ${age(t.cree)}` : depuis(t.maj))}${t.plateforme ? ` ${pucePlateforme(t.plateforme, { court: true })}` : ''}${t.qualification ? ` ${pastille(QUALIFICATIONS, t.qualification)}` : ''}`,
         fin: `${puce(URGENCES, t.urgence || 'important')}${pastille(STATUTS, t.statut)}${t.assigne ? '' : '<span class="etiquette">Sans assigné</span>'}`,
       })).join('')}</div>` : vide({ icone: 'inbox', titre: 'Rien dans cette colonne', texte: etat.colonne === 'nouveau' ? 'Aucune nouvelle demande. Tout est pris en charge.' : '', compact: true })}
     </div>`;
