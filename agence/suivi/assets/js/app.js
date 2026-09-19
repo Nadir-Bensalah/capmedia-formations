@@ -14,6 +14,7 @@ import { icone } from './icones.js';
 import * as accueil from './vues/accueil.js';
 import * as projet from './vues/projet.js';
 import * as demande from './vues/demande.js';
+import * as brique from './vues/brique.js';
 import * as messages from './vues/messages.js';
 import * as valider from './vues/valider.js';
 import * as calendrier from './vues/calendrier.js';
@@ -124,6 +125,7 @@ definir([
   { chemin: '/projets/:id/demandes/:tid', vue: (ctx) => demande.detail(ctx, env) },
   { chemin: '/demande/:tid', vue: (ctx) => demande.resoudre(ctx, env) },
   { chemin: '/projets/:id/taches/:tid', cle: (c) => `projet:${c.params.id}`, vue: (ctx) => projet.vue({ ...ctx, onglet: 'taches' }, env) },
+  { chemin: '/projets/:id/brique/:cid', vue: (ctx) => brique.vue(ctx, env) },
   { chemin: '/projets/:id/:onglet', cle: (c) => `projet:${c.params.id}`, vue: (ctx) => projet.vue({ ...ctx, onglet: ctx.params.onglet }, env) },
   { chemin: '/messages', vue: (ctx) => messages.vue(ctx, env) },
   { chemin: '/messages/:pid', vue: (ctx) => messages.vue(ctx, env) },

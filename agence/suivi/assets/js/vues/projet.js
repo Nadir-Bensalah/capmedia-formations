@@ -263,27 +263,23 @@ const reglerOnglets = (sortie) => {
 const cartesPlateformes = (projet, d, pid) => {
   const cles = (projet.plateformes || []).filter((c) => PLATEFORMES[c]);
   if (!cles.length) return '';
-  projet = { ...projet, liensPublics: (d.liens || []).filter((l) => l.url && l.visibilite !== 'interne' && ['production', 'mobile'].includes(l.categorie || '')) };
   return `<div class="cartes-plateformes" role="list">${cles.map((cle) => {
     const f = PLATEFORMES[cle];
     const c = d.composants.find((x) => x.type === (f.composant || cle)) || null;
-    /* L'adresse publique de la brique, sinon le lien du projet qui lui est
-       rattaché : la fiche du store, le site en ligne. Jamais un dépôt. */
-    const rattache = c ? (projet.liensPublics || []).find((l) => l.composant === c.id) : null;
-    const adresse = (c && c.lien) || (rattache ? rattache.url : '') || '';
+    /* La carte mène à la page de la brique : son histoire complète, ses
+       versions, ses tâches, ses points bloquants. L'adresse publique y
+       vit aussi, en bouton, mais elle ne court-circuite plus la page. */
     const etat = c
       ? [c.version && `Version ${c.version}`, (STATUTS_COMPOSANT[c.statut || 'en-cours'] || {}).libelle].filter(Boolean).join(' · ')
       : 'Pas encore suivie';
-    const att = adresse
-      ? `href="${echapper(adresse)}" target="_blank" rel="noopener noreferrer"`
-      : `href="#/projets/${echapper(pid)}/versions"`;
-    return `<a class="carte-plateforme carte-plateforme--${f.voile}" role="listitem" ${att} data-astuce="${echapper(adresse ? 'Ouvrir' : 'Voir les versions')}">
+    const att = `href="#/projets/${echapper(pid)}/brique/${echapper(c ? c.id : `p-${cle}`)}"`;
+    return `<a class="carte-plateforme carte-plateforme--${f.voile}" role="listitem" ${att} data-astuce="${echapper(`Ouvrir la page ${f.libelle}`)}">
       <span class="carte-plateforme-tuile">${icone(f.icone)}</span>
       <span class="carte-plateforme-corps">
         <span class="carte-plateforme-nom">${echapper(f.libelle)}</span>
         <span class="carte-plateforme-etat">${echapper(etat)}</span>
       </span>
-      <span class="carte-plateforme-fleche">${icone(adresse ? 'externe' : 'fleche')}</span>
+      <span class="carte-plateforme-fleche">${icone('fleche')}</span>
     </a>`;
   }).join('')}</div>`;
 };
