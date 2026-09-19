@@ -156,8 +156,8 @@ const editeurs = {
         ${champ('contact2Nom', 'Second interlocuteur', (contactsDe(fiche)[1] || {}).nom, { facultatif: true, placeholder: 'Laissez vide s\'il n\'y en a qu\'un' })}
         ${champ('contact2Email', 'Son e-mail', (contactsDe(fiche)[1] || {}).email, { type: 'email', facultatif: true })}
       </div>
-      <label class="interrupteur" style="margin-top:8px"><input type="checkbox" name="interne" ${fiche.interne ? 'checked' : ''}><i></i> Projet interne Capmedia</label>
-      <p class="aide">Un projet à vous : aucun client, aucun e-mail, visible du seul cockpit.</p>
+      <label class="interrupteur" style="margin-top:8px"><input type="checkbox" name="interne" ${fiche.interne ? 'checked' : ''}><i></i> C'est un projet à moi</label>
+      <p class="aide">Aucun client, aucun e-mail, visible de vous seul dans le cockpit.</p>
       <label class="interrupteur" style="margin-top:8px"><input type="checkbox" name="silence" ${fiche.silence ? 'checked' : ''}><i></i> Préparer sans prévenir le client</label>
       <p class="aide">En sourdine, le client garde l'accès mais ne reçoit aucun e-mail. À lever quand l'espace est prêt.</p>`,
     surMontage: (racine) => brancherLogo(racine, pid),
