@@ -10,6 +10,7 @@ import { definir, demarrer } from './routeur.js';
 import * as magasin from './magasin.js';
 import { abonnerGlobal, K, G, agreger, enAttenteDeVous, nonLusProjet, ecrire } from './donnees.js';
 import { icone } from './icones.js';
+import { avatarProjet } from './ui.js';
 
 import * as accueil from './vues/accueil.js';
 import * as projet from './vues/projet.js';
@@ -69,7 +70,9 @@ const construireNavigation = () => {
       titre: 'Vos projets',
       items: [
         ...projets.filter((p) => !p.archive).map((p) => ({
-          chemin: `/projets/${p.id}`, libelle: p.nom, icone: 'projets',
+          /* Le projet porte son propre logo : dans une liste de plusieurs, l'œil
+             retrouve le sien avant d'avoir lu le nom. */
+          chemin: `/projets/${p.id}`, libelle: p.nom, ecusson: avatarProjet(p, 'mini'),
           compte: { total: ouverts.filter((t) => t.projet === p.id).length, neuf: parProjet(p.id) },
         })),
         { chemin: '/nouveau-projet', libelle: 'Demander un projet', icone: 'plus' },
