@@ -96,6 +96,14 @@ await refuse('Camille ne lit pas une note interne de demande', getDoc(doc(camill
 await doit('Camille lit un message public de demande', getDoc(doc(camille(), 'tickets/t1/messages/m-public')));
 await doit("L'équipe lit tout, interne compris", getDoc(doc(equipe(), 'taches/t-interne')));
 
+console.log('\n== Les accusés de lecture');
+await doit('Camille pose son accusé de lecture', setDoc(doc(camille(), 'projets/atelier/lectures/' + CAMILLE), { lu: serverTimestamp(), frappe: null, cote: 'client', nom: 'Camille' }));
+await doit("L'équipe lit les accusés du projet", getDocs(collection(equipe(), 'projets/atelier/lectures')));
+await doit('Camille lit les accusés de son projet', getDocs(collection(camille(), 'projets/atelier/lectures')));
+await refuse("Camille ne pose pas l'accusé de quelqu'un d'autre", setDoc(doc(camille(), 'projets/atelier/lectures/' + AGENT), { lu: serverTimestamp(), cote: 'equipe', nom: 'Agent' }));
+await refuse("Camille ne glisse pas de texte dans un accusé", setDoc(doc(camille(), 'projets/atelier/lectures/' + CAMILLE), { lu: serverTimestamp(), cote: 'client', nom: 'Camille', texte: 'coucou' }));
+await refuse("Léa ne lit pas les accusés de Atelier", getDocs(collection(lea(), 'projets/atelier/lectures')));
+
 console.log('\n== Ce que le client peut écrire');
 await doit('Camille crée une demande', addDoc(collection(camille(), 'tickets'), { numero: null, projet: 'atelier', composant: '', titre: 'Bug', description: 'x', type: 'bug', urgence: 'important', statut: 'nouveau', plateforme: 'ios', version: '', etapes: '', attendu: '', obtenu: '', contexte: '', appareil: '', liens: [], assigne: null, auteur: { uid: CAMILLE, nom: 'Camille', email: 'camille.essai@exemple.test', cote: 'client' }, pieces: [], archive: false, cree: serverTimestamp(), maj: serverTimestamp(), resolu: null, lu: { client: null, equipe: null }, qualification: null, devis: null }));
 await refuse('Camille ne crée pas une demande sur le projet de Léa', addDoc(collection(camille(), 'tickets'), { numero: null, projet: 'boutique', composant: '', titre: 'Bug', description: 'x', type: 'bug', urgence: 'important', statut: 'nouveau', plateforme: 'ios', version: '', etapes: '', attendu: '', obtenu: '', contexte: '', appareil: '', liens: [], assigne: null, auteur: { uid: CAMILLE, nom: 'Camille', email: 'camille.essai@exemple.test', cote: 'client' }, pieces: [], archive: false, cree: serverTimestamp(), maj: serverTimestamp(), resolu: null, lu: { client: null, equipe: null }, qualification: null, devis: null }));

@@ -27,6 +27,7 @@ export const K = {
   jalons: (p) => `jalons:${p}`,
   liens: (p) => `liens:${p}`,
   messages: (p) => `messages:${p}`,
+  lectures: (p) => `lectures:${p}`,
   taches: (p) => `taches:${p}`,
   tickets: (p) => `tickets:${p}`,
   validations: (p) => `validations:${p}`,
@@ -83,6 +84,7 @@ export const abonnerProjet = (lot, pid, role) => {
   lot.abonner(K.jalons(pid), () => col('projets', pid, 'jalons'));
   lot.abonner(K.liens(pid), () => visible(col('projets', pid, 'liens')));
   lot.abonner(K.messages(pid), () => query(col('projets', pid, 'messages'), orderBy('date', 'asc'), limit(300)));
+  lot.abonner(K.lectures(pid), () => col('projets', pid, 'lectures'));
   lot.abonner(K.taches(pid), () => surProjetVisible('taches'));
   lot.abonner(K.tickets(pid), () => surProjet('tickets'));
   lot.abonner(K.validations(pid), () => surProjet('validations'));
@@ -210,6 +212,15 @@ export const ecrire = {
   async messageProjet(session, pid, texte, pieces = []) {
     const de = auteurDe(session);
     await addDoc(col('projets', pid, 'messages'), { de: { uid: de.uid, nom: de.nom, cote: de.cote }, texte, pieces, date: serverTimestamp() });
+  },
+
+  /* L'accusé de lecture d'un projet : l'instant lu, et l'instant de la
+     dernière frappe pour dire à l'autre qu'une réponse s'écrit. */
+  marquerLecture: (session, pid, { frappe = false } = {}) => {
+    const de = auteurDe(session);
+    return setDoc(doc(bdd, 'projets', pid, 'lectures', de.uid),
+      nettoyer({ lu: serverTimestamp(), cote: de.cote, nom: de.nom, frappe: frappe ? serverTimestamp() : null }),
+      { merge: true });
   },
 
   /* --- Le profil de la personne connectée ----------------------------- */

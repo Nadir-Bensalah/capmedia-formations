@@ -18,6 +18,7 @@ import * as magasin from '../magasin.js';
 import { K, ecrire, abonnerProjet, progressionProjet, jalonCourant, jalonSuivant, prochaineReunion, enAttenteDeVous, parStatut } from '../donnees.js';
 import { filAriane } from '../coquille.js';
 import { naviguer } from '../routeur.js';
+import { monterBulle } from '../bulle.js';
 import { editer, supprimer } from './editeurs.js';
 import { activiteHtml } from './accueil.js';
 
@@ -67,6 +68,9 @@ export const vue = async (ctx, env) => {
   const sortie = ctx.sortie;
   sortie.innerHTML = `<div class="page">${squelette('page', 6)}</div>`;
 
+  /* L'onglet dont l'animation d'entrée est allée jusqu'au bout : tant
+     qu'elle n'a pas fini, un redessin la rejoue au lieu de la couper. */
+  let ongletAnime = '';
   const cles = [K.projet(pid), K.composants(pid), K.jalons(pid), K.liens(pid), K.taches(pid), K.tickets(pid), K.validations(pid), K.fichiers(pid), K.releases(pid), K.reunions(pid), K.notes(pid), K.blocages(pid), K.documents(pid), K.paiements(pid), K.activite(pid), K.equipe];
   abonnerProjet(lot, pid, env.role);
 
@@ -128,9 +132,11 @@ export const vue = async (ctx, env) => {
         ${equipe ? `<a class="onglet${onglet === 'composants' ? ' actif' : ''}" href="#/projets/${echapper(pid)}/composants">Composants</a>` : ''}
       </nav></div>
 
-      <div id="onglet-corps">${rendreOnglet(onglet, d, { pid, env, prog, attente, ouverts })}</div>
+      <div id="onglet-corps"${onglet !== ongletAnime ? ' class="corps-anime"' : ''}>${rendreOnglet(onglet, d, { pid, env, prog, attente, ouverts })}</div>
     </div>`;
     derniereEmpreinte = magasin.empreinte(cles) + '|' + onglet;
+    const corps = sortie.querySelector('#onglet-corps.corps-anime');
+    if (corps) corps.addEventListener('animationend', () => { ongletAnime = onglet; corps.classList.remove('corps-anime'); }, { once: true });
     reglerOnglets(sortie);
 
     if (detailOuvert) {
@@ -212,8 +218,12 @@ export const vue = async (ctx, env) => {
   cles.forEach((c) => lot.sur(c, planifier));
   planifier();
 
+  /* La conversation du projet vit en bulle, hors de la page : changer
+     d'onglet ne la referme pas et n'interrompt pas la frappe. */
+  const bulle = monterBulle({ pid, env, nomProjet: (magasin.lire(K.projet(pid)) || {}).nom || '' });
+
   return {
-    fin: () => { clearTimeout(minuteur); gestes(); gestesFichiers(); gestesFiltres(); lot.fin(); },
+    fin: () => { clearTimeout(minuteur); gestes(); gestesFichiers(); gestesFiltres(); bulle.fin(); lot.fin(); },
     /* Changer d'onglet ne recharge pas la page : on redessine, les écoutes
        restent ouvertes et le défilement ne saute pas. */
     maj: (suite) => {
