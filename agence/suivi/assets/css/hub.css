@@ -1047,22 +1047,23 @@ input, select, textarea { font: inherit; color: inherit; }
 .toast--erreur svg { color: var(--alerte); }
 .toast button { margin-left: auto; color: inherit; opacity: 0.7; font-weight: 600; }
 
-/* L'info-bulle, par attribut. */
-[data-astuce] { position: relative; }
-[data-astuce]::after {
-  content: attr(data-astuce);
-  position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%);
-  padding: 5px 9px; border-radius: 7px; white-space: nowrap;
+/* L'info-bulle : un seul élément, posé sur le corps de la page et placé
+   en coordonnées d'écran. Rien ne peut plus la tronquer, et elle ne
+   compte dans la zone défilante d'aucun conteneur. */
+.astuce {
+  position: fixed; top: 0; left: -9999px; z-index: 200;
+  max-width: min(260px, calc(100vw - 16px));
+  padding: 6px 10px; border-radius: 8px;
   background: var(--encre); color: var(--fond);
-  font: var(--t-micro); font-weight: 500;
-  opacity: 0; pointer-events: none; transition: opacity var(--vite);
-  z-index: 50;
+  font: var(--t-micro); font-weight: 500; line-height: 1.35;
+  pointer-events: none;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+  opacity: 0; transform: translateY(3px);
+  transition: opacity var(--vite), transform var(--vite);
 }
-[data-astuce]:hover::after, [data-astuce]:focus-visible::after { opacity: 1; }
-/* Dans la barre haute, l'info-bulle s'aligne à droite pour ne jamais déborder. */
-.haut [data-astuce]::after { left: auto; right: 0; transform: none; }
-/* Sans souris, pas d'info-bulle : elle ne s'afficherait jamais et élargirait la page. */
-@media (hover: none) { [data-astuce]::after { display: none; } }
+.astuce.visible { opacity: 1; transform: none; }
+.astuce--dessous { transform: translateY(-3px); }
+.astuce--dessous.visible { transform: none; }
 
 /* ==========================================================================
    9. États : squelette, vide, erreur, chargement

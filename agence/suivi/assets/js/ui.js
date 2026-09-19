@@ -494,6 +494,95 @@ export const toast = (texte, genre = 'ok', options = 4200) => {
 };
 
 /* ==========================================================================
+   5 bis. Les info-bulles
+
+   Elles vivaient en pseudo-élément, donc prisonnières de leur conteneur :
+   tronquées par une barre qui défile, coupées par un panneau arrondi, et
+   pire, elles élargissaient la zone défilante d'un fil de discussion.
+
+   Une seule bulle, posée sur le corps de la page, en position fixe. Elle
+   se place au-dessus de son bouton, bascule dessous s'il n'y a pas la
+   place, et reste toujours dans l'écran.
+   ========================================================================== */
+
+const brancherAstuces = () => {
+  if (typeof document === 'undefined' || document.__astuces) return;
+  document.__astuces = true;
+  const bulle = document.createElement('div');
+  bulle.className = 'astuce';
+  bulle.setAttribute('role', 'tooltip');
+  bulle.hidden = true;
+  document.body.appendChild(bulle);
+
+  let ancre = null;
+  let minuteur = null;
+
+  const cacher = () => {
+    clearTimeout(minuteur);
+    ancre = null;
+    bulle.hidden = true;
+    bulle.classList.remove('visible', 'astuce--dessous');
+  };
+
+  const placer = () => {
+    if (!ancre || !ancre.isConnected) { cacher(); return; }
+    const r = ancre.getBoundingClientRect();
+    const b = bulle.getBoundingClientRect();
+    const marge = 8;
+    const dessous = r.top - b.height - 10 < marge;
+    let x = r.left + r.width / 2 - b.width / 2;
+    x = Math.max(marge, Math.min(x, window.innerWidth - b.width - marge));
+    const y = dessous ? r.bottom + 8 : r.top - b.height - 8;
+    bulle.style.left = `${Math.round(x)}px`;
+    bulle.style.top = `${Math.round(y)}px`;
+    bulle.classList.toggle('astuce--dessous', dessous);
+  };
+
+  const montrer = (el, tout_de_suite) => {
+    const texte = el.getAttribute('data-astuce');
+    if (!texte) return;
+    ancre = el;
+    clearTimeout(minuteur);
+    minuteur = setTimeout(() => {
+      if (ancre !== el || !el.isConnected) return;
+      bulle.textContent = texte;
+      bulle.hidden = false;
+      bulle.style.left = '-9999px';
+      placer();
+      bulle.classList.add('visible');
+    }, tout_de_suite ? 0 : 320);
+  };
+
+  /* Au doigt, pas d'info-bulle : le geste sert à agir, pas à survoler. */
+  document.addEventListener('pointerover', (e) => {
+    if (e.pointerType === 'touch') return;
+    const el = e.target.closest && e.target.closest('[data-astuce]');
+    if (!el) return;
+    montrer(el, false);
+  });
+  /* Passer du bouton à l'icône qu'il contient déclenche un pointerout :
+     on ne referme que si le curseur quitte vraiment le bouton. */
+  document.addEventListener('pointerout', (e) => {
+    const el = e.target.closest && e.target.closest('[data-astuce]');
+    if (!el || el !== ancre) return;
+    const vers = e.relatedTarget;
+    if (vers && vers.nodeType === 1 && el.contains(vers)) return;
+    cacher();
+  });
+  document.addEventListener('focusin', (e) => {
+    const el = e.target.closest && e.target.closest('[data-astuce]');
+    if (el) montrer(el, true);
+  });
+  document.addEventListener('focusout', cacher);
+  document.addEventListener('pointerdown', cacher);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cacher(); });
+  window.addEventListener('scroll', cacher, true);
+  window.addEventListener('resize', cacher);
+};
+
+brancherAstuces();
+
+/* ==========================================================================
    6. Les formulaires
    ========================================================================== */
 
