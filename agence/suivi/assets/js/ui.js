@@ -230,6 +230,9 @@ export const messageHtml = (m, options = {}) => {
   const moi = options.moi && de.uid === options.moi;
   const classes = ['message'];
   if (equipe) classes.push('message--equipe');
+  /* Une conversation se lit comme une conversation : mes messages d'un
+     côté, ceux d'en face de l'autre. */
+  if (moi) classes.push('message--moi');
   if (m.interne) classes.push('message--interne');
   const pieces = Array.isArray(m.pieces) && m.pieces.length
     ? `<div class="pieces">${m.pieces.map((p) => pieceHtml(p)).join('')}</div>` : '';

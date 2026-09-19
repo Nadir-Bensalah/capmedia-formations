@@ -1125,7 +1125,8 @@ input, select, textarea { font: inherit; color: inherit; }
 
 /* La conversation : deux voix. */
 .fil { display: flex; flex-direction: column; gap: var(--e-4); }
-.message { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 10px; }
+.message { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 10px; min-width: 0; max-width: 100%; }
+.message > div { min-width: 0; }
 .message-tete { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
 .message-auteur { font: var(--t-petit); font-weight: 600; }
 .message-date { font: var(--t-micro); color: var(--encre-3); }
@@ -1135,11 +1136,26 @@ input, select, textarea { font: inherit; color: inherit; }
   background: var(--fond-2); font: var(--t-corps); overflow-wrap: anywhere;
 }
 .message-corps p + p { margin-top: 8px; }
-.message--equipe .message-corps { background: var(--accent-voile); border-radius: 16px 16px 4px 16px; }
 .message--interne .message-corps { background: var(--attention-voile); }
+
+/* Mes messages basculent à droite, avatar compris, et prennent la couleur
+   d'accent ; ceux d'en face restent à gauche, sur le fond neutre. */
 .message--moi { grid-template-columns: minmax(0, 1fr) 32px; }
+.message--moi > .avatar { order: 2; }
+/* La bulle de texte est en ligne : c'est l'alignement du bloc qui la pousse
+   à droite, une marge automatique ne mordrait pas sur un inline-block. */
+.message--moi > div { order: 1; min-width: 0; text-align: right; }
+.message--moi .message-corps { text-align: left; }
 .message--moi .message-tete { justify-content: flex-end; }
-.message--moi .message-corps { border-radius: 16px 16px 4px 16px; }
+/* Mon propre nom n'apprend rien : la place et la couleur le disent déjà.
+   Il ne reste que l'heure. */
+.message--moi .message-auteur { display: none; }
+.message--moi .message-corps {
+  background: var(--accent-voile);
+  border-radius: 16px 16px 4px 16px;
+  margin-left: auto;
+}
+.message--moi .pieces { justify-content: flex-end; }
 .message--moi .message-cote { text-align: right; }
 .marque-interne { font: var(--t-micro); font-weight: 600; color: var(--attention); text-transform: uppercase; letter-spacing: 0.05em; }
 .composer { display: flex; flex-direction: column; gap: 10px; padding-top: var(--e-4); border-top: 1px solid var(--trait); margin-top: var(--e-4); }
@@ -1382,7 +1398,12 @@ input, select, textarea { font: inherit; color: inherit; }
 .bulle-point.vif { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-voile); }
 #bulle-son.actif { color: var(--accent); }
 
-.bulle-fil { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: var(--e-4); display: flex; flex-direction: column; gap: var(--e-4); }
+.bulle-fil { flex: 1; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; padding: var(--e-4); display: flex; flex-direction: column; gap: var(--e-4); }
+.bulle-fil > * { min-width: 0; max-width: 100%; }
+.bulle-message { min-width: 0; }
+/* Le geste « en faire une demande » se pose à l'intérieur, jamais au-delà
+   du bord : sinon le fil se met à défiler de côté. */
+.bulle-message:has(.message--moi) .bulle-action { right: auto; left: 0; }
 /* Pas d'animation d'entrée sur les messages : le fil se remplit parfois
    pendant que le panneau est replié, et une animation qui ne démarre pas
    laisserait le message invisible une fois le panneau rouvert. */
@@ -1411,6 +1432,8 @@ input, select, textarea { font: inherit; color: inherit; }
 .bulle-joindre { width: 40px; height: 40px; flex: none; }
 .depot--compact { display: none; }
 #bulle-pieces .pieces:not(:empty) { margin-bottom: 8px; }
+.fil { overflow-x: hidden; }
+.fil > * { min-width: 0; max-width: 100%; }
 
 @media (max-width: 640px) {
   .bulle { right: var(--e-4); bottom: var(--e-4); left: var(--e-4); align-items: flex-end; }
