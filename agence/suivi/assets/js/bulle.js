@@ -11,7 +11,7 @@
    des fichiers par glisser-déposer.
    ========================================================================== */
 
-import { echapper, depuis, heure, TYPES } from './noyau.js';
+import { echapper, depuis, heure, TYPES, nomsContacts } from './noyau.js';
 import { icone } from './icones.js';
 import { messageHtml, depot, toast, agir, brancherPieces, avatarProjet, menu, sur } from './ui.js';
 import * as magasin from './magasin.js';
@@ -128,8 +128,7 @@ export const monterBulle = ({ pid, env }) => {
   const nomEnFace = () => {
     const p = projet();
     if (!equipe) return 'Capmedia';
-    const c = p.client || {};
-    return c.nom || c.entreprise || 'Le client';
+    return nomsContacts(p) || (p.client || {}).entreprise || 'Le client';
   };
   const rendreTete = () => {
     const p = projet();

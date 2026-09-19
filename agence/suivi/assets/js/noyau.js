@@ -117,6 +117,17 @@ export const PLATEFORMES = {
 /* Le sélecteur d'une demande ajoute « non précisée » ; la fiche d'un projet
    n'énumère que de vraies plateformes. */
 export const PLATEFORMES_CHOIX = { ...PLATEFORMES, '': { libelle: 'Non précisée', court: '', icone: 'help', voile: 'gris' } };
+/* Les interlocuteurs d'un projet : la liste si elle existe, sinon le
+   contact unique d'avant. Un projet interne n'en a aucun. */
+export const contactsProjet = (projet) => {
+  if (!projet || projet.interne) return [];
+  const liste = Array.isArray(projet.contacts) ? projet.contacts.filter((c) => c && (c.email || c.nom)) : [];
+  if (liste.length) return liste;
+  const c = projet.client || {};
+  return c.email || c.nom ? [{ nom: c.nom || '', email: c.email || '' }] : [];
+};
+export const nomsContacts = (projet) => contactsProjet(projet).map((c) => c.nom || c.email).filter(Boolean).join(' et ');
+
 export const libellePlateforme = (cle) => ((PLATEFORMES_CHOIX[cle] || {}).libelle || cle || '');
 
 export const QUALIFICATIONS = {
