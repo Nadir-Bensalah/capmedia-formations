@@ -471,15 +471,56 @@ export const delaiProjet = (projet, sources = {}) => verdictDelai(projet && proj
   risques: risquesProjet(sources),
 });
 
+/**
+ * L'ordre d'affichage d'une feuille de route : ce qui bouge en premier,
+ * puis du plus récent au plus ancien. Une feuille de route rangée par
+ * numéro d'ordre obligeait à la lire en entier pour trouver où on en est.
+ */
+export const trierEtapes = (jalons = []) => {
+  /* Trois rangs : ce qui bouge, ce qui vient, ce qui est fait. Dans le
+     rang qui vient, l'échéance la plus proche d'abord, sinon une étape de
+     maintenance datée dans dix-huit mois passait devant une échéance de
+     magasin dans six semaines. Dans le rang fait, le plus récent d'abord. */
+  const rang = (j) => (['en-cours', 'bloque'].includes(j.statut) ? 0 : j.statut === 'termine' ? 2 : 1);
+  const quand = (j) => { const d = enDate(j.fin) || enDate(j.debut) || enDate(j.cree); return d ? d.getTime() : 0; };
+  return jalons.slice().sort((a, b) => {
+    const r = rang(a) - rang(b);
+    if (r) return r;
+    if (rang(a) === 1) return (quand(a) || Infinity) - (quand(b) || Infinity);
+    return quand(b) - quand(a) || (a.ordre || 0) - (b.ordre || 0);
+  });
+};
+
+/**
+ * Les phases, dans le même ordre : une phase vaut sa meilleure étape.
+ * Renvoie [{ nom, jalons }], les étapes de chaque phase déjà triées.
+ */
+export const phasesTriees = (jalons = []) => {
+  const phases = [];
+  for (const j of trierEtapes(jalons)) {
+    const nom = j.phase || 'Sans phase';
+    let p = phases.find((x) => x.nom === nom);
+    if (!p) { p = { nom, jalons: [] }; phases.push(p); }
+    p.jalons.push(j);
+  }
+  return phases;
+};
+
 /** La phase en cours de la feuille de route. */
+/* L'étape en cours, puis celle d'après. Le classement par numéro d'ordre
+   désignait la première saisie, pas celle où on en est : on lit la date. */
+const parEcheance = (jalons) => jalons.slice().sort((a, b) => {
+  const d = (j) => { const x = enDate(j.fin) || enDate(j.debut); return x ? x.getTime() : Infinity; };
+  return d(a) - d(b) || (a.ordre || 0) - (b.ordre || 0);
+});
 export const jalonCourant = (jalons = []) => {
-  const tries = [...jalons].sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
+  const tries = parEcheance(jalons);
   return tries.find((j) => j.statut === 'en-cours' || j.statut === 'bloque')
     || tries.find((j) => j.statut === 'planifie' || j.statut === 'a-venir')
     || null;
 };
 export const jalonSuivant = (jalons = []) => {
-  const tries = [...jalons].sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
+  const tries = parEcheance(jalons);
   const courant = jalonCourant(jalons);
   const i = courant ? tries.indexOf(courant) : -1;
   return tries.slice(i + 1).find((j) => j.statut !== 'termine') || null;

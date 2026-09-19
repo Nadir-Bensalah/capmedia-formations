@@ -19,7 +19,7 @@ import {
   ligne, vide, squelette, titrePage, metrique, sur, fichierHtml, encart, chronoItem,
 } from '../ui.js';
 import * as magasin from '../magasin.js';
-import { K, abonnerProjet } from '../donnees.js';
+import { K, abonnerProjet, trierEtapes } from '../donnees.js';
 import { filAriane } from '../coquille.js';
 import { editer, supprimer } from './editeurs.js';
 
@@ -92,7 +92,7 @@ export const vue = async (ctx, env) => {
     const ouvertes = taches.filter((t) => t.statut !== 'terminee');
     const demandes = d.tickets.filter((t) => sien(t, composant, cle)).sort(parDateDesc('cree')).slice(0, 20);
     const demandesOuvertes = demandes.filter((t) => OUVERTS.includes(t.statut));
-    const jalons = d.jalons.filter((j) => composant && Array.isArray(j.composants) && j.composants.includes(composant.id));
+    const jalons = trierEtapes(d.jalons.filter((j) => composant && Array.isArray(j.composants) && j.composants.includes(composant.id)));
     const fichiers = d.fichiers.filter((f) => sien(f, composant, cle));
     const liens = d.liens.filter((l) => sien(l, composant, cle));
     const notes = d.notes.filter((n) => sien(n, composant, cle));

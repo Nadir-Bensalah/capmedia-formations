@@ -39,10 +39,14 @@ const contenu = {
     statut: 'en-cours',
     plateformes: ['ios', 'android', 'web', 'admin', 'landing', 'backend'],
     progression: { mode: 'jalons', valeur: 0 },
+    /* La date visée : rouvrir la fiche Google Play et livrer l'API 36 avant
+       l'échéance reportée du 1er novembre 2026. C'est la seule échéance du
+       projet qui ne se négocie pas. */
+    cible: '2026-11-01',
     pulse: {
-      enCours: 'Correction des validations de tâches et republication Android',
-      derniereLivraison: 'iOS 1.1.2 (build 23)',
-      prochaineEtape: 'Campagne de tests sur les trois plateformes',
+      enCours: "Republication sur Google Play, et restructuration des abonnements Apple",
+      derniereLivraison: 'iOS 1.1.2, build 23, le 9 septembre 2026',
+      prochaineEtape: "Passage à l'API Android 36 avant le 1er novembre",
       attenteClient: '',
     },
     sante: 'attention',
@@ -58,15 +62,127 @@ const contenu = {
     { id: 'backend', nom: 'Backend et infrastructure', type: 'backend', statut: 'en-cours', progression: 96, version: '', environnement: 'Firebase', techno: ['Cloud Functions', 'Firestore', 'Storage', 'Stripe', 'RevenueCat', 'Brevo'], ordre: 6, description: 'Règles de sécurité, fonctions, abonnements et e-mails transactionnels.' },
   ],
 
+  /* La feuille de route, relevée le 19 septembre 2026 dans les quatre
+     dépôts (315 commits côté mobile depuis le 27 juillet 2025, 137 sur le
+     web, 56 sur le site, 26 sur le tableau de bord) et dans les notes de
+     suivi. Chaque étape porte ses vraies dates : c'est elles qui la
+     rangent à l'écran, l'active d'abord puis la plus récente. */
   jalons: [
-    { id: 'cadrage', titre: 'Cadrage et maquettage', phase: 'Cadrage', statut: 'termine', progression: 100, ordre: 1, description: 'Audit technique, business plan, maquettes.' },
-    { id: 'socle', titre: 'Socle applicatif', phase: 'Développement', statut: 'termine', progression: 100, ordre: 2, composants: ['ios', 'android', 'backend'], description: 'Authentification, modèle de données, navigation, synchronisation.' },
-    { id: 'fonctions', titre: 'Fonctionnalités principales', phase: 'Développement', statut: 'termine', progression: 100, ordre: 3, composants: ['ios', 'android', 'web'], description: 'Objectifs, tâches, habitudes, journal, idées, dates importantes, listes de courses, notes rapides.' },
-    { id: 'admin', titre: "Tableau de bord d'administration", phase: 'Développement', statut: 'termine', progression: 100, ordre: 4, composants: ['admin'], description: 'Livré et en service.' },
-    { id: 'abonnements', titre: 'Abonnements et paiements', phase: 'Développement', statut: 'en-cours', progression: 80, ordre: 5, composants: ['ios', 'android', 'backend'], description: 'Restructuration des offres Apple en deux phases, phase 1 soumise.' },
-    { id: 'publication', titre: 'Publication sur les stores', phase: 'Publication', statut: 'bloque', progression: 60, ordre: 6, composants: ['ios', 'android'], description: 'iOS publié. Android en attente après le refus de Google.' },
-    { id: 'qa', titre: 'Campagne de tests', phase: 'Tests', statut: 'planifie', progression: 0, ordre: 7, composants: ['ios', 'android', 'web'], description: 'Testeurs sur les trois plateformes, parcours automatisés, journal des anomalies.' },
-    { id: 'maintenance', titre: 'Maintenance et évolutions', phase: 'Maintenance', statut: 'a-venir', progression: 0, ordre: 8 },
+
+    /* --- Cadrage ---------------------------------------------------- */
+    { id: 'cadrage', titre: 'Cadrage et maquettage', phase: 'Cadrage', statut: 'termine', progression: 100, ordre: 1,
+      debut: '2025-07-27', fin: '2025-08-31',
+      description: "Audit technique, business plan, maquettes. Dépôt ouvert le 27 juillet 2025." },
+
+    /* --- Développement ---------------------------------------------- */
+    { id: 'socle', titre: 'Socle applicatif', phase: 'Développement', statut: 'termine', progression: 100, ordre: 2,
+      debut: '2025-07-28', fin: '2025-09-30', composants: ['ios', 'android', 'backend'],
+      description: "Authentification, modèle de données Firestore, navigation, thème, synchronisation, et la traduction en six langues posée dès l'origine." },
+
+    { id: 'fonctions', titre: 'Fonctionnalités principales', phase: 'Développement', statut: 'termine', progression: 100, ordre: 3,
+      debut: '2025-08-01', fin: '2025-10-31', composants: ['ios', 'android', 'web'],
+      description: "Objectifs et sous-objectifs, tâches et récurrences, rituels, journal, idées, dates importantes, listes de courses, notes rapides, voyages." },
+
+    { id: 'admin', titre: "Tableau de bord d'administration", phase: 'Développement', statut: 'termine', progression: 100, ordre: 4,
+      debut: '2025-08-14', fin: '2026-08-25', composants: ['admin'],
+      description: "Ouvert en août 2025, entièrement refondu le 13 août 2026 : dix-neuf points d'audit corrigés, plus aucune donnée inventée, pagination et recherche, modération réelle, page des revenus, journal des actions d'administration, export. Fonctions Cloud rapatriées dans le dépôt le 25 août 2026. En service sur admin.forgeme.net." },
+
+    { id: 'web', titre: 'Application web', phase: 'Développement', statut: 'termine', progression: 100, ordre: 5,
+      debut: '2025-11-04', fin: '2026-09-09', composants: ['web'],
+      description: "Ouverte en novembre 2025, 137 versions. Même base Firestore que le mobile, connexion Google et Apple, abonnements. En ligne sur app.forgeme.net." },
+
+    { id: 'landing', titre: 'Site de présentation forgeme.net', phase: 'Développement', statut: 'termine', progression: 100, ordre: 6,
+      debut: '2026-01-13', fin: '2026-08-26', composants: ['landing'],
+      description: "Six langues et 287 clés de traduction, détection de la langue à l'arrivée, deux codes QR de téléchargement, un par boutique. Audit complet le 15 juillet 2026." },
+
+    { id: 'onboarding', titre: "Refonte du parcours d'entrée", phase: 'Développement', statut: 'termine', progression: 100, ordre: 7,
+      debut: '2026-07-24', fin: '2026-07-27', composants: ['ios', 'android'],
+      description: "Douze écrans, du prénom au badge : priorité, modules, quotidien, organisation, coaching, rappel, plan prêt, défi de sept jours. La création de contenu avant inscription a été supprimée au profit d'une activation de modules en cascade. Quatre-vingt-onze versions en un mois." },
+
+    { id: 'packs', titre: 'Packs de démarrage', phase: 'Développement', statut: 'termine', progression: 100, ordre: 8,
+      debut: '2026-07-25', fin: '2026-09-09', composants: ['ios', 'android', 'backend'],
+      description: "Huit packs gratuits en six langues, installés à l'inscription : l'application n'ouvre plus sur un écran vide. Installation traçable et réversible. Une double installation découverte le 9 septembre 2026 a été corrigée ; le nettoyage des soixante-six doublons existants attend un feu vert." },
+
+    { id: 'perso', titre: "Personnalisation pilotée par le parcours d'entrée", phase: 'Développement', statut: 'termine', progression: 100, ordre: 9,
+      debut: '2026-07-26', fin: '2026-07-27', composants: ['ios', 'android'],
+      description: "La barre d'onglets, la rangée d'accueil et un écran de réglages dédié s'adaptent à l'orientation choisie à l'inscription. Journal et Idées restent accessibles même hors de la barre." },
+
+    { id: 'taches', titre: 'Fiabilisation de la synchronisation des tâches', phase: 'Développement', statut: 'termine', progression: 100, ordre: 10,
+      debut: '2026-07-27', fin: '2026-09-09', composants: ['ios', 'android', 'web', 'backend'],
+      description: "Coches et suppressions qui revenaient, créations qui disparaissaient, archivage quotidien, compteurs d'usage. Puis la fenêtre de mille tâches retirée le 9 septembre 2026 : les deux plateformes lisent désormais page par page, sans plafond." },
+
+    { id: 'bugs-sept', titre: 'Anomalies remontées par le client', phase: 'Développement', statut: 'termine', progression: 100, ordre: 11,
+      debut: '2026-09-04', fin: '2026-09-09', composants: ['ios', 'android', 'web', 'backend'],
+      description: "Quatre anomalies corrigées et vérifiées sur un compte réel : tâches visibles sur le web et absentes du mobile, liste des anniversaires incomplète (quarante-neuf sur quatre-vingt-treize), contenus de pack décomptés du quota gratuit, objectif validé qui repassait en cours. Puis la régression du 9 septembre sur les tâches récurrentes, mesurée et corrigée le matin même." },
+
+    /* --- Abonnements et paiements ------------------------------------ */
+    { id: 'abonnements', titre: 'Abonnements dans les applications', phase: 'Abonnements et paiements', statut: 'termine', progression: 100, ordre: 12,
+      debut: '2026-08-13', fin: '2026-08-13', composants: ['ios', 'android', 'backend'],
+      description: "Six formules, changement de palier depuis l'application, badge d'essai gratuit, et attribution manuelle d'un plan depuis l'administration." },
+
+    { id: 'abo-apple', titre: "Restructuration des groupes d'abonnement Apple", phase: 'Abonnements et paiements', statut: 'en-cours', progression: 60, ordre: 13,
+      debut: '2026-08-13', fin: '2026-10-15', composants: ['ios'],
+      description: "Premium et Ultra vivaient dans deux groupes séparés, ce qui interdisait tout changement de palier sans se retrouver avec deux abonnements en parallèle. Phase 1 faite : les trois Premium re-nivelés, les trois nouveaux Ultra créés dans le même groupe. Phase 2 en attente de l'approbation d'Apple." },
+
+    { id: 'tarifs', titre: 'Grille tarifaire des deux boutiques', phase: 'Abonnements et paiements', statut: 'termine', progression: 100, ordre: 14,
+      debut: '2026-08-25', fin: '2026-08-27', composants: ['ios', 'android', 'web'],
+      description: "Premium à 2,99 la semaine, 9,99 le mois, 99,99 l'année ; Ultra à 4,99, 15,99 et 159,99. Cinq cent vingt-quatre tarifs planifiés sur cent soixante-quinze territoires côté Apple, appliqués le 27 août 2026." },
+
+    { id: 'stripe', titre: 'Paiement par carte sur le web', phase: 'Abonnements et paiements', statut: 'termine', progression: 100, ordre: 15,
+      debut: '2026-08-25', fin: '2026-08-27', composants: ['web', 'backend'],
+      description: "Le web n'avait jamais encaissé : les sessions de paiement partaient en mode test, personne n'a jamais pu payer. Compte créé et activé le 27 août 2026, deux produits, six tarifs, un point de réception des événements, et les six parcours d'achat vérifiés jusqu'à l'encaissement." },
+
+    { id: 'refonte-abo', titre: "Refonte de l'offre d'abonnement", phase: 'Abonnements et paiements', statut: 'planifie', progression: 0, ordre: 16,
+      debut: '2026-10-01', fin: '2026-12-15', composants: ['ios', 'android', 'web', 'backend'],
+      description: "Le socle technique fonctionne sur les trois canaux, c'est l'offre elle-même qui doit être reprise : paliers, contenu de chaque formule, essai, parcours de vente. Périmètre à cadrer avec le client avant tout développement." },
+
+    /* --- Publication -------------------------------------------------- */
+    { id: 'publication-ios', titre: "Publication sur l'App Store", phase: 'Publication', statut: 'termine', progression: 100, ordre: 17,
+      debut: '2026-08-01', fin: '2026-09-04', composants: ['ios'],
+      description: "Mise en conformité avec la règle 4 d'Apple sur Sign in with Apple : plus aucune porte n'exige un nom ou une adresse après connexion. Build 19 publié, train 1.0.0 clos par Apple, puis 1.1.0 et 1.1.2." },
+
+    { id: 'publication', titre: 'Republication sur Google Play', phase: 'Publication', statut: 'bloque', progression: 60, ordre: 18,
+      debut: '2026-08-12', fin: '2026-10-31', composants: ['android'],
+      description: "Trois refus successifs : crash au démarrage en version 12 (un effet de flou invalide sur Android), gel du parcours d'entrée en version 13, puis suspension de la fiche. Package passé à net.forgeme.app le 23 août, puis retour sur com.forgeme.app en version 15 pour la republication. La fiche reste à rouvrir." },
+
+    /* --- Tests --------------------------------------------------------- */
+    { id: 'qa', titre: 'Campagne de tests', phase: 'Tests', statut: 'planifie', progression: 0, ordre: 19,
+      debut: '2026-10-01', fin: '2026-11-15', composants: ['ios', 'android', 'web'],
+      description: "Le plan de tests est écrit. Testeurs sur les trois plateformes, parcours automatisés, journal des anomalies. Deux parcours ne se vérifient qu'à la main : la connexion Google et Apple dans un vrai navigateur, et la réinitialisation de mot de passe de bout en bout." },
+
+    /* --- Conformité et échéances --------------------------------------- */
+    { id: 'api36', titre: "Passage à l'API Android 36", phase: 'Conformité et échéances', statut: 'planifie', progression: 0, ordre: 20,
+      debut: '2026-09-22', fin: '2026-11-01', composants: ['android'],
+      description: "Google Play l'exige depuis le 31 août 2026 pour tout nouveau dépôt ; un report au 1er novembre est accordable depuis la console. Montée de React Native 0.80.2 vers 0.81 et reprise des dépendances natives, affichage bord à bord imposé, campagne de non-régression sur les deux plateformes puisque l'opération touche aussi iOS. Quatre à six jours." },
+
+    { id: 'regles', titre: 'Règles de sécurité de la base', phase: 'Conformité et échéances', statut: 'planifie', progression: 50, ordre: 21,
+      debut: '2026-08-13', fin: '2026-10-31', composants: ['backend'],
+      description: "La production tourne encore en règles ouvertes à tout compte connecté : n'importe quel utilisateur peut écrire dans les abonnements. Les règles unifiées sont écrites et compilées depuis le 13 août 2026, elles restent à déployer avec un cycle de vérification." },
+
+    { id: 'fonctions-perdues', titre: 'Fonctions serveur sans code source', phase: 'Conformité et échéances', statut: 'a-venir', progression: 0, ordre: 22,
+      debut: '2026-10-01', fin: '2026-12-31', composants: ['backend'],
+      description: "Dix-huit fonctions tournent en production sans code dans aucun dépôt : distribution des points, badges, classement, sécurité des connexions, maintenance et migrations. Cherchées dans les cinq dépôts, dans l'historique de chacun et dans le code compilé, elles sont introuvables. Seule voie de récupération : l'archive que Google conserve à chaque déploiement." },
+
+    { id: 'cgv', titre: 'Dette des conditions de vente', phase: 'Conformité et échéances', statut: 'a-venir', progression: 0, ordre: 23,
+      debut: '2026-10-01', fin: '2026-12-31', composants: ['web', 'backend'],
+      description: "Trois mécanismes exigés par la vente directe, retirés du texte pour qu'il ne promette que du réel : la renonciation au droit de rétractation à la commande, la facturation automatique par courriel, le préavis avant toute hausse et le rappel annuel de non-reconduction prévu par le code de la consommation." },
+
+    /* --- Évolutions ----------------------------------------------------- */
+    { id: 'sync-web-mobile', titre: 'Réconciliation du web et du mobile', phase: 'Évolutions', statut: 'a-venir', progression: 0, ordre: 24,
+      debut: '2026-11-01', fin: '2027-01-31', composants: ['ios', 'android', 'web'],
+      description: "Listes de courses et notes rapides vivent dans la mémoire de l'appareil côté mobile et dans la base côté web : rien ne traverse, et la donnée est perdue à la désinstallation. Le carnet de contacts et le tableau de dessin n'existent que sur le web." },
+
+    { id: 'brevo', titre: "Domaine expéditeur des courriels", phase: 'Évolutions', statut: 'bloque', progression: 0, ordre: 25,
+      debut: '2026-08-25', fin: '2026-10-31', composants: ['backend'],
+      description: "Les courriels de l'application partent encore d'une adresse personnelle, codes de vérification et réinitialisations de mot de passe compris. Il faut une clé d'envoi et trois entrées dans la zone du domaine, dont une signature de plusieurs centaines de caractères. La zone appartient au client." },
+
+    { id: 'blog', titre: 'Blog et contenus éditoriaux', phase: 'Évolutions', statut: 'a-venir', progression: 0, ordre: 26,
+      debut: '2026-11-01', fin: '2027-01-31', composants: ['landing', 'admin'],
+      description: "Une dizaine d'articles de fond signés de l'équipe, avec une illustration chacun, gérés depuis le tableau de bord. Demandé le 23 août 2026." },
+
+    { id: 'maintenance', titre: 'Maintenance et évolutions', phase: 'Évolutions', statut: 'a-venir', progression: 0, ordre: 27,
+      debut: '2026-11-15', fin: '2027-06-30', composants: ['ios', 'android', 'web', 'backend'],
+      description: "Suivi des versions, des échéances des boutiques et des remontées d'utilisateurs, une fois la publication Android rouverte et la campagne de tests passée." },
   ],
 
   liens: [
