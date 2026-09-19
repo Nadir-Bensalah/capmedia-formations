@@ -18,6 +18,7 @@ const CATEGORIES = [
   ['finances', 'Devis et factures', "Un devis disponible, une facture émise ou bientôt échue."],
   ['reunions', 'Réunions', 'Une réunion programmée ou modifiée.'],
   ['releases', 'Nouvelles versions', 'Une version publiée.'],
+  ['relance', 'Rappel hebdomadaire', "Le lundi matin, et seulement s'il reste des points en attente de vous."],
 ];
 
 export const vue = async (ctx, env) => {
@@ -78,7 +79,10 @@ export const vue = async (ctx, env) => {
       e.preventDefault();
       const forme = e.target;
       if (!valider(forme, { nom: obligatoire() })) return;
-      await agir(forme.querySelector('[type="submit"]'), () => ecrire.majProfil(session.utilisateur.uid, lireForme(forme)), 'Profil enregistré.');
+      /* L'adresse est recopiée dans le profil : côté serveur, la coupure
+         des e-mails se cherche par adresse, et sans elle le réglage
+         « Désactivé » n'avait jamais aucun effet. */
+      await agir(forme.querySelector('[type="submit"]'), () => ecrire.majProfil(session.utilisateur.uid, { ...lireForme(forme), email: String(session.utilisateur.email || '').toLowerCase() }), 'Profil enregistré.');
     });
     sortie.querySelector('#deconnexion').addEventListener('click', quitter);
   };
@@ -86,7 +90,7 @@ export const vue = async (ctx, env) => {
   const gestes = sur(sortie, 'change', '[data-pref]', async (el) => {
     const profil = magasin.lire(K.profil) || {};
     const notifications = { ...(profil.notifications || {}), [el.dataset.pref]: el.value };
-    await agir(null, () => ecrire.majProfil(session.utilisateur.uid, { notifications }), 'Préférence enregistrée.');
+    await agir(null, () => ecrire.majProfil(session.utilisateur.uid, { notifications, email: String(session.utilisateur.email || '').toLowerCase() }), 'Préférence enregistrée.');
   });
   let premier = true;
   lot.sur(K.profil, () => { if (premier) { premier = false; rendre(); } });

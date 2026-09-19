@@ -71,19 +71,24 @@ export {
 
 /* --- Les demandes (collection « tickets ») ------------------------------ */
 
+/*
+ * `suite` dit ce qui va se passer ensuite, et `chez` qui tient la balle.
+ * Sans ces deux-là, le client lisait un mot d'état et écrivait un message
+ * pour savoir la seule chose qui l'intéresse : et maintenant ?
+ */
 export const STATUTS = {
-  'nouveau':           { libelle: 'Reçue',                voile: 'bleu',   ordre: 1 },
-  'a-analyser':        { libelle: 'À analyser',           voile: 'bleu',   ordre: 2 },
-  'en-attente-client': { libelle: "Besoin d'information", voile: 'ambre',  ordre: 3,  client: 'Une réponse est attendue de vous' },
-  'acceptee':          { libelle: 'Acceptée',             voile: 'violet', ordre: 4 },
-  'planifiee':         { libelle: 'Planifiée',            voile: 'violet', ordre: 5 },
-  'en-cours':          { libelle: 'En cours',             voile: 'bleu',   ordre: 6 },
-  'en-revue':          { libelle: 'En revue',             voile: 'violet', ordre: 7 },
-  'a-valider':         { libelle: 'À valider',            voile: 'ambre',  ordre: 8,  client: 'À valider par vous' },
-  'resolu':            { libelle: 'Terminée',             voile: 'vert',   ordre: 9 },
-  'refuse':            { libelle: 'Refusée',              voile: 'gris',   ordre: 10 },
-  'annulee':           { libelle: 'Annulée',              voile: 'gris',   ordre: 11 },
-  'ferme':             { libelle: 'Fermée',               voile: 'gris',   ordre: 12 },
+  'nouveau':           { libelle: 'Reçue',                voile: 'bleu',   ordre: 1,  chez: 'capmedia', suite: 'Nous la lisons et revenons vers vous.' },
+  'a-analyser':        { libelle: 'À analyser',           voile: 'bleu',   ordre: 2,  chez: 'capmedia', suite: 'Nous regardons ce que cela implique, puis nous vous disons quand.' },
+  'en-attente-client': { libelle: "Besoin d'information", voile: 'ambre',  ordre: 3,  chez: 'client',   client: 'Une réponse est attendue de vous', suite: 'Répondez ci-dessous : la demande repart dès votre réponse.' },
+  'acceptee':          { libelle: 'Acceptée',             voile: 'violet', ordre: 4,  chez: 'capmedia', suite: 'Elle entre dans le planning. Vous verrez la date apparaître ici.' },
+  'planifiee':         { libelle: 'Planifiée',            voile: 'violet', ordre: 5,  chez: 'capmedia', suite: 'Le travail va commencer.' },
+  'en-cours':          { libelle: 'En cours',             voile: 'bleu',   ordre: 6,  chez: 'capmedia', suite: 'Nous y travaillons. La prochaine étape est une version à essayer.' },
+  'en-revue':          { libelle: 'En revue',             voile: 'violet', ordre: 7,  chez: 'capmedia', suite: 'Fait, en cours de relecture chez nous avant de vous être livré.' },
+  'a-valider':         { libelle: 'À valider',            voile: 'ambre',  ordre: 8,  chez: 'client',   client: 'À valider par vous', suite: 'Vérifiez de votre côté, puis validez ou dites-nous ce qui manque.' },
+  'resolu':            { libelle: 'Terminée',             voile: 'vert',   ordre: 9,  chez: '',         suite: 'Vous pouvez la rouvrir pendant sept jours.' },
+  'refuse':            { libelle: 'Refusée',              voile: 'gris',   ordre: 10, chez: '',         suite: '' },
+  'annulee':           { libelle: 'Annulée',              voile: 'gris',   ordre: 11, chez: '',         suite: '' },
+  'ferme':             { libelle: 'Fermée',               voile: 'gris',   ordre: 12, chez: '',         suite: '' },
 };
 
 export const TYPES = {
@@ -110,7 +115,7 @@ export const PLATEFORMES = {
   'ios':     { libelle: 'iPhone',          court: 'iOS',       icone: 'apple',    voile: 'gris',   composant: 'ios' },
   'android': { libelle: 'Android',         court: 'Android',   icone: 'android',  voile: 'vert',   composant: 'android' },
   'web':     { libelle: 'Web',             court: 'Web',       icone: 'globe',    voile: 'bleu',   composant: 'web' },
-  'admin':   { libelle: 'Tableau de bord', court: 'Dashboard', icone: 'kanban',   voile: 'violet', composant: 'admin' },
+  'admin':   { libelle: 'Tableau de bord', court: 'Tableau',   icone: 'kanban',   voile: 'violet', composant: 'admin' },
   'backend': { libelle: 'Serveur',         court: 'Serveur',   icone: 'serveur',  voile: 'ambre',  composant: 'backend' },
   'landing': { libelle: 'Site vitrine',    court: 'Vitrine',   icone: 'etincelle', voile: 'rouge', composant: 'landing' },
 };
@@ -193,8 +198,8 @@ export const TYPES_COMPOSANT = {
   'android':        'Application Android',
   'web':            'Application web',
   'admin':          'Tableau de bord',
-  'landing':        'Landing page',
-  'backend':        'Backend / API',
+  'landing':        'Site vitrine',
+  'backend':        'Serveur et API',
   'infrastructure': 'Infrastructure',
   'design':         'Design',
   'autre':          'Autre',
@@ -215,13 +220,41 @@ export const SANTES = {
 };
 
 /* --- La feuille de route ------------------------------------------------ */
+/* « Jalon » ne se dit pas. Une étape est une étape : le mot est le même
+   dans la bouche du client, dans le nôtre et à l'écran. */
 
-export const STATUTS_JALON = {
+export const STATUTS_ETAPE = {
   'a-venir':  { libelle: 'À venir',  voile: 'gris' },
   'planifie': { libelle: 'Planifié', voile: 'bleu' },
   'en-cours': { libelle: 'En cours', voile: 'bleu' },
   'bloque':   { libelle: 'Bloqué',   voile: 'rouge' },
   'termine':  { libelle: 'Terminé',  voile: 'vert' },
+};
+
+/*
+ * La tenue des délais. Une date brute ne dit rien : le client la lit, la
+ * compare mentalement à aujourd'hui, et nous écrit pour savoir. Le verdict
+ * dit à sa place, et « à risque » ne sort jamais d'une intuition : il faut
+ * un fait nommable, un point bloquant ouvert ou une étape déjà dépassée.
+ */
+export const VERDICTS = {
+  'livre':    { libelle: 'Livré',          voile: 'vert',  icone: 'check' },
+  'tenu':     { libelle: 'Dans les temps', voile: 'vert',  icone: 'check' },
+  'risque':   { libelle: 'À risque',       voile: 'ambre', icone: 'alerte' },
+  'depasse':  { libelle: 'Dépassée',       voile: 'rouge', icone: 'alerte' },
+  'sans':     { libelle: 'Pas de date',    voile: 'gris',  icone: 'horloge' },
+};
+
+/* Les motifs d'un report. Un report sans motif est un report qu'on relit
+   six mois plus tard sans savoir pourquoi. */
+export const MOTIFS_REPORT = {
+  'attente-client':  'En attente du client',
+  'perimetre':       'Le périmètre a changé',
+  'technique':       'Obstacle technique',
+  'tiers':           'Dépendance à un tiers',
+  'magasin':         "Délai d'un magasin d'applications",
+  'capmedia':        'De notre fait',
+  'autre':           'Autre',
 };
 
 /* --- Les tâches --------------------------------------------------------- */
@@ -247,7 +280,7 @@ export const PRIORITES = {
 export const TYPES_VALIDATION = {
   'design':         'Design',
   'fonctionnalite': 'Fonctionnalité',
-  'jalon':          'Jalon',
+  'jalon':          'Étape',
   'contenu':        'Contenu',
   'maquette':       'Maquette',
   'release':        'Version',
@@ -299,7 +332,7 @@ export const STATUTS_RELEASE = {
   'developpement': { libelle: 'En développement', voile: 'gris' },
   'test':          { libelle: 'En test',          voile: 'violet' },
   'soumise':       { libelle: 'Soumise',          voile: 'bleu' },
-  'revue':         { libelle: 'En review',        voile: 'bleu' },
+  'revue':         { libelle: 'En validation',    voile: 'bleu' },
   'disponible':    { libelle: 'Disponible',       voile: 'vert' },
   'retiree':       { libelle: 'Retirée',          voile: 'gris' },
 };
@@ -513,6 +546,32 @@ export const joursAvant = (valeur) => {
   const d = enDate(valeur);
   if (!d) return null;
   return Math.round((debutDeJour(d) - debutDeJour(new Date())) / JOUR);
+};
+
+/**
+ * Le verdict d'une échéance.
+ * `clos` : la chose est livrée, la date n'a plus d'objet.
+ * `risques` : les faits qui menacent la date, en clair. Le premier est
+ * affiché ; sans aucun fait, une date à venir est tenue, point.
+ */
+export const verdictDelai = (cible, { clos = false, risques = [] } = {}) => {
+  if (clos) return { cle: 'livre', ...VERDICTS.livre, detail: '' };
+  const n = joursAvant(cible);
+  if (n === null) return { cle: 'sans', ...VERDICTS.sans, detail: '' };
+  if (n < 0) return { cle: 'depasse', ...VERDICTS.depasse, detail: `de ${-n} j` };
+  if (risques.length) return { cle: 'risque', ...VERDICTS.risque, detail: risques[0] };
+  if (n === 0) return { cle: 'tenu', ...VERDICTS.tenu, detail: "c'est aujourd'hui" };
+  return { cle: 'tenu', ...VERDICTS.tenu, detail: `dans ${n} j` };
+};
+
+/** La liste des reports d'une fiche, du plus ancien au plus récent. */
+export const reportsDe = (fiche) => (Array.isArray(fiche && fiche.reports) ? fiche.reports : [])
+  .slice().sort((a, b) => (enDate(a.le) || 0) - (enDate(b.le) || 0));
+
+/** La date d'origine : celle du premier report, sinon la date actuelle. */
+export const dateOrigine = (fiche, champ = 'cible') => {
+  const r = reportsDe(fiche);
+  return r.length ? r[0].de : (fiche ? fiche[champ] : null);
 };
 
 /** « Aujourd'hui », « Demain », « Dans 3 jours », « En retard de 2 jours ». */

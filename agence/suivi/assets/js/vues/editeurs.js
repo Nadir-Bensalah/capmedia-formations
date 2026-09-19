@@ -6,9 +6,10 @@
 
 import {
   echapper, dateISO, dateHeureISO, borner, enDate,
-  TYPES_COMPOSANT, STATUTS_COMPOSANT, STATUTS_JALON, STATUTS_TACHE, PRIORITES, CATEGORIES_LIEN,
+  TYPES_COMPOSANT, STATUTS_COMPOSANT, STATUTS_ETAPE, STATUTS_TACHE, PRIORITES, CATEGORIES_LIEN,
   STATUTS_RELEASE, TYPES_CHANGEMENT, TYPES_NOTE, TYPES_VALIDATION, CATEGORIES_FICHIER,
   STATUTS_PROJET, TYPES_PROJET, SANTES, STATUTS, URGENCES, QUALIFICATIONS, PLATEFORMES_CHOIX, contactsProjet,
+  MOTIFS_REPORT, nomAffiche, dateCourte,
 } from '../noyau.js';
 import { modale, confirmer, toast, lireForme, valider, obligatoire, longueurMax, urlValide, emailValide, optionsDe, depot, agir, lisible, choixPlateformes } from '../ui.js';
 import { appelServeur } from '../serveur.js';
@@ -61,15 +62,65 @@ const visibilite = (valeur = 'client') => `
   </div>`;
 
 /* Un choix multiple garde ce qui était déjà coché : sans cela, rouvrir un
-   jalon pour corriger son avancement effaçait en silence ses composants. */
+   étape pour corriger son avancement effaçait en silence ses parties. */
 const optionsMultiples = (carte, prises) => Object.entries(carte)
   .map(([cle, libelle]) => `<option value="${echapper(cle)}"${(prises || []).includes(cle) ? ' selected' : ''}>${echapper(typeof libelle === 'string' ? libelle : libelle.libelle)}</option>`)
   .join('');
+
+/*
+ * Un report de date. Une date qui bouge sans laisser de trace, c'est la
+ * question que le client pose au téléphone six semaines plus tard. Le bloc
+ * ne se montre que si la date change vraiment, et il n'accepte pas d'être
+ * vide : un report sans motif ne vaut pas mieux qu'un report caché.
+ */
+const blocReport = (nom, ancienne) => (ancienne ? `
+  <div class="groupe report-bloc" data-report-pour="ed-${nom}" hidden>
+    <p class="surtitre">Ce report sera inscrit dans l'historique</p>
+    <p class="aide" style="margin-top:2px">Date actuelle : ${echapper(dateCourte(ancienne))}. Le client verra le motif.</p>
+    ${select('reportMotif', 'Motif du report', MOTIFS_REPORT, 'attente-client')}
+    ${champ('reportNote', 'Une phrase de plus', '', { facultatif: true, placeholder: 'Ce que le client a besoin de comprendre.' })}
+  </div>` : '');
+
+/* Le bloc n'apparaît qu'à la vraie différence : rouvrir une fiche et
+   ressortir sans toucher à la date n'inscrit rien. */
+const brancherReport = (racine) => {
+  racine.querySelectorAll('[data-report-pour]').forEach((bloc) => {
+    const entree = racine.querySelector(`#${bloc.dataset.reportPour}`);
+    if (!entree) return;
+    const depart = entree.value;
+    const revoir = () => { bloc.hidden = !entree.value || entree.value === depart; };
+    entree.addEventListener('input', revoir);
+    entree.addEventListener('change', revoir);
+    revoir();
+  });
+};
+
+/* La liste des reports, celui d'aujourd'hui compris s'il y en a un. */
+const reportsMaj = (fiche, champDate, valeur, d, session) => {
+  const reports = Array.isArray(fiche && fiche.reports) ? fiche.reports.slice() : [];
+  const ancienne = enDate(fiche && fiche[champDate]);
+  const nouvelle = valeur ? new Date(valeur) : null;
+  /* On compare des jours, pas des instants : un champ date rend minuit
+     UTC quand la fiche porte minuit local, et la différence d'une heure
+     inscrivait un report du 3 novembre au 3 novembre. */
+  if (!ancienne || !nouvelle || dateISO(ancienne) === dateISO(nouvelle)) return reports;
+  reports.push({
+    de: ancienne, vers: nouvelle,
+    motif: d.reportMotif || 'autre', note: (d.reportNote || '').slice(0, 300),
+    le: new Date(), par: nomAffiche(session) || 'Capmedia',
+  });
+  return reports.slice(-20);
+};
 
 const contactsDe = (fiche) => contactsProjet(fiche);
 const composantsDe = (pid) => (magasin.lire(K.composants(pid)) || []).reduce((c, x) => ({ ...c, [x.id]: x.nom }), {});
 const jalonsDe = (pid) => (magasin.lire(K.jalons(pid)) || []).reduce((c, x) => ({ ...c, [x.id]: x.titre }), {});
 const equipeCarte = () => (magasin.lire(K.equipe) || []).reduce((c, x) => ({ ...c, [x.id]: x.nom || x.email }), {});
+/* Les versions d'un projet, de la plus récente à la plus ancienne : c'est
+   dans l'une d'elles que part la correction, et le client veut son nom. */
+const releasesDe = (pid) => (magasin.lire(K.releases(pid)) || [])
+  .slice().sort((a, b) => (enDate(b.date) || 0) - (enDate(a.date) || 0))
+  .reduce((c, r) => ({ ...c, [r.id]: [(PLATEFORMES_CHOIX[r.plateforme] || {}).libelle, r.version, r.titre].filter(Boolean).join(' · ') }), {});
 
 /** Ouvre une feuille, branche le formulaire, résout la valeur d'`enregistrer`. */
 /** Le choix d'un logo : on l'envoie tout de suite, l'aperçu suit. */
@@ -155,8 +206,9 @@ const editeurs = {
         ${champ('debut', 'Début', dateISO(fiche.debut), { type: 'date', facultatif: true })}
         ${champ('cible', 'Date cible', dateISO(fiche.cible), { type: 'date', facultatif: true })}
       </div>
+      ${blocReport('cible', fiche.cible)}
       <div class="forme-rang">
-        ${select('progressionMode', 'Progression', { manuel: 'Saisie à la main', jalons: 'Calculée sur les jalons' }, (fiche.progression || {}).mode || 'manuel')}
+        ${select('progressionMode', 'Progression', { manuel: 'Saisie à la main', jalons: 'Calculée sur les étapes' }, (fiche.progression || {}).mode || 'manuel')}
         ${champ('progressionValeur', 'Valeur (si à la main)', borner((fiche.progression || {}).valeur), { type: 'number', attrs: 'min="0" max="100"' })}
       </div>
       <div class="forme-rang">
@@ -182,7 +234,7 @@ const editeurs = {
       <p class="aide">Aucun client, aucun e-mail, visible de vous seul dans le cockpit.</p>
       <label class="interrupteur" style="margin-top:8px"><input type="checkbox" name="silence" ${fiche.silence ? 'checked' : ''}><i></i> Préparer sans prévenir le client</label>
       <p class="aide">En sourdine, le client garde l'accès mais ne reçoit aucun e-mail. À lever quand l'espace est prêt.</p>`,
-    surMontage: (racine) => brancherLogo(racine, pid),
+    surMontage: (racine) => { brancherLogo(racine, pid); brancherReport(racine); },
     regles: {
       nom: obligatoire(),
       progressionValeur: (v) => (v !== null && (v < 0 || v > 100) ? 'Entre 0 et 100.' : ''),
@@ -192,6 +244,7 @@ const editeurs = {
       nom: d.nom, statut: d.statut, type: d.type, description: d.description,
       plateformes: Array.isArray(d.plateformes) ? d.plateformes : (d.plateformes ? [d.plateformes] : []),
       debut: d.debut ? new Date(d.debut) : null, cible: d.cible ? new Date(d.cible) : null,
+      reports: reportsMaj(fiche, 'cible', d.cible, d, env.session),
       progression: { mode: d.progressionMode, valeur: borner(d.progressionValeur) },
       responsable: d.responsable, sante: d.sante, silence: Boolean(d.silence), interne: Boolean(d.interne),
       contacts: [
@@ -206,7 +259,7 @@ const editeurs = {
   }),
 
   composant: (env, { pid, fiche, defaut = {} }) => feuille({
-    titre: fiche ? 'Le composant' : 'Nouveau composant', sousTitre: fiche ? fiche.nom : 'Une brique du projet : iOS, Android, backend...',
+    titre: fiche ? 'La partie' : 'Nouvelle partie', sousTitre: fiche ? fiche.nom : 'Une partie du projet : iPhone, Android, web, serveur...',
     corps: `
       ${champ('nom', 'Nom', fiche ? fiche.nom : (defaut.nom || ''), { placeholder: 'Application iOS' })}
       <div class="forme-rang">
@@ -232,7 +285,7 @@ const editeurs = {
     enregistrer: async (d) => {
       const donnees = { ...d, techno: d.techno ? d.techno.split(',').map((t) => t.trim()).filter(Boolean) : [], progression: borner(d.progression) };
       if (fiche) await ecrire.majComposant(pid, fiche.id, donnees); else await ecrire.creerComposant(pid, donnees);
-      toast(fiche ? 'Composant mis à jour.' : 'Composant créé.');
+      toast(fiche ? 'Partie mise à jour.' : 'Partie ajoutée.');
     },
   }),
 
@@ -309,31 +362,38 @@ const editeurs = {
   },
 
   jalon: (env, { pid, fiche, defaut = {} }) => feuille({
-    titre: fiche ? 'Le jalon' : 'Nouveau jalon', sousTitre: 'Une étape de la feuille de route.',
+    titre: fiche ? "L'étape" : 'Nouvelle étape', sousTitre: 'Une étape de la feuille de route.',
     corps: `
       ${champ('titre', 'Titre', fiche ? fiche.titre : '', { placeholder: 'Développement' })}
       ${champ('phase', 'Phase', fiche ? fiche.phase : (defaut.phase || ''), { facultatif: true, placeholder: 'Cadrage, Design, Développement, Tests, Publication...' })}
       <div class="forme-rang">
-        ${select('statut', 'Statut', STATUTS_JALON, fiche ? fiche.statut : 'a-venir')}
+        ${select('statut', 'Statut', STATUTS_ETAPE, fiche ? fiche.statut : 'a-venir')}
         ${champ('progression', 'Progression (%)', fiche ? borner(fiche.progression) : 0, { type: 'number', attrs: 'min="0" max="100"' })}
       </div>
       <div class="forme-rang">
         ${champ('debut', 'Début', fiche ? dateISO(fiche.debut) : '', { type: 'date', facultatif: true })}
         ${champ('fin', 'Fin prévue', fiche ? dateISO(fiche.fin) : '', { type: 'date', facultatif: true })}
       </div>
+      ${blocReport('fin', fiche && fiche.fin)}
       <div class="forme-rang">
         ${champ('ordre', 'Ordre', fiche ? fiche.ordre : (defaut.ordre || 0), { type: 'number' })}
         ${select('responsable', 'Responsable', equipeCarte(), fiche ? fiche.responsable : '', { vide: 'Non défini' })}
       </div>
-      <div class="groupe"><label class="etiquette-champ" for="ed-composants">Composants concernés</label>
+      <div class="groupe"><label class="etiquette-champ" for="ed-composants">Parties concernées</label>
         <select class="select" id="ed-composants" name="composants" multiple size="4">${optionsMultiples(composantsDe(pid), (fiche && fiche.composants) || [])}</select>
         <p class="aide">Maintenez ⌘ ou Ctrl pour en choisir plusieurs.</p></div>
       ${zone('description', 'Description', fiche ? fiche.description : '', { facultatif: true, lignes: 3 })}`,
+    surMontage: brancherReport,
     regles: { titre: obligatoire() },
     enregistrer: async (d) => {
-      const donnees = { ...d, progression: borner(d.progression), debut: d.debut ? new Date(d.debut) : null, fin: d.fin ? new Date(d.fin) : null };
+      const donnees = {
+        ...d, progression: borner(d.progression),
+        debut: d.debut ? new Date(d.debut) : null, fin: d.fin ? new Date(d.fin) : null,
+        reports: reportsMaj(fiche, 'fin', d.fin, d, env.session),
+      };
+      delete donnees.reportMotif; delete donnees.reportNote;
       if (fiche) await ecrire.majJalon(pid, fiche.id, donnees); else await ecrire.creerJalon(pid, donnees);
-      toast(fiche ? 'Jalon mis à jour.' : 'Jalon créé.');
+      toast(fiche ? 'Étape mise à jour.' : 'Étape créée.');
     },
   }),
 
@@ -351,8 +411,8 @@ const editeurs = {
         ${champ('echeance', 'Échéance', fiche ? dateISO(fiche.echeance) : '', { type: 'date', facultatif: true })}
       </div>
       <div class="forme-rang">
-        ${select('composant', 'Composant', composantsDe(pid), fiche ? fiche.composant : (defaut.composant || ''), { vide: 'Aucun' })}
-        ${select('jalon', 'Jalon', jalonsDe(pid), fiche ? fiche.jalon : (defaut.jalon || ''), { vide: 'Aucun' })}
+        ${select('composant', 'Partie du projet', composantsDe(pid), fiche ? fiche.composant : (defaut.composant || ''), { vide: 'Aucune' })}
+        ${select('jalon', 'Étape', jalonsDe(pid), fiche ? fiche.jalon : (defaut.jalon || ''), { vide: 'Aucune' })}
       </div>
       <div class="forme-rang">
         ${champ('estimation', 'Estimation', fiche ? fiche.estimation : '', { facultatif: true, placeholder: '2 j' })}
@@ -376,7 +436,7 @@ const editeurs = {
       ${champ('url', 'Adresse', fiche ? fiche.url : '', { type: 'url', placeholder: 'https://' })}
       <div class="forme-rang">
         ${select('categorie', 'Catégorie', CATEGORIES_LIEN, fiche ? fiche.categorie : 'production')}
-        ${select('composant', 'Composant', composantsDe(pid), fiche ? fiche.composant : '', { vide: 'Aucun' })}
+        ${select('composant', 'Partie du projet', composantsDe(pid), fiche ? fiche.composant : '', { vide: 'Aucune' })}
       </div>
       ${champ('environnement', 'Environnement', fiche ? fiche.environnement : '', { facultatif: true, placeholder: 'Production, Staging, TestFlight' })}
       ${champ('description', 'Description', fiche ? fiche.description : '', { facultatif: true })}
@@ -401,7 +461,7 @@ const editeurs = {
         ${select('statut', 'Statut', STATUTS_RELEASE, fiche ? fiche.statut : 'developpement')}
         ${champ('date', 'Date', fiche ? dateISO(fiche.date) : dateISO(new Date()), { type: 'date' })}
       </div>
-      ${select('composant', 'Composant', composantsDe(pid), fiche ? fiche.composant : '', { vide: 'Aucun' })}
+      ${select('composant', 'Partie du projet', composantsDe(pid), fiche ? fiche.composant : '', { vide: 'Aucune' })}
       ${zone('notes', 'Changements', fiche ? (fiche.notes || []).map((n) => `${n.type}: ${n.texte}`).join('\n') : '', { aide: 'Une ligne par changement, précédée de nouveau:, amelioration:, correction: ou technique:.', lignes: 5, placeholder: 'correction: Connexion Apple\nnouveau: Profil' })}
       <div class="forme-rang">
         ${champ('lienStore', 'Lien App Store / Play', fiche ? (fiche.liens || {}).store : '', { type: 'url', facultatif: true })}
@@ -447,7 +507,7 @@ const editeurs = {
     },
   }),
 
-  note: (env, { pid, fiche }) => feuille({
+  note: (env, { pid, fiche, defaut = {} }) => feuille({
     titre: fiche ? 'La note' : 'Nouvelle note', sousTitre: 'Une décision, une information, un risque : ce qui ne doit pas se perdre.',
     corps: `
       <div class="forme-rang">
@@ -455,6 +515,7 @@ const editeurs = {
         ${champ('date', 'Date', fiche ? dateISO(fiche.date) : dateISO(new Date()), { type: 'date' })}
       </div>
       ${champ('titre', 'Titre', fiche ? fiche.titre : '', { placeholder: 'Conserver Stripe pour les paiements' })}
+      ${select('composant', 'Partie du projet', composantsDe(pid), fiche ? fiche.composant : (defaut.composant || ''), { vide: 'Tout le projet', aide: 'La note remonte alors sur la page de cette partie.' })}
       ${zone('contenu', 'Contenu', fiche ? fiche.contenu : '', { lignes: 4 })}
       ${champ('decidePar', 'Décidé par', fiche ? fiche.decidePar : '', { facultatif: true, placeholder: 'Les personnes qui ont tranché' })}
       ${zone('contexte', 'Contexte', fiche ? fiche.contexte : '', { facultatif: true, lignes: 2 })}
@@ -468,10 +529,11 @@ const editeurs = {
     },
   }),
 
-  blocage: (env, { pid, fiche }) => feuille({
+  blocage: (env, { pid, fiche, defaut = {} }) => feuille({
     titre: fiche ? 'Le point bloquant' : 'Nouveau point bloquant', sousTitre: 'Court, factuel, avec un responsable.',
     corps: `
       ${champ('titre', 'Titre', fiche ? fiche.titre : '', { placeholder: 'Publication Android bloquée' })}
+      ${select('composant', 'Partie du projet', composantsDe(pid), fiche ? fiche.composant : (defaut.composant || ''), { vide: 'Tout le projet', aide: 'Le point remonte alors sur la page de cette partie.' })}
       ${zone('description', 'Description', fiche ? fiche.description : '', { lignes: 3, placeholder: 'Attente du compte développeur client.' })}
       <div class="forme-rang">
         ${select('responsable', 'Responsable', { client: 'Le client', capmedia: 'Capmedia', tiers: 'Un tiers' }, fiche ? fiche.responsable : 'client')}
@@ -508,7 +570,7 @@ const editeurs = {
     corps: `
       <div class="forme-rang">
         ${select('categorie', 'Catégorie', CATEGORIES_FICHIER, fiche ? fiche.categorie : 'livrables')}
-        ${select('composant', 'Composant', composantsDe(pid), fiche ? fiche.composant : '', { vide: 'Aucun' })}
+        ${select('composant', 'Partie du projet', composantsDe(pid), fiche ? fiche.composant : '', { vide: 'Aucune' })}
       </div>
       ${champ('description', 'Description', fiche ? fiche.description : '', { facultatif: true })}
       ${champ('version', 'Version', fiche ? fiche.version : '', { facultatif: true, placeholder: 'v2' })}
@@ -534,16 +596,17 @@ const editeurs = {
       </div>
       <div class="forme-rang">
         ${select('assigne', 'Assignée à', equipeCarte(), fiche.assigne || '', { vide: 'Personne' })}
-        ${select('composant', 'Composant', composantsDe(pid), fiche.composant || '', { vide: 'Aucun' })}
+        ${select('composant', 'Partie du projet', composantsDe(pid), fiche.composant || '', { vide: 'Aucune' })}
       </div>
       <div class="forme-rang">
         ${select('qualification', 'Qualification', QUALIFICATIONS, fiche.qualification || '', { vide: 'Pas encore qualifiée', aide: 'Hors périmètre ou à chiffrer : le client en est informé.' })}
         ${select('plateforme', 'Plateforme', PLATEFORMES_CHOIX, fiche.plateforme || '')}
       </div>
+      ${select('release', 'Livrée dans la version', releasesDe(pid), fiche.release || '', { vide: 'Pas encore fixée', aide: "Le client lit le nom de la version qui porte la correction, au lieu de le demander." })}
       ${champ('titre', 'Titre', fiche.titre)}`,
     regles: { titre: obligatoire(), plateforme: () => '' },
     enregistrer: async (d) => {
-      const changements = { statut: d.statut, urgence: d.urgence, assigne: d.assigne || null, composant: d.composant, qualification: d.qualification || null, plateforme: d.plateforme, titre: d.titre };
+      const changements = { statut: d.statut, urgence: d.urgence, assigne: d.assigne || null, composant: d.composant, qualification: d.qualification || null, plateforme: d.plateforme, titre: d.titre, release: d.release || null };
       if (d.statut === 'resolu' && fiche.statut !== 'resolu') changements.resolu = new Date();
       await ecrire.majDemande(fiche.id, changements);
       toast('Demande mise à jour.');

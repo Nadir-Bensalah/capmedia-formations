@@ -97,8 +97,12 @@ service cloud.firestore {
       allow write: if connecte() && moi() == uid
         && request.resource.data.keys().hasOnly([
              'nom', 'telephone', 'entreprise', 'langue', 'fuseau', 'notifications',
-             'lus', 'epingles', 'derniereVisite', 'maj'
+             'lus', 'epingles', 'derniereVisite', 'maj',
+             // L'adresse, recopiée ici pour que le serveur retrouve les
+             // préférences d'envoi. Elle ne peut être que la sienne.
+             'email'
            ])
+        && (!('email' in request.resource.data) || request.resource.data.email == monEmail())
         && (!('nom' in request.resource.data) || texteBorne(request.resource.data.nom, 120))
         && (!('telephone' in request.resource.data) || texteBorne(request.resource.data.telephone, 40))
         && (!('entreprise' in request.resource.data) || texteBorne(request.resource.data.entreprise, 120))
@@ -125,8 +129,13 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
              'nom', 'description', 'type', 'statut', 'progression', 'debut', 'cible',
              'responsable', 'pulse', 'sante', 'archive', 'client', 'plateformes', 'logo', 'budget', 'budgetNote', 'silence', 'maj',
-             'contacts', 'interne'
+             'contacts', 'interne',
+             // L'histoire de la date cible : chaque report, son motif, sa
+             // date et son auteur. Le client la lit, c'est tout l'objet.
+             'reports'
            ])
+        && (!('reports' in request.resource.data)
+            || (request.resource.data.reports is list && request.resource.data.reports.size() <= 20))
         && texteRequis(request.resource.data.nom, 120)
         && request.resource.data.statut in ['prospect', 'cadrage', 'planifie', 'en-cours', 'attente-client',
                                             'en-revue', 'livraison', 'maintenance', 'termine', 'suspendu', 'archive'];
@@ -245,7 +254,10 @@ service cloud.firestore {
       function majEquipe() {
         return request.resource.data.diff(resource.data).affectedKeys()
                  .hasOnly(['statut', 'urgence', 'assigne', 'archive', 'maj', 'resolu', 'lu', 'titre',
-                           'type', 'plateforme', 'pieces', 'composant', 'qualification', 'devis'])
+                           'type', 'plateforme', 'pieces', 'composant', 'qualification', 'devis',
+                           // La version qui porte la correction : le client
+                           // la demandait par message, faute de la lire.
+                           'release'])
             && request.resource.data.statut in ['nouveau', 'a-analyser', 'en-attente-client', 'acceptee', 'planifiee',
                                                 'en-cours', 'en-revue', 'a-valider', 'resolu', 'refuse', 'annulee', 'ferme']
             && request.resource.data.urgence in ['bloquant', 'critique', 'important', 'mineur']

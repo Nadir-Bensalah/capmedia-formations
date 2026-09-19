@@ -222,8 +222,55 @@ locaux, ce qui est fait.
 
 L'espace de suivi est devenu le Client Hub : un espace client (`suivi/app.html`) et un cockpit d'équipe (`suivi/admin.html`), tous deux sur `assets/js/` avec un routeur par dièse, un magasin temps réel (`magasin.js`) et une couche de données (`donnees.js`) qui est la seule à parler à Firestore.
 
-Collections ajoutées : `organisations`, `profils`, `projets/{p}/composants|jalons|liens|messages`, `taches`, `validations`, `fichiers`, `releases`, `reunions`, `notes`, `blocages`, `paiements`, `activite`, `boites/{uid}/notifications`, `audit`, `demandesProjet`. Les règles sont dans `suivi/firestore.rules` et prouvées par `fonctions-suivi/outils/regles.test.mjs` (69 contrôles). La visibilité `client | interne` est appliquée par les règles, pas seulement à l'écran.
+Collections ajoutées : `organisations`, `profils`, `projets/{p}/composants|jalons|liens|messages`, `taches`, `validations`, `fichiers`, `releases`, `reunions`, `notes`, `blocages`, `paiements`, `activite`, `boites/{uid}/notifications`, `audit`, `demandesProjet`. Les règles sont dans `suivi/firestore.rules` et prouvées par `fonctions-suivi/outils/regles.test.mjs` (87 contrôles). La visibilité `client | interne` est appliquée par les règles, pas seulement à l'écran.
 
 Les automatisations (`fonctions-suivi/hub.js`) écrivent l'activité, les notifications et la file d'e-mails à partir des vrais événements. Sur les émulateurs, le facteur ne contacte jamais Brevo : les envois sont marqués `simule`.
 
 Banc d'essai : `fonctions-suivi/outils/semer-suivi.mjs` (adresses fictives uniquement), `regles.test.mjs`, `verifier-suivi.mjs`, et le parcours navigateur Playwright.
+
+## 10. La tenue des délais, la vie d'une demande, la relance (septembre 2026)
+
+Le client trouvait l'état de son projet, mais pas la réponse aux deux
+questions pour lesquelles il décrochait quand même son téléphone : est-ce
+qu'on tient la date, et où en est ma demande. Rien non plus n'allait le
+chercher : tout attendait qu'il vienne.
+
+**Champs ajoutés**
+
+```
+projets/{p}.reports   list<map>  [{ de, vers, motif, note, le, par }], 20 au plus
+                                 motif ∈ attente-client | perimetre | technique
+                                          | tiers | magasin | capmedia | autre
+projets/{p}.relance   timestamp  date de la dernière lettre hebdomadaire
+projets/{p}/jalons/{j}.reports    la même liste, pour la date de fin d'une étape
+tickets/{t}.release   string     l'identifiant de la version qui porte la livraison
+notes/{n}.composant   string     la partie du projet concernée, vide = tout le projet
+blocages/{b}.composant string    idem
+profils/{uid}.email   string     recopiée par son propriétaire, et par lui seul :
+                                 le serveur cherche les préférences d'envoi par
+                                 adresse, et sans elle « Désactivé » ne coupait rien
+```
+
+`reports` et `release` sont dans la liste blanche des règles ; le client les
+lit, ne les écrit jamais. `email` ne peut valoir que l'adresse du jeton.
+
+**Le verdict d'une date** (`verdictDelai` dans `noyau.js`) ne sort que de
+faits : livré, dépassée de N jours, ou à risque si `risquesProjet` nomme un
+point bloquant ouvert, une étape dépassée, une tâche en retard ou une
+demande qui dort du côté du client depuis plus d'une semaine. Sans fait
+nommable, une date à venir est tenue, et on le dit.
+
+**La progression** (`progressionProjet`) descend une chaîne de sources :
+étapes, valeur saisie, parties du projet, tâches, statut. Quand aucune ne
+parle, elle vaut `null` et l'écran affiche « non estimée » au lieu de 0 %.
+
+**La relance** (`hubRelanceHebdo`, lundi 9 h, Europe/Paris) n'écrit que s'il
+reste quelque chose du côté du client, se tait sur un projet à moi, en
+sourdine, archivé ou clos, et jamais deux fois dans la même semaine. Le
+client la coupe depuis ses réglages, catégorie `relance`. Elle est prouvée
+par `fonctions-suivi/outils/relance.test.mjs` (20 contrôles), qui interroge
+la décision et le relevé sans passer par le déclencheur.
+
+**Vocabulaire** : « jalon » est devenu « étape », « composant » est devenu
+« partie du projet », et l'adresse `/projets/{p}/roadmap` est devenue
+`/projets/{p}/etapes`, l'ancienne restant comprise.

@@ -5,11 +5,11 @@
 
 import {
   echapper, prenom, nomAffiche, depuis, dateCourte, heure, dateHeure, montant, enDate, parDateDesc,
-  OUVERTS, STATUTS_PROJET, pluriel, statutProjet
+  OUVERTS, STATUTS_PROJET, pluriel, statutProjet, verdictDelai
 } from '../noyau.js';
-import { icone, pastille, avatarProjet, progression, ligne, vide, chronoItem, parJour, titrePage, echeanceHtml, squelette } from '../ui.js';
+import { icone, pastille, avatarProjet, progression, progressionOuPas, verdictHtml, ligne, vide, chronoItem, parJour, titrePage, echeanceHtml, squelette } from '../ui.js';
 import * as magasin from '../magasin.js';
-import { K, G, agreger, enAttenteDeVous, progressionProjet, jalonCourant, prochaineReunion, resteAPayer, depuisVisite, nonLusProjet } from '../donnees.js';
+import { K, G, agreger, enAttenteDeVous, progressionProjet, jalonCourant, prochaineReunion, resteAPayer, depuisVisite, nonLusProjet, risquesProjet } from '../donnees.js';
 import { filAriane } from '../coquille.js';
 import { echeance } from '../noyau.js';
 
@@ -118,7 +118,8 @@ export const vue = async (ctx, env) => {
         <div class="section-tete"><h2>Vos projets</h2>${projets.length ? '<a class="lien" href="#/nouveau-projet">Demander un nouveau projet</a>' : ''}</div>
         ${projets.length ? `<div class="grille grille-2">${projets.map((p) => {
           const jalons = magasin.lire(K.jalons(p.id)) || [];
-          const prog = progressionProjet(p, jalons);
+          const prog = progressionProjet(p, jalons, { composants: magasin.lire(K.composants(p.id)) || [], taches: magasin.lire(K.taches(p.id)) || [] });
+          const delai = verdictDelai(p.cible, { clos: statutProjet(p) === 'termine', risques: risquesProjet({ jalons, blocages: magasin.lire(K.blocages(p.id)) || [], taches: magasin.lire(K.taches(p.id)) || [], tickets: magasin.lire(K.tickets(p.id)) || [] }) });
           const courant = jalonCourant(jalons);
           const pulse = p.pulse || {};
           const ouvertsProjet = ouverts.filter((t) => t.projet === p.id).length;
@@ -138,10 +139,11 @@ export const vue = async (ctx, env) => {
               </div>
             </div>
             <div style="margin-top:16px">
-              <div class="rang-espace t-micro t-3" style="margin-bottom:6px"><span>Progression</span><span class="nb">${prog.valeur} %</span></div>
-              ${progression(prog.valeur, prog.valeur >= 100 ? 'vert' : '')}
+              <div class="rang-espace t-micro t-3" style="margin-bottom:6px"><span>Progression</span><span class="nb">${prog.valeur === null ? 'non estimée' : `${prog.valeur} %`}</span></div>
+              ${progressionOuPas(prog, prog.valeur >= 100 ? 'vert' : '')}
             </div>
             <div class="rang" style="margin-top:14px;gap:14px" class="t-petit">
+              ${p.cible ? verdictHtml(delai, { vide: false }) : ''}
               <span class="puce">${icone('demandes')} ${pluriel(ouvertsProjet, 'demande ouverte', 'demandes ouvertes')}</span>
               ${attenteProjet ? `<span class="puce puce--ambre"><i></i>${pluriel(attenteProjet, 'point pour vous', 'points pour vous')}</span>` : ''}
             </div>
@@ -189,6 +191,7 @@ export const vue = async (ctx, env) => {
   const cles = [K.projets, K.profil, ...session.projets.flatMap((p) => [
     K.jalons(p.id), K.tickets(p.id), K.validations(p.id), K.documents(p.id), K.paiements(p.id),
     K.taches(p.id), K.blocages(p.id), K.reunions(p.id), K.releases(p.id), K.activite(p.id), K.messages(p.id),
+    K.composants(p.id),
   ])];
   let minuteur = null;
   const planifier = () => { clearTimeout(minuteur); minuteur = setTimeout(rendre, 40); };

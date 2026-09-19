@@ -6,7 +6,7 @@
 
 import { exigerSession, $, echapper, prenom, nomAffiche, OUVERTS, ATTEND_CLIENT, FACTURES_DUES, joursAvant } from './noyau.js';
 import { monterCoquille, definirNavigation, enregistrerRecherche } from './coquille.js';
-import { definir, demarrer } from './routeur.js';
+import { definir, demarrer, courant, surChangement } from './routeur.js';
 import * as magasin from './magasin.js';
 import { abonnerGlobal, K, G, agreger, enAttenteDeVous, nonLusProjet, ecrire } from './donnees.js';
 import { icone } from './icones.js';
@@ -52,6 +52,26 @@ const compter = () => {
   return { projets, attente, nonLus, profil };
 };
 
+/* Les sections d'un projet, dans l'ordre de ses onglets. */
+const SECTIONS = [
+  { cle: 'etapes',  libelle: 'Feuille de route', icone: 'route' },
+  { cle: 'taches',  libelle: 'Tâches',      icone: 'taches',   compte: (pid) => (magasin.lire(K.taches(pid)) || []).filter((t) => !t.archive && t.statut !== 'terminee').length },
+  { cle: 'demandes', libelle: 'Demandes',   icone: 'demandes', compte: (pid) => (magasin.lire(K.tickets(pid)) || []).filter((t) => !t.archive && OUVERTS.includes(t.statut)).length },
+  { cle: 'fichiers', libelle: 'Fichiers',   icone: 'fichiers', compte: (pid) => (magasin.lire(K.fichiers(pid)) || []).filter((f) => !f.archive).length },
+  { cle: 'releases', libelle: 'Versions',   icone: 'releases', compte: (pid) => (magasin.lire(K.releases(pid)) || []).length },
+  { cle: 'liens',   libelle: 'Liens',       icone: 'liens' },
+  { cle: 'reunions', libelle: 'Réunions',   icone: 'reunions' },
+  { cle: 'notes',   libelle: 'Décisions',   icone: 'note' },
+  { cle: 'activite', libelle: 'Activité',   icone: 'activite' },
+];
+
+/* Le projet où l'on se trouve, quelle que soit la profondeur de l'adresse. */
+const projetOuvert = () => {
+  const m = /^\/projets\/([^/]+)/.exec(courant().chemin || '');
+  return m ? m[1] : '';
+};
+const ouvertSur = (pid) => projetOuvert() === pid;
+
 const construireNavigation = () => {
   const { projets, attente, nonLus } = compter();
   const parProjet = (pid) => attente.filter((a) => a.projet === pid).length;
@@ -69,12 +89,20 @@ const construireNavigation = () => {
     {
       titre: 'Vos projets',
       items: [
-        ...projets.filter((p) => !p.archive).map((p) => ({
+        ...projets.filter((p) => !p.archive).flatMap((p) => [{
           /* Le projet porte son propre logo : dans une liste de plusieurs, l'œil
              retrouve le sien avant d'avoir lu le nom. */
           chemin: `/projets/${p.id}`, libelle: p.nom, ecusson: avatarProjet(p, 'mini'),
           compte: { total: ouverts.filter((t) => t.projet === p.id).length, neuf: parProjet(p.id) },
-        })),
+        },
+        /* Les sections d'un projet sont à lui : elles se déplient sous son
+           nom quand on y entre, et se replient quand on en sort. Les cinq
+           pages du groupe « Suivi » restent à plat : elles rassemblent
+           tous les projets à la fois, et n'appartiennent à aucun. */
+        ...(ouvertSur(p.id) ? SECTIONS.map((sec) => ({
+          chemin: `/projets/${p.id}/${sec.cle}`, libelle: sec.libelle, icone: sec.icone, sous: true,
+          compte: { total: sec.compte ? sec.compte(p.id) : 0 },
+        })) : [])]),
         { chemin: '/nouveau-projet', libelle: 'Demander un projet', icone: 'plus' },
       ],
     },
@@ -97,6 +125,7 @@ const planifierNav = () => { clearTimeout(minuteurNav); minuteurNav = setTimeout
 [K.projets, K.profil, ...session.projets.flatMap((p) => [K.tickets(p.id), K.validations(p.id), K.documents(p.id), K.taches(p.id), K.blocages(p.id), K.messages(p.id)])]
   .forEach((cle) => magasin.sur(cle, planifierNav));
 construireNavigation();
+surChangement(construireNavigation);
 
 /* --- La recherche ------------------------------------------------------- */
 

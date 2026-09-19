@@ -33,9 +33,9 @@ export const vue = async (ctx, env) => {
       releases: (magasin.lire(K.releasesToutes) || []).filter(filtre), validations: (magasin.lire(K.validationsToutes) || []).filter(filtre),
     });
     const aVenir = evenements.filter((e) => joursAvant(e.date) >= 0).slice(0, 15);
-    const enRetard = evenements.filter((e) => joursAvant(e.date) < 0 && (e.genre === 'Tâche' || e.genre === 'Jalon' || e.genre === 'Facture')).slice(-8).reverse();
+    const enRetard = evenements.filter((e) => joursAvant(e.date) < 0 && (e.genre === 'Tâche' || e.genre === 'Étape' || e.genre === 'Facture')).slice(-8).reverse();
     sortie.innerHTML = `<div class="page">
-      <div class="page-tete"><div><h1>Planning</h1><p class="chapo">Réunions, jalons, échéances et versions de tous les projets.</p></div>
+      <div class="page-tete"><div><h1>Planning</h1><p class="chapo">Réunions, étapes, échéances et versions de tous les projets.</p></div>
         <div class="actions"><select class="select" id="f-projet" style="width:auto"><option value="">Tous les projets</option>${projets.map((p) => `<option value="${echapper(p.id)}" ${etat.projet === p.id ? 'selected' : ''}>${echapper(p.nom)}</option>`).join('')}</select><div class="segments"><button type="button" data-mois="-1" aria-label="Mois précédent">${icone('chevronGauche')}</button><button type="button" data-mois="0">Aujourd'hui</button><button type="button" data-mois="1" aria-label="Mois suivant">${icone('chevronDroite')}</button></div><button class="btn btn-principal" type="button" data-reunion>${icone('plus')} Réunion</button></div></div>
       <div class="grille grille-tiers">
         <section><p class="t-titre-2" style="margin-bottom:12px;text-transform:capitalize">${MOIS[mois]} ${annee}</p><div class="calendrier">${grilleMois(annee, mois, evenements)}</div></section>

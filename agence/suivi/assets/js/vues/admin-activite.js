@@ -9,7 +9,7 @@ import { K } from '../donnees.js';
 import { filAriane } from '../coquille.js';
 import { activiteHtml } from './accueil.js';
 
-const NATURES = { '': 'Tout', demande: 'Demandes', tache: 'Tâches', message: 'Messages', validation: 'Validations', fichier: 'Fichiers', release: 'Versions', reunion: 'Réunions', devis: 'Devis', facture: 'Factures', paiement: 'Paiements', jalon: 'Jalons', note: 'Notes', blocage: 'Blocages', projet: 'Projets' };
+const NATURES = { '': 'Tout', demande: 'Demandes', tache: 'Tâches', message: 'Messages', validation: 'Validations', fichier: 'Fichiers', release: 'Versions', reunion: 'Réunions', devis: 'Devis', facture: 'Factures', paiement: 'Paiements', jalon: 'Étapes', note: 'Notes', blocage: 'Blocages', projet: 'Projets' };
 
 export const vue = async (ctx, env) => {
   const lot = magasin.lot();
