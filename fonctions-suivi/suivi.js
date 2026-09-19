@@ -170,9 +170,19 @@ function contactsClient(projet, auteur) {
   /* Un projet en sourdine se prépare sans rien envoyer au client. Le
      drapeau se lève depuis le cockpit quand l'espace est prêt. */
   if (projet && projet.silence === true) return [];
+  /* Un projet interne n'a pas de client : rien ne sort. */
+  if (projet && projet.interne === true) return [];
   const liste = [];
+  /* Un projet peut compter plusieurs interlocuteurs : ils reçoivent tous
+     le meme courrier. La liste prime, le contact unique reste compris. */
+  const contacts = Array.isArray(projet && projet.contacts) ? projet.contacts : [];
+  for (const c of contacts) {
+    if (c && c.email && !liste.some((d) => memeEmail(d.email, c.email))) {
+      liste.push({ email: c.email, nom: c.nom || '' });
+    }
+  }
   const client = (projet && projet.client) || {};
-  if (client.email) {
+  if (client.email && !liste.some((d) => memeEmail(d.email, client.email))) {
     liste.push({ email: client.email, nom: client.nom || client.entreprise || '' });
   }
   if (auteur && auteur.cote === 'client' && auteur.email
@@ -839,14 +849,29 @@ exports.suiviAdmin = onRequest(
         const deja = await bdd.collection('projets').where('ref', '==', reference).limit(1).get();
         if (!deja.empty) return res.status(409).send(`la reference ${reference} est deja prise`);
 
-        /* Le client : une organisation existante, ou une nouvelle creee a la volee. */
+        /* Un projet interne n'a ni client ni organisation : c'est un projet
+           de la maison, suivi dans le cockpit et invisible cote client. */
+        const estInterne = req.body.interne === true;
         let orgId = organisation ? String(organisation) : null;
         let ficheClient = client && typeof client === 'object' ? client : {};
-        if (orgId) {
+        if (estInterne) {
+          orgId = null;
+          ficheClient = {};
+        } else if (orgId) {
           const org = await bdd.doc(`organisations/${orgId}`).get();
           if (!org.exists) return res.status(404).send('organisation inconnue');
           const o = org.data();
           ficheClient = { nom: o.nom || '', email: o.email || '', entreprise: o.entreprise || '' };
+        } else if (!emailPlausible(ficheClient.email) && inviter === false && String(ficheClient.nom || ficheClient.entreprise || '').trim()) {
+          /* Un client connu dont on n'a pas encore l'adresse : l'organisation
+             existe, l'invitation partira quand l'adresse sera renseignee. */
+          const orgRef = await bdd.collection('organisations').add({
+            nom: String(ficheClient.nom || '').trim(), entreprise: String(ficheClient.entreprise || '').trim(),
+            email: '', telephone: '', adresse: '', notesInternes: String(ficheClient.notesInternes || ''),
+            contacts: [], membres: [], roles: {},
+            cree: FieldValue.serverTimestamp(), maj: FieldValue.serverTimestamp(),
+          });
+          orgId = orgRef.id;
         } else {
           if (!emailPlausible(ficheClient.email)) return res.status(400).send('email du client requis');
           const orgRef = await bdd.collection('organisations').add({
@@ -866,6 +891,8 @@ exports.suiviAdmin = onRequest(
           nom: String(nom).trim(), ref: reference, description: String(description || '').trim(),
           type: String(type || 'application-mobile'), statut: String(statut || 'cadrage'),
           organisation: orgId, client: ficheClient, plateformes: plateformesValides,
+          interne: estInterne, contacts: Array.isArray(req.body.contacts) ? req.body.contacts : [],
+          silence: req.body.silence === true,
           membres: [], membresOrganisation: [], compteur: 0,
           progression: { mode: 'manuel', valeur: 0 },
           debut: enDate(debut), cible: enDate(cible), responsable: String(responsable || ''),
@@ -875,7 +902,7 @@ exports.suiviAdmin = onRequest(
         }));
 
         /* Les membres de l'organisation deviennent membres du projet. */
-        await synchroniserMembres(orgId);
+        if (orgId) await synchroniserMembres(orgId);
 
         /* L'invitation du contact principal, si demandee. */
         if (inviter !== false && emailPlausible(ficheClient.email)) {
@@ -1306,6 +1333,7 @@ exports.suiviAdmin = onRequest(
         const permises = adressesAttendues.map(normaliserEmail);
         const presentes = [];
         if (projet.client && projet.client.email) presentes.push(normaliserEmail(projet.client.email));
+        for (const c of (projet.contacts || [])) if (c && c.email) presentes.push(normaliserEmail(c.email));
         for (const uid of (projet.membres || [])) {
           try { const u = await getAuth().getUser(uid); if (u.email) presentes.push(normaliserEmail(u.email)); }
           catch (err) { return res.status(409).send(`membre ${uid} illisible, remplissage refuse`); }
@@ -1326,6 +1354,8 @@ exports.suiviAdmin = onRequest(
             plateformes: Array.isArray(p.plateformes) ? p.plateformes.filter((x) => PLATEFORMES_CONNUES.includes(x)) : undefined,
             debut: enDate(p.debut), cible: enDate(p.cible), progression: p.progression, pulse: p.pulse,
             sante: p.sante, budget: p.budget, budgetNote: p.budgetNote, silence: p.silence,
+            interne: p.interne, contacts: Array.isArray(p.contacts) ? p.contacts : undefined,
+            client: p.client, organisation: p.organisation, ref: p.ref, logo: p.logo,
             maj: FieldValue.serverTimestamp(),
           }));
           compte.projet = 1;

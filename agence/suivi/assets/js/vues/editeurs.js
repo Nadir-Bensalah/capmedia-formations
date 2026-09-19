@@ -8,9 +8,9 @@ import {
   echapper, dateISO, dateHeureISO, borner, enDate,
   TYPES_COMPOSANT, STATUTS_COMPOSANT, STATUTS_JALON, STATUTS_TACHE, PRIORITES, CATEGORIES_LIEN,
   STATUTS_RELEASE, TYPES_CHANGEMENT, TYPES_NOTE, TYPES_VALIDATION, CATEGORIES_FICHIER,
-  STATUTS_PROJET, TYPES_PROJET, SANTES, STATUTS, URGENCES, QUALIFICATIONS, PLATEFORMES_CHOIX,
+  STATUTS_PROJET, TYPES_PROJET, SANTES, STATUTS, URGENCES, QUALIFICATIONS, PLATEFORMES_CHOIX, contactsProjet,
 } from '../noyau.js';
-import { modale, confirmer, toast, lireForme, valider, obligatoire, longueurMax, urlValide, optionsDe, depot, agir, lisible, choixPlateformes } from '../ui.js';
+import { modale, confirmer, toast, lireForme, valider, obligatoire, longueurMax, urlValide, emailValide, optionsDe, depot, agir, lisible, choixPlateformes } from '../ui.js';
 import { appelServeur } from '../serveur.js';
 import * as magasin from '../magasin.js';
 import { K, ecrire } from '../donnees.js';
@@ -44,6 +44,7 @@ const visibilite = (valeur = 'client') => `
     </div>
   </div>`;
 
+const contactsDe = (fiche) => contactsProjet(fiche);
 const composantsDe = (pid) => (magasin.lire(K.composants(pid)) || []).reduce((c, x) => ({ ...c, [x.id]: x.nom }), {});
 const jalonsDe = (pid) => (magasin.lire(K.jalons(pid)) || []).reduce((c, x) => ({ ...c, [x.id]: x.titre }), {});
 const equipeCarte = () => (magasin.lire(K.equipe) || []).reduce((c, x) => ({ ...c, [x.id]: x.nom || x.email }), {});
@@ -145,16 +146,39 @@ const editeurs = {
       ${champ('pulseDerniereLivraison', 'Dernière livraison', (fiche.pulse || {}).derniereLivraison, { facultatif: true, placeholder: 'ex. iOS 2.4.1' })}
       ${champ('pulseProchaineEtape', 'Prochaine étape', (fiche.pulse || {}).prochaineEtape, { facultatif: true, placeholder: 'ex. Validation TestFlight' })}
       ${champ('pulseAttenteClient', 'Attente client', (fiche.pulse || {}).attenteClient, { facultatif: true, placeholder: 'Laissez vide si rien' })}
+      <p class="surtitre" style="margin-top:8px">Les interlocuteurs</p>
+      <p class="aide" style="margin-top:-4px">Un projet peut en compter deux : ils reçoivent les mêmes e-mails et voient le même espace.</p>
+      <div class="forme-rang">
+        ${champ('contact1Nom', 'Interlocuteur principal', (contactsDe(fiche)[0] || {}).nom, { facultatif: true, placeholder: 'Prénom et nom' })}
+        ${champ('contact1Email', 'Son e-mail', (contactsDe(fiche)[0] || {}).email, { type: 'email', facultatif: true })}
+      </div>
+      <div class="forme-rang">
+        ${champ('contact2Nom', 'Second interlocuteur', (contactsDe(fiche)[1] || {}).nom, { facultatif: true, placeholder: 'Laissez vide s\'il n\'y en a qu\'un' })}
+        ${champ('contact2Email', 'Son e-mail', (contactsDe(fiche)[1] || {}).email, { type: 'email', facultatif: true })}
+      </div>
+      <label class="interrupteur" style="margin-top:8px"><input type="checkbox" name="interne" ${fiche.interne ? 'checked' : ''}><i></i> Projet interne Capmedia</label>
+      <p class="aide">Un projet à vous : aucun client, aucun e-mail, visible du seul cockpit.</p>
       <label class="interrupteur" style="margin-top:8px"><input type="checkbox" name="silence" ${fiche.silence ? 'checked' : ''}><i></i> Préparer sans prévenir le client</label>
       <p class="aide">En sourdine, le client garde l'accès mais ne reçoit aucun e-mail. À lever quand l'espace est prêt.</p>`,
     surMontage: (racine) => brancherLogo(racine, pid),
-    regles: { nom: obligatoire(), progressionValeur: (v) => (v !== null && (v < 0 || v > 100) ? 'Entre 0 et 100.' : '') },
+    regles: {
+      nom: obligatoire(),
+      progressionValeur: (v) => (v !== null && (v < 0 || v > 100) ? 'Entre 0 et 100.' : ''),
+      contact1Email: emailValide(), contact2Email: emailValide(),
+    },
     enregistrer: (d) => ecrire.majProjet(pid, {
       nom: d.nom, statut: d.statut, type: d.type, description: d.description,
       plateformes: Array.isArray(d.plateformes) ? d.plateformes : (d.plateformes ? [d.plateformes] : []),
       debut: d.debut ? new Date(d.debut) : null, cible: d.cible ? new Date(d.cible) : null,
       progression: { mode: d.progressionMode, valeur: borner(d.progressionValeur) },
-      responsable: d.responsable, sante: d.sante, silence: Boolean(d.silence),
+      responsable: d.responsable, sante: d.sante, silence: Boolean(d.silence), interne: Boolean(d.interne),
+      contacts: [
+        { nom: d.contact1Nom || '', email: (d.contact1Email || '').trim().toLowerCase() },
+        { nom: d.contact2Nom || '', email: (d.contact2Email || '').trim().toLowerCase() },
+      ].filter((c) => c.email || c.nom),
+      client: (d.contact1Email || d.contact1Nom)
+        ? { ...(fiche.client || {}), nom: d.contact1Nom || '', email: (d.contact1Email || '').trim().toLowerCase() }
+        : (fiche.client || null),
       pulse: { enCours: d.pulseEnCours, derniereLivraison: d.pulseDerniereLivraison, prochaineEtape: d.pulseProchaineEtape, attenteClient: d.pulseAttenteClient },
     }).then(() => toast('Projet mis à jour.')),
   }),

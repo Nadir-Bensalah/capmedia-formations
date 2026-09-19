@@ -122,7 +122,8 @@ service cloud.firestore {
       allow update: if estEquipe()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
              'nom', 'description', 'type', 'statut', 'progression', 'debut', 'cible',
-             'responsable', 'pulse', 'sante', 'archive', 'client', 'plateformes', 'logo', 'budget', 'budgetNote', 'silence', 'maj'
+             'responsable', 'pulse', 'sante', 'archive', 'client', 'plateformes', 'logo', 'budget', 'budgetNote', 'silence', 'maj',
+             'contacts', 'interne'
            ])
         && texteRequis(request.resource.data.nom, 120)
         && request.resource.data.statut in ['prospect', 'cadrage', 'planifie', 'en-cours', 'attente-client',

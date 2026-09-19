@@ -8,7 +8,7 @@
 import {
   echapper, dateCourte, dateHeure, depuis, heure, montant, pluriel, joursAvant, echeance as calcEcheance, enParagraphes, avecLiens, parDateDesc, parDateAsc, borner,
   STATUTS_PROJET, STATUTS_COMPOSANT, TYPES_COMPOSANT, STATUTS_JALON, STATUTS_TACHE, PRIORITES, STATUTS, TYPES, URGENCES, OUVERTS, ATTEND_CLIENT,
-  CATEGORIES_FICHIER, CATEGORIES_LIEN, STATUTS_RELEASE, TYPES_CHANGEMENT, TYPES_NOTE, SANTES, STATUTS_VALIDATION, QUALIFICATIONS, statutProjet, PLATEFORMES
+  CATEGORIES_FICHIER, CATEGORIES_LIEN, STATUTS_RELEASE, TYPES_CHANGEMENT, TYPES_NOTE, SANTES, STATUTS_VALIDATION, QUALIFICATIONS, statutProjet, PLATEFORMES, nomsContacts
 } from '../noyau.js';
 import {
   icone, pastille, pastilleTexte, puce, pucePlateforme, iconePlateforme, tonPlateforme, avatarProjet, avatar, progression, anneau, ligne, vide, fait, chronoItem, parJour, squelette, titrePage,
@@ -107,10 +107,12 @@ export const vue = async (ctx, env) => {
         <div class="rang" style="gap:16px;align-items:flex-start;min-width:0">
           ${avatarProjet(projet, 'grand')}
           <div style="min-width:0">
-            <p class="surtitre">${echapper([projet.ref, (projet.client || {}).entreprise || (projet.client || {}).nom, projet.type && ({ ...TYPES_COMPOSANT, ...{ 'application-mobile': 'Application mobile', 'site-vitrine': 'Site vitrine', 'e-commerce': 'E-commerce', 'saas': 'SaaS' } })[projet.type]].filter(Boolean).join(' · '))}</p>
+            <p class="surtitre">${echapper([projet.ref, projet.interne ? 'Projet interne Capmedia' : ((projet.client || {}).entreprise || nomsContacts(projet)), projet.type && ({ ...TYPES_COMPOSANT, ...{ 'application-mobile': 'Application mobile', 'site-vitrine': 'Site vitrine', 'e-commerce': 'E-commerce', 'saas': 'SaaS' } })[projet.type]].filter(Boolean).join(' · '))}</p>
             <h1 style="margin-top:2px">${echapper(projet.nom)}</h1>
             <div class="rang tete-suivi">
               ${pastille(STATUTS_PROJET, statutProjet(projet))}
+              ${projet.interne ? '<span class="etiquette">Projet de la maison</span>' : ''}
+              ${equipe && !projet.interne && nomsContacts(projet) ? `<span class="puce">${icone('utilisateurs')} ${echapper(nomsContacts(projet))}</span>` : ''}
               ${equipe && projet.sante ? pastille(SANTES, projet.sante) : ''}
               ${projet.cible ? `<span class="puce">${icone('cible')} Cible ${echapper(dateCourte(projet.cible))}</span>` : ''}
               ${projet.responsable ? `<span class="puce">${icone('utilisateur')} ${echapper(nomEquipe(d.equipe, projet.responsable) || 'Capmedia')}</span>` : ''}
