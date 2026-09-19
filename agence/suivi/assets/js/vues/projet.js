@@ -17,7 +17,7 @@ import {
   verdictHtml, anneauOuPas, progressionOuPas,
 } from '../ui.js';
 import * as magasin from '../magasin.js';
-import { K, ecrire, abonnerProjet, progressionProjet, jalonCourant, jalonSuivant, prochaineReunion, enAttenteDeVous, parStatut, risquesProjet, MODES_PROGRESSION } from '../donnees.js';
+import { K, ecrire, abonnerProjet, progressionProjet, jalonCourant, jalonSuivant, prochaineReunion, enAttenteDeVous, parStatut, risquesProjet, MODES_PROGRESSION, trierEtapes, phasesTriees } from '../donnees.js';
 import { filAriane } from '../coquille.js';
 import { naviguer } from '../routeur.js';
 import { monterBulle } from '../bulle.js';
@@ -398,7 +398,7 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
       <div class="pile" style="gap:var(--e-7)">
         <section>
           <div class="section-tete"><h2>Feuille de route</h2><a class="lien" href="#/projets/${echapper(pid)}/etapes">Tout voir</a></div>
-          ${d.jalons.length ? `<div class="route">${d.jalons.slice(0, 6).map((j) => phaseHtml(j)).join('')}</div>` : vide({ icone: 'route', titre: 'Pas encore de feuille de route', texte: equipe ? 'Posez les étapes du projet.' : 'Elle apparaîtra ici dès que les étapes seront posées.', compact: true, action: boutonNouveau(env, 'jalon', 'Première étape') })}
+          ${d.jalons.length ? `<div class="route">${trierEtapes(d.jalons).slice(0, 6).map((j) => phaseHtml(j)).join('')}</div>` : vide({ icone: 'route', titre: 'Pas encore de feuille de route', texte: equipe ? 'Posez les étapes du projet.' : 'Elle apparaîtra ici dès que les étapes seront posées.', compact: true, action: boutonNouveau(env, 'jalon', 'Première étape') })}
         </section>
         <section>
           <div class="section-tete"><h2>Activité récente</h2><a class="lien" href="#/projets/${echapper(pid)}/activite">Tout voir</a></div>
@@ -507,17 +507,13 @@ const composants = (d, { env }) => `
 
 /* --- Feuille de route ----------------------------------------------------- */
 const etapes = (d, { env, pid }) => {
-  const phases = [];
-  for (const j of d.jalons) {
-    const nom = j.phase || 'Sans phase';
-    let p = phases.find((x) => x.nom === nom);
-    if (!p) { p = { nom, jalons: [] }; phases.push(p); }
-    p.jalons.push(j);
-  }
+  /* Ce qui bouge d'abord, puis du plus récent au plus ancien : autant
+     dans la frise que dans les phases, et les phases entre elles. */
+  const phases = phasesTriees(d.jalons);
   return `
   <section class="section" style="margin-top:0">
     <div class="section-tete"><h2>Feuille de route</h2>${boutonNouveau(env, 'jalon', 'Nouvelle étape', { ordre: d.jalons.length + 1 })}</div>
-    ${d.jalons.length ? `<div class="route" style="margin-bottom:var(--e-6)">${d.jalons.map(phaseHtml).join('')}</div>
+    ${d.jalons.length ? `<div class="route" style="margin-bottom:var(--e-6)">${trierEtapes(d.jalons).map(phaseHtml).join('')}</div>
     ${phases.map((p) => `<div class="section" style="margin-top:var(--e-5)">
       <p class="surtitre" style="margin-bottom:8px">${echapper(p.nom)}</p>
       <div class="liste">${p.jalons.map((j) => {
