@@ -615,6 +615,10 @@ function relanceRetenue(projet, maintenant = Date.now()) {
   if (['termine', 'suspendu', 'archive'].includes(String(projet.statut || ''))) return { retenu: false, motif: 'projet clos' };
   const derniere = enDateFn(projet.relance);
   if (derniere && maintenant - derniere.getTime() < SEMAINE) return { retenu: false, motif: 'déjà relancé cette semaine' };
+  /* Sans membre, personne ne peut ouvrir le lien : écrire « des points vous
+     attendent » à quelqu'un qui n'a pas encore d'accès serait une faute.
+     C'est le cas des prospects, qui portent une adresse mais pas de compte. */
+  if (!Array.isArray(projet.membres) || !projet.membres.length) return { retenu: false, motif: 'aucun accès ouvert' };
   return { retenu: true, motif: '' };
 }
 

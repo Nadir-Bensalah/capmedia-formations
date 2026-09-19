@@ -30,7 +30,7 @@ const verifier = (condition, quoi, detail = '') => {
 };
 
 const ilYA = (jours) => Timestamp.fromDate(new Date(Date.now() - jours * 86400000));
-const vivant = { nom: 'Atelier', statut: 'en-cours', contacts: [{ nom: 'Camille', email: 'camille@exemple.test' }] };
+const vivant = { nom: 'Atelier', statut: 'en-cours', membres: ['uid-camille'], contacts: [{ nom: 'Camille', email: 'camille@exemple.test' }] };
 
 console.log('== Quand la lettre ne part pas');
 verifier(!retenue({ ...vivant, interne: true }).retenu, "un projet à moi n'est jamais relancé");
@@ -39,6 +39,7 @@ verifier(!retenue({ ...vivant, archive: true }).retenu, "un projet archivé n'é
 verifier(!retenue({ ...vivant, statut: 'termine' }).retenu, 'un projet terminé non plus');
 verifier(!retenue({ ...vivant, statut: 'suspendu' }).retenu, 'un projet suspendu non plus');
 verifier(!retenue({ ...vivant, relance: ilYA(2) }).retenu, 'jamais deux lettres dans la même semaine');
+verifier(!retenue({ ...vivant, membres: [] }).retenu, "un prospect sans accès ouvert ne reçoit rien : il ne pourrait pas ouvrir le lien");
 
 console.log('\n== Quand elle part');
 verifier(retenue(vivant).retenu, 'un projet vivant est relançable');
