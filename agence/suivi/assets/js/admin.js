@@ -2,11 +2,11 @@
    CAPMEDIA CLIENT HUB · l'entrée du cockpit d'équipe
    ========================================================================== */
 
-import { exigerSession, $, OUVERTS, ATTEND_EQUIPE, FACTURES_DUES, joursAvant } from './noyau.js';
+import { exigerSession, $, OUVERTS, ATTEND_EQUIPE, FACTURES_DUES, joursAvant, projetEstActif, bdd, collection, query, orderBy, limit } from './noyau.js';
 import { monterCoquille, definirNavigation, enregistrerRecherche } from './coquille.js';
 import { definir, demarrer } from './routeur.js';
 import * as magasin from './magasin.js';
-import { abonnerGlobal, K } from './donnees.js';
+import { abonnerGlobal, K, nonLusProjet } from './donnees.js';
 import { surCle } from './serveur.js';
 
 import * as adminAccueil from './vues/admin-accueil.js';
@@ -54,31 +54,45 @@ const construireNavigation = () => {
   const impayees = documents.filter((d) => d.type === 'facture' && FACTURES_DUES.includes(d.statut)).length;
   const preprojets = demandesProjet.filter((d) => ['nouvelle', 'discussion', 'qualification', 'estimation'].includes(d.statut)).length;
 
+  /* Les totaux, en gris : combien il y en a. Les pastilles rouges : combien
+     attendent une action de notre côté. */
+  const projets = magasin.lire(K.projets) || [];
+  const organisations = magasin.lire(K.organisations) || [];
+  const reunions = (magasin.lire(K.reunionsToutes) || []).filter((r) => joursAvant(r.date) >= 0);
+  const fichiers = magasin.lire(K.fichiersTous) || [];
+  const profil = magasin.lire(K.profil);
+  const uid = session.utilisateur.uid;
+  const nonLus = projets.reduce((n, p) => n + nonLusProjet(magasin.lire(K.messages(p.id)) || [], profil, p.id, uid), 0);
+  const ouvertes = tickets.filter((t) => OUVERTS.includes(t.statut)).length;
+  const aFaire = taches.filter((t) => t.statut !== 'terminee').length;
+  const nouveauxPreprojets = demandesProjet.filter((d) => d.statut === 'nouvelle').length;
+  const piecesDues = documents.filter((d) => FACTURES_DUES.includes(d.statut) || d.statut === 'envoye').length;
+
   definirNavigation([
     { items: [{ chemin: '/', libelle: 'Accueil', icone: 'accueil', exact: true }] },
     {
       titre: 'Portefeuille',
       items: [
-        { chemin: '/clients', libelle: 'Clients', icone: 'entreprise' },
-        { chemin: '/projets', libelle: 'Projets', icone: 'projets' },
-        { chemin: '/nouveaux-projets', libelle: 'Nouveaux projets', icone: 'sparkle', compte: { n: preprojets, vif: preprojets > 0 } },
+        { chemin: '/clients', libelle: 'Clients', icone: 'entreprise', compte: { total: organisations.length } },
+        { chemin: '/projets', libelle: 'Projets', icone: 'projets', compte: { total: projets.filter(projetEstActif).length } },
+        { chemin: '/nouveaux-projets', libelle: 'Nouveaux projets', icone: 'sparkle', compte: { total: preprojets, neuf: nouveauxPreprojets } },
       ],
     },
     {
       titre: 'Travail',
       items: [
-        { chemin: '/demandes', libelle: 'Demandes', icone: 'inbox', compte: { n: aNous, vif: nouvelles > 0 } },
-        { chemin: '/taches', libelle: 'Tâches', icone: 'taches', compte: { n: enRetard, vif: enRetard > 0 } },
-        { chemin: '/planning', libelle: 'Planning', icone: 'calendrier' },
-        { chemin: '/messages', libelle: 'Messages', icone: 'messages' },
-        { chemin: '/validations', libelle: 'Validations', icone: 'valider', compte: { n: attendues, vif: false } },
-        { chemin: '/documents', libelle: 'Documents', icone: 'documents' },
+        { chemin: '/demandes', libelle: 'Demandes', icone: 'inbox', compte: { total: ouvertes, neuf: nouvelles } },
+        { chemin: '/taches', libelle: 'Tâches', icone: 'taches', compte: { total: aFaire, neuf: enRetard } },
+        { chemin: '/planning', libelle: 'Planning', icone: 'calendrier', compte: { total: reunions.length } },
+        { chemin: '/messages', libelle: 'Messages', icone: 'messages', compte: { total: projets.filter((p) => !p.archive).length, neuf: nonLus } },
+        { chemin: '/validations', libelle: 'Validations', icone: 'valider', compte: { total: attendues } },
+        { chemin: '/documents', libelle: 'Documents', icone: 'documents', compte: { total: fichiers.length } },
       ],
     },
     {
       titre: 'Gestion',
       items: [
-        { chemin: '/finances', libelle: 'Devis, factures, paiements', icone: 'finances', compte: { n: impayees, vif: impayees > 0 } },
+        { chemin: '/finances', libelle: 'Devis, factures, paiements', icone: 'finances', compte: { total: piecesDues, neuf: impayees } },
         { chemin: '/activite', libelle: 'Activité', icone: 'activite' },
         { chemin: '/archives', libelle: 'Archives', icone: 'archive' },
         { chemin: '/parametres', libelle: 'Paramètres', icone: 'parametres' },
@@ -87,9 +101,21 @@ const construireNavigation = () => {
   ]);
 };
 
+/* Le cockpit écoute aussi la conversation de chaque projet ouvert : sans
+   cela, la pastille des messages non lus resterait muette. */
+const conversationsSuivies = new Set();
+const suivreConversations = () => {
+  for (const p of (magasin.lire(K.projets) || [])) {
+    if (p.archive || conversationsSuivies.has(p.id)) continue;
+    conversationsSuivies.add(p.id);
+    lotGlobal.abonner(K.messages(p.id), () => query(collection(bdd, 'projets', p.id, 'messages'), orderBy('date', 'asc'), limit(300)));
+    lotGlobal.sur(K.messages(p.id), () => planifierNav());
+  }
+};
+
 let minuteurNav = null;
-const planifierNav = () => { clearTimeout(minuteurNav); minuteurNav = setTimeout(construireNavigation, 80); };
-[K.ticketsTous, K.tachesToutes, K.validationsToutes, K.documentsTous, K.demandesProjet].forEach((cle) => magasin.sur(cle, planifierNav));
+const planifierNav = () => { clearTimeout(minuteurNav); minuteurNav = setTimeout(() => { suivreConversations(); construireNavigation(); }, 80); };
+[K.ticketsTous, K.tachesToutes, K.validationsToutes, K.documentsTous, K.demandesProjet, K.projets, K.organisations, K.reunionsToutes, K.fichiersTous, K.profil].forEach((cle) => magasin.sur(cle, planifierNav));
 surCle(planifierNav);
 construireNavigation();
 
