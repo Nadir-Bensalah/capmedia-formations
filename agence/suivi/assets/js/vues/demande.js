@@ -46,6 +46,12 @@ export const nouvelle = async (ctx, env) => {
   titrePage('Nouvelle demande');
   filAriane([{ libelle: projet.nom, chemin: `/projets/${pid}` }, { libelle: 'Demandes', chemin: `/projets/${pid}/demandes` }, { libelle: 'Nouvelle demande' }]);
   const typeInitial = ctx.requete.type && TYPES[ctx.requete.type] ? ctx.requete.type : 'bug';
+  /* Une demande née d'un message : le texte est déjà là, on ne le retape pas. */
+  let depuisMessage = null;
+  try {
+    const brut = sessionStorage.getItem(`suivi:demande-depuis:${pid}`);
+    if (brut) { depuisMessage = JSON.parse(brut); sessionStorage.removeItem(`suivi:demande-depuis:${pid}`); }
+  } catch (e) { depuisMessage = null; }
   const composants = magasin.lire(K.composants(pid)) || [];
   /* On ne propose que les plateformes du projet : demander « Android » sur un
      projet qui n'en a pas n'aide personne. */
@@ -55,6 +61,7 @@ export const nouvelle = async (ctx, env) => {
 
   sortie.innerHTML = `<div class="page" style="max-width:820px">
     <div class="page-tete"><div><p class="surtitre">${echapper(projet.nom)}</p><h1>Nouvelle demande</h1><p class="chapo">Dites-nous ce dont vous avez besoin. Plus c'est précis, plus vite on avance. Vous recevrez un e-mail à chaque mouvement.</p></div></div>
+    ${depuisMessage ? `<div class="encart encart--info" style="margin-bottom:var(--e-5)">${icone('messages')} <span>Reprise d'un message${depuisMessage.auteur ? ` de ${echapper(depuisMessage.auteur)}` : ''}. Relisez, complétez, ajustez le type si besoin.</span></div>` : ''}
     <form class="forme" id="forme-demande" novalidate>
       <div class="groupe">
         <span class="etiquette-champ">De quoi s'agit-il ?</span>
@@ -65,8 +72,8 @@ export const nouvelle = async (ctx, env) => {
           </label>`).join('')}
         </div>
       </div>
-      <div class="groupe"><label class="etiquette-champ" for="titre">Titre</label><input class="champ" id="titre" name="titre" maxlength="120" placeholder="En une phrase"></div>
-      <div class="groupe"><label class="etiquette-champ" for="description">Description</label><textarea class="zone" id="description" name="description" rows="5" maxlength="6000" placeholder="Ce que vous avez constaté, ce que vous souhaitez, et dans quel contexte."></textarea></div>
+      <div class="groupe"><label class="etiquette-champ" for="titre">Titre</label><input class="champ" id="titre" name="titre" maxlength="120" placeholder="En une phrase" value="${echapper(depuisMessage ? depuisMessage.titre || '' : '')}"></div>
+      <div class="groupe"><label class="etiquette-champ" for="description">Description</label><textarea class="zone" id="description" name="description" rows="5" maxlength="6000" placeholder="Ce que vous avez constaté, ce que vous souhaitez, et dans quel contexte.">${echapper(depuisMessage ? depuisMessage.description || '' : '')}</textarea></div>
       <div class="forme-rang">
         <div class="groupe"><label class="etiquette-champ" for="urgence">Urgence</label><select class="select" id="urgence" name="urgence">${optionsDe(URGENCES, 'important')}</select><p class="aide">Bloquant : vous ne pouvez plus travailler. Critique : une fonction majeure est cassée.</p></div>
         ${composants.length ? `<div class="groupe"><label class="etiquette-champ" for="composant">Composant concerné</label><select class="select" id="composant" name="composant"><option value="">Je ne sais pas</option>${composants.map((c) => `<option value="${echapper(c.id)}">${echapper(c.nom)}</option>`).join('')}</select></div>` : ''}

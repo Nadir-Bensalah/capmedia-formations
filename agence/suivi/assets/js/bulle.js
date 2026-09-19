@@ -11,9 +11,9 @@
    des fichiers par glisser-déposer.
    ========================================================================== */
 
-import { echapper, depuis, heure } from './noyau.js';
+import { echapper, depuis, heure, TYPES } from './noyau.js';
 import { icone } from './icones.js';
-import { messageHtml, depot, toast, agir, brancherPieces } from './ui.js';
+import { messageHtml, depot, toast, agir, brancherPieces, avatarProjet, menu, sur } from './ui.js';
 import * as magasin from './magasin.js';
 import { K, ecrire } from './donnees.js';
 import { naviguer } from './routeur.js';
@@ -67,7 +67,7 @@ const battre = (n) => {
 
 const enDate = (v) => (v && typeof v.toDate === 'function' ? v.toDate() : (v ? new Date(v) : null));
 
-export const monterBulle = ({ pid, env, nomProjet }) => {
+export const monterBulle = ({ pid, env }) => {
   const uid = env.session.utilisateur.uid;
   const equipe = env.role === 'equipe';
   const racine = document.createElement('div');
@@ -80,10 +80,10 @@ export const monterBulle = ({ pid, env, nomProjet }) => {
     <section class="bulle-panneau" id="bulle-panneau" hidden aria-label="Conversation du projet">
       <header class="bulle-tete">
         <div class="bulle-tete-qui">
-          <span class="bulle-point" id="bulle-point"></span>
-          <div>
-            <p class="bulle-titre">${echapper(equipe ? 'Le client' : 'Capmedia')}</p>
-            <p class="bulle-sous" id="bulle-sous">${echapper(nomProjet || '')}</p>
+          <span class="bulle-logo" id="bulle-logo"></span>
+          <div class="bulle-tete-texte">
+            <p class="bulle-titre"><span class="bulle-point" id="bulle-point"></span><span id="bulle-nom"></span></p>
+            <p class="bulle-sous" id="bulle-sous"></p>
           </div>
         </div>
         <div class="bulle-tete-gestes">
@@ -121,6 +121,23 @@ export const monterBulle = ({ pid, env, nomProjet }) => {
     $('#bulle-son').classList.toggle('actif', oui);
   };
 
+  const projet = () => magasin.lire(K.projet(pid)) || {};
+
+  /* Le nom affiché est celui d'en face : le contact du projet vu de
+     l'équipe, Capmedia vu du client. */
+  const nomEnFace = () => {
+    const p = projet();
+    if (!equipe) return 'Capmedia';
+    const c = p.client || {};
+    return c.nom || c.entreprise || 'Le client';
+  };
+  const rendreTete = () => {
+    const p = projet();
+    $('#bulle-logo').innerHTML = avatarProjet(p, 'petit');
+    $('#bulle-nom').textContent = nomEnFace();
+    $('#bulle-sous').textContent = p.nom || '';
+  };
+
   const messages = () => magasin.lire(K.messages(pid)) || [];
   const lectures = () => magasin.lire(K.lectures(pid)) || [];
 
@@ -143,7 +160,7 @@ export const monterBulle = ({ pid, env, nomProjet }) => {
     const miens = liste.filter((m) => m.de && m.de.uid === uid);
     const dernierMien = miens[miens.length - 1];
     fil.innerHTML = liste.length
-      ? liste.map((m) => messageHtml(m, { moi: uid })).join('')
+      ? liste.map((m) => `<div class="bulle-message" data-msg="${echapper(m.id || '')}">${messageHtml(m, { moi: uid })}<button class="bulle-action" type="button" data-transformer="${echapper(m.id || '')}" aria-label="Transformer ce message en demande" data-astuce="En faire une demande">${icone('sparkle')}</button></div>`).join('')
         + (dernierMien
           ? `<p class="bulle-accuse">${lu && (enDate(dernierMien.date) || 0) <= lu
             ? `${icone('checkDouble')} Lu ${echapper(heure(lu))}`
@@ -176,7 +193,8 @@ export const monterBulle = ({ pid, env, nomProjet }) => {
     panneau.hidden = !oui;
     racine.classList.toggle('bulle--ouverte', oui);
     ecrireCle(CLE_OUVERTE, oui);
-    if (oui) { marquer(); rendreFil(); champ.focus(); }
+    rendreFil();
+    if (oui) { marquer(); champ.focus(); fil.scrollTop = fil.scrollHeight; }
     rendrePastille();
   };
 
@@ -188,7 +206,8 @@ export const monterBulle = ({ pid, env, nomProjet }) => {
     const nouveau = !premier && cle && cle !== dernierVu && dernier.de && dernier.de.uid !== uid;
     dernierVu = cle;
     premier = false;
-    if (ouverte) { rendreFil(); marquer(); }
+    rendreFil();
+    if (ouverte) marquer();
     rendrePastille();
     if (!nouveau) return;
     sonner();
@@ -205,6 +224,32 @@ export const monterBulle = ({ pid, env, nomProjet }) => {
   $('#bulle-son').addEventListener('click', () => { reveiller(); ecrireCle(CLE_SON, !lire(CLE_SON, true)); majSon(); sonner(); });
   $('#bulle-plein').addEventListener('click', () => { ouvrir(false); naviguer(`/messages/${pid}`); });
   $('#bulle-joindre').addEventListener('click', () => { const e = racine.querySelector('#bulle-pieces input[type="file"]'); if (e) e.click(); });
+
+  /* D'un message à une demande : le texte part dans le formulaire, déjà
+     rempli, du type choisi. Rien à recopier, rien à perdre. */
+  const transformer = (bouton, id) => {
+    const m = messages().find((x) => x.id === id);
+    if (!m) return;
+    menu(bouton, Object.entries(TYPES).filter(([cle]) => cle !== 'demande').map(([cle, t]) => ({
+      libelle: t.libelle,
+      icone: t.icone,
+      action: () => {
+        const texte = (m.texte || '').trim();
+        const premiereLigne = texte.split('\n')[0].slice(0, 110);
+        try {
+          sessionStorage.setItem(`suivi:demande-depuis:${pid}`, JSON.stringify({
+            titre: premiereLigne,
+            description: texte,
+            auteur: (m.de || {}).nom || '',
+            date: new Date().toISOString(),
+          }));
+        } catch (e) { /* stockage refusé : le formulaire s'ouvrira vide */ }
+        ouvrir(false);
+        naviguer(`/projets/${pid}/nouvelle-demande?type=${cle}`);
+      },
+    })));
+  };
+  const gesteTransformer = sur(racine, 'click', '[data-transformer]', (el) => transformer(el, el.dataset.transformer));
 
   let frappe = 0;
   champ.addEventListener('input', () => {
@@ -241,9 +286,11 @@ export const monterBulle = ({ pid, env, nomProjet }) => {
   const pouls = setInterval(rendreFrappe, 1500);
 
   const arretMessages = magasin.sur(K.messages(pid), surMessages);
-  const arretLectures = magasin.sur(K.lectures(pid), () => { if (ouverte) rendreFil(); rendreFrappe(); rendrePastille(); });
+  const arretLectures = magasin.sur(K.lectures(pid), () => { rendreFil(); rendreFrappe(); rendrePastille(); });
+  const arretProjet = magasin.sur(K.projet(pid), rendreTete);
 
   majSon();
+  rendreTete();
   ouvrir(ouverte);
   surMessages();
   rendreFrappe();
@@ -251,10 +298,12 @@ export const monterBulle = ({ pid, env, nomProjet }) => {
   return {
     fin: () => {
       clearInterval(pouls);
+      gesteTransformer();
       battre(0);
       document.removeEventListener('visibilitychange', surVisible);
       if (typeof arretMessages === 'function') arretMessages();
       if (typeof arretLectures === 'function') arretLectures();
+      if (typeof arretProjet === 'function') arretProjet();
       racine.remove();
     },
   };
