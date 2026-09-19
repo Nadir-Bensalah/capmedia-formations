@@ -64,12 +64,34 @@ export const badge = (n, vif = false) => (n > 0
   ? `<span class="badge${vif ? ' badge--vif' : ''}">${echapper(n)}</span>`
   : '');
 
+/* Une teinte par nom, toujours la même : deux clients ne se ressemblent
+   pas, et l'œil retrouve le sien d'une liste à l'autre. */
+const TEINTES = ['bleu', 'vert', 'violet', 'ambre', 'rouge', 'sarcelle', 'rose', 'indigo'];
+export const teinteDe = (nom) => {
+  const t = String(nom || '');
+  let somme = 0;
+  for (let i = 0; i < t.length; i += 1) somme = (somme * 31 + t.charCodeAt(i)) % 100000;
+  return TEINTES[somme % TEINTES.length];
+};
+
 export const avatar = (nom, options = {}) => {
   const classes = ['avatar'];
   if (options.equipe) classes.push('avatar--equipe');
+  else if (options.teinte !== false) classes.push(`avatar--t-${teinteDe(nom)}`);
   if (options.taille) classes.push(`avatar--${options.taille}`);
   return `<span class="${classes.join(' ')}" aria-hidden="true">${echapper(initiales(nom))}</span>`;
 };
+
+/**
+ * Un avatar de client et le logo d'un de ses projets, en pile : le logo
+ * se pose en bas à droite, légèrement par-dessus. Sans projet, l'avatar
+ * reste seul.
+ */
+export const avatarEmpile = (nom, projet, options = {}) => `
+  <span class="pile-avatar${options.taille ? ` pile-avatar--${options.taille}` : ''}">
+    ${avatar(nom, options)}
+    ${projet ? `<span class="pile-avatar-jeton">${avatarProjet(projet, 'mini')}</span>` : ''}
+  </span>`;
 
 /**
  * L'écusson d'un projet : son logo s'il en a un, ses initiales sinon.

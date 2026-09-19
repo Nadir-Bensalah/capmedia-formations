@@ -1491,3 +1491,28 @@ input, select, textarea { font: inherit; color: inherit; }
 .jeton--violet { background: var(--violet-voile); color: var(--violet); }
 .jeton--gris   { background: var(--gris-voile); color: var(--encre-2); }
 @media (max-width: 720px) { .jetons { display: none; } }
+
+/* --- Les avatars de client, en couleur ------------------------------------
+   Une teinte par nom, stable d'une liste à l'autre. Les fonds sont voilés
+   pour que le texte reste lisible dans les deux thèmes. */
+/* Fond plein et initiales blanches : ces teintes tiennent sur le fond
+   clair comme sur le fond sombre, sans avoir à se dédoubler par thème. */
+.avatar[class*="avatar--t-"] { color: #fff; }
+.avatar--t-bleu     { background: #0075DE; }
+.avatar--t-vert     { background: #1F9D55; }
+.avatar--t-violet   { background: #6E56CF; }
+.avatar--t-ambre    { background: #C77700; }
+.avatar--t-rouge    { background: #D93025; }
+.avatar--t-sarcelle { background: #0F7A72; }
+.avatar--t-rose     { background: #B4326E; }
+.avatar--t-indigo   { background: #3B47C4; }
+
+/* L'avatar du client et le logo d'un de ses projets, en pile. */
+.pile-avatar { position: relative; display: inline-grid; line-height: 0; flex: none; }
+.pile-avatar-jeton { position: absolute; right: -5px; bottom: -5px; line-height: 0; }
+.pile-avatar-jeton .avatar-projet {
+  width: 18px; height: 18px; border-radius: 6px; font-size: 8px;
+  border: 2px solid var(--fond);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
+}
+.avatar-projet--mini { width: 18px; height: 18px; border-radius: 6px; font-size: 8px; }

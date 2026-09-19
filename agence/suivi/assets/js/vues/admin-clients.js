@@ -4,7 +4,7 @@
    ========================================================================== */
 
 import { echapper, dateCourte, montant, pluriel, parDateDesc, STATUTS_PROJET, STATUTS_FACTURE, STATUTS_DEVIS, statutProjet, projetEstActif} from '../noyau.js';
-import { icone, pastille, avatar, avatarProjet, pileProjets, ligne, vide, squelette, titrePage, modale, confirmer, toast, sur, agir, lireForme, valider, obligatoire, emailValide, fait, metrique, menu } from '../ui.js';
+import { icone, pastille, avatar, avatarEmpile, avatarProjet, pileProjets, ligne, vide, squelette, titrePage, modale, confirmer, toast, sur, agir, lireForme, valider, obligatoire, emailValide, fait, metrique, menu } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K, resteAPayer } from '../donnees.js';
 import { filAriane } from '../coquille.js';
@@ -28,7 +28,10 @@ export const liste = async (ctx, env) => {
         const sesProjets = projets.filter((p) => p.organisation === o.id);
         const actifs = sesProjets.filter(projetEstActif);
         const { total } = resteAPayer(documents.filter((d) => sesProjets.some((p) => p.id === d.projet)), paiements);
-        return ligne({ href: `#/clients/${echapper(o.id)}`, titre: `<span class="rang" style="gap:10px">${avatar(o.entreprise || o.nom)} ${echapper(o.entreprise || o.nom)}</span>`, sous: `${echapper([o.nom !== o.entreprise ? o.nom : '', o.email, pluriel(actifs.length, 'projet actif', 'projets actifs')].filter(Boolean).join(' · '))}`, fin: `${total > 0 ? `<span class="puce puce--ambre"><i></i>${echapper(montant(total))} dû</span>` : ''}${pileProjets(actifs)}` });
+        /* L'avatar du client porte, en pile, le logo de son projet le plus
+           avancé : on reconnaît le client et son produit d'un seul regard. */
+        const vedette = actifs.slice().sort((a, b) => Number(Boolean(b.logo)) - Number(Boolean(a.logo)))[0] || sesProjets[0] || null;
+        return ligne({ href: `#/clients/${echapper(o.id)}`, titre: `<span class="rang" style="gap:12px">${avatarEmpile(o.entreprise || o.nom, vedette)} ${echapper(o.entreprise || o.nom)}</span>`, sous: `${echapper([o.nom !== o.entreprise ? o.nom : '', o.email, pluriel(actifs.length, 'projet actif', 'projets actifs')].filter(Boolean).join(' · '))}`, fin: `${total > 0 ? `<span class="puce puce--ambre"><i></i>${echapper(montant(total))} dû</span>` : ''}${pileProjets(actifs)}` });
       }).join('')}</div>` : vide({ icone: 'entreprise', titre: 'Aucun client', texte: 'Créez la première organisation, puis rattachez-lui ses projets.', action: '<a class="btn btn-principal" href="#/clients/nouveau">Nouveau client</a>' })}
     </div>`;
   };
