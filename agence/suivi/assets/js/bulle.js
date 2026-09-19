@@ -160,7 +160,7 @@ export const monterBulle = ({ pid, env }) => {
     const miens = liste.filter((m) => m.de && m.de.uid === uid);
     const dernierMien = miens[miens.length - 1];
     fil.innerHTML = liste.length
-      ? liste.map((m) => `<div class="bulle-message" data-msg="${echapper(m.id || '')}">${messageHtml(m, { moi: uid })}<button class="bulle-action" type="button" data-transformer="${echapper(m.id || '')}" aria-label="Transformer ce message en demande" data-astuce="En faire une demande">${icone('sparkle')}</button></div>`).join('')
+      ? liste.map((m) => `<div class="bulle-message" data-msg="${echapper(m.id || '')}">${messageHtml(m, { moi: uid })}<button class="bulle-action" type="button" data-transformer="${echapper(m.id || '')}" aria-label="Transformer ce message en demande" title="En faire une demande">${icone('sparkle')}</button></div>`).join('')
         + (dernierMien
           ? `<p class="bulle-accuse">${lu && (enDate(dernierMien.date) || 0) <= lu
             ? `${icone('checkDouble')} Lu ${echapper(heure(lu))}`
