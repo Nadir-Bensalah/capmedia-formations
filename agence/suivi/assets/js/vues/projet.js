@@ -107,11 +107,11 @@ export const vue = async (ctx, env) => {
         <div class="rang" style="gap:16px;align-items:flex-start;min-width:0">
           ${avatarProjet(projet, 'grand')}
           <div style="min-width:0">
-            <p class="surtitre">${echapper([projet.ref, projet.interne ? 'Projet interne Capmedia' : ((projet.client || {}).entreprise || nomsContacts(projet)), projet.type && ({ ...TYPES_COMPOSANT, ...{ 'application-mobile': 'Application mobile', 'site-vitrine': 'Site vitrine', 'e-commerce': 'E-commerce', 'saas': 'SaaS' } })[projet.type]].filter(Boolean).join(' · '))}</p>
+            <p class="surtitre">${echapper([projet.ref, projet.interne ? 'Mon projet' : ((projet.client || {}).entreprise || nomsContacts(projet)), projet.type && ({ ...TYPES_COMPOSANT, ...{ 'application-mobile': 'Application mobile', 'site-vitrine': 'Site vitrine', 'e-commerce': 'E-commerce', 'saas': 'SaaS' } })[projet.type]].filter(Boolean).join(' · '))}</p>
             <h1 style="margin-top:2px">${echapper(projet.nom)}</h1>
             <div class="rang tete-suivi">
               ${pastille(STATUTS_PROJET, statutProjet(projet))}
-              ${projet.interne ? '<span class="etiquette">Projet de la maison</span>' : ''}
+              ${projet.interne ? '<span class="etiquette">Mon projet</span>' : ''}
               ${equipe && !projet.interne && nomsContacts(projet) ? `<span class="puce">${icone('utilisateurs')} ${echapper(nomsContacts(projet))}</span>` : ''}
               ${equipe && projet.sante ? pastille(SANTES, projet.sante) : ''}
               ${projet.cible ? `<span class="puce">${icone('cible')} Cible ${echapper(dateCourte(projet.cible))}</span>` : ''}

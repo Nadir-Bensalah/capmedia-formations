@@ -32,8 +32,8 @@ export const vue = async (ctx, env) => {
     const nomProjet = (pid) => ((projets.find((p) => p.id === pid) || {}).nom || '');
 
     const actifs = projetsActifs(projets).filter((p) => !p.interne);
-    /* Les projets de la maison se comptent à part : ils n'ont pas de client
-       et ne disent rien du portefeuille commercial. */
+    /* Mes propres projets se comptent à part : ils n'ont pas de client et
+       ne disent rien du portefeuille commercial. */
     const maison = projets.filter((p) => p.interne && !p.archive);
     const enRetard = actifs.filter((p) => p.cible && joursAvant(p.cible) < 0 && p.statut !== 'termine');
     const ouverts = tickets.filter((t) => OUVERTS.includes(t.statut));
@@ -53,12 +53,12 @@ export const vue = async (ctx, env) => {
     const aujourdhui = attendNous.filter((a) => a.genre === 'demande' && (a.urgence === 'bloquant' || a.urgence === 'critique')).concat(attendNous.filter((a) => a.genre === 'tache' || a.genre === 'blocage')).concat(attendNous.filter((a) => a.genre === 'demande' && !(a.urgence === 'bloquant' || a.urgence === 'critique'))).concat(attendNous.filter((a) => a.genre === 'preprojet')).slice(0, 10);
 
     sortie.innerHTML = `<div class="page">
-      <div class="page-tete"><div><p class="surtitre">${echapper(dateCourte(new Date()))}</p><h1>Bonjour ${echapper(prenom(nomAffiche(env.session)))}</h1><p class="chapo">${pluriel(actifs.length, 'projet client actif', 'projets clients actifs')} pour ${pluriel(organisations.length, 'client')}, et ${pluriel(maison.length, 'projet de la maison', 'projets de la maison')}. ${attendNous.length ? `${pluriel(attendNous.length, 'point à traiter', 'points à traiter')} de notre côté.` : 'Rien n\'attend de notre côté.'}</p></div>
+      <div class="page-tete"><div><p class="surtitre">${echapper(dateCourte(new Date()))}</p><h1>Bonjour ${echapper(prenom(nomAffiche(env.session)))}</h1><p class="chapo">${pluriel(actifs.length, 'projet client actif', 'projets clients actifs')} pour ${pluriel(organisations.length, 'client')}, et ${pluriel(maison.length, 'projet à moi', 'projets à moi')}. ${attendNous.length ? `${pluriel(attendNous.length, 'point à traiter', 'points à traiter')} de notre côté.` : 'Rien n\'attend de notre côté.'}</p></div>
         <div class="actions"><a class="btn btn-secondaire" href="#/projets/nouveau">${icone('plus')} Projet</a><a class="btn btn-secondaire" href="#/clients/nouveau">${icone('entreprise')} Client</a><a class="btn btn-principal" href="#/demandes">${icone('inbox')} Demandes${nouvelles.length ? ` <span class="badge badge--vif" style="background:#fff;color:var(--accent)">${nouvelles.length}</span>` : ''}</a></div></div>
 
       <div class="metriques">
         ${metrique(actifs.length, 'Projets clients', { nuance: `${pluriel(organisations.length, 'client')}` })}
-        ${metrique(maison.length, 'Projets de la maison', { nuance: 'sans client' })}
+        ${metrique(maison.length, 'Mes projets', { nuance: 'sans client' })}
         ${metrique(nouvelles.length, 'Demandes reçues', { ton: nouvelles.length ? 'accent' : '', nuance: `${ouverts.length} ouvertes` })}
         ${metrique(bloquants.length, 'Bloquantes ou critiques', { ton: bloquants.length ? 'rouge' : '' })}
         ${metrique(tachesRetard.length, 'Tâches en retard', { ton: tachesRetard.length ? 'rouge' : '', nuance: `${aFaire.length} à faire` })}
