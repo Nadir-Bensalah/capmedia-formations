@@ -109,7 +109,7 @@ export const rendreNavigation = () => {
       ${g.titre ? `<p class="lat-titre">${echapper(g.titre)}</p>` : ''}
       ${g.items.map((it) => `
         <a class="lat-lien${it.sous ? ' lat-sous-lien' : ''}" href="#${echapper(it.chemin)}" data-chemin="${echapper(it.chemin)}"${it.exact ? ' data-exact' : ''}>
-          ${it.icone ? icone(it.icone) : ''}<span class="tronque">${echapper(it.libelle)}</span>${compteHtml(typeof it.compte === 'function' ? it.compte() : it.compte)}
+          ${it.ecusson || (it.icone ? icone(it.icone) : '')}<span class="tronque">${echapper(it.libelle)}</span>${compteHtml(typeof it.compte === 'function' ? it.compte() : it.compte)}
         </a>`).join('')}
     </div>`).join('');
   marquerActif();
