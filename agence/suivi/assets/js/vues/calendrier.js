@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Le calendrier : réunions, jalons, échéances de tâches, factures,
+   Le calendrier : réunions, étapes, échéances de tâches, factures,
    versions, validations attendues. Une grille mensuelle, et la liste de
    ce qui vient.
    ========================================================================== */
@@ -18,7 +18,7 @@ export const evenementsDe = (session, { projets, reunions, jalons, taches, docum
   const nomProjet = (pid) => ((projets.find((p) => p.id === pid) || {}).nom || '');
   const items = [];
   reunions.forEach((r) => items.push({ date: r.date, titre: r.titre, genre: 'Réunion', ton: 'bleu', icone: 'reunions', chemin: `/projets/${r.projet}/reunions`, projet: nomProjet(r.projet), heure: heure(r.date) }));
-  jalons.forEach((j) => { if (j.fin && j.statut !== 'termine') items.push({ date: j.fin, titre: j.titre, genre: 'Jalon', ton: 'violet', icone: 'drapeau', chemin: `/projets/${j.projet}/roadmap`, projet: nomProjet(j.projet) }); });
+  jalons.forEach((j) => { if (j.fin && j.statut !== 'termine') items.push({ date: j.fin, titre: j.titre, genre: 'Étape', ton: 'violet', icone: 'drapeau', chemin: `/projets/${j.projet}/etapes`, projet: nomProjet(j.projet) }); });
   taches.forEach((t) => { if (t.echeance && t.statut !== 'terminee' && !t.archive) items.push({ date: t.echeance, titre: t.titre, genre: 'Tâche', ton: joursAvant(t.echeance) < 0 ? 'rouge' : 'gris', icone: 'taches', chemin: `/projets/${t.projet}/taches/${t.id}`, projet: nomProjet(t.projet) }); });
   documents.forEach((d) => { if (d.type === 'facture' && d.echeance && FACTURES_DUES.includes(d.statut)) items.push({ date: d.echeance, titre: `Échéance ${d.numero || ''}`.trim(), genre: 'Facture', ton: 'ambre', icone: 'euro', chemin: `/finances/${d.id}`, projet: nomProjet(d.projet) }); if (d.type === 'devis' && d.expiration && ['envoye', 'consulte'].includes(d.statut)) items.push({ date: d.expiration, titre: `Devis ${d.numero || ''} expire`.trim(), genre: 'Devis', ton: 'ambre', icone: 'receipt', chemin: `/finances/${d.id}`, projet: nomProjet(d.projet) }); });
   releases.forEach((r) => { if (r.date) items.push({ date: r.date, titre: `${r.plateforme || ''} ${r.version || ''}`.trim(), genre: 'Version', ton: 'vert', icone: 'releases', chemin: `/projets/${r.projet}/releases`, projet: nomProjet(r.projet) }); });
@@ -63,7 +63,7 @@ export const vue = async (ctx, env) => {
     });
     const aVenir = evenements.filter((e) => joursAvant(e.date) >= 0).slice(0, 12);
     sortie.innerHTML = `<div class="page">
-      <div class="page-tete"><div><h1>Calendrier</h1><p class="chapo">Réunions, jalons, échéances, versions et validations attendues, au même endroit.</p></div>
+      <div class="page-tete"><div><h1>Calendrier</h1><p class="chapo">Réunions, étapes, échéances, versions et validations attendues, au même endroit.</p></div>
         <div class="actions"><div class="segments"><button type="button" data-mois="-1" aria-label="Mois précédent">${icone('chevronGauche')}</button><button type="button" data-mois="0">Aujourd'hui</button><button type="button" data-mois="1" aria-label="Mois suivant">${icone('chevronDroite')}</button></div></div></div>
       <div class="grille grille-tiers">
         <section>

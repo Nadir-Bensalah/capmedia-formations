@@ -356,6 +356,25 @@ input, select, textarea { font: inherit; color: inherit; }
 .lat-sous { padding-left: 28px; }
 .lat-sous .lat-lien { padding-block: 6px; font-weight: 400; }
 
+/* Les sections du projet ouvert. Un filet vertical les rattache à leur
+   projet : sans lui, elles flotteraient au même rang que les pages qui
+   traversent tous les projets, et c'est justement la confusion à éviter. */
+.lat-sous-lien {
+  margin-left: 18px;
+  padding-block: 5px;
+  font-weight: 400;
+  color: var(--encre-3);
+  border-left: 1.5px solid var(--trait);
+  border-radius: 0 10px 10px 0;
+  animation: sous-lien-entre var(--vite) both;
+}
+.lat-sous-lien svg { width: 15px; height: 15px; opacity: 0.6; }
+.lat-sous-lien:hover { border-left-color: var(--encre-4); }
+.lat-sous-lien.actif { border-left-color: var(--accent); box-shadow: none; background: var(--survol); }
+.lat-sous-lien.actif svg { opacity: 1; }
+@keyframes sous-lien-entre { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .lat-sous-lien { animation: none; } }
+
 .lat-pied {
   flex: none;
   padding: var(--e-4);
@@ -453,6 +472,10 @@ input, select, textarea { font: inherit; color: inherit; }
 }
 .page-tete--projet > .actions { justify-content: flex-end; }
 .tete-suivi { margin-top: var(--e-2); row-gap: var(--e-2); }
+/* L'écusson et le titre ne se séparent jamais : la ligne de suivi peut
+   tenir sur trois lignes sans faire descendre le nom du projet sous son
+   logo, ce qui décrochait les actions du haut de la page. */
+.page-tete--projet > .rang { flex-wrap: nowrap; }
 
 /* Les plateformes du projet, en cartes : une tuile colorée, l'état de la
    brique, et le geste qui mène à l'application publiée. */
@@ -1577,3 +1600,67 @@ input, select, textarea { font: inherit; color: inherit; }
 
 /* La lecture française d'une date, sous le champ natif du navigateur. */
 .aide--date { color: var(--encre-2); font-weight: 500; }
+
+/* ==========================================================================
+   La tenue des délais, et la vie d'une demande
+   ========================================================================== */
+
+/* La carte des délais. Elle répond à la seule question pour laquelle un
+   client décrochait son téléphone : est-ce qu'on tient la date. */
+.delais { display: flex; flex-direction: column; gap: var(--e-5); }
+.delais-tete {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: var(--e-4); flex-wrap: wrap;
+}
+.delais-verdict { flex: none; }
+.delais-risques, .delais-reports {
+  padding-top: var(--e-4);
+  border-top: 1px solid var(--trait);
+}
+.delais-risques ul { list-style: none; margin: 0; padding: 0; }
+
+/* L'anneau qui ne sait pas : un trait discontinu plutôt qu'un zéro. */
+.anneau--vide { background: none; border: 2px dashed var(--trait); }
+.anneau--vide span { color: var(--encre-3); }
+
+/* La bande « où en est ma demande ». Elle vient avant tout le reste,
+   parce que c'est la première chose que le client cherche. */
+.suivi-demande {
+  margin-top: var(--e-5);
+  padding: var(--e-5);
+  border-radius: var(--r-carte);
+  border: 1px solid var(--trait);
+  background: var(--fond);
+}
+.suivi-demande--info { background: var(--accent-voile); border-color: transparent; }
+.suivi-demande--attention { background: var(--attention-voile); border-color: transparent; }
+.suivi-demande--ok { background: var(--ok-voile); border-color: transparent; }
+.suivi-demande-tete { display: flex; gap: var(--e-4); align-items: flex-start; }
+.suivi-demande-pastille {
+  flex: none; width: 34px; height: 34px; border-radius: 11px;
+  display: grid; place-items: center;
+  background: var(--fond); color: var(--encre-2);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.suivi-demande-pastille svg { width: 17px; height: 17px; }
+.suivi-demande-faits {
+  display: grid; gap: var(--e-4) var(--e-5);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin: var(--e-5) 0 0;
+  padding-top: var(--e-4);
+  border-top: 1px solid var(--trait);
+}
+.suivi-demande-faits dt { font: var(--t-micro); color: var(--encre-3); }
+.suivi-demande-faits dd { margin: 2px 0 0; font: var(--t-corps-fort); font-size: 13px; }
+.suivi-demande-note { margin: var(--e-4) 0 0; font: var(--t-petit); color: var(--encre-2); }
+
+/* Le bloc de report ne s'ouvre qu'à la vraie différence de date. */
+.report-bloc {
+  padding: var(--e-4);
+  border-radius: var(--r-champ);
+  background: var(--fond-2);
+  border: 1px solid var(--trait);
+}
+
+/* Un mot qui alerte à l'intérieur d'une phrase. */
+.t-alerte { color: var(--alerte); font-weight: 500; }

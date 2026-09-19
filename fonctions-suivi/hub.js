@@ -209,14 +209,14 @@ exports.hubJalonEcrit = onDocumentWritten({ region: REGION, document: 'projets/{
   const apres = evenement.data.after.exists ? evenement.data.after.data() : null;
   await recalculerProgression(projetId);
   const lien = `/projets/${projetId}/roadmap`;
-  if (apres && !avant) await activite({ projet: projetId, type: 'jalon', texte: `a ajouté le jalon « ${apres.titre} »`, lien });
+  if (apres && !avant) await activite({ projet: projetId, type: 'jalon', texte: `a ajouté l'étape « ${apres.titre} »`, lien });
   else if (apres && avant && avant.statut !== apres.statut && apres.statut === 'termine') {
-    await activite({ projet: projetId, type: 'jalon', texte: `a terminé le jalon « ${apres.titre} »`, lien });
+    await activite({ projet: projetId, type: 'jalon', texte: `a terminé l'étape « ${apres.titre} »`, lien });
     const projet = await lireProjet(projetId);
     await notifier(uidsClient(projet), { type: 'jalon', titre: 'Étape terminée', texte: apres.titre, lien: `#${lien}`, projet: projetId });
   } else if (apres && avant && avant.statut !== apres.statut && apres.statut === 'bloque') {
-    await activite({ projet: projetId, type: 'jalon', texte: `a marqué le jalon « ${apres.titre} » comme bloqué`, lien, visibilite: 'interne' });
-  } else if (!apres && avant) await activite({ projet: projetId, type: 'jalon', texte: `a retiré le jalon « ${avant.titre} »`, lien, visibilite: 'interne' });
+    await activite({ projet: projetId, type: 'jalon', texte: `a marqué l'étape « ${apres.titre} » comme bloqué`, lien, visibilite: 'interne' });
+  } else if (!apres && avant) await activite({ projet: projetId, type: 'jalon', texte: `a retiré l'étape « ${avant.titre} »`, lien, visibilite: 'interne' });
 });
 
 /* ==========================================================================
@@ -512,6 +512,22 @@ exports.hubProjetModifie = onDocumentUpdated({ region: REGION, document: 'projet
   if (pb.prochaineEtape && pa.prochaineEtape !== pb.prochaineEtape) await activite({ projet: projetId, type: 'projet', texte: `a fixé la prochaine étape : ${pb.prochaineEtape}`, lien });
   if (pb.derniereLivraison && pa.derniereLivraison !== pb.derniereLivraison) await activite({ projet: projetId, type: 'projet', texte: `a livré : ${pb.derniereLivraison}`, lien });
   if (avant.archive !== apres.archive) await activite({ projet: projetId, type: 'projet', texte: apres.archive ? 'a archivé le projet' : 'a restauré le projet', lien, visibilite: 'interne' });
+
+  /* Une date de livraison qui bouge est l'événement que le client cherchait
+     en nous écrivant. Elle laisse une trace datée, avec son motif, et une
+     notification : on ne la découvre plus en relisant la fiche. */
+  const dateDe = (v) => (v && typeof v.toDate === 'function' ? v.toDate().getTime() : (v ? new Date(v).getTime() : 0));
+  if (dateDe(avant.cible) !== dateDe(apres.cible)) {
+    const reports = Array.isArray(apres.reports) ? apres.reports : [];
+    const dernier = reports.length ? reports[reports.length - 1] : null;
+    const motifs = { 'attente-client': 'en attente du client', perimetre: 'le périmètre a changé', technique: 'obstacle technique', tiers: 'dépendance à un tiers', magasin: "délai d'un magasin d'applications", capmedia: 'de notre fait', autre: 'autre motif' };
+    const jour = (v) => { const d = v && typeof v.toDate === 'function' ? v.toDate() : (v ? new Date(v) : null); return d ? d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : 'sans date'; };
+    const texte = avant.cible && apres.cible
+      ? `a reporté la livraison du ${jour(avant.cible)} au ${jour(apres.cible)}${dernier && dernier.motif ? ` · ${motifs[dernier.motif] || dernier.motif}` : ''}`
+      : apres.cible ? `a fixé la livraison au ${jour(apres.cible)}` : 'a retiré la date de livraison';
+    await activite({ projet: projetId, type: 'projet', texte, lien });
+    await notifier(apres.membres || [], { type: 'projet', titre: 'La date de livraison a changé', texte: `${apres.nom} · ${texte.replace(/^a /, '')}`, lien: `#${lien}`, projet: projetId });
+  }
 });
 
 exports.hubComposantEcrit = onDocumentWritten({ region: REGION, document: 'projets/{projetId}/composants/{composantId}' }, async (evenement) => {
@@ -519,8 +535,8 @@ exports.hubComposantEcrit = onDocumentWritten({ region: REGION, document: 'proje
   const apres = evenement.data.after.exists ? evenement.data.after.data() : null;
   const projetId = evenement.params.projetId;
   const lien = `/projets/${projetId}`;
-  if (apres && !avant) await activite({ projet: projetId, type: 'projet', texte: `a ajouté le composant « ${apres.nom} »`, lien });
-  else if (apres && avant && avant.statut !== apres.statut && apres.statut === 'livre') await activite({ projet: projetId, type: 'projet', texte: `a livré le composant « ${apres.nom} »`, lien });
+  if (apres && !avant) await activite({ projet: projetId, type: 'projet', texte: `a ajouté la partie « ${apres.nom} »`, lien });
+  else if (apres && avant && avant.statut !== apres.statut && apres.statut === 'livre') await activite({ projet: projetId, type: 'projet', texte: `a livré la partie « ${apres.nom} »`, lien });
   else if (apres && avant && avant.version !== apres.version && apres.version) await activite({ projet: projetId, type: 'projet', texte: `a passé « ${apres.nom} » en version ${apres.version}`, lien });
 });
 
@@ -531,3 +547,110 @@ exports.hubProjetCree = onDocumentCreated({ region: REGION, document: 'projets/{
   await activite({ projet: projetId, organisation: p.organisation || null, type: 'projet', texte: `a ouvert le projet « ${p.nom} »`, lien: `/projets/${projetId}` });
   await notifier(p.membres || [], { type: 'projet', titre: 'Votre espace projet est ouvert', texte: p.nom, lien: `#/projets/${projetId}`, projet: projetId });
 });
+
+/* ==========================================================================
+   14. La relance hebdomadaire
+
+   Tout, dans l'espace, attendait que le client vienne. S'il ne l'ouvre pas
+   pendant trois semaines, personne ne lui dit que six choses l'attendent.
+   Ce rendez-vous du lundi matin va le chercher, mais seulement s'il y a
+   vraiment quelque chose, et jamais deux fois dans la même semaine.
+   ========================================================================== */
+
+const { onSchedule } = require('firebase-functions/v2/scheduler');
+
+const SEMAINE = 7 * 24 * 3600 * 1000;
+const ATTEND_LE_CLIENT = ['en-attente-client', 'a-valider'];
+const FACTURES_DUES = ['envoyee', 'a-payer', 'partielle', 'en-retard'];
+
+const enDateFn = (v) => {
+  if (!v) return null;
+  if (typeof v.toDate === 'function') return v.toDate();
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+const ageEnJours = (v) => { const d = enDateFn(v); return d ? Math.floor((Date.now() - d.getTime()) / 86400000) : null; };
+const depuisJours = (v) => { const n = ageEnJours(v); return n === null ? '' : n <= 0 ? "aujourd'hui" : n === 1 ? 'depuis hier' : `depuis ${n} jours`; };
+
+/** Ce qui, sur un projet, ne peut pas avancer sans le client. */
+async function pointsEnAttente(projetId) {
+  const points = [];
+  const prendre = async (collection, filtre, fabrique) => {
+    try {
+      const q = await bdd.collection(collection).where('projet', '==', projetId).get();
+      for (const d of q.docs) {
+        const x = { id: d.id, ...d.data() };
+        if (filtre(x)) points.push(fabrique(x));
+      }
+    } catch (err) { console.error(`Relance : ${collection} illisible pour ${projetId}`, err); }
+  };
+
+  await prendre('validations', (v) => v.statut === 'en-attente',
+    (v) => ({ quoi: 'À valider', detail: `${v.titre || ''} · en attente ${depuisJours(v.cree)}` }));
+  await prendre('tickets', (t) => !t.archive && ATTEND_LE_CLIENT.includes(t.statut),
+    (t) => ({ quoi: t.statut === 'a-valider' ? 'Correction à vérifier' : 'Précision attendue', detail: `${t.numero ? `${t.numero} · ` : ''}${t.titre || ''} · ${depuisJours(t.maj)}` }));
+  await prendre('documents', (x) => x.type === 'devis' && ['envoye', 'consulte'].includes(x.statut),
+    (x) => ({ quoi: 'Devis à décider', detail: `${x.numero || ''} ${x.libelle || ''}`.trim() }));
+  await prendre('documents', (x) => x.type === 'facture' && FACTURES_DUES.includes(x.statut),
+    (x) => ({ quoi: 'Facture à régler', detail: `${x.numero || ''} ${x.libelle || ''}`.trim() }));
+  await prendre('taches', (x) => !x.archive && x.statut === 'attente-client' && x.visibilite === 'client',
+    (x) => ({ quoi: 'Tâche en attente de vous', detail: `${x.titre || ''} · ${depuisJours(x.maj)}` }));
+  await prendre('blocages', (b) => !b.resolu && b.responsable === 'client' && b.visibilite === 'client',
+    (b) => ({ quoi: 'Point bloquant', detail: `${b.titre || ''} · ${depuisJours(b.depuis)}` }));
+
+  return points;
+}
+
+/*
+ * Faut-il relancer ce projet ? La question est séparée de l'envoi pour
+ * pouvoir être posée à l'épreuve sans déclencheur ni file d'attente.
+ * Elle ne dit jamais oui sur une impression : archive, projet à moi,
+ * sourdine, projet clos, lettre déjà partie cette semaine.
+ */
+function relanceRetenue(projet, maintenant = Date.now()) {
+  if (!projet) return { retenu: false, motif: 'projet absent' };
+  if (projet.archive) return { retenu: false, motif: 'archivé' };
+  if (projet.interne === true) return { retenu: false, motif: 'projet à moi' };
+  if (projet.silence === true) return { retenu: false, motif: 'en sourdine' };
+  if (['termine', 'suspendu', 'archive'].includes(String(projet.statut || ''))) return { retenu: false, motif: 'projet clos' };
+  const derniere = enDateFn(projet.relance);
+  if (derniere && maintenant - derniere.getTime() < SEMAINE) return { retenu: false, motif: 'déjà relancé cette semaine' };
+  return { retenu: true, motif: '' };
+}
+
+/* Exposées pour l'épreuve : la décision, et le relevé de ce qui attend. */
+exports._relanceRetenue = relanceRetenue;
+exports._pointsEnAttente = pointsEnAttente;
+
+exports.hubRelanceHebdo = onSchedule(
+  { region: REGION, schedule: 'every monday 09:00', timeZone: 'Europe/Paris' },
+  async () => {
+    let projets = [];
+    try {
+      const q = await bdd.collection('projets').get();
+      projets = q.docs.map((d) => ({ id: d.id, ...d.data() }));
+    } catch (err) { console.error('Relance : projets illisibles', err); return; }
+
+    let envoyees = 0; let ignorees = 0;
+    for (const projet of projets) {
+      /* La sourdine est le verrou qui a permis de remplir le portefeuille
+         sans réveiller personne : il tient ici aussi. */
+      if (!relanceRetenue(projet).retenu) { ignorees += 1; continue; }
+
+      const points = await pointsEnAttente(projet.id);
+      if (!points.length) { ignorees += 1; continue; }
+
+      const destinataires = await contactsClient(projet);
+      if (!destinataires.length) { ignorees += 1; continue; }
+
+      for (const d of destinataires) {
+        await mettreEnFile('relance', [d], {
+          par: d.nom || '', projet: projet.nom || '', points, lien: LIEN('/valider'),
+        }, 'relance');
+      }
+      try { await bdd.doc(`projets/${projet.id}`).update({ relance: FieldValue.serverTimestamp() }); } catch (err) { console.error('Relance non datée', err); }
+      envoyees += 1;
+    }
+    console.log(`Relance hebdomadaire : ${envoyees} projet(s) relancé(s), ${ignorees} laissé(s) tranquilles.`);
+  },
+);

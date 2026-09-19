@@ -143,6 +143,26 @@ export const progression = (valeur, ton = '') =>
 export const anneau = (valeur, grand = false) =>
   `<div class="anneau${grand ? ' anneau--grand' : ''}" style="--v:${borner(valeur)}" role="img" aria-label="${borner(valeur)} %"><span>${borner(valeur)}%</span></div>`;
 
+/* Une progression inconnue n'est pas une progression nulle. Plutôt que de
+   dessiner une barre à zéro sur un projet bien avancé, on l'avoue. */
+export const progressionOuPas = (prog, ton = '') => (prog && prog.valeur === null
+  ? '<span class="t-micro t-3">Non estimée</span>'
+  : progression(prog ? prog.valeur : 0, ton));
+export const anneauOuPas = (prog, grand = false) => (prog && prog.valeur === null
+  ? `<div class="anneau anneau--vide${grand ? ' anneau--grand' : ''}" role="img" aria-label="Progression non estimée"><span>?</span></div>`
+  : anneau(prog ? prog.valeur : 0, grand));
+
+/**
+ * Le verdict d'une échéance, en pastille. C'est la brique qui répond à la
+ * seule question pour laquelle un client décroche son téléphone : est-ce
+ * qu'on tient la date ?
+ */
+export const verdictHtml = (v, options = {}) => {
+  if (!v || v.cle === 'sans') return options.vide === false ? '' : '<span class="puce t-3"><i></i>Pas de date fixée</span>';
+  const detail = v.detail && options.detail !== false ? ` <span class="t-3">${echapper(v.detail)}</span>` : '';
+  return `<span class="puce puce--${v.voile}"><i aria-hidden="true"></i>${echapper(v.libelle)}${detail}</span>`;
+};
+
 export const metrique = (valeur, libelle, options = {}) => `
   <div class="metrique${options.ton ? ` metrique--${options.ton}` : ''}">
     <p class="metrique-valeur">${echapper(valeur)}</p>

@@ -160,6 +160,32 @@ await doit("L'équipe lit les prospects du site", getDoc(doc(equipe(), 'contact-
 await refuse('Camille ne lit pas les prospects du site', getDoc(doc(camille(), 'contact-messages/c1')));
 await doit('Un visiteur dépose un message de contact', addDoc(collection(anonyme(), 'contact-messages'), { nom: 'x', email: 'x@y.fr' }));
 
+console.log("\n== L'histoire d'une date, la version d'une correction, l'adresse d'un profil");
+/* L'histoire de la date cible est écrite par l'équipe et lue par le client :
+   c'est tout son objet. Le client ne la réécrit jamais. */
+await doit("L'équipe inscrit un report de la date cible",
+  updateDoc(doc(equipe(), 'projets/atelier'), { cible: new Date('2026-12-01'), reports: [{ de: new Date('2026-11-03'), vers: new Date('2026-12-01'), motif: 'attente-client', note: '', le: new Date(), par: 'Agent' }], maj: serverTimestamp() }));
+await refuse('Camille ne réécrit pas l\'histoire de la date',
+  updateDoc(doc(camille(), 'projets/atelier'), { reports: [] }));
+await refuse("L'équipe n'empile pas plus de vingt reports",
+  updateDoc(doc(equipe(), 'projets/atelier'), { reports: Array.from({ length: 21 }, () => ({ motif: 'autre' })), maj: serverTimestamp() }));
+
+/* Le pilotage envoie toujours la qualification : la règle l'exige, et un
+   champ absent y vaut refus. Le formulaire fait pareil. */
+await doit("L'équipe nomme la version qui porte la correction",
+  updateDoc(doc(equipe(), 'tickets/t1'), { release: 'r1', qualification: 'incluse', maj: serverTimestamp() }));
+/* Une valeur différente de celle déjà posée : écrire la même ne change
+   aucune clé, et une écriture qui ne change rien passe partout. */
+await refuse('Camille ne choisit pas la version qui porte la correction',
+  updateDoc(doc(camille(), 'tickets/t1'), { release: 'r2-invente' }));
+
+/* L'adresse recopiée dans le profil sert au serveur à couper les envois.
+   Elle ne peut être que la sienne, sinon on coupe ceux d'un autre. */
+await doit('Camille recopie son adresse dans son profil',
+  setDoc(doc(camille(), 'profils/uid-camille'), { nom: 'Camille', email: 'camille.essai@exemple.test', notifications: { relance: 'off' } }, { merge: true }));
+await refuse("Camille ne pose pas l'adresse de quelqu'un d'autre",
+  setDoc(doc(camille(), 'profils/uid-camille'), { email: 'lea.essai@exemple.test' }, { merge: true }));
+
 console.log(`\n${ok} contrôle(s) conforme(s)${ecarts.length ? `, ${ecarts.length} ÉCART(S) :\n  - ${ecarts.join('\n  - ')}` : ''}`);
 await env.cleanup();
 process.exit(ecarts.length ? 1 : 0);

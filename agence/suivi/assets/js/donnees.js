@@ -14,6 +14,7 @@ import {
   serverTimestamp, arrayUnion, arrayRemove, Timestamp,
   nomAffiche, enDate, parDateDesc, parDateAsc, joursAvant, borner, age, retard, dateCourte,
   OUVERTS, ATTEND_CLIENT, ATTEND_EQUIPE, FACTURES_DUES, PROJETS_ACTIFS, CATEGORIES_CLIENT, projetEstActif,
+  statutProjet, pluriel, verdictDelai,
 } from './noyau.js';
 import * as magasin from './magasin.js';
 
@@ -316,6 +317,7 @@ export const ecrire = {
     projet: pid, titre: d.titre, description: d.description || '', phase: d.phase || '', statut: d.statut || 'a-venir',
     progression: borner(d.progression), debut: dateOuNull(d.debut), fin: dateOuNull(d.fin),
     composants: d.composants || [], responsable: d.responsable || '', dependances: d.dependances || [], ordre: Number(d.ordre) || 0,
+    reports: [],
     cree: serverTimestamp(), maj: serverTimestamp(),
   })),
   majJalon: (pid, jid, d) => updateDoc(doc(bdd, 'projets', pid, 'jalons', jid), nettoyer({ ...d, maj: serverTimestamp() })),
@@ -374,7 +376,8 @@ export const ecrire = {
   async creerNote(session, pid, d) {
     const par = auteurDe(session);
     const ref = await addDoc(col('notes'), nettoyer({
-      projet: pid, type: d.type || 'information', titre: d.titre, contenu: d.contenu || '',
+      projet: pid, composant: d.composant || '', plateforme: d.plateforme || '',
+      type: d.type || 'information', titre: d.titre, contenu: d.contenu || '',
       contexte: d.contexte || '', impact: d.impact || '', decidePar: d.decidePar || '',
       date: dateOuNull(d.date) || Timestamp.now(), visibilite: d.visibilite || 'client',
       cree: serverTimestamp(), maj: serverTimestamp(), par: { uid: par.uid, nom: par.nom },
@@ -385,7 +388,8 @@ export const ecrire = {
   supprimerNote: (nid) => deleteDoc(doc(bdd, 'notes', nid)),
 
   creerBlocage: (pid, d) => addDoc(col('blocages'), nettoyer({
-    projet: pid, titre: d.titre, description: d.description || '', responsable: d.responsable || 'client',
+    projet: pid, composant: d.composant || '', plateforme: d.plateforme || '',
+    titre: d.titre, description: d.description || '', responsable: d.responsable || 'client',
     impact: d.impact || '', depuis: dateOuNull(d.depuis) || Timestamp.now(), resolu: null,
     visibilite: d.visibilite || 'client', cree: serverTimestamp(), maj: serverTimestamp(),
   })),
@@ -398,14 +402,74 @@ export const ecrire = {
    ========================================================================== */
 
 /** La progression d'un projet, selon son mode. */
-export const progressionProjet = (projet, jalons = []) => {
-  const p = (projet && projet.progression) || {};
-  if (p.mode === 'jalons' && jalons.length) {
-    const total = jalons.reduce((s, j) => s + borner(j.statut === 'termine' ? 100 : j.progression), 0);
-    return { valeur: Math.round(total / jalons.length), mode: 'jalons' };
-  }
-  return { valeur: borner(p.valeur), mode: p.mode || 'manuel' };
+/* D'où sort le chiffre. Le dire évite qu'on le croie plus précis qu'il ne l'est. */
+export const MODES_PROGRESSION = {
+  etapes:  'Calculée sur les étapes',
+  manuel:  'Estimée par Capmedia',
+  parties: 'Calculée sur les parties du projet',
+  taches:  'Calculée sur les tâches',
+  termine: 'Projet terminé',
+  inconnu: '',
 };
+
+/**
+ * La progression d'un projet.
+ *
+ * Un projet sans étapes et sans valeur saisie affichait 0 %. Une barre à
+ * zéro sur un projet aux trois quarts fait ment plus qu'elle n'informe :
+ * on descend donc la chaîne des faits disponibles, et si aucun ne dit
+ * rien, `valeur` vaut null et l'écran l'avoue au lieu d'inventer.
+ */
+export const progressionProjet = (projet, jalons = [], { composants = [], taches = [] } = {}) => {
+  const p = (projet && projet.progression) || {};
+  const moyenne = (n) => Math.round(n.reduce((s, x) => s + x, 0) / n.length);
+
+  if (p.mode === 'jalons' && jalons.length) {
+    return { valeur: moyenne(jalons.map((j) => borner(j.statut === 'termine' ? 100 : j.progression))), mode: 'etapes' };
+  }
+  if (Number(p.valeur) > 0) return { valeur: borner(p.valeur), mode: 'manuel' };
+  if (jalons.length) {
+    return { valeur: moyenne(jalons.map((j) => borner(j.statut === 'termine' ? 100 : j.progression))), mode: 'etapes' };
+  }
+  const parlantes = composants.filter((c) => Number(c.progression) > 0 || c.statut === 'livre');
+  if (parlantes.length) {
+    return { valeur: moyenne(composants.map((c) => borner(c.statut === 'livre' ? 100 : c.progression))), mode: 'parties' };
+  }
+  const suivies = taches.filter((t) => !t.archive);
+  if (suivies.length >= 3) {
+    return { valeur: Math.round((suivies.filter((t) => t.statut === 'terminee').length / suivies.length) * 100), mode: 'taches' };
+  }
+  if (statutProjet(projet) === 'termine') return { valeur: 100, mode: 'termine' };
+  return { valeur: null, mode: 'inconnu' };
+};
+
+/**
+ * Les faits qui menacent une date. Aucun n'est une intuition : un point
+ * bloquant ouvert, une étape déjà dépassée, une tâche en retard, une
+ * demande qui dort du côté du client. Sans fait, une date à venir est
+ * tenue, et on le dit.
+ */
+export const risquesProjet = ({ jalons = [], blocages = [], taches = [], tickets = [] } = {}) => {
+  const r = [];
+  const bloquants = blocages.filter((b) => !b.resolu);
+  if (bloquants.length) r.push(pluriel(bloquants.length, 'point bloquant ouvert', 'points bloquants ouverts'));
+  const etapes = jalons.filter((j) => j.statut !== 'termine' && joursAvant(j.fin) < 0);
+  if (etapes.length) r.push(pluriel(etapes.length, 'étape déjà dépassée', 'étapes déjà dépassées'));
+  const retards = taches.filter((t) => t.statut !== 'terminee' && joursAvant(t.echeance) < 0);
+  if (retards.length) r.push(pluriel(retards.length, 'tâche en retard', 'tâches en retard'));
+  const cote = tickets.filter((t) => ATTEND_CLIENT.includes(t.statut) && joursAvant(t.maj) < -7);
+  if (cote.length) r.push(pluriel(cote.length, 'demande en attente du client depuis plus d\'une semaine', 'demandes en attente du client depuis plus d\'une semaine'));
+  return r;
+};
+
+/**
+ * Le verdict de la date cible d'un projet, prêt à afficher. Le projet est
+ * clos s'il est terminé : la date n'a alors plus d'objet.
+ */
+export const delaiProjet = (projet, sources = {}) => verdictDelai(projet && projet.cible, {
+  clos: statutProjet(projet) === 'termine',
+  risques: risquesProjet(sources),
+});
 
 /** La phase en cours de la feuille de route. */
 export const jalonCourant = (jalons = []) => {

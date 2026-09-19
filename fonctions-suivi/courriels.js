@@ -710,6 +710,29 @@ function preprojet(v) {
   };
 }
 
+/*
+ * La relance hebdomadaire. Rien dans l'espace n'allait chercher le client :
+ * tout attendait qu'il vienne. S'il n'ouvre pas le hub pendant trois
+ * semaines, personne ne lui dit que six choses l'attendent. Cette lettre
+ * ne part que s'il y a vraiment quelque chose, et elle liste quoi.
+ */
+function relance(v) {
+  const lignes = Array.isArray(v.points) ? v.points : [];
+  const n = lignes.length;
+  return {
+    objet: n > 1
+      ? `${valeurTexte(v.projet)} : ${n} points attendent votre reponse`
+      : `${valeurTexte(v.projet)} : un point attend votre reponse`,
+    ...rendreGabarit({
+      titre: n > 1 ? `${n} points attendent votre reponse` : 'Un point attend votre reponse',
+      intro: `Bonjour ${valeurTexte(v.par)},\n\nRien d'urgent de notre cote, mais ces points sont bloques tant qu'ils n'ont pas votre retour. Tout se traite depuis votre espace, en quelques minutes.`,
+      faits: lignes.slice(0, 8).map((l) => [valeurTexte(l.quoi), valeurTexte(l.detail)]),
+      bouton: { libelle: 'Voir ce qui vous attend', url: valeurTexte(v.lien) || lienEspace() },
+      note: "Vous recevez cette lettre une fois par semaine au maximum, et seulement s'il y a quelque chose. Elle s'arrete des que la liste est vide.",
+    }),
+  };
+}
+
 const MODELES = {
   'invitation': invitation,
   'ticket-cree': ticketCree,
@@ -730,6 +753,7 @@ const MODELES = {
   'message-projet': messageProjet,
   'qualification': qualification,
   'preprojet': preprojet,
+  'relance': relance,
 };
 
 /**

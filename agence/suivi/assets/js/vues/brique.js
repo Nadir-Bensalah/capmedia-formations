@@ -11,7 +11,7 @@
 
 import {
   echapper, dateCourte, depuis, joursAvant, parDateDesc, borner, enParagraphes,
-  PLATEFORMES, TYPES_COMPOSANT, STATUTS_COMPOSANT, STATUTS_JALON, STATUTS_TACHE, STATUTS_RELEASE,
+  PLATEFORMES, TYPES_COMPOSANT, STATUTS_COMPOSANT, STATUTS_ETAPE, STATUTS_TACHE, STATUTS_RELEASE,
   TYPES_CHANGEMENT, TYPES_NOTE, PRIORITES, STATUTS, OUVERTS, CATEGORIES_LIEN, pluriel, nombre, age,
 } from '../noyau.js';
 import {
@@ -80,7 +80,7 @@ export const vue = async (ctx, env) => {
     }
 
     const { composant, cle, fiche } = resoudre(d, cid);
-    const titre = composant ? composant.nom : (fiche ? fiche.libelle : 'Brique inconnue');
+    const titre = composant ? composant.nom : (fiche ? fiche.libelle : 'Partie inconnue');
     const nomIcone = iconePlateforme(cle) || 'composants';
     const ton = tonPlateforme(cle);
     titrePage(`${titre} · ${d.projet.nom}`);
@@ -133,7 +133,7 @@ export const vue = async (ctx, env) => {
           ${equipe && composant ? `<button class="btn btn-secondaire" type="button" data-action="editer" data-genre="composant" data-id="${echapper(composant.id)}">${icone('edit')} Modifier</button>` : ''}
           ${equipe && composant ? `<button class="btn btn-secondaire" type="button" data-action="editer" data-genre="technique" data-id="${echapper(composant.id)}">${icone('code')} Fiche technique</button>` : ''}
           ${equipe ? `<button class="btn btn-principal" type="button" data-action="nouveau" data-genre="release" data-defaut='${echapper(JSON.stringify({ plateforme: cle, composant: composant ? composant.id : '' }))}'>${icone('plus')} Nouvelle version</button>` : ''}
-          ${equipe && !composant ? `<button class="btn btn-principal" type="button" data-action="nouveau" data-genre="composant" data-defaut='${echapper(JSON.stringify({ type: cle, nom: fiche ? fiche.libelle : '' }))}'>${icone('plus')} Créer la brique</button>` : ''}
+          ${equipe && !composant ? `<button class="btn btn-principal" type="button" data-action="nouveau" data-genre="composant" data-defaut='${echapper(JSON.stringify({ type: cle, nom: fiche ? fiche.libelle : '' }))}'>${icone('plus')} Suivre cette partie</button>` : ''}
         </div>
       </header>
 
@@ -201,13 +201,13 @@ export const vue = async (ctx, env) => {
         <p class="aide" style="margin-top:8px">Aucun mot de passe ni clé n'est stocké ici, seulement qui détient quoi et où.</p>
       </section>` : ''}
 
-      ${blocages.length ? `<section class="section">
-        <div class="section-tete"><h2>Ce qui bloque <span class="compte-section compte-section--vif">${blocages.length}</span></h2></div>
-        <div class="liste">${blocages.map((b) => ligne({
+      ${blocages.length || equipe ? `<section class="section">
+        <div class="section-tete"><h2>Ce qui bloque ${blocages.length ? `<span class="compte-section compte-section--vif">${blocages.length}</span>` : ''}</h2>${equipe && composant ? `<button class="btn btn-secondaire btn-petit" type="button" data-action="nouveau" data-genre="blocage" data-defaut='${echapper(JSON.stringify({ composant: composant ? composant.id : '' }))}'>${icone('plus')} Signaler</button>` : ''}</div>
+        ${blocages.length ? `<div class="liste">${blocages.map((b) => ligne({
           icone: 'alerte', ton: 'rouge', titre: echapper(b.titre),
           sous: echapper([b.description, b.impact && `Conséquence : ${b.impact}`].filter(Boolean).join(' · ')),
           fin: `${b.responsable === 'client' ? '<span class="puce puce--ambre"><i></i>De votre côté</span>' : '<span class="puce"><i></i>De notre côté</span>'}${equipe ? boutons('blocage', b.id, b.titre) : ''}`,
-        })).join('')}</div>
+        })).join('')}</div>` : '<p class="t-petit t-3">Rien ne bloque cette partie.</p>'}
       </section>` : ''}
 
       <section class="section">
@@ -235,12 +235,12 @@ export const vue = async (ctx, env) => {
       </section>
 
       ${jalons.length ? `<section class="section">
-        <div class="section-tete"><h2>Les étapes qui la concernent <span class="compte-section">${jalons.length}</span></h2><a class="lien" href="#/projets/${echapper(pid)}/roadmap">La feuille de route</a></div>
+        <div class="section-tete"><h2>Les étapes qui la concernent <span class="compte-section">${jalons.length}</span></h2><a class="lien" href="#/projets/${echapper(pid)}/etapes">La feuille de route</a></div>
         <div class="liste">${jalons.map((j) => ligne({
           icone: j.statut === 'termine' ? 'check' : j.statut === 'bloque' ? 'alerte' : 'drapeau',
           ton: j.statut === 'termine' ? 'vert' : j.statut === 'bloque' ? 'rouge' : j.statut === 'en-cours' ? 'bleu' : '',
           titre: echapper(j.titre), sous: echapper(j.description || ''),
-          fin: `${j.statut !== 'termine' ? `<span style="width:80px">${progression(j.progression)}</span>` : ''}${pastille(STATUTS_JALON, j.statut || 'a-venir')}`,
+          fin: `${j.statut !== 'termine' ? `<span style="width:80px">${progression(j.progression)}</span>` : ''}${pastille(STATUTS_ETAPE, j.statut || 'a-venir')}`,
         })).join('')}</div>
       </section>` : ''}
 
@@ -262,16 +262,16 @@ export const vue = async (ctx, env) => {
           icone: 'demandes', titre: echapper(t.titre),
           sous: echapper([t.numero, t.version ? `version ${t.version}` : '', OUVERTS.includes(t.statut) ? `ouverte depuis ${age(t.cree)}` : `close ${depuis(t.maj)}`].filter(Boolean).join(' · ')),
           fin: pastille(STATUTS, t.statut, { client: !equipe }),
-        })).join('')}</div>` : vide({ icone: 'demandes', titre: 'Aucune demande sur cette brique', compact: true })}
+        })).join('')}</div>` : vide({ icone: 'demandes', titre: 'Aucune demande sur cette partie', compact: true })}
       </section>
 
-      ${notes.length ? `<section class="section">
-        <div class="section-tete"><h2>Décisions et notes <span class="compte-section">${notes.length}</span></h2></div>
-        <div class="liste">${notes.map((n) => ligne({
+      ${notes.length || equipe ? `<section class="section">
+        <div class="section-tete"><h2>Décisions et notes ${notes.length ? `<span class="compte-section">${notes.length}</span>` : ''}</h2>${equipe && composant ? `<button class="btn btn-secondaire btn-petit" type="button" data-action="nouveau" data-genre="note" data-defaut='${echapper(JSON.stringify({ composant: composant ? composant.id : '' }))}'>${icone('plus')} Nouvelle note</button>` : ''}</div>
+        ${notes.length ? `<div class="liste">${notes.map((n) => ligne({
           icone: 'note', titre: echapper(n.titre),
           sous: echapper([(TYPES_NOTE[n.type] || {}).libelle || n.type, dateCourte(n.date || n.cree)].filter(Boolean).join(' · ')),
           fin: `${n.visibilite === 'interne' ? '<span class="etiquette">Interne</span>' : ''}${equipe ? boutons('note', n.id, n.titre) : ''}`,
-        })).join('')}</div>
+        })).join('')}</div>` : '<p class="t-petit t-3">Aucune décision rattachée à cette partie pour l\'instant.</p>'}
       </section>` : ''}
 
       <div class="grille grille-2 section">

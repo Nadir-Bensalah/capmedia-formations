@@ -7,15 +7,17 @@
 
 import {
   echapper, dateCourte, dateHeure, depuis, heure, montant, pluriel, joursAvant, echeance as calcEcheance, enParagraphes, avecLiens, parDateDesc, parDateAsc, borner,
-  STATUTS_PROJET, STATUTS_COMPOSANT, TYPES_COMPOSANT, STATUTS_JALON, STATUTS_TACHE, PRIORITES, STATUTS, TYPES, URGENCES, OUVERTS, ATTEND_CLIENT,
-  CATEGORIES_FICHIER, CATEGORIES_LIEN, STATUTS_RELEASE, TYPES_CHANGEMENT, TYPES_NOTE, SANTES, STATUTS_VALIDATION, QUALIFICATIONS, statutProjet, PLATEFORMES, nomsContacts, age
+  STATUTS_PROJET, STATUTS_COMPOSANT, TYPES_COMPOSANT, STATUTS_ETAPE, STATUTS_TACHE, PRIORITES, STATUTS, TYPES, URGENCES, OUVERTS, ATTEND_CLIENT,
+  CATEGORIES_FICHIER, CATEGORIES_LIEN, STATUTS_RELEASE, TYPES_CHANGEMENT, TYPES_NOTE, SANTES, STATUTS_VALIDATION, QUALIFICATIONS, statutProjet, PLATEFORMES, nomsContacts, age,
+  verdictDelai, reportsDe, dateOrigine, MOTIFS_REPORT, dateLongue
 } from '../noyau.js';
 import {
   icone, pastille, pastilleTexte, puce, pucePlateforme, iconePlateforme, tonPlateforme, avatarProjet, avatar, progression, anneau, ligne, vide, fait, chronoItem, parJour, squelette, titrePage,
   echeanceHtml, modale, confirmer, toast, sur, menu, fichierHtml, brancherPieces, depot, lireForme, valider, obligatoire, agir, encart, optionsDe,
+  verdictHtml, anneauOuPas, progressionOuPas,
 } from '../ui.js';
 import * as magasin from '../magasin.js';
-import { K, ecrire, abonnerProjet, progressionProjet, jalonCourant, jalonSuivant, prochaineReunion, enAttenteDeVous, parStatut } from '../donnees.js';
+import { K, ecrire, abonnerProjet, progressionProjet, jalonCourant, jalonSuivant, prochaineReunion, enAttenteDeVous, parStatut, risquesProjet, MODES_PROGRESSION } from '../donnees.js';
 import { filAriane } from '../coquille.js';
 import { naviguer } from '../routeur.js';
 import { monterBulle } from '../bulle.js';
@@ -24,7 +26,7 @@ import { activiteHtml } from './accueil.js';
 
 const ONGLETS = [
   { cle: 'apercu', libelle: 'Aperçu', icone: 'accueil' },
-  { cle: 'roadmap', libelle: 'Feuille de route', icone: 'route' },
+  { cle: 'etapes', libelle: 'Feuille de route', icone: 'route' },
   { cle: 'taches', libelle: 'Tâches', icone: 'taches' },
   { cle: 'demandes', libelle: 'Demandes', icone: 'demandes' },
   { cle: 'fichiers', libelle: 'Fichiers', icone: 'fichiers' },
@@ -62,7 +64,13 @@ const nomEquipe = (equipe, uid) => ((equipe.find((e) => e.id === uid) || {}).nom
 
 export const vue = async (ctx, env) => {
   const pid = ctx.params.id;
-  let onglet = ONGLETS.some((o) => o.cle === ctx.onglet) ? ctx.onglet : (ctx.onglet === 'composants' ? 'composants' : 'apercu');
+  /* « roadmap » a été l'adresse de la feuille de route : un lien parti par
+     e-mail il y a six mois doit toujours y mener. */
+  const ongletDe = (voulu) => {
+    const v = voulu === 'roadmap' ? 'etapes' : voulu;
+    return ONGLETS.some((o) => o.cle === v) ? v : (v === 'composants' ? 'composants' : 'apercu');
+  };
+  let onglet = ongletDe(ctx.onglet);
   const equipe = env.role === 'equipe';
   const lot = magasin.lot();
   const sortie = ctx.sortie;
@@ -87,9 +95,11 @@ export const vue = async (ctx, env) => {
       return;
     }
     titrePage(projet.nom);
-    filAriane([{ libelle: equipe ? 'Projets' : 'Accueil', chemin: equipe ? '/projets' : '/' }, { libelle: projet.nom, chemin: `/projets/${pid}` }, ...(onglet !== 'apercu' ? [{ libelle: (ONGLETS.find((o) => o.cle === onglet) || { libelle: 'Composants' }).libelle }] : [])]);
+    filAriane([{ libelle: equipe ? 'Projets' : 'Accueil', chemin: equipe ? '/projets' : '/' }, { libelle: projet.nom, chemin: `/projets/${pid}` }, ...(onglet !== 'apercu' ? [{ libelle: (ONGLETS.find((o) => o.cle === onglet) || { libelle: 'Les parties' }).libelle }] : [])]);
 
-    const prog = progressionProjet(projet, d.jalons);
+    const prog = progressionProjet(projet, d.jalons, { composants: d.composants, taches: d.taches });
+    const risques = risquesProjet({ jalons: d.jalons, blocages: d.blocages, taches: d.taches, tickets: d.tickets });
+    const delai = verdictDelai(projet.cible, { clos: statutProjet(projet) === 'termine', risques });
     const ouverts = d.tickets.filter((t) => OUVERTS.includes(t.statut));
     const attente = enAttenteDeVous({ projets: [projet], tickets: d.tickets, validations: d.validations, documents: d.documents, taches: d.taches, blocages: d.blocages });
     const comptes = {
@@ -113,8 +123,8 @@ export const vue = async (ctx, env) => {
               ${pastille(STATUTS_PROJET, statutProjet(projet))}
               ${projet.interne ? '<span class="etiquette">Mon projet</span>' : ''}
               ${equipe && !projet.interne && nomsContacts(projet) ? `<span class="puce">${icone('utilisateurs')} ${echapper(nomsContacts(projet))}</span>` : ''}
-              ${equipe && projet.sante ? pastille(SANTES, projet.sante) : ''}
-              ${projet.cible ? `<span class="puce">${icone('cible')} Cible ${echapper(dateCourte(projet.cible))}</span>` : ''}
+              ${equipe && projet.sante && projet.sante !== 'ok' ? pastille(SANTES, projet.sante) : ''}
+              ${projet.cible ? `<span class="puce">${icone('cible')} Livraison visée ${echapper(dateCourte(projet.cible))}</span>${verdictHtml(delai)}` : ''}
               ${projet.responsable ? `<span class="puce">${icone('utilisateur')} ${echapper(nomEquipe(d.equipe, projet.responsable) || 'Capmedia')}</span>` : ''}
               <span class="puce t-3">${icone('horloge')} ${d.activite[0] ? `Dernière activité ${echapper(depuis(d.activite[0].date))}` : 'Pas encore d\'activité'}</span>
             </div>
@@ -131,10 +141,10 @@ export const vue = async (ctx, env) => {
 
       <div class="onglets-enveloppe"><nav class="onglets" id="onglets-projet" aria-label="Sections du projet">
         ${ONGLETS.map((o) => `<a class="onglet${o.cle === onglet ? ' actif' : ''}" href="#/projets/${echapper(pid)}${o.cle === 'apercu' ? '' : `/${o.cle}`}">${o.libelle}${comptes[o.cle] ? `<span class="badge">${comptes[o.cle]}</span>` : ''}</a>`).join('')}
-        ${equipe ? `<a class="onglet${onglet === 'composants' ? ' actif' : ''}" href="#/projets/${echapper(pid)}/composants">Composants</a>` : ''}
+        ${equipe ? `<a class="onglet${onglet === 'composants' ? ' actif' : ''}" href="#/projets/${echapper(pid)}/composants">Les parties</a>` : ''}
       </nav></div>
 
-      <div id="onglet-corps"${onglet !== ongletAnime ? ' class="corps-anime"' : ''}>${rendreOnglet(onglet, d, { pid, env, prog, attente, ouverts })}</div>
+      <div id="onglet-corps"${onglet !== ongletAnime ? ' class="corps-anime"' : ''}>${rendreOnglet(onglet, d, { pid, env, prog, attente, ouverts, delai, risques })}</div>
     </div>`;
     derniereEmpreinte = magasin.empreinte(cles) + '|' + onglet;
     const corps = sortie.querySelector('#onglet-corps.corps-anime');
@@ -229,8 +239,7 @@ export const vue = async (ctx, env) => {
     /* Changer d'onglet ne recharge pas la page : on redessine, les écoutes
        restent ouvertes et le défilement ne saute pas. */
     maj: (suite) => {
-      const voulu = suite.params.onglet || (suite.params.tid ? 'taches' : 'apercu');
-      onglet = ONGLETS.some((o) => o.cle === voulu) ? voulu : (voulu === 'composants' ? 'composants' : 'apercu');
+      onglet = ongletDe(suite.params.onglet || (suite.params.tid ? 'taches' : 'apercu'));
       if (suite.params.tid && onglet === 'taches') detailOuvert = suite.params.tid;
       rendre(true);
       window.scrollTo({ top: 0, behavior: 'instant' });
@@ -303,7 +312,7 @@ const rendreOnglet = (onglet, d, c) => {
   switch (onglet) {
     case 'apercu': return apercu(d, c);
     case 'composants': return composants(d, c);
-    case 'roadmap': return roadmap(d, c);
+    case 'etapes': return etapes(d, c);
     case 'taches': return taches(d, c);
     case 'demandes': return demandes(d, c);
     case 'fichiers': return fichiers(d, c);
@@ -317,7 +326,7 @@ const rendreOnglet = (onglet, d, c) => {
 };
 
 /* --- Aperçu --------------------------------------------------------------- */
-const apercu = (d, { pid, env, prog, attente, ouverts }) => {
+const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
   const equipe = env.role === 'equipe';
   const projet = d.projet;
   const pulse = projet.pulse || {};
@@ -331,7 +340,7 @@ const apercu = (d, { pid, env, prog, attente, ouverts }) => {
   const derniereRelease = d.releases.filter((r) => r.statut === 'disponible').sort(parDateDesc('date'))[0];
   const validationsAttente = d.validations.filter((v) => v.statut === 'en-attente');
   const echeances = [
-    ...d.jalons.filter((j) => j.fin && j.statut !== 'termine').map((j) => ({ date: j.fin, titre: j.titre, genre: 'Jalon', icone: 'drapeau', chemin: `/projets/${pid}/roadmap` })),
+    ...d.jalons.filter((j) => j.fin && j.statut !== 'termine').map((j) => ({ date: j.fin, titre: j.titre, genre: 'Étape', icone: 'drapeau', chemin: `/projets/${pid}/etapes` })),
     ...d.taches.filter((t) => t.echeance && t.statut !== 'terminee').map((t) => ({ date: t.echeance, titre: t.titre, genre: 'Tâche', icone: 'taches', chemin: `/projets/${pid}/taches/${t.id}` })),
     ...d.reunions.filter((r) => joursAvant(r.date) >= 0).map((r) => ({ date: r.date, titre: r.titre, genre: 'Réunion', icone: 'reunions', chemin: `/projets/${pid}/reunions` })),
     ...d.documents.filter((x) => x.type === 'facture' && x.echeance && ['a-payer', 'partielle', 'en-retard'].includes(x.statut)).map((x) => ({ date: x.echeance, titre: x.libelle, genre: 'Facture', icone: 'euro', chemin: equipe ? `/finances/${x.id}` : `/finances/${x.id}` })),
@@ -354,15 +363,18 @@ const apercu = (d, { pid, env, prog, attente, ouverts }) => {
           <div><p class="quoi">${icone('horloge')} ${equipe ? 'Attente client' : 'Attendu de vous'}</p><p class="texte${pulse.attenteClient || attente.length ? '' : ' rien'}">${echapper(pulse.attenteClient || (attente.length ? pluriel(attente.length, 'point à traiter', 'points à traiter') : 'Rien'))}</p></div>
         </div>
         <div class="carte carte--creuse rang" style="gap:18px;align-items:center">
-          ${anneau(prog.valeur, true)}
+          ${anneauOuPas(prog, true)}
           <div>
             <p class="t-titre-3">Progression</p>
-            <p class="t-petit t-2" style="margin-top:2px">${prog.mode === 'jalons' ? 'Calculée sur les jalons' : 'Estimée par Capmedia'}</p>
+            <p class="t-petit t-2" style="margin-top:2px">${echapper(MODES_PROGRESSION[prog.mode] || '')}${prog.valeur === null ? 'Rien ne permet encore de la calculer' : ''}</p>
             ${courant ? `<p class="t-petit" style="margin-top:8px"><span class="t-3">Étape en cours ·</span> ${echapper(courant.titre)}</p>` : ''}
+            ${prog.valeur === null && equipe ? '<p class="t-micro t-3" style="margin-top:6px">Posez des étapes, ou saisissez une valeur dans Modifier.</p>' : ''}
           </div>
         </div>
       </div>
     </section>
+
+    ${tenueDesDelais(d, { pid, env, delai, risques })}
 
     ${blocagesOuverts.length ? `<section class="section">
       <div class="section-tete"><h2>Points bloquants</h2>${boutonNouveau(env, 'blocage', 'Signaler')}</div>
@@ -373,20 +385,20 @@ const apercu = (d, { pid, env, prog, attente, ouverts }) => {
     </section>` : ''}
 
     ${d.composants.length ? `<section class="section">
-      <div class="section-tete"><h2>Composants</h2><a class="lien" href="#/projets/${echapper(pid)}/${equipe ? 'composants' : 'roadmap'}">${equipe ? 'Gérer' : 'Feuille de route'}</a></div>
+      <div class="section-tete"><h2>Les parties du projet <span class="compte-section">${d.composants.length}</span></h2><a class="lien" href="#/projets/${echapper(pid)}/${equipe ? 'composants' : 'etapes'}">${equipe ? 'Gérer' : 'Feuille de route'}</a></div>
       <div class="grille grille-3">${d.composants.map((c) => `<div class="carte carte--serree">
         <div class="rang-espace"><p class="t-corps-fort rang" style="gap:8px">${iconePlateforme(c.type) ? `<span class="ligne-icone ligne-icone--${tonPlateforme(c.type)}" style="width:28px;height:28px;border-radius:8px">${icone(iconePlateforme(c.type))}</span>` : ''}${echapper(c.nom)}</p>${pastille(STATUTS_COMPOSANT, c.statut || 'en-cours')}</div>
         <div class="rang-espace t-micro t-3" style="margin:10px 0 6px"><span>${echapper(TYPES_COMPOSANT[c.type] || c.type || '')}</span><span class="nb">${borner(c.progression)} %</span></div>
         ${progression(c.progression, borner(c.progression) >= 100 ? 'vert' : '')}
         ${c.version || c.environnement ? `<p class="t-micro t-3" style="margin-top:8px">${echapper([c.version && `v${c.version}`, c.versionPrep && `${c.versionPrep} en préparation`, c.environnement].filter(Boolean).join(' · '))}</p>` : ''}
       </div>`).join('')}</div>
-    </section>` : (equipe ? `<section class="section"><div class="section-tete"><h2>Composants</h2>${boutonNouveau(env, 'composant', 'Ajouter un composant')}</div>${vide({ icone: 'composants', titre: 'Aucun composant', texte: 'Découpez le projet : iOS, Android, web, backend...', compact: true })}</section>` : '')}
+    </section>` : (equipe ? `<section class="section"><div class="section-tete"><h2>Les parties du projet</h2>${boutonNouveau(env, 'composant', 'Ajouter une partie')}</div>${vide({ icone: 'composants', titre: 'Aucune partie', texte: 'Découpez le projet : iPhone, Android, web, serveur...', compact: true })}</section>` : '')}
 
     <div class="grille grille-tiers section">
       <div class="pile" style="gap:var(--e-7)">
         <section>
-          <div class="section-tete"><h2>Feuille de route</h2><a class="lien" href="#/projets/${echapper(pid)}/roadmap">Tout voir</a></div>
-          ${d.jalons.length ? `<div class="route">${d.jalons.slice(0, 6).map((j) => phaseHtml(j)).join('')}</div>` : vide({ icone: 'route', titre: 'Pas encore de feuille de route', texte: equipe ? 'Ajoutez les jalons du projet.' : 'Elle apparaîtra ici dès que les étapes seront posées.', compact: true, action: boutonNouveau(env, 'jalon', 'Premier jalon') })}
+          <div class="section-tete"><h2>Feuille de route</h2><a class="lien" href="#/projets/${echapper(pid)}/etapes">Tout voir</a></div>
+          ${d.jalons.length ? `<div class="route">${d.jalons.slice(0, 6).map((j) => phaseHtml(j)).join('')}</div>` : vide({ icone: 'route', titre: 'Pas encore de feuille de route', texte: equipe ? 'Posez les étapes du projet.' : 'Elle apparaîtra ici dès que les étapes seront posées.', compact: true, action: boutonNouveau(env, 'jalon', 'Première étape') })}
         </section>
         <section>
           <div class="section-tete"><h2>Activité récente</h2><a class="lien" href="#/projets/${echapper(pid)}/activite">Tout voir</a></div>
@@ -412,30 +424,89 @@ const apercu = (d, { pid, env, prog, attente, ouverts }) => {
     </div>`;
 };
 
+/*
+ * La tenue des délais. C'est la seule chose que le client ne trouvait
+ * nulle part et pour laquelle il écrivait un message : est-ce qu'on tient
+ * la date, et si elle a bougé, pourquoi. On garde la date d'origine, on
+ * inscrit chaque report avec son motif, et on nomme les faits qui
+ * menacent la prochaine.
+ */
+const tenueDesDelais = (d, { pid, env, delai, risques }) => {
+  const equipe = env.role === 'equipe';
+  const projet = d.projet;
+  const reports = reportsDe(projet);
+  const origine = dateOrigine(projet, 'cible');
+  const decale = origine && projet.cible && dateCourte(origine) !== dateCourte(projet.cible);
+  const etapesEnRetard = d.jalons.filter((j) => j.statut !== 'termine' && joursAvant(j.fin) < 0);
+
+  if (!projet.cible && !reports.length) {
+    return equipe ? `<section class="section">
+      <div class="section-tete"><h2>Tenue des délais</h2><button class="btn btn-fantome btn-petit" type="button" data-action="editer-projet">${icone('cible')} Fixer une date</button></div>
+      ${encart("Aucune date de livraison n'est fixée. Le client n'a donc rien à quoi se raccrocher, et c'est la première raison pour laquelle il écrit.", 'attention', 'alerte')}
+    </section>` : '';
+  }
+
+  return `<section class="section">
+    <div class="section-tete"><h2>Tenue des délais</h2>${equipe ? `<button class="btn btn-fantome btn-petit" type="button" data-action="editer-projet">${icone('edit')} Changer la date</button>` : ''}</div>
+    <div class="carte delais">
+      <div class="delais-tete">
+        <div>
+          <p class="surtitre">Livraison visée</p>
+          <p class="t-titre-2" style="margin-top:4px">${echapper(projet.cible ? dateLongue(projet.cible) : 'Non fixée')}</p>
+          ${decale ? `<p class="t-petit t-3" style="margin-top:4px">Initialement le ${echapper(dateCourte(origine))} · ${echapper(pluriel(reports.length, 'report'))}</p>` : ''}
+        </div>
+        <div class="delais-verdict">${verdictHtml(delai)}</div>
+      </div>
+
+      ${risques.length ? `<div class="delais-risques">
+        <p class="surtitre">Ce qui pèse sur cette date</p>
+        <ul class="pile" style="margin-top:8px;gap:6px">${risques.map((r) => `<li class="rang" style="gap:8px;align-items:flex-start"><span class="ligne-icone ligne-icone--ambre" style="width:22px;height:22px;border-radius:7px">${icone('alerte')}</span><span class="t-petit">${echapper(r)}</span></li>`).join('')}</ul>
+        ${etapesEnRetard.length ? `<p class="t-micro" style="margin-top:8px"><a href="#/projets/${echapper(pid)}/etapes">Voir les étapes concernées</a></p>` : ''}
+      </div>` : ''}
+
+      ${reports.length ? `<div class="delais-reports">
+        <p class="surtitre">L'histoire de cette date</p>
+        <div class="chrono" style="margin-top:10px">
+          ${reports.slice().reverse().map((r) => chronoItem({
+            icone: 'calendrier', ton: 'ambre',
+            texte: `Reportée du <strong>${echapper(dateCourte(r.de))}</strong> au <strong>${echapper(dateCourte(r.vers))}</strong> · ${echapper(MOTIFS_REPORT[r.motif] || r.motif || 'motif non précisé')}${r.note ? `<br><span class="t-3">${echapper(r.note)}</span>` : ''}`,
+            date: `${dateCourte(r.le)}${r.par ? ` · ${r.par}` : ''}`,
+          })).join('')}
+        </div>
+      </div>` : `<p class="t-petit t-3" style="margin-top:14px">Cette date n'a jamais bougé.</p>`}
+    </div>
+  </section>`;
+};
+
+/* Le verdict d'une étape : la même règle que pour le projet, en plus
+   court. Une étape terminée est close, sa date n'a plus d'objet. */
+const delaiEtape = (j) => verdictDelai(j.fin, { clos: j.statut === 'termine', risques: j.statut === 'bloque' ? ['bloquée'] : [] });
+
 const phaseHtml = (j) => {
   const classe = j.statut === 'termine' ? 'phase--terminee' : j.statut === 'en-cours' ? 'phase--en-cours' : j.statut === 'bloque' ? 'phase--bloquee' : '';
+  const v = delaiEtape(j);
   return `<div class="phase ${classe}">
-    <div class="phase-etat"><i aria-hidden="true"></i><span class="t-micro t-3">${echapper((STATUTS_JALON[j.statut] || {}).libelle || '')}</span></div>
+    <div class="phase-etat"><i aria-hidden="true"></i><span class="t-micro t-3">${echapper((STATUTS_ETAPE[j.statut] || {}).libelle || '')}</span></div>
     <p class="phase-nom">${echapper(j.titre)}</p>
-    <p class="phase-sous">${echapper([j.phase, j.fin ? `fin ${dateCourte(j.fin)}` : ''].filter(Boolean).join(' · '))}</p>
+    <p class="phase-sous">${echapper([j.phase, j.fin ? `fin ${dateCourte(j.fin)}` : ''].filter(Boolean).join(' · '))}${v.cle === 'depasse' ? ` <span class="t-alerte">· dépassée ${echapper(v.detail)}</span>` : ''}</p>
     ${j.statut !== 'termine' && borner(j.progression) > 0 ? progression(j.progression) : ''}
   </div>`;
 };
 
-/* --- Composants (équipe) -------------------------------------------------- */
+/* --- Les parties du projet (équipe) --------------------------------------- */
 const composants = (d, { env }) => `
   <section class="section" style="margin-top:0">
-    <div class="section-tete"><h2>Composants</h2>${boutonNouveau(env, 'composant', 'Ajouter')}</div>
+    <div class="section-tete"><h2>Les parties du projet</h2>${boutonNouveau(env, 'composant', 'Ajouter')}</div>
     ${d.composants.length ? `<div class="liste">${d.composants.map((c) => ligne({
       icone: iconePlateforme(c.type) || 'composants', ton: tonPlateforme(c.type),
       titre: `${echapper(c.nom)} <span class="t-3 t-petit" style="font-weight:400">· ${echapper(TYPES_COMPOSANT[c.type] || c.type || '')}</span>`,
       sous: `${echapper([c.version && `v${c.version}`, c.versionPrep && `${c.versionPrep} en prépa.`, c.environnement, (c.techno || []).join(', ')].filter(Boolean).join(' · '))}`,
       fin: `<span class="nb t-petit" style="min-width:44px;text-align:right">${borner(c.progression)} %</span>${pastille(STATUTS_COMPOSANT, c.statut || 'en-cours')}${boutonsEdition(env, 'composant', c.id, c.nom)}`,
-    })).join('')}</div>` : vide({ icone: 'composants', titre: 'Aucun composant', texte: 'Découpez le projet en briques pour suivre chacune.', compact: true })}
+    })).join('')}</div>` : vide({ icone: 'composants', titre: 'Aucune partie', texte: 'Découpez le projet pour suivre chacune de ses parties.', compact: true })}
   </section>`;
 
 /* --- Feuille de route ----------------------------------------------------- */
-const roadmap = (d, { env, pid }) => {
+const etapes = (d, { env, pid }) => {
   const phases = [];
   for (const j of d.jalons) {
     const nom = j.phase || 'Sans phase';
@@ -445,7 +516,7 @@ const roadmap = (d, { env, pid }) => {
   }
   return `
   <section class="section" style="margin-top:0">
-    <div class="section-tete"><h2>Feuille de route</h2>${boutonNouveau(env, 'jalon', 'Nouveau jalon', { ordre: d.jalons.length + 1 })}</div>
+    <div class="section-tete"><h2>Feuille de route</h2>${boutonNouveau(env, 'jalon', 'Nouvelle étape', { ordre: d.jalons.length + 1 })}</div>
     ${d.jalons.length ? `<div class="route" style="margin-bottom:var(--e-6)">${d.jalons.map(phaseHtml).join('')}</div>
     ${phases.map((p) => `<div class="section" style="margin-top:var(--e-5)">
       <p class="surtitre" style="margin-bottom:8px">${echapper(p.nom)}</p>
@@ -455,12 +526,12 @@ const roadmap = (d, { env, pid }) => {
         return ligne({
           icone: j.statut === 'termine' ? 'check' : j.statut === 'bloque' ? 'alerte' : 'drapeau', ton: j.statut === 'termine' ? 'vert' : j.statut === 'bloque' ? 'rouge' : j.statut === 'en-cours' ? 'bleu' : '',
           titre: echapper(j.titre),
-          sous: `${echapper([j.debut && dateCourte(j.debut), j.fin && `→ ${dateCourte(j.fin)}`, tachesDuJalon.length ? `${faites}/${tachesDuJalon.length} tâches` : '', j.description].filter(Boolean).join(' · '))}`,
-          fin: `${j.statut !== 'termine' ? `<span style="width:80px">${progression(j.progression)}</span>` : ''}${pastille(STATUTS_JALON, j.statut || 'a-venir')}${boutonsEdition(env, 'jalon', j.id, j.titre)}`,
+          sous: `${echapper([j.debut && dateCourte(j.debut), j.fin && `→ ${dateCourte(j.fin)}`, tachesDuJalon.length ? `${faites}/${tachesDuJalon.length} tâches` : '', j.description].filter(Boolean).join(' · '))}${reportsDe(j).length ? ` · <span class="t-3">${echapper(pluriel(reportsDe(j).length, 'report'))}, initialement ${echapper(dateCourte(dateOrigine(j, 'fin')))}</span>` : ''}`,
+          fin: `${verdictHtml(delaiEtape(j), { vide: false, detail: j.statut !== 'termine' })}${j.statut !== 'termine' ? `<span style="width:80px">${progression(j.progression)}</span>` : ''}${pastille(STATUTS_ETAPE, j.statut || 'a-venir')}${boutonsEdition(env, 'jalon', j.id, j.titre)}`,
         });
       }).join('')}</div>
     </div>`).join('')}`
-    : vide({ icone: 'route', titre: 'Aucun jalon pour le moment', texte: env.role === 'equipe' ? 'Posez les grandes étapes : cadrage, design, développement, tests, publication.' : 'Les étapes du projet apparaîtront ici.' })}
+    : vide({ icone: 'route', titre: 'Aucune étape pour le moment', texte: env.role === 'equipe' ? 'Posez les grandes étapes : cadrage, design, développement, tests, publication.' : 'Les étapes du projet apparaîtront ici.' })}
   </section>`;
 };
 
@@ -547,7 +618,14 @@ const demandes = (d, { env, pid }) => {
       nonLu: nonLu(t) && OUVERTS.includes(t.statut),
       titre: `${t.numero ? `<span class="t-mono t-3" style="font-weight:400">${echapper(t.numero)}</span> ` : ''}${echapper(t.titre)}`,
       sous: `${echapper((TYPES[t.type] || {}).libelle || t.type)} · ${puce(URGENCES, t.urgence || 'important')} · ${echapper(OUVERTS.includes(t.statut) ? `ouverte depuis ${age(t.cree)}` : `close ${depuis(t.maj)}`)}${t.qualification ? ` · ${pastille(QUALIFICATIONS, t.qualification)}` : ''}`,
-      fin: pastille(STATUTS, t.statut, { client: !equipe }),
+      fin: `${(() => {
+        /* Qui l'a en main. C'est la question que le client posait par
+           message, faute de lire la réponse quelque part. */
+        const chez = (STATUTS[t.statut] || {}).chez;
+        if (chez === 'client') return `<span class="puce puce--ambre"><i></i>${equipe ? 'Chez le client' : 'À vous'}</span>`;
+        if (chez === 'capmedia') return '<span class="puce"><i></i>Chez Capmedia</span>';
+        return '';
+      })()}${pastille(STATUTS, t.statut, { client: !equipe })}`,
     })).join('')}</div>`
     : vide({ icone: 'demandes', titre: filtre === 'ouvertes' ? 'Aucune demande en cours' : 'Rien ici', texte: filtre === 'ouvertes' ? 'Tout semble en ordre pour le moment.' : '', action: `<a class="btn btn-secondaire" href="#/projets/${echapper(pid)}/nouvelle-demande">Créer une demande</a>` })}
   </section>`;

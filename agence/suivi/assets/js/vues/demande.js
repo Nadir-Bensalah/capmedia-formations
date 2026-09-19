@@ -5,9 +5,9 @@
    ========================================================================== */
 
 import {
-  echapper, dateCourte, dateHeure, depuis, enParagraphes, avecLiens, parDateAsc, parDateDesc, joursAvant,
+  echapper, dateCourte, dateHeure, depuis, enParagraphes, avecLiens, parDateAsc, parDateDesc, joursAvant, age,
   bdd, collection, query, where, orderBy, doc,
-  STATUTS, TYPES, URGENCES, PLATEFORMES, QUALIFICATIONS, OUVERTS, ATTEND_CLIENT,
+  STATUTS, TYPES, URGENCES, PLATEFORMES, QUALIFICATIONS, OUVERTS, ATTEND_CLIENT, STATUTS_RELEASE, pluriel,
 } from '../noyau.js';
 import {
   icone, pastille, puce, pucePlateforme, choixPlateformes, avatar, fait, vide, squelette, titrePage, modale, confirmer, toast, sur, depot, lireForme, valider, obligatoire, longueurMax, agir, optionsDe, messageHtml, brancherPieces, encart, pieceHtml, chronoItem,
@@ -76,7 +76,7 @@ export const nouvelle = async (ctx, env) => {
       <div class="groupe"><label class="etiquette-champ" for="description">Description</label><textarea class="zone" id="description" name="description" rows="5" maxlength="6000" placeholder="Ce que vous avez constaté, ce que vous souhaitez, et dans quel contexte.">${echapper(depuisMessage ? depuisMessage.description || '' : '')}</textarea></div>
       <div class="forme-rang">
         <div class="groupe"><label class="etiquette-champ" for="urgence">Urgence</label><select class="select" id="urgence" name="urgence">${optionsDe(URGENCES, 'important')}</select><p class="aide">Bloquant : vous ne pouvez plus travailler. Critique : une fonction majeure est cassée.</p></div>
-        ${composants.length ? `<div class="groupe"><label class="etiquette-champ" for="composant">Composant concerné</label><select class="select" id="composant" name="composant"><option value="">Je ne sais pas</option>${composants.map((c) => `<option value="${echapper(c.id)}">${echapper(c.nom)}</option>`).join('')}</select></div>` : ''}
+        ${composants.length ? `<div class="groupe"><label class="etiquette-champ" for="composant">Quelle partie du projet ?</label><select class="select" id="composant" name="composant"><option value="">Je ne sais pas</option>${composants.map((c) => `<option value="${echapper(c.id)}">${echapper(c.nom)}</option>`).join('')}</select></div>` : ''}
       </div>
       <div class="groupe" data-champ="plateforme">
         <span class="etiquette-champ">Sur quelle plateforme ?</span>
@@ -147,7 +147,7 @@ export const detail = async (ctx, env) => {
   let luMarque = false;
   let composeur = null;
   let derniereEmpreinte = '';
-  const cles = [K.projet(pid), K.ticket(tid), K.messagesTicket(tid), K.evenementsTicket(tid), K.composants(pid), K.taches(pid), K.equipe];
+  const cles = [K.projet(pid), K.ticket(tid), K.messagesTicket(tid), K.evenementsTicket(tid), K.composants(pid), K.taches(pid), K.releases(pid), K.equipe];
 
   const rendre = () => {
     const projet = magasin.lire(K.projet(pid));
@@ -162,6 +162,7 @@ export const detail = async (ctx, env) => {
     const evenements = magasin.lire(K.evenementsTicket(tid)) || [];
     const composants = magasin.lire(K.composants(pid)) || [];
     const taches = (magasin.lire(K.taches(pid)) || []).filter((x) => x.ticket === tid);
+    const release = (magasin.lire(K.releases(pid)) || []).find((r) => r.id === t.release) || null;
     const equipeListe = magasin.lire(K.equipe) || [];
     const nomEquipe = (uid) => ((equipeListe.find((e) => e.id === uid) || {}).nom || '');
     const brouillon = composeur ? composeur.value : '';
@@ -194,9 +195,8 @@ export const detail = async (ctx, env) => {
         </div>
       </header>
 
-      ${!equipe && t.statut === 'en-attente-client' ? encart('<strong>Nous avons besoin d\'une précision.</strong> Lisez le dernier message et répondez ci-dessous : la demande reprend dès votre réponse.', 'attention', 'help') : ''}
-      ${!equipe && t.statut === 'a-valider' ? encart('<strong>La correction est livrée.</strong> Vérifiez de votre côté, puis validez ou dites-nous ce qui manque.', 'ok', 'check') : ''}
-      ${t.qualification === 'hors-perimetre' || t.qualification === 'a-chiffrer' ? encart(`<strong>${t.qualification === 'a-chiffrer' ? 'Cette demande sera chiffrée.' : 'Cette demande sort du périmètre prévu.'}</strong> ${t.devis ? `Le devis <a href="#/finances/${echapper(t.devis)}">est disponible</a>.` : 'Un devis vous sera proposé avant tout développement.'}`, 'info', 'receipt') : ''}
+      ${bandeauSuivi(t, { equipe, release, nomEquipe, evenements })}
+
 
       <div class="grille grille-tiers section">
         <div>
@@ -235,13 +235,13 @@ export const detail = async (ctx, env) => {
               ${fait('Le', echapper(dateHeure(t.cree)))}
               ${fait('Dernier mouvement', echapper(dateHeure(t.maj)))}
               ${fait('Suivie par', echapper(t.assigne ? (nomEquipe(t.assigne) || 'Capmedia') : (equipe ? 'Personne' : 'Capmedia')))}
-              ${fait('Composant', echapper((composants.find((c) => c.id === t.composant) || {}).nom || ''))}
+              ${fait('Partie concernée', echapper((composants.find((c) => c.id === t.composant) || {}).nom || ''))}
             </dl>
           </div>
           ${taches.length ? `<div class="carte carte--creuse"><p class="surtitre">Tâches liées</p><div class="pile" style="margin-top:10px;gap:8px">${taches.map((x) => `<a class="rang" style="gap:8px;color:inherit" href="#/projets/${echapper(pid)}/taches/${echapper(x.id)}">${icone(x.statut === 'terminee' ? 'check' : 'taches')}<span class="t-petit">${echapper(x.titre)}</span></a>`).join('')}</div></div>` : ''}
           <div class="carte carte--creuse">
-            <p class="surtitre">Historique</p>
-            ${evenements.length ? `<div class="chrono" style="margin-top:10px">${evenements.map((e) => chronoItem({ icone: e.type === 'creation' ? 'plus' : e.type === 'statut' ? 'drapeau' : e.type === 'assignation' ? 'utilisateur' : 'activite', ton: e.apres === 'resolu' ? 'vert' : '', texte: texteEvenement(e, nomEquipe), date: dateHeure(e.date) })).join('')}</div>` : '<p class="t-petit t-3" style="margin-top:8px">Rien encore.</p>'}
+            <p class="surtitre">Tout ce qui lui est arrivé</p>
+            ${evenements.length ? `<div class="chrono" style="margin-top:10px">${evenements.slice().reverse().map((e) => chronoItem({ icone: e.type === 'creation' ? 'plus' : e.type === 'statut' ? 'drapeau' : e.type === 'assignation' ? 'utilisateur' : 'activite', ton: e.apres === 'resolu' ? 'vert' : '', texte: texteEvenement(e, nomEquipe), date: [dateHeure(e.date), age(e.date)].filter(Boolean).join(' · ') })).join('')}</div>` : '<p class="t-petit t-3" style="margin-top:8px">Rien encore.</p>'}
           </div>
         </aside>
       </div>
@@ -309,6 +309,45 @@ export const resoudre = async (ctx) => {
   return () => {};
 };
 
+/*
+ * « Où en est ma demande ». Le client lisait un mot d'état et écrivait un
+ * message pour savoir la seule chose qui compte : qui l'a en main, depuis
+ * quand, et ce qui va se passer ensuite. Cette bande le dit sans détour,
+ * et nomme la version dans laquelle la correction part.
+ */
+const bandeauSuivi = (t, { equipe, release, nomEquipe, evenements }) => {
+  const s = STATUTS[t.statut] || {};
+  const ouverte = OUVERTS.includes(t.statut);
+  const chez = s.chez === 'client' ? (equipe ? 'client' : 'vous') : s.chez === 'capmedia' ? 'capmedia' : '';
+  const ton = !ouverte ? (t.statut === 'resolu' ? 'ok' : 'gris') : chez === 'capmedia' ? 'info' : 'attention';
+  const dernier = evenements.length ? evenements[evenements.length - 1] : null;
+  const suivie = t.assigne ? (nomEquipe(t.assigne) || 'Capmedia') : 'Capmedia';
+
+  const balle = chez === 'capmedia'
+    ? `C'est à nous de jouer. ${equipe ? 'Le client attend.' : 'Vous n\'avez rien à faire.'}`
+    : chez === 'vous' ? 'La balle est dans votre camp.'
+    : chez === 'client' ? 'La balle est dans le camp du client.' : '';
+
+  return `<section class="suivi-demande suivi-demande--${ton}">
+    <div class="suivi-demande-tete">
+      <span class="suivi-demande-pastille">${icone(ouverte ? (chez === 'capmedia' ? 'play' : 'help') : 'check')}</span>
+      <div style="min-width:0">
+        <p class="t-titre-3">${echapper((!equipe && s.client) || s.libelle || t.statut)}</p>
+        <p class="t-petit t-2" style="margin-top:2px">${echapper([balle, s.suite].filter(Boolean).join(' '))}</p>
+      </div>
+    </div>
+    <dl class="suivi-demande-faits">
+      <div><dt>Ouverte depuis</dt><dd>${echapper(age(t.cree))}</dd></div>
+      <div><dt>Dernier mouvement</dt><dd>${echapper((dernier && age(dernier.date)) || age(t.maj) || age(t.cree))}</dd></div>
+      <div><dt>Suivie par</dt><dd>${echapper(suivie)}</dd></div>
+      <div><dt>Livrée dans</dt><dd>${release
+        ? `${echapper([release.plateforme && (PLATEFORMES[release.plateforme] || {}).libelle, release.version].filter(Boolean).join(' '))} <span class="t-3">· ${echapper((STATUTS_RELEASE[release.statut] || {}).libelle || '')}${release.date ? ` ${dateCourte(release.date)}` : ''}</span>`
+        : '<span class="t-3">version pas encore fixée</span>'}</dd></div>
+    </dl>
+    ${t.qualification === 'hors-perimetre' || t.qualification === 'a-chiffrer' ? `<p class="suivi-demande-note">${t.qualification === 'a-chiffrer' ? 'Cette demande sera chiffrée.' : 'Cette demande sort du périmètre prévu.'} ${t.devis ? `Le devis <a href="#/finances/${echapper(t.devis)}">est disponible</a>.` : 'Un devis vous sera proposé avant tout développement.'}</p>` : ''}
+  </section>`;
+};
+
 const texteEvenement = (e, nomEquipe) => {
   const par = (e.par && e.par.nom) || 'Capmedia';
   if (e.type === 'creation') return `Demande créée par <strong>${echapper(par)}</strong>`;
@@ -320,4 +359,4 @@ const texteEvenement = (e, nomEquipe) => {
   return `${echapper(e.type)} : ${echapper(e.avant || 'vide')} vers ${echapper(e.apres || 'vide')}`;
 };
 
-void avatar; void dateCourte; void parDateAsc; void parDateDesc; void modale; void ATTEND_CLIENT;
+void avatar; void parDateAsc; void parDateDesc; void modale; void ATTEND_CLIENT; void encart; void pluriel;

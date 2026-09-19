@@ -3,10 +3,10 @@
    étapes qui pose d'un coup la structure initiale.
    ========================================================================== */
 
-import { echapper, dateCourte, pluriel, joursAvant, parDateDesc, STATUTS_PROJET, TYPES_PROJET, TYPES_COMPOSANT, CATEGORIES_LIEN, PLATEFORMES, projetEstActif, statutProjet } from '../noyau.js';
-import { icone, pastille, avatarProjet, progression, ligne, vide, squelette, titrePage, toast, sur, agir, lireForme, valider, obligatoire, emailValide, urlValide, optionsDe, encart, choixPlateformes, pucePlateforme } from '../ui.js';
+import { echapper, dateCourte, pluriel, joursAvant, parDateDesc, STATUTS_PROJET, TYPES_PROJET, TYPES_COMPOSANT, CATEGORIES_LIEN, PLATEFORMES, projetEstActif, statutProjet, verdictDelai } from '../noyau.js';
+import { icone, pastille, avatarProjet, progression, progressionOuPas, verdictHtml, ligne, vide, squelette, titrePage, toast, sur, agir, lireForme, valider, obligatoire, emailValide, urlValide, optionsDe, encart, choixPlateformes, pucePlateforme } from '../ui.js';
 import * as magasin from '../magasin.js';
-import { K, ecrire, progressionProjet } from '../donnees.js';
+import { K, ecrire, progressionProjet, risquesProjet } from '../donnees.js';
 import { filAriane } from '../coquille.js';
 import { naviguer } from '../routeur.js';
 import { appelServeur } from '../serveur.js';
@@ -35,6 +35,7 @@ export const liste = async (ctx, env) => {
     const organisations = magasin.lire(K.organisations) || [];
     const tickets = (magasin.lire(K.ticketsTous) || []).filter((t) => !t.archive);
     const jalons = magasin.lire(K.jalonsTous) || [];
+    const taches = (magasin.lire(K.tachesToutes) || []).filter((t) => !t.archive);
     const nomOrg = (id) => ((organisations.find((o) => o.id === id) || {}).entreprise || (organisations.find((o) => o.id === id) || {}).nom || '');
     /* Mes propres projets se rangent à part : ce ne sont pas des affaires
        clientes, et les mêler fausserait la lecture du portefeuille. */
@@ -49,11 +50,11 @@ export const liste = async (ctx, env) => {
     sortie.innerHTML = `<div class="page">
       <div class="page-tete"><div><h1>Projets</h1><p class="chapo">${pluriel(groupes.actifs.length, 'projet client actif', 'projets clients actifs')} et ${pluriel(groupes.maison.length, 'projet à moi', 'projets à moi')}, sur ${projets.length} au total.</p></div><div class="actions"><a class="btn btn-principal" href="#/projets/nouveau">${icone('plus')} Nouveau projet</a></div></div>
       <div class="filtres" style="margin-bottom:16px">${[['actifs', 'Clients'], ['maison', 'Mes projets'], ['tous', 'Tous'], ['termines', 'Terminés'], ['archives', 'Archivés']].map(([cle, lib]) => `<button class="filtre${etat.filtre === cle ? ' actif' : ''}" type="button" data-filtre="${cle}">${lib}<span class="compte">${groupes[cle].length}</span></button>`).join('')}</div>
-      ${liste.length ? `<div class="liste">${liste.map((p) => { const prog = progressionProjet(p, jalons.filter((j) => j.projet === p.id)); const ouverts = tickets.filter((t) => t.projet === p.id && !['resolu', 'ferme', 'refuse', 'annulee'].includes(t.statut)).length; return ligne({ href: `#/projets/${echapper(p.id)}`, titre: `<span class="rang" style="gap:10px">${avatarProjet(p, 'petit')} ${echapper(p.nom)} <span class="t-3 t-petit" style="font-weight:400">${echapper(p.ref || '')}</span></span>`, sous: echapper([p.interne ? 'Mon projet' : (nomOrg(p.organisation) || (p.client || {}).entreprise || (p.client || {}).nom), p.cible ? `cible ${dateCourte(p.cible)}` : '', ouverts ? pluriel(ouverts, 'demande ouverte', 'demandes ouvertes') : ''].filter(Boolean).join(' · ')), fin: `${jetonsPlateformes(p.plateformes)}<span style="width:90px">${progression(prog.valeur)}</span>${pastille(STATUTS_PROJET, statutProjet(p))}${p.cible && joursAvant(p.cible) < 0 && statutProjet(p) !== 'termine' ? '<span class="puce puce--rouge"><i></i>Retard</span>' : ''}` }); }).join('')}</div>` : vide({ icone: 'projets', titre: 'Aucun projet ici', compact: true })}
+      ${liste.length ? `<div class="liste">${liste.map((p) => { const prog = progressionProjet(p, jalons.filter((j) => j.projet === p.id), { taches: taches.filter((t) => t.projet === p.id) }); const ouverts = tickets.filter((t) => t.projet === p.id && !['resolu', 'ferme', 'refuse', 'annulee'].includes(t.statut)).length; return ligne({ href: `#/projets/${echapper(p.id)}`, titre: `<span class="rang" style="gap:10px">${avatarProjet(p, 'petit')} ${echapper(p.nom)} <span class="t-3 t-petit" style="font-weight:400">${echapper(p.ref || '')}</span></span>`, sous: echapper([p.interne ? 'Mon projet' : (nomOrg(p.organisation) || (p.client || {}).entreprise || (p.client || {}).nom), p.cible ? `cible ${dateCourte(p.cible)}` : '', ouverts ? pluriel(ouverts, 'demande ouverte', 'demandes ouvertes') : ''].filter(Boolean).join(' · ')), fin: `${jetonsPlateformes(p.plateformes)}<span style="width:90px">${progressionOuPas(prog)}</span>${pastille(STATUTS_PROJET, statutProjet(p))}${verdictHtml(verdictDelai(p.cible, { clos: statutProjet(p) === 'termine', risques: risquesProjet({ jalons: jalons.filter((j) => j.projet === p.id), taches: taches.filter((t) => t.projet === p.id) }) }), { vide: false, detail: false })}` }); }).join('')}</div>` : vide({ icone: 'projets', titre: 'Aucun projet ici', compact: true })}
     </div>`;
   };
   const gestes = sur(sortie, 'click', '[data-filtre]', (el) => { etat.filtre = el.dataset.filtre; rendre(); });
-  [K.projets, K.organisations, K.ticketsTous, K.jalonsTous].forEach((c) => lot.sur(c, rendre));
+  [K.projets, K.organisations, K.ticketsTous, K.jalonsTous, K.tachesToutes].forEach((c) => lot.sur(c, rendre));
   return () => { gestes(); lot.fin(); };
 };
 
@@ -61,7 +62,7 @@ export const liste = async (ctx, env) => {
    L'assistant de création
    ========================================================================== */
 
-const ETAPES = ['Identité', 'Client', 'Type', 'Composants', 'Équipe', 'Dates', 'Budget', 'Liens', 'Accès', 'Récapitulatif'];
+const ETAPES = ['Identité', 'Client', 'Type', 'Les parties', 'Équipe', 'Dates', 'Budget', 'Liens', 'Accès', 'Récapitulatif'];
 
 export const nouveau = async (ctx, env) => {
   const sortie = ctx.sortie;
@@ -97,7 +98,7 @@ export const nouveau = async (ctx, env) => {
       case 6: return `<div class="forme-rang"><div class="groupe"><label class="etiquette-champ" for="budget">Budget HT <span class="facultatif">(facultatif, interne)</span></label><input class="champ" id="budget" name="budget" type="number" min="0" step="100" value="${echapper(d.budget)}"></div><div class="groupe"><label class="etiquette-champ" for="budgetNote">Note <span class="facultatif">(facultatif)</span></label><input class="champ" id="budgetNote" name="budgetNote" value="${echapper(d.budgetNote)}" placeholder="Forfait, régie, phases"></div></div><p class="aide">Le budget reste interne. Le client voit ses devis et ses factures.</p>`;
       case 7: return `<p class="t-petit t-2">Les adresses utiles au client, dès l'ouverture. Vous pourrez en ajouter ensuite.</p><div id="liste-liens" class="pile" style="margin-top:12px">${d.liens.map((l, i) => `<div class="forme-rang" data-i="${i}"><input class="champ" name="lnom" value="${echapper(l.nom)}" placeholder="Nom"><div class="rang" style="gap:6px;flex-wrap:nowrap"><input class="champ" name="lurl" value="${echapper(l.url)}" placeholder="https://"><select class="select" name="lcat" style="width:150px;flex:none">${optionsDe(CATEGORIES_LIEN, l.categorie)}</select><button class="btn-icone" type="button" data-retirer-lien="${i}" aria-label="Retirer">${icone('fermer')}</button></div></div>`).join('')}</div><button class="btn btn-doux btn-petit" type="button" data-ajouter-lien style="margin-top:12px">${icone('plus')} Ajouter un lien</button>`;
       case 8: return `<label class="interrupteur"><input type="checkbox" name="inviter" ${d.inviter ? 'checked' : ''}><i></i> Inviter le contact principal dès la création</label><p class="aide" style="margin-top:8px">Il reçoit un e-mail avec le lien de son espace. Décochez pour préparer le projet avant d'ouvrir l'accès.</p>${encart('Les contacts déjà rattachés au client ont automatiquement accès au nouveau projet.', 'info')}`;
-      case 9: { const o = orgChoisie(); return `<dl class="faits" style="grid-template-columns:1fr 1fr">${[['Projet', `${d.nom} (${d.ref.toUpperCase()})`], ['Client', o ? (o.entreprise || o.nom) : `${d.clientEntreprise} · ${d.clientNom} · ${d.clientEmail}`], ['Type', TYPES_PROJET[d.type]], ['Statut', (STATUTS_PROJET[d.statut] || {}).libelle], ['Composants', d.composants.map((c) => c.nom).join(', ') || 'Aucun'], ['Responsable', (equipe.find((e) => e.id === d.responsable) || {}).nom || ''], ['Dates', [d.debut, d.cible].filter(Boolean).join(' → ') || 'Non fixées'], ['Budget', d.budget ? `${d.budget} € HT` : 'Non renseigné'], ['Liens', d.liens.length ? pluriel(d.liens.length, 'lien') : 'Aucun'], ['Invitation', d.inviter ? 'Envoyée à la création' : 'Plus tard']].map(([l, v]) => `<div class="fait"><dt>${echapper(l)}</dt><dd>${echapper(v)}</dd></div>`).join('')}</dl>${depuis ? encart(`Ce projet reprend la demande « ${echapper(depuis.titre)} ». Sa discussion et ses fichiers restent accessibles depuis la fiche de la demande.`, 'info', 'sparkle') : ''}`; }
+      case 9: { const o = orgChoisie(); return `<dl class="faits" style="grid-template-columns:1fr 1fr">${[['Projet', `${d.nom} (${d.ref.toUpperCase()})`], ['Client', o ? (o.entreprise || o.nom) : `${d.clientEntreprise} · ${d.clientNom} · ${d.clientEmail}`], ['Type', TYPES_PROJET[d.type]], ['Statut', (STATUTS_PROJET[d.statut] || {}).libelle], ['Les parties', d.composants.map((c) => c.nom).join(', ') || 'Aucune'], ['Responsable', (equipe.find((e) => e.id === d.responsable) || {}).nom || ''], ['Dates', [d.debut, d.cible].filter(Boolean).join(' → ') || 'Non fixées'], ['Budget', d.budget ? `${d.budget} € HT` : 'Non renseigné'], ['Liens', d.liens.length ? pluriel(d.liens.length, 'lien') : 'Aucun'], ['Invitation', d.inviter ? 'Envoyée à la création' : 'Plus tard']].map(([l, v]) => `<div class="fait"><dt>${echapper(l)}</dt><dd>${echapper(v)}</dd></div>`).join('')}</dl>${depuis ? encart(`Ce projet reprend la demande « ${echapper(depuis.titre)} ». Sa discussion et ses fichiers restent accessibles depuis la fiche de la demande.`, 'info', 'sparkle') : ''}`; }
       default: return '';
     }
   };
