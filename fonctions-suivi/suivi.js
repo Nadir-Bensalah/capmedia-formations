@@ -1379,6 +1379,23 @@ exports.suiviAdmin = onRequest(
           techno: x.techno || [], responsable: x.responsable || '', description: x.description || '', ordre: Number(x.ordre) || 0,
           lien: x.lien || '',
         }));
+        /* Les fiches techniques se posent sur des briques existantes : on
+           fusionne, sans toucher au reste du composant. */
+        if (Array.isArray(c.fichesTechniques) && c.fichesTechniques.length) {
+          let n = 0;
+          const tous = await bdd.collection(`projets/${id}/composants`).get();
+          for (const f of c.fichesTechniques) {
+            const vises = Array.isArray(f.composants) && f.composants.length
+              ? tous.docs.filter((d) => f.composants.includes(d.id))
+              : tous.docs;
+            for (const d of vises) {
+              await d.ref.set({ technique: sansIndefini({ ...f.technique, releve: enDate(f.technique && f.technique.releve) }), maj: FieldValue.serverTimestamp() }, { merge: true });
+              n += 1;
+            }
+          }
+          compte.fichesTechniques = n;
+        }
+
         compte.jalons = await poser(c.jalons, `projets/${id}/jalons`, (x) => ({
           projet: String(id), titre: x.titre, description: x.description || '', phase: x.phase || '',
           statut: x.statut || 'a-venir', progression: Number(x.progression) || 0,
