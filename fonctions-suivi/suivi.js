@@ -1306,7 +1306,7 @@ exports.suiviAdmin = onRequest(
         ]);
         return res.status(200).json({
           ok: true,
-          projets: projets.docs.map((d) => { const p = d.data(); return { id: d.id, nom: p.nom, ref: p.ref, statut: p.statut, archive: Boolean(p.archive), organisation: p.organisation || null, membres: (p.membres || []).length, client: (p.client || {}).email || null, progression: p.progression || null, silence: p.silence === true, plateformes: p.plateformes || [] }; }),
+          projets: projets.docs.map((d) => { const p = d.data(); return { id: d.id, nom: p.nom, ref: p.ref, statut: p.statut, archive: Boolean(p.archive), organisation: p.organisation || null, membres: (p.membres || []).length, client: (p.client || {}).email || null, progression: p.progression || null, silence: p.silence === true, plateformes: p.plateformes || [], interne: p.interne === true, contacts: (p.contacts || []).length }; }),
           organisations: organisations.docs.map((d) => ({ id: d.id, nom: d.data().entreprise || d.data().nom, email: d.data().email, membres: (d.data().membres || []).length })),
           equipe: equipe.docs.map((d) => ({ uid: d.id, email: d.data().email, role: d.data().role })),
           documents: (await bdd.collection('documents').get()).docs.map((d) => { const x = d.data(); return { id: d.id, projet: x.projet, type: x.type, numero: x.numero, montant: x.montant, statut: x.statut, pdf: Boolean(x.fichier && x.fichier.chemin), liens: (x.liens || []).length }; }),
