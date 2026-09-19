@@ -1516,3 +1516,23 @@ input, select, textarea { font: inherit; color: inherit; }
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
 }
 .avatar-projet--mini { width: 18px; height: 18px; border-radius: 6px; font-size: 8px; }
+
+/* --- La page d'une brique -------------------------------------------------
+   L'icône de la plateforme en grand, et les notes de version en liste. */
+.brique-icone {
+  width: 64px; height: 64px; border-radius: 18px; flex: none;
+  display: grid; place-items: center;
+  background: var(--gris-voile); color: var(--encre-2);
+}
+.brique-icone svg { width: 28px; height: 28px; }
+.brique-icone--bleu   { background: var(--accent-voile);    color: var(--accent); }
+.brique-icone--vert   { background: var(--ok-voile);        color: var(--ok); }
+.brique-icone--ambre  { background: var(--attention-voile); color: var(--attention); }
+.brique-icone--rouge  { background: var(--alerte-voile);    color: var(--alerte); }
+.brique-icone--violet { background: var(--violet-voile);    color: var(--violet); }
+.brique-icone--gris   { background: var(--gris-voile);      color: var(--encre-2); }
+
+.notes-version { list-style: none; margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.notes-version li { display: flex; align-items: flex-start; gap: 8px; font: var(--t-petit); color: var(--encre-2); }
+.notes-version li .puce { flex: none; margin-top: 1px; }
+.chrono-point--ok { background: var(--ok); }

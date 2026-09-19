@@ -14,6 +14,7 @@ import * as adminClients from './vues/admin-clients.js';
 import * as adminProjets from './vues/admin-projets.js';
 import * as projet from './vues/projet.js';
 import * as demande from './vues/demande.js';
+import * as brique from './vues/brique.js';
 import * as adminDemandes from './vues/admin-demandes.js';
 import * as adminTaches from './vues/admin-taches.js';
 import * as adminPlanning from './vues/admin-planning.js';
@@ -150,6 +151,7 @@ definir([
   { chemin: '/projets/:id/nouvelle-demande', vue: (ctx) => demande.nouvelle(ctx, env) },
   { chemin: '/projets/:id/demandes/:tid', vue: (ctx) => demande.detail(ctx, env) },
   { chemin: '/projets/:id/taches/:tid', cle: (c) => `projet:${c.params.id}`, vue: (ctx) => projet.vue({ ...ctx, onglet: 'taches' }, env) },
+  { chemin: '/projets/:id/brique/:cid', vue: (ctx) => brique.vue(ctx, env) },
   { chemin: '/projets/:id/:onglet', cle: (c) => `projet:${c.params.id}`, vue: (ctx) => projet.vue({ ...ctx, onglet: ctx.params.onglet }, env) },
   { chemin: '/nouveaux-projets', vue: (ctx) => nouveauProjet.liste(ctx, env) },
   { chemin: '/nouveaux-projets/:id', vue: (ctx) => nouveauProjet.detail(ctx, env) },
