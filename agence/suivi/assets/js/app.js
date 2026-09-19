@@ -78,8 +78,8 @@ const construireNavigation = () => {
     {
       titre: 'Suivi',
       items: [
-        { chemin: '/valider', libelle: 'À valider', icone: 'valider', compte: { total: aValider.length, neuf: validations } },
-        { chemin: '/messages', libelle: 'Messages', icone: 'messages', compte: { total: projets.filter((p) => !p.archive).length, neuf: nonLus } },
+        { chemin: '/valider', libelle: 'En attente de vous', icone: 'valider', compte: { total: attente.length, neuf: attente.length } },
+        { chemin: '/messages', libelle: 'Messages', icone: 'messages', compte: { total: 0, neuf: nonLus } },
         { chemin: '/calendrier', libelle: 'Calendrier', icone: 'calendrier', compte: { total: reunionsAVenir.length } },
         { chemin: '/finances', libelle: 'Devis et factures', icone: 'finances', compte: { total: pieces.length, neuf: dues } },
         { chemin: '/documents', libelle: 'Documents', icone: 'documents', compte: { total: fichiers.length } },

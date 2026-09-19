@@ -44,6 +44,12 @@ const visibilite = (valeur = 'client') => `
     </div>
   </div>`;
 
+/* Un choix multiple garde ce qui était déjà coché : sans cela, rouvrir un
+   jalon pour corriger son avancement effaçait en silence ses composants. */
+const optionsMultiples = (carte, prises) => Object.entries(carte)
+  .map(([cle, libelle]) => `<option value="${echapper(cle)}"${(prises || []).includes(cle) ? ' selected' : ''}>${echapper(typeof libelle === 'string' ? libelle : libelle.libelle)}</option>`)
+  .join('');
+
 const contactsDe = (fiche) => contactsProjet(fiche);
 const composantsDe = (pid) => (magasin.lire(K.composants(pid)) || []).reduce((c, x) => ({ ...c, [x.id]: x.nom }), {});
 const jalonsDe = (pid) => (magasin.lire(K.jalons(pid)) || []).reduce((c, x) => ({ ...c, [x.id]: x.titre }), {});
@@ -183,12 +189,12 @@ const editeurs = {
     }).then(() => toast('Projet mis à jour.')),
   }),
 
-  composant: (env, { pid, fiche }) => feuille({
+  composant: (env, { pid, fiche, defaut = {} }) => feuille({
     titre: fiche ? 'Le composant' : 'Nouveau composant', sousTitre: fiche ? fiche.nom : 'Une brique du projet : iOS, Android, backend...',
     corps: `
-      ${champ('nom', 'Nom', fiche ? fiche.nom : '', { placeholder: 'Application iOS' })}
+      ${champ('nom', 'Nom', fiche ? fiche.nom : (defaut.nom || ''), { placeholder: 'Application iOS' })}
       <div class="forme-rang">
-        ${select('type', 'Type', TYPES_COMPOSANT, fiche ? fiche.type : 'ios')}
+        ${select('type', 'Type', TYPES_COMPOSANT, fiche ? fiche.type : (defaut.type || 'ios'))}
         ${select('statut', 'Statut', STATUTS_COMPOSANT, fiche ? fiche.statut : 'en-cours')}
       </div>
       <div class="forme-rang">
@@ -218,7 +224,7 @@ const editeurs = {
      tourner, qui en détient les clés, et ce qu'il faudra mettre à jour.
      Deux façons de la remplir : coller un package.json, ou tout saisir. */
   technique: (env, { pid, fiche }) => {
-    const t = (fiche && fiche.technique) || {};
+    const t = (magasin.lire(K.technique(pid)) || []).find((x) => x.id === (fiche && fiche.id)) || {};
     const enLignes = (liste, forme) => (liste || []).map(forme).join('\n');
     return feuille({
       titre: 'La fiche technique', sousTitre: fiche ? fiche.nom : '',
@@ -280,7 +286,7 @@ const editeurs = {
           acces: couper(d.acces).map((l) => { const [nom, compte, detenteur, url] = l.split('|').map((x) => x.trim()); return { nom, compte: compte || '', detenteur: detenteur || '', url: url || '' }; }),
           alertes: couper(d.alertes).map((l) => { const [gravite, titre, echeance, texte] = l.split('|').map((x) => x.trim()); return { gravite: gravite || 'info', titre: titre || '', echeance: echeance || '', texte: texte || '' }; }),
         };
-        await ecrire.majComposant(pid, fiche.id, { technique });
+        await ecrire.majTechnique(pid, fiche.id, technique);
         toast('Fiche technique mise à jour.');
       },
     });
@@ -304,7 +310,7 @@ const editeurs = {
         ${select('responsable', 'Responsable', equipeCarte(), fiche ? fiche.responsable : '', { vide: 'Non défini' })}
       </div>
       <div class="groupe"><label class="etiquette-champ" for="ed-composants">Composants concernés</label>
-        <select class="select" id="ed-composants" name="composants" multiple size="4">${optionsDe(composantsDe(pid), '')}</select>
+        <select class="select" id="ed-composants" name="composants" multiple size="4">${optionsMultiples(composantsDe(pid), (fiche && fiche.composants) || [])}</select>
         <p class="aide">Maintenez ⌘ ou Ctrl pour en choisir plusieurs.</p></div>
       ${zone('description', 'Description', fiche ? fiche.description : '', { facultatif: true, lignes: 3 })}`,
     regles: { titre: obligatoire() },
@@ -367,12 +373,12 @@ const editeurs = {
     },
   }),
 
-  release: (env, { pid, fiche }) => feuille({
+  release: (env, { pid, fiche, defaut = {} }) => feuille({
     titre: fiche ? 'La version' : 'Nouvelle version', sousTitre: 'Ce qui change, dit au client.',
     corps: `
       <div class="forme-rang">
         ${champ('version', 'Version', fiche ? fiche.version : '', { placeholder: '2.4.1' })}
-        ${select('plateforme', 'Plateforme', { ios: 'iOS', android: 'Android', web: 'Web', backend: 'Backend', admin: 'Tableau de bord' }, fiche ? fiche.plateforme : 'ios')}
+        ${select('plateforme', 'Plateforme', PLATEFORMES_CHOIX, fiche ? fiche.plateforme : (defaut.plateforme || 'ios'))}
       </div>
       ${champ('titre', 'Titre', fiche ? fiche.titre : '', { facultatif: true, placeholder: 'Nouveau profil et corrections' })}
       <div class="forme-rang">

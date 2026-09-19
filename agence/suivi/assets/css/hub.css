@@ -40,11 +40,11 @@
   --accent-voile:  #E8F2FD;
   --anneau:        rgba(0, 117, 222, 0.28);
 
-  --ok:            #1F9D55;
+  --ok:            #16763F;
   --ok-voile:      #E6F6EC;
-  --attention:     #C77700;
+  --attention:     #8A5200;
   --attention-voile: #FFF4DE;
-  --alerte:        #D93025;
+  --alerte:        #B3261E;
   --alerte-voile:  #FDECEA;
   --violet:        #6E56CF;
   --violet-voile:  #EFEBFD;
@@ -192,7 +192,11 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; text-underline-offset: 3px; }
 input, select, textarea { font: inherit; color: inherit; }
-:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--anneau); border-radius: var(--r-petit); }
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--fond), 0 0 0 4px var(--accent);
+  border-radius: var(--r-champ);
+}
 ::selection { background: var(--accent-voile); }
 
 .sr-only {
@@ -440,6 +444,10 @@ input, select, textarea { font: inherit; color: inherit; }
 /* L'en-tête d'un projet : le titre à gauche, les actions toujours à droite,
    quelle que soit la hauteur de la colonne de gauche. */
 .page-tete--projet { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
+@media (max-width: 720px) {
+  .page-tete--projet { grid-template-columns: minmax(0, 1fr); }
+  .page-tete--projet > .actions { justify-content: flex-start; }
+}
 .page-tete--projet > .actions { justify-content: flex-end; }
 .tete-suivi { margin-top: var(--e-2); row-gap: var(--e-2); }
 
@@ -1348,7 +1356,14 @@ input, select, textarea { font: inherit; color: inherit; }
    est fermée, et se plie en plein écran sur un téléphone.
    ========================================================================== */
 
-.bulle { position: fixed; right: var(--e-5); bottom: var(--e-5); z-index: 70; display: flex; flex-direction: column-reverse; align-items: flex-end; gap: var(--e-3); }
+.bulle {
+  position: fixed; right: var(--e-5); bottom: calc(var(--e-5) + env(safe-area-inset-bottom, 0px));
+  z-index: 70; display: flex; flex-direction: column-reverse; align-items: flex-end; gap: var(--e-3);
+  /* Le conteneur ne dessine rien : il ne doit pas capter le doigt à la
+     place du contenu qui passe dessous. */
+  pointer-events: none;
+}
+.bulle-pastille, .bulle-panneau { pointer-events: auto; }
 
 .bulle-pastille {
   position: relative; width: 52px; height: 52px; border-radius: 50%;

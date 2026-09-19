@@ -127,7 +127,8 @@ export const vue = async (ctx, env) => {
 
   const rendre = () => {
     const projets = magasin.lire(K.projets) || session.projets;
-    const documents = agreger(session, G.documents).filter((d) => !d.archive);
+    /* Un brouillon est une réflexion de l'agence : il ne s'affiche pas. */
+    const documents = agreger(session, G.documents).filter((d) => !d.archive && d.statut !== 'brouillon');
     const paiements = agreger(session, G.paiements);
     const nomProjet = (pid) => ((projets.find((p) => p.id === pid) || {}).nom || '');
     const devis = documents.filter((d) => d.type === 'devis').sort(parDateDesc('date'));

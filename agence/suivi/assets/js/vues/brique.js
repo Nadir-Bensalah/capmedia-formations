@@ -35,25 +35,25 @@ const lire = (pid) => ({
   notes: magasin.lire(K.notes(pid)) || [],
   blocages: magasin.lire(K.blocages(pid)) || [],
   activite: (magasin.lire(K.activite(pid)) || []).slice().sort(parDateDesc('date')),
+  technique: magasin.lire(K.technique(pid)) || [],
   equipe: magasin.lire(K.equipe) || [],
 });
 
 /* Le repère de la brique : soit un composant existant, soit une plateforme
    déclarée sur le projet qui n'a pas encore sa brique. */
 const resoudre = (d, cid) => {
-  const composant = d.composants.find((c) => c.id === cid) || null;
-  if (composant) return { composant, cle: composant.type, fiche: PLATEFORMES[composant.type] || null };
   const cle = String(cid || '').replace(/^p-/, '');
+  const composant = d.composants.find((c) => c.id === cid)
+    || (String(cid || '').startsWith('p-') ? d.composants.find((c) => c.type === cle) : null);
+  if (composant) return { composant, cle: composant.type, fiche: PLATEFORMES[composant.type] || null };
   return { composant: null, cle, fiche: PLATEFORMES[cle] || null };
 };
 
 /* Ce qui appartient à cette brique. Une tâche, une demande ou une version
    s'y rattache par son composant, ou à défaut par sa plateforme. */
-const sien = (x, composant, cle) => {
-  if (composant && x.composant && x.composant === composant.id) return true;
-  if (x.plateforme && cle && x.plateforme === cle) return true;
-  return false;
-};
+const sien = (x, composant, cle) => (x.composant
+  ? Boolean(composant) && x.composant === composant.id
+  : Boolean(cle) && x.plateforme === cle);
 
 export const vue = async (ctx, env) => {
   const pid = ctx.params.id;
@@ -65,7 +65,7 @@ export const vue = async (ctx, env) => {
   abonnerProjet(lot, pid, env.role);
 
   const cles = [K.projet(pid), K.composants(pid), K.jalons(pid), K.liens(pid), K.taches(pid), K.tickets(pid),
-    K.fichiers(pid), K.releases(pid), K.notes(pid), K.blocages(pid), K.activite(pid), K.equipe];
+    K.fichiers(pid), K.releases(pid), K.notes(pid), K.blocages(pid), K.activite(pid), K.technique(pid), K.equipe];
   let empreinte = '';
 
   const rendre = (force = false) => {
@@ -87,25 +87,25 @@ export const vue = async (ctx, env) => {
     filAriane([{ libelle: d.projet.nom, chemin: `/projets/${pid}` }, { libelle: titre }]);
 
     const versions = d.releases.filter((r) => sien(r, composant, cle)).sort(parDateDesc('date'));
-    const taches = d.taches.filter((t) => sien(t, composant, cle));
+    const taches = d.taches.filter((t) => sien(t, composant, cle))
+      .sort((a, b) => Number(a.statut === 'terminee') - Number(b.statut === 'terminee'));
     const ouvertes = taches.filter((t) => t.statut !== 'terminee');
-    const demandes = d.tickets.filter((t) => sien(t, composant, cle));
+    const demandes = d.tickets.filter((t) => sien(t, composant, cle)).sort(parDateDesc('cree')).slice(0, 20);
     const demandesOuvertes = demandes.filter((t) => OUVERTS.includes(t.statut));
     const jalons = d.jalons.filter((j) => composant && Array.isArray(j.composants) && j.composants.includes(composant.id));
     const fichiers = d.fichiers.filter((f) => sien(f, composant, cle));
     const liens = d.liens.filter((l) => sien(l, composant, cle));
     const notes = d.notes.filter((n) => sien(n, composant, cle));
-    const blocages = d.blocages.filter((b) => sien(b, composant, cle));
-    const journal = d.activite.filter((a) => {
-      const t = `${a.texte || ''}`.toLowerCase();
-      return (composant && t.includes(String(composant.nom || '').toLowerCase()))
-        || (fiche && t.includes(String(fiche.libelle || '').toLowerCase()));
-    }).slice(0, 25);
+    const blocages = d.blocages.filter((b) => !b.resolu && sien(b, composant, cle));
+    /* Le journal se rattache par identifiant, jamais par ressemblance de
+       texte : chercher « web » dans une phrase attrapait « webhook ». */
+    const miens = new Set([...versions, ...taches, ...fichiers, ...demandes].map((x) => x.id));
+    const journal = d.activite.filter((a) => a.cible && miens.has(a.cible)).slice(0, 25);
 
     const adresse = (composant && composant.lien)
       || (liens.find((l) => ['production', 'mobile'].includes(l.categorie || '')) || {}).url || '';
 
-    const tec = (composant && composant.technique) || {};
+    const tec = (composant && d.technique.find((x) => x.id === composant.id)) || {};
     const lienFiche = `<button class="lien" type="button" data-action="editer" data-genre="technique" data-id="${echapper(composant ? composant.id : '')}">Compléter</button>`;
 
     const publiees = versions.filter((v) => v.statut === 'disponible');
@@ -124,6 +124,7 @@ export const vue = async (ctx, env) => {
               ${composant && composant.version ? `<span class="puce">${icone('releases')} Version ${echapper(composant.version)}</span>` : ''}
               ${composant && composant.versionPrep ? `<span class="puce">${icone('sparkle')} ${echapper(composant.versionPrep)} en préparation</span>` : ''}
               ${composant && composant.environnement ? `<span class="puce">${icone('serveur')} ${echapper(composant.environnement)}</span>` : ''}
+              ${composant && composant.responsable && (d.equipe.find((m) => m.id === composant.responsable) || {}).nom ? `<span class="puce">${icone('utilisateur')} ${echapper((d.equipe.find((m) => m.id === composant.responsable) || {}).nom)}</span>` : ''}
             </div>
           </div>
         </div>
@@ -149,7 +150,7 @@ export const vue = async (ctx, env) => {
 
       ${composant && (composant.techno || []).length ? `<div class="rang" style="margin-top:var(--e-5);gap:6px">${(composant.techno || []).map((t) => `<span class="etiquette">${echapper(t)}</span>`).join('')}</div>` : ''}
 
-      ${tec.alertes && tec.alertes.length ? `<section class="section">
+      ${equipe && tec.alertes && tec.alertes.length ? `<section class="section">
         <div class="section-tete"><h2>À mettre à jour <span class="compte-section compte-section--vif">${tec.alertes.length}</span></h2>${equipe ? lienFiche : ''}</div>
         <div class="liste">${tec.alertes.map((a) => ligne({
           icone: a.gravite === 'critique' ? 'alerte' : a.gravite === 'attention' ? 'horloge' : 'info',
@@ -160,8 +161,8 @@ export const vue = async (ctx, env) => {
         })).join('')}</div>
       </section>` : ''}
 
-      ${(tec.lignes || tec.fichiers || (tec.technos || []).length) ? `<section class="section">
-        <div class="section-tete"><h2>Le code</h2>${tec.releve ? `<span class="t-petit t-3">Relevé le ${echapper(dateCourte(tec.releve))}</span>` : ''}</div>
+      ${equipe && (tec.lignes || tec.fichiers || (tec.technos || []).length) ? `<section class="section">
+        <div class="section-tete"><h2>Le code</h2>${tec.releve ? `<span class="t-petit t-3">Relevé ${echapper(depuis(tec.releve))}</span>` : ''}</div>
         <div class="metriques">
           ${tec.lignes ? metrique(nombre(tec.lignes), 'Lignes de code', { nuance: tec.fichiers ? `${nombre(tec.fichiers)} fichiers` : '' }) : ''}
           ${(tec.dependances || []).length ? metrique((tec.dependances || []).filter((x) => !x.dev).length, 'Bibliothèques', { nuance: `${(tec.dependances || []).filter((x) => x.dev).length} de développement` }) : ''}
@@ -171,7 +172,7 @@ export const vue = async (ctx, env) => {
         ${(tec.technos || []).length ? `<div class="rang" style="margin-top:var(--e-5);gap:6px">${(tec.technos || []).map((x) => `<span class="etiquette etiquette--techno">${echapper(x.nom)}${x.version ? ` <b>${echapper(x.version)}</b>` : ''}</span>`).join('')}</div>` : ''}
       </section>` : ''}
 
-      ${(tec.dependances || []).length ? `<section class="section">
+      ${equipe && (tec.dependances || []).length ? `<section class="section">
         <details class="depliant">
           <summary><span class="t-titre-3">Les bibliothèques installées</span><span class="compte-section">${(tec.dependances || []).length}</span></summary>
           <table class="tableau" style="margin-top:var(--e-4)">
@@ -184,12 +185,12 @@ export const vue = async (ctx, env) => {
         </details>
       </section>` : ''}
 
-      ${(tec.assets || []).length ? `<section class="section">
+      ${equipe && (tec.assets || []).length ? `<section class="section">
         <div class="section-tete"><h3>Les ressources</h3></div>
         <div class="liste">${(tec.assets || []).map((a) => ligne({ icone: 'image', titre: echapper(a.nom), sous: echapper(a.detail || '') })).join('')}</div>
       </section>` : ''}
 
-      ${(tec.acces || []).length ? `<section class="section">
+      ${equipe && (tec.acces || []).length ? `<section class="section">
         <div class="section-tete"><h3>Les comptes et les accès</h3>${equipe ? lienFiche : ''}</div>
         <div class="liste">${(tec.acces || []).map((a) => ligne({
           href: a.url || undefined,

@@ -341,7 +341,9 @@ export const STATUTS_FACTURE = {
   'annulee':   { libelle: 'Annulée',             voile: 'gris' },
   'avoir':     { libelle: 'Avoir',               voile: 'gris' },
 };
-export const FACTURES_DUES = ['a-payer', 'partielle', 'en-retard'];
+/* Une facture envoyée est déjà due : la laisser hors de cette liste la
+   rendait invisible du client, qui découvrait le retard un mois plus tard. */
+export const FACTURES_DUES = ['envoyee', 'a-payer', 'partielle', 'en-retard'];
 export const MOYENS_PAIEMENT = { 'virement': 'Virement', 'carte': 'Carte', 'stripe': 'Stripe', 'cheque': 'Chèque', 'especes': 'Espèces', 'autre': 'Autre' };
 
 /* --- Les demandes de nouveau projet ------------------------------------- */
