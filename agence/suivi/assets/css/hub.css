@@ -37,6 +37,9 @@
   /* --- Accent et sémantique ------------------------------------------ */
   --accent:        #0075DE;
   --accent-survol: #0062BA;
+  /* Le bleu des icônes de la barre latérale : celui du système, pas celui
+     de l'accent, pour que la barre reste calme quand l'accent bouge. */
+  --bleu-systeme:  #007AFF;
   --accent-voile:  #E8F2FD;
   --anneau:        rgba(0, 117, 222, 0.28);
 
@@ -114,6 +117,7 @@
     --pression:    rgba(255, 255, 255, 0.10);
     --accent:        #2E8FF0;
     --accent-survol: #58A6F5;
+    --bleu-systeme:  #0A84FF;
     --accent-voile:  #16304A;
     --anneau:        rgba(46, 143, 240, 0.4);
     --ok:            #3FC46A;
@@ -149,6 +153,7 @@
   --pression:    rgba(255, 255, 255, 0.10);
   --accent:        #2E8FF0;
   --accent-survol: #58A6F5;
+  --bleu-systeme:  #0A84FF;
   --accent-voile:  #16304A;
   --anneau:        rgba(46, 143, 240, 0.4);
   --ok:            #3FC46A;
@@ -268,12 +273,13 @@ input, select, textarea { font: inherit; color: inherit; }
   z-index: 60;
   display: flex;
   flex-direction: column;
-  background: var(--fond-2);
+  background: var(--fond);
   border-right: 1px solid var(--trait);
   transform: translateX(-100%);
   transition: transform var(--doux);
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  /* La barre elle-même ne défile jamais : la marque reste en haut, le
+     compte reste en bas, et seule la navigation glisse entre les deux. */
+  overflow: hidden;
 }
 .lat.ouverte { transform: none; box-shadow: var(--ombre-modale); }
 .voile-lat {
@@ -313,7 +319,17 @@ input, select, textarea { font: inherit; color: inherit; }
 .btn-plier svg { width: 18px; height: 18px; }
 .btn-plier:hover { background: var(--survol); color: var(--encre); }
 
-.lat-corps { flex: 1; padding: var(--e-2) var(--e-4) var(--e-5); display: flex; flex-direction: column; gap: var(--e-5); }
+.lat-corps {
+  flex: 1 1 auto; min-height: 0;
+  padding: var(--e-2) var(--e-4) var(--e-5);
+  display: flex; flex-direction: column; gap: var(--e-5);
+  /* Le seul bloc qui défile, et sans barre visible : une barre de
+     défilement prend de la largeur et tronquait les compteurs à droite. */
+  overflow-y: auto; overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+.lat-corps::-webkit-scrollbar { width: 0; height: 0; }
 
 .lat-groupe { display: flex; flex-direction: column; gap: 2px; }
 .lat-titre {
@@ -321,8 +337,8 @@ input, select, textarea { font: inherit; color: inherit; }
   color: var(--encre-3); padding: var(--e-2) var(--e-3) var(--e-2);
 }
 .lat-lien {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 12px;
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 10px;
   border-radius: 10px;
   color: var(--encre-2);
   font: var(--t-corps-fort);
@@ -332,14 +348,13 @@ input, select, textarea { font: inherit; color: inherit; }
   width: 100%;
   text-align: left;
 }
-.lat-lien svg { width: 18px; height: 18px; flex: none; opacity: 0.85; }
+.lat-lien svg { width: 18px; height: 18px; flex: none; color: var(--bleu-systeme); }
 /* Un écusson de projet tient la place d'une icône, au même gabarit. */
 .lat-lien .avatar-projet { flex: none; width: 18px; height: 18px; border-radius: 5px; font-size: 8px; }
-.lat-lien.actif .avatar-projet { box-shadow: 0 0 0 1px var(--trait); }
+.lat-lien.actif .avatar-projet { box-shadow: 0 0 0 1px var(--trait-fort); }
 .lat-lien:hover { background: var(--survol); color: var(--encre); text-decoration: none; }
-.lat-lien.actif { background: var(--fond); color: var(--encre); box-shadow: 0 1px 2px rgba(0,0,0,0.06), 0 0 0 1px var(--trait); }
-.lat-lien.actif svg { color: var(--accent); opacity: 1; }
-.lat-lien .comptes { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; flex: none; }
+.lat-lien.actif { background: var(--fond-3); color: var(--encre); box-shadow: none; }
+.lat-lien .comptes { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; flex: none; padding-left: 6px; }
 .lat-lien .compte {
   font: var(--t-micro); font-variant-numeric: tabular-nums;
   color: var(--encre-3);
@@ -360,7 +375,7 @@ input, select, textarea { font: inherit; color: inherit; }
    projet : sans lui, elles flotteraient au même rang que les pages qui
    traversent tous les projets, et c'est justement la confusion à éviter. */
 .lat-sous-lien {
-  margin-left: 18px;
+  margin-left: 12px;
   padding-block: 5px;
   font-weight: 400;
   color: var(--encre-3);
@@ -368,9 +383,9 @@ input, select, textarea { font: inherit; color: inherit; }
   border-radius: 0 10px 10px 0;
   animation: sous-lien-entre var(--vite) both;
 }
-.lat-sous-lien svg { width: 15px; height: 15px; opacity: 0.6; }
+.lat-sous-lien svg { width: 16px; height: 16px; color: var(--bleu-systeme); }
 .lat-sous-lien:hover { border-left-color: var(--encre-4); }
-.lat-sous-lien.actif { border-left-color: var(--accent); box-shadow: none; background: var(--survol); }
+.lat-sous-lien.actif { border-left-color: var(--bleu-systeme); box-shadow: none; background: var(--fond-3); }
 .lat-sous-lien.actif svg { opacity: 1; }
 @keyframes sous-lien-entre { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .lat-sous-lien { animation: none; } }
@@ -379,6 +394,7 @@ input, select, textarea { font: inherit; color: inherit; }
   flex: none;
   padding: var(--e-4);
   border-top: 1px solid var(--trait);
+  background: var(--fond);
 }
 .lat-compte {
   display: flex; align-items: center; gap: 10px;

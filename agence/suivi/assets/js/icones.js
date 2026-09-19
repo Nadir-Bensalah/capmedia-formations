@@ -73,7 +73,9 @@ export const ICONES = {
   eclair:       T('<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>'),
   drapeau:      T('<path d="M5 21V4"/><path d="M5 4h12l-2 4 2 4H5"/>'),
   cible:        T('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>'),
-  route:        T('<path d="M4 19h4a3 3 0 0 0 0-6H8a3 3 0 0 1 0-6h4"/><circle cx="18" cy="7" r="2"/><circle cx="6" cy="17" r="0"/>'),
+  /* Les étapes : deux jalons reliés, avec ce qui les accompagne. Le chemin
+     sinueux d'avant se lisait « s° » dès qu'on le réduisait à seize pixels. */
+  route:        T('<circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><path d="M6 8v8"/><path d="M11 6h9"/><path d="M11 18h6"/>'),
   composants:   T('<rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/>'),
   note:         T('<path d="M5 4h11l3 3v13H5z"/><path d="M9 10h6"/><path d="M9 14h6"/>'),
   ampoule:      T('<path d="M9 18h6"/><path d="M10 21h4"/><path d="M8 13a5 5 0 1 1 8 0c-.8.8-1.5 1.7-1.5 3h-5c0-1.3-.7-2.2-1.5-3z"/>'),
