@@ -203,6 +203,11 @@ input, select, textarea { font: inherit; color: inherit; }
 .tronque { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nb { font-variant-numeric: tabular-nums; }
 
+/* Un élément marqué caché l'est, quelle que soit la classe qui le dessine :
+   sans cette règle, un `display` posé par une classe l'emporte sur
+   l'attribut et le bloc reste à l'écran. */
+[hidden] { display: none !important; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
   html { scroll-behavior: auto; }
@@ -1411,3 +1416,23 @@ input, select, textarea { font: inherit; color: inherit; }
   .bulle { right: var(--e-4); bottom: var(--e-4); left: var(--e-4); align-items: flex-end; }
   .bulle-panneau { width: 100%; height: min(72dvh, 560px); }
 }
+
+/* L'en-tête de la bulle : le logo du projet, le nom du contact d'en face. */
+.bulle-logo { flex: none; line-height: 0; }
+.bulle-tete-texte { min-width: 0; }
+.bulle-titre { display: flex; align-items: center; gap: 7px; }
+.bulle-titre span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Un message porte un geste discret : en faire une demande, sur place. */
+.bulle-message { position: relative; }
+.bulle-action {
+  position: absolute; top: 0; right: 0;
+  width: 26px; height: 26px; border-radius: 8px;
+  display: grid; place-items: center;
+  border: 1px solid var(--trait); background: var(--fond); color: var(--encre-3);
+  opacity: 0; transform: translateY(-2px); cursor: pointer;
+  transition: opacity var(--vite), transform var(--vite), color var(--vite), border-color var(--vite);
+}
+.bulle-action svg { width: 13px; height: 13px; }
+.bulle-message:hover .bulle-action, .bulle-action:focus-visible { opacity: 1; transform: none; }
+.bulle-action:hover { color: var(--accent); border-color: var(--accent); }

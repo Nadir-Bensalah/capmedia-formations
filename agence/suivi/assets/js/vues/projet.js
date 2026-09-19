@@ -220,7 +220,7 @@ export const vue = async (ctx, env) => {
 
   /* La conversation du projet vit en bulle, hors de la page : changer
      d'onglet ne la referme pas et n'interrompt pas la frappe. */
-  const bulle = monterBulle({ pid, env, nomProjet: (magasin.lire(K.projet(pid)) || {}).nom || '' });
+  const bulle = monterBulle({ pid, env });
 
   return {
     fin: () => { clearTimeout(minuteur); gestes(); gestesFichiers(); gestesFiltres(); bulle.fin(); lot.fin(); },
