@@ -108,6 +108,7 @@ export const vue = async (ctx, env) => {
           <p class="attente-tete">${icone('alerte')} En attente de vous <span class="badge badge--vif" style="margin-left:4px">${attente.length}</span></p>
           <div class="liste" style="margin-top:8px">
             ${attente.slice(0, 6).map((a) => ligne({ href: `#${a.chemin}`, icone: a.icone, ton: a.ton, titre: echapper(a.titre), sous: echapper(a.sous) })).join('')}
+            ${attente.length > 6 ? `<p class="t-petit" style="margin-top:8px"><a href="#/valider">${echapper(pluriel(attente.length - 6, 'autre point', 'autres points'))} à voir</a></p>` : ''}
           </div>
           ${attente.length > 6 ? `<p style="margin-top:8px"><a class="t-petit t-fort" href="#/valider">Tout voir (${attente.length})</a></p>` : ''}
         </div>
@@ -121,7 +122,10 @@ export const vue = async (ctx, env) => {
           const courant = jalonCourant(jalons);
           const pulse = p.pulse || {};
           const ouvertsProjet = ouverts.filter((t) => t.projet === p.id).length;
-          const attenteProjet = attente.filter((a) => (a.chemin || '').startsWith(`/projets/${p.id}`)).length;
+          /* Le même compte que le bloc du haut : déduire le projet de
+             l'adresse oubliait les validations et les pièces comptables,
+             et le client lisait deux chiffres différents. */
+          const attenteProjet = attente.filter((a) => a.projet === p.id).length;
           return `<a class="carte carte--cliquable" href="#/projets/${echapper(p.id)}">
             <div class="rang" style="gap:14px;align-items:flex-start">
               ${avatarProjet(p)}

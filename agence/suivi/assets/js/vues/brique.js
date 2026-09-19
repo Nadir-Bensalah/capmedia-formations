@@ -12,7 +12,7 @@
 import {
   echapper, dateCourte, depuis, joursAvant, parDateDesc, borner, enParagraphes,
   PLATEFORMES, TYPES_COMPOSANT, STATUTS_COMPOSANT, STATUTS_JALON, STATUTS_TACHE, STATUTS_RELEASE,
-  TYPES_CHANGEMENT, TYPES_NOTE, PRIORITES, STATUTS, OUVERTS, CATEGORIES_LIEN, pluriel, nombre,
+  TYPES_CHANGEMENT, TYPES_NOTE, PRIORITES, STATUTS, OUVERTS, CATEGORIES_LIEN, pluriel, nombre, age,
 } from '../noyau.js';
 import {
   icone, pastille, puce, pucePlateforme, iconePlateforme, tonPlateforme, avatar, progression,
@@ -260,7 +260,7 @@ export const vue = async (ctx, env) => {
         ${demandes.length ? `<div class="liste">${demandes.map((t) => ligne({
           href: `#/projets/${echapper(pid)}/demandes/${echapper(t.id)}`,
           icone: 'demandes', titre: echapper(t.titre),
-          sous: echapper([t.numero, t.version ? `version ${t.version}` : '', depuis(t.cree)].filter(Boolean).join(' · ')),
+          sous: echapper([t.numero, t.version ? `version ${t.version}` : '', OUVERTS.includes(t.statut) ? `ouverte depuis ${age(t.cree)}` : `close ${depuis(t.maj)}`].filter(Boolean).join(' · ')),
           fin: pastille(STATUTS, t.statut, { client: !equipe }),
         })).join('')}</div>` : vide({ icone: 'demandes', titre: 'Aucune demande sur cette brique', compact: true })}
       </section>

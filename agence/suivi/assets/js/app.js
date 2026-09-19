@@ -53,7 +53,7 @@ const compter = () => {
 
 const construireNavigation = () => {
   const { projets, attente, nonLus } = compter();
-  const parProjet = (pid) => attente.filter((a) => (a.chemin || '').includes(`/projets/${pid}/`) || (a.chemin || '') === `/projets/${pid}`).length;
+  const parProjet = (pid) => attente.filter((a) => a.projet === pid).length;
   const validations = attente.filter((a) => a.genre === 'validation').length;
   const dues = attente.filter((a) => a.genre === 'facture' || a.genre === 'devis').length;
   /* Le gris dit combien il y en a, le rouge combien attendent votre main. */
