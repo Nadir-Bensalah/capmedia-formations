@@ -545,6 +545,11 @@ export const jourRelatif = (valeur) => {
   return dateCourte(valeur);
 };
 
+/* Un nombre lisible : les milliers séparés, sans unité. */
+export const nombre = (valeur) => (typeof valeur === 'number' && Number.isFinite(valeur)
+  ? valeur.toLocaleString('fr-FR')
+  : String(valeur || ''));
+
 export const montant = (valeur, decimales = 0) => (typeof valeur === 'number' && Number.isFinite(valeur))
   ? valeur.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: decimales, maximumFractionDigits: Math.max(decimales, 2) })
   : '';

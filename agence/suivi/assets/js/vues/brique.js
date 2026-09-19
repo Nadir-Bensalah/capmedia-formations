@@ -12,7 +12,7 @@
 import {
   echapper, dateCourte, depuis, joursAvant, parDateDesc, borner, enParagraphes,
   PLATEFORMES, TYPES_COMPOSANT, STATUTS_COMPOSANT, STATUTS_JALON, STATUTS_TACHE, STATUTS_RELEASE,
-  TYPES_CHANGEMENT, TYPES_NOTE, PRIORITES, STATUTS, OUVERTS, CATEGORIES_LIEN, pluriel,
+  TYPES_CHANGEMENT, TYPES_NOTE, PRIORITES, STATUTS, OUVERTS, CATEGORIES_LIEN, pluriel, nombre,
 } from '../noyau.js';
 import {
   icone, pastille, puce, pucePlateforme, iconePlateforme, tonPlateforme, avatar, progression,
@@ -105,6 +105,9 @@ export const vue = async (ctx, env) => {
     const adresse = (composant && composant.lien)
       || (liens.find((l) => ['production', 'mobile'].includes(l.categorie || '')) || {}).url || '';
 
+    const tec = (composant && composant.technique) || {};
+    const lienFiche = `<button class="lien" type="button" data-action="editer" data-genre="technique" data-id="${echapper(composant ? composant.id : '')}">Compléter</button>`;
+
     const publiees = versions.filter((v) => v.statut === 'disponible');
     const derniere = publiees[0] || versions[0] || null;
 
@@ -127,6 +130,7 @@ export const vue = async (ctx, env) => {
         <div class="actions">
           ${adresse ? `<a class="btn btn-secondaire" href="${echapper(adresse)}" target="_blank" rel="noopener noreferrer">${icone('externe')} Ouvrir</a>` : ''}
           ${equipe && composant ? `<button class="btn btn-secondaire" type="button" data-action="editer" data-genre="composant" data-id="${echapper(composant.id)}">${icone('edit')} Modifier</button>` : ''}
+          ${equipe && composant ? `<button class="btn btn-secondaire" type="button" data-action="editer" data-genre="technique" data-id="${echapper(composant.id)}">${icone('code')} Fiche technique</button>` : ''}
           ${equipe ? `<button class="btn btn-principal" type="button" data-action="nouveau" data-genre="release" data-defaut='${echapper(JSON.stringify({ plateforme: cle, composant: composant ? composant.id : '' }))}'>${icone('plus')} Nouvelle version</button>` : ''}
           ${equipe && !composant ? `<button class="btn btn-principal" type="button" data-action="nouveau" data-genre="composant" data-defaut='${echapper(JSON.stringify({ type: cle, nom: fiche ? fiche.libelle : '' }))}'>${icone('plus')} Créer la brique</button>` : ''}
         </div>
@@ -144,6 +148,57 @@ export const vue = async (ctx, env) => {
       </div>
 
       ${composant && (composant.techno || []).length ? `<div class="rang" style="margin-top:var(--e-5);gap:6px">${(composant.techno || []).map((t) => `<span class="etiquette">${echapper(t)}</span>`).join('')}</div>` : ''}
+
+      ${tec.alertes && tec.alertes.length ? `<section class="section">
+        <div class="section-tete"><h2>À mettre à jour <span class="compte-section compte-section--vif">${tec.alertes.length}</span></h2>${equipe ? lienFiche : ''}</div>
+        <div class="liste">${tec.alertes.map((a) => ligne({
+          icone: a.gravite === 'critique' ? 'alerte' : a.gravite === 'attention' ? 'horloge' : 'info',
+          ton: a.gravite === 'critique' ? 'rouge' : a.gravite === 'attention' ? 'ambre' : 'bleu',
+          titre: echapper(a.titre),
+          sous: echapper(a.texte || ''),
+          fin: a.echeance ? `<span class="puce${a.gravite === 'critique' ? ' puce--rouge' : a.gravite === 'attention' ? ' puce--ambre' : ''}"><i></i>${echapper(a.echeance)}</span>` : '',
+        })).join('')}</div>
+      </section>` : ''}
+
+      ${(tec.lignes || tec.fichiers || (tec.technos || []).length) ? `<section class="section">
+        <div class="section-tete"><h2>Le code</h2>${tec.releve ? `<span class="t-petit t-3">Relevé le ${echapper(dateCourte(tec.releve))}</span>` : ''}</div>
+        <div class="metriques">
+          ${tec.lignes ? metrique(nombre(tec.lignes), 'Lignes de code', { nuance: tec.fichiers ? `${nombre(tec.fichiers)} fichiers` : '' }) : ''}
+          ${(tec.dependances || []).length ? metrique((tec.dependances || []).filter((x) => !x.dev).length, 'Bibliothèques', { nuance: `${(tec.dependances || []).filter((x) => x.dev).length} de développement` }) : ''}
+          ${tec.poids ? metrique(tec.poids, 'Poids du dépôt') : ''}
+          ${(tec.assets || []).length ? metrique((tec.assets || []).length, 'Jeux de ressources') : ''}
+        </div>
+        ${(tec.technos || []).length ? `<div class="rang" style="margin-top:var(--e-5);gap:6px">${(tec.technos || []).map((x) => `<span class="etiquette etiquette--techno">${echapper(x.nom)}${x.version ? ` <b>${echapper(x.version)}</b>` : ''}</span>`).join('')}</div>` : ''}
+      </section>` : ''}
+
+      ${(tec.dependances || []).length ? `<section class="section">
+        <details class="depliant">
+          <summary><span class="t-titre-3">Les bibliothèques installées</span><span class="compte-section">${(tec.dependances || []).length}</span></summary>
+          <table class="tableau" style="margin-top:var(--e-4)">
+            <thead><tr><th>Bibliothèque</th><th>Version</th><th>Usage</th></tr></thead>
+            <tbody>${(tec.dependances || []).slice().sort((a, b) => String(a.nom).localeCompare(String(b.nom))).map((x) => `<tr>
+              <td>${echapper(x.nom)}</td><td class="nb">${echapper(x.version || '')}</td>
+              <td>${x.dev ? '<span class="etiquette">Développement</span>' : '<span class="etiquette">Production</span>'}</td>
+            </tr>`).join('')}</tbody>
+          </table>
+        </details>
+      </section>` : ''}
+
+      ${(tec.assets || []).length ? `<section class="section">
+        <div class="section-tete"><h3>Les ressources</h3></div>
+        <div class="liste">${(tec.assets || []).map((a) => ligne({ icone: 'image', titre: echapper(a.nom), sous: echapper(a.detail || '') })).join('')}</div>
+      </section>` : ''}
+
+      ${(tec.acces || []).length ? `<section class="section">
+        <div class="section-tete"><h3>Les comptes et les accès</h3>${equipe ? lienFiche : ''}</div>
+        <div class="liste">${(tec.acces || []).map((a) => ligne({
+          href: a.url || undefined,
+          icone: 'cle', titre: echapper(a.nom),
+          sous: echapper([a.compte, a.detenteur && `détenu par ${a.detenteur}`].filter(Boolean).join(' · ')),
+          fin: a.url ? `<span class="t-3">${icone('externe')}</span>` : '',
+        })).join('')}</div>
+        <p class="aide" style="margin-top:8px">Aucun mot de passe ni clé n'est stocké ici, seulement qui détient quoi et où.</p>
+      </section>` : ''}
 
       ${blocages.length ? `<section class="section">
         <div class="section-tete"><h2>Ce qui bloque <span class="compte-section compte-section--vif">${blocages.length}</span></h2></div>
@@ -258,7 +313,10 @@ export const vue = async (ctx, env) => {
       try { defaut = JSON.parse(el.dataset.defaut || '{}'); } catch (e) { defaut = {}; }
       return editer(genre, env, { pid, defaut });
     }
-    if (action === 'editer') return editer(genre, env, { pid, fiche: trouver(genre, el.dataset.id) });
+    if (action === 'editer') {
+      const cible = genre === 'technique' ? d.composants.find((c) => c.id === el.dataset.id) : trouver(genre, el.dataset.id);
+      return editer(genre, env, { pid, fiche: cible });
+    }
     if (action === 'supprimer') return supprimer(genre, env, { pid, fiche: trouver(genre, el.dataset.id), libelle: el.dataset.libelle });
     return undefined;
   });

@@ -214,6 +214,78 @@ const editeurs = {
     },
   }),
 
+  /* La fiche technique d'une brique : ce qu'il y a dedans, ce qui la fait
+     tourner, qui en détient les clés, et ce qu'il faudra mettre à jour.
+     Deux façons de la remplir : coller un package.json, ou tout saisir. */
+  technique: (env, { pid, fiche }) => {
+    const t = (fiche && fiche.technique) || {};
+    const enLignes = (liste, forme) => (liste || []).map(forme).join('\n');
+    return feuille({
+      titre: 'La fiche technique', sousTitre: fiche ? fiche.nom : '',
+      corps: `
+        <div class="groupe">
+          <label class="etiquette-champ" for="ed-json">Coller un package.json <span class="facultatif">(facultatif)</span></label>
+          <textarea class="zone" id="ed-json" name="json" rows="4" placeholder='{ "dependencies": { "react-native": "0.80.2" } }'></textarea>
+          <p class="aide">Collé ici, il remplace la liste des bibliothèques par celle du fichier, versions comprises. Laissez vide pour garder la liste actuelle.</p>
+        </div>
+        <p class="surtitre" style="margin-top:8px">Le code en chiffres</p>
+        <div class="forme-rang">
+          ${champ('lignes', 'Lignes de code', t.lignes, { type: 'number', facultatif: true })}
+          ${champ('fichiers', 'Fichiers de code', t.fichiers, { type: 'number', facultatif: true })}
+        </div>
+        <div class="forme-rang">
+          ${champ('poids', 'Poids du dépôt', t.poids, { facultatif: true, placeholder: '320 Mo' })}
+          ${champ('releve', 'Date du relevé', dateISO(t.releve), { type: 'date', facultatif: true })}
+        </div>
+        ${zone('technos', 'Technologies et versions', enLignes(t.technos, (x) => `${x.nom}${x.version ? ` · ${x.version}` : ''}`), { facultatif: true, lignes: 3, aide: 'Une par ligne : nom · version.' })}
+        ${zone('dependances', 'Bibliothèques', enLignes(t.dependances, (x) => `${x.nom} · ${x.version || ''}${x.dev ? ' · dev' : ''}`), { facultatif: true, lignes: 5, aide: 'Une par ligne : nom · version · dev. Le package.json collé plus haut écrase cette liste.' })}
+        ${zone('assets', 'Ressources', enLignes(t.assets, (x) => `${x.nom} · ${x.detail || ''}`), { facultatif: true, lignes: 3, aide: 'Une par ligne : nom · détail. Par exemple : Images · 128 fichiers, 42 Mo.' })}
+        ${zone('acces', 'Comptes et accès', enLignes(t.acces, (x) => `${x.nom} | ${x.compte || ''} | ${x.detenteur || ''} | ${x.url || ''}`), { facultatif: true, lignes: 4, aide: 'Une par ligne : service | compte | détenteur | adresse. Jamais de mot de passe ni de clé.' })}
+        ${zone('alertes', 'À mettre à jour', enLignes(t.alertes, (x) => `${x.gravite || 'info'} | ${x.titre} | ${x.echeance || ''} | ${x.texte || ''}`), { facultatif: true, lignes: 4, aide: 'Une par ligne : gravité (critique, attention, info) | titre | échéance | explication.' })}`,
+      regles: {},
+      enregistrer: async (d) => {
+        const couper = (v) => String(v || '').split('\n').map((l) => l.trim()).filter(Boolean);
+        let dependances = couper(d.dependances).map((l) => {
+          const [nom, version, dev] = l.split('·').map((x) => x.trim());
+          return { nom, version: version || '', dev: dev === 'dev' };
+        });
+        let technos = couper(d.technos).map((l) => {
+          const [nom, version] = l.split('·').map((x) => x.trim());
+          return { nom, version: version || '' };
+        });
+        if (String(d.json || '').trim()) {
+          let paquet = null;
+          try { paquet = JSON.parse(d.json); } catch (e) { toast('Le package.json collé est illisible : la liste n\'a pas changé.', 'erreur'); paquet = null; }
+          if (paquet) {
+            const lire = (bloc, dev) => Object.entries(bloc || {}).map(([nom, version]) => ({ nom, version: String(version).replace(/^[\^~]/, ''), dev }));
+            dependances = [...lire(paquet.dependencies, false), ...lire(paquet.devDependencies, true)];
+            /* Le socle se détache des bibliothèques : c'est lui qui date.
+               Ce que vous avez saisi à la main reste, le fichier complète. */
+            const socle = ['react-native', 'react', 'next', 'expo', 'vue', 'svelte', 'typescript', 'firebase', 'astro', 'vite'];
+            const duFichier = dependances.filter((x) => socle.includes(x.nom)).map((x) => ({ nom: x.nom, version: x.version }));
+            if (paquet.engines && paquet.engines.node) duFichier.push({ nom: 'node', version: String(paquet.engines.node) });
+            const deja = (nom) => technos.some((t) => t.nom.toLowerCase().replace(/[\s_-]/g, '') === String(nom).toLowerCase().replace(/[\s_-]/g, ''));
+            technos = [...technos, ...duFichier.filter((x) => !deja(x.nom))];
+            toast(`${dependances.length} bibliothèques reprises du package.json.`);
+          }
+        }
+        const technique = {
+          lignes: Number(d.lignes) || null,
+          fichiers: Number(d.fichiers) || null,
+          poids: d.poids || '',
+          releve: d.releve ? new Date(d.releve) : null,
+          technos,
+          dependances,
+          assets: couper(d.assets).map((l) => { const [nom, detail] = l.split('·').map((x) => x.trim()); return { nom, detail: detail || '' }; }),
+          acces: couper(d.acces).map((l) => { const [nom, compte, detenteur, url] = l.split('|').map((x) => x.trim()); return { nom, compte: compte || '', detenteur: detenteur || '', url: url || '' }; }),
+          alertes: couper(d.alertes).map((l) => { const [gravite, titre, echeance, texte] = l.split('|').map((x) => x.trim()); return { gravite: gravite || 'info', titre: titre || '', echeance: echeance || '', texte: texte || '' }; }),
+        };
+        await ecrire.majComposant(pid, fiche.id, { technique });
+        toast('Fiche technique mise à jour.');
+      },
+    });
+  },
+
   jalon: (env, { pid, fiche, defaut = {} }) => feuille({
     titre: fiche ? 'Le jalon' : 'Nouveau jalon', sousTitre: 'Une étape de la feuille de route.',
     corps: `

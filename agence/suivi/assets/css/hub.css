@@ -1536,3 +1536,23 @@ input, select, textarea { font: inherit; color: inherit; }
 .notes-version li { display: flex; align-items: flex-start; gap: 8px; font: var(--t-petit); color: var(--encre-2); }
 .notes-version li .puce { flex: none; margin-top: 1px; }
 .chrono-point--ok { background: var(--ok); }
+
+/* Le dépliant d'une longue liste : ouvert, il ne pousse rien hors cadre. */
+.depliant > summary {
+  display: flex; align-items: center; gap: 10px; cursor: pointer;
+  padding: 12px 0; list-style: none;
+  border-bottom: 1px solid var(--trait);
+}
+.depliant > summary::-webkit-details-marker { display: none; }
+.depliant > summary::after {
+  content: ""; width: 8px; height: 8px; margin-left: auto;
+  border-right: 2px solid var(--encre-3); border-bottom: 2px solid var(--encre-3);
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform var(--vite);
+}
+.depliant[open] > summary::after { transform: rotate(-135deg) translateY(-2px); }
+.depliant > summary:hover { color: var(--encre); }
+.depliant .tableau { display: block; max-height: 420px; overflow: auto; }
+
+.etiquette--techno { text-transform: none; letter-spacing: 0; }
+.etiquette--techno b { font-weight: 700; font-variant-numeric: tabular-nums; }
