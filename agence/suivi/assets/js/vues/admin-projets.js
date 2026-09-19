@@ -11,6 +11,18 @@ import { filAriane } from '../coquille.js';
 import { naviguer } from '../routeur.js';
 import { appelServeur } from '../serveur.js';
 
+/* Les plateformes d'un projet, en jetons : l'icône seule dans sa couleur,
+   alignée à droite avec le reste des indicateurs. Le libellé tient dans
+   l'info-bulle : sur une ligne de liste, le pictogramme suffit. */
+const jetonsPlateformes = (cles) => {
+  const liste = (cles || []).filter((c) => PLATEFORMES[c]);
+  if (!liste.length) return '';
+  return `<span class="jetons">${liste.map((c) => {
+    const f = PLATEFORMES[c];
+    return `<span class="jeton jeton--${f.voile}" data-astuce="${echapper(f.libelle)}">${icone(f.icone)}</span>`;
+  }).join('')}</span>`;
+};
+
 export const liste = async (ctx, env) => {
   const lot = magasin.lot();
   const sortie = ctx.sortie;
@@ -37,7 +49,7 @@ export const liste = async (ctx, env) => {
     sortie.innerHTML = `<div class="page">
       <div class="page-tete"><div><h1>Projets</h1><p class="chapo">${pluriel(groupes.actifs.length, 'projet client actif', 'projets clients actifs')} et ${pluriel(groupes.maison.length, 'projet de la maison', 'projets de la maison')}, sur ${projets.length} au total.</p></div><div class="actions"><a class="btn btn-principal" href="#/projets/nouveau">${icone('plus')} Nouveau projet</a></div></div>
       <div class="filtres" style="margin-bottom:16px">${[['actifs', 'Clients'], ['maison', 'La maison'], ['tous', 'Tous'], ['termines', 'Terminés'], ['archives', 'Archivés']].map(([cle, lib]) => `<button class="filtre${etat.filtre === cle ? ' actif' : ''}" type="button" data-filtre="${cle}">${lib}<span class="compte">${groupes[cle].length}</span></button>`).join('')}</div>
-      ${liste.length ? `<div class="liste">${liste.map((p) => { const prog = progressionProjet(p, jalons.filter((j) => j.projet === p.id)); const ouverts = tickets.filter((t) => t.projet === p.id && !['resolu', 'ferme', 'refuse', 'annulee'].includes(t.statut)).length; return ligne({ href: `#/projets/${echapper(p.id)}`, titre: `<span class="rang" style="gap:10px">${avatarProjet(p, 'petit')} ${echapper(p.nom)} <span class="t-3 t-petit" style="font-weight:400">${echapper(p.ref || '')}</span></span>`, sous: `${echapper([p.interne ? 'Projet de la maison' : (nomOrg(p.organisation) || (p.client || {}).entreprise || (p.client || {}).nom), p.cible ? `cible ${dateCourte(p.cible)}` : '', ouverts ? pluriel(ouverts, 'demande ouverte', 'demandes ouvertes') : ''].filter(Boolean).join(' · '))} ${(p.plateformes || []).map((x) => pucePlateforme(x, { court: true })).join('')}`, fin: `<span style="width:90px">${progression(prog.valeur)}</span>${pastille(STATUTS_PROJET, statutProjet(p))}${p.cible && joursAvant(p.cible) < 0 && statutProjet(p) !== 'termine' ? '<span class="puce puce--rouge"><i></i>Retard</span>' : ''}` }); }).join('')}</div>` : vide({ icone: 'projets', titre: 'Aucun projet ici', compact: true })}
+      ${liste.length ? `<div class="liste">${liste.map((p) => { const prog = progressionProjet(p, jalons.filter((j) => j.projet === p.id)); const ouverts = tickets.filter((t) => t.projet === p.id && !['resolu', 'ferme', 'refuse', 'annulee'].includes(t.statut)).length; return ligne({ href: `#/projets/${echapper(p.id)}`, titre: `<span class="rang" style="gap:10px">${avatarProjet(p, 'petit')} ${echapper(p.nom)} <span class="t-3 t-petit" style="font-weight:400">${echapper(p.ref || '')}</span></span>`, sous: echapper([p.interne ? 'Projet de la maison' : (nomOrg(p.organisation) || (p.client || {}).entreprise || (p.client || {}).nom), p.cible ? `cible ${dateCourte(p.cible)}` : '', ouverts ? pluriel(ouverts, 'demande ouverte', 'demandes ouvertes') : ''].filter(Boolean).join(' · ')), fin: `${jetonsPlateformes(p.plateformes)}<span style="width:90px">${progression(prog.valeur)}</span>${pastille(STATUTS_PROJET, statutProjet(p))}${p.cible && joursAvant(p.cible) < 0 && statutProjet(p) !== 'termine' ? '<span class="puce puce--rouge"><i></i>Retard</span>' : ''}` }); }).join('')}</div>` : vide({ icone: 'projets', titre: 'Aucun projet ici', compact: true })}
     </div>`;
   };
   const gestes = sur(sortie, 'click', '[data-filtre]', (el) => { etat.filtre = el.dataset.filtre; rendre(); });

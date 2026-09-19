@@ -1473,3 +1473,21 @@ input, select, textarea { font: inherit; color: inherit; }
   vertical-align: middle; margin-left: 2px;
 }
 .compte-section--vif { background: var(--alerte-voile); color: var(--alerte); }
+
+/* Les jetons de plateforme : l'icône seule, alignée avec les indicateurs
+   de fin de ligne. Le libellé passe dans l'info-bulle. */
+.jetons { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.jeton {
+  width: 24px; height: 24px; border-radius: 7px;
+  display: grid; place-items: center; flex: none;
+  transition: transform var(--vite);
+}
+.jeton svg { width: 13px; height: 13px; }
+.ligne:hover .jeton { transform: translateY(-1px); }
+.jeton--bleu   { background: var(--accent-voile); color: var(--accent); }
+.jeton--vert   { background: var(--ok-voile); color: var(--ok); }
+.jeton--ambre  { background: var(--attention-voile); color: var(--attention); }
+.jeton--rouge  { background: var(--alerte-voile); color: var(--alerte); }
+.jeton--violet { background: var(--violet-voile); color: var(--violet); }
+.jeton--gris   { background: var(--gris-voile); color: var(--encre-2); }
+@media (max-width: 720px) { .jetons { display: none; } }
