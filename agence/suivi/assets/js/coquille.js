@@ -87,12 +87,18 @@ export const monterCoquille = ({ session, role, groupes, sortie }) => {
    2. La navigation
    ========================================================================== */
 
+/*
+ * Deux chiffres par entrée, jamais confondus : le total, en gris, dit
+ * combien il y en a ; la pastille rouge dit combien attendent une action.
+ * L'ancienne forme { n, vif } reste comprise.
+ */
 const compteHtml = (valeur) => {
   if (!valeur) return '';
-  const n = typeof valeur === 'object' ? valeur.n : valeur;
-  const vif = typeof valeur === 'object' ? valeur.vif : false;
-  if (!n) return '';
-  return `<span class="compte${vif ? ' vif' : ''}">${echapper(n)}</span>`;
+  const v = typeof valeur === 'object' ? valeur : { total: valeur };
+  const total = Number(v.total !== undefined ? v.total : (v.vif ? 0 : v.n)) || 0;
+  const neuf = Number(v.neuf !== undefined ? v.neuf : (v.vif ? v.n : 0)) || 0;
+  if (!total && !neuf) return '';
+  return `<span class="comptes">${total ? `<span class="compte">${echapper(total)}</span>` : ''}${neuf ? `<span class="compte vif" aria-label="${echapper(neuf)} à traiter">${echapper(neuf > 99 ? '99+' : neuf)}</span>` : ''}</span>`;
 };
 
 export const rendreNavigation = () => {

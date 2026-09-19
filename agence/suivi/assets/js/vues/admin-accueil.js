@@ -54,6 +54,7 @@ export const vue = async (ctx, env) => {
         <div class="actions"><a class="btn btn-secondaire" href="#/projets/nouveau">${icone('plus')} Projet</a><a class="btn btn-secondaire" href="#/clients/nouveau">${icone('entreprise')} Client</a><a class="btn btn-principal" href="#/demandes">${icone('inbox')} Demandes${nouvelles.length ? ` <span class="badge badge--vif" style="background:#fff;color:var(--accent)">${nouvelles.length}</span>` : ''}</a></div></div>
 
       <div class="metriques">
+        ${metrique(actifs.length, 'Projets en cours', { nuance: `${pluriel(organisations.length, 'client')}` })}
         ${metrique(nouvelles.length, 'Demandes reçues', { ton: nouvelles.length ? 'accent' : '', nuance: `${ouverts.length} ouvertes` })}
         ${metrique(bloquants.length, 'Bloquantes ou critiques', { ton: bloquants.length ? 'rouge' : '' })}
         ${metrique(tachesRetard.length, 'Tâches en retard', { ton: tachesRetard.length ? 'rouge' : '', nuance: `${aFaire.length} à faire` })}
@@ -65,11 +66,11 @@ export const vue = async (ctx, env) => {
       <div class="grille grille-tiers section">
         <div class="pile" style="gap:var(--e-7)">
           <section>
-            <div class="section-tete"><h2>À traiter maintenant</h2><a class="lien" href="#/demandes">Toutes les demandes</a></div>
+            <div class="section-tete"><h2>À traiter maintenant${attendNous.length ? ` <span class="compte-section compte-section--vif">${attendNous.length}</span>` : ''}</h2><a class="lien" href="#/demandes">Toutes les demandes</a></div>
             ${aujourdhui.length ? `<div class="liste">${aujourdhui.map((a) => ligne({ href: `#${a.chemin}`, icone: a.icone, ton: a.ton, titre: echapper(a.titre), sous: echapper(a.sous), fin: a.urgence ? puce(URGENCES, a.urgence) : '' })).join('')}</div>` : vide({ icone: 'check', titre: 'Rien à traiter', texte: 'La boîte est vide. Profitez-en pour avancer les tâches.', compact: true })}
           </section>
           <section>
-            <div class="section-tete"><h2>Projets</h2><a class="lien" href="#/projets">Tous</a></div>
+            <div class="section-tete"><h2>Projets <span class="compte-section">${actifs.length}</span></h2><a class="lien" href="#/projets">Tous</a></div>
             ${actifs.length ? `<div class="liste">${actifs.slice(0, 8).map((p) => { const prog = progressionProjet(p, jalons.filter((j) => j.projet === p.id)); const ouvertsP = ouverts.filter((t) => t.projet === p.id).length; return ligne({ href: `#/projets/${echapper(p.id)}`, titre: `<span class="rang" style="gap:10px">${avatarProjet(p, 'petit')} ${echapper(p.nom)}</span>`, sous: `${echapper((p.client || {}).entreprise || (p.client || {}).nom || '')}${p.pulse && p.pulse.enCours ? ` · ${echapper(p.pulse.enCours)}` : ''}${ouvertsP ? ` · ${pluriel(ouvertsP, 'demande ouverte', 'demandes ouvertes')}` : ''}`, fin: `<span style="width:90px">${progression(prog.valeur)}</span>${pastille(STATUTS_PROJET, statutProjet(p))}${p.cible && joursAvant(p.cible) < 0 ? '<span class="puce puce--rouge"><i></i>Retard</span>' : ''}` }); }).join('')}</div>` : vide({ icone: 'projets', titre: 'Aucun projet actif', action: '<a class="btn btn-principal" href="#/projets/nouveau">Créer un projet</a>', compact: true })}
             ${enRetard.length ? `<p class="t-petit t-2" style="margin-top:8px">${pluriel(enRetard.length, 'projet a dépassé sa date cible', 'projets ont dépassé leur date cible')}.</p>` : ''}
           </section>

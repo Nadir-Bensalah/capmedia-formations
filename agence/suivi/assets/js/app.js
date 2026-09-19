@@ -4,7 +4,7 @@
    navigation vivante et la recherche.
    ========================================================================== */
 
-import { exigerSession, $, echapper, prenom, nomAffiche, OUVERTS, ATTEND_CLIENT, FACTURES_DUES } from './noyau.js';
+import { exigerSession, $, echapper, prenom, nomAffiche, OUVERTS, ATTEND_CLIENT, FACTURES_DUES, joursAvant } from './noyau.js';
 import { monterCoquille, definirNavigation, enregistrerRecherche } from './coquille.js';
 import { definir, demarrer } from './routeur.js';
 import * as magasin from './magasin.js';
@@ -55,23 +55,33 @@ const construireNavigation = () => {
   const parProjet = (pid) => attente.filter((a) => (a.chemin || '').includes(`/projets/${pid}/`) || (a.chemin || '') === `/projets/${pid}`).length;
   const validations = attente.filter((a) => a.genre === 'validation').length;
   const dues = attente.filter((a) => a.genre === 'facture' || a.genre === 'devis').length;
+  /* Le gris dit combien il y en a, le rouge combien attendent votre main. */
+  const ouverts = agreger(session, G.tickets).filter((t) => OUVERTS.includes(t.statut));
+  const aValider = agreger(session, G.validations).filter((v) => v.statut === 'en-attente');
+  const pieces = agreger(session, G.documents);
+  const fichiers = agreger(session, G.fichiers);
+  const reunionsAVenir = agreger(session, G.reunions).filter((r) => joursAvant(r.date) >= 0);
+
   definirNavigation([
     { items: [{ chemin: '/', libelle: 'Accueil', icone: 'accueil', exact: true }] },
     {
       titre: 'Vos projets',
       items: [
-        ...projets.filter((p) => !p.archive).map((p) => ({ chemin: `/projets/${p.id}`, libelle: p.nom, icone: 'projets', compte: { n: parProjet(p.id), vif: parProjet(p.id) > 0 } })),
+        ...projets.filter((p) => !p.archive).map((p) => ({
+          chemin: `/projets/${p.id}`, libelle: p.nom, icone: 'projets',
+          compte: { total: ouverts.filter((t) => t.projet === p.id).length, neuf: parProjet(p.id) },
+        })),
         { chemin: '/nouveau-projet', libelle: 'Demander un projet', icone: 'plus' },
       ],
     },
     {
       titre: 'Suivi',
       items: [
-        { chemin: '/valider', libelle: 'À valider', icone: 'valider', compte: { n: validations, vif: validations > 0 } },
-        { chemin: '/messages', libelle: 'Messages', icone: 'messages', compte: { n: nonLus, vif: nonLus > 0 } },
-        { chemin: '/calendrier', libelle: 'Calendrier', icone: 'calendrier' },
-        { chemin: '/finances', libelle: 'Devis et factures', icone: 'finances', compte: { n: dues, vif: dues > 0 } },
-        { chemin: '/documents', libelle: 'Documents', icone: 'documents' },
+        { chemin: '/valider', libelle: 'À valider', icone: 'valider', compte: { total: aValider.length, neuf: validations } },
+        { chemin: '/messages', libelle: 'Messages', icone: 'messages', compte: { total: projets.filter((p) => !p.archive).length, neuf: nonLus } },
+        { chemin: '/calendrier', libelle: 'Calendrier', icone: 'calendrier', compte: { total: reunionsAVenir.length } },
+        { chemin: '/finances', libelle: 'Devis et factures', icone: 'finances', compte: { total: pieces.length, neuf: dues } },
+        { chemin: '/documents', libelle: 'Documents', icone: 'documents', compte: { total: fichiers.length } },
       ],
     },
     { titre: 'Compte', items: [{ chemin: '/parametres', libelle: 'Paramètres', icone: 'parametres' }] },
