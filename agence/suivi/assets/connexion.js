@@ -19,7 +19,6 @@ import {
   auth, session, $, echapper, quitter, surEmulateur,
   isSignInWithEmailLink, signInWithEmailLink, sendSignInLinkToEmail,
 } from './js/noyau.js';
-import { signInWithCustomToken } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js';
 
 const PORTE = surEmulateur
   ? 'http://127.0.0.1:5001/capmedia-1f90d/europe-west1/suiviConnexion'
@@ -176,14 +175,17 @@ $('#forme-code').addEventListener('submit', async (e) => {
   bouton.textContent = 'Connexion...';
   try {
     const r = await appeler('verifierCode', { email: adresse, code });
-    if (!r.ok || !r.jeton) {
+    if (!r.ok || !r.lien) {
       erreur(r.message || 'Code incorrect.');
       champCode.value = '';
       champCode.focus();
       return;
     }
+    /* Le serveur rend un lien à usage unique que l'on consomme sur place :
+       il n'a jamais transité par une boîte, il ne s'affiche nulle part, et
+       Firebase le brûle après cette seule utilisation. */
     montrer('#entree');
-    await signInWithCustomToken(auth, r.jeton);
+    await signInWithEmailLink(auth, adresse, r.lien);
     try { localStorage.removeItem(CLE_EMAIL); } catch (e2) { /* rien */ }
     await orienter();
   } catch (e3) {

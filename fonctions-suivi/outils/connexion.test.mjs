@@ -69,20 +69,20 @@ verifier(Boolean(stocke.sel) && stocke.sel.length >= 32, "l'empreinte est salée
 
 console.log('\n== Les mauvais codes');
 const faux = await appeler('verifierCode', { email: CLIENT, code: code === '000000' ? '111111' : '000000' });
-verifier(faux.code === 401 && !faux.jeton, 'un mauvais code est refusé');
+verifier(faux.code === 401 && !faux.lien, 'un mauvais code est refusé');
 verifier(/reste \d+ essai/.test(faux.message || ''), 'le nombre d essais restants est annoncé', faux.message);
 for (let i = 0; i < 5; i += 1) await appeler('verifierCode', { email: CLIENT, code: '999999' });
 const brule = await appeler('verifierCode', { email: CLIENT, code });
-verifier(brule.code === 401 && !brule.jeton, "le bon code ne sert plus une fois les essais épuisés", JSON.stringify(brule));
+verifier(brule.code === 401 && !brule.lien, "le bon code ne sert plus une fois les essais épuisés", JSON.stringify(brule));
 
 console.log('\n== Le bon code');
 await rouvrirLesVannes(); await viderBoite();
 await appeler('demanderCode', { email: CLIENT });
 const bon = await dernierCode(CLIENT);
 const ouverte = await appeler('verifierCode', { email: CLIENT, code: bon });
-verifier(ouverte.ok && typeof ouverte.jeton === 'string' && ouverte.jeton.length > 100, 'le bon code rend un jeton de session');
+verifier(ouverte.ok && typeof ouverte.lien === 'string' && /oobCode=/.test(ouverte.lien), 'le bon code rend un accès de session à usage unique');
 const rejoue = await appeler('verifierCode', { email: CLIENT, code: bon });
-verifier(rejoue.code === 401 && !rejoue.jeton, 'le même code ne sert pas deux fois');
+verifier(rejoue.code === 401 && !rejoue.lien, 'le même code ne sert pas deux fois');
 
 console.log('\n== Le débit');
 await rouvrirLesVannes(); await viderBoite();

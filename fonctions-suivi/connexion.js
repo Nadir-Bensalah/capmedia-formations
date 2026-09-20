@@ -250,7 +250,26 @@ async function verifierCode(req, res) {
      les règles de sécurité, qui exigent une adresse vérifiée. */
   try { await getAuth().updateUser(verdict.uid, { emailVerified: true }); } catch (err) { console.error('Adresse non marquée vérifiée', err); }
 
-  const jeton = await getAuth().createCustomToken(verdict.uid);
+  /*
+   * La session s'ouvre par un lien à usage unique que la page consomme
+   * tout de suite : il ne part jamais par courriel, il ne s'affiche
+   * jamais, il ne sort pas de la réponse à cette requête.
+   *
+   * Un jeton personnalisé aurait fait la même chose, mais il exige que le
+   * compte de service ait le droit de signer un JWT, droit absent ici et
+   * qu'il faudrait demander à la console. Le lien passe par le même
+   * service d'identité, sans aucune permission supplémentaire, et Firebase
+   * le brûle après usage. À garanties égales, on prend la voie qui ne
+   * dépend de rien.
+   */
+  let lien;
+  try {
+    lien = await getAuth().generateSignInWithEmailLink(email, { url: `${courriels.BASE}`, handleCodeInApp: true });
+  } catch (err) {
+    console.error('Lien de session impossible', err);
+    await audit('connexion.session-impossible', { email, uid: verdict.uid, motif: String(err && err.message || err).slice(0, 200) });
+    return res.status(500).json({ ok: false, message: "Le code était bon, mais la session n'a pas pu s'ouvrir. Prévenez-nous." });
+  }
   await audit('connexion.ouverte', { email, uid: verdict.uid, equipe: verdict.equipe, ip: adresseIp });
 
   /* Une session d'équipe ouvre le cockpit de tous les projets : elle
@@ -264,7 +283,7 @@ async function verifierCode(req, res) {
     });
   }
 
-  return res.json({ ok: true, jeton });
+  return res.json({ ok: true, lien });
 }
 
 /* --- Exposé pour l'épreuve ----------------------------------------------- */

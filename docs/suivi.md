@@ -320,12 +320,24 @@ règles, y compris à l'équipe : c'est ce qui rend les compteurs
 infranchissables. Seul le serveur y touche.
 
 **Fonctions** `suiviConnexion` (publique, actions `invitation`,
-`demanderCode`, `verifierCode`) et, côté cockpit, `creerInvitation`,
-`revoquerInvitation` et `verifierSignature` sur `suiviAdmin`. La session
-s'ouvre par un jeton personnalisé signé par le compte de service : si
-cette signature échoue, personne n'entre. `verifierSignature` le
-contrôle sans rien envoyer à personne, et la page de connexion garde une
-porte de secours par lien, montrée seulement quand le code n'aboutit pas.
+`demanderCode`, `verifierCode`) et, côté cockpit, `creerInvitation` et
+`revoquerInvitation` sur `suiviAdmin`.
+
+**Comment la session s'ouvre.** Une fois le code vérifié, le serveur
+fabrique un accès à usage unique que la page consomme immédiatement. Il
+ne part jamais par courriel, ne s'affiche nulle part, et Firebase le
+brûle après cette seule utilisation. Un jeton personnalisé aurait fait
+la même chose, mais il exige que le compte de service ait le droit de
+signer un JWT : ce droit est absent sur ce projet, `verifierSignature`
+sur `suiviAdmin` le confirme, et il aurait fallu le demander à la
+console. La voie retenue passe par le même service d'identité sans
+aucune permission supplémentaire.
+
+**Deux garde-fous contre l'enfermement dehors.** La page bascule seule
+sur un lien de connexion classique si le service de codes ne répond pas
+ou n'est pas encore en ligne : l'ordre de mise en ligne du serveur et de
+la page ne peut donc enfermer personne. Et un bouton de secours reste
+disponible si le code n'aboutit pas.
 
 **Les anciens liens restent acceptés** le temps que les derniers partis
 arrivent au bout de leur heure.
