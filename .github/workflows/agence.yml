@@ -64,6 +64,26 @@ jobs:
                       open(chemin, 'w', encoding='utf-8').write(neuf)
                       touches += n
           print(f'{touches} import(s) estampilles en v={v}')
+
+          # Le fichier d'entree, lui, est appele depuis le HTML. L'hebergeur
+          # sert les .js avec un cache de sept jours : sans version dans la
+          # balise, un navigateur venu cette semaine garde l'ancien script
+          # avec la nouvelle page. C'est ainsi qu'une refonte de la page de
+          # connexion a servi un script perime, et que la connexion cassait.
+          # Le HTML, lui, est revalide a chaque visite : la balise estampillee
+          # suffit donc a forcer le bon fichier.
+          balise = re.compile(r'(src=\")((?:\.{1,2}/)[^\"?]+\.js)(\")')
+          pages = 0
+          for racine, _, fichiers in os.walk('agence/suivi'):
+              for f in fichiers:
+                  if not f.endswith('.html'): continue
+                  chemin = os.path.join(racine, f)
+                  src = open(chemin, encoding='utf-8').read()
+                  neuf, n = balise.subn(lambda m: f'{m.group(1)}{m.group(2)}?v={v}{m.group(3)}', src)
+                  if n:
+                      open(chemin, 'w', encoding='utf-8').write(neuf)
+                      pages += n
+          print(f'{pages} balise(s) de script estampillee(s) en v={v}')
           PY
 
       - name: Envoi FTP vers la racine
