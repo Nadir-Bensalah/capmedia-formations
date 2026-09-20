@@ -9,7 +9,7 @@ import {
   echapper, dateCourte, dateHeure, depuis, heure, montant, pluriel, joursAvant, echeance as calcEcheance, enParagraphes, avecLiens, parDateDesc, parDateAsc, borner,
   STATUTS_PROJET, STATUTS_COMPOSANT, TYPES_COMPOSANT, STATUTS_ETAPE, STATUTS_TACHE, PRIORITES, STATUTS, TYPES, URGENCES, OUVERTS, ATTEND_CLIENT,
   CATEGORIES_FICHIER, CATEGORIES_LIEN, STATUTS_RELEASE, TYPES_CHANGEMENT, TYPES_NOTE, SANTES, STATUTS_VALIDATION, QUALIFICATIONS, statutProjet, PLATEFORMES, nomsContacts, age,
-  verdictDelai, reportsDe, dateOrigine, MOTIFS_REPORT, dateLongue
+  verdictDelai, reportsDe, dateOrigine, MOTIFS_REPORT, dateLongue, enDate
 } from '../noyau.js';
 import {
   icone, pastille, pastilleTexte, puce, pucePlateforme, iconePlateforme, tonPlateforme, avatarProjet, avatar, progression, anneau, ligne, vide, fait, chronoItem, parJour, squelette, titrePage,
@@ -205,6 +205,7 @@ export const vue = async (ctx, env) => {
         { libelle: 'Archiver', icone: 'archive', danger: true, action: async () => { if (await confirmer({ titre: 'Archiver ce fichier ?', texte: 'Il reste dans les archives, rien n\'est effacé.', ok: 'Archiver' })) agir(null, () => ecrire.majFichier(f.id, { archive: true }), 'Fichier archivé.'); } }];
       return menu(el, items);
     }
+    if (action === 'ouvrir-etape') { const j = d.jalons.find((x) => x.id === id); if (j) ouvrirEtape(j, d, { pid, env }); return null; }
     if (action === 'ouvrir-reunion') { const r = d.reunions.find((x) => x.id === id); if (r) ouvrirReunion(r, { pid, env }); return null; }
     if (action === 'ouvrir-note') { const n = d.notes.find((x) => x.id === id); if (n) ouvrirNote(n, { pid, env }); return null; }
     if (action === 'ouvrir-release') { const r = d.releases.find((x) => x.id === id); if (r) ouvrirRelease(r, { pid, env }); return null; }
@@ -482,15 +483,109 @@ const tenueDesDelais = (d, { pid, env, delai, risques }) => {
    court. Une étape terminée est close, sa date n'a plus d'objet. */
 const delaiEtape = (j) => verdictDelai(j.fin, { clos: j.statut === 'termine', risques: j.statut === 'bloque' ? ['bloquée'] : [] });
 
+/* Une étape de la frise. C'est un bouton : la carte ne tient que trois
+   lignes, le détail vit dans la fiche qu'elle ouvre. */
 const phaseHtml = (j) => {
   const classe = j.statut === 'termine' ? 'phase--terminee' : j.statut === 'en-cours' ? 'phase--en-cours' : j.statut === 'bloque' ? 'phase--bloquee' : '';
   const v = delaiEtape(j);
-  return `<div class="phase ${classe}">
-    <div class="phase-etat"><i aria-hidden="true"></i><span class="t-micro t-3">${echapper((STATUTS_ETAPE[j.statut] || {}).libelle || '')}</span></div>
-    <p class="phase-nom">${echapper(j.titre)}</p>
-    <p class="phase-sous">${echapper([j.phase, j.fin ? `fin ${dateCourte(j.fin)}` : ''].filter(Boolean).join(' · '))}${v.cle === 'depasse' ? ` <span class="t-alerte">· dépassée ${echapper(v.detail)}</span>` : ''}</p>
+  return `<button class="phase ${classe}" type="button" data-action="ouvrir-etape" data-id="${echapper(j.id)}" data-astuce="Voir le détail">
+    <span class="phase-etat"><i aria-hidden="true"></i><span class="t-micro t-3">${echapper((STATUTS_ETAPE[j.statut] || {}).libelle || '')}</span></span>
+    <span class="phase-nom">${echapper(j.titre)}</span>
+    <span class="phase-sous">${echapper([j.phase, j.fin ? `fin ${dateCourte(j.fin)}` : ''].filter(Boolean).join(' · '))}${v.cle === 'depasse' ? ` <span class="t-alerte">· dépassée ${echapper(v.detail)}</span>` : ''}</span>
     ${j.statut !== 'termine' && borner(j.progression) > 0 ? progression(j.progression) : ''}
-  </div>`;
+  </button>`;
+};
+
+/* Combien de temps une étape aura duré, en clair. */
+const duree = (debut, fin) => {
+  const a = enDate(debut); const b = enDate(fin);
+  if (!a || !b) return '';
+  const jours = Math.max(0, Math.round((b - a) / 86400000));
+  if (jours < 14) return pluriel(jours || 1, 'jour');
+  if (jours < 70) return pluriel(Math.round(jours / 7), 'semaine');
+  if (jours < 365) return pluriel(Math.round(jours / 30), 'mois', 'mois');
+  return pluriel(Math.round(jours / 365), 'an');
+};
+
+/*
+ * La fiche d'une étape. Une carte de trois lignes ne dit ni ce qu'on y
+ * fait, ni ce qui la retient, ni ce qui a bougé : tout cela vit ici, et
+ * on l'ouvre d'un clic sur la carte.
+ */
+const ouvrirEtape = (j, d, { pid, env }) => {
+  const equipe = env.role === 'equipe';
+  const v = delaiEtape(j);
+  const reports = reportsDe(j);
+  const origine = dateOrigine(j, 'fin');
+  const decalee = origine && j.fin && dateCourte(origine) !== dateCourte(j.fin);
+  const taches = d.taches.filter((t) => t.jalon === j.id);
+  const faites = taches.filter((t) => t.statut === 'terminee').length;
+  const parties = (Array.isArray(j.composants) ? j.composants : [])
+    .map((id) => d.composants.find((c) => c.id === id)).filter(Boolean);
+  const versions = d.releases.filter((r) => {
+    const x = enDate(r.date); const a = enDate(j.debut); const b = enDate(j.fin);
+    return x && a && b && x >= a && x <= b;
+  }).sort(parDateDesc('date'));
+
+  const m = modale({
+    titre: j.titre,
+    sousTitre: [j.phase, (STATUTS_ETAPE[j.statut] || {}).libelle].filter(Boolean).join(' · '),
+    corps: `
+      <div class="rang" style="margin-bottom:18px">
+        ${pastille(STATUTS_ETAPE, j.statut || 'a-venir')}
+        ${verdictHtml(v, { vide: false })}
+        ${j.statut !== 'termine' ? `<span class="puce t-3">${borner(j.progression)} % fait</span>` : ''}
+      </div>
+
+      ${j.description ? `<div class="prose t-corps">${avecLiens(j.description)}</div>` : '<p class="t-petit t-3">Pas encore de description.</p>'}
+
+      <dl class="faits" style="margin-top:20px">
+        ${fait('Début', j.debut ? echapper(dateLongue(j.debut)) : '')}
+        ${fait('Fin prévue', j.fin ? `${echapper(dateLongue(j.fin))}${decalee ? `<br><span class="t-micro t-3">initialement le ${echapper(dateCourte(origine))}</span>` : ''}` : '')}
+        ${fait('Durée', echapper(duree(j.debut, j.fin)))}
+        ${fait('Suivie par', echapper(j.responsable ? (nomEquipe(d.equipe, j.responsable) || 'Capmedia') : ''))}
+      </dl>
+
+      ${parties.length ? `<div style="margin-top:22px">
+        <p class="surtitre">Ce qu'elle touche</p>
+        <div class="rang" style="margin-top:8px">${parties.map((c) => (iconePlateforme(c.type) ? pucePlateforme(c.type) : `<span class="etiquette">${echapper(c.nom)}</span>`)).join('')}</div>
+      </div>` : ''}
+
+      ${taches.length ? `<div style="margin-top:22px">
+        <p class="surtitre">Les tâches de cette étape <span class="compte-section">${faites}/${taches.length}</span></p>
+        <div class="liste" style="margin-top:8px">${taches.map((t) => ligne({
+          icone: t.statut === 'terminee' ? 'check' : t.statut === 'bloquee' ? 'alerte' : 'taches',
+          ton: t.statut === 'terminee' ? 'vert' : t.statut === 'bloquee' ? 'rouge' : t.statut === 'en-cours' ? 'bleu' : '',
+          titre: echapper(t.titre),
+          sous: echapper([(d.composants.find((c) => c.id === t.composant) || {}).nom, t.echeance && `pour le ${dateCourte(t.echeance)}`].filter(Boolean).join(' · ')),
+          fin: pastille(STATUTS_TACHE, t.statut || 'a-faire'),
+        })).join('')}</div>
+      </div>` : ''}
+
+      ${versions.length ? `<div style="margin-top:22px">
+        <p class="surtitre">Livré pendant cette étape</p>
+        <div class="liste" style="margin-top:8px">${versions.map((r) => ligne({
+          icone: iconePlateforme(r.plateforme) || 'releases', ton: tonPlateforme(r.plateforme),
+          titre: echapper(`${(PLATEFORMES[r.plateforme] || {}).libelle || ''} ${r.version || ''}`.trim()),
+          sous: echapper([r.titre, r.date && dateCourte(r.date)].filter(Boolean).join(' · ')),
+          fin: pastille(STATUTS_RELEASE, r.statut || 'disponible'),
+        })).join('')}</div>
+      </div>` : ''}
+
+      ${reports.length ? `<div style="margin-top:22px">
+        <p class="surtitre">L'histoire de cette date</p>
+        <div class="chrono" style="margin-top:10px">${reports.slice().reverse().map((r) => chronoItem({
+          icone: 'calendrier', ton: 'ambre',
+          texte: `Reportée du <strong>${echapper(dateCourte(r.de))}</strong> au <strong>${echapper(dateCourte(r.vers))}</strong> · ${echapper(MOTIFS_REPORT[r.motif] || r.motif || 'motif non précisé')}${r.note ? `<br><span class="t-3">${echapper(r.note)}</span>` : ''}`,
+          date: `${dateCourte(r.le)}${r.par ? ` · ${r.par}` : ''}`,
+        })).join('')}</div>
+      </div>` : ''}`,
+    pied: equipe
+      ? `<button class="btn btn-danger" type="button" data-suppr>Supprimer</button><span class="pousse"></span><button class="btn btn-secondaire" type="button" data-fermer>Fermer</button><button class="btn btn-principal" type="button" data-editer>Modifier</button>`
+      : `<a class="btn btn-secondaire" href="#/messages/${echapper(pid)}">Une question sur cette étape</a><button class="btn btn-principal" type="button" data-fermer>Fermer</button>`,
+  });
+  sur(m.el, 'click', '[data-editer]', () => { m.fermer(); editer('jalon', env, { pid, fiche: j }); });
+  sur(m.el, 'click', '[data-suppr]', async () => { const ok = await supprimer('jalon', env, { pid, fiche: j, libelle: 'cette étape' }); if (ok) m.fermer(); });
 };
 
 /* --- Les parties du projet (équipe) --------------------------------------- */
@@ -523,7 +618,7 @@ const etapes = (d, { env, pid }) => {
           icone: j.statut === 'termine' ? 'check' : j.statut === 'bloque' ? 'alerte' : 'drapeau', ton: j.statut === 'termine' ? 'vert' : j.statut === 'bloque' ? 'rouge' : j.statut === 'en-cours' ? 'bleu' : '',
           titre: echapper(j.titre),
           sous: `${echapper([j.debut && dateCourte(j.debut), j.fin && `→ ${dateCourte(j.fin)}`, tachesDuJalon.length ? `${faites}/${tachesDuJalon.length} tâches` : '', j.description].filter(Boolean).join(' · '))}${reportsDe(j).length ? ` · <span class="t-3">${echapper(pluriel(reportsDe(j).length, 'report'))}, initialement ${echapper(dateCourte(dateOrigine(j, 'fin')))}</span>` : ''}`,
-          fin: `${verdictHtml(delaiEtape(j), { vide: false, detail: j.statut !== 'termine' })}${j.statut !== 'termine' ? `<span style="width:80px">${progression(j.progression)}</span>` : ''}${pastille(STATUTS_ETAPE, j.statut || 'a-venir')}${boutonsEdition(env, 'jalon', j.id, j.titre)}`,
+          fin: `${verdictHtml(delaiEtape(j), { vide: false, detail: j.statut !== 'termine' })}${j.statut !== 'termine' ? `<span style="width:80px">${progression(j.progression)}</span>` : ''}${pastille(STATUTS_ETAPE, j.statut || 'a-venir')}<button class="btn-icone" type="button" data-action="ouvrir-etape" data-id="${echapper(j.id)}" aria-label="Voir le détail" data-astuce="Voir le détail">${icone('info')}</button>${boutonsEdition(env, 'jalon', j.id, j.titre)}`,
         });
       }).join('')}</div>
     </div>`).join('')}`

@@ -20,6 +20,7 @@
   --fond-3:      #ECECEF;
   --fond-eleve:  #FFFFFF;
   --voile-page:  rgba(0, 0, 0, 0.36);
+  --voile-modale: rgba(0, 0, 0, 0.22);
 
   /* --- Encre ---------------------------------------------------------- */
   --encre:       #1D1D1F;
@@ -107,6 +108,7 @@
     --fond-3:      #2A2A2D;
     --fond-eleve:  #1F1F21;
     --voile-page:  rgba(0, 0, 0, 0.6);
+    --voile-modale: rgba(0, 0, 0, 0.44);
     --encre:       #F5F5F7;
     --encre-2:     #A1A1A6;
     --encre-3:     #86868B;
@@ -143,6 +145,7 @@
   --fond-3:      #2A2A2D;
   --fond-eleve:  #1F1F21;
   --voile-page:  rgba(0, 0, 0, 0.6);
+  --voile-modale: rgba(0, 0, 0, 0.44);
   --encre:       #F5F5F7;
   --encre-2:     #A1A1A6;
   --encre-3:     #86868B;
@@ -849,14 +852,22 @@ input, select, textarea { font: inherit; color: inherit; }
 
 /* La feuille de route : des phases en ligne, chacune avec son état. */
 .route { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--e-3); }
-.phase { padding: var(--e-4); border-radius: var(--r-champ); background: var(--fond-2); position: relative; min-width: 0; }
+.phase {
+  padding: var(--e-4); border-radius: var(--r-champ);
+  background: var(--fond-2); position: relative; min-width: 0;
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  border: 1px solid transparent;
+  transition: background var(--vite), border-color var(--vite), transform var(--vite);
+}
+.phase:hover { background: var(--fond-3); border-color: var(--trait); transform: translateY(-1px); }
+.phase:active { transform: none; }
 .phase-etat { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .phase-etat i { width: 10px; height: 10px; border-radius: 50%; background: var(--encre-4); }
 .phase--terminee .phase-etat i { background: var(--ok); }
 .phase--en-cours .phase-etat i { background: var(--accent); box-shadow: 0 0 0 4px var(--accent-voile); }
 .phase--bloquee .phase-etat i { background: var(--alerte); }
-.phase-nom { font: var(--t-corps-fort); }
-.phase-sous { font: var(--t-micro); color: var(--encre-3); margin-top: 4px; }
+.phase-nom { font: var(--t-corps-fort); display: block; }
+.phase-sous { font: var(--t-micro); color: var(--encre-3); margin-top: 4px; display: block; }
 .phase .progression { margin-top: 10px; }
 
 /* Le kanban : des colonnes qui défilent, jamais la page. */
@@ -1005,12 +1016,20 @@ input, select, textarea { font: inherit; color: inherit; }
    8. Surfaces flottantes : modale, feuille, menu, palette, toast
    ========================================================================== */
 
+/* Le fond d'une fiche ouverte : assombri et flou. La page reste lisible
+   derrière, mais plus lisible que la fiche : c'est elle qu'on lit. */
 .voile {
   position: fixed; inset: 0; z-index: 100;
-  background: var(--voile-page);
+  background: var(--voile-modale);
+  -webkit-backdrop-filter: saturate(140%) blur(16px);
+  backdrop-filter: saturate(140%) blur(16px);
   display: grid; place-items: center;
   padding: var(--e-4);
   animation: apparait var(--vite) both;
+}
+/* Sans le flou, le voile seul ne suffirait pas à détacher la fiche. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .voile { background: var(--voile-page); }
 }
 @keyframes apparait { from { opacity: 0; } to { opacity: 1; } }
 @keyframes pose { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }

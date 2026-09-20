@@ -455,7 +455,10 @@ export const modale = ({ titre, sousTitre = '', corps = '', pied = '', large = f
   voile.addEventListener('click', (e) => {
     if (fermable && (e.target === voile || e.target.closest('[data-fermer]'))) fermer(undefined);
   });
-  const premier = $('input, select, textarea, button:not([data-fermer])', voile);
+  /* Le premier élément atteint par le clavier ne doit jamais être une
+     action destructrice : une fiche s'ouvrait avec « Supprimer » déjà
+     sous la main, et une touche Entrée suffisait. */
+  const premier = $('input, select, textarea, button:not([data-fermer]):not([data-suppr]):not(.btn-danger)', voile);
   if (premier) setTimeout(() => premier.focus(), 30);
 
   return { el: voile, corps: $('.modale-corps', voile), pied: $('.modale-pied', voile), fermer, fin };
