@@ -24,20 +24,37 @@
     <h1 style="margin-top:4px">Bienvenue</h1>
     <p class="t-corps t-2" style="margin-top:8px">Vos projets, vos demandes, vos fichiers, vos devis et vos factures. Au même endroit.</p>
 
-    <!-- Étape 1 : la demande de lien -->
+    <!-- Étape 1 : l'adresse -->
     <form id="forme" class="forme" style="margin-top:28px" novalidate>
       <div class="groupe">
         <label class="etiquette-champ" for="email">Votre adresse e-mail</label>
         <input class="champ" type="email" id="email" name="email" autocomplete="email" inputmode="email" placeholder="vous@exemple.com" required>
+        <p class="aide masque" id="aide-invitation"></p>
       </div>
-      <button class="btn btn-principal btn-grand btn-bloc" type="submit" id="envoyer">Recevoir mon lien de connexion</button>
-      <p class="t-micro t-3">Pas de mot de passe à retenir. Vous recevez un lien valable une heure, à ouvrir sur cet appareil.</p>
+      <button class="btn btn-principal btn-grand btn-bloc" type="submit" id="envoyer">Recevoir mon code</button>
+      <p class="t-micro t-3">Pas de mot de passe. Un code à six chiffres arrive dans votre boîte, vous le recopiez ici.</p>
     </form>
 
-    <!-- Étape 2 : le lien est parti -->
-    <div id="parti" class="masque" style="margin-top:28px">
-      <div class="encart encart--ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg><div><strong>Le lien est parti.</strong> Ouvrez votre boîte, puis cliquez sur le lien depuis cet appareil. Pensez aux indésirables si rien n'arrive.</div></div>
-      <button class="btn btn-fantome" type="button" id="recommencer" style="margin-top:16px">Changer d'adresse</button>
+    <!-- Étape 2 : le code -->
+    <form id="forme-code" class="forme masque" style="margin-top:28px" novalidate>
+      <p class="t-corps t-2">Le code est parti à <strong id="rappel-email"></strong>. Il est valable <span id="rappel-minutes">10</span> minutes.</p>
+      <div class="groupe">
+        <label class="etiquette-champ" for="code">Votre code à six chiffres</label>
+        <input class="champ champ-code" type="text" id="code" name="code" inputmode="numeric" autocomplete="one-time-code"
+               maxlength="6" minlength="6" pattern="[0-9]{6}" placeholder="000000" spellcheck="false" required>
+      </div>
+      <button class="btn btn-principal btn-grand btn-bloc" type="submit" id="valider">Me connecter</button>
+      <div class="rang" style="justify-content:space-between;margin-top:4px">
+        <button class="btn btn-fantome btn-petit" type="button" id="renvoyer">Renvoyer un code</button>
+        <button class="btn btn-fantome btn-petit" type="button" id="recommencer">Changer d'adresse</button>
+      </div>
+      <p class="t-micro t-3">Rien n'arrive ? Regardez dans les indésirables. Nous ne vous demanderons jamais ce code par téléphone ni par message.</p>
+    </form>
+
+    <!-- La porte de secours, montrée seulement si le code ne peut pas aboutir -->
+    <div id="secours" class="masque" style="margin-top:20px">
+      <button class="btn btn-secondaire btn-bloc" type="button" id="par-lien">Recevoir plutôt un lien de connexion</button>
+      <p class="t-micro t-3" style="margin-top:8px">À ouvrir depuis ce navigateur. Utile si le code ne fonctionne pas.</p>
     </div>
 
     <!-- Étape 3 : connexion en cours -->

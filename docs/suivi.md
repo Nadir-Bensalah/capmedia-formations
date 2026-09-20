@@ -222,7 +222,7 @@ locaux, ce qui est fait.
 
 L'espace de suivi est devenu le Client Hub : un espace client (`suivi/app.html`) et un cockpit d'équipe (`suivi/admin.html`), tous deux sur `assets/js/` avec un routeur par dièse, un magasin temps réel (`magasin.js`) et une couche de données (`donnees.js`) qui est la seule à parler à Firestore.
 
-Collections ajoutées : `organisations`, `profils`, `projets/{p}/composants|jalons|liens|messages`, `taches`, `validations`, `fichiers`, `releases`, `reunions`, `notes`, `blocages`, `paiements`, `activite`, `boites/{uid}/notifications`, `audit`, `demandesProjet`. Les règles sont dans `suivi/firestore.rules` et prouvées par `fonctions-suivi/outils/regles.test.mjs` (87 contrôles). La visibilité `client | interne` est appliquée par les règles, pas seulement à l'écran.
+Collections ajoutées : `organisations`, `profils`, `projets/{p}/composants|jalons|liens|messages`, `taches`, `validations`, `fichiers`, `releases`, `reunions`, `notes`, `blocages`, `paiements`, `activite`, `boites/{uid}/notifications`, `audit`, `demandesProjet`. Les règles sont dans `suivi/firestore.rules` et prouvées par `fonctions-suivi/outils/regles.test.mjs` (95 contrôles). La visibilité `client | interne` est appliquée par les règles, pas seulement à l'écran.
 
 Les automatisations (`fonctions-suivi/hub.js`) écrivent l'activité, les notifications et la file d'e-mails à partir des vrais événements. Sur les émulateurs, le facteur ne contacte jamais Brevo : les envois sont marqués `simule`.
 
@@ -274,3 +274,63 @@ la décision et le relevé sans passer par le déclencheur.
 **Vocabulaire** : « jalon » est devenu « étape », « composant » est devenu
 « partie du projet », et l'adresse `/projets/{p}/roadmap` est devenue
 `/projets/{p}/etapes`, l'ancienne restant comprise.
+
+## 11. La porte d'entrée par code (septembre 2026)
+
+Le lien magique a un défaut qu'on ne peut pas corriger : il doit être
+ouvert dans le navigateur qui l'a demandé, parce que c'est là que
+l'adresse est mise de côté. Ouvert depuis l'application de courrier, ou
+depuis le téléphone quand la demande venait de l'ordinateur, il échoue ou
+réclame de retaper l'adresse. Le code à six chiffres n'a pas ce défaut :
+on demande ici, on lit là-bas, on tape ici.
+
+**Le parcours**
+
+1. L'admin crée un lien d'invitation depuis le projet (menu, « Créer un
+   lien d'invitation »). Le lien s'affiche, se copie, et peut partir par
+   e-mail si la case est cochée. Il vit quatorze jours et se révoque.
+2. Le client clique : son adresse est posée et verrouillée, le nom du
+   projet s'affiche, il demande son code.
+3. Le code arrive dans sa boîte. Six chiffres, dix minutes.
+4. Il le tape, la session s'ouvre. La fois suivante : adresse, code.
+
+**Le jeton d'invitation ne donne aucun accès.** Il ne fait que
+pré-remplir une adresse. C'est le code reçu dans la boîte qui ouvre la
+session. On peut donc coller le lien dans un message sans risque.
+
+**Les garde-fous.** Six chiffres, c'est un million de combinaisons : ce
+n'est pas le code qui protège, c'est ce qui l'entoure.
+
+```
+validité        10 minutes (client) · 5 minutes (équipe)
+essais          5 (client) · 3 (équipe), puis le code meurt
+usage           unique, effacé dès qu'il a servi
+débit           3 codes par quart d'heure et par adresse
+                12 demandes par quart d'heure et par adresse IP
+stockage        empreinte SHA-256 salée, jamais le code en clair
+comparaison     à temps constant
+discrétion      réponse identique que l'adresse existe ou non
+trace           chaque demande, chaque essai, chaque ouverture en audit
+équipe          une alerte e-mail à chaque ouverture de session
+```
+
+**Collections** `connexions/{sha256(email)}`, `connexionsIp/{sha256(ip)}`
+et `invitations/{jeton}`. Les trois sont fermées au navigateur par les
+règles, y compris à l'équipe : c'est ce qui rend les compteurs
+infranchissables. Seul le serveur y touche.
+
+**Fonctions** `suiviConnexion` (publique, actions `invitation`,
+`demanderCode`, `verifierCode`) et, côté cockpit, `creerInvitation`,
+`revoquerInvitation` et `verifierSignature` sur `suiviAdmin`. La session
+s'ouvre par un jeton personnalisé signé par le compte de service : si
+cette signature échoue, personne n'entre. `verifierSignature` le
+contrôle sans rien envoyer à personne, et la page de connexion garde une
+porte de secours par lien, montrée seulement quand le code n'aboutit pas.
+
+**Les anciens liens restent acceptés** le temps que les derniers partis
+arrivent au bout de leur heure.
+
+Éprouvée par `fonctions-suivi/outils/connexion.test.mjs` (24 contrôles,
+dont les mauvais codes, les codes brûlés, le rejeu, le débit et les
+jetons révoqués), par huit contrôles de règles, et par le parcours
+navigateur complet dans la suite de bout en bout.

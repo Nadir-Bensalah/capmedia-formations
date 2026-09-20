@@ -24,3 +24,7 @@ exports.suiviAdmin           = suivi.suiviAdmin;
 /* Les automatisations du hub : activité, notifications, e-mails, progression. */
 const hub = require('./hub');
 Object.assign(exports, hub);
+
+/* La porte d'entrée : lien d'invitation, code à six chiffres, session. */
+const connexion = require('./connexion');
+exports.suiviConnexion = connexion.suiviConnexion;

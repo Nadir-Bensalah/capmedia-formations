@@ -1699,3 +1699,15 @@ input, select, textarea { font: inherit; color: inherit; }
 
 /* Un mot qui alerte à l'intérieur d'une phrase. */
 .t-alerte { color: var(--alerte); font-weight: 500; }
+
+/* Le champ des six chiffres : grand, espacé, centré. On le lit à voix
+   haute depuis son téléphone tout en le tapant, il doit être net. */
+.champ-code {
+  font: 600 28px / 1.2 var(--police);
+  letter-spacing: 0.34em;
+  text-align: center;
+  text-indent: 0.34em;
+  font-variant-numeric: tabular-nums;
+  padding-block: 14px;
+}
+.champ-code::placeholder { color: var(--encre-4); letter-spacing: 0.34em; }

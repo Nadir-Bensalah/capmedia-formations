@@ -86,6 +86,14 @@ function sansIndefini(valeur) {
  * Dépose un e-mail dans la file. Ne lève jamais : l'appelant est un
  * déclencheur dont l'échec ferait rejouer une écriture métier déjà faite.
  */
+/* La trace d'un geste d'administration. Les invitations en laissent une :
+   un lien qui pre-remplit une adresse doit pouvoir se retrouver. */
+async function audit(action, details) {
+  try {
+    await bdd.collection('audit').add({ action, ...details, date: FieldValue.serverTimestamp() });
+  } catch (err) { console.error('Audit non écrit', err); }
+}
+
 async function mettreEnFile(modele, destinataires, variables) {
   const a = (destinataires || [])
     .filter((d) => d && emailPlausible(d.email))
@@ -1305,6 +1313,74 @@ exports.suiviAdmin = onRequest(
       }
 
       /* --- Un etat des lieux, pour verifier sans deviner -------------------- */
+      /* --- Un lien d'invitation -------------------------------------------
+         Le client n'a rien a retenir ni a retaper : il clique, son adresse
+         est deja la, il demande son code. Le jeton ne porte aucun pouvoir
+         par lui-meme, il ne fait que pre-remplir l'adresse ; c'est le code
+         recu dans la boite qui ouvre la session. */
+      if (action === 'creerInvitation') {
+        const adresse = normaliserEmail(email);
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(adresse)) return res.status(400).send('adresse invalide');
+
+        let ficheProjet = null;
+        if (projet) {
+          const d = await bdd.doc(`projets/${String(projet)}`).get();
+          if (!d.exists) return res.status(404).send('projet inconnu');
+          ficheProjet = { id: d.id, ...d.data() };
+        }
+
+        /* Le compte existe, ou nait ici : sans lui, le code n'aurait
+           personne a qui ouvrir. Le rattachement au projet reste le geste
+           separe d'« inviterClient », qui donne l'acces. */
+        const { utilisateur } = await compteAuth(adresse, nom);
+
+        const jeton = require('node:crypto').randomBytes(24).toString('base64url');
+        await bdd.doc(`invitations/${jeton}`).set({
+          email: adresse, nom: String(nom || '').trim() || '',
+          projet: ficheProjet ? ficheProjet.id : null,
+          projetNom: ficheProjet ? (ficheProjet.nom || '') : '',
+          uid: utilisateur.uid,
+          expire: new Date(Date.now() + 14 * 24 * 3600 * 1000),
+          revoquee: false,
+          cree: FieldValue.serverTimestamp(),
+        });
+
+        const lien = `${courriels.BASE}?i=${jeton}`;
+        await audit('invitation.creee', { email: adresse, projet: ficheProjet ? ficheProjet.id : null, uid: utilisateur.uid });
+
+        /* Envoi facultatif : l'admin peut vouloir coller le lien lui-meme
+           dans un message, plutot que de declencher un courriel. */
+        if (req.body.envoyer === true) {
+          await mettreEnFile('invitation', [{ email: adresse, nom: String(nom || '').trim() }], {
+            clientNom: String(nom || '').trim(), projetNom: ficheProjet ? (ficheProjet.nom || '') : '', email: adresse, lien,
+          });
+        }
+        return res.json({ ok: true, lien, jeton, expire: '14 jours' });
+      }
+
+      /* Couper un lien qui a fuite, sans toucher au compte. */
+      if (action === 'revoquerInvitation') {
+        const jeton = String(req.body.jeton || '').trim();
+        if (!jeton) return res.status(400).send('jeton requis');
+        await bdd.doc(`invitations/${jeton}`).set({ revoquee: true, maj: FieldValue.serverTimestamp() }, { merge: true });
+        await audit('invitation.revoquee', { jeton });
+        return res.json({ ok: true });
+      }
+
+      /* La porte d'entrée par code repose sur des jetons signés par le
+         compte de service. Si la permission de signature manque, personne
+         ne peut plus entrer : on le vérifie sans rien envoyer à personne. */
+      if (action === 'verifierSignature') {
+        const cible = String(uid || '').trim();
+        if (!cible) return res.status(400).send('uid requis');
+        try {
+          const jeton = await getAuth().createCustomToken(cible);
+          return res.json({ ok: true, signe: typeof jeton === 'string' && jeton.length > 100 });
+        } catch (err) {
+          return res.json({ ok: false, signe: false, motif: String(err && err.message || err).slice(0, 300) });
+        }
+      }
+
       if (action === 'diagnostic') {
         const [projets, organisations, equipe] = await Promise.all([
           bdd.collection('projets').get(), bdd.collection('organisations').get(), bdd.collection('equipe').get(),

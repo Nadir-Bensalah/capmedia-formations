@@ -186,6 +186,19 @@ await doit('Camille recopie son adresse dans son profil',
 await refuse("Camille ne pose pas l'adresse de quelqu'un d'autre",
   setDoc(doc(camille(), 'profils/uid-camille'), { email: 'lea.essai@exemple.test' }, { merge: true }));
 
+console.log("\n== La porte d'entrée");
+/* Les empreintes de codes, les compteurs d'essais et les jetons
+   d'invitation ne se lisent ni ne s'écrivent depuis un navigateur : c'est
+   ce qui rend les garde-fous infranchissables. Pas même pour l'équipe. */
+await refuse('Camille ne lit pas les codes en cours', getDoc(doc(camille(), 'connexions/x')));
+await refuse("L'équipe non plus", getDoc(doc(equipe(), 'connexions/x')));
+await refuse("Personne n'écrit une empreinte de code", setDoc(doc(camille(), 'connexions/x'), { empreinte: 'a' }));
+await refuse('Camille ne remet pas son compteur d essais à zéro', updateDoc(doc(camille(), 'connexions/x'), { essais: 0 }));
+await refuse('Camille ne lit pas les compteurs par adresse IP', getDoc(doc(camille(), 'connexionsIp/x')));
+await refuse('Camille ne lit pas un jeton d invitation', getDoc(doc(camille(), 'invitations/x')));
+await refuse("L'équipe ne fabrique pas un jeton d'invitation depuis le navigateur", setDoc(doc(equipe(), 'invitations/x'), { email: 'a@b.fr' }));
+await refuse('Un visiteur ne lit pas les jetons', getDocs(collection(anonyme(), 'invitations')));
+
 console.log(`\n${ok} contrôle(s) conforme(s)${ecarts.length ? `, ${ecarts.length} ÉCART(S) :\n  - ${ecarts.join('\n  - ')}` : ''}`);
 await env.cleanup();
 process.exit(ecarts.length ? 1 : 0);

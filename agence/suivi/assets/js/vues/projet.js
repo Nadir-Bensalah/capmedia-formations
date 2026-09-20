@@ -8,7 +8,7 @@
 import {
   echapper, dateCourte, dateHeure, depuis, heure, montant, pluriel, joursAvant, echeance as calcEcheance, enParagraphes, avecLiens, parDateDesc, parDateAsc, borner,
   STATUTS_PROJET, STATUTS_COMPOSANT, TYPES_COMPOSANT, STATUTS_ETAPE, STATUTS_TACHE, PRIORITES, STATUTS, TYPES, URGENCES, OUVERTS, ATTEND_CLIENT,
-  CATEGORIES_FICHIER, CATEGORIES_LIEN, STATUTS_RELEASE, TYPES_CHANGEMENT, TYPES_NOTE, SANTES, STATUTS_VALIDATION, QUALIFICATIONS, statutProjet, PLATEFORMES, nomsContacts, age,
+  CATEGORIES_FICHIER, CATEGORIES_LIEN, STATUTS_RELEASE, TYPES_CHANGEMENT, TYPES_NOTE, SANTES, STATUTS_VALIDATION, QUALIFICATIONS, statutProjet, PLATEFORMES, nomsContacts, contactsProjet, age,
   verdictDelai, reportsDe, dateOrigine, MOTIFS_REPORT, dateLongue, enDate
 } from '../noyau.js';
 import {
@@ -22,6 +22,7 @@ import { filAriane } from '../coquille.js';
 import { naviguer } from '../routeur.js';
 import { monterBulle } from '../bulle.js';
 import { editer, supprimer } from './editeurs.js';
+import { appelServeur } from '../serveur.js';
 import { activiteHtml } from './accueil.js';
 
 const ONGLETS = [
@@ -170,6 +171,7 @@ export const vue = async (ctx, env) => {
           const ok = await confirmer({ titre: d.projet.archive ? 'Restaurer ce projet ?' : 'Archiver ce projet ?', texte: d.projet.archive ? 'Il redevient visible pour le client.' : "Il disparaît de l'accueil du client, rien n'est supprimé.", ok: d.projet.archive ? 'Restaurer' : 'Archiver' });
           if (ok) await agir(null, () => ecrire.majProjet(pid, { archive: !d.projet.archive, statut: d.projet.archive ? 'en-cours' : 'archive' }), d.projet.archive ? 'Projet restauré.' : 'Projet archivé.');
         } },
+        { libelle: "Créer un lien d'invitation", icone: 'utilisateurs', action: () => ouvrirInvitation(d.projet, env) },
         { libelle: 'Signaler un point bloquant', icone: 'alerte', action: () => editer('blocage', env, { pid }) },
         { libelle: 'Demander une validation', icone: 'valider', action: () => editer('validation', env, { pid }) },
         { libelle: 'Nouvelle note ou décision', icone: 'note', action: () => editer('note', env, { pid }) },
@@ -246,6 +248,52 @@ export const vue = async (ctx, env) => {
       window.scrollTo({ top: 0, behavior: 'instant' });
     },
   };
+};
+
+/*
+ * Le lien d'invitation. Le client clique, son adresse est déjà posée, il
+ * demande son code et entre. Le lien ne donne aucun accès par lui-même :
+ * il ne fait que remplir l'adresse, c'est le code reçu dans la boîte qui
+ * ouvre la session. On peut donc le coller dans un message sans risque.
+ */
+const ouvrirInvitation = (projet, env) => {
+  const contacts = contactsProjet(projet);
+  const m = modale({
+    titre: "Créer un lien d'invitation",
+    sousTitre: projet.nom,
+    corps: `<form class="forme" id="forme-invitation" novalidate>
+      <div class="groupe">
+        <label class="etiquette-champ" for="inv-email">Adresse du destinataire</label>
+        <input class="champ" id="inv-email" name="email" type="email" value="${echapper((contacts[0] || {}).email || '')}" placeholder="prenom@entreprise.fr">
+        ${contacts.length > 1 ? `<p class="aide">Second interlocuteur : ${echapper(contacts[1].email || contacts[1].nom || '')}. Créez-lui son propre lien.</p>` : ''}
+      </div>
+      <div class="groupe">
+        <label class="etiquette-champ" for="inv-nom">Son nom <span class="facultatif">(facultatif)</span></label>
+        <input class="champ" id="inv-nom" name="nom" value="${echapper((contacts[0] || {}).nom || '')}">
+      </div>
+      <label class="interrupteur"><input type="checkbox" name="envoyer"><i></i> Lui envoyer aussi l'invitation par e-mail</label>
+      <p class="aide">Sans cette case, rien ne part : le lien s'affiche ici et vous le collez où vous voulez.</p>
+      <div id="inv-resultat"></div>
+    </form>`,
+    pied: `<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button><button class="btn btn-principal" type="submit" form="forme-invitation">Créer le lien</button>`,
+  });
+  m.el.querySelector('#forme-invitation').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const d = lireForme(e.target);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(d.email || '').trim())) { toast("Cette adresse a l'air incomplète.", 'erreur'); return; }
+    await agir(m.pied.querySelector('[type="submit"]'), async () => {
+      const r = await appelServeur('creerInvitation', { email: d.email, nom: d.nom, projet: projet.id, envoyer: Boolean(d.envoyer) });
+      const zone = m.el.querySelector('#inv-resultat');
+      zone.innerHTML = `<div class="groupe" style="margin-top:8px">
+        <span class="etiquette-champ">Le lien, valable quatorze jours</span>
+        <input class="champ" id="inv-lien" value="${echapper(r.lien)}" readonly>
+        <p class="aide">Il ne donne aucun accès seul : il pose l'adresse, le code reçu par e-mail ouvre la session.</p>
+      </div>`;
+      const entree = zone.querySelector('#inv-lien');
+      entree.focus(); entree.select();
+      try { await navigator.clipboard.writeText(r.lien); } catch (err) { /* refus du presse-papiers */ }
+    }, d.envoyer ? 'Lien créé, invitation envoyée.' : 'Lien créé et copié.');
+  });
 };
 
 /* La barre d'onglets : l'onglet actif se ramène dans le champ de vision, et

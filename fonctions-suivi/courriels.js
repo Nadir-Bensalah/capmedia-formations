@@ -733,6 +733,39 @@ function relance(v) {
   };
 }
 
+/*
+ * Le code de connexion. Rien d'autre dans la lettre : pas de lien à
+ * cliquer, donc rien à détourner. Le code se lit, se recopie, et meurt.
+ */
+function code(v) {
+  const chiffres = valeurTexte(v.code);
+  const minutes = Number(v.minutes) || 10;
+  return {
+    objet: `${chiffres} est votre code de connexion`,
+    ...rendreGabarit({
+      titre: 'Votre code de connexion',
+      intro: `Saisissez ce code dans la page de connexion, sur l'appareil ou vous venez de le demander.\n\n`
+        + `Il est valable ${minutes} minutes et ne sert qu'une fois.`,
+      faits: [['Code', chiffres.split('').join(' ')]],
+      note: "Si vous n'avez rien demande, ignorez ce message : sans ce code, personne n'entre. Ne le transmettez a personne, nous ne vous le demanderons jamais.",
+    }),
+  };
+}
+
+/* L'alerte d'ouverture d'une session d'equipe : le cockpit voit tous les
+   projets, une ouverture qu'on n'a pas faite doit se remarquer. */
+function connexionEquipe(v) {
+  return {
+    objet: 'Une session du cockpit vient de s ouvrir',
+    ...rendreGabarit({
+      titre: 'Session du cockpit ouverte',
+      intro: "Une session d'equipe vient d'etre ouverte avec votre adresse. Si c'est vous, il n'y a rien a faire.",
+      faits: [['Quand', valeurTexte(v.quand)], ['Depuis', valeurTexte(v.ip)]],
+      note: "Si ce n'est pas vous, changez l'acces a votre boite immediatement : c'est elle qui ouvre le cockpit.",
+    }),
+  };
+}
+
 const MODELES = {
   'invitation': invitation,
   'ticket-cree': ticketCree,
@@ -754,6 +787,8 @@ const MODELES = {
   'qualification': qualification,
   'preprojet': preprojet,
   'relance': relance,
+  'code': code,
+  'connexion-equipe': connexionEquipe,
 };
 
 /**

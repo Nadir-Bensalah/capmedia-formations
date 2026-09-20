@@ -540,6 +540,15 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // La porte d'entrée. Ces trois collections portent l'empreinte des
+    // codes en cours, les compteurs de tentatives et les jetons
+    // d'invitation : rien de tout cela ne se lit ni ne s'écrit depuis un
+    // navigateur, même connecté, même membre de l'équipe. Seul le serveur
+    // y touche, et c'est ce qui rend les garde-fous infranchissables.
+    match /connexions/{cle}      { allow read, write: if false; }
+    match /connexionsIp/{cle}    { allow read, write: if false; }
+    match /invitations/{jeton}   { allow read, write: if false; }
+
     // ================================================================
     // FORMULAIRES PUBLICS DU SITE (déjà en service sur ce projet)
     //

@@ -200,6 +200,14 @@ async function main() {
   /* --- Une demande de nouveau projet ------------------------------------------------------ */
   await bdd.doc('demandesProjet/dp-boutique-app').set({ organisation: 'boutique-sud', par: { uid: lea, nom: 'Léa Bernard', email: 'lea.essai@exemple.test' }, titre: 'Une application de commande pour Boutique', idee: 'Permettre la commande en ligne depuis le menu.', objectifs: 'Plus de commandes le soir.', type: 'application-mobile', plateformes: ['ios', 'android'], budget: '5 000 à 8 000 €', delai: 'Avant l\'été', description: '', fonctionnalites: 'Panier, paiement, suivi', exemples: '', liens: '', pieces: [], statut: 'discussion', projet: null, cree: ilYA(4), maj: ilYA(2) });
 
+  /* Un banc neuf n'a pas d'historique de connexion : sans cette purge, le
+     plafond de trois codes par quart d'heure bloquait la deuxième série
+     d'essais de la journée. */
+  for (const nom of ['connexions', 'connexionsIp', 'invitations']) {
+    const q = await bdd.collection(nom).get();
+    await Promise.all(q.docs.map((d) => d.ref.delete()));
+  }
+
   console.log('Jeu de données posé sur le projet', PROJET);
   console.log('  équipe   agent.essai@exemple.test');
   console.log('  clients  camille.essai@exemple.test (Atelier), lea.essai@exemple.test (Boutique)');
