@@ -1372,13 +1372,19 @@ exports.suiviAdmin = onRequest(
          ne peut plus entrer : on le vérifie sans rien envoyer à personne. */
       if (action === 'verifierSignature') {
         const cible = String(uid || '').trim();
-        if (!cible) return res.status(400).send('uid requis');
-        try {
-          const jeton = await getAuth().createCustomToken(cible);
-          return res.json({ ok: true, signe: typeof jeton === 'string' && jeton.length > 100 });
-        } catch (err) {
-          return res.json({ ok: false, signe: false, motif: String(err && err.message || err).slice(0, 300) });
+        const adresse = normaliserEmail(email);
+        const bilan = {};
+        if (cible) {
+          try { const j = await getAuth().createCustomToken(cible); bilan.jetonPersonnalise = typeof j === 'string' && j.length > 100; }
+          catch (err) { bilan.jetonPersonnalise = false; bilan.motifJeton = String(err && err.message || err).slice(0, 200); }
         }
+        /* La voie reellement empruntee par la porte : un acces a usage
+           unique. On ne rend jamais le lien, seulement s il se fabrique. */
+        if (adresse) {
+          try { const l = await getAuth().generateSignInWithEmailLink(adresse, { url: courriels.BASE, handleCodeInApp: true }); bilan.accesUnique = typeof l === 'string' && l.includes('oobCode='); }
+          catch (err) { bilan.accesUnique = false; bilan.motifAcces = String(err && err.message || err).slice(0, 200); }
+        }
+        return res.json({ ok: true, ...bilan });
       }
 
       if (action === 'diagnostic') {
