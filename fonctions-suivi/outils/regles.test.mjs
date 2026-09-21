@@ -26,6 +26,17 @@ const camille = () => env.authenticatedContext(CAMILLE, jeton(CAMILLE, 'camille.
 const lea = () => env.authenticatedContext(LEA, jeton(LEA, 'lea.essai@exemple.test')).firestore();
 const anonyme = () => env.unauthenticatedContext().firestore();
 
+/* Les testeurs. Ils ne sont membres d'aucun projet : leur accès tient
+   entièrement à la revendication « testeur » et à la liste des campagnes.
+   Karim et Sonia sont affectés à la campagne en cours, Marc ne l'est pas. */
+const KARIM = 'uid-karim';
+const SONIA = 'uid-sonia';
+const MARC = 'uid-marc';
+const jetonTesteur = (uid, email) => ({ email, email_verified: true, sub: uid, testeur: true });
+const karim = () => env.authenticatedContext(KARIM, jetonTesteur(KARIM, 'karim.essai@exemple.test')).firestore();
+const sonia = () => env.authenticatedContext(SONIA, jetonTesteur(SONIA, 'sonia.essai@exemple.test')).firestore();
+const marc = () => env.authenticatedContext(MARC, jetonTesteur(MARC, 'marc.essai@exemple.test')).firestore();
+
 let ok = 0; const ecarts = [];
 const doit = async (libelle, promesse) => { try { await assertSucceeds(promesse); ok += 1; console.log('  ok     ' + libelle); } catch (e) { ecarts.push(libelle); console.log('  ÉCART  ' + libelle + ' (refusé à tort)'); } };
 const refuse = async (libelle, promesse) => { try { await assertFails(promesse); ok += 1; console.log('  ok     ' + libelle); } catch (e) { ecarts.push(libelle); console.log('  ÉCART  ' + libelle + ' (AUTORISÉ À TORT)'); } };
@@ -66,6 +77,20 @@ await env.withSecurityRulesDisabled(async (ctx) => {
   await setDoc(doc(b, `boites/${CAMILLE}/notifications/n1`), { titre: 'x', lu: false });
   await setDoc(doc(b, 'demandesProjet/dp1'), { par: { uid: LEA, email: 'lea.essai@exemple.test' }, titre: 'Appli', statut: 'nouvelle', projet: null, pieces: [] });
   await setDoc(doc(b, 'contact-messages/c1'), { nom: 'Prospect', email: 'p@x.fr' });
+
+  /* La plateforme de tests. Une campagne en cours où figurent Karim et
+     Sonia, une campagne close, et un passage de chacun. */
+  await setDoc(doc(b, 'testeurs', KARIM), { prenom: 'Karim', email: 'karim.essai@exemple.test', profil: { age: '25-34' }, projets: ['atelier'] });
+  await setDoc(doc(b, 'testeurs', SONIA), { prenom: 'Sonia', email: 'sonia.essai@exemple.test', profil: { age: '35-44' }, projets: ['atelier'] });
+  await setDoc(doc(b, 'projets/atelier/scenarios/DI-15'), { ref: 'DI-15', bloc: 'dates-importantes', titre: 'Rappel fin de mois', niveau: 'socle', actif: true });
+  await setDoc(doc(b, 'projets/atelier/scenarios/ID-01'), { ref: 'ID-01', bloc: 'idees', titre: 'Idee minimale', niveau: 'reparti', actif: true });
+  await setDoc(doc(b, 'projets/atelier/campagnes/c1'), { titre: 'Passe 1.2.0', statut: 'en-cours', testeurs: [KARIM, SONIA], builds: { ios: '24' } });
+  await setDoc(doc(b, 'projets/atelier/campagnes/close'), { titre: 'Passe 1.1.0', statut: 'close', testeurs: [KARIM], builds: { ios: '22' } });
+  await setDoc(doc(b, `projets/atelier/campagnes/c1/passages/${KARIM}__DI-15`), { scenario: 'DI-15', testeur: KARIM, plateforme: 'ios', resultat: 'ko', commentaire: 'rappel le 3 mars', preuves: ['p/1.mp4'], contexte: { modele: 'iPhone 13' } });
+  await setDoc(doc(b, `projets/atelier/campagnes/c1/passages/${SONIA}__DI-15`), { scenario: 'DI-15', testeur: SONIA, plateforme: 'android', resultat: 'ok', commentaire: '', preuves: [], contexte: { modele: 'Pixel 8' } });
+  await setDoc(doc(b, `projets/atelier/campagnes/close/passages/${KARIM}__ID-01`), { scenario: 'ID-01', testeur: KARIM, plateforme: 'ios', resultat: 'ok', commentaire: '', preuves: [], contexte: {} });
+  await setDoc(doc(b, `projets/atelier/campagnes/c1/appreciations/${KARIM}`), { beaute: 4, prix: 5 });
+  await setDoc(doc(b, 'projets/atelier/anomalies/a1'), { titre: 'Rappel decale', gravite: 'majeur', statut: 'confirmee', passages: [`${KARIM}__DI-15`] });
 });
 
 console.log('\n== Cloisonnement entre clients');
@@ -214,6 +239,108 @@ await refuse('Camille ne lit pas les compteurs par adresse IP', getDoc(doc(camil
 await refuse('Camille ne lit pas un jeton d invitation', getDoc(doc(camille(), 'invitations/x')));
 await refuse("L'équipe ne fabrique pas un jeton d'invitation depuis le navigateur", setDoc(doc(equipe(), 'invitations/x'), { email: 'a@b.fr' }));
 await refuse('Un visiteur ne lit pas les jetons', getDocs(collection(anonyme(), 'invitations')));
+
+console.log('\n== La plateforme de tests : le vivier');
+/* Le nom, l'âge et la fonction d'un testeur ne regardent que l'équipe.
+   Un testeur lit sa propre fiche, jamais celle d'un autre : c'est la
+   première barrière du cloisonnement. */
+await doit("L'équipe lit le vivier", getDocs(collection(equipe(), 'testeurs')));
+await doit('Karim lit sa propre fiche', getDoc(doc(karim(), 'testeurs', KARIM)));
+await refuse('Karim ne lit pas la fiche de Sonia', getDoc(doc(karim(), 'testeurs', SONIA)));
+await refuse('Karim ne lit pas le vivier entier', getDocs(collection(karim(), 'testeurs')));
+await refuse('Camille ne lit pas le vivier', getDocs(collection(camille(), 'testeurs')));
+await refuse("Karim ne se fabrique pas une fiche", setDoc(doc(karim(), 'testeurs', KARIM), { prenom: 'Karim', projets: ['atelier', 'boutique'] }));
+await refuse("L'équipe n'inscrit pas un testeur depuis le navigateur", setDoc(doc(equipe(), 'testeurs', MARC), { prenom: 'Marc', projets: ['atelier'] }));
+
+console.log('\n== La plateforme de tests : la bibliothèque');
+/* Le client lit les scénarios pour savoir ce qui sera vérifié, le testeur
+   pour lire l'énoncé de ce qu'il doit dérouler. Ni l'un ni l'autre n'écrit. */
+await doit('Camille lit les scénarios de son projet', getDocs(collection(camille(), 'projets/atelier/scenarios')));
+await doit('Karim lit un scénario', getDoc(doc(karim(), 'projets/atelier/scenarios/DI-15')));
+await doit("L'équipe verse un scénario", setDoc(doc(equipe(), 'projets/atelier/scenarios/TA-01'), { ref: 'TA-01', bloc: 'taches', titre: 'Tâche minimale', niveau: 'reparti', actif: true }));
+await refuse('Karim ne réécrit pas un scénario', updateDoc(doc(karim(), 'projets/atelier/scenarios/DI-15'), { attendu: 'ce que je veux' }));
+await refuse('Camille ne réécrit pas un scénario', updateDoc(doc(camille(), 'projets/atelier/scenarios/DI-15'), { niveau: 'reparti' }));
+await refuse('Léa ne lit pas les scénarios d un autre projet', getDocs(collection(lea(), 'projets/atelier/scenarios')));
+
+console.log('\n== La plateforme de tests : les campagnes');
+/* Un testeur ne lit que les campagnes où il figure : il ne doit pas
+   déduire du nombre de campagnes ce que l'agence fait ailleurs. */
+await doit('Camille suit la campagne de son projet', getDoc(doc(camille(), 'projets/atelier/campagnes/c1')));
+await doit('Karim lit la campagne où il figure', getDoc(doc(karim(), 'projets/atelier/campagnes/c1')));
+await refuse("Marc ne lit pas une campagne où il n'est pas", getDoc(doc(marc(), 'projets/atelier/campagnes/c1')));
+await refuse('Karim ne s ajoute pas à une campagne', updateDoc(doc(karim(), 'projets/atelier/campagnes/c1'), { testeurs: [KARIM, SONIA, MARC] }));
+await refuse('Camille ne crée pas une campagne', setDoc(doc(camille(), 'projets/atelier/campagnes/c2'), { titre: 'La mienne', statut: 'en-cours', testeurs: [] }));
+await doit("L'équipe crée une campagne", setDoc(doc(equipe(), 'projets/atelier/campagnes/c2'), { titre: 'Passe 1.3.0', statut: 'preparation', testeurs: [KARIM] }));
+
+console.log('\n== La plateforme de tests : le cloisonnement des passages');
+/* Le cœur du dispositif. Un testeur qui verrait les réponses des autres
+   cocherait comme eux, et la campagne ne vaudrait plus rien. L'identifiant
+   du document porte l'uid, ce qui rend le refus vérifiable sans lire le
+   document : la demande est écartée avant d'être servie. */
+await doit('Karim relit son propre passage', getDoc(doc(karim(), `projets/atelier/campagnes/c1/passages/${KARIM}__DI-15`)));
+await refuse('Karim ne lit pas le passage de Sonia', getDoc(doc(karim(), `projets/atelier/campagnes/c1/passages/${SONIA}__DI-15`)));
+await refuse('Karim ne liste pas tous les passages', getDocs(collection(karim(), 'projets/atelier/campagnes/c1/passages')));
+await doit('Karim liste les siens', getDocs(query(collection(karim(), 'projets/atelier/campagnes/c1/passages'), where('testeur', '==', KARIM))));
+await refuse('Karim ne liste pas ceux de Sonia par requête', getDocs(query(collection(karim(), 'projets/atelier/campagnes/c1/passages'), where('testeur', '==', SONIA))));
+await doit("L'équipe lit tous les passages", getDocs(collection(equipe(), 'projets/atelier/campagnes/c1/passages')));
+await doit('Camille lit les passages de son projet', getDocs(collection(camille(), 'projets/atelier/campagnes/c1/passages')));
+await refuse('Léa ne lit pas les passages d un autre projet', getDocs(collection(lea(), 'projets/atelier/campagnes/c1/passages')));
+
+console.log('\n== La plateforme de tests : écrire un passage');
+await doit('Karim consigne un résultat', setDoc(doc(karim(), `projets/atelier/campagnes/c1/passages/${KARIM}__ID-01`), { scenario: 'ID-01', testeur: KARIM, plateforme: 'ios', resultat: 'ok', commentaire: '', preuves: [], contexte: { modele: 'iPhone 13' }, le: serverTimestamp() }));
+await refuse("Karim ne consigne pas au nom de Sonia", setDoc(doc(karim(), `projets/atelier/campagnes/c1/passages/${SONIA}__ID-01`), { scenario: 'ID-01', testeur: SONIA, plateforme: 'android', resultat: 'ok', commentaire: '', preuves: [], contexte: {}, le: serverTimestamp() }));
+await refuse("Karim ne déguise pas son identifiant", setDoc(doc(karim(), `projets/atelier/campagnes/c1/passages/${KARIM}__ID-01`), { scenario: 'ID-01', testeur: SONIA, plateforme: 'ios', resultat: 'ok', commentaire: '', preuves: [], contexte: {}, le: serverTimestamp() }));
+await refuse("Un identifiant qui ne colle pas au scénario est refusé", setDoc(doc(karim(), `projets/atelier/campagnes/c1/passages/${KARIM}__ID-01`), { scenario: 'DI-15', testeur: KARIM, plateforme: 'ios', resultat: 'ok', commentaire: '', preuves: [], contexte: {}, le: serverTimestamp() }));
+await refuse("Marc ne consigne rien sur une campagne où il n'est pas", setDoc(doc(marc(), `projets/atelier/campagnes/c1/passages/${MARC}__ID-01`), { scenario: 'ID-01', testeur: MARC, plateforme: 'ios', resultat: 'ok', commentaire: '', preuves: [], contexte: {}, le: serverTimestamp() }));
+/* Un échec sans preuve n'est pas un rapport, c'est une opinion. */
+await refuse('Un échec sans preuve est refusé', setDoc(doc(sonia(), `projets/atelier/campagnes/c1/passages/${SONIA}__ID-01`), { scenario: 'ID-01', testeur: SONIA, plateforme: 'android', resultat: 'ko', commentaire: 'ça marche pas', preuves: [], contexte: {}, le: serverTimestamp() }));
+await doit('Un échec avec preuve passe', setDoc(doc(sonia(), `projets/atelier/campagnes/c1/passages/${SONIA}__ID-01`), { scenario: 'ID-01', testeur: SONIA, plateforme: 'android', resultat: 'ko', commentaire: 'rien ne se passe', preuves: ['p/2.mp4'], contexte: {}, le: serverTimestamp() }));
+await refuse('Un résultat inventé est refusé', setDoc(doc(sonia(), `projets/atelier/campagnes/c1/passages/${SONIA}__DI-15`), { scenario: 'DI-15', testeur: SONIA, plateforme: 'android', resultat: 'peut-etre', commentaire: '', preuves: [], contexte: {}, le: serverTimestamp() }));
+await refuse('Une plateforme inventée est refusée', setDoc(doc(sonia(), `projets/atelier/campagnes/c1/passages/${SONIA}__DI-15`), { scenario: 'DI-15', testeur: SONIA, plateforme: 'windows-phone', resultat: 'ok', commentaire: '', preuves: [], contexte: {}, le: serverTimestamp() }));
+await refuse('Un champ en trop est refusé', setDoc(doc(sonia(), `projets/atelier/campagnes/c1/passages/${SONIA}__DI-15`), { scenario: 'DI-15', testeur: SONIA, plateforme: 'android', resultat: 'ok', commentaire: '', preuves: [], contexte: {}, le: serverTimestamp(), note: 'payez-moi plus' }));
+await refuse('Camille ne consigne pas de résultat', setDoc(doc(camille(), `projets/atelier/campagnes/c1/passages/${CAMILLE}__DI-15`), { scenario: 'DI-15', testeur: CAMILLE, plateforme: 'web', resultat: 'ok', commentaire: '', preuves: [], contexte: {}, le: serverTimestamp() }));
+/* Un passage ne s'efface pas : c'est la mémoire de la campagne. */
+await refuse('Karim n efface pas son passage', deleteDoc(doc(karim(), `projets/atelier/campagnes/c1/passages/${KARIM}__DI-15`)));
+await refuse("L'équipe n'efface pas un passage", deleteDoc(doc(equipe(), `projets/atelier/campagnes/c1/passages/${SONIA}__DI-15`)));
+
+console.log('\n== La plateforme de tests : la campagne close est figée');
+/* Une campagne close est un document d'archive. Plus personne n'y écrit,
+   pas même celui qui l'a remplie : sans cela on perd l'historique, et on
+   retombe dans le défaut du tableur. */
+await doit('Karim relit une campagne close', getDoc(doc(karim(), 'projets/atelier/campagnes/close')));
+await refuse('Karim ne corrige pas un passage d une campagne close', updateDoc(doc(karim(), `projets/atelier/campagnes/close/passages/${KARIM}__ID-01`), { resultat: 'ko', preuves: ['p/3.mp4'] }));
+await refuse('Karim n ajoute pas un passage à une campagne close', setDoc(doc(karim(), `projets/atelier/campagnes/close/passages/${KARIM}__DI-15`), { scenario: 'DI-15', testeur: KARIM, plateforme: 'ios', resultat: 'ok', commentaire: '', preuves: [], contexte: {}, le: serverTimestamp() }));
+await refuse('Karim ne dépose pas son appréciation sur une campagne close', setDoc(doc(karim(), `projets/atelier/campagnes/close/appreciations/${KARIM}`), { beaute: 5 }));
+
+console.log('\n== La plateforme de tests : l appréciation');
+/* Ce que le testeur pense de l'application. Une par testeur et par
+   campagne, et l'identifiant est son propre uid. */
+await doit('Sonia dépose son appréciation', setDoc(doc(sonia(), `projets/atelier/campagnes/c1/appreciations/${SONIA}`), { beaute: 3, prix: 7, utile: 'oui' }));
+await doit('Karim relit la sienne', getDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`)));
+await refuse("Karim ne lit pas l'appréciation de Sonia", getDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${SONIA}`)));
+await refuse("Karim n'écrit pas au nom de Sonia", setDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${SONIA}`), { beaute: 1 }));
+await doit("Camille lit les appréciations de son projet", getDocs(collection(camille(), 'projets/atelier/campagnes/c1/appreciations')));
+await doit("L'équipe lit les appréciations", getDocs(collection(equipe(), 'projets/atelier/campagnes/c1/appreciations')));
+
+console.log('\n== La plateforme de tests : les anomalies');
+/* Le testeur rapporte, il ne juge pas : le tri des échecs en anomalies
+   est un geste d'équipe, et le client en voit le résultat. */
+await doit('Camille lit les anomalies', getDocs(collection(camille(), 'projets/atelier/anomalies')));
+await doit("L'équipe classe une anomalie", updateDoc(doc(equipe(), 'projets/atelier/anomalies/a1'), { statut: 'corrigee' }));
+await refuse('Karim ne lit pas les anomalies', getDocs(collection(karim(), 'projets/atelier/anomalies')));
+await refuse('Camille ne classe pas une anomalie', updateDoc(doc(camille(), 'projets/atelier/anomalies/a1'), { statut: 'sans-suite' }));
+await refuse('Léa ne lit pas les anomalies d un autre projet', getDocs(collection(lea(), 'projets/atelier/anomalies')));
+
+console.log('\n== La plateforme de tests : le testeur reste dehors');
+/* Un testeur n'est pas membre du projet. Il n'a rien à faire dans les
+   demandes, les factures, les messages ou les fichiers. */
+await refuse('Karim ne lit pas le projet', getDoc(doc(karim(), 'projets/atelier')));
+await refuse('Karim ne lit pas les demandes', getDocs(query(collection(karim(), 'tickets'), where('projet', '==', 'atelier'))));
+await refuse('Karim ne lit pas les devis et factures', getDocs(query(collection(karim(), 'documents'), where('projet', '==', 'atelier'))));
+await refuse('Karim ne lit pas les messages du projet', getDocs(collection(karim(), 'projets/atelier/messages')));
+await refuse('Karim ne lit pas les fichiers', getDocs(query(collection(karim(), 'fichiers'), where('projet', '==', 'atelier'))));
+await refuse('Karim ne lit pas les tâches', getDocs(query(collection(karim(), 'taches'), where('projet', '==', 'atelier'))));
+await refuse('Karim ne lit pas l équipe du projet', getDocs(collection(karim(), 'projets/atelier/jalons')));
 
 console.log(`\n${ok} contrôle(s) conforme(s)${ecarts.length ? `, ${ecarts.length} ÉCART(S) :\n  - ${ecarts.join('\n  - ')}` : ''}`);
 await env.cleanup();

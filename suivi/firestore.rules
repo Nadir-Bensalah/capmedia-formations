@@ -544,6 +544,151 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // ================================================================
+    // La plateforme de tests
+    //
+    // Trois publics, pas deux. L'équipe pilote, le client regarde, et le
+    // testeur ne voit que son propre travail. Ce dernier cloisonnement est
+    // le plus important : un testeur qui verrait les réponses des autres
+    // cocherait comme eux, et la campagne ne vaudrait plus rien.
+    //
+    // Un testeur n'est pas membre du projet : il n'a rien à faire dans les
+    // demandes, les factures ou les messages. Son accès passe par une
+    // revendication « testeur » posée par le serveur, et par la liste des
+    // campagnes auxquelles il participe.
+    // ================================================================
+
+    function estTesteur() {
+      return connecte() && request.auth.token.testeur == true;
+    }
+
+    function ficheCampagne(projetId, campagneId) {
+      return get(/databases/$(database)/documents/projets/$(projetId)/campagnes/$(campagneId)).data;
+    }
+
+    // Affecté à cette campagne, et elle n'est pas close. Une campagne close
+    // est un document d'archive : plus personne n'y écrit, pas même celui
+    // qui l'a remplie.
+    function testeurDeLaCampagne(projetId, campagneId) {
+      return estTesteur()
+          && moi() in ficheCampagne(projetId, campagneId).testeurs;
+    }
+
+    function campagneOuverte(projetId, campagneId) {
+      return ficheCampagne(projetId, campagneId).statut == 'en-cours';
+    }
+
+    // Le vivier, à la racine : un testeur sert sur plusieurs projets sans
+    // qu'on lui refasse un compte. Nul ne lit la liste des autres, et c'est
+    // volontaire : le nom, l'âge et la fonction d'un testeur ne regardent
+    // que l'équipe.
+    match /testeurs/{testeurId} {
+      allow read:   if estEquipe() || (estTesteur() && testeurId == moi());
+      allow write:  if false;   // le serveur seul, via suiviAdmin
+    }
+
+    match /projets/{projetId} {
+
+      // La bibliothèque. Le client la lit pour savoir ce qui sera vérifié,
+      // le testeur pour lire l'énoncé de ce qu'il doit dérouler.
+      match /scenarios/{scenarioId} {
+        allow read:   if accesProjet(projetId) || estTesteur();
+        allow write:  if estEquipe();
+      }
+
+      // Les campagnes. Le testeur lit celles où il figure, et rien d'autre :
+      // il ne doit pas déduire du nombre de campagnes ce que fait l'agence
+      // pour d'autres clients.
+      match /campagnes/{campagneId} {
+        allow read:   if accesProjet(projetId)
+                      || (estTesteur() && moi() in resource.data.testeurs);
+        allow write:  if estEquipe();
+
+        // Le passage : un scénario, un testeur, une campagne. C'est la seule
+        // chose qu'un testeur écrit, et il n'écrit que la sienne.
+        //
+        // L'identifiant du document porte le testeur (« <uid>__DI-15 »), ce
+        // qui rend le cloisonnement vérifiable sans lire le document : une
+        // requête sur les passages d'autrui est refusée avant d'être servie.
+        match /passages/{passageId} {
+          allow read:   if accesProjet(projetId)
+                        || (estTesteur() && resource.data.testeur == moi());
+
+          allow create: if testeurDeLaCampagne(projetId, campagneId)
+            && campagneOuverte(projetId, campagneId)
+            && passageId == moi() + '__' + request.resource.data.scenario
+            && request.resource.data.testeur == moi()
+            && request.resource.data.keys().hasOnly([
+                 'scenario', 'testeur', 'plateforme', 'resultat',
+                 'commentaire', 'preuves', 'contexte', 'le'
+               ])
+            && request.resource.data.resultat in ['ok', 'ko', 'na']
+            && request.resource.data.plateforme in ['ios', 'android', 'web']
+            && texteBorne(request.resource.data.commentaire, 4000)
+            && request.resource.data.preuves is list
+            && request.resource.data.preuves.size() <= 5
+            // Un échec sans preuve n'est pas un rapport, c'est une opinion.
+            && (request.resource.data.resultat != 'ko'
+                || request.resource.data.preuves.size() > 0);
+
+          // Se corriger, oui. Changer de scénario ou de testeur, non.
+          //
+          // Les mêmes contrôles de forme qu'à la création, et pour une
+          // raison précise : un passage déjà consigné se réécrit avec
+          // setDoc, qui est une mise à jour et non une création. Une garde
+          // posée sur le seul « create » laisserait la correction passer
+          // sans contrôle, ce qui est exactement le trou qu'on cherchait.
+          allow update: if testeurDeLaCampagne(projetId, campagneId)
+            && campagneOuverte(projetId, campagneId)
+            && resource.data.testeur == moi()
+            && request.resource.data.scenario == resource.data.scenario
+            && request.resource.data.testeur == resource.data.testeur
+            && request.resource.data.keys().hasOnly([
+                 'scenario', 'testeur', 'plateforme', 'resultat',
+                 'commentaire', 'preuves', 'contexte', 'le'
+               ])
+            && request.resource.data.resultat in ['ok', 'ko', 'na']
+            && request.resource.data.plateforme in ['ios', 'android', 'web']
+            && texteBorne(request.resource.data.commentaire, 4000)
+            && request.resource.data.preuves is list
+            && request.resource.data.preuves.size() <= 5
+            && (request.resource.data.resultat != 'ko'
+                || request.resource.data.preuves.size() > 0);
+
+          // Un passage ne s'efface pas : c'est la mémoire de la campagne.
+          allow delete: if false;
+
+          // Le rattachement à une anomalie est un geste de tri : l'équipe.
+          allow update: if estEquipe();
+        }
+
+        // L'appréciation : ce que le testeur pense de l'application. Une par
+        // testeur et par campagne, et l'identifiant est son propre uid.
+        match /appreciations/{testeurId} {
+          allow read:   if accesProjet(projetId)
+                        || (estTesteur() && testeurId == moi());
+          allow write:  if estTesteur()
+            && testeurId == moi()
+            && testeurDeLaCampagne(projetId, campagneId)
+            && campagneOuverte(projetId, campagneId);
+        }
+      }
+
+      // Les anomalies : le regroupement des échecs. Trois testeurs qui
+      // tombent sur le même scénario font une anomalie, pas trois.
+      // Le testeur ne les voit pas : il rapporte, il ne juge pas.
+      match /anomalies/{anomalieId} {
+        allow read:   if accesProjet(projetId);
+        allow write:  if estEquipe();
+      }
+    }
+
+    // Les scénarios se lisent aussi en groupe, pour la bibliothèque de
+    // l'équipe qui couvre tous les projets.
+    match /{chemin=**}/scenarios/{scenarioId} {
+      allow read: if estEquipe();
+    }
+
     // La porte d'entrée. Ces trois collections portent l'empreinte des
     // codes en cours, les compteurs de tentatives et les jetons
     // d'invitation : rien de tout cela ne se lit ni ne s'écrit depuis un
