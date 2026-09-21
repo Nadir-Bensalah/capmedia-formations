@@ -1373,6 +1373,40 @@ exports.suiviAdmin = onRequest(
       }
 
       /* --- Un etat des lieux, pour verifier sans deviner -------------------- */
+      /* --- Poser une demande depuis le cockpit -----------------------------
+         Une anomalie remontée par message ou par téléphone doit rejoindre
+         le fil des demandes, sinon elle vit dans une boîte mail et le
+         client ne peut pas la suivre. L'auteur est Capmedia : c'est nous
+         qui l'inscrivons, au nom de ce qu'on nous a dit. */
+      if (action === 'creerDemande') {
+        if (!projet) return res.status(400).send('projet requis');
+        const titre = String(req.body.titre || '').trim();
+        if (!titre) return res.status(400).send('titre requis');
+        const projetDoc = await bdd.doc(`projets/${String(projet)}`).get();
+        if (!projetDoc.exists) return res.status(404).send('projet inconnu');
+
+        const TYPES_DEMANDE = ['bug', 'modification', 'fonctionnalite', 'amelioration', 'question', 'technique', 'contenu', 'devis', 'demande', 'autre'];
+        const URGENCES_DEMANDE = ['bloquant', 'critique', 'important', 'mineur'];
+        const typeDemande = TYPES_DEMANDE.includes(String(req.body.typeDemande || '')) ? String(req.body.typeDemande) : 'demande';
+        const urgence = URGENCES_DEMANDE.includes(String(req.body.urgence || '')) ? String(req.body.urgence) : 'important';
+
+        const nouveau = await bdd.collection('tickets').add(sansIndefini({
+          numero: null, projet: String(projet), composant: String(req.body.composant || ''),
+          titre: titre.slice(0, 120), description: String(description || '').slice(0, 6000),
+          type: typeDemande, urgence, statut: String(req.body.statut || 'nouveau'),
+          plateforme: PLATEFORMES_CONNUES.includes(String(req.body.plateforme || '')) ? String(req.body.plateforme) : '',
+          version: String(req.body.version || ''), etapes: String(req.body.etapes || ''),
+          attendu: String(req.body.attendu || ''), obtenu: String(req.body.obtenu || ''),
+          contexte: String(req.body.contexte || ''), appareil: String(req.body.appareil || ''),
+          liens: Array.isArray(liens) ? liens.filter((l) => typeof l === 'string' && /^https?:\/\//.test(l)).slice(0, 10) : [],
+          assigne: null, auteur: { uid: null, nom: String(nom || EQUIPE_NOM), email: '', cote: 'equipe' },
+          pieces: [], archive: false, resolu: null, qualification: req.body.qualification || null, devis: null,
+          lu: {}, cree: FieldValue.serverTimestamp(), maj: FieldValue.serverTimestamp(),
+        }));
+        await audit('demande-creee-cockpit', { projet: String(projet), ticket: nouveau.id, titre });
+        return res.json({ ok: true, id: nouveau.id });
+      }
+
       /* --- Ouvrir le projet au client -------------------------------------
          Le geste qui leve le rideau : le client entre, voit tout ce qui a
          ete prepare, et recoit son invitation. Il refuse tant que l'espace
