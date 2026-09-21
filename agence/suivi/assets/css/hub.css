@@ -1062,8 +1062,16 @@ input, select, textarea { font: inherit; color: inherit; }
   display: flex; flex-direction: column;
   animation: glisse var(--doux) both;
   margin-left: auto;
+  /* Sans « overflow », un formulaire plus haut que l'écran pousse le pied
+     hors de la fenêtre et le bouton d'enregistrement devient injoignable.
+     La modale s'en protégeait déjà ; la feuille, non. */
+  overflow: hidden;
 }
-.feuille .modale-corps { flex: 1; }
+/* « min-height: 0 » lève le plancher que le flex impose à ses enfants :
+   sans lui le corps refuse de rétrécir, donc il ne défile jamais et c'est
+   la feuille entière qui grandit. */
+.feuille .modale-corps { flex: 1; min-height: 0; }
+.feuille .modale-tete, .feuille .modale-pied { flex: 0 0 auto; }
 @media (max-width: 700px) {
   .voile--feuille { place-items: end stretch; }
   .feuille { width: 100%; height: auto; max-height: 92vh; margin: auto 0 0; border-radius: 22px 22px 0 0; animation: monte var(--doux) both; }
@@ -1745,3 +1753,68 @@ input, select, textarea { font: inherit; color: inherit; }
 }
 .rideau-etat dt { font: var(--t-micro); color: var(--encre-3); }
 .rideau-etat dd { margin: 2px 0 0; font: var(--t-corps-fort); font-size: 13px; }
+
+/* ==========================================================================
+   La plateforme de tests
+   ========================================================================== */
+
+/* Une ligne de scénario : la référence, le titre, le niveau de couverture.
+   Le liseré à gauche marque les scénarios passés par deux testeurs : c'est
+   ce qui coûte le double, et ça doit se voir en parcourant la liste. */
+.bloc-scenarios { margin-top: 22px; }
+.bloc-scenarios:first-of-type { margin-top: 14px; }
+
+.bloc-tete {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 600; letter-spacing: .02em;
+  color: var(--t-3); text-transform: uppercase;
+  margin: 0 0 8px;
+}
+
+.liste--serree { gap: 2px; }
+
+.scenario {
+  display: flex; align-items: center; gap: 4px;
+  border-radius: 10px;
+  border-left: 3px solid transparent;
+  transition: background-color .12s ease;
+}
+.scenario:hover { background: var(--fond-2); }
+.scenario--double { border-left-color: var(--bleu-systeme); }
+
+.scenario-corps {
+  flex: 1; min-width: 0;
+  display: flex; align-items: center; gap: 12px;
+  padding: 9px 10px;
+  background: none; border: 0; cursor: pointer;
+  font: inherit; color: inherit; text-align: left;
+}
+
+.scenario-ref {
+  flex: 0 0 auto; min-width: 58px;
+  font-size: 12px; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--t-3);
+}
+
+.scenario-titre {
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.scenario-fin {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 6px;
+}
+
+/* Les boutons de modification n'apparaissent qu'au survol : une liste de
+   173 lignes avec deux icônes par ligne devient illisible. */
+.scenario .boutons-edition { opacity: 0; transition: opacity .12s ease; padding-right: 6px; }
+.scenario:hover .boutons-edition,
+.scenario:focus-within .boutons-edition { opacity: 1; }
+@media (hover: none) { .scenario .boutons-edition { opacity: 1; } }
+
+.couverture { gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+.couverture .puce { gap: 6px; }
+
+.puce--mini { font-size: 11px; padding: 1px 6px; }

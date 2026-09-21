@@ -10,7 +10,7 @@
    ========================================================================== */
 
 import {
-  bdd, collection, collectionGroup, query, where, orderBy, limit, doc, addDoc, updateDoc, setDoc, deleteDoc,
+  bdd, collection, collectionGroup, query, where, orderBy, limit, doc, getDoc, addDoc, updateDoc, setDoc, deleteDoc,
   serverTimestamp, arrayUnion, arrayRemove, Timestamp,
   nomAffiche, enDate, parDateDesc, parDateAsc, joursAvant, borner, age, retard, dateCourte,
   OUVERTS, ATTEND_CLIENT, ATTEND_EQUIPE, FACTURES_DUES, PROJETS_ACTIFS, CATEGORIES_CLIENT, projetEstActif,
@@ -26,6 +26,9 @@ export const K = {
   projet: (p) => `projet:${p}`,
   composants: (p) => `composants:${p}`,
   jalons: (p) => `jalons:${p}`,
+  scenarios: (p) => `scenarios:${p}`,
+  campagnes: (p) => `campagnes:${p}`,
+  anomalies: (p) => `anomalies:${p}`,
   liens: (p) => `liens:${p}`,
   messages: (p) => `messages:${p}`,
   lectures: (p) => `lectures:${p}`,
@@ -62,6 +65,8 @@ export const K = {
   fichiersTous: 'fichiers:*',
   blocagesTous: 'blocages:*',
   jalonsTous: 'jalons:*',
+  scenariosTous: 'scenarios:*',
+  testeurs: 'testeurs',
   audit: 'audit',
   envois: 'envois',
 };
@@ -90,6 +95,13 @@ export const abonnerProjet = (lot, pid, role) => {
   /* La fiche technique ne se lit que côté équipe : les règles refuseraient
      la requête à un client, et elle ne lui sert à rien. */
   if (!client) lot.abonner(K.technique(pid), () => col('projets', pid, 'technique'));
+  /* La plateforme de tests. Les scénarios et les campagnes se lisent des
+     deux côtés ; les anomalies aussi, puisque le client doit savoir ce qui
+     a été trouvé. Seuls les passages restent cloisonnés, et ils se lisent
+     campagne par campagne, à l'ouverture. */
+  lot.abonner(K.scenarios(pid), () => col('projets', pid, 'scenarios'));
+  lot.abonner(K.campagnes(pid), () => col('projets', pid, 'campagnes'));
+  lot.abonner(K.anomalies(pid), () => col('projets', pid, 'anomalies'));
   lot.abonner(K.taches(pid), () => surProjetVisible('taches'));
   lot.abonner(K.tickets(pid), () => surProjet('tickets'));
   lot.abonner(K.validations(pid), () => surProjet('validations'));
@@ -346,6 +358,35 @@ export const ecrire = {
   })),
   majComposant: (pid, cid, d) => updateDoc(doc(bdd, 'projets', pid, 'composants', cid), nettoyer({ ...d, maj: serverTimestamp() })),
   supprimerComposant: (pid, cid) => deleteDoc(doc(bdd, 'projets', pid, 'composants', cid)),
+
+  /* --- La plateforme de tests ------------------------------------------
+     Un scénario porte sa référence comme identifiant (« DI-15 »), parce que
+     c'est elle qui le nomme partout ailleurs : dans les passages, dans les
+     anomalies, dans les rapports des testeurs. Deux scénarios ne peuvent
+     donc pas porter la même référence, et c'est voulu. */
+  creerScenario: (pid, d) => setDoc(doc(bdd, 'projets', pid, 'scenarios', d.ref), nettoyer({
+    ref: d.ref, bloc: d.bloc || 'divers', blocLibelle: d.blocLibelle || '',
+    groupe: d.groupe || '', titre: d.titre, options: d.options || '', attendu: d.attendu || '',
+    niveau: d.niveau || 'reparti', plateformes: d.plateformes || ['ios', 'android', 'web'],
+    ordre: Number(d.ordre) || 0, actif: d.actif !== false,
+    cree: serverTimestamp(), maj: serverTimestamp(),
+  })),
+  /* Le magasin peut être en retard d'un instant, et il écarte les scénarios
+     désactivés. Pour savoir si une référence est déjà prise, seule la base
+     répond juste : écraser un scénario existant changerait le sens des
+     passages déjà consignés sous cette référence. */
+  scenarioExiste: async (pid, ref) => (await getDoc(doc(bdd, 'projets', pid, 'scenarios', ref))).exists(),
+  majScenario: (pid, ref, d) => updateDoc(doc(bdd, 'projets', pid, 'scenarios', ref), nettoyer({ ...d, maj: serverTimestamp() })),
+  supprimerScenario: (pid, ref) => deleteDoc(doc(bdd, 'projets', pid, 'scenarios', ref)),
+
+  creerCampagne: (pid, d) => addDoc(col('projets', pid, 'campagnes'), nettoyer({
+    titre: d.titre, statut: d.statut || 'preparation',
+    debut: d.debut || null, fin: d.fin || null,
+    builds: d.builds || {}, testeurs: d.testeurs || [], affectation: d.affectation || {},
+    cree: serverTimestamp(), maj: serverTimestamp(),
+  })),
+  majCampagne: (pid, cid, d) => updateDoc(doc(bdd, 'projets', pid, 'campagnes', cid), nettoyer({ ...d, maj: serverTimestamp() })),
+  supprimerCampagne: (pid, cid) => deleteDoc(doc(bdd, 'projets', pid, 'campagnes', cid)),
 
   creerJalon: (pid, d) => addDoc(col('projets', pid, 'jalons'), nettoyer({
     projet: pid, titre: d.titre, description: d.description || '', phase: d.phase || '', statut: d.statut || 'a-venir',

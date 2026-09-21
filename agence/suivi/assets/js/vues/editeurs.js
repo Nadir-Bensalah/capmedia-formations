@@ -10,6 +10,7 @@ import {
   STATUTS_RELEASE, TYPES_CHANGEMENT, TYPES_NOTE, TYPES_VALIDATION, CATEGORIES_FICHIER,
   STATUTS_PROJET, TYPES_PROJET, SANTES, STATUTS, URGENCES, QUALIFICATIONS, PLATEFORMES_CHOIX, contactsProjet,
   MOTIFS_REPORT, nomAffiche, dateCourte,
+  NIVEAUX_SCENARIO, BLOCS_SCENARIO, STATUTS_CAMPAGNE, PLATEFORMES_TEST, REF_SCENARIO,
 } from '../noyau.js';
 import { modale, confirmer, toast, lireForme, valider, obligatoire, longueurMax, urlValide, emailValide, optionsDe, depot, agir, lisible, choixPlateformes } from '../ui.js';
 import { appelServeur } from '../serveur.js';
@@ -172,7 +173,11 @@ const feuille = ({ titre, sousTitre, corps, enregistrer, libelle = 'Enregistrer'
     const bouton = $('button[type="submit"]', m.pied);
     const ok = await agir(bouton, async () => {
       const resultat = await enregistrer(lireForme(forme), boiteDepot ? boiteDepot.pieces : []);
-      m.fermer(resultat === undefined ? true : resultat);
+      /* Un éditeur qui renvoie « undefined » refuse la saisie et l'a déjà
+         dit : fermer la feuille effacerait le formulaire sous les yeux de
+         celui qui vient de se tromper, et il devrait tout retaper. */
+      if (resultat === undefined) return;
+      m.fermer(resultat);
     });
     void ok;
   });
@@ -360,6 +365,63 @@ const editeurs = {
       },
     });
   },
+
+  /* Un scénario de test. La référence est l'identifiant du document : elle
+     nomme le scénario dans les passages, les anomalies et les rapports des
+     testeurs, donc elle ne se change pas une fois posée. Rouvrir un
+     scénario pour le corriger laisse le champ en lecture seule. */
+  scenario: (env, { pid, fiche, defaut = {} }) => feuille({
+    titre: fiche ? 'Le scénario' : 'Nouveau scénario',
+    sousTitre: fiche ? fiche.ref : 'Un cas de test, écrit une fois, déroulé à chaque campagne.',
+    corps: `
+      <div class="forme-rang">
+        ${champ('ref', 'Référence', fiche ? fiche.ref : (defaut.ref || ''), { placeholder: 'DI-33', aide: fiche ? 'La référence ne se change pas : elle nomme ce scénario partout ailleurs.' : 'Deux lettres, un tiret, un numéro. Elle sert de nom dans tous les rapports.', attrs: fiche ? 'readonly' : '' })}
+        ${select('bloc', 'Bloc', BLOCS_SCENARIO, fiche ? fiche.bloc : (defaut.bloc || 'divers'))}
+      </div>
+      ${champ('titre', 'Titre', fiche ? fiche.titre : '', { placeholder: 'Rappel fin de mois' })}
+      ${zone('options', 'Options', fiche ? fiche.options : '', { facultatif: true, lignes: 2, placeholder: 'Type Événement, le 31 mars, rappel 1 mois avant' })}
+      ${zone('attendu', 'Résultat attendu', fiche ? fiche.attendu : '', { lignes: 3, placeholder: 'Déclenchement le 28 ou 29 février, jamais le 3 mars' })}
+      <div class="groupe">
+        ${select('niveau', 'Couverture', NIVEAUX_SCENARIO, fiche ? fiche.niveau : 'reparti')}
+        <p class="aide">Un scénario « socle » ou « transversal » est passé par deux testeurs sur deux systèmes différents. Un scénario « réparti » ne l'est qu'une fois : passer deux fois coûte le double, on ne le fait que là où la réponse peut différer.</p>
+      </div>
+      <div class="groupe"><span class="etiquette-champ">Plateformes</span>
+        <div class="rang" style="gap:14px;flex-wrap:wrap">${Object.entries(PLATEFORMES_TEST).map(([cle, f]) => `<label class="case"><input type="checkbox" name="plateformes" value="${echapper(cle)}" ${((fiche && fiche.plateformes) || ['ios', 'android', 'web']).includes(cle) ? 'checked' : ''}> ${echapper(f.libelle)}</label>`).join('')}</div>
+        <p class="aide">Là où ce scénario a un sens. Un scénario qui ne concerne que le mobile n'apparaît pas dans la liste du testeur web.</p>
+      </div>
+      ${champ('ordre', 'Ordre', fiche ? fiche.ordre : (defaut.ordre || 0), { type: 'number', aide: 'Sa place dans la liste. Les scénarios importés gardent l\'ordre du plan.' })}`,
+    regles: {
+      ref: (v) => {
+        if (!String(v || '').trim()) return 'Donnez une référence.';
+        if (!REF_SCENARIO.test(String(v).trim().toUpperCase())) return 'Deux lettres, un tiret, un numéro. Par exemple DI-33.';
+        return '';
+      },
+      titre: obligatoire(),
+      attendu: obligatoire(),
+    },
+    enregistrer: async (d) => {
+      const ref = fiche ? fiche.ref : String(d.ref || '').trim().toUpperCase();
+      /* Créer un scénario dont la référence existe déjà écraserait le sien
+         sans rien dire, et les passages déjà consignés changeraient de sens.
+         On interroge la base, pas le magasin : lui écarte les scénarios
+         désactivés, et leur référence reste prise. */
+      if (!fiche && await ecrire.scenarioExiste(pid, ref)) {
+        toast(`${ref} existe déjà dans ce projet.`, 'erreur');
+        return undefined;
+      }
+      const plateformes = Array.isArray(d.plateformes) ? d.plateformes : (d.plateformes ? [d.plateformes] : []);
+      if (!plateformes.length) { toast('Choisissez au moins une plateforme.', 'erreur'); return undefined; }
+      const donnees = {
+        ref, bloc: d.bloc, blocLibelle: (BLOCS_SCENARIO[d.bloc] || {}).libelle || '',
+        titre: d.titre, options: d.options || '', attendu: d.attendu,
+        niveau: d.niveau, plateformes, ordre: Number(d.ordre) || 0,
+      };
+      if (fiche) await ecrire.majScenario(pid, ref, donnees);
+      else await ecrire.creerScenario(pid, { ...donnees, groupe: defaut.groupe || '', actif: true });
+      toast(fiche ? 'Scénario enregistré.' : `${ref} créé.`);
+      return true;
+    },
+  }),
 
   jalon: (env, { pid, fiche, defaut = {} }) => feuille({
     titre: fiche ? "L'étape" : 'Nouvelle étape', sousTitre: 'Une étape de la feuille de route.',
@@ -646,6 +708,8 @@ export const supprimer = async (genre, env, { pid, fiche, libelle }) => {
     else if (genre === 'reunion') await ecrire.supprimerReunion(fiche.id);
     else if (genre === 'note') await ecrire.supprimerNote(fiche.id);
     else if (genre === 'blocage') await ecrire.supprimerBlocage(fiche.id);
+    else if (genre === 'scenario') await ecrire.supprimerScenario(pid, fiche.ref);
+    else if (genre === 'campagne') await ecrire.supprimerCampagne(pid, fiche.id);
     toast('Supprimé.');
     return true;
   } catch (e) { toast(lisible(e), 'erreur'); return false; }

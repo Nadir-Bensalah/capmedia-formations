@@ -279,6 +279,73 @@ export const MOTIFS_REPORT = {
 
 /* --- Les tâches --------------------------------------------------------- */
 
+/* ==========================================================================
+   La plateforme de tests
+   ========================================================================== */
+
+/* Le niveau de couverture décide combien de personnes passent un scénario.
+   « socle » : le comportement dépend du système, donc un testeur iOS et un
+   testeur Android le passent tous les deux. « transversal » : il touche la
+   synchronisation ou les langues, donc il demande deux appareils par
+   construction. « reparti » : il se comporte pareil partout, une personne
+   suffit. Passer un scénario deux fois coûte le double : on ne le fait que
+   là où la réponse peut différer. */
+export const NIVEAUX_SCENARIO = {
+  'socle':       { libelle: 'Socle',       court: 'Socle',  voile: 'bleu',   double: true,  aide: 'Le comportement dépend du système : un testeur iOS et un testeur Android le passent.' },
+  'transversal': { libelle: 'Transversal', court: 'Transv', voile: 'violet', double: true,  aide: 'Synchronisation, langues, abonnement : il demande deux appareils.' },
+  'reparti':     { libelle: 'Réparti',     court: 'Simple', voile: 'gris',   double: false, aide: 'Se comporte pareil partout : une seule personne le passe.' },
+};
+
+export const BLOCS_SCENARIO = {
+  'dates-importantes': { libelle: 'Dates importantes' },
+  'taches':            { libelle: 'Tâches' },
+  'rituels':           { libelle: 'Rituels' },
+  'objectifs':         { libelle: 'Objectifs' },
+  'voyages':           { libelle: 'Voyages' },
+  'journal':           { libelle: 'Journal' },
+  'idees':             { libelle: 'Idées' },
+  'transversal':       { libelle: 'Transversal' },
+  'compte-charge':     { libelle: 'Compte chargé et archivées' },
+  'divers':            { libelle: 'Divers' },
+};
+
+export const PLATEFORMES_TEST = {
+  'ios':     { libelle: 'iOS',     court: 'iOS' },
+  'android': { libelle: 'Android', court: 'Android' },
+  'web':     { libelle: 'Web',     court: 'Web' },
+};
+
+export const STATUTS_CAMPAGNE = {
+  'preparation': { libelle: 'En préparation', voile: 'gris',  ordre: 1 },
+  'en-cours':    { libelle: 'En cours',       voile: 'bleu',  ordre: 2 },
+  'close':       { libelle: 'Close',          voile: 'vert',  ordre: 3 },
+};
+
+export const RESULTATS_PASSAGE = {
+  'ok': { libelle: 'OK', voile: 'vert' },
+  'ko': { libelle: 'KO', voile: 'rouge' },
+  'na': { libelle: 'NA', voile: 'gris' },
+};
+
+export const GRAVITES_ANOMALIE = {
+  'bloquant':   { libelle: 'Bloquant',   voile: 'rouge',  rang: 1 },
+  'majeur':     { libelle: 'Majeur',     voile: 'ambre',  rang: 2 },
+  'mineur':     { libelle: 'Mineur',     voile: 'bleu',   rang: 3 },
+  'cosmetique': { libelle: 'Cosmétique', voile: 'gris',   rang: 4 },
+};
+
+export const STATUTS_ANOMALIE = {
+  'nouvelle':   { libelle: 'Nouvelle',   voile: 'ambre',  ordre: 1 },
+  'confirmee':  { libelle: 'Confirmée',  voile: 'rouge',  ordre: 2 },
+  'corrigee':   { libelle: 'Corrigée',   voile: 'vert',   ordre: 3 },
+  'sans-suite': { libelle: 'Sans suite', voile: 'gris',   ordre: 4 },
+};
+
+/* Une référence de scénario : deux lettres, un tiret, un numéro. Le « R »
+   des régressions est admis (« DI-R1 »), parce que le plan les nomme ainsi
+   et que c'est la référence qui fait foi dans les rapports. */
+export const REF_SCENARIO = /^[A-Z]{2}-R?\d{1,3}$/;
+
 export const STATUTS_TACHE = {
   'a-faire':        { libelle: 'À faire',           voile: 'gris',   ordre: 1 },
   'en-cours':       { libelle: 'En cours',          voile: 'bleu',   ordre: 2 },
