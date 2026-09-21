@@ -1711,3 +1711,37 @@ input, select, textarea { font: inherit; color: inherit; }
   padding-block: 14px;
 }
 .champ-code::placeholder { color: var(--encre-4); letter-spacing: 0.34em; }
+
+/* ==========================================================================
+   Le rideau : un projet qui se prépare, avant d'être ouvert au client
+   ========================================================================== */
+
+.rideau {
+  padding: var(--e-5);
+  border-radius: var(--r-carte);
+  background: var(--fond-2);
+  border: 1px dashed var(--trait-fort);
+}
+.rideau-tete { display: flex; align-items: center; gap: var(--e-4); flex-wrap: wrap; }
+.rideau-icone {
+  flex: none; width: 38px; height: 38px; border-radius: 12px;
+  display: grid; place-items: center;
+  background: var(--fond); color: var(--encre-2);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.rideau-icone svg { width: 19px; height: 19px; }
+.rideau-manque {
+  display: flex; align-items: center; gap: 8px;
+  margin: var(--e-4) 0 0;
+  font: var(--t-petit); color: var(--attention);
+}
+.rideau-manque svg { width: 16px; height: 16px; flex: none; }
+.rideau-etat {
+  display: grid; gap: var(--e-4) var(--e-5);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin: var(--e-5) 0 0;
+  padding-top: var(--e-4);
+  border-top: 1px solid var(--trait);
+}
+.rideau-etat dt { font: var(--t-micro); color: var(--encre-3); }
+.rideau-etat dd { margin: 2px 0 0; font: var(--t-corps-fort); font-size: 13px; }

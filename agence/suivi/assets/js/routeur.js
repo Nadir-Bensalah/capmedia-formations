@@ -14,6 +14,12 @@ let nettoyage = null;
 let majEnPlace = null;
 let cleCourante = null;
 let sortie = null;
+/* Chaque rendu prend un numéro. Monter une vue est asynchrone : si une
+   autre adresse arrive pendant le montage, celui-ci se retrouve périmé
+   avant d'avoir fini. Sans ce numéro, la vue d'avant réinstallait son
+   nettoyage et ses écoutes continuaient d'écrire dans la même zone : on
+   lisait l'ancien écran sous la nouvelle adresse. */
+let generation = 0;
 const ecouteurs = new Set();
 let routeCourante = { chemin: '/', params: {}, requete: {} };
 
@@ -56,6 +62,7 @@ const rendre = async () => {
      cle sont la meme vue. On lui passe alors la main plutot que de tout
      detruire, ce qui evite la secousse d un rechargement complet. */
   const cle = typeof trouve.route.cle === 'function' ? trouve.route.cle({ chemin, params: trouve.params, requete }) : null;
+  const mien = (generation += 1);
   if (cle && cle === cleCourante && typeof majEnPlace === 'function') {
     routeCourante = { chemin, params: trouve.params, requete };
     ecouteurs.forEach((fn) => { try { fn(routeCourante); } catch (e) { console.error(e); } });
@@ -72,13 +79,20 @@ const rendre = async () => {
   window.scrollTo({ top: 0 });
   try {
     const rendu = await trouve.route.vue({ ...routeCourante, sortie });
-    if (rendu && typeof rendu === 'object' && typeof rendu.fin === 'function') {
-      nettoyage = rendu.fin;
-      majEnPlace = typeof rendu.maj === 'function' ? rendu.maj : null;
-    } else {
-      nettoyage = rendu;
+    const objet = rendu && typeof rendu === 'object';
+    const fin = objet && typeof rendu.fin === 'function' ? rendu.fin
+      : (typeof rendu === 'function' ? rendu : null);
+    const maj = objet && typeof rendu.maj === 'function' ? rendu.maj : null;
+    if (mien !== generation) {
+      /* Une autre adresse a pris la main pendant le montage : cette vue
+         n'est plus à l'écran, on la démonte sans rien réinstaller. */
+      if (fin) { try { fin(); } catch (e) { console.error(e); } }
+      return;
     }
+    nettoyage = fin;
+    majEnPlace = maj;
   } catch (e) {
+    if (mien !== generation) return;
     console.error('[routeur] la vue a échoué', e);
     sortie.innerHTML = `<div class="page"><div class="vide"><p class="vide-titre">Cette page n'a pas pu s'ouvrir.</p><p class="vide-texte">Réessayez dans un instant. Si cela continue, prévenez-nous.</p><button class="btn btn-secondaire" type="button" onclick="location.reload()">Recharger</button></div></div>`;
   }

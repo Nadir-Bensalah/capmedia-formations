@@ -51,8 +51,15 @@ export const abonner = (cle, fabrique) => {
         (err) => {
           // Un accès refusé est un cas prévu (adresse d'un projet qui n'est pas
           // le sien) : on le note sans crier. Le reste est une vraie panne.
-          if (err && err.code === 'permission-denied') console.warn(`[magasin] accès refusé sur « ${cle} »`);
-          else console.error(`[magasin] écoute de « ${cle} » en échec`, err);
+          if (err && err.code === 'permission-denied') {
+            console.warn(`[magasin] accès refusé sur « ${cle} »`);
+            /* L'accès vient d'être retiré : ce qui restait en mémoire n'est
+               plus à nous. On vide, sinon l'écran continue d'afficher un
+               projet auquel on n'a plus droit jusqu'au rechargement. Une
+               panne de réseau, elle, garde sa valeur : l'écran ne doit pas
+               se vider à la première coupure. */
+            e.valeur = Array.isArray(e.valeur) ? [] : null;
+          } else console.error(`[magasin] écoute de « ${cle} » en échec`, err);
           e.erreur = err; e.chargee = true; diffuser(cle);
         },
       );
@@ -104,6 +111,21 @@ export const sur = (cle, fn) => {
   e.ecouteurs.add(fn);
   if (e.chargee) { try { fn(e.valeur, e.erreur); } catch (err) { console.error(err); } }
   return () => e.ecouteurs.delete(fn);
+};
+
+/**
+ * Réveille les écoutes d'une clé sans rien changer à sa valeur.
+ *
+ * Sert quand une donnée dont dépend une vue arrive sur une autre clé que
+ * celles qu'elle écoute : un projet ouvert en direct amène ses pièces sur
+ * des clés nées après le montage de l'écran, qui ne pouvait donc pas les
+ * connaître. Plutôt que de faire relire le monde à chaque vue, on frappe
+ * à la porte de celles qui écoutaient déjà la liste des projets.
+ */
+export const reveiller = (cle) => {
+  const e = entrees.get(cle);
+  if (!e || !e.chargee) return;
+  e.ecouteurs.forEach((fn) => { try { fn(e.valeur, e.erreur); } catch (err) { console.error(err); } });
 };
 
 /** Attend la première valeur d'une clé (déjà abonnée). */

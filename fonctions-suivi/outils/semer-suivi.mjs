@@ -60,13 +60,27 @@ async function main() {
     plateformes: ['ios', 'android', 'web', 'admin'], membres: [camille], membresOrganisation: [camille], compteur: 5,
     progression: { mode: 'jalons', valeur: 0 }, debut: ilYA(180), cible: dans(45), responsable: agent,
     pulse: { enCours: 'Corrections des retours Android', derniereLivraison: 'iOS 1.1.2', prochaineEtape: 'Validation TestFlight 1.2', attenteClient: '' },
-    sante: 'ok', budget: 28000, budgetNote: 'Forfait par phases', archive: false, cree: ilYA(180), maj: ilYA(0, 2),
+    sante: 'ok', budget: 28000, budgetNote: 'Forfait par phases', archive: false, ouvert: true, ouvertLe: ilYA(180), cree: ilYA(180), maj: ilYA(0, 2),
   });
   await bdd.doc('projets/boutique').set({
     nom: 'Boutique', ref: 'BOUTIQUE', description: 'Menus de restaurant en ligne.', type: 'site-vitrine', statut: 'cadrage', organisation: 'boutique-sud',
     client: { nom: 'Léa Bernard', email: 'lea.essai@exemple.test', entreprise: 'Boutique Sud' }, plateformes: ['web'], membres: [lea], membresOrganisation: [lea], compteur: 1,
-    progression: { mode: 'manuel', valeur: 15 }, responsable: agent, pulse: {}, sante: 'attention', archive: false, cree: ilYA(60), maj: ilYA(3),
+    progression: { mode: 'manuel', valeur: 15 }, responsable: agent, pulse: {}, sante: 'attention', archive: false, ouvert: true, ouvertLe: ilYA(60), cree: ilYA(60), maj: ilYA(3),
   });
+  /* Un projet en preparation, rideau baisse : personne n'est dans
+     « membres », donc les regles le refusent au client. C'est le cas qui
+     doit tenir : on garnit un espace avant de le montrer. */
+  await bdd.doc('projets/prepa').set({
+    nom: 'Refonte Atelier', ref: 'REFONTE', description: "La refonte complete de l'application, a proposer a Camille.",
+    type: 'application-mobile', statut: 'brouillon', organisation: 'atelier-nord',
+    client: { nom: 'Camille Martin', email: 'camille.essai@exemple.test', entreprise: 'Atelier Nord' },
+    contacts: [{ nom: 'Camille Martin', email: 'camille.essai@exemple.test' }],
+    plateformes: ['ios', 'android'], membres: [], membresOrganisation: [], compteur: 0,
+    progression: { mode: 'manuel', valeur: 0 }, responsable: agent, pulse: {}, sante: 'ok',
+    archive: false, ouvert: false, ouvertLe: null, cree: ilYA(4), maj: ilYA(1),
+  });
+  await bdd.doc('projets/prepa/jalons/cadrage').set({ projet: 'prepa', titre: 'Cadrage de la refonte', phase: 'Cadrage', statut: 'a-venir', progression: 0, ordre: 1, debut: dans(7), fin: dans(30), composants: [], reports: [], cree: ilYA(4), maj: ilYA(4) });
+
   /* Un projet tel que l'ancienne console les creait : statut « actif », sans
      organisation ni progression. Il doit rester visible partout. */
   await bdd.doc('projets/ancien').set({
@@ -196,6 +210,24 @@ async function main() {
   await bdd.collection(`boites/${camille}/notifications`).add({ type: 'validation', titre: 'Votre validation est attendue', texte: 'Valider la maquette du nouveau profil', lien: '#/valider/v-maquette', projet: 'atelier', lu: false, date: ilYA(1) });
   await bdd.collection(`boites/${agent}/notifications`).add({ type: 'demande', titre: 'Nouvelle demande', texte: 'Les notifications arrivent deux fois le matin · Atelier', lien: '#/projets/atelier/demandes/t-nouveau', projet: 'atelier', lu: false, date: ilYA(0, 1) });
   await bdd.doc(`profils/${camille}`).set({ nom: 'Camille Martin', email: 'camille.essai@exemple.test', derniereVisite: ilYA(2), notifications: {}, lus: {} });
+
+  /* --- Les deux portees d'un devis --------------------------------------------------------- */
+  /* Le devis fondateur du projet en preparation : sa signature fera
+     demarrer le travail. Le client ne le voit pas encore, le projet est
+     ferme. */
+  await bdd.doc('documents/d-refonte').set({
+    projet: 'prepa', type: 'devis', portee: 'initial', numero: 'D-2026-048', libelle: 'Refonte complete, phase 1',
+    description: 'Cadrage, maquettes, socle applicatif.', montant: 18000, tva: 0, ttc: 18000,
+    statut: 'envoye', date: ilYA(2), expiration: dans(30), echeance: null,
+    fichier: null, liens: [], reponse: null, archive: false,
+  });
+  /* Un avenant sur un projet deja lance : sa signature n'y change rien. */
+  await bdd.doc('documents/d-avenant').set({
+    projet: 'atelier', type: 'devis', portee: 'complementaire', numero: 'D-2026-049', libelle: 'Module de statistiques, en plus',
+    description: "Ajout au perimetre initial.", montant: 3200, tva: 0, ttc: 3200,
+    statut: 'envoye', date: ilYA(1), expiration: dans(21), echeance: null,
+    fichier: null, liens: [], reponse: null, archive: false,
+  });
 
   /* --- Une demande de nouveau projet ------------------------------------------------------ */
   await bdd.doc('demandesProjet/dp-boutique-app').set({ organisation: 'boutique-sud', par: { uid: lea, nom: 'Léa Bernard', email: 'lea.essai@exemple.test' }, titre: 'Une application de commande pour Boutique', idee: 'Permettre la commande en ligne depuis le menu.', objectifs: 'Plus de commandes le soir.', type: 'application-mobile', plateformes: ['ios', 'android'], budget: '5 000 à 8 000 €', delai: 'Avant l\'été', description: '', fonctionnalites: 'Panier, paiement, suivi', exemples: '', liens: '', pieces: [], statut: 'discussion', projet: null, cree: ilYA(4), maj: ilYA(2) });

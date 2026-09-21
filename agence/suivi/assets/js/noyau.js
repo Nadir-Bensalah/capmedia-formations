@@ -150,8 +150,17 @@ export const TERMINES = ['resolu', 'refuse', 'annulee', 'ferme'];
 
 /* --- Les projets -------------------------------------------------------- */
 
+/*
+ * Le cycle d'un projet, du brouillon à l'archive. Les trois premiers
+ * états sont commerciaux et vivent avant tout travail : un projet se
+ * prépare en brouillon, invisible du client, puis se propose, puis se
+ * signe. Ce n'est qu'ensuite qu'il s'ouvre et que le travail commence.
+ */
 export const STATUTS_PROJET = {
+  'brouillon':      { libelle: 'En préparation',    voile: 'gris',   equipe: 'Brouillon' },
   'prospect':       { libelle: 'Prospect',          voile: 'gris' },
+  'devis-envoye':   { libelle: 'Devis à signer',    voile: 'ambre',  client: 'Devis à signer' },
+  'devis-signe':    { libelle: 'Devis signé',       voile: 'vert' },
   'cadrage':        { libelle: 'Cadrage',           voile: 'bleu' },
   'planifie':       { libelle: 'Planifié',          voile: 'bleu' },
   'en-cours':       { libelle: 'En cours',          voile: 'bleu' },
@@ -163,11 +172,22 @@ export const STATUTS_PROJET = {
   'suspendu':       { libelle: 'Suspendu',          voile: 'gris' },
   'archive':        { libelle: 'Archivé',           voile: 'gris' },
 };
-export const PROJETS_ACTIFS = ['cadrage', 'planifie', 'en-cours', 'attente-client', 'en-revue', 'livraison', 'maintenance'];
+export const PROJETS_ACTIFS = ['devis-envoye', 'devis-signe', 'cadrage', 'planifie', 'en-cours', 'attente-client', 'en-revue', 'livraison', 'maintenance'];
 /* Un projet est actif tant qu'il n'est pas terminé, suspendu ou archivé.
    Dire ce qui sort de la liste, plutôt qu'énumérer ce qui y entre : un
    statut inconnu ne fait ainsi jamais disparaître un projet de l'écran. */
 export const PROJETS_CLOS = ['termine', 'suspendu', 'archive'];
+
+/* Les états d'avant le travail : le projet se prépare ou se négocie. */
+export const PROJETS_AVANT_TRAVAIL = ['brouillon', 'prospect', 'devis-envoye'];
+
+/* La portée d'un devis. Le devis fondateur ouvre le projet et le fait
+   passer en « signé » quand le client l'accepte ; un devis complémentaire
+   étend un projet déjà lancé et ne touche jamais à son état. */
+export const PORTEES_DEVIS = {
+  'initial':        { libelle: 'Devis initial',       court: 'Initial',  aide: 'Le devis qui lance le projet. Sa signature fait démarrer le travail.' },
+  'complementaire': { libelle: 'Devis complémentaire', court: 'Avenant', aide: "Une extension d'un projet déjà lancé. Sa signature ne change pas l'état du projet." },
+};
 
 /* Les projets créés avant le Client Hub portent « actif », un statut qui
    n'existe plus. On le traduit à la lecture, sans attendre la migration. */

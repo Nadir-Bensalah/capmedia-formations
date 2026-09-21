@@ -8,7 +8,7 @@
 import {
   echapper, dateCourte, dateHeure, depuis, heure, montant, pluriel, joursAvant, echeance as calcEcheance, enParagraphes, avecLiens, parDateDesc, parDateAsc, borner,
   STATUTS_PROJET, STATUTS_COMPOSANT, TYPES_COMPOSANT, STATUTS_ETAPE, STATUTS_TACHE, PRIORITES, STATUTS, TYPES, URGENCES, OUVERTS, ATTEND_CLIENT,
-  CATEGORIES_FICHIER, CATEGORIES_LIEN, STATUTS_RELEASE, TYPES_CHANGEMENT, TYPES_NOTE, SANTES, STATUTS_VALIDATION, QUALIFICATIONS, statutProjet, PLATEFORMES, nomsContacts, contactsProjet, age,
+  CATEGORIES_FICHIER, CATEGORIES_LIEN, STATUTS_RELEASE, TYPES_CHANGEMENT, TYPES_NOTE, SANTES, STATUTS_VALIDATION, QUALIFICATIONS, statutProjet, PLATEFORMES, nomsContacts, contactsProjet, PORTEES_DEVIS, age,
   verdictDelai, reportsDe, dateOrigine, MOTIFS_REPORT, dateLongue, enDate
 } from '../noyau.js';
 import {
@@ -159,18 +159,44 @@ export const vue = async (ctx, env) => {
     }
   };
 
+  /* Refermer un projet ouvert trop tot : le client perd l'acces, rien
+     n'est supprime, et on peut rouvrir. */
+  const refermer = async (projetId) => {
+    const ok = await confirmer({
+      titre: 'Refermer ce projet ?',
+      texte: "Le client perd l'accès immédiatement. Rien n'est supprimé, et vous pourrez rouvrir quand vous voudrez.",
+      ok: 'Refermer', danger: true,
+    });
+    if (ok) await agir(null, () => appelServeur('fermerAuClient', { id: projetId }), 'Projet refermé.');
+  };
+
   /* --- Les gestes ------------------------------------------------------ */
   const gestes = sur(sortie, 'click', '[data-action]', async (el) => {
     const d = lireTout(pid);
     const action = el.dataset.action;
     const id = el.dataset.id;
     if (action === 'editer-projet') return editer('projet', env, { pid, fiche: d.projet });
+    if (action === 'ouvrir-au-client') {
+      const qui = nomsContacts(d.projet) || 'le client';
+      const ok = await confirmer({
+        titre: 'Ouvrir ce projet au client ?',
+        texte: `${qui} recevra son invitation et verra tout ce qui est ici : étapes, tâches visibles, fichiers, devis, factures. La sourdine sera levée.`,
+        ok: 'Ouvrir',
+      });
+      if (!ok) return null;
+      return agir(el, async () => {
+        const r = await appelServeur('ouvrirAuClient', { id: pid });
+        return r;
+      }, 'Projet ouvert. L\'invitation est partie.');
+    }
+
     if (action === 'menu-projet') {
       return menu(el, [
         { libelle: d.projet.archive ? 'Restaurer le projet' : 'Archiver le projet', icone: 'archive', action: async () => {
           const ok = await confirmer({ titre: d.projet.archive ? 'Restaurer ce projet ?' : 'Archiver ce projet ?', texte: d.projet.archive ? 'Il redevient visible pour le client.' : "Il disparaît de l'accueil du client, rien n'est supprimé.", ok: d.projet.archive ? 'Restaurer' : 'Archiver' });
           if (ok) await agir(null, () => ecrire.majProjet(pid, { archive: !d.projet.archive, statut: d.projet.archive ? 'en-cours' : 'archive' }), d.projet.archive ? 'Projet restauré.' : 'Projet archivé.');
         } },
+        ...(d.projet.ouvert === true && !d.projet.interne ? [{ libelle: 'Refermer au client', icone: 'oeilFerme', danger: true, action: () => refermer(pid) }] : []),
         { libelle: "Créer un lien d'invitation", icone: 'utilisateurs', action: () => ouvrirInvitation(d.projet, env) },
         { libelle: 'Signaler un point bloquant', icone: 'alerte', action: () => editer('blocage', env, { pid }) },
         { libelle: 'Demander une validation', icone: 'valider', action: () => editer('validation', env, { pid }) },
@@ -423,6 +449,8 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
       </div>
     </section>
 
+    ${rideauHtml(d, { pid, env })}
+
     ${tenueDesDelais(d, { pid, env, delai, risques })}
 
     ${blocagesOuverts.length ? `<section class="section">
@@ -471,6 +499,52 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
         </div>
       </aside>
     </div>`;
+};
+
+/*
+ * Le rideau. Un projet se prépare, se garnit, se chiffre, et seulement
+ * ensuite s'ouvre au client : on ne remplit pas un espace sous ses yeux.
+ * Tant qu'il est fermé, le client n'est dans aucune liste de membres,
+ * donc les règles lui refusent la lecture. Ce bandeau le rappelle, et
+ * porte le geste qui lève le rideau.
+ */
+const rideauHtml = (d, { pid, env }) => {
+  if (env.role !== 'equipe') return '';
+  const projet = d.projet;
+  if (projet.interne) return '';
+  /* Seul un « ouvert : faux » explicite baisse le rideau. Les projets nés
+     avant cette notion n'en portent pas et restent ouverts : on ne va pas
+     fermer d'un coup cinquante espaces déjà partagés. */
+  if (projet.ouvert !== false) return '';
+
+  const contacts = contactsProjet(projet);
+  const avecAdresse = contacts.filter((c) => c.email);
+  const devis = d.documents.filter((x) => x.type === 'devis' && !x.archive);
+  const manque = [];
+  if (!avecAdresse.length) manque.push("l'adresse d'au moins un interlocuteur");
+  if (!d.jalons.length) manque.push('au moins une étape');
+
+  return `<section class="section" style="margin-top:0">
+    <div class="rideau">
+      <div class="rideau-tete">
+        <span class="rideau-icone">${icone('oeilFerme')}</span>
+        <div style="min-width:0;flex:1">
+          <p class="t-titre-3">Ce projet n'est pas encore ouvert au client</p>
+          <p class="t-petit t-2" style="margin-top:2px">${echapper(avecAdresse.length
+            ? `Personne n'y a accès. ${nomsContacts(projet)} n'y entrera qu'à votre geste.`
+            : "Personne n'y a accès, et aucun interlocuteur n'est encore renseigné.")}</p>
+        </div>
+        <button class="btn btn-principal" type="button" data-action="ouvrir-au-client"${manque.length ? ' disabled' : ''}>${icone('utilisateurs')} Ouvrir au client</button>
+      </div>
+      ${manque.length ? `<p class="rideau-manque">${icone('alerte')} Avant d'ouvrir, il manque ${echapper(manque.join(' et '))}.</p>` : ''}
+      <dl class="rideau-etat">
+        <div><dt>Interlocuteurs</dt><dd>${avecAdresse.length ? echapper(avecAdresse.map((c) => c.nom || c.email).join(', ')) : '<span class="t-3">aucun</span>'}</dd></div>
+        <div><dt>Étapes posées</dt><dd>${d.jalons.length || '<span class="t-3">aucune</span>'}</dd></div>
+        <div><dt>Devis</dt><dd>${devis.length ? echapper(devis.map((x) => `${x.numero || ''} ${(PORTEES_DEVIS[x.portee || 'initial'] || {}).court || ''}`.trim()).join(', ')) : '<span class="t-3">aucun</span>'}</dd></div>
+        <div><dt>Fichiers</dt><dd>${d.fichiers.length || '<span class="t-3">aucun</span>'}</dd></div>
+      </dl>
+    </div>
+  </section>`;
 };
 
 /*

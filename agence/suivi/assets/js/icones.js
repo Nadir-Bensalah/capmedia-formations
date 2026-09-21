@@ -49,6 +49,8 @@ export const ICONES = {
   points:       T('<circle cx="6" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18" cy="12" r="1.4"/>'),
   alerte:       T('<path d="M12 4 2.5 20h19z"/><path d="M12 10v4"/><path d="M12 17h.01"/>'),
   info:         T('<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/>'),
+  /* Le rideau baissé : ce que le client ne voit pas encore. */
+  oeilFerme:    T('<path d="M3 3l18 18"/><path d="M10.6 5.2A9.5 9.5 0 0 1 12 5c5 0 9 4.5 9 7a12 12 0 0 1-2.6 3.4"/><path d="M6.2 6.7C3.9 8.2 3 10.4 3 12c0 2.5 4 7 9 7 1.6 0 3-.4 4.2-1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>'),
   help:         T('<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7"/><path d="M12 17h.01"/>'),
   horloge:      T('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
   bug:          T('<path d="M8 9a4 4 0 0 1 8 0v6a4 4 0 0 1-8 0z"/><path d="M8 12H4"/><path d="M20 12h-4"/><path d="m6 7 2 2"/><path d="m18 7-2 2"/><path d="m6 18 2-2"/><path d="m18 18-2-2"/><path d="M10 5.5 12 3l2 2.5"/>'),

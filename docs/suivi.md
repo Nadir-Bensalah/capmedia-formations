@@ -222,7 +222,7 @@ locaux, ce qui est fait.
 
 L'espace de suivi est devenu le Client Hub : un espace client (`suivi/app.html`) et un cockpit d'équipe (`suivi/admin.html`), tous deux sur `assets/js/` avec un routeur par dièse, un magasin temps réel (`magasin.js`) et une couche de données (`donnees.js`) qui est la seule à parler à Firestore.
 
-Collections ajoutées : `organisations`, `profils`, `projets/{p}/composants|jalons|liens|messages`, `taches`, `validations`, `fichiers`, `releases`, `reunions`, `notes`, `blocages`, `paiements`, `activite`, `boites/{uid}/notifications`, `audit`, `demandesProjet`. Les règles sont dans `suivi/firestore.rules` et prouvées par `fonctions-suivi/outils/regles.test.mjs` (95 contrôles). La visibilité `client | interne` est appliquée par les règles, pas seulement à l'écran.
+Collections ajoutées : `organisations`, `profils`, `projets/{p}/composants|jalons|liens|messages`, `taches`, `validations`, `fichiers`, `releases`, `reunions`, `notes`, `blocages`, `paiements`, `activite`, `boites/{uid}/notifications`, `audit`, `demandesProjet`. Les règles sont dans `suivi/firestore.rules` et prouvées par `fonctions-suivi/outils/regles.test.mjs` (104 contrôles). La visibilité `client | interne` est appliquée par les règles, pas seulement à l'écran.
 
 Les automatisations (`fonctions-suivi/hub.js`) écrivent l'activité, les notifications et la file d'e-mails à partir des vrais événements. Sur les émulateurs, le facteur ne contacte jamais Brevo : les envois sont marqués `simule`.
 
@@ -346,3 +346,63 @@ arrivent au bout de leur heure.
 dont les mauvais codes, les codes brûlés, le rejeu, le débit et les
 jetons révoqués), par huit contrôles de règles, et par le parcours
 navigateur complet dans la suite de bout en bout.
+
+## 12. Le rideau et le cycle commercial (septembre 2026)
+
+Deux manques de fond, corrigés ensemble.
+
+**Le rideau.** Un projet se créait avec son client dedans : celui-ci
+voyait un espace vide se garnir sous ses yeux. Désormais un projet naît
+`ouvert: false`, `membres: []`, statut `brouillon`. On le garnit, on le
+chiffre, puis on lève le rideau. Ce n'est pas un masque à l'écran :
+sans son `uid` dans `membres`, les règles refusent au client la fiche du
+projet et ses dix-sept sous-collections.
+
+```
+creerProjet        n'invite plus par défaut ; « inviter: true » reste possible
+ouvrirAuClient     rattache les interlocuteurs, lève la sourdine, envoie
+                   l'invitation ; refuse s'il n'y a aucune adresse
+fermerAuClient     retire l'accès sans rien supprimer, et on peut rouvrir
+synchroniserMembres saute les projets fermés : un second projet d'un client
+                   déjà connu ne s'ouvre plus tout seul à sa création
+```
+
+Un `ouvert` absent vaut ouvert : les projets nés avant cette notion
+restent en l'état, on n'allait pas fermer d'un coup cinquante espaces
+déjà partagés.
+
+**Le cycle commercial.** Trois états s'ajoutent avant le travail :
+`brouillon` (en préparation), `devis-envoye` (devis à signer),
+`devis-signe`. Et un devis porte désormais sa `portee` :
+
+```
+initial          le devis qui fonde le projet. Son dépôt met le projet en
+                 « devis à signer » ; sa signature le passe en « devis signé »
+complementaire   un avenant sur un projet déjà lancé : il ne touche jamais
+                 à l'état du projet, il l'étend
+```
+
+La portée se devine seule au dépôt (pas encore de fondateur → initial,
+sinon avenant) et reste corrigeable à la main. Le client lit laquelle
+il signe, et le journal garde « a signé le devis : le projet démarre »
+ou « a signé l'avenant ».
+
+**Trois défauts trouvés par la recette, et corrigés**
+
+1. *Un projet ouvert en direct restait vide chez le client.* La liste de
+   ses projets était figée à la connexion : le nouveau apparaissait dans
+   la barre, sans ses pièces, jusqu'au rechargement. Les abonnements
+   suivent maintenant la liste vivante, et `agreger` la lit au lieu de
+   lire la session.
+2. *Un accès retiré laissait l'écran en place.* Un refus de lecture
+   notait l'erreur mais gardait la valeur en mémoire. Un `permission-denied`
+   vide désormais la valeur ; une panne de réseau, elle, la garde.
+3. *Une vue pouvait en écraser une autre.* Monter une vue est
+   asynchrone : une adresse qui change pendant le montage laissait
+   l'ancienne réinstaller ses écoutes par-dessus la nouvelle. Chaque
+   rendu porte maintenant un numéro et se démonte s'il est périmé.
+
+Éprouvé par `qa-scenarios.cjs` : dix scénarios joués dans les deux
+espaces, 48 contrôles, de la préparation rideau baissé à la validation
+d'une demande, en passant par le cloisonnement entre deux clients et ce
+que le client ne doit jamais voir.

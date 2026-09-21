@@ -130,14 +130,48 @@ export const abonnerGlobal = (lot, session) => {
     lot.abonner(K.demandesProjet, () => query(col('demandesProjet'), where('par.uid', '==', uid)));
     /* Pour mettre un nom sur le responsable du projet, au lieu de « Capmedia ». */
     lot.abonner(K.equipe, () => col('equipe'));
-    for (const p of session.projets) abonnerProjet(lot, p.id, 'client');
+
+    /*
+     * Les projets d'un client ne sont pas figés au chargement de la page.
+     * Quand l'équipe lève le rideau sur un nouveau projet, la liste
+     * change en direct : il faut s'abonner à ses sous-collections dans la
+     * foulée, sinon le client voit apparaître un projet vide et doit
+     * recharger pour en lire le contenu.
+     */
+    const suivis = new Set();
+    const suivre = (projets) => {
+      for (const p of projets || []) {
+        if (!p || !p.id || suivis.has(p.id)) continue;
+        const premier = !suivis.size;
+        suivis.add(p.id);
+        abonnerProjet(lot, p.id, 'client');
+        /* Un projet arrivé après le montage des écrans amène ses pièces
+           sur des clés qu'aucun d'eux n'écoute. On réveille donc la liste
+           des projets, que tous écoutent, à mesure qu'elles arrivent. */
+        if (!premier) {
+          for (const cle of [K.documents(p.id), K.tickets(p.id), K.taches(p.id), K.fichiers(p.id), K.reunions(p.id), K.validations(p.id), K.jalons(p.id)]) {
+            lot.sur(cle, () => magasin.reveiller(K.projets));
+          }
+        }
+      }
+    };
+    suivre(session.projets);
+    lot.sur(K.projets, suivre);
   }
 };
 
-/** Pour un client, une vue « toutes collections » agrège ses projets. */
+/**
+ * Pour un client, une vue « toutes collections » agrège ses projets.
+ *
+ * La liste vient du magasin, pas de la session : celle-ci est figée à la
+ * connexion, et un projet ouvert entre-temps n'y figure pas. Le client
+ * voyait alors le projet apparaître dans sa barre mais ni son devis ni
+ * ses pièces, jusqu'au rechargement.
+ */
 export const agreger = (session, fabriqueCle) => {
   if (session.equipe) return magasin.lire(fabriqueCle('*')) || [];
-  return session.projets.flatMap((p) => magasin.lire(fabriqueCle(p.id)) || []);
+  const projets = magasin.lire(K.projets) || session.projets || [];
+  return projets.flatMap((p) => magasin.lire(fabriqueCle(p.id)) || []);
 };
 const cleGlobale = (nom) => (p) => (p === '*' ? `${nom}:*` : `${nom}:${p}`);
 export const G = {

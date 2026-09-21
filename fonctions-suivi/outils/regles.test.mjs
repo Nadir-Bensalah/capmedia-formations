@@ -38,6 +38,8 @@ await env.withSecurityRulesDisabled(async (ctx) => {
   await setDoc(doc(b, 'organisations/boutique'), { nom: 'Léa', membres: [LEA], contacts: [] });
   await setDoc(doc(b, 'projets/atelier'), { nom: 'Atelier', ref: 'ATELIER', membres: [CAMILLE], organisation: 'atelier-nord', statut: 'en-cours', compteur: 0 });
   await setDoc(doc(b, 'projets/boutique'), { nom: 'Boutique', ref: 'BOUTIQUE', membres: [LEA], organisation: 'boutique', statut: 'cadrage', compteur: 0 });
+  /* Un projet rideau baissé : préparé, chiffré, mais sans personne dedans. */
+  await setDoc(doc(b, 'projets/ferme'), { nom: 'En préparation', ref: 'FERME', membres: [], organisation: 'atelier-nord', statut: 'brouillon', ouvert: false, compteur: 0 });
   await setDoc(doc(b, 'projets/atelier/composants/ios'), { nom: 'iOS' });
   await setDoc(doc(b, 'projets/atelier/jalons/dev'), { projet: 'atelier', titre: 'Dev', statut: 'en-cours' });
   await setDoc(doc(b, 'projets/atelier/liens/public'), { nom: 'Web', url: 'https://x', visibilite: 'client' });
@@ -185,6 +187,20 @@ await doit('Camille recopie son adresse dans son profil',
   setDoc(doc(camille(), 'profils/uid-camille'), { nom: 'Camille', email: 'camille.essai@exemple.test', notifications: { relance: 'off' } }, { merge: true }));
 await refuse("Camille ne pose pas l'adresse de quelqu'un d'autre",
   setDoc(doc(camille(), 'profils/uid-camille'), { email: 'lea.essai@exemple.test' }, { merge: true }));
+
+console.log('\n== Le rideau');
+/* Un projet fermé n'a personne dans « membres » : ce n'est pas un masque
+   à l'écran, c'est l'absence d'accès. Et lever le rideau n'appartient
+   qu'au serveur : c'est lui qui rattache les comptes et refait les jetons. */
+await refuse('Camille ne lit pas un projet fermé', getDoc(doc(camille(), 'projets/ferme')));
+await refuse('Camille ne lit pas les étapes d un projet fermé', getDocs(collection(camille(), 'projets/ferme/jalons')));
+await refuse("L'équipe ne lève pas le rideau depuis le navigateur", updateDoc(doc(equipe(), 'projets/ferme'), { ouvert: true, maj: serverTimestamp() }));
+await refuse("L'équipe n'ajoute pas un membre depuis le navigateur", updateDoc(doc(equipe(), 'projets/atelier'), { membres: [CAMILLE, LEA], maj: serverTimestamp() }));
+await doit("L'équipe garnit un projet fermé", setDoc(doc(equipe(), 'projets/ferme/jalons/x'), { projet: 'ferme', titre: 'Cadrage', statut: 'a-venir' }));
+await doit("L'équipe pose un projet en brouillon", updateDoc(doc(equipe(), 'projets/atelier'), { statut: 'brouillon', maj: serverTimestamp() }));
+await doit("L'équipe pose un projet en devis à signer", updateDoc(doc(equipe(), 'projets/atelier'), { statut: 'devis-envoye', maj: serverTimestamp() }));
+await doit("L'équipe pose un projet en devis signé", updateDoc(doc(equipe(), 'projets/atelier'), { statut: 'devis-signe', maj: serverTimestamp() }));
+await refuse("Un état inventé est refusé", updateDoc(doc(equipe(), 'projets/atelier'), { statut: 'devis-peut-etre', maj: serverTimestamp() }));
 
 console.log("\n== La porte d'entrée");
 /* Les empreintes de codes, les compteurs d'essais et les jetons

@@ -571,6 +571,30 @@ exports.suiviDocumentModifie = onDocumentUpdated(
     const projet = await lireProjet(apres.projet);
     const reponse = apres.reponse || {};
 
+    /*
+     * La signature du devis fondateur fait demarrer le projet. Un avenant
+     * signe, lui, ne change rien a l'etat : le projet est deja lance, il
+     * s'etend. C'est toute la difference entre « on commence » et « on
+     * continue plus loin », et elle se lit dans le journal du projet.
+     */
+    const portee = apres.portee || 'initial';
+    if (projet && apres.statut === 'accepte') {
+      try {
+        if (portee === 'initial' && ['brouillon', 'prospect', 'devis-envoye', 'cadrage'].includes(String(projet.statut || ''))) {
+          await bdd.doc(`projets/${apres.projet}`).update({ statut: 'devis-signe', maj: FieldValue.serverTimestamp() });
+        }
+        await bdd.collection('activite').add({
+          projet: apres.projet, organisation: projet.organisation || null, type: 'devis',
+          texte: portee === 'initial'
+            ? `a signé le devis ${apres.numero || ''} : le projet démarre`
+            : `a signé l'avenant ${apres.numero || ''}`,
+          par: { uid: reponse.par || null, nom: reponse.nom || nomClient(projet), cote: 'client' },
+          cible: evenement.params.documentId, lien: `/finances/${evenement.params.documentId}`,
+          visibilite: 'client', date: FieldValue.serverTimestamp(),
+        });
+      } catch (err) { console.error('Suite du devis non ecrite', err); }
+    }
+
     await mettreEnFile('devis-reponse', contactsEquipe(), {
       numero: apres.numero,
       libelle: apres.libelle,
@@ -578,6 +602,7 @@ exports.suiviDocumentModifie = onDocumentUpdated(
       projetNom: nomProjet(projet),
       clientNom: nomClient(projet),
       reponse: apres.statut,
+      portee,
       date: reponse.date || reponse.le || apres.date || null,
       lien: courriels.lienProjet(apres.projet),
     });
@@ -808,6 +833,10 @@ async function synchroniserMembres(orgId) {
   const projets = await bdd.collection('projets').where('organisation', '==', orgId).get();
   const touches = new Set(membres);
   for (const p of projets.docs) {
+    /* Un projet ferme ne recoit personne, meme si le client est deja
+       membre de l'organisation pour un autre projet : sinon un second
+       projet s'ouvrirait tout seul des sa creation. */
+    if (p.data().ouvert === false) continue;
     const actuels = p.data().membres || [];
     actuels.forEach((u) => touches.add(u));
     const fusion = Array.from(new Set([...actuels.filter((u) => !(p.data().membresOrganisation || []).includes(u)), ...membres]));
@@ -900,10 +929,16 @@ exports.suiviAdmin = onRequest(
 
         const nouveau = await bdd.collection('projets').add(sansIndefini({
           nom: String(nom).trim(), ref: reference, description: String(description || '').trim(),
-          type: String(type || 'application-mobile'), statut: String(statut || 'cadrage'),
+          type: String(type || 'application-mobile'), statut: String(statut || (estInterne ? 'en-cours' : 'brouillon')),
           organisation: orgId, client: ficheClient, plateformes: plateformesValides,
           interne: estInterne, contacts: Array.isArray(req.body.contacts) ? req.body.contacts : [],
           silence: req.body.silence === true,
+          /* Le rideau. Un projet se prepare, se garnit, se chiffre, et
+             seulement ensuite s'ouvre au client. Tant qu'il est ferme,
+             personne n'est dans « membres » : ce n'est pas un masque a
+             l'ecran, c'est l'absence d'acces, refusee par les regles. */
+          ouvert: req.body.inviter === true,
+          ouvertLe: req.body.inviter === true ? FieldValue.serverTimestamp() : null,
           membres: [], membresOrganisation: [], compteur: 0,
           progression: { mode: 'manuel', valeur: 0 },
           debut: enDate(debut), cible: enDate(cible), responsable: String(responsable || ''),
@@ -915,8 +950,10 @@ exports.suiviAdmin = onRequest(
         /* Les membres de l'organisation deviennent membres du projet. */
         if (orgId) await synchroniserMembres(orgId);
 
-        /* L'invitation du contact principal, si demandee. */
-        if (inviter !== false && emailPlausible(ficheClient.email)) {
+        /* L'invitation du contact principal, seulement si elle est demandee
+           explicitement. Par defaut le projet reste ferme : on ne garnit
+           pas un espace sous les yeux du client. */
+        if (inviter === true && emailPlausible(ficheClient.email)) {
           const { utilisateur } = await compteAuth(ficheClient.email, ficheClient.nom);
           await bdd.doc(`organisations/${orgId}`).update({ membres: FieldValue.arrayUnion(utilisateur.uid), [`roles.${utilisateur.uid}`]: 'owner', maj: FieldValue.serverTimestamp() });
           const org = await bdd.doc(`organisations/${orgId}`).get();
@@ -1009,8 +1046,24 @@ exports.suiviAdmin = onRequest(
         const dateEcheance = enDate(echeance);
         if (echeance && !dateEcheance) return res.status(400).send('echeance illisible');
 
+        /*
+         * La portee d'un devis. Le premier devis d'un projet le fonde : sa
+         * signature fait demarrer le travail. Les suivants sont des
+         * avenants, qui etendent un projet deja lance sans jamais toucher a
+         * son etat. Confondre les deux ferait redemarrer un projet a chaque
+         * rallonge, ou n'en ferait jamais demarrer aucun.
+         */
+        let portee = String(req.body.portee || '').trim();
+        if (type === 'devis' && !['initial', 'complementaire'].includes(portee)) {
+          const deja = await bdd.collection('documents')
+            .where('projet', '==', String(projet)).where('type', '==', 'devis').get();
+          const fondateur = deja.docs.some((d) => (d.data().portee || 'initial') === 'initial' && d.data().archive !== true);
+          portee = fondateur ? 'complementaire' : 'initial';
+        }
+
         const fiche = sansIndefini({
           projet: String(projet), type, numero: String(numero).trim(), libelle: String(libelle).trim().slice(0, 160),
+          portee: type === 'devis' ? portee : undefined,
           description: String(description || '').slice(0, 2000),
           montant: somme, tva: taux, ttc: Math.round(somme * (1 + taux / 100) * 100) / 100,
           statut: type === 'devis' ? 'envoye' : 'a-payer',
@@ -1022,8 +1075,15 @@ exports.suiviAdmin = onRequest(
           reponse: null, archive: false,
         });
         const nouveau = await bdd.collection('documents').add(fiche);
-        console.log(`${type} ${fiche.numero} depose sur le projet ${projet} : ${nouveau.id}`);
-        return res.status(200).json({ ok: true, id: nouveau.id });
+
+        /* Un devis fondateur pose le projet en attente de signature, s'il
+           n'a pas encore commence. Un avenant ne touche a rien. */
+        if (type === 'devis' && portee === 'initial'
+            && ['brouillon', 'prospect', 'cadrage'].includes(String(projetDoc.data().statut || ''))) {
+          await projetDoc.ref.update({ statut: 'devis-envoye', maj: FieldValue.serverTimestamp() });
+        }
+        console.log(`${type} ${fiche.numero} depose sur le projet ${projet} : ${nouveau.id}${type === 'devis' ? ` (${portee})` : ''}`);
+        return res.status(200).json({ ok: true, id: nouveau.id, portee: fiche.portee });
       }
 
       /* --- Le logo d un projet ---------------------------------------------
@@ -1313,6 +1373,74 @@ exports.suiviAdmin = onRequest(
       }
 
       /* --- Un etat des lieux, pour verifier sans deviner -------------------- */
+      /* --- Ouvrir le projet au client -------------------------------------
+         Le geste qui leve le rideau : le client entre, voit tout ce qui a
+         ete prepare, et recoit son invitation. Il refuse tant que l'espace
+         n'est pas presentable : sans interlocuteur, on ouvrirait a
+         personne. */
+      if (action === 'ouvrirAuClient') {
+        if (!id) return res.status(400).send('id du projet requis');
+        const ref = bdd.doc(`projets/${String(id)}`);
+        const doc = await ref.get();
+        if (!doc.exists) return res.status(404).send('projet inconnu');
+        const p = doc.data();
+        if (p.interne === true) return res.status(409).send('un projet a moi n a pas de client a qui ouvrir');
+
+        /* Les adresses a qui ouvrir : les interlocuteurs, puis le contact
+           historique. Sans aucune, il n'y a personne a faire entrer. */
+        const adresses = [];
+        for (const c of (p.contacts || [])) if (emailPlausible(c.email)) adresses.push({ email: normaliserEmail(c.email), nom: c.nom || '' });
+        if (p.client && emailPlausible(p.client.email) && !adresses.some((a) => a.email === normaliserEmail(p.client.email))) {
+          adresses.push({ email: normaliserEmail(p.client.email), nom: p.client.nom || '' });
+        }
+        if (!adresses.length) {
+          return res.status(409).json({ ok: false, message: "Aucune adresse d'interlocuteur sur ce projet. Renseignez-la avant d'ouvrir." });
+        }
+
+        const uids = [];
+        for (const a of adresses) {
+          const { utilisateur } = await compteAuth(a.email, a.nom);
+          uids.push(utilisateur.uid);
+        }
+
+        await ref.update({
+          ouvert: true, ouvertLe: FieldValue.serverTimestamp(),
+          membres: FieldValue.arrayUnion(...uids),
+          /* Ouvrir, c'est accepter d'etre entendu : la sourdine tombe. */
+          silence: false,
+          maj: FieldValue.serverTimestamp(),
+        });
+        if (p.organisation) {
+          await bdd.doc(`organisations/${p.organisation}`).update({ membres: FieldValue.arrayUnion(...uids), maj: FieldValue.serverTimestamp() });
+          await synchroniserMembres(p.organisation);
+        }
+        for (const uid of uids) { try { await poserRevendications(uid); } catch (err) { console.error(`Jeton de ${uid} non recalcule`, err); } }
+
+        if (req.body.prevenir !== false) {
+          for (const a of adresses) {
+            await mettreEnFile('invitation', [a], {
+              projetNom: p.nom || '', clientNom: a.nom || '', email: a.email, lien: `${courriels.BASE}app#/projets/${id}`,
+            });
+          }
+        }
+        await audit('projet-ouvert', { projet: String(id), adresses: adresses.map((a) => a.email) });
+        return res.json({ ok: true, ouvert: true, adresses: adresses.map((a) => a.email) });
+      }
+
+      /* Refermer : le client perd l'acces, rien n'est supprime. Utile si un
+         projet a ete ouvert trop tot. */
+      if (action === 'fermerAuClient') {
+        if (!id) return res.status(400).send('id du projet requis');
+        const ref = bdd.doc(`projets/${String(id)}`);
+        const doc = await ref.get();
+        if (!doc.exists) return res.status(404).send('projet inconnu');
+        const anciens = doc.data().membres || [];
+        await ref.update({ ouvert: false, membres: [], membresOrganisation: [], maj: FieldValue.serverTimestamp() });
+        for (const uid of anciens) { try { await poserRevendications(uid); } catch (err) { console.error(`Jeton de ${uid} non recalcule`, err); } }
+        await audit('projet-referme', { projet: String(id), retires: anciens.length });
+        return res.json({ ok: true, ouvert: false, retires: anciens.length });
+      }
+
       /* --- Un lien d'invitation -------------------------------------------
          Le client n'a rien a retenir ni a retaper : il clique, son adresse
          est deja la, il demande son code. Le jeton ne porte aucun pouvoir

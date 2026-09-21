@@ -3,7 +3,7 @@
    statuts, enregistrer un paiement, voir ce qui reste dû.
    ========================================================================== */
 
-import { echapper, dateCourte, dateISO, montant, pluriel, parDateDesc, joursAvant, STATUTS_DEVIS, STATUTS_FACTURE, FACTURES_DUES, MOYENS_PAIEMENT, age, retard } from '../noyau.js';
+import { echapper, dateCourte, dateISO, montant, pluriel, parDateDesc, joursAvant, STATUTS_DEVIS, STATUTS_FACTURE, FACTURES_DUES, MOYENS_PAIEMENT, PORTEES_DEVIS, age, retard } from '../noyau.js';
 import { icone, pastille, ligne, vide, squelette, titrePage, sur, modale, toast, agir, lireForme, valider, obligatoire, optionsDe, depot, metrique, menu, confirmer } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K, resteAPayer } from '../donnees.js';
@@ -21,6 +21,11 @@ const deposer = (env, projets, type) => {
       <div class="groupe"><label class="etiquette-champ" for="d-projet">Projet</label><select class="select" id="d-projet" name="projet">${projets.map((p) => `<option value="${echapper(p.id)}">${echapper(p.nom)}</option>`).join('')}</select></div>
       <div class="forme-rang"><div class="groupe"><label class="etiquette-champ" for="d-numero">Numéro</label><input class="champ" id="d-numero" name="numero" placeholder="${type === 'devis' ? 'D-2026-015' : 'F-2026-032'}"></div><div class="groupe"><label class="etiquette-champ" for="d-date">Date</label><input class="champ" id="d-date" name="date" type="date" value="${dateISO(new Date())}"></div></div>
       <div class="groupe"><label class="etiquette-champ" for="d-libelle">Libellé</label><input class="champ" id="d-libelle" name="libelle" maxlength="160" placeholder="Développement de la version 1.2"></div>
+      ${type === 'devis' ? `<div class="groupe"><span class="etiquette-champ">Portée de ce devis</span>
+        <div class="segments" role="radiogroup" id="d-portee-choix">
+          ${Object.entries(PORTEES_DEVIS).map(([cle, f], i) => `<label class="interrupteur" style="padding:6px 10px"><input type="radio" name="portee" value="${cle}" ${i === 0 ? 'checked' : ''}> ${echapper(f.libelle)}</label>`).join('')}
+        </div>
+        <p class="aide" id="d-portee-aide">${echapper(PORTEES_DEVIS.initial.aide)}</p></div>` : ''}
       <div class="forme-rang"><div class="groupe"><label class="etiquette-champ" for="d-montant">Montant HT (€)</label><input class="champ" id="d-montant" name="montant" type="number" min="0" step="0.01"></div><div class="groupe"><label class="etiquette-champ" for="d-tva">TVA (%)</label><input class="champ" id="d-tva" name="tva" type="number" min="0" step="0.1" value="0"><p class="aide">0 pour une auto-entreprise sans TVA.</p></div></div>
       <div class="groupe"><label class="etiquette-champ" for="d-echeance">${type === 'devis' ? 'Valable jusqu\'au' : 'Échéance de paiement'}</label><input class="champ" id="d-echeance" name="echeance" type="date"></div>
       <div class="groupe"><label class="etiquette-champ" for="d-desc">Détail <span class="facultatif">(facultatif)</span></label><textarea class="zone" id="d-desc" name="description" rows="2" maxlength="2000"></textarea></div>
@@ -33,6 +38,25 @@ const deposer = (env, projets, type) => {
   let boite = null;
   const rebrancher = () => { boite = depot(m.el.querySelector('#d-depot'), { chemin: `projets/${sel.value}/documents/${type}`, max: 1, texte: 'Déposez le <strong>PDF</strong>.', aide: '' }); };
   rebrancher(); sel.addEventListener('change', rebrancher);
+
+  /* La portée propose d'elle-même ce qui est juste : un projet qui n'a pas
+     encore de devis fondateur en attend un, un projet déjà lancé attend un
+     avenant. On peut toujours corriger, mais le défaut ne se trompe pas. */
+  const choix = m.el.querySelector('#d-portee-choix');
+  if (choix) {
+    const aide = m.el.querySelector('#d-portee-aide');
+    const proposer = () => {
+      const p = projets.find((x) => x.id === sel.value) || {};
+      const lance = !['brouillon', 'prospect', 'devis-envoye'].includes(String(p.statut || ''));
+      const voulu = lance ? 'complementaire' : 'initial';
+      const bouton = choix.querySelector(`input[value="${voulu}"]`);
+      if (bouton) bouton.checked = true;
+      aide.textContent = PORTEES_DEVIS[voulu].aide;
+    };
+    proposer();
+    sel.addEventListener('change', proposer);
+    choix.addEventListener('change', (e) => { if (e.target.name === 'portee') aide.textContent = (PORTEES_DEVIS[e.target.value] || {}).aide || ''; });
+  }
   forme.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!valider(forme, { numero: obligatoire(), libelle: obligatoire(), montant: (v) => (v === null || v < 0 ? 'Un montant est attendu.' : '') })) return;
@@ -40,7 +64,7 @@ const deposer = (env, projets, type) => {
     const d = lireForme(forme);
     const fichier = boite.pieces[0] || null;
     const liens = d.lien ? [{ nom: type === 'devis' ? 'La proposition en ligne' : 'Le justificatif', url: d.lien }] : [];
-    if (await agir(m.pied.querySelector('[type="submit"]'), () => appelServeur('deposerDocument', { projet: d.projet, type, numero: d.numero, libelle: d.libelle, montant: d.montant, tva: d.tva || 0, echeance: d.echeance || null, date: d.date || null, description: d.description, fichier, liens }), `${type === 'devis' ? 'Devis' : 'Facture'} déposé.`)) m.fermer(true);
+    if (await agir(m.pied.querySelector('[type="submit"]'), () => appelServeur('deposerDocument', { projet: d.projet, type, numero: d.numero, libelle: d.libelle, montant: d.montant, tva: d.tva || 0, echeance: d.echeance || null, date: d.date || null, description: d.description, portee: d.portee, fichier, liens }), `${type === 'devis' ? 'Devis' : 'Facture'} déposé.`)) m.fermer(true);
   });
 };
 
