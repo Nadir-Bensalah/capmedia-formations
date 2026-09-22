@@ -8,18 +8,22 @@
    Ce que la page doit dire sans qu'on le cherche : combien de parcours ne
    sont PAS encore éprouvés par mutation. Un parcours au vert ne prouve
    rien tant qu'on n'a pas remis le défaut d'origine et vu le parcours
-   tomber. Une page qui afficherait seulement « 48 parcours, tous verts »
+   tomber. Une page qui afficherait seulement « tous verts »
    donnerait exactement la fausse assurance qu'elle prétend retirer.
 
    Un parcours instable remonte au même niveau qu'un rouge : le rouge dit
    qu'il y a un défaut, l'instable n'apprend rien, et on finit par
    l'ignorer.
 
-   Cette suite attend EXACTEMENT les quarante-huit parcours du semis, dans
-   leur état d'origine. Un semis « merge » laisse derrière lui ce qu'un
-   précédent a posé : il faut vider la collection avant, sinon le compte
-   grandit d'une exécution à l'autre et les contrôles tombent pour une
-   raison qui n'a rien à voir avec le produit.
+   Cette suite attend EXACTEMENT les parcours du semis, dans leur état
+   d'origine. Elle ne code pas leur nombre en dur : la liste grandit, et
+   une suite qui exige quarante-huit tomberait à chaque ajout pour une
+   raison qui n'a rien à voir avec le produit. Elle lit le compte réel en
+   base et vérifie que la page annonce le même.
+
+   En revanche il faut VIDER la collection avant le semis : un semis
+   « merge » laisse derrière lui ce qu'un précédent a posé, et le compte
+   grandit alors d'une exécution à l'autre.
 
      (émulateurs, semis, campagne, puis semer-parcours.mjs sur une
       collection vidée)
@@ -66,6 +70,14 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   await page.evaluate(()=>{ try{localStorage.setItem('suivi:cle-admin','cle-essai-locale');}catch(e){} });
   await page.reload({waitUntil:'domcontentloaded'}); await pause(3500);
 
+  /* Le compte réel, lu en base. Coder 48 en dur ferait tomber la suite au
+     premier parcours ajouté, pour une raison qui n'est pas un défaut. */
+  const tous = ((await lire('projets/atelier/parcours?pageSize=400'))||{}).documents||[];
+  const nb = tous.length;
+  const refsCouvertes = new Set();
+  tous.forEach(d=>{((((d.fields||{}).scenarios||{}).arrayValue||{}).values||[]).forEach(v=>refsCouvertes.add(v.stringValue));});
+  console.log(`    (${nb} parcours en base, ${refsCouvertes.size} scénarios couverts)`);
+
   console.log('\n== Les parcours dans un projet');
   await aller(page,'/tests?projet=atelier','.chiffres-tests','Tests');
   await pause(1500);
@@ -76,8 +88,8 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   }));
   verifier(v.sections.includes('Parcours automatisés'),'la section existe',v.sections.join('/'));
   verifier(v.bouton,'le bouton de création est là');
-  verifier(/48 parcours/.test(v.texte),'les 48 sont annoncés');
-  verifier(/59 scénarios/.test(v.texte),'avec les scénarios couverts');
+  verifier(new RegExp(`${nb} parcours`).test(v.texte),`les ${nb} sont annoncés`);
+  verifier(new RegExp(`${refsCouvertes.size} scénarios`).test(v.texte),`avec les ${refsCouvertes.size} scénarios couverts`);
   verifier(/éprouvés par mutation/.test(v.texte),'et le compte des éprouvés');
   verifier(/remis en défaut/.test(v.texte),'la page dit pourquoi ça compte');
   const m = v.texte.match(/(\d+) parcours rejoués[^.]*/);
@@ -95,10 +107,48 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   verifier(/une fois sur trois/.test(g.haut),'avec sa note');
   verifier(g.sections.includes('Parcours automatisés'),'et la section globale existe');
 
+  console.log('\n== Le catalogue se replie');
+  await aller(page,'/tests?projet=atelier','.chiffres-tests','Tests');
+  await pause(1500);
+  const r1 = await page.evaluate(()=>{
+    const b=document.querySelector('#catalogue-parcours');
+    return { existe:!!b, replie: b?b.hidden:null,
+      bouton:(document.querySelector('[data-plier-parcours]')||{}).innerText||'',
+      dehors: document.querySelectorAll('.section .liste .ligne').length };
+  });
+  verifier(r1.existe,'le catalogue existe');
+  verifier(r1.replie===true,'il est replié au départ','il est déplié : 144 lignes au-dessus du vivier');
+  verifier(new RegExp(`Voir les ${nb} parcours`).test(r1.bouton),`le bouton annonce les ${nb}`,r1.bouton);
+
+  await page.click('[data-plier-parcours]'); await pause(900);
+  const r2 = await page.evaluate(()=>{
+    const b=document.querySelector('#catalogue-parcours');
+    return { replie:b.hidden, lignes:b.querySelectorAll('.ligne').length,
+      blocs:[...b.querySelectorAll('.bloc-tete')].map(h=>h.innerText.trim().replace(/\s+/g,' ')),
+      bouton:(document.querySelector('[data-plier-parcours]')||{}).innerText||'' };
+  });
+  verifier(r2.replie===false,'un clic le déplie');
+  verifier(r2.lignes===nb,`les ${nb} parcours sont là`,`${r2.lignes} lignes`);
+  verifier(r2.blocs.length>=3,'groupés par outil',r2.blocs.join(' / '));
+  verifier(/Replier/.test(r2.bouton),'le bouton dit Replier',r2.bouton);
+
+  /* Ce qui est rouge ou instable ne doit PAS être enfermé dans le repli :
+     c'est justement ce qu'on veut voir sans cliquer. */
+  const dehors = await page.evaluate(()=>{
+    const b=document.querySelector('#catalogue-parcours');
+    return [...document.querySelectorAll('.section .liste .ligne')]
+      .filter(l=>!b.contains(l)).map(l=>l.innerText.split('\n')[0].trim());
+  });
+  verifier(dehors.some(t=>/R-04/.test(t)),'le rouge reste hors du repli',dehors.join(' | ').slice(0,100));
+  verifier(dehors.some(t=>/C-02/.test(t)),'l instable aussi');
+
+  await page.click('[data-plier-parcours]'); await pause(800);
+  verifier(await page.evaluate(()=>document.querySelector('#catalogue-parcours').hidden)===true,'un second clic le replie');
+
   console.log('\n== En créer un');
   await aller(page,'/tests?projet=atelier','.chiffres-tests','Tests');
   await pause(1400);
-  const avant = ((await lire('projets/atelier/parcours?pageSize=60'))||{}).documents||[];
+  const avant = ((await lire('projets/atelier/parcours?pageSize=400'))||{}).documents||[];
   await page.click('[data-nouveau-parcours]'); await pause(1200);
   const f = await page.evaluate(()=>({
     feuille:!!document.querySelector('.feuille'),
@@ -117,7 +167,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   await page.fill('#ed-titre','Un parcours écrit à la main');
   await page.selectOption('#ed-outil','playwright');
   await page.click('[data-enregistrer],button[type="submit"][form="ed-forme"]'); await pause(2600);
-  const apres = ((await lire('projets/atelier/parcours?pageSize=60'))||{}).documents||[];
+  const apres = ((await lire('projets/atelier/parcours?pageSize=400'))||{}).documents||[];
   verifier(apres.length===avant.length+1,`il est créé (${avant.length} puis ${apres.length})`);
   const neuf = await lire('projets/atelier/parcours/X-99');
   verifier(!!neuf,'sous sa référence');
@@ -130,14 +180,29 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   await connecter(cl,'camille.essai@exemple.test');
   await aller(cl,'/tests?projet=atelier',null,'Tests');
   await pause(1500);
+  /* Le catalogue est replié pour lui aussi : chercher une référence dans
+     le texte visible ne prouverait rien. On déplie, comme il le ferait. */
   const c = await cl.evaluate(()=>({
     voit:/Parcours automatisés/.test(document.body.innerText),
-    refs:/R-01/.test(document.body.innerText),
+    annonce:/\d+ parcours rejoués/.test(document.body.innerText),
+    replie:(document.querySelector('#catalogue-parcours')||{}).hidden,
     creer:document.querySelectorAll('[data-nouveau-parcours]').length,
     editer:document.querySelectorAll('[data-editer-parcours]').length,
   }));
   verifier(c.voit,'il voit la section');
-  verifier(c.refs,'et les parcours');
+  /* Le compte annoncé, pas un nombre en dur : la suite vient d'en créer
+     un, et le total n'est donc plus celui du semis. */
+  verifier(c.annonce,'avec le compte annoncé');
+  verifier(c.replie===true,'le catalogue lui est replié aussi');
+  await cl.click('[data-plier-parcours]'); await pause(900);
+  const c2 = await cl.evaluate(()=>({
+    lignes:document.querySelectorAll('#catalogue-parcours .ligne').length,
+    refs:/R-01/.test(document.body.innerText),
+    editer:document.querySelectorAll('[data-editer-parcours]').length,
+  }));
+  verifier(c2.refs,'et les parcours quand il déplie');
+  verifier(c2.lignes>100,`il les voit tous (${c2.lignes})`);
+  verifier(c2.editer===0,'sans bouton de modification dans le catalogue');
   verifier(c.creer===0,'sans pouvoir en créer');
   verifier(c.editer===0,'ni en modifier');
 

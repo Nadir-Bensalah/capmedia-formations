@@ -221,6 +221,24 @@ const parcoursHtml = (d, { pid, equipe }) => {
   const eprouves = liste.filter((x) => x.mutation).length;
   const couverts = new Set(liste.flatMap((x) => x.scenarios || [])).size;
 
+  /* Cent quarante-quatre lignes à plat, personne ne les lit. On groupe par
+     outil, parce que c'est l'outil qui décide où le parcours tourne et qui
+     l'écrit, et on replie : ce qui doit sauter aux yeux, ce sont les
+     chiffres et ce qui ne va pas, pas le catalogue. */
+  const parOutil = Object.keys(OUTILS_PARCOURS)
+    .map((o) => ({ cle: o, f: OUTILS_PARCOURS[o], items: liste.filter((x) => x.outil === o) }))
+    .filter((g) => g.items.length);
+
+  const aVoir = liste.filter((x) => PARCOURS_A_REGARDER.includes(x.etat));
+
+  const rangee = (x) => ligne({
+    icone: x.outil === 'playwright' ? 'globe' : x.outil === 'jest' ? 'code' : 'smartphone',
+    ton: x.etat === 'vert' ? 'vert' : x.etat === 'rouge' ? 'rouge' : x.etat === 'instable' ? 'ambre' : '',
+    titre: `${echapper(x.ref)} · ${echapper(x.titre || '')}${x.mutation ? '' : ' <span class="etiquette">Non éprouvé</span>'}`,
+    sous: `${echapper((OUTILS_PARCOURS[x.outil] || {}).court || x.outil)}${(x.plateformes || []).length ? ` · ${echapper((x.plateformes || []).map((p) => (PLATEFORMES_TEST[p] || {}).court || p).join(', '))}` : ''}${(x.scenarios || []).length ? ` · ${pluriel((x.scenarios || []).length, 'scénario', 'scénarios')}` : ''}${x.note ? ` · ${echapper(x.note.slice(0, 60))}` : ''}`,
+    fin: `${pastille(ETATS_PARCOURS, x.etat || 'a-ecrire')}${equipe ? `<span class="rang boutons-edition"><button class="btn-icone" type="button" data-editer-parcours="${echapper(x.ref)}" aria-label="Modifier" data-astuce="Modifier">${icone('edit')}</button></span>` : ''}`,
+  });
+
   return `<section class="section">
     <div class="section-tete">
       <div><h2>Parcours automatisés</h2><p class="chapo">${liste.length ? `${pluriel(liste.length, 'parcours', 'parcours')} rejoués à chaque version${couverts ? `, couvrant ${pluriel(couverts, 'scénario', 'scénarios')}` : ''}.` : 'Ce que la machine rejouera à chaque version.'}</p></div>
@@ -234,15 +252,24 @@ const parcoursHtml = (d, { pid, equipe }) => {
       <div class="chiffre"><span class="chiffre-valeur">${par['a-ecrire'] || 0}</span><span class="chiffre-nom">à écrire</span></div>
       <div class="chiffre"><span class="chiffre-valeur">${eprouves} / ${liste.length}</span><span class="chiffre-nom">éprouvés par mutation</span></div>
     </div>
+
+    <div class="rang couverture" style="margin-bottom:14px">
+      ${parOutil.map((g) => `<span class="puce" data-astuce="${echapper(g.f.ou)}">${echapper(g.f.court)} ${g.items.length}</span>`).join('')}
+    </div>
+
     ${eprouves < liste.length ? `<p class="aide" style="margin-bottom:14px">Un parcours qui passe au vert ne prouve rien tant qu'on n'a pas vérifié qu'il sait tomber. ${pluriel(liste.length - eprouves, 'parcours n\'a pas encore été remis en défaut', 'parcours n\'ont pas encore été remis en défaut')}.</p>` : ''}
 
-    <div class="liste">${liste.map((x) => ligne({
-      icone: x.outil === 'playwright' ? 'globe' : x.outil === 'jest' ? 'code' : 'smartphone',
-      ton: x.etat === 'vert' ? 'vert' : x.etat === 'rouge' ? 'rouge' : x.etat === 'instable' ? 'ambre' : '',
-      titre: `${echapper(x.ref)} · ${echapper(x.titre || '')}${x.mutation ? '' : ' <span class="etiquette">Non éprouvé</span>'}`,
-      sous: `${echapper((OUTILS_PARCOURS[x.outil] || {}).court || x.outil)}${(x.plateformes || []).length ? ` · ${echapper((x.plateformes || []).map((p) => (PLATEFORMES_TEST[p] || {}).court || p).join(', '))}` : ''}${(x.scenarios || []).length ? ` · ${pluriel((x.scenarios || []).length, 'scénario', 'scénarios')}` : ''}${x.note ? ` · ${echapper(x.note.slice(0, 60))}` : ''}`,
-      fin: `${pastille(ETATS_PARCOURS, x.etat || 'a-ecrire')}${equipe ? `<span class="rang boutons-edition"><button class="btn-icone" type="button" data-editer-parcours="${echapper(x.ref)}" aria-label="Modifier" data-astuce="Modifier">${icone('edit')}</button></span>` : ''}`,
-    })).join('')}</div>`
+    ${aVoir.length ? `<div class="liste" style="margin-bottom:14px">${aVoir.map(rangee).join('')}</div>` : ''}
+
+    <button class="btn btn-secondaire btn-petit" type="button" data-plier-parcours aria-expanded="false">${icone('deplier')} Voir les ${liste.length} parcours</button>
+    <div id="catalogue-parcours" hidden style="margin-top:14px">
+      ${parOutil.map((g) => `
+        <div class="bloc-scenarios">
+          <h3 class="bloc-tete">${echapper(g.f.libelle)}<span class="badge">${g.items.length}</span></h3>
+          <p class="aide" style="margin:0 0 8px">${echapper(g.f.ou)}</p>
+          <div class="liste">${g.items.map(rangee).join('')}</div>
+        </div>`).join('')}
+    </div>`
     : vide({ icone: 'code', titre: 'Aucun parcours',
         texte: equipe && pid ? 'Un parcours est rejoué par une machine à chaque version : c\'est ce qui empêche un défaut corrigé de revenir.' : 'Les parcours automatisés apparaîtront ici.', compact: true })}
   </section>`;
@@ -801,7 +828,7 @@ export const vue = async (ctx, env) => {
     if (sel) sel.addEventListener('change', (e) => { etat.projet = e.target.value; poser({ projet: etat.projet, plateforme: etat.plateforme }); rendre(true); });
   };
 
-  const gestes = sur(sortie, 'click', '[data-plateforme], [data-scenario], [data-plier-scenarios], [data-nouvelle-campagne], [data-editer-campagne], [data-action="ouvrir-campagne"], [data-nouveau-testeur], [data-action="ouvrir-testeur"], [data-nouveau-parcours], [data-editer-parcours]', async (el) => {
+  const gestes = sur(sortie, 'click', '[data-plateforme], [data-scenario], [data-plier-scenarios], [data-plier-parcours], [data-nouvelle-campagne], [data-editer-campagne], [data-action="ouvrir-campagne"], [data-nouveau-testeur], [data-action="ouvrir-testeur"], [data-nouveau-parcours], [data-editer-parcours]', async (el) => {
     /* Une référence n'est unique qu'à l'intérieur d'un projet : deux plans
        de tests portent chacun leur « DI-15 ». Chercher sans le projet
        ouvrirait l'énoncé d'une autre application, sans rien dire. */
@@ -819,6 +846,17 @@ export const vue = async (ctx, env) => {
       boite.hidden = ouverte;
       el.setAttribute('aria-expanded', String(!ouverte));
       el.innerHTML = `${icone(ouverte ? 'deplier' : 'plier')} ${ouverte ? 'Voir la bibliothèque' : 'Replier'}`;
+      return;
+    }
+    /* Cent quarante-quatre parcours au-dessus du vivier, c'est le vivier
+       qu'on ne voit plus. Ce qui est rouge ou instable reste dehors. */
+    if (el.hasAttribute('data-plier-parcours')) {
+      const boite = sortie.querySelector('#catalogue-parcours');
+      if (!boite) return;
+      const ouverte = !boite.hidden;
+      boite.hidden = ouverte;
+      el.setAttribute('aria-expanded', String(!ouverte));
+      el.innerHTML = `${icone(ouverte ? 'deplier' : 'plier')} ${ouverte ? `Voir les ${boite.querySelectorAll('.ligne').length} parcours` : 'Replier'}`;
       return;
     }
     if (el.dataset.nouvelleCampagne) { await editer('campagne', env, { pid: el.dataset.nouvelleCampagne }); return; }
