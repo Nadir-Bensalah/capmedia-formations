@@ -20,7 +20,7 @@
       est refusé au navigateur par les règles, et ne s'écrit qu'ici.
    ========================================================================== */
 
-const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
+const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { onRequest }    = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const { getApps, initializeApp } = require('firebase-admin/app');
@@ -550,6 +550,41 @@ exports.suiviDocumentCree = onDocumentCreated(
   },
 );
 
+/*
+ * Le profil public d'un testeur.
+ *
+ * Le client doit pouvoir lire QUI a donné un avis sans savoir QUI c'est :
+ * un avis de 22 ans et un avis de 55 ans ne disent pas la même chose, et
+ * masquer le profil le priverait de l'essentiel. Mais il n'a aucune raison
+ * de connaître le nom ni l'adresse de qui teste pour lui.
+ *
+ * On recopie donc le seul profil dans une sous-collection lisible, et
+ * jamais le reste. La recopie vaut mieux qu'une règle qui filtrerait les
+ * champs : Firestore sert un document entier ou rien, et une règle ne
+ * masque pas un champ.
+ */
+exports.suiviProfilTesteur = onDocumentWritten(
+  { region: REGION, document: 'testeurs/{testeurId}' },
+  async (evenement) => {
+    const apres = evenement.data.after.exists ? evenement.data.after.data() : null;
+    const cible = bdd.doc(`testeurs/${evenement.params.testeurId}/public/profil`);
+
+    /* Un testeur retiré du vivier voit son profil public disparaître avec
+       lui : le laisser derrière serait une trace que plus rien ne justifie. */
+    if (!apres) { try { await cible.delete(); } catch (err) { /* déjà parti */ } return; }
+
+    const p = apres.profil || {};
+    try {
+      await cible.set({
+        sexe: p.sexe || '', age: p.age || '', fonction: p.fonction || '',
+        aisance: p.aisance || '', langue: p.langue || '',
+        mobile: apres.mobile || '',
+        maj: FieldValue.serverTimestamp(),
+      });
+    } catch (err) { console.error('Profil public non recopié', err); }
+  },
+);
+
 exports.suiviDocumentModifie = onDocumentUpdated(
   { region: REGION, document: 'documents/{documentId}' },
   async (evenement) => {
@@ -869,7 +904,8 @@ exports.suiviAdmin = onRequest(
     const { cle, action, projet, email, nom, uid, ref, client, plateformes,
       type, numero, libelle, montant, echeance, fichier, liens, id, statut, role,
       entreprise, telephone, adresse, notesInternes, organisation, description, responsable,
-      debut, cible, budget, budgetNote, inviter, demandeProjet, tva, date, facture, moyen, reference, note, archive } = req.body || {};
+      debut, cible, budget, budgetNote, inviter, demandeProjet, tva, date, facture, moyen, reference, note, archive,
+      prenom, mobile, profil, testeur } = req.body || {};
 
     const attendu = String(ADMIN_CLE.value() || '').trim();
     if (!attendu || String(cle || '').trim() !== attendu) return res.status(403).send('interdit');
@@ -1480,6 +1516,77 @@ exports.suiviAdmin = onRequest(
          est deja la, il demande son code. Le jeton ne porte aucun pouvoir
          par lui-meme, il ne fait que pre-remplir l'adresse ; c'est le code
          recu dans la boite qui ouvre la session. */
+      /* --- Le vivier de testeurs ------------------------------------------
+         Un testeur n'est pas un client : il n'est membre d'aucun projet, il
+         ne voit que son propre travail, et son accès tient à la revendication
+         que la connexion lui pose. On crée donc son compte ici, on l'inscrit
+         au vivier, et c'est tout : aucun rattachement à un projet au sens des
+         membres, sans quoi il verrait les demandes et les devis. */
+      if (action === 'inscrireTesteur') {
+        const adresse = normaliserEmail(email);
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(adresse)) return res.status(400).send('adresse invalide');
+        if (!String(prenom || '').trim()) return res.status(400).send('prenom requis');
+        if (mobile && !['ios', 'android'].includes(String(mobile))) return res.status(400).send('mobile inconnu');
+
+        let compte;
+        try { compte = await getAuth().getUserByEmail(adresse); }
+        catch (err) { compte = await getAuth().createUser({ email: adresse, emailVerified: true, displayName: String(prenom).trim() }); }
+
+        /* Un compte d'équipe ne devient pas testeur : il verrait alors son
+           propre travail à travers deux écrans qui ne disent pas la même
+           chose, et la revendication brouillerait ses propres règles. */
+        const estDeLEquipe = (await bdd.doc(`equipe/${compte.uid}`).get()).exists;
+        if (estDeLEquipe) return res.status(409).send('ce compte appartient a l equipe');
+
+        const projets = Array.isArray(req.body.projets) ? req.body.projets.map(String) : (projet ? [String(projet)] : []);
+        await bdd.doc(`testeurs/${compte.uid}`).set({
+          prenom: String(prenom).trim(), email: adresse,
+          mobile: String(mobile || ''), projets, actif: true,
+          profil: {
+            sexe: String((profil || {}).sexe || ''),
+            age: String((profil || {}).age || ''),
+            fonction: String((profil || {}).fonction || ''),
+            aisance: String((profil || {}).aisance || ''),
+            langue: String((profil || {}).langue || 'fr'),
+            certifie: Boolean((profil || {}).certifie),
+          },
+          cree: FieldValue.serverTimestamp(), maj: FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        await audit('testeur.inscrit', { uid: compte.uid, email: adresse, projets });
+        return res.json({ ok: true, uid: compte.uid });
+      }
+
+      if (action === 'majTesteur') {
+        const tid = String(testeur || uid || '');
+        if (!tid) return res.status(400).send('testeur requis');
+        const fiche = await bdd.doc(`testeurs/${tid}`).get();
+        if (!fiche.exists) return res.status(404).send('testeur inconnu');
+
+        const changements = { maj: FieldValue.serverTimestamp() };
+        if (prenom !== undefined) changements.prenom = String(prenom).trim();
+        if (mobile !== undefined) changements.mobile = String(mobile);
+        if (archive !== undefined) changements.actif = archive !== true;
+        if (Array.isArray(req.body.projets)) changements.projets = req.body.projets.map(String);
+        if (profil) changements.profil = { ...(fiche.data().profil || {}), ...profil };
+
+        await bdd.doc(`testeurs/${tid}`).set(changements, { merge: true });
+        await audit('testeur.modifie', { uid: tid, champs: Object.keys(changements) });
+        return res.json({ ok: true });
+      }
+
+      /* Retirer un testeur du vivier ne supprime pas ses passages : ils sont
+         la mémoire de la campagne, et les effacer falsifierait le rapport.
+         On ferme l'accès, on ne réécrit pas l'histoire. */
+      if (action === 'retirerTesteur') {
+        const tid = String(testeur || uid || '');
+        if (!tid) return res.status(400).send('testeur requis');
+        await bdd.doc(`testeurs/${tid}`).delete().catch(() => {});
+        try { await getAuth().setCustomUserClaims(tid, {}); } catch (err) { /* compte parti */ }
+        await audit('testeur.retire', { uid: tid });
+        return res.json({ ok: true });
+      }
+
       if (action === 'creerInvitation') {
         const adresse = normaliserEmail(email);
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(adresse)) return res.status(400).send('adresse invalide');

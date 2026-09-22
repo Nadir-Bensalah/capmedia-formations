@@ -592,6 +592,16 @@ service cloud.firestore {
     match /testeurs/{testeurId} {
       allow read:   if estEquipe() || (estTesteur() && testeurId == moi());
       allow write:  if false;   // le serveur seul, via suiviAdmin
+
+      // Le profil sans le nom. Un avis de 22 ans et un avis de 55 ans ne
+      // disent pas la même chose, et masquer le profil priverait le client
+      // de l'essentiel. Mais il n'a aucune raison de connaître le nom ni
+      // l'adresse de qui teste pour lui : le serveur recopie donc ici le
+      // seul profil, sans rien qui identifie.
+      match /public/profil {
+        allow read:  if connecte();
+        allow write: if false;
+      }
     }
 
     match /projets/{projetId} {

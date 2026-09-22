@@ -19,6 +19,7 @@ exports.suiviMessageCree     = suivi.suiviMessageCree;
 exports.suiviDocumentCree    = suivi.suiviDocumentCree;
 exports.suiviDocumentModifie = suivi.suiviDocumentModifie;
 exports.suiviFacteur         = suivi.suiviFacteur;
+exports.suiviProfilTesteur   = suivi.suiviProfilTesteur;
 exports.suiviAdmin           = suivi.suiviAdmin;
 
 /* Les automatisations du hub : activité, notifications, e-mails, progression. */

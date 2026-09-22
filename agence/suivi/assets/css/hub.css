@@ -1916,3 +1916,68 @@ input, select, textarea { font: inherit; color: inherit; }
   .t-scenario-choix { padding-left: 14px; }
   .t-choix { padding: 12px 8px; }
 }
+
+/* Le questionnaire d'appréciation */
+.avis-famille { margin-bottom: 28px; }
+.avis-famille:last-child { margin-bottom: 0; }
+
+.avis-echelle { display: flex; gap: 6px; }
+.avis-cran {
+  flex: 1; padding: 12px 0;
+  border: 1px solid var(--trait); border-radius: 10px;
+  background: var(--fond); font: inherit; font-weight: 600;
+  font-variant-numeric: tabular-nums; cursor: pointer;
+  transition: background-color .12s ease, border-color .12s ease;
+}
+.avis-cran:hover { background: var(--fond-2); }
+.avis-cran[aria-pressed="true"] {
+  background: var(--bleu-systeme); border-color: transparent; color: #fff;
+}
+/* De 0 à 10, les crans deviennent étroits : on les laisse plus petits
+   plutôt que de les faire déborder. */
+.avis-echelle--large .avis-cran { padding: 10px 0; font-size: 13px; }
+
+.avis-bornes {
+  justify-content: space-between; margin-top: 6px;
+  font: var(--t-micro); font-weight: 400; color: var(--encre-3);
+}
+
+.avis-choix {
+  padding: 9px 14px;
+  border: 1px solid var(--trait); border-radius: 99px;
+  background: var(--fond); font: inherit; font-size: 14px; cursor: pointer;
+  transition: background-color .12s ease, border-color .12s ease;
+}
+.avis-choix:hover { background: var(--fond-2); }
+.avis-choix[aria-pressed="true"] {
+  background: var(--bleu-systeme); border-color: transparent; color: #fff;
+}
+
+.avis-appel { margin-bottom: 18px; }
+
+.lien-sobre {
+  background: none; border: 0; padding: 0;
+  font: inherit; color: var(--bleu-systeme);
+  text-decoration: underline; cursor: pointer;
+}
+
+/* La restitution des avis */
+.avis-mesure { margin-bottom: 16px; }
+.avis-verbatims { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+
+/* Une réponse libre est rendue mot pour mot : c'est là qu'est la vraie
+   information, et un résumé la tue. On la met donc en avant. */
+.avis-verbatim {
+  margin: 0; padding: 12px 14px;
+  background: var(--fond-2); border-radius: 12px;
+  border-left: 3px solid var(--bleu-systeme);
+}
+.avis-verbatim p { margin: 0; white-space: pre-wrap; }
+.avis-verbatim cite {
+  display: block; margin-top: 6px;
+  font: var(--t-micro); font-weight: 500; font-style: normal;
+  color: var(--encre-3);
+}
+
+/* Un testeur inscrit mais affecté à rien : une place payée pour rien. */
+.puce--vide { color: var(--encre-3); }

@@ -346,6 +346,95 @@ export const STATUTS_ANOMALIE = {
    et que c'est la référence qui fait foi dans les rapports. */
 export const REF_SCENARIO = /^[A-Z]{2}-R?\d{1,3}$/;
 
+/* Le questionnaire d'appréciation.
+
+   Les 173 scénarios disent si l'application MARCHE. Ceci dit si elle
+   PLAÎT, et c'est la seconde question qui décide du chiffre d'affaires.
+
+   La première famille se remplit AVANT de commencer : une fois qu'on
+   connaît une application, on ne retrouve plus ce regard-là. Tout le reste
+   après avoir tout déroulé.
+
+   Les quatre questions de prix ne sont pas de moi : c'est une méthode
+   connue, et elle donne un intervalle acceptable au lieu d'un chiffre en
+   l'air. Avec six réponses on n'a pas une étude de marché, mais on a une
+   direction. */
+export const FAMILLES_AVIS = {
+  'impression': {
+    libelle: 'Première impression', quand: 'avant',
+    aide: "Deux minutes, avant de commencer. C'est le seul regard qu'on ne peut pas retrouver ensuite.",
+    questions: [
+      { cle: 'sert-a-quoi', type: 'texte', libelle: "Rien qu'en voyant le premier écran, à quoi sert cette application ?" },
+      { cle: 'compris', type: 'echelle', libelle: 'En vingt secondes, avez-vous compris ce qu\'elle propose ?', bas: 'Pas du tout', haut: 'Tout de suite' },
+      { cle: 'oeil', type: 'texte', libelle: "Qu'est-ce qui vous a attiré l'œil en premier ?" },
+    ],
+  },
+  'esthetique': {
+    libelle: 'L\'esthétique', quand: 'apres',
+    questions: [
+      { cle: 'belle', type: 'echelle', libelle: 'Belle ou pas ?', bas: 'Pas belle', haut: 'Très belle' },
+      { cle: 'moderne', type: 'echelle', libelle: 'Moderne ou datée ?', bas: 'Datée', haut: 'Moderne' },
+      { cle: 'couleurs', type: 'choix', libelle: 'Les couleurs', options: ['Agréables', 'Neutres', 'Fatigantes', 'Trop nombreuses'] },
+      { cle: 'lisible', type: 'echelle', libelle: 'La lisibilité des textes', bas: 'Difficile', haut: 'Très lisible' },
+      { cle: 'aere', type: 'echelle', libelle: "L'aération des écrans", bas: 'Étouffant', haut: 'Bien aéré' },
+      { cle: 'coherent', type: 'echelle', libelle: "La cohérence d'un écran à l'autre", bas: 'Décousu', haut: 'Très cohérent' },
+      { cle: 'reussi', type: 'texte', libelle: "L'écran le plus réussi, et le plus raté" },
+    ],
+  },
+  'facilite': {
+    libelle: 'La facilité', quand: 'apres',
+    questions: [
+      { cle: 'trouve', type: 'echelle', libelle: 'Trouve-t-on ce qu\'on cherche ?', bas: 'Jamais', haut: 'Toujours' },
+      { cle: 'vocabulaire', type: 'echelle', libelle: 'Le vocabulaire est-il clair ?', bas: 'Obscur', haut: 'Très clair' },
+      { cle: 'bloque', type: 'choix', libelle: 'Combien de fois avez-vous été bloqué sans savoir quoi faire ?', options: ['Jamais', 'Une ou deux fois', 'Plusieurs fois', 'Tout le temps'] },
+      { cle: 'erreurs', type: 'echelle', libelle: 'Les messages d\'erreur vous ont-ils aidé ?', bas: 'Pas du tout', haut: 'Beaucoup' },
+      { cle: 'recommande', type: 'note10', libelle: 'Recommanderiez-vous cette application ?', aide: 'De 0 à 10.' },
+    ],
+  },
+  'utilite': {
+    libelle: "L'utilité", quand: 'apres',
+    questions: [
+      { cle: 'probleme', type: 'echelle', libelle: 'Est-ce que ça résout un vrai problème ?', bas: 'Aucun', haut: 'Un vrai' },
+      { cle: 'vraie-vie', type: 'choix', libelle: "L'utiliseriez-vous dans votre vraie vie ?", options: ['Oui, tous les jours', 'Oui, de temps en temps', 'Non', 'Je ne sais pas'] },
+      { cle: 'plus-utile', type: 'texte', libelle: 'La fonction la plus utile' },
+      { cle: 'inutile', type: 'texte', libelle: 'Celle qui ne sert à rien' },
+      { cle: 'manque', type: 'texte', libelle: 'Ce qui manque' },
+    ],
+  },
+  'argent': {
+    libelle: "L'argent", quand: 'apres',
+    aide: "La famille la plus importante. Les quatre derniers montants donnent une fourchette, pas un chiffre isolé.",
+    questions: [
+      { cle: 'paierait', type: 'choix', libelle: 'Paieriez-vous pour cette application ?', options: ['Oui', 'Peut-être', 'Non'] },
+      { cle: 'spontane', type: 'euros', libelle: 'Combien par mois, spontanément ?' },
+      { cle: 'trop-cher', type: 'euros', libelle: 'À quel prix est-ce trop cher ?' },
+      { cle: 'cher', type: 'euros', libelle: 'À quel prix est-ce cher, mais vous réfléchissez ?' },
+      { cle: 'bonne-affaire', type: 'euros', libelle: 'À quel prix est-ce une bonne affaire ?' },
+      { cle: 'suspect', type: 'euros', libelle: 'À quel prix est-ce si peu cher que vous vous méfiez de la qualité ?' },
+      { cle: 'gratuit', type: 'choix', libelle: "L'offre gratuite", options: ['Suffit largement', 'Convient', 'Pousse trop vite à payer'] },
+    ],
+  },
+  'performance': {
+    libelle: 'La performance ressentie', quand: 'apres',
+    questions: [
+      { cle: 'rapide', type: 'echelle', libelle: 'Rapide ou lente ?', bas: 'Très lente', haut: 'Très rapide' },
+      { cle: 'attentes', type: 'choix', libelle: 'Des attentes sans savoir ce qui se passe ?', options: ['Jamais', 'Parfois', 'Souvent'] },
+      { cle: 'plantages', type: 'choix', libelle: 'Des plantages ?', options: ['Aucun', 'Un ou deux', 'Plusieurs'] },
+      { cle: 'comparee', type: 'echelle', libelle: 'Comparée aux applications que vous utilisez tous les jours', bas: 'Bien moins bien', haut: 'Bien mieux' },
+    ],
+  },
+  'libre': {
+    libelle: 'Le libre', quand: 'apres',
+    aide: "C'est ici qu'est la vraie information. Elle est restituée mot pour mot, jamais résumée.",
+    questions: [
+      { cle: 'garder', type: 'texte', libelle: 'Les trois choses à garder absolument' },
+      { cle: 'changer', type: 'texte', libelle: 'Les trois à changer en premier' },
+      { cle: 'une-phrase', type: 'texte', libelle: 'Résumez l\'application en une phrase, comme à un ami' },
+      { cle: 'agace', type: 'texte', libelle: "Qu'est-ce qui vous a agacé, même un détail ?" },
+    ],
+  },
+};
+
 export const STATUTS_TACHE = {
   'a-faire':        { libelle: 'À faire',           voile: 'gris',   ordre: 1 },
   'en-cours':       { libelle: 'En cours',          voile: 'bleu',   ordre: 2 },

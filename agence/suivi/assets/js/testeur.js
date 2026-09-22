@@ -15,7 +15,7 @@
 import {
   bdd, auth, doc, getDoc, getDocs, setDoc, collection, query, where, signOut,
   serverTimestamp, session, echapper, envoyerPiece,
-  NIVEAUX_SCENARIO, BLOCS_SCENARIO, PLATEFORMES_TEST, RESULTATS_PASSAGE, STATUTS_CAMPAGNE,
+  NIVEAUX_SCENARIO, BLOCS_SCENARIO, PLATEFORMES_TEST, RESULTATS_PASSAGE, FAMILLES_AVIS,
 } from './noyau.js';
 import { icone, pastille, toast, agir, modale, vide } from './ui.js';
 
@@ -45,7 +45,7 @@ let plateformeCourante = (() => {
   try { return localStorage.getItem('suivi:testeur-plateforme') || ''; } catch (e) { return ''; }
 })();
 
-const etat = { campagne: null, scenarios: [], passages: new Map(), bloc: '', reste: true };
+const etat = { campagne: null, scenarios: [], passages: new Map(), avis: null, bloc: '', reste: true };
 
 /* -------------------------------------------------------------------------- */
 
@@ -91,6 +91,39 @@ const ligneScenario = (s) => {
   </div>`;
 };
 
+/* L'appel au questionnaire. Avant de commencer, puis quand tout est
+   déroulé : un avis demandé au milieu n'a ni la fraîcheur du premier
+   regard ni le recul du dernier. */
+const appelAvis = () => {
+  const total = etat.scenarios.length;
+  const faits = etat.scenarios.filter((s) => etat.passages.has(s.ref)).length;
+  const a = etat.avis || {};
+  const avantFait = Object.keys(a).some((k) => k.startsWith('impression.'));
+  const apresFait = Object.keys(a).some((k) => k.startsWith('esthetique.'));
+
+  if (!avantFait && !faits) {
+    return `<div class="encart encart--attention avis-appel">
+      ${icone('ampoule')}
+      <div><strong>Avant de commencer, deux minutes.</strong>
+      <p>Ce que vous pensez de l'application en la découvrant ne se retrouve pas ensuite.</p>
+      <button class="btn btn-principal btn-petit" type="button" data-avis="avant" style="margin-top:10px">Donner ma première impression</button></div>
+    </div>`;
+  }
+  if (total && faits === total && !apresFait) {
+    return `<div class="encart encart--attention avis-appel">
+      ${icone('coeur')}
+      <div><strong>Vous avez tout déroulé. Merci.</strong>
+      <p>Il reste le plus utile : ce que vous pensez de l'application.</p>
+      <button class="btn btn-principal btn-petit" type="button" data-avis="apres" style="margin-top:10px">Donner mon avis</button></div>
+    </div>`;
+  }
+  if (apresFait) return '';
+  if (faits) {
+    return `<p class="aide" style="margin-bottom:14px">Quand vous aurez tout déroulé, un questionnaire vous demandera ce que vous pensez de l'application. <button class="lien-sobre" type="button" data-avis="apres">Y répondre maintenant</button></p>`;
+  }
+  return '';
+};
+
 const rendre = (moi) => {
   const campagne = etat.campagne;
   if (!campagne) {
@@ -122,6 +155,8 @@ const rendre = (moi) => {
 
   racine.innerHTML = `<div class="page page--testeur">
     ${enTete(moi, campagne)}
+
+    ${appelAvis()}
 
     <div class="rang testeur-filtres">
       <select class="select" id="f-bloc" style="width:auto">
@@ -218,6 +253,115 @@ const poser = async (s, resultat, moi) => {
 };
 
 /* --------------------------------------------------------------------------
+   Le questionnaire d'appréciation
+   -------------------------------------------------------------------------- */
+
+/* Les 173 scénarios disent si l'application marche. Ceci dit si elle
+   plaît, et c'est la seconde question qui décide du chiffre d'affaires. */
+const champAvis = (q, valeur) => {
+  const id = `av-${q.cle}`;
+  const v = valeur === undefined ? '' : valeur;
+  if (q.type === 'echelle') {
+    return `<div class="groupe">
+      <span class="etiquette-champ">${echapper(q.libelle)}</span>
+      <div class="avis-echelle" role="group">
+        ${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="avis-cran" data-avis="${q.cle}" data-valeur="${n}" aria-pressed="${String(v) === String(n)}">${n}</button>`).join('')}
+      </div>
+      <div class="rang avis-bornes"><span>${echapper(q.bas || '')}</span><span>${echapper(q.haut || '')}</span></div>
+    </div>`;
+  }
+  if (q.type === 'note10') {
+    return `<div class="groupe">
+      <span class="etiquette-champ">${echapper(q.libelle)}</span>
+      <div class="avis-echelle avis-echelle--large" role="group">
+        ${Array.from({ length: 11 }, (_, n) => `<button type="button" class="avis-cran" data-avis="${q.cle}" data-valeur="${n}" aria-pressed="${String(v) === String(n)}">${n}</button>`).join('')}
+      </div>
+      ${q.aide ? `<p class="aide">${echapper(q.aide)}</p>` : ''}
+    </div>`;
+  }
+  if (q.type === 'choix') {
+    return `<div class="groupe">
+      <span class="etiquette-champ">${echapper(q.libelle)}</span>
+      <div class="rang" style="gap:8px;flex-wrap:wrap">
+        ${(q.options || []).map((o) => `<button type="button" class="avis-choix" data-avis="${q.cle}" data-valeur="${echapper(o)}" aria-pressed="${v === o}">${echapper(o)}</button>`).join('')}
+      </div>
+    </div>`;
+  }
+  if (q.type === 'euros') {
+    return `<div class="groupe">
+      <label class="etiquette-champ" for="${id}">${echapper(q.libelle)}</label>
+      <div class="rang" style="gap:8px;align-items:center">
+        <input class="champ" id="${id}" data-avis-champ="${q.cle}" type="number" min="0" step="0.5" inputmode="decimal" value="${echapper(String(v))}" style="max-width:140px">
+        <span class="t-2">€ par mois</span>
+      </div>
+    </div>`;
+  }
+  return `<div class="groupe">
+    <label class="etiquette-champ" for="${id}">${echapper(q.libelle)}</label>
+    <textarea class="champ" id="${id}" data-avis-champ="${q.cle}" rows="3">${echapper(String(v))}</textarea>
+  </div>`;
+};
+
+const ouvrirAvis = async (moi, quand) => {
+  const uid = auth.currentUser.uid;
+  const chemin = `projets/${etat.campagne.projet}/campagnes/${etat.campagne.id}/appreciations/${uid}`;
+  let deja = {};
+  try { const d = await getDoc(doc(bdd, chemin)); if (d.exists()) deja = d.data(); } catch (e) { /* première fois */ }
+
+  const familles = Object.entries(FAMILLES_AVIS).filter(([, f]) => f.quand === quand);
+  const reponses = { ...deja };
+
+  const m = modale({
+    titre: quand === 'avant' ? 'Avant de commencer' : 'Votre avis sur l\'application',
+    sousTitre: quand === 'avant'
+      ? 'Deux minutes. Ce regard-là ne se retrouve pas ensuite.'
+      : 'Les scénarios disent si ça marche. Ceci dit si ça plaît.',
+    feuille: true,
+    corps: familles.map(([cle, f]) => `
+      <section class="avis-famille">
+        <h3 class="bloc-tete">${echapper(f.libelle)}</h3>
+        ${f.aide ? `<p class="aide" style="margin-bottom:14px">${echapper(f.aide)}</p>` : ''}
+        ${f.questions.map((q) => champAvis(q, deja[`${cle}.${q.cle}`])).join('')}
+      </section>`).join(''),
+    pied: '<button class="btn btn-secondaire" type="button" data-fermer>Plus tard</button><button class="btn btn-principal" type="button" data-envoyer>Enregistrer</button>',
+  });
+
+  /* Les boutons d'échelle et de choix tiennent leur valeur dans l'écran :
+     ils ne sont pas des champs de formulaire, et « lireForme » ne les
+     verrait pas. */
+  m.el.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-avis]');
+    if (!b) return;
+    const famille = familles.find(([, f]) => f.questions.some((q) => q.cle === b.dataset.avis));
+    if (!famille) return;
+    reponses[`${famille[0]}.${b.dataset.avis}`] = b.dataset.valeur;
+    m.el.querySelectorAll(`[data-avis="${b.dataset.avis}"]`).forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  });
+
+  const envoyer = m.el.querySelector('[data-envoyer]');
+  envoyer.addEventListener('click', () => agir(envoyer, async () => {
+    m.el.querySelectorAll('[data-avis-champ]').forEach((ch) => {
+      const famille = familles.find(([, f]) => f.questions.some((q) => q.cle === ch.dataset.avisChamp));
+      if (!famille) return;
+      const v = (ch.value || '').trim();
+      if (v) reponses[`${famille[0]}.${ch.dataset.avisChamp}`] = v;
+    });
+    /* Fusionné, pas remplacé : les deux moments écrivent dans le même
+       document, et enregistrer l'après effacerait l'avant. */
+    try {
+      await setDoc(doc(bdd, chemin), { ...reponses, testeur: uid, maj: serverTimestamp() }, { merge: true });
+      etat.avis = reponses;
+      toast('Merci, votre avis est enregistré.');
+      m.fermer(true);
+    } catch (e) {
+      console.error(e);
+      toast("Votre avis n'a pas pu être enregistré. Réessayez.", 'erreur');
+    }
+  }));
+  return m.fin;
+};
+
+/* --------------------------------------------------------------------------
    Le montage
    -------------------------------------------------------------------------- */
 
@@ -251,6 +395,11 @@ const charger = async (moi) => {
         where('testeur', '==', moi.uid)));
       deja.forEach((d) => { const x = d.data(); etat.passages.set(x.scenario, x); });
     } catch (e) { /* aucun passage encore */ }
+
+    try {
+      const a = await getDoc(doc(bdd, 'projets', pid, 'campagnes', enCours.id, 'appreciations', moi.uid));
+      if (a.exists()) etat.avis = a.data();
+    } catch (e) { /* pas encore d'avis */ }
     return;
   }
 };
@@ -263,7 +412,7 @@ const monter = async () => {
   rendre(testeur);
 
   document.addEventListener('click', async (e) => {
-    const el = e.target.closest('[data-sortir], [data-sur], [data-poser], [data-ouvrir]');
+    const el = e.target.closest('[data-sortir], [data-sur], [data-poser], [data-ouvrir], [data-avis]');
     if (!el) return;
 
     if (el.hasAttribute('data-sortir')) { await signOut(auth); location.replace('./'); return; }
@@ -271,6 +420,15 @@ const monter = async () => {
     if (el.dataset.sur !== undefined) {
       plateformeCourante = el.dataset.sur;
       try { localStorage.setItem('suivi:testeur-plateforme', plateformeCourante); } catch (err) { /* stockage refusé */ }
+      rendre(testeur);
+      return;
+    }
+
+    /* Les boutons de l'échelle portent aussi « data-avis », mais ils
+       vivent dans la feuille, pas dans la page : ce geste-ci ne voit que
+       ceux du bandeau, et ils portent un moment, pas une clé. */
+    if (el.dataset.avis === 'avant' || el.dataset.avis === 'apres') {
+      await ouvrirAvis(testeur, el.dataset.avis);
       rendre(testeur);
       return;
     }

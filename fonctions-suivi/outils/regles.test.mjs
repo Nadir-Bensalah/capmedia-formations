@@ -253,6 +253,22 @@ await refuse('Camille ne lit pas le vivier', getDocs(collection(camille(), 'test
 await refuse("Karim ne se fabrique pas une fiche", setDoc(doc(karim(), 'testeurs', KARIM), { prenom: 'Karim', projets: ['atelier', 'boutique'] }));
 await refuse("L'équipe n'inscrit pas un testeur depuis le navigateur", setDoc(doc(equipe(), 'testeurs', MARC), { prenom: 'Marc', projets: ['atelier'] }));
 
+console.log('\n== La plateforme de tests : le profil sans le nom');
+/* Le client doit savoir QUI a donné un avis sans savoir QUI c'est. Le nom
+   et l'adresse lui restent fermés, le profil lui est ouvert : un avis de
+   22 ans et un avis de 55 ans ne disent pas la même chose.
+
+   La recopie vaut mieux qu'une règle qui filtrerait les champs : Firestore
+   sert un document entier ou rien, et une règle ne masque pas un champ. */
+await env.withSecurityRulesDisabled(async (ctx) => {
+  await setDoc(doc(ctx.firestore(), `testeurs/${KARIM}/public/profil`), { sexe: 'homme', age: '25-34', fonction: 'QA freelance', mobile: 'ios' });
+});
+await doit('Camille lit le profil public d un testeur', getDoc(doc(camille(), `testeurs/${KARIM}/public/profil`)));
+await refuse('mais pas sa fiche, qui porte son nom', getDoc(doc(camille(), 'testeurs', KARIM)));
+await doit('Karim lit le sien', getDoc(doc(karim(), `testeurs/${KARIM}/public/profil`)));
+await refuse('Personne n écrit un profil public depuis le navigateur', setDoc(doc(equipe(), `testeurs/${KARIM}/public/profil`), { age: '55-64' }));
+await refuse('Un visiteur ne lit aucun profil', getDoc(doc(anonyme(), `testeurs/${KARIM}/public/profil`)));
+
 console.log('\n== La plateforme de tests : la bibliothèque');
 /* Le client lit les scénarios pour savoir ce qui sera vérifié, le testeur
    pour lire l'énoncé de ce qu'il doit dérouler. Ni l'un ni l'autre n'écrit. */
@@ -373,6 +389,25 @@ await doit('Sonia dépose une appréciation bornée', setDoc(doc(sonia(), `proje
 await refuse('Un texte libre sans fin est refusé', setDoc(doc(sonia(), `projets/atelier/campagnes/c1/appreciations/${SONIA}`), { beaute: 3, libre: 'x'.repeat(9000) }));
 await refuse('Une appréciation ne s efface pas', deleteDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`)));
 await refuse("L'équipe non plus n'efface pas une appréciation", deleteDoc(doc(equipe(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`)));
+
+console.log('\n== La plateforme de tests : le questionnaire tient dans les bornes');
+/* Le questionnaire porte 35 questions en 7 familles, plus l'auteur et la
+   date : 37 champs. Le plafond est à 60, et cette marge doit rester
+   vérifiée, pas supposée. Une famille ajoutée sans y penser ferait
+   refuser l'enregistrement du testeur au dernier moment, après qu'il a
+   tout rempli. */
+const avisComplet = { testeur: KARIM, maj: new Date() };
+for (let f = 0; f < 7; f += 1) for (let q = 0; q < 5; q += 1) avisComplet[`f${f}.q${q}`] = q % 2 ? 'texte de réponse' : 4;
+await doit(`Karim dépose un questionnaire de ${Object.keys(avisComplet).length} champs`, setDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`), avisComplet));
+
+const trop = { testeur: KARIM };
+for (let i = 0; i < 70; i += 1) trop[`q${i}`] = i;
+await refuse('Un questionnaire démesuré est refusé', setDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`), trop));
+
+/* Les deux moments écrivent dans le même document : l'après ne doit pas
+   effacer l'avant, et la règle doit accepter la fusion. */
+await doit('La première impression se dépose seule', setDoc(doc(sonia(), `projets/atelier/campagnes/c1/appreciations/${SONIA}`), { 'impression.compris': 4, testeur: SONIA }, { merge: true }));
+await doit('Le reste vient s y ajouter', setDoc(doc(sonia(), `projets/atelier/campagnes/c1/appreciations/${SONIA}`), { 'esthetique.belle': 5, testeur: SONIA }, { merge: true }));
 
 console.log('\n== La plateforme de tests : les lectures en groupe');
 /* La console regarde tous les projets d'un coup. C'est un privilège

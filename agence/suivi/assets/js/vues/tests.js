@@ -17,14 +17,16 @@
 import {
   echapper, dateCourte, depuis, pluriel, joursAvant, parDateDesc,
   NIVEAUX_SCENARIO, BLOCS_SCENARIO, PLATEFORMES_TEST, STATUTS_CAMPAGNE,
-  GRAVITES_ANOMALIE, STATUTS_ANOMALIE,
+  GRAVITES_ANOMALIE, STATUTS_ANOMALIE, FAMILLES_AVIS,
 } from '../noyau.js';
 import {
-  icone, pastille, ligne, vide, squelette, titrePage, sur, modale, toast, agir,
+  icone, pastille, ligne, vide, squelette, titrePage, sur, modale, toast, agir, confirmer,
 } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K, ecrire, repartir } from '../donnees.js';
+import { bdd, collection, getDocs, doc, getDoc } from '../noyau.js';
 import { editer } from './editeurs.js';
+import { appelServeur } from '../serveur.js';
 import { filAriane } from '../coquille.js';
 
 /* La mémoire des filtres tient dans l'adresse, pas dans le stockage : un
@@ -185,6 +187,50 @@ const activite = (d, { nomProjet, plateforme }) => {
 };
 
 /* --------------------------------------------------------------------------
+   Section 4 · Le vivier
+   -------------------------------------------------------------------------- */
+
+/* Qui teste, sur quoi, et où il en est. Le tableau répond à la seule
+   question qui compte en cours de campagne : qui traîne, et qui a fini. */
+const vivierHtml = (d, { equipe }) => {
+  if (!equipe) return '';
+  const gens = d.testeurs || [];
+
+  /* Ce que chacun a rendu, toutes campagnes en cours confondues. Un
+     testeur inscrit mais affecté à rien est le cas qu'on veut voir :
+     c'est une place payée pour rien. */
+  const charge = (t) => {
+    let du = 0;
+    d.campagnes.filter((c) => c.statut === 'en-cours').forEach((c) => {
+      du += ((c.affectation || {})[t.id] || []).length;
+    });
+    return du;
+  };
+
+  return `<section class="section">
+    <div class="section-tete">
+      <div><h2>Testeurs</h2><p class="chapo">${gens.length ? pluriel(gens.length, 'personne au vivier', 'personnes au vivier') : 'Le vivier est vide.'}</p></div>
+      <button class="btn btn-principal btn-petit" type="button" data-nouveau-testeur>${icone('plus')} Inscrire un testeur</button>
+    </div>
+    ${gens.length ? `<div class="liste">${gens.map((t) => {
+      const p = t.profil || {};
+      const traits = [p.age ? `${p.age} ans` : '', p.fonction, p.sexe].filter(Boolean).join(' · ');
+      const n = charge(t);
+      return ligne({
+        icone: 'utilisateur', ton: t.actif === false ? '' : (n ? 'bleu' : 'ambre'),
+        titre: `${echapper(t.prenom || t.email || '')}${t.actif === false ? ' <span class="etiquette">Retiré</span>' : ''}`,
+        sous: `${echapper(t.email || '')}${traits ? ` · ${echapper(traits)}` : ''}`,
+        fin: `${t.mobile ? `<span class="puce">${icone(t.mobile === 'ios' ? 'apple' : 'android')} ${echapper((PLATEFORMES_TEST[t.mobile] || {}).court || t.mobile)}</span>` : ''}
+          <span class="puce${n ? '' : ' puce--vide'}">${n ? pluriel(n, 'passage', 'passages') : 'rien à faire'}</span>`,
+        action: 'ouvrir-testeur', attrs: `data-id="${echapper(t.id)}"`,
+      });
+    }).join('')}</div>`
+    : vide({ icone: 'utilisateurs', titre: 'Aucun testeur',
+        texte: 'Inscrivez-en un : il recevra un code par e-mail et ne verra que les scénarios qu\'on lui confie.', compact: true })}
+  </section>`;
+};
+
+/* --------------------------------------------------------------------------
    Un projet choisi : toute la panoplie
    -------------------------------------------------------------------------- */
 
@@ -244,6 +290,8 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
     })).join('')}</div>
   </section>` : ''}
 
+  ${equipe ? vivierHtml({ ...d, testeurs: (d.testeurs || []).filter((t) => (t.projets || []).includes(pid)) }, { equipe }) : ''}
+
   <section class="section">
     <div class="section-tete">
       <div><h2>Scénarios</h2><p class="chapo">La bibliothèque du projet${plateforme ? `, sur ${(PLATEFORMES_TEST[plateforme] || {}).libelle}` : ''}. ${scen.length ? pluriel(scen.length, 'scénario', 'scénarios') : 'Vide.'}</p></div>
@@ -299,6 +347,230 @@ const ouvrirScenario = (s) => {
   }).fin;
 };
 
+/* Le vivier de testeurs.
+
+   Un testeur n'est membre d'aucun projet : il ne voit que son propre
+   travail, et son accès tient à la revendication que la connexion lui
+   pose. L'inscrire ici ne lui ouvre donc ni les demandes ni les devis. */
+const ouvrirTesteur = (fiche, { env, projets }) => {
+  const neuf = !fiche;
+  const f = fiche || {};
+  const p = f.profil || {};
+  const AGES = ['18-24', '25-34', '35-44', '45-54', '55-64', '65 et plus'];
+  const AISANCE = ['À l\'aise', 'Moyenne', 'Peu à l\'aise'];
+
+  const m = modale({
+    titre: neuf ? 'Inscrire un testeur' : (f.prenom || 'Le testeur'),
+    sousTitre: neuf ? 'Il ne verra que son propre travail, jamais le projet.' : f.email,
+    feuille: true,
+    corps: `
+      <div class="forme-rang">
+        <div class="groupe"><label class="etiquette-champ" for="t-prenom">Prénom</label>
+          <input class="champ" id="t-prenom" value="${echapper(f.prenom || '')}" placeholder="Karim"></div>
+        <div class="groupe"><label class="etiquette-champ" for="t-email">Adresse</label>
+          <input class="champ" id="t-email" type="email" value="${echapper(f.email || '')}" ${neuf ? '' : 'readonly'} placeholder="karim@exemple.fr">
+          ${neuf ? '' : '<p class="aide">L\'adresse ne se change pas : elle est la clé de son compte.</p>'}</div>
+      </div>
+
+      <div class="groupe"><span class="etiquette-champ">Son mobile</span>
+        <div class="segments" role="group">
+          <button type="button" data-mobile="ios" aria-pressed="${f.mobile === 'ios'}">${icone('apple')} iOS</button>
+          <button type="button" data-mobile="android" aria-pressed="${f.mobile === 'android'}">${icone('android')} Android</button>
+        </div>
+        <p class="aide">Chacun couvre le web plus un mobile. C'est ce choix qui décide de ce qu'il recevra : un scénario dont le comportement dépend du système part chez un testeur iOS et un testeur Android.</p>
+      </div>
+
+      <div class="groupe"><span class="etiquette-champ">Son profil</span>
+        <div class="forme-rang">
+          <select class="select" id="t-sexe">
+            <option value="">Sexe</option>
+            ${['homme', 'femme', 'autre'].map((x) => `<option value="${x}"${p.sexe === x ? ' selected' : ''}>${x}</option>`).join('')}
+          </select>
+          <select class="select" id="t-age">
+            <option value="">Tranche d'âge</option>
+            ${AGES.map((x) => `<option value="${echapper(x)}"${p.age === x ? ' selected' : ''}>${echapper(x)} ans</option>`).join('')}
+          </select>
+        </div>
+        <input class="champ" id="t-fonction" value="${echapper(p.fonction || '')}" placeholder="Sa fonction : testeur QA, étudiante, développeur..." style="margin-top:10px">
+        <select class="select" id="t-aisance" style="margin-top:10px">
+          <option value="">Son aisance avec le numérique</option>
+          ${AISANCE.map((x) => `<option value="${echapper(x)}"${p.aisance === x ? ' selected' : ''}>${echapper(x)}</option>`).join('')}
+        </select>
+        <p class="aide">Il faut pouvoir distinguer un blocage causé par l'application d'un blocage causé par l'habitude. Ce profil est visible du client, jamais son nom.</p>
+      </div>
+
+      <div class="groupe"><span class="etiquette-champ">Ses projets</span>
+        <div class="cases-blocs">${projets.map((x) => `
+          <label class="case"><input type="checkbox" data-projet="${echapper(x.id)}" ${(f.projets || []).includes(x.id) ? 'checked' : ''}> ${echapper(x.nom)}</label>`).join('')}</div>
+      </div>`,
+    pied: `<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button>
+      ${neuf ? '' : '<button class="btn btn-danger" type="button" data-retirer>Retirer du vivier</button>'}
+      <button class="btn btn-principal" type="button" data-enregistrer>${neuf ? 'Inscrire' : 'Enregistrer'}</button>`,
+  });
+
+  let mobile = f.mobile || '';
+  m.el.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-mobile]');
+    if (!b) return;
+    mobile = b.dataset.mobile;
+    m.el.querySelectorAll('[data-mobile]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  });
+
+  const retirer = m.el.querySelector('[data-retirer]');
+  if (retirer) retirer.addEventListener('click', async () => {
+    const sur = await confirmer({
+      titre: `Retirer ${f.prenom || 'ce testeur'} du vivier ?`,
+      texte: "Son accès se ferme. Ses résultats restent : ils sont la mémoire de la campagne, et les effacer falsifierait le rapport.",
+      ok: 'Retirer', danger: true,
+    });
+    if (!sur) return;
+    await agir(retirer, async () => {
+      await appelServeur('retirerTesteur', { testeur: f.id });
+      toast('Testeur retiré. Ses résultats sont conservés.');
+      m.fermer(true);
+    });
+  });
+
+  const enregistrer = m.el.querySelector('[data-enregistrer]');
+  enregistrer.addEventListener('click', () => agir(enregistrer, async () => {
+    const prenomV = (m.el.querySelector('#t-prenom').value || '').trim();
+    const emailV = (m.el.querySelector('#t-email').value || '').trim();
+    if (!prenomV) { toast('Donnez-lui un prénom.', 'erreur'); return; }
+    if (neuf && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(emailV)) { toast('Cette adresse a l\'air incomplète.', 'erreur'); return; }
+    if (!mobile) { toast('Dites sur quel mobile il teste.', 'erreur'); return; }
+
+    const donnees = {
+      prenom: prenomV, mobile,
+      projets: [...m.el.querySelectorAll('[data-projet]')].filter((x) => x.checked).map((x) => x.dataset.projet),
+      profil: {
+        sexe: m.el.querySelector('#t-sexe').value,
+        age: m.el.querySelector('#t-age').value,
+        fonction: (m.el.querySelector('#t-fonction').value || '').trim(),
+        aisance: m.el.querySelector('#t-aisance').value,
+      },
+    };
+    if (neuf) await appelServeur('inscrireTesteur', { ...donnees, email: emailV });
+    else await appelServeur('majTesteur', { ...donnees, testeur: f.id });
+    toast(neuf ? `${prenomV} est inscrit au vivier.` : 'Testeur enregistré.');
+    m.fermer(true);
+  }));
+  return m.fin;
+};
+
+/* La restitution du questionnaire.
+
+   Les moyennes disent la tendance, les réponses libres disent pourquoi.
+   Ces dernières sont rendues MOT POUR MOT, jamais résumées : c'est là
+   qu'est la vraie information, et un résumé la tue.
+
+   Chez le client, les noms sont masqués et les profils restent : « Testeur
+   3, femme, 35-44 ans » suffit à comprendre qui parle sans le nommer. */
+const ouvrirAvis = (campagne, { env, vivier }) => {
+  const equipe = env.role === 'equipe';
+  const avis = campagne._avis || [];
+
+  if (!avis.length) {
+    return modale({
+      titre: 'Ce que les testeurs en pensent', feuille: true,
+      corps: vide({ icone: 'coeur', titre: 'Aucun avis pour l\'instant',
+        texte: 'Le questionnaire est proposé aux testeurs quand ils ont tout déroulé.', compact: true }),
+      pied: '<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>',
+    }).fin;
+  }
+
+  /* Le nom d'un testeur ne regarde que l'équipe. Le profil, lui, éclaire
+     la réponse : un avis de 22 ans et un de 55 ans ne disent pas la même
+     chose, et le masquer priverait le client de l'essentiel. */
+  const qui = (uid, rang) => {
+    const t = vivier.find((x) => x.id === uid) || {};
+    const p = t.profil || {};
+    const traits = [p.sexe, p.age ? `${p.age} ans` : '', p.fonction].filter(Boolean).join(', ');
+    return equipe
+      ? `${t.prenom || uid}${traits ? ` · ${traits}` : ''}`
+      : `Testeur ${rang + 1}${traits ? ` · ${traits}` : ''}`;
+  };
+
+  const moyenne = (cle) => {
+    const n = avis.map((a) => Number(a[cle])).filter((x) => !Number.isNaN(x) && x !== null);
+    return n.length ? { v: n.reduce((x, y) => x + y, 0) / n.length, sur: n.length } : null;
+  };
+
+  const euros = (cle) => {
+    const n = avis.map((a) => Number(a[cle])).filter((x) => !Number.isNaN(x) && x > 0).sort((x, y) => x - y);
+    return n.length ? { bas: n[0], haut: n[n.length - 1], median: n[Math.floor(n.length / 2)], sur: n.length } : null;
+  };
+
+  /* La fourchette acceptable : entre ce qu'on trouve suspect et ce qu'on
+     trouve cher. En dessous on doute de la qualité, au-dessus on renonce. */
+  const suspect = euros('argent.suspect');
+  const cher = euros('argent.cher');
+  const recommande = moyenne('facilite.recommande');
+
+  const familleHtml = (cle, f) => {
+    const chiffrees = f.questions.filter((q) => ['echelle', 'note10'].includes(q.type));
+    const libres = f.questions.filter((q) => q.type === 'texte');
+    const choix = f.questions.filter((q) => q.type === 'choix');
+    return `
+    <section class="avis-famille">
+      <h3 class="bloc-tete">${echapper(f.libelle)}</h3>
+
+      ${chiffrees.map((q) => {
+        const m = moyenne(`${cle}.${q.cle}`);
+        if (!m) return '';
+        const part = q.type === 'note10' ? (m.v / 10) * 100 : (m.v / 5) * 100;
+        return `<div class="avis-mesure">
+          <div class="rang" style="justify-content:space-between;gap:12px">
+            <span>${echapper(q.libelle)}</span>
+            <strong>${m.v.toFixed(1)}${q.type === 'note10' ? ' / 10' : ' / 5'}</strong>
+          </div>
+          <div class="testeur-jauge" style="margin-top:6px"><div class="testeur-jauge-barre" style="width:${Math.round(part)}%"></div></div>
+        </div>`;
+      }).join('')}
+
+      ${choix.map((q) => {
+        const comptes = {};
+        avis.forEach((a) => { const v = a[`${cle}.${q.cle}`]; if (v) comptes[v] = (comptes[v] || 0) + 1; });
+        const lignes = Object.entries(comptes).sort((a, b) => b[1] - a[1]);
+        if (!lignes.length) return '';
+        return `<div class="avis-mesure">
+          <span class="etiquette-champ">${echapper(q.libelle)}</span>
+          <div class="rang" style="gap:8px;flex-wrap:wrap;margin-top:6px">
+            ${lignes.map(([v, n]) => `<span class="puce">${echapper(v)} <strong>${n}</strong></span>`).join('')}
+          </div>
+        </div>`;
+      }).join('')}
+
+      ${libres.map((q) => {
+        const dits = avis.map((a, i) => ({ texte: a[`${cle}.${q.cle}`], uid: a.testeur, rang: i })).filter((x) => x.texte);
+        if (!dits.length) return '';
+        return `<div class="avis-mesure">
+          <span class="etiquette-champ">${echapper(q.libelle)}</span>
+          <div class="avis-verbatims">${dits.map((x) => `
+            <blockquote class="avis-verbatim">
+              <p>${echapper(String(x.texte))}</p>
+              <cite>${echapper(qui(x.uid, x.rang))}</cite>
+            </blockquote>`).join('')}</div>
+        </div>`;
+      }).join('')}
+    </section>`;
+  };
+
+  return modale({
+    titre: 'Ce que les testeurs en pensent',
+    sousTitre: `${pluriel(avis.length, 'réponse', 'réponses')} · ${echapper(campagne.titre || '')}`,
+    feuille: true,
+    corps: `
+      <div class="rang chiffres-tests" style="margin-bottom:22px">
+        ${recommande ? `<div class="chiffre"><span class="chiffre-valeur">${recommande.v.toFixed(1)}</span><span class="chiffre-nom">recommandation sur 10</span></div>` : ''}
+        ${suspect && cher ? `<div class="chiffre"><span class="chiffre-valeur">${suspect.median} à ${cher.median} €</span><span class="chiffre-nom">fourchette acceptable</span></div>` : ''}
+        <div class="chiffre"><span class="chiffre-valeur">${avis.length}</span><span class="chiffre-nom">testeurs ont répondu</span></div>
+      </div>
+      ${suspect && cher ? `<p class="aide" style="margin-bottom:22px">En dessous de ${suspect.median} €, ils se méfient de la qualité. Au-dessus de ${cher.median} €, ils renoncent. Sur ${pluriel(avis.length, 'réponse', 'réponses')}, c'est une direction, pas une étude de marché.</p>` : ''}
+      ${Object.entries(FAMILLES_AVIS).map(([cle, f]) => familleHtml(cle, f)).join('')}`,
+    pied: '<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>',
+  }).fin;
+};
+
 /* L'affectation des testeurs à une campagne.
    Le calcul propose, il ne décide pas : un testeur tombe malade, un autre
    demande un bloc précis, et aucun calcul ne prévoit cela. */
@@ -349,10 +621,37 @@ const ouvrirCampagne = async (c, { pid, env, scenarios }) => {
           <label class="case"><input type="checkbox" data-testeur="${echapper(t.id)}" ${(c.testeurs || []).includes(t.id) ? 'checked' : ''}> ${echapper(t.prenom || t.email || t.id)}${t.mobile ? ` · ${echapper((PLATEFORMES_TEST[t.mobile] || {}).court || t.mobile)}` : ''}</label>`).join('')}</div>
         <p class="aide">Chaque testeur couvre le web plus un mobile. Un scénario dont le comportement dépend du système part chez un testeur iOS et un testeur Android : c'est la seule chose qu'on paie deux fois.</p>
       </div>` : ''}`,
-    pied: equipe
-      ? `<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button><button class="btn btn-principal" type="button" data-repartir>${icone('eclair')} Répartir</button>`
-      : '<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>',
+    pied: `<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>
+      <button class="btn btn-secondaire" type="button" data-voir-avis>${icone('coeur')} Leur avis</button>
+      ${equipe ? `<button class="btn btn-principal" type="button" data-repartir>${icone('eclair')} Répartir</button>` : ''}`,
   });
+
+  const voir = m.el.querySelector('[data-voir-avis]');
+  if (voir) voir.addEventListener('click', () => agir(voir, async () => {
+    /* Les avis se lisent à l'ouverture, pas en permanence : ils ne
+       changent qu'à la toute fin d'une campagne, et les abonner en
+       continu ferait un écouteur de plus pour rien. */
+    const lot = [];
+    try {
+      const inst = await getDocs(collection(bdd, 'projets', pid, 'campagnes', c.id, 'appreciations'));
+      inst.forEach((d) => lot.push({ testeur: d.id, ...d.data() }));
+    } catch (e) { toast("Les avis n'ont pas pu être lus.", 'erreur'); return; }
+
+    /* Le client ne lit pas le vivier : le nom d'un testeur ne le regarde
+       pas. Son profil, lui, éclaire la réponse, et le serveur l'a recopié
+       à part, sans rien qui identifie. */
+    let profils = vivier;
+    if (env.role !== 'equipe') {
+      profils = [];
+      for (const a of lot) {
+        try {
+          const d = await getDoc(doc(bdd, 'testeurs', a.testeur, 'public', 'profil'));
+          profils.push({ id: a.testeur, profil: d.exists() ? d.data() : {} });
+        } catch (err) { profils.push({ id: a.testeur, profil: {} }); }
+      }
+    }
+    await ouvrirAvis({ ...c, _avis: lot }, { env, vivier: profils });
+  }));
 
   const bouton = m.el.querySelector('[data-repartir]');
   if (bouton) bouton.addEventListener('click', () => agir(bouton, async () => {
@@ -435,14 +734,14 @@ export const vue = async (ctx, env) => {
 
       ${pid
         ? unProjet(d, { pid, nomProjet, plateforme: etat.plateforme, equipe: env.role === 'equipe' })
-        : `${alertes(d, { nomProjet, plateforme: etat.plateforme })}${avancement(d, { nomProjet, plateforme: etat.plateforme })}${activite(d, { nomProjet, plateforme: etat.plateforme })}`}
+        : `${alertes(d, { nomProjet, plateforme: etat.plateforme })}${avancement(d, { nomProjet, plateforme: etat.plateforme })}${vivierHtml(d, { equipe: env.role === 'equipe' })}${activite(d, { nomProjet, plateforme: etat.plateforme })}`}
     </div>`;
 
     const sel = sortie.querySelector('#f-projet');
     if (sel) sel.addEventListener('change', (e) => { etat.projet = e.target.value; poser({ projet: etat.projet, plateforme: etat.plateforme }); rendre(true); });
   };
 
-  const gestes = sur(sortie, 'click', '[data-plateforme], [data-scenario], [data-plier-scenarios], [data-nouvelle-campagne], [data-editer-campagne], [data-action="ouvrir-campagne"]', async (el) => {
+  const gestes = sur(sortie, 'click', '[data-plateforme], [data-scenario], [data-plier-scenarios], [data-nouvelle-campagne], [data-editer-campagne], [data-action="ouvrir-campagne"], [data-nouveau-testeur], [data-action="ouvrir-testeur"]', async (el) => {
     /* Une référence n'est unique qu'à l'intérieur d'un projet : deux plans
        de tests portent chacun leur « DI-15 ». Chercher sans le projet
        ouvrirait l'énoncé d'une autre application, sans rien dire. */
@@ -463,6 +762,15 @@ export const vue = async (ctx, env) => {
       return;
     }
     if (el.dataset.nouvelleCampagne) { await editer('campagne', env, { pid: el.dataset.nouvelleCampagne }); return; }
+    if (el.hasAttribute('data-nouveau-testeur')) {
+      await ouvrirTesteur(null, { env, projets: magasin.lire(K.projets) || [] });
+      return;
+    }
+    if (el.dataset.action === 'ouvrir-testeur') {
+      const t = (magasin.lire(K.testeurs) || []).find((x) => x.id === el.dataset.id);
+      if (t) await ouvrirTesteur(t, { env, projets: magasin.lire(K.projets) || [] });
+      return;
+    }
     if (el.dataset.action === 'ouvrir-campagne') {
       const pid = projetCourant();
       const d = lireTout(env);
