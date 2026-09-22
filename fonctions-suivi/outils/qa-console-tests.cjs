@@ -10,9 +10,11 @@
    sert à personne, et cet ordre est une décision, pas un hasard de mise en
    page.
 
-   Cette suite attend une anomalie bloquante, une campagne en retard et
-   une campagne sans scénario : c'est ce qu'elle vérifie en haut de page.
-   Lancée après un autre semis, elle signale des écarts qui n'en sont pas.
+   Cette suite POSE elle-même ce qu'elle vérifie en haut de page : une
+   anomalie bloquante, une campagne en retard, une campagne sans scénario.
+   Elle ne dépend plus des restes d'une autre suite, parce qu'une suite qui
+   attend qu'une voisine ait tourné avant elle signale des écarts qui n'en
+   sont pas, et on finit par ne plus la croire.
 
      firebase emulators:start --config firebase.suivi.json --project capmedia-1f90d
      node fonctions-suivi/outils/semer-suivi.mjs
@@ -57,6 +59,29 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   const err=[]; page.on('pageerror',e=>err.push('PAGE: '+e.message.slice(0,140)));
   page.on('console',m=>{if(m.type()==='error')err.push(m.text().slice(0,140));});
 
+  /* Ce que la page doit signaler en haut. On le pose ici plutôt que de
+     compter sur une autre suite : l'anomalie bloquante, la campagne dont
+     la date de fin est passée, et celle qui n'a aucun scénario. */
+  const hier = new Date(Date.now() - 86400000).toISOString();
+  const poser = async (chemin, corps) => fetch(bdd(chemin), {
+    method: 'PATCH', headers: { ...prop, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: corps }),
+  });
+  await poser('projets/atelier/anomalies/qa-bloquante', {
+    titre: { stringValue: 'Le rappel fin de mois ne part jamais' },
+    gravite: { stringValue: 'bloquant' }, statut: { stringValue: 'confirmee' },
+    actif: { booleanValue: true },
+  });
+  await poser('projets/atelier/campagnes/qa-retard', {
+    nom: { stringValue: 'Passe en retard' }, statut: { stringValue: 'en-cours' },
+    fin: { stringValue: hier.slice(0, 10) }, actif: { booleanValue: true },
+    scenarios: { arrayValue: { values: [{ stringValue: 'DI-06' }] } },
+  });
+  await poser('projets/atelier/campagnes/qa-vide', {
+    nom: { stringValue: 'Passe sans scénario' }, statut: { stringValue: 'en-cours' },
+    actif: { booleanValue: true }, scenarios: { arrayValue: { values: [] } },
+  });
+
   await connecter(page,'agent.essai@exemple.test');
   /* Laisser l'application finir de démarrer : juste après la connexion le
      document vient d'être remplacé, et le routeur peut manquer le premier
@@ -85,7 +110,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   verifier(g.plateformes.length===4,'les 4 filtres de plateforme sont là',g.plateformes.join('/'));
   verifier(/rappel fin de mois/i.test(g.texte),'l\'anomalie bloquante remonte en haut');
   verifier(/dépasse sa date de fin/i.test(g.texte),'la campagne en retard est signalée');
-  verifier(/sans aucun scénario/i.test(g.texte),'la campagne sans scénario est signalée');
+  verifier(/sans aucun scénario|aucun scénario retenu/i.test(g.texte),'la campagne sans scénario est signalée');
 
   console.log('\n== Un projet choisi');
   await aller(page,'/tests?projet=atelier','.chiffres-tests');
@@ -98,8 +123,24 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
     creer: !!document.querySelector('[data-nouvelle-campagne]'),
   }));
   console.log('    chiffres :', u.chiffres.join(' | '));
-  verifier(u.scenarios===173,`les 173 scénarios sont dans la page`,`${u.scenarios} vus`);
-  verifier(u.doubles===82,'82 marqués double',`${u.doubles} vus`);
+  /* Les comptes réels, lus en base : la bibliothèque grandit, et une
+     suite qui exige 173 tombe au premier ajout pour une raison qui n'est
+     pas un défaut. */
+  const tousScen = [];
+  { let jeton = '';
+    for (let i = 0; i < 20; i += 1) {
+      const j = await lire(`projets/atelier/scenarios?pageSize=300${jeton ? `&pageToken=${jeton}` : ''}`);
+      (((j || {}).documents) || []).forEach((d) => tousScen.push(d));
+      jeton = (j || {}).nextPageToken || ''; if (!jeton) break;
+    } }
+  const actifs = tousScen.filter((d) => (((d.fields || {}).actif || {}).booleanValue) !== false);
+  const NIV = (d) => ((((d.fields || {}).niveau || {}).stringValue) || 'reparti');
+  const nScen = actifs.length;
+  const nDoubles = actifs.filter((d) => ['socle', 'transversal'].includes(NIV(d))).length;
+  console.log(`    (${nScen} scénarios actifs, ${nDoubles} doublés)`);
+
+  verifier(u.scenarios===nScen,`les ${nScen} scénarios sont dans la page`,`${u.scenarios} vus`);
+  verifier(u.doubles===nDoubles,`${nDoubles} marqués double`,`${u.doubles} vus`);
   /* Quatre chiffres pour la campagne, quatre pour les parcours : la page
      en porte huit dès qu'un projet a des parcours automatisés. */
   verifier(u.chiffres.length>=4,`les chiffres du haut (${u.chiffres.length})`);
@@ -110,7 +151,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   await page.click('[data-plateforme="web"]'); await pause(1400);
   const w = await page.evaluate(()=>({n:document.querySelectorAll('.scenario').length, hash:location.hash}));
   verifier(w.hash.includes('plateforme=web'),'le filtre passe dans l\'adresse',w.hash);
-  verifier(w.n>0 && w.n<=173,`le filtre web restreint la liste (${w.n})`);
+  verifier(w.n>0 && w.n<=nScen,`le filtre web restreint la liste (${w.n})`);
 
   console.log('\n== Le détail d\'un scénario');
   await page.click('[data-plateforme=""]'); await pause(1200);
@@ -137,7 +178,11 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   verifier(o.scenarios===0,'la liste complète n\'est plus dans l\'onglet',`${o.scenarios} scénarios encore`);
   verifier(o.chiffres===4,'le résumé affiche ses quatre chiffres',`${o.chiffres}`);
   verifier(o.console,'le bouton « Ouvrir la console » est là');
-  verifier(/Passe manuelle 1\.2\.0/.test(o.texte),'la campagne en cours est rappelée');
+  /* L'onglet du projet ne nomme PAS les campagnes : il en donne le
+     nombre, et renvoie vers la console pour le détail. C'est la décision
+     prise quand l'onglet a été allégé. Le contrôle d'origine ne passait
+     que parce qu'un nom traînait ailleurs dans la page. */
+  verifier(/campagnes? en cours/.test(o.texte),'le nombre de campagnes en cours est rappelé',`vu : ${o.texte.slice(0,160).replace(/\n+/g,' | ')}`);
 
   console.log('\n== Le client');
   const nav2=await chromium.launch();
@@ -175,7 +220,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
     scenarios: document.querySelectorAll('.scenario').length,
     chiffres: document.querySelectorAll('.chiffre').length,
   }));
-  verifier(cp.scenarios===173,'il voit les 173 scénarios de son projet',`${cp.scenarios} vus`);
+  verifier(cp.scenarios===nScen,`il voit les ${nScen} scénarios de son projet`,`${cp.scenarios} vus`);
   verifier(cp.chiffres>=4,`et les chiffres du haut (${cp.chiffres})`);
 
   console.log('\n'+(soucis.length?`${soucis.length} ÉCART(S)`:'tout est conforme'));

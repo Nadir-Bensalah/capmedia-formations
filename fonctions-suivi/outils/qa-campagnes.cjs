@@ -64,7 +64,25 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   verifier(visible1===0,'aucun scénario ne barre la route',`${visible1} visibles`);
   await page.click('[data-plier-scenarios]'); await pause(800);
   const visible2 = await page.evaluate(()=>[...document.querySelectorAll('.scenario')].filter(e=>e.offsetParent!==null).length);
-  verifier(visible2===173,'elle se déplie sur demande',`${visible2} visibles`);
+  /* Les comptes réels, lus en base. Coder 173 en dur faisait tomber la
+     suite au premier scénario ajouté, pour une raison qui n'est pas un
+     défaut : c'est le piège du plancher, à l'envers. */
+  const tousScen = [];
+  { let jeton = '';
+    for (let i = 0; i < 20; i += 1) {
+      const j = await lire(`projets/atelier/scenarios?pageSize=300${jeton ? `&pageToken=${jeton}` : ''}`);
+      (((j || {}).documents) || []).forEach((d) => tousScen.push(d));
+      jeton = (j || {}).nextPageToken || ''; if (!jeton) break;
+    } }
+  const actifs = tousScen.filter((d) => (((d.fields || {}).actif || {}).booleanValue) !== false);
+  const NIV = (d) => ((((d.fields || {}).niveau || {}).stringValue) || 'reparti');
+  const nScen = actifs.length;
+  const nSocle = actifs.filter((d) => ['socle', 'transversal'].includes(NIV(d))).length;
+  const nBlocs = new Set(actifs.map((d) => (((d.fields || {}).bloc || {}).stringValue) || 'divers')).size;
+  const nPassagesMob = actifs.reduce((n, d) => n + (['socle', 'transversal'].includes(NIV(d)) ? 2 : 1), 0);
+  console.log(`    (${nScen} scénarios actifs, ${nSocle} doublés, ${nBlocs} blocs, ${nPassagesMob} passages mobiles)`);
+
+  verifier(visible2===nScen,`elle se déplie sur demande (${nScen})`,`${visible2} visibles`);
   await page.click('[data-plier-scenarios]'); await pause(600);
 
   console.log('\n== Créer une campagne');
@@ -78,17 +96,17 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
     boutons: [...document.querySelectorAll('[data-tout],[data-socle],[data-rien]')].map(b=>b.textContent.trim()),
   }));
   verifier(f.feuille,'la feuille s\'ouvre');
-  verifier(f.blocs===9,'les 9 blocs sont proposés',`${f.blocs}`);
-  verifier(/173 scénarios/.test(f.compte),'le compte annonce les 173',f.compte);
-  verifier(/255 passages/.test(f.compte),'et les 255 passages mobiles',f.compte);
+  verifier(f.blocs===nBlocs,`les ${nBlocs} blocs sont proposés`,`${f.blocs}`);
+  verifier(new RegExp(`${nScen} scénarios`).test(f.compte),`le compte annonce les ${nScen}`,f.compte);
+  verifier(new RegExp(`${nPassagesMob} passages`).test(f.compte),`et les ${nPassagesMob} passages mobiles`,f.compte);
   console.log('    ', f.compte);
 
   console.log('\n== Le socle seulement');
   await page.check('#ed-socle-seul'); await pause(500);
   const cSocle = await page.evaluate(()=>(document.querySelector('#compte-scenarios')||{}).textContent||'');
   console.log('    ', cSocle);
-  verifier(/^82 scénarios/.test(cSocle),'le socle seul retient 82 scénarios',cSocle);
-  verifier(/164 passages/.test(cSocle),'soit 164 passages, tous doublés',cSocle);
+  verifier(new RegExp(`^${nSocle} scénarios`).test(cSocle),`le socle seul retient ${nSocle} scénarios`,cSocle);
+  verifier(new RegExp(`${nSocle * 2} passages`).test(cSocle),`soit ${nSocle * 2} passages, tous doublés`,cSocle);
   await page.uncheck('#ed-socle-seul'); await pause(400);
 
   console.log('\n== Aucun bloc');
@@ -112,7 +130,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   verifier(!!neuve,'elle porte le bon titre');
   if (neuve) {
     const refs = ((((neuve.fields.scenarios||{}).arrayValue)||{}).values||[]).length;
-    verifier(refs===173,'elle retient les 173 scénarios',`${refs}`);
+    verifier(refs===nScen,`elle retient les ${nScen} scénarios`,`${refs}`);
     const b = (((neuve.fields.builds||{}).mapValue||{}).fields)||{};
     verifier((b.ios||{}).stringValue==='24','le build iOS est enregistré');
     verifier((b.web||{}).stringValue==='qa-1.2.0','le build web aussi');

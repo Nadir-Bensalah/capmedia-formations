@@ -17,7 +17,7 @@
 import {
   echapper, dateCourte, depuis, pluriel, joursAvant, parDateDesc,
   NIVEAUX_SCENARIO, BLOCS_SCENARIO, PLATEFORMES_TEST, STATUTS_CAMPAGNE,
-  GRAVITES_ANOMALIE, STATUTS_ANOMALIE, FAMILLES_AVIS,
+  GRAVITES_ANOMALIE, STATUTS_ANOMALIE, FAMILLES_AVIS, FAMILLES_REGLE, ETATS_REGLE,
   ETATS_PARCOURS, OUTILS_PARCOURS, PARCOURS_A_REGARDER,
 } from '../noyau.js';
 import {
@@ -62,6 +62,7 @@ const lireTout = (env) => {
     campagnes: rassembler(K.campagnesToutes, K.campagnes),
     anomalies: rassembler(K.anomaliesToutes, K.anomalies),
     parcours: rassembler(K.parcoursTous, K.parcours),
+    regles: rassembler(K.reglesToutes, K.regles),
     testeurs: magasin.lire(K.testeurs) || [],
   };
 };
@@ -128,6 +129,19 @@ const alertes = (d, { nomProjet, plateforme }) => {
     sous: `${echapper(nomProjet(pid))} · la campagne n'a rien à distribuer`,
     fin: '',
   }));
+
+  /* Et une campagne OUVERTE dont la sélection est vide, alors même que le
+     projet a des scénarios. C'est le cas le plus traître : la campagne
+     existe, elle est en cours, les testeurs sont affectés, et personne
+     n'a rien à faire. Rien ne le dit tant qu'on n'ouvre pas la campagne. */
+  d.campagnes
+    .filter((c) => c.statut === 'en-cours' && !(c.scenarios || []).length && avecScenario.has(projetDe(c)))
+    .forEach((c) => soucis.push({
+      ton: 'ambre', icone: 'bug',
+      titre: `${echapper(c.nom || 'Campagne')} : aucun scénario retenu`,
+      sous: `${echapper(nomProjet(projetDe(c)))} · elle est en cours et n'a rien à distribuer`,
+      fin: '',
+    }));
 
   if (!soucis.length) {
     return `<section class="section" style="margin-top:0">
@@ -276,6 +290,84 @@ const parcoursHtml = (d, { pid, equipe }) => {
 };
 
 /* --------------------------------------------------------------------------
+   Section 3 bis · Les règles métier
+   -------------------------------------------------------------------------- */
+
+/* Mille règles ne se listent pas comme trois cents parcours. Un parcours
+   se lit à l'unité, une règle vit dans une famille et n'a d'intérêt que
+   par le nombre de cas qu'elle essaie. On montre donc les familles, et le
+   nombre de cas en gros : c'est lui qui dit la profondeur.
+
+   Et on dit pourquoi c'est gratuit, parce que c'est la question que le
+   client pose : mille règles tournent en moins d'une minute, là où trois
+   cents parcours d'interface prennent des heures. */
+const reglesHtml = (d, { pid, equipe }) => {
+  const liste = (d.regles || []).filter((x) => x.actif !== false && (!pid || projetDe(x) === pid));
+  if (!liste.length) {
+    return `<section class="section">
+      <div class="section-tete">
+        <div><h2>Règles métier</h2><p class="chapo">Ce que la machine vérifie en millisecondes.</p></div>
+        ${equipe && pid ? `<button class="btn btn-principal btn-petit" type="button" data-nouvelle-regle="${echapper(pid)}">${icone('plus')} Nouvelle famille</button>` : ''}
+      </div>
+      ${vide({ icone: 'code', titre: 'Aucune règle',
+        texte: 'Une règle métier pure tourne en une milliseconde : on peut donc en essayer mille, là où un parcours d\'interface en essaie trois.', compact: true })}
+    </section>`;
+  }
+
+  const cas = liste.reduce((n, x) => n + (Number(x.cas) || 0), 0);
+  const verts = liste.filter((x) => x.etat === 'vert');
+  const casVerts = verts.reduce((n, x) => n + (Number(x.cas) || 0), 0);
+  const rouges = liste.filter((x) => x.etat === 'rouge');
+  const eprouvees = liste.filter((x) => x.mutation).length;
+
+  const parFamille = Object.keys(FAMILLES_REGLE)
+    .map((f) => ({ cle: f, f: FAMILLES_REGLE[f], items: liste.filter((x) => x.famille === f) }))
+    .filter((g) => g.items.length)
+    .map((g) => ({ ...g, cas: g.items.reduce((n, x) => n + (Number(x.cas) || 0), 0) }))
+    .sort((a, b) => b.cas - a.cas);
+
+  const rangee = (x) => ligne({
+    icone: 'code',
+    ton: x.etat === 'vert' ? 'vert' : x.etat === 'rouge' ? 'rouge' : '',
+    titre: `${echapper(x.ref)} · ${echapper(x.titre || '')}${x.mutation ? '' : ' <span class="etiquette">Non éprouvée</span>'}`,
+    sous: `${pluriel(Number(x.cas) || 0, 'cas essayé', 'cas essayés')}${x.cherche ? ` · ${echapper(x.cherche)}` : ''}`,
+    fin: `${pastille(ETATS_REGLE, x.etat || 'a-ecrire')}${equipe ? `<span class="rang boutons-edition"><button class="btn-icone" type="button" data-editer-regle="${echapper(x.ref)}" aria-label="Modifier" data-astuce="Modifier">${icone('edit')}</button></span>` : ''}`,
+  });
+
+  return `<section class="section">
+    <div class="section-tete">
+      <div><h2>Règles métier</h2><p class="chapo">${pluriel(liste.length, 'famille', 'familles')}, ${pluriel(cas, 'cas essayé', 'cas essayés')} à chaque enregistrement.</p></div>
+      ${equipe && pid ? `<button class="btn btn-principal btn-petit" type="button" data-nouvelle-regle="${echapper(pid)}">${icone('plus')} Nouvelle famille</button>` : ''}
+    </div>
+
+    <div class="rang chiffres-tests" style="margin-bottom:16px">
+      <div class="chiffre"><span class="chiffre-valeur">${cas}</span><span class="chiffre-nom">cas essayés</span></div>
+      <div class="chiffre"><span class="chiffre-valeur">${casVerts}</span><span class="chiffre-nom">au vert</span></div>
+      <div class="chiffre${rouges.length ? ' chiffre--alerte' : ''}"><span class="chiffre-valeur">${rouges.length}</span><span class="chiffre-nom">familles rouges</span></div>
+      <div class="chiffre"><span class="chiffre-valeur">${eprouvees} / ${liste.length}</span><span class="chiffre-nom">éprouvées par mutation</span></div>
+    </div>
+
+    <p class="aide" style="margin-bottom:14px">Une règle métier tourne en une milliseconde : les ${cas} passent en moins d'une minute, à chaque enregistrement. C'est ce qui permet d'essayer le 29 février sur cinquante ans, ou les cent vingt-sept combinaisons de jours d'une répétition hebdomadaire, là où un parcours d'interface en essaie trois.</p>
+
+    ${rouges.length ? `<div class="liste" style="margin-bottom:14px">${rouges.map(rangee).join('')}</div>` : ''}
+
+    <div class="rang couverture" style="margin-bottom:14px">
+      ${parFamille.map((g) => `<span class="puce" data-astuce="${echapper(g.f.aide)}">${echapper(g.f.libelle)} ${g.cas}</span>`).join('')}
+    </div>
+
+    <button class="btn btn-secondaire btn-petit" type="button" data-plier-regles aria-expanded="false">${icone('deplier')} Voir les ${liste.length} familles</button>
+    <div id="catalogue-regles" hidden style="margin-top:14px">
+      ${parFamille.map((g) => `
+        <div class="bloc-scenarios">
+          <h3 class="bloc-tete">${echapper(g.f.libelle)}<span class="badge">${g.cas}</span></h3>
+          <p class="aide" style="margin:0 0 8px">${echapper(g.f.aide)}</p>
+          <div class="liste">${g.items.map(rangee).join('')}</div>
+        </div>`).join('')}
+    </div>
+  </section>`;
+};
+
+/* --------------------------------------------------------------------------
    Section 4 · Le vivier
    -------------------------------------------------------------------------- */
 
@@ -380,6 +472,8 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
   </section>` : ''}
 
   ${parcoursHtml(d, { pid, equipe })}
+
+  ${reglesHtml(d, { pid, equipe })}
 
   ${equipe ? vivierHtml({ ...d, testeurs: (d.testeurs || []).filter((t) => (t.projets || []).includes(pid)) }, { equipe }) : ''}
 
@@ -774,9 +868,9 @@ export const vue = async (ctx, env) => {
      s'abonner aux mauvaises laisse l'écran figé sur son premier rendu, sans
      la moindre erreur pour le dire. */
   const clesSuivies = () => (env.role === 'equipe'
-    ? [K.projets, K.scenariosTous, K.campagnesToutes, K.anomaliesToutes, K.parcoursTous, K.testeurs]
+    ? [K.projets, K.scenariosTous, K.campagnesToutes, K.anomaliesToutes, K.parcoursTous, K.reglesToutes, K.testeurs]
     : [K.projets, ...(magasin.lire(K.projets) || (env.session || {}).projets || [])
-        .flatMap((p) => [K.scenarios(p.id), K.campagnes(p.id), K.anomalies(p.id), K.parcours(p.id)])]);
+        .flatMap((p) => [K.scenarios(p.id), K.campagnes(p.id), K.anomalies(p.id), K.parcours(p.id), K.regles(p.id)])]);
 
   /* Le projet ouvert : celui qu'on a choisi, ou le seul que le client ait.
      Le rendu et les gestes doivent lire la MÊME valeur, faute de quoi le
@@ -828,7 +922,7 @@ export const vue = async (ctx, env) => {
     if (sel) sel.addEventListener('change', (e) => { etat.projet = e.target.value; poser({ projet: etat.projet, plateforme: etat.plateforme }); rendre(true); });
   };
 
-  const gestes = sur(sortie, 'click', '[data-plateforme], [data-scenario], [data-plier-scenarios], [data-plier-parcours], [data-nouvelle-campagne], [data-editer-campagne], [data-action="ouvrir-campagne"], [data-nouveau-testeur], [data-action="ouvrir-testeur"], [data-nouveau-parcours], [data-editer-parcours]', async (el) => {
+  const gestes = sur(sortie, 'click', '[data-plateforme], [data-scenario], [data-plier-scenarios], [data-plier-parcours], [data-plier-regles], [data-nouvelle-regle], [data-editer-regle], [data-nouvelle-campagne], [data-editer-campagne], [data-action="ouvrir-campagne"], [data-nouveau-testeur], [data-action="ouvrir-testeur"], [data-nouveau-parcours], [data-editer-parcours]', async (el) => {
     /* Une référence n'est unique qu'à l'intérieur d'un projet : deux plans
        de tests portent chacun leur « DI-15 ». Chercher sans le projet
        ouvrirait l'énoncé d'une autre application, sans rien dire. */
@@ -857,6 +951,22 @@ export const vue = async (ctx, env) => {
       boite.hidden = ouverte;
       el.setAttribute('aria-expanded', String(!ouverte));
       el.innerHTML = `${icone(ouverte ? 'deplier' : 'plier')} ${ouverte ? `Voir les ${boite.querySelectorAll('.ligne').length} parcours` : 'Replier'}`;
+      return;
+    }
+    if (el.hasAttribute('data-plier-regles')) {
+      const boite = sortie.querySelector('#catalogue-regles');
+      if (!boite) return;
+      const ouverte = !boite.hidden;
+      boite.hidden = ouverte;
+      el.setAttribute('aria-expanded', String(!ouverte));
+      el.innerHTML = `${icone(ouverte ? 'deplier' : 'plier')} ${ouverte ? `Voir les ${boite.querySelectorAll('.ligne').length} familles` : 'Replier'}`;
+      return;
+    }
+    if (el.dataset.nouvelleRegle) { await editer('regle', env, { pid: el.dataset.nouvelleRegle }); return; }
+    if (el.dataset.editerRegle) {
+      const pid = projetCourant();
+      const x = lireTout(env).regles.find((y) => y.ref === el.dataset.editerRegle && projetDe(y) === pid);
+      if (x) await editer('regle', env, { pid, fiche: x });
       return;
     }
     if (el.dataset.nouvelleCampagne) { await editer('campagne', env, { pid: el.dataset.nouvelleCampagne }); return; }

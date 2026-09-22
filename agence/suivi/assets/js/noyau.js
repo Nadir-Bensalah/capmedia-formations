@@ -306,6 +306,9 @@ export const BLOCS_SCENARIO = {
   'idees':             { libelle: 'Idées' },
   'transversal':       { libelle: 'Transversal' },
   'compte-charge':     { libelle: 'Compte chargé et archivées' },
+  'statistiques':      { libelle: 'Statistiques' },
+  'parametres':        { libelle: 'Paramètres et compte' },
+  'premium':           { libelle: 'Abonnement Premium' },
   'divers':            { libelle: 'Divers' },
 };
 
@@ -327,11 +330,15 @@ export const RESULTATS_PASSAGE = {
   'na': { libelle: 'NA', voile: 'gris' },
 };
 
+/* Les quatre mots sont ceux de la proposition remise au client, et ceux
+   des URGENCES d'un ticket : bloquante, critique, importante, mineure. Un
+   client qui lit « majeur » dans le Hub alors qu'il a acheté « critique »
+   se demande s'il s'agit de la même échelle. C'en est une seule. */
 export const GRAVITES_ANOMALIE = {
-  'bloquant':   { libelle: 'Bloquant',   voile: 'rouge',  rang: 1 },
-  'majeur':     { libelle: 'Majeur',     voile: 'ambre',  rang: 2 },
-  'mineur':     { libelle: 'Mineur',     voile: 'bleu',   rang: 3 },
-  'cosmetique': { libelle: 'Cosmétique', voile: 'gris',   rang: 4 },
+  'bloquant':  { libelle: 'Bloquant',  voile: 'rouge', rang: 1, aide: 'Le testeur ne peut pas continuer.' },
+  'critique':  { libelle: 'Critique',  voile: 'rouge', rang: 2, aide: 'Une fonction majeure est cassée.' },
+  'important': { libelle: 'Important', voile: 'ambre', rang: 3, aide: 'Gênant, mais on peut contourner.' },
+  'mineur':    { libelle: 'Mineur',    voile: 'gris',  rang: 4, aide: 'Détail, confort ou apparence.' },
 };
 
 export const STATUTS_ANOMALIE = {
@@ -375,6 +382,32 @@ export const OUTILS_PARCOURS = {
    y a un défaut, l'instable n'apprend rien et on finit par l'ignorer.
    C'est la raison d'être de ce compte. */
 export const PARCOURS_A_REGARDER = ['rouge', 'instable'];
+
+/* Les règles métier ne se comptent pas comme les parcours d'interface.
+   Un parcours Maestro met une minute et se lit à l'unité ; une règle Jest
+   met une milliseconde, et on en écrit mille. Les aligner ligne à ligne
+   noierait les parcours sous les règles. On les groupe donc par FAMILLE :
+   une famille est une règle du produit, et elle porte le nombre de cas
+   qu'on lui fait essayer. C'est ce nombre qui dit la profondeur. */
+export const FAMILLES_REGLE = {
+  'recurrences':   { libelle: 'Récurrences',            aide: 'Le dépliage d\'une répétition sur une période donnée.' },
+  'dates':         { libelle: 'Dates et rappels',       aide: 'Le calcul d\'une échéance et de ses alertes.' },
+  'calendrier':    { libelle: 'Calendrier et fuseaux',  aide: 'Bissextiles, heure d\'été, fuseaux, minuit.' },
+  'statistiques':  { libelle: 'Statistiques',           aide: 'Totaux, taux, séries, moyennes.' },
+  'limites':       { libelle: 'Limites et abonnement',  aide: 'Quotas du gratuit, droits du Premium.' },
+  'validation':    { libelle: 'Validation des saisies', aide: 'Ce que le produit accepte, et ce qu\'il refuse.' },
+  'tri':           { libelle: 'Tri et filtres',         aide: 'L\'ordre des listes, et ce qu\'un filtre retient.' },
+  'donnees':       { libelle: 'Cohérence des données',  aide: 'Ce qui doit rester vrai après plusieurs écritures.' },
+};
+
+/* Une famille de règles est à l'un de ces trois états. Il n'y a pas
+   d'« instable » ici : une règle pure est déterministe, si elle vacille
+   c'est le test qui est faux, pas le produit. */
+export const ETATS_REGLE = {
+  'a-ecrire': { libelle: 'À écrire', voile: 'gris',  ordre: 1 },
+  'vert':     { libelle: 'Vert',     voile: 'vert',  ordre: 2 },
+  'rouge':    { libelle: 'Rouge',    voile: 'rouge', ordre: 3 },
+};
 
 /* Le questionnaire d'appréciation.
 

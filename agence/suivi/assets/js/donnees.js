@@ -30,6 +30,7 @@ export const K = {
   campagnes: (p) => `campagnes:${p}`,
   anomalies: (p) => `anomalies:${p}`,
   parcours: (p) => `parcours:${p}`,
+  regles: (p) => `regles:${p}`,
   liens: (p) => `liens:${p}`,
   messages: (p) => `messages:${p}`,
   lectures: (p) => `lectures:${p}`,
@@ -70,6 +71,7 @@ export const K = {
   campagnesToutes: 'campagnes:*',
   anomaliesToutes: 'anomalies:*',
   parcoursTous: 'parcours:*',
+  reglesToutes: 'regles:*',
   testeurs: 'testeurs',
   audit: 'audit',
   envois: 'envois',
@@ -107,6 +109,7 @@ export const abonnerProjet = (lot, pid, role) => {
   lot.abonner(K.campagnes(pid), () => col('projets', pid, 'campagnes'));
   lot.abonner(K.anomalies(pid), () => col('projets', pid, 'anomalies'));
   lot.abonner(K.parcours(pid), () => col('projets', pid, 'parcours'));
+  lot.abonner(K.regles(pid), () => col('projets', pid, 'regles'));
   lot.abonner(K.taches(pid), () => surProjetVisible('taches'));
   lot.abonner(K.tickets(pid), () => surProjet('tickets'));
   lot.abonner(K.validations(pid), () => surProjet('validations'));
@@ -145,6 +148,7 @@ export const abonnerGlobal = (lot, session) => {
     lot.abonner(K.campagnesToutes, () => collectionGroup(bdd, 'campagnes'));
     lot.abonner(K.anomaliesToutes, () => collectionGroup(bdd, 'anomalies'));
     lot.abonner(K.parcoursTous, () => collectionGroup(bdd, 'parcours'));
+    lot.abonner(K.reglesToutes, () => collectionGroup(bdd, 'regles'));
     lot.abonner(K.scenariosTous, () => collectionGroup(bdd, 'scenarios'));
     lot.abonner(K.testeurs, () => col('testeurs'));
   } else {
@@ -403,6 +407,14 @@ export const ecrire = {
     ordre: Number(d.ordre) || 0, actif: d.actif !== false,
     cree: serverTimestamp(), maj: serverTimestamp(),
   })),
+  /* Une famille de règles porte sa référence comme identifiant, comme un
+     parcours : c'est ce qui permet au robot de recoller son verdict. */
+  creerRegle: (pid, d) => setDoc(doc(bdd, 'projets', pid, 'regles', d.ref), nettoyer({
+    ...d, actif: true, maj: serverTimestamp(),
+  })),
+  majRegle: (pid, ref, d) => updateDoc(doc(bdd, 'projets', pid, 'regles', ref), nettoyer({ ...d, maj: serverTimestamp() })),
+  supprimerRegle: (pid, ref) => deleteDoc(doc(bdd, 'projets', pid, 'regles', ref)),
+
   majParcours: (pid, ref, d) => updateDoc(doc(bdd, 'projets', pid, 'parcours', ref), nettoyer({ ...d, maj: serverTimestamp() })),
   supprimerParcours: (pid, ref) => deleteDoc(doc(bdd, 'projets', pid, 'parcours', ref)),
 

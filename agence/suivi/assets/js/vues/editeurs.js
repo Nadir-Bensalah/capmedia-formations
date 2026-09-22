@@ -11,7 +11,7 @@ import {
   STATUTS_PROJET, TYPES_PROJET, SANTES, STATUTS, URGENCES, QUALIFICATIONS, PLATEFORMES_CHOIX, contactsProjet,
   MOTIFS_REPORT, nomAffiche, dateCourte,
   NIVEAUX_SCENARIO, BLOCS_SCENARIO, STATUTS_CAMPAGNE, PLATEFORMES_TEST, REF_SCENARIO,
-  ETATS_PARCOURS, OUTILS_PARCOURS,
+  ETATS_PARCOURS, OUTILS_PARCOURS, FAMILLES_REGLE, ETATS_REGLE,
 } from '../noyau.js';
 import { modale, confirmer, toast, lireForme, valider, obligatoire, longueurMax, urlValide, emailValide, optionsDe, depot, agir, lisible, choixPlateformes } from '../ui.js';
 import { appelServeur } from '../serveur.js';
@@ -604,6 +604,72 @@ const editeurs = {
         if (fiche) await ecrire.majParcours(pid, ref, donnees);
         else await ecrire.creerParcours(pid, { ...donnees, actif: true });
         toast(fiche ? 'Parcours enregistré.' : `${ref} créé.`);
+        return true;
+      },
+    });
+  },
+
+  /* Une famille de règles, pas une règle. Le champ qui compte est le
+     nombre de CAS : c'est lui qui dit la profondeur, et c'est la seule
+     chose qui distingue une famille écrite d'une famille sérieuse. */
+  regle: (env, { pid, fiche, defaut = {} }) => {
+    const scen = [
+      ...(magasin.lire(K.scenarios(pid)) || []),
+      ...(magasin.lire(K.scenariosTous) || []).filter((x) => (x.projet || x._parent) === pid),
+    ].filter((x, i, l) => x.actif !== false && l.findIndex((y) => y.ref === x.ref) === i)
+      .sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
+
+    return feuille({
+      titre: fiche ? 'La famille de règles' : 'Nouvelle famille',
+      sousTitre: fiche ? fiche.ref : 'Une règle du produit, et les cas qu\'on lui fait essayer.',
+      corps: `
+        <div class="forme-rang">
+          ${champ('ref', 'Référence', fiche ? fiche.ref : (defaut.ref || ''), { placeholder: 'RG-01', attrs: fiche ? 'readonly' : '', aide: fiche ? "Elle ne change pas : c'est elle que l'outil renvoie." : "C'est par elle qu'on recolle le verdict de Jest." })}
+          ${select('famille', 'Famille', FAMILLES_REGLE, fiche ? fiche.famille : 'recurrences')}
+        </div>
+        ${champ('titre', 'Ce que la règle vérifie', fiche ? fiche.titre : '', { placeholder: 'Hebdomadaire : les 127 combinaisons de jours' })}
+        <div class="forme-rang">
+          ${champ('cas', 'Nombre de cas essayés', fiche ? (Number(fiche.cas) || 0) : 0, { type: 'number', attrs: 'min="1" max="5000"', aide: "C'est ce nombre qui dit la profondeur, pas le nombre de fichiers." })}
+          ${select('etat', 'État', ETATS_REGLE, fiche ? fiche.etat : 'a-ecrire')}
+        </div>
+        ${zone('cherche', 'Ce qu\'on cherche', fiche ? fiche.cherche : '', { facultatif: true, lignes: 2, placeholder: 'Aucun jour sauté, aucun jour en double.' })}
+        ${champ('fichier', 'Fichier', fiche ? fiche.fichier : '', { facultatif: true, placeholder: '__tests__/recurrences/rg-01.test.ts' })}
+        <div class="groupe">
+          <label class="case"><input type="checkbox" name="mutation"${fiche && fiche.mutation ? ' checked' : ''}> Éprouvée par mutation</label>
+          <p class="aide">Cochez seulement si la règle a été cassée exprès et que le test est tombé. Une famille au vert que rien n'a mise à l'épreuve reste un fichier.</p>
+        </div>
+        <div class="groupe">
+          <label class="etiquette-champ" for="ed-scenarios">Scénarios couverts</label>
+          <select class="select" id="ed-scenarios" name="scenarios" multiple size="6">${scen.map((x) => `<option value="${echapper(x.ref)}"${((fiche && fiche.scenarios) || []).includes(x.ref) ? ' selected' : ''}>${echapper(x.ref)} — ${echapper(x.titre)}</option>`).join('')}</select>
+          <p class="aide">Maintenez ⌘ ou Ctrl pour en choisir plusieurs.</p>
+        </div>
+        ${zone('note', 'Notes', fiche ? fiche.note : '', { facultatif: true, lignes: 3 })}`,
+      regles: {
+        ref: (v) => {
+          if (!String(v || '').trim()) return 'Donnez une référence.';
+          if (!/^[A-Z]{1,3}-\d{1,3}$/.test(String(v).trim().toUpperCase())) return 'Des lettres, un tiret, un numéro. Par exemple RG-01.';
+          return '';
+        },
+        titre: obligatoire(),
+        cas: (v) => (Number(v) > 0 ? '' : 'Une famille essaie au moins un cas.'),
+      },
+      enregistrer: async (d) => {
+        const ref = fiche ? fiche.ref : String(d.ref || '').trim().toUpperCase();
+        if (!fiche && (magasin.lire(K.regles(pid)) || []).some((x) => x.ref === ref)) {
+          toast(`${ref} existe déjà dans ce projet.`, 'erreur');
+          return undefined;
+        }
+        const liste = (v) => (Array.isArray(v) ? v : (v ? [v] : []));
+        const donnees = {
+          ref, titre: d.titre, famille: d.famille,
+          cas: Number(d.cas) || 0, cherche: d.cherche || '',
+          scenarios: liste(d.scenarios), fichier: d.fichier || '',
+          etat: d.etat, note: d.note || '',
+          mutation: d.mutation === true || d.mutation === 'on',
+        };
+        if (fiche) await ecrire.majRegle(pid, ref, donnees);
+        else await ecrire.creerRegle(pid, { ...donnees, actif: true });
+        toast(fiche ? 'Famille enregistrée.' : `${ref} créée.`);
         return true;
       },
     });

@@ -91,7 +91,7 @@ await env.withSecurityRulesDisabled(async (ctx) => {
   await setDoc(doc(b, `projets/atelier/campagnes/c1/passages/${SONIA}__DI-15`), { scenario: 'DI-15', testeur: SONIA, plateforme: 'android', resultat: 'ok', commentaire: '', preuves: [], contexte: { modele: 'Pixel 8' } });
   await setDoc(doc(b, `projets/atelier/campagnes/close/passages/${KARIM}__ID-01`), { scenario: 'ID-01', testeur: KARIM, plateforme: 'ios', resultat: 'ok', commentaire: '', preuves: [], contexte: {} });
   await setDoc(doc(b, `projets/atelier/campagnes/c1/appreciations/${KARIM}`), { beaute: 4, prix: 5 });
-  await setDoc(doc(b, 'projets/atelier/anomalies/a1'), { titre: 'Rappel decale', gravite: 'majeur', statut: 'confirmee', passages: [`${KARIM}__DI-15`] });
+  await setDoc(doc(b, 'projets/atelier/anomalies/a1'), { titre: 'Rappel decale', gravite: 'critique', statut: 'confirmee', passages: [`${KARIM}__DI-15`] });
 });
 
 console.log('\n== Cloisonnement entre clients');
@@ -425,6 +425,24 @@ await refuse('Camille n écrit pas un parcours', setDoc(doc(camille(), 'projets/
 await doit("L'équipe en écrit un", setDoc(doc(equipe(), 'projets/atelier/parcours/P-02'), { ref: 'P-02', titre: 'Cocher une tâche', outil: 'playwright', etat: 'a-ecrire', actif: true }));
 await doit("L'équipe les lit en groupe", getDocs(collectionGroup(equipe(), 'parcours')));
 await refuse('Camille ne les lit pas en groupe', getDocs(collectionGroup(camille(), 'parcours')));
+
+console.log('\n== La plateforme de tests : les familles de règles');
+/* Mêmes droits que les parcours, et pour la même raison : le client paie
+   une base de tests, il a le droit d'en voir la profondeur. Le testeur
+   n'y a rien à faire, et un projet voisin encore moins. */
+await env.withSecurityRulesDisabled(async (ctx) => {
+  await setDoc(doc(ctx.firestore(), 'projets/atelier/regles/RG-01'), { ref: 'RG-01', titre: 'Recurrences', famille: 'recurrences', cas: 127, etat: 'vert', actif: true });
+});
+await doit("L'équipe lit les règles", getDocs(collection(equipe(), 'projets/atelier/regles')));
+await doit('Camille les lit aussi', getDocs(collection(camille(), 'projets/atelier/regles')));
+await refuse('Karim ne lit pas les règles', getDocs(collection(karim(), 'projets/atelier/regles')));
+await refuse('Léa ne lit pas celles d un autre projet', getDocs(collection(lea(), 'projets/atelier/regles')));
+await refuse('Camille n écrit pas une règle', setDoc(doc(camille(), 'projets/atelier/regles/RG-02'), { ref: 'RG-02', titre: 'Inventee' }));
+await refuse('Camille ne supprime pas une règle', deleteDoc(doc(camille(), 'projets/atelier/regles/RG-01')));
+await doit("L'équipe en écrit une", setDoc(doc(equipe(), 'projets/atelier/regles/RG-02'), { ref: 'RG-02', titre: 'Dates', famille: 'dates', cas: 96, etat: 'a-ecrire', actif: true }));
+await doit("L'équipe les lit en groupe", getDocs(collectionGroup(equipe(), 'regles')));
+await refuse('Camille ne les lit pas en groupe', getDocs(collectionGroup(camille(), 'regles')));
+await refuse('Karim ne les lit pas en groupe', getDocs(collectionGroup(karim(), 'regles')));
 
 console.log('\n== La plateforme de tests : les lectures en groupe');
 /* La console regarde tous les projets d'un coup. C'est un privilège

@@ -252,13 +252,24 @@ async function main() {
   }
 
   /* Un scénario retiré du plan n'est pas supprimé : les passages enregistrés
-     le nomment encore, et une référence orpheline ne se lit pas. */
-  for (const ref of avant) lot.set(col.doc(ref), { actif: false, maj: FieldValue.serverTimestamp() }, { merge: true });
+     le nomment encore, et une référence orpheline ne se lit pas.
+
+     Mais cet outil n'est PLUS la seule source : semer-trous.mjs pose les
+     domaines vendus que le plan ne couvrait pas (statistiques, paramètres,
+     Premium). Désactiver tout ce qui n'est pas dans le plan les effacerait
+     de la campagne en silence, à la prochaine importation. On ne touche
+     donc qu'aux références que CE plan est censé porter, c'est-à-dire
+     celles dont le préfixe apparaît dans le plan lui-même. */
+  const prefixes = new Set(scenarios.map((x) => String(x.ref).split('-')[0]));
+  const aDesactiver = [...avant].filter((ref) => prefixes.has(String(ref).split('-')[0]));
+  const epargnes = [...avant].filter((ref) => !prefixes.has(String(ref).split('-')[0]));
+  for (const ref of aDesactiver) lot.set(col.doc(ref), { actif: false, maj: FieldValue.serverTimestamp() }, { merge: true });
 
   await lot.commit();
 
   console.log(`\n  ${scenarios.length} scénarios versés dans projets/${projet}/scenarios`);
-  if (avant.size) console.log(`  ${avant.size} scénarios absents du plan, désactivés : ${[...avant].join(', ')}`);
+  if (aDesactiver.length) console.log(`  ${aDesactiver.length} scénarios absents du plan, désactivés : ${aDesactiver.join(', ')}`);
+  if (epargnes.length) console.log(`  ${epargnes.length} scénarios d'un autre semis, laissés intacts : ${epargnes.join(', ')}`);
   console.log('');
 }
 

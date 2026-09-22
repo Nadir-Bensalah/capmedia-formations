@@ -730,6 +730,14 @@ service cloud.firestore {
         allow read:   if accesProjet(projetId);
         allow write:  if estEquipe();
       }
+
+      // Les familles de règles métier. Mêmes droits que les parcours, et
+      // pour la même raison : le client paie une base de tests, il a le
+      // droit de voir sa profondeur. Le testeur n'y a rien à faire.
+      match /regles/{regleId} {
+        allow read:   if accesProjet(projetId);
+        allow write:  if estEquipe();
+      }
     }
 
     // La console de tests regarde tous les projets d'un coup. Ces trois
@@ -750,6 +758,10 @@ service cloud.firestore {
     }
 
     match /{chemin=**}/parcours/{parcoursId} {
+      allow read: if estEquipe();
+    }
+
+    match /{chemin=**}/regles/{regleId} {
       allow read: if estEquipe();
     }
 

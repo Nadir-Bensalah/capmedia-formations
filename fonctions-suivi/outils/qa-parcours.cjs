@@ -15,6 +15,14 @@
    qu'il y a un défaut, l'instable n'apprend rien, et on finit par
    l'ignorer.
 
+   DÉPENDANCE DE DONNÉES : la suite veut les scénarios du projet réel sur
+   le banc (importer-scenarios.mjs puis semer-trous.mjs), pas seulement le
+   jeu de démonstration de semer-suivi.mjs, qui n'en pose que quelques
+   dizaines. Sans eux, la feuille d'un parcours n'offre qu'une poignée de
+   scénarios à couvrir et le contrôle tombe pour une raison qui n'est pas
+   un défaut. Et semer-suivi.mjs REMET ce jeu de démonstration : il faut
+   donc relancer les semis de tests après lui, pas avant.
+
    Cette suite attend EXACTEMENT les parcours du semis, dans leur état
    d'origine. Elle ne code pas leur nombre en dur : la liste grandit, et
    une suite qui exige quarante-huit tomberait à chaque ajout pour une
@@ -72,7 +80,20 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
 
   /* Le compte réel, lu en base. Coder 48 en dur ferait tomber la suite au
      premier parcours ajouté, pour une raison qui n'est pas un défaut. */
-  const tous = ((await lire('projets/atelier/parcours?pageSize=400'))||{}).documents||[];
+  /* Firestore pagine sa réponse REST quelle que soit la pageSize demandée.
+     Compter sur une seule réponse donnait 150 au lieu de 288, et la suite
+     accusait la page d'un défaut qui était le sien. On suit le jeton. */
+  const toutesPages = async (col) => {
+    const out = []; let jeton = '';
+    for (let i = 0; i < 20; i += 1) {
+      const j = await lire(`${col}?pageSize=300${jeton ? `&pageToken=${jeton}` : ''}`);
+      (((j || {}).documents) || []).forEach((d) => out.push(d));
+      jeton = (j || {}).nextPageToken || '';
+      if (!jeton) break;
+    }
+    return out;
+  };
+  const tous = await toutesPages('projets/atelier/parcours');
   const nb = tous.length;
   const refsCouvertes = new Set();
   tous.forEach(d=>{((((d.fields||{}).scenarios||{}).arrayValue||{}).values||[]).forEach(v=>refsCouvertes.add(v.stringValue));});
@@ -148,7 +169,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   console.log('\n== En créer un');
   await aller(page,'/tests?projet=atelier','.chiffres-tests','Tests');
   await pause(1400);
-  const avant = ((await lire('projets/atelier/parcours?pageSize=400'))||{}).documents||[];
+  const avant = await toutesPages('projets/atelier/parcours');
   await page.click('[data-nouveau-parcours]'); await pause(1200);
   const f = await page.evaluate(()=>({
     feuille:!!document.querySelector('.feuille'),
@@ -160,14 +181,14 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   verifier(f.feuille,'la feuille s ouvre');
   verifier(f.outils.length===4,'les quatre outils',f.outils.join('/'));
   verifier(f.etats.length===6,'les six états',f.etats.join('/'));
-  verifier(f.scenarios>100,`les scénarios à couvrir (${f.scenarios})`);
+  verifier(f.scenarios>=200,`les scénarios à couvrir (${f.scenarios})`);
   verifier(f.mutation,'la case « éprouvé par mutation »');
 
   await page.fill('#ed-ref','X-99');
   await page.fill('#ed-titre','Un parcours écrit à la main');
   await page.selectOption('#ed-outil','playwright');
   await page.click('[data-enregistrer],button[type="submit"][form="ed-forme"]'); await pause(2600);
-  const apres = ((await lire('projets/atelier/parcours?pageSize=400'))||{}).documents||[];
+  const apres = await toutesPages('projets/atelier/parcours');
   verifier(apres.length===avant.length+1,`il est créé (${avant.length} puis ${apres.length})`);
   const neuf = await lire('projets/atelier/parcours/X-99');
   verifier(!!neuf,'sous sa référence');
