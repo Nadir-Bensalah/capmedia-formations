@@ -775,6 +775,17 @@ input, select, textarea { font: inherit; color: inherit; }
 .ligne--sans-icone { grid-template-columns: minmax(0, 1fr) auto; }
 .ligne-corps { min-width: 0; }
 .ligne-titre { font: var(--t-corps-fort); overflow-wrap: anywhere; }
+/* Le titre devient le bouton quand la ligne porte déjà un crayon : un
+   <button> dans un <button> est invalide et le navigateur l'éjecte. Il
+   garde l'apparence d'un titre, le clic en plus. */
+.ligne-titre--bouton {
+  display: block; width: 100%;
+  background: none; border: 0; padding: 0; margin: 0;
+  text-align: left; color: inherit; font: inherit;
+  cursor: pointer;
+}
+.ligne-titre--bouton:hover { text-decoration: underline; text-underline-offset: 3px; }
+.ligne--titre-agit { cursor: default; }
 .ligne-sous { font: var(--t-petit); color: var(--encre-3); margin-top: 2px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .ligne-fin { display: flex; align-items: center; gap: var(--e-3); flex: none; }
 .ligne-fin .boutons-edition { flex-wrap: nowrap; gap: 2px; }
@@ -1829,14 +1840,60 @@ input, select, textarea { font: inherit; color: inherit; }
 /* La console de tests : la barre de filtres, et les chiffres du haut. */
 .barre-tests { gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
 
+/* ---------------------------------------------------------------------
+   L'identité visuelle des sections de la console de tests.
+
+   Neuf sections empilées, même taille de titre, mêmes tuiles grises :
+   l'œil n'a nulle part où se poser et tout se ressemble. Chaque section
+   reçoit donc un médaillon coloré qui ne sert qu'à une chose, la
+   reconnaître de loin en faisant défiler.
+
+   La couleur suit le SENS, elle ne décore pas : rouge pour ce qui ne va
+   pas, ambre pour ce qui attend, vert pour ce qui tourne, violet pour la
+   machine, bleu pour les gens et la bibliothèque. Les tons sont ceux qui
+   servent déjà aux lignes et aux pastilles, pas une seconde palette.
+   --------------------------------------------------------------------- */
+.section-marque {
+  display: flex; align-items: center; gap: 12px;
+}
+.section-medaille {
+  flex: none;
+  width: 34px; height: 34px;
+  border-radius: 10px;
+  display: grid; place-items: center;
+  background: var(--gris-voile); color: var(--encre-3);
+}
+.section-medaille svg { width: 18px; height: 18px; }
+.section-medaille--rouge  { background: var(--alerte-voile);    color: var(--alerte); }
+.section-medaille--ambre  { background: var(--attention-voile); color: var(--attention); }
+.section-medaille--vert   { background: var(--ok-voile);        color: var(--ok); }
+.section-medaille--violet { background: var(--violet-voile);    color: var(--violet); }
+.section-medaille--bleu   { background: var(--accent-voile);    color: var(--accent); }
+
+/* Un filet neutre sous le titre : il sépare les sections sans ajouter
+   une boîte de plus. La couleur reste au médaillon seul, parce que neuf
+   filets teintés empilés redeviendraient exactement le bruit qu'on
+   cherche à retirer. */
+.section--marquee > .section-tete {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--trait);
+  margin-bottom: 16px;
+}
+
 .chiffres-tests { gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
 .chiffre {
   flex: 1 1 140px; min-width: 0;
   padding: 14px 16px;
   background: var(--fond-2);
+  border: 1px solid var(--trait);
   border-radius: 14px;
   display: flex; flex-direction: column; gap: 2px;
 }
+/* La tuile qui porte le chiffre principal de la section : c'est celui
+   qu'on vient lire, les autres sont du contexte. Un liseré suffit, une
+   couleur de fond en ferait un bouton. */
+.chiffre--tete { border-color: var(--trait-fort); }
+.chiffre--tete .chiffre-valeur { color: var(--encre); }
 .chiffre-valeur {
   font-size: 30px; font-weight: 650; line-height: 1.1;
   font-variant-numeric: tabular-nums;

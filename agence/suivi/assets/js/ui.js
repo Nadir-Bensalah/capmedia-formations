@@ -174,18 +174,33 @@ export const metrique = (valeur, libelle, options = {}) => `
 export const ligne = ({ href, icone: nomIcone, ton, titre, sous, fin, nonLu, action, attrs = '' }) => {
   /* Une ligne qui ne mène nulle part n'est pas un bouton : sinon les boutons
      d'édition qu'elle porte se retrouveraient imbriqués, et le navigateur
-     les rejetterait hors de la ligne, l'un sous l'autre. */
+     les rejetterait hors de la ligne, l'un sous l'autre.
+
+     Et une ligne qui mène quelque part ET porte un bouton tombe dans le
+     même piège : un <button> dans un <button> est invalide, le navigateur
+     éjecte l'intérieur, et le crayon se retrouve seul sur la ligne du
+     dessous. Dans ce cas la ligne reste un conteneur inerte et c'est son
+     TITRE qui devient le bouton : la rangée entière n'est plus cliquable,
+     mais rien ne saute hors de sa place. */
+  const porteUnBouton = /<button/.test(String(fin || ''));
   const agissante = Boolean(href || action || /data-action/.test(attrs));
-  const balise = href ? 'a' : (agissante ? 'button' : 'div');
-  const lien = href ? ` href="${echapper(href)}"` : (agissante ? ' type="button"' : '');
+  const titreAgit = agissante && !href && porteUnBouton;
+  const balise = href ? 'a' : (agissante && !titreAgit ? 'button' : 'div');
+  const lien = href ? ` href="${echapper(href)}"` : (agissante && !titreAgit ? ' type="button"' : '');
   const classes = ['ligne'];
   if (!agissante) classes.push('ligne--inerte');
+  if (titreAgit) classes.push('ligne--titre-agit');
   if (!nomIcone) classes.push('ligne--sans-icone');
   if (nonLu) classes.push('non-lu');
-  return `<${balise} class="${classes.join(' ')}"${lien}${action ? ` data-action="${echapper(action)}"` : ''} ${attrs}>
+  /* Quand c'est le titre qui agit, les attributs d'action voyagent avec
+     lui : la ligne elle-même ne doit plus rien déclencher. */
+  const surLigne = titreAgit ? '' : `${action ? ` data-action="${echapper(action)}"` : ''} ${attrs}`;
+  const surTitre = titreAgit ? `${action ? ` data-action="${echapper(action)}"` : ''} ${attrs}` : '';
+
+  return `<${balise} class="${classes.join(' ')}"${lien}${surLigne}>
     ${nomIcone ? `<span class="ligne-icone${ton ? ` ligne-icone--${ton}` : ''}">${icone(nomIcone)}</span>` : ''}
     <span class="ligne-corps">
-      <span class="ligne-titre">${titre}</span>
+      ${titreAgit ? `<button class="ligne-titre ligne-titre--bouton" type="button"${surTitre}>${titre}</button>` : `<span class="ligne-titre">${titre}</span>`}
       ${sous ? `<span class="ligne-sous">${sous}</span>` : ''}
     </span>
     <span class="ligne-fin">${fin || ''}${href ? `<span class="chevron">${icone('chevronDroite')}</span>` : ''}</span>

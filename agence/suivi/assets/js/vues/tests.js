@@ -70,6 +70,17 @@ const lireTout = (env) => {
 /* Une lecture en groupe ne dit pas de quel projet vient le document : la
    donnée ne porte pas son chemin. Le magasin garde l'identifiant du parent
    sous « _parent », et c'est lui qui répond quand le champ manque. */
+/* Le médaillon d'une section. Neuf sections empilées se ressemblaient
+   toutes : même titre, mêmes tuiles, aucun repère. Chaque section porte
+   désormais une icône dans une pastille colorée, dont le seul rôle est
+   de la faire reconnaître de loin en faisant défiler.
+
+   La couleur suit le sens : rouge pour ce qui ne va pas, ambre pour ce
+   qui attend, vert pour ce qui tourne, violet pour la machine, bleu pour
+   les gens et la bibliothèque. */
+const marque = (nomIcone, ton) =>
+  `<span class="section-medaille section-medaille--${ton}" aria-hidden="true">${icone(nomIcone)}</span>`;
+
 const projetDe = (x) => x.projet || x._parent || '';
 
 const dansPlateforme = (x, plateforme) => {
@@ -144,14 +155,14 @@ const alertes = (d, { nomProjet, plateforme }) => {
     }));
 
   if (!soucis.length) {
-    return `<section class="section" style="margin-top:0">
-      <div class="section-tete"><h2>Ce qui ne va pas</h2></div>
+    return `<section class="section section--marquee" style="margin-top:0">
+      <div class="section-tete"><div class="section-marque">${marque('valider', 'vert')}<h2>Ce qui ne va pas</h2></div></div>
       ${vide({ icone: 'check', titre: 'Rien à signaler', texte: 'Aucune anomalie bloquante, aucune campagne en retard.', compact: true })}
     </section>`;
   }
 
-  return `<section class="section" style="margin-top:0">
-    <div class="section-tete"><div><h2>Ce qui ne va pas</h2><p class="chapo">${pluriel(soucis.length, 'point à regarder', 'points à regarder')}.</p></div></div>
+  return `<section class="section section--marquee" style="margin-top:0">
+    <div class="section-tete"><div class="section-marque">${marque('alerte', 'rouge')}<div><h2>Ce qui ne va pas</h2><p class="chapo">${pluriel(soucis.length, 'point à regarder', 'points à regarder')}.</p></div></div></div>
     <div class="liste">${soucis.map((s) => ligne(s)).join('')}</div>
   </section>`;
 };
@@ -170,14 +181,14 @@ const avancement = (d, { nomProjet, plateforme }) => {
   }).filter((x) => x.scen || x.camp.length);
 
   if (!lignes.length) {
-    return `<section class="section">
-      <div class="section-tete"><h2>Avancement</h2></div>
+    return `<section class="section section--marquee">
+      <div class="section-tete"><div class="section-marque">${marque('trend', 'bleu')}<h2>Avancement</h2></div></div>
       ${vide({ icone: 'bug', titre: 'Aucun projet testé', texte: 'Versez un plan de tests sur un projet pour commencer.', compact: true })}
     </section>`;
   }
 
-  return `<section class="section">
-    <div class="section-tete"><div><h2>Avancement</h2><p class="chapo">${pluriel(lignes.length, 'projet suivi', 'projets suivis')}.</p></div></div>
+  return `<section class="section section--marquee">
+    <div class="section-tete"><div class="section-marque">${marque('trend', 'bleu')}<div><h2>Avancement</h2><p class="chapo">${pluriel(lignes.length, 'projet suivi', 'projets suivis')}.</p></div></div></div>
     <div class="liste">${lignes.map((x) => ligne({
       href: `#/tests?projet=${echapper(x.p.id)}${plateforme ? `&plateforme=${echapper(plateforme)}` : ''}`,
       icone: 'bug', ton: x.ano ? 'rouge' : x.enCours ? 'bleu' : '',
@@ -205,8 +216,8 @@ const activite = (d, { nomProjet, plateforme }) => {
 
   if (!faits.length) return '';
 
-  return `<section class="section">
-    <div class="section-tete"><h2>Activité</h2></div>
+  return `<section class="section section--marquee">
+    <div class="section-tete"><div class="section-marque">${marque('activite', 'bleu')}<h2>Activité</h2></div></div>
     <div class="liste">${faits.map((f) => ligne({
       icone: f.icone, ton: f.ton || '',
       titre: echapper(f.titre), sous: `${echapper(f.sous)} · ${echapper(depuis(f.date))}`,
@@ -253,15 +264,15 @@ const parcoursHtml = (d, { pid, equipe }) => {
     fin: `${pastille(ETATS_PARCOURS, x.etat || 'a-ecrire')}${equipe ? `<span class="rang boutons-edition"><button class="btn-icone" type="button" data-editer-parcours="${echapper(x.ref)}" aria-label="Modifier" data-astuce="Modifier">${icone('edit')}</button></span>` : ''}`,
   });
 
-  return `<section class="section">
+  return `<section class="section section--marquee">
     <div class="section-tete">
-      <div><h2>Parcours automatisés</h2><p class="chapo">${liste.length ? `${pluriel(liste.length, 'parcours', 'parcours')} rejoués à chaque version${couverts ? `, couvrant ${pluriel(couverts, 'scénario', 'scénarios')}` : ''}.` : 'Ce que la machine rejouera à chaque version.'}</p></div>
+      <div class="section-marque">${marque('eclair', 'violet')}<div><h2>Parcours automatisés</h2><p class="chapo">${liste.length ? `${pluriel(liste.length, 'parcours', 'parcours')} rejoués à chaque version${couverts ? `, couvrant ${pluriel(couverts, 'scénario', 'scénarios')}` : ''}.` : 'Ce que la machine rejouera à chaque version.'}</p></div></div>
       ${equipe && pid ? `<button class="btn btn-principal btn-petit" type="button" data-nouveau-parcours="${echapper(pid)}">${icone('plus')} Nouveau parcours</button>` : ''}
     </div>
 
     ${liste.length ? `
     <div class="rang chiffres-tests" style="margin-bottom:16px">
-      <div class="chiffre"><span class="chiffre-valeur">${par.vert || 0}</span><span class="chiffre-nom">au vert</span></div>
+      <div class="chiffre chiffre--tete"><span class="chiffre-valeur">${par.vert || 0}</span><span class="chiffre-nom">au vert</span></div>
       <div class="chiffre${aRegarder ? ' chiffre--alerte' : ''}"><span class="chiffre-valeur">${aRegarder}</span><span class="chiffre-nom">à regarder</span></div>
       <div class="chiffre"><span class="chiffre-valeur">${par['a-ecrire'] || 0}</span><span class="chiffre-nom">à écrire</span></div>
       <div class="chiffre"><span class="chiffre-valeur">${eprouves} / ${liste.length}</span><span class="chiffre-nom">éprouvés par mutation</span></div>
@@ -304,9 +315,9 @@ const parcoursHtml = (d, { pid, equipe }) => {
 const reglesHtml = (d, { pid, equipe }) => {
   const liste = (d.regles || []).filter((x) => x.actif !== false && (!pid || projetDe(x) === pid));
   if (!liste.length) {
-    return `<section class="section">
+    return `<section class="section section--marquee">
       <div class="section-tete">
-        <div><h2>Règles métier</h2><p class="chapo">Ce que la machine vérifie en millisecondes.</p></div>
+        <div class="section-marque">${marque('code', 'violet')}<div><h2>Règles métier</h2><p class="chapo">Ce que la machine vérifie en millisecondes.</p></div></div>
         ${equipe && pid ? `<button class="btn btn-principal btn-petit" type="button" data-nouvelle-regle="${echapper(pid)}">${icone('plus')} Nouvelle famille</button>` : ''}
       </div>
       ${vide({ icone: 'code', titre: 'Aucune règle',
@@ -334,14 +345,14 @@ const reglesHtml = (d, { pid, equipe }) => {
     fin: `${pastille(ETATS_REGLE, x.etat || 'a-ecrire')}${equipe ? `<span class="rang boutons-edition"><button class="btn-icone" type="button" data-editer-regle="${echapper(x.ref)}" aria-label="Modifier" data-astuce="Modifier">${icone('edit')}</button></span>` : ''}`,
   });
 
-  return `<section class="section">
+  return `<section class="section section--marquee">
     <div class="section-tete">
-      <div><h2>Règles métier</h2><p class="chapo">${pluriel(liste.length, 'famille', 'familles')}, ${pluriel(cas, 'cas essayé', 'cas essayés')} à chaque enregistrement.</p></div>
+      <div class="section-marque">${marque('code', 'violet')}<div><h2>Règles métier</h2><p class="chapo">${pluriel(liste.length, 'famille', 'familles')}, ${pluriel(cas, 'cas essayé', 'cas essayés')} à chaque enregistrement.</p></div></div>
       ${equipe && pid ? `<button class="btn btn-principal btn-petit" type="button" data-nouvelle-regle="${echapper(pid)}">${icone('plus')} Nouvelle famille</button>` : ''}
     </div>
 
     <div class="rang chiffres-tests" style="margin-bottom:16px">
-      <div class="chiffre"><span class="chiffre-valeur">${cas}</span><span class="chiffre-nom">cas essayés</span></div>
+      <div class="chiffre chiffre--tete"><span class="chiffre-valeur">${cas}</span><span class="chiffre-nom">cas essayés</span></div>
       <div class="chiffre"><span class="chiffre-valeur">${casVerts}</span><span class="chiffre-nom">au vert</span></div>
       <div class="chiffre${rouges.length ? ' chiffre--alerte' : ''}"><span class="chiffre-valeur">${rouges.length}</span><span class="chiffre-nom">familles rouges</span></div>
       <div class="chiffre"><span class="chiffre-valeur">${eprouvees} / ${liste.length}</span><span class="chiffre-nom">éprouvées par mutation</span></div>
@@ -388,9 +399,9 @@ const vivierHtml = (d, { equipe }) => {
     return du;
   };
 
-  return `<section class="section">
+  return `<section class="section section--marquee">
     <div class="section-tete">
-      <div><h2>Testeurs</h2><p class="chapo">${gens.length ? pluriel(gens.length, 'personne au vivier', 'personnes au vivier') : 'Le vivier est vide.'}</p></div>
+      <div class="section-marque">${marque('utilisateurs', 'bleu')}<div><h2>Testeurs</h2><p class="chapo">${gens.length ? pluriel(gens.length, 'personne au vivier', 'personnes au vivier') : 'Le vivier est vide.'}</p></div></div>
       <button class="btn btn-principal btn-petit" type="button" data-nouveau-testeur>${icone('plus')} Inscrire un testeur</button>
     </div>
     ${gens.length ? `<div class="liste">${gens.map((t) => {
@@ -446,9 +457,9 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
     <div class="chiffre${ouvertes ? ' chiffre--alerte' : ''}"><span class="chiffre-valeur">${ouvertes}</span><span class="chiffre-nom">anomalies ouvertes</span></div>
   </div>
 
-  <section class="section">
+  <section class="section section--marquee">
     <div class="section-tete">
-      <div><h2>Campagnes</h2><p class="chapo">Une campagne pioche dans la bibliothèque : les mêmes scénarios sont rejoués d'une version à l'autre.</p></div>
+      <div class="section-marque">${marque('cible', 'ambre')}<div><h2>Campagnes</h2><p class="chapo">Une campagne pioche dans la bibliothèque : les mêmes scénarios sont rejoués d'une version à l'autre.</p></div></div>
       ${equipe ? `<button class="btn btn-principal btn-petit" type="button" data-nouvelle-campagne="${echapper(pid)}">${icone('plus')} Nouvelle campagne</button>` : ''}
     </div>
     ${camp.length ? `<div class="liste">${camp.map((c) => ligne({
@@ -461,8 +472,8 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
     : vide({ icone: 'bug', titre: 'Aucune campagne', texte: 'Une campagne prend des scénarios, les distribue aux testeurs, et garde le résultat daté.', compact: true })}
   </section>
 
-  ${ano.length ? `<section class="section">
-    <div class="section-tete"><div><h2>Anomalies</h2><p class="chapo">Plusieurs échecs sur le même scénario font une seule anomalie.</p></div></div>
+  ${ano.length ? `<section class="section section--marquee">
+    <div class="section-tete"><div class="section-marque">${marque('bug', 'rouge')}<div><h2>Anomalies</h2><p class="chapo">Plusieurs échecs sur le même scénario font une seule anomalie.</p></div></div></div>
     <div class="liste">${ano.map((a) => ligne({
       icone: 'alerte', ton: (GRAVITES_ANOMALIE[a.gravite] || {}).voile === 'rouge' ? 'rouge' : (GRAVITES_ANOMALIE[a.gravite] || {}).voile === 'ambre' ? 'ambre' : '',
       titre: echapper(a.titre || 'Anomalie'),
@@ -477,9 +488,9 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
 
   ${equipe ? vivierHtml({ ...d, testeurs: (d.testeurs || []).filter((t) => (t.projets || []).includes(pid)) }, { equipe }) : ''}
 
-  <section class="section">
+  <section class="section section--marquee">
     <div class="section-tete">
-      <div><h2>Scénarios</h2><p class="chapo">La bibliothèque du projet${plateforme ? `, sur ${(PLATEFORMES_TEST[plateforme] || {}).libelle}` : ''}. ${scen.length ? pluriel(scen.length, 'scénario', 'scénarios') : 'Vide.'}</p></div>
+      <div class="section-marque">${marque('liste', 'bleu')}<div><h2>Scénarios</h2><p class="chapo">La bibliothèque du projet${plateforme ? `, sur ${(PLATEFORMES_TEST[plateforme] || {}).libelle}` : ''}. ${scen.length ? pluriel(scen.length, 'scénario', 'scénarios') : 'Vide.'}</p></div></div>
       <button class="btn btn-secondaire btn-petit" type="button" data-plier-scenarios aria-expanded="false">${icone('deplier')} Voir la bibliothèque</button>
     </div>
     ${scen.length ? `
