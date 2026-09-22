@@ -11,6 +11,10 @@
    les scénarios ne retirerait rien, puisque chaque bloc contient au moins
    un scénario du socle.
 
+   Cette suite crée sa campagne et attend qu'aucune autre ne porte le même
+   titre. Lancée après un semis qui en pose déjà une, elle signale des
+   écarts qui n'en sont pas.
+
      firebase emulators:start --config firebase.suivi.json --project capmedia-1f90d
      node fonctions-suivi/outils/semer-suivi.mjs
      node fonctions-suivi/outils/importer-scenarios.mjs atelier <plan.md> --vrai

@@ -10,6 +10,10 @@
    sert à personne, et cet ordre est une décision, pas un hasard de mise en
    page.
 
+   Cette suite attend une anomalie bloquante, une campagne en retard et
+   une campagne sans scénario : c'est ce qu'elle vérifie en haut de page.
+   Lancée après un autre semis, elle signale des écarts qui n'en sont pas.
+
      firebase emulators:start --config firebase.suivi.json --project capmedia-1f90d
      node fonctions-suivi/outils/semer-suivi.mjs
      node fonctions-suivi/outils/importer-scenarios.mjs atelier <plan.md> --vrai

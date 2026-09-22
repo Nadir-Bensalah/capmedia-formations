@@ -493,7 +493,7 @@ const memeEmail = (a, b) => String(a || '').trim().toLowerCase() === String(b ||
 export const session = () => new Promise((resolve) => {
   const arret = onAuthStateChanged(auth, async (utilisateur) => {
     arret();
-    if (!utilisateur) return resolve({ utilisateur: null, equipe: null, projets: [], organisations: [], profil: null });
+    if (!utilisateur) return resolve({ utilisateur: null, equipe: null, testeur: null, projets: [], organisations: [], profil: null });
 
     // Le rôle vient de Firestore, jamais du navigateur : un document
     // equipe/{uid} n'est écrit que par l'Admin SDK.
@@ -502,6 +502,21 @@ export const session = () => new Promise((resolve) => {
       const fiche = await getDoc(doc(bdd, 'equipe', utilisateur.uid));
       if (fiche.exists()) equipe = { uid: utilisateur.uid, ...fiche.data() };
     } catch (e) { /* pas de fiche : c'est un client */ }
+
+    /* Un testeur se reconnaît à la revendication de son jeton, celle-là
+       même que lisent les règles Firestore : la fiche du vivier ne lui est
+       pas lisible autrement, et se fier à elle ferait boucler le contrôle
+       sur lui-même. Le serveur pose la revendication à la connexion. */
+    let testeur = null;
+    if (!equipe) {
+      try {
+        const { claims } = await utilisateur.getIdTokenResult();
+        if (claims && claims.testeur === true) {
+          const fiche = await getDoc(doc(bdd, 'testeurs', utilisateur.uid));
+          testeur = { uid: utilisateur.uid, ...(fiche.exists() ? fiche.data() : {}) };
+        }
+      } catch (e) { /* pas un testeur */ }
+    }
 
     let profil = null;
     try {
@@ -528,7 +543,7 @@ export const session = () => new Promise((resolve) => {
       console.error('[suivi] lecture des projets impossible :', erreur);
     }
 
-    resolve({ utilisateur, equipe, projets, organisations, profil, erreur });
+    resolve({ utilisateur, equipe, testeur, projets, organisations, profil, erreur });
   });
 });
 

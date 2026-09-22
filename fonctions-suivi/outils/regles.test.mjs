@@ -332,6 +332,17 @@ await refuse('Karim ne lit pas les anomalies', getDocs(collection(karim(), 'proj
 await refuse('Camille ne classe pas une anomalie', updateDoc(doc(camille(), 'projets/atelier/anomalies/a1'), { statut: 'sans-suite' }));
 await refuse('Léa ne lit pas les anomalies d un autre projet', getDocs(collection(lea(), 'projets/atelier/anomalies')));
 
+console.log('\n== La plateforme de tests : ce que la page testeur demande');
+/* Les requêtes exactes que fait l'espace testeur. Une règle peut être
+   juste sur un document et refuser la requête qui le cherche : Firestore
+   évalue la requête AVANT de servir, et une liste que rien ne restreint
+   est refusée en bloc, pas filtrée. */
+await doit('Karim cherche les campagnes où il figure', getDocs(query(collection(karim(), 'projets/atelier/campagnes'), where('testeurs', 'array-contains', KARIM))));
+await refuse('Karim ne liste pas toutes les campagnes du projet', getDocs(collection(karim(), 'projets/atelier/campagnes')));
+await refuse("Karim ne cherche pas les campagnes d'un autre", getDocs(query(collection(karim(), 'projets/atelier/campagnes'), where('testeurs', 'array-contains', SONIA))));
+await doit('Karim lit la bibliothèque de son projet', getDocs(collection(karim(), 'projets/atelier/scenarios')));
+await doit('Karim relit ses propres passages', getDocs(query(collection(karim(), 'projets/atelier/campagnes/c1/passages'), where('testeur', '==', KARIM))));
+
 console.log('\n== La plateforme de tests : les angles morts');
 /* Trois trous trouvés en auditant, et qui avaient tous la même cause : la
    garde existait, mais rien ne l'éprouvait sous le bon angle.

@@ -12,10 +12,12 @@
 
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
 
 if (!process.env.FIRESTORE_EMULATOR_HOST) { console.error('Émulateurs requis.'); process.exit(1); }
 initializeApp({ projectId: process.env.GCLOUD_PROJECT || 'capmedia-1f90d' });
 const bdd = getFirestore();
+const auth = getAuth();
 const PORTE = process.env.PORTE_CONNEXION || 'http://127.0.0.1:5001/capmedia-1f90d/europe-west1/suiviConnexion';
 
 let ok = 0; const ecarts = [];
@@ -115,6 +117,49 @@ await bdd.doc('invitations/epreuve-jeton-de-test').update({ revoquee: true });
 verifier((await appeler('invitation', { jeton: 'epreuve-jeton-de-test' })).ok === false, 'un jeton révoqué ne rend plus rien');
 await bdd.doc('invitations/epreuve-jeton-perime').set({ email: CLIENT, expire: new Date(Date.now() - 1000), revoquee: false });
 verifier((await appeler('invitation', { jeton: 'epreuve-jeton-perime' })).ok === false, 'un jeton périmé ne rend plus rien');
+
+console.log('\n== Le testeur, entre les deux');
+/* Un testeur se connecte souvent, depuis un téléphone, entre deux
+   scénarios : la sévérité d'un compte d'équipe le bloquerait en pleine
+   campagne. Il ne voit que son propre travail, le risque n'est pas le
+   même. Mais il n'a pas non plus les mêmes règles qu'un client, et
+   surtout il doit porter la revendication que les règles Firestore
+   lisent, sans quoi il arrive devant un écran vide. */
+await rouvrirLesVannes(); await viderBoite();
+const TESTEUR = 'karim.essai@exemple.test';
+const uidTesteur = (await auth.getUserByEmail(TESTEUR).catch(() => auth.createUser({ email: TESTEUR, emailVerified: true }))).uid;
+await bdd.doc(`testeurs/${uidTesteur}`).set({ prenom: 'Karim', email: TESTEUR, mobile: 'ios', projets: ['atelier'] });
+
+await appeler('demanderCode', { email: TESTEUR });
+const cleT = (await import('node:crypto')).createHash('sha256').update(TESTEUR).digest('hex');
+const ficheT = (await bdd.doc(`connexions/${cleT}`).get()).data() || {};
+verifier(ficheT.testeur === true, 'le compte du vivier est reconnu comme testeur');
+verifier(ficheT.equipe !== true, "et il n'est pas pris pour l'équipe");
+verifier(Number(ficheT.essaisMax) === 5, 'il a droit à cinq essais', `${ficheT.essaisMax}`);
+
+/* La revendication doit être POSÉE, pas seulement calculée : c'est le
+   jeton que lisent les règles, pas la base. */
+const codeT = await dernierCode(TESTEUR);
+verifier(Boolean(codeT), 'un code lui parvient');
+const ouvT = await appeler('verifierCode', { email: TESTEUR, code: codeT });
+verifier(ouvT.ok === true, 'sa session s ouvre', JSON.stringify(ouvT).slice(0, 120));
+/* Relire le compte, pas une copie en mémoire : « setCustomUserClaims »
+   écrit côté serveur, et un objet lu avant l'appel garderait l'ancienne
+   valeur sans qu'on s'en aperçoive. C'est ce qui rendait cette garde
+   muette : elle passait au vert même quand la revendication n'était
+   jamais posée. */
+const apresOuverture = await auth.getUser(uidTesteur);
+verifier((apresOuverture.customClaims || {}).testeur === true,
+  'et son compte porte la revendication « testeur »', JSON.stringify(apresOuverture.customClaims || {}));
+
+/* Sorti du vivier, il garderait sinon son accès jusqu'à sa prochaine
+   connexion : la revendication se retire aussi. */
+await bdd.doc(`testeurs/${uidTesteur}`).delete();
+await rouvrirLesVannes(); await viderBoite();
+await appeler('demanderCode', { email: TESTEUR });
+await appeler('verifierCode', { email: TESTEUR, code: await dernierCode(TESTEUR) });
+const apresSortie = (await auth.getUser(uidTesteur)).customClaims || {};
+verifier(apresSortie.testeur !== true, 'sorti du vivier, la revendication lui est retirée', JSON.stringify(apresSortie));
 
 console.log('\n== Les entrées malformées');
 verifier((await appeler('demanderCode', { email: 'pas-une-adresse' })).code === 400, 'une adresse invalide est refusée');

@@ -38,6 +38,11 @@ const REGION = 'europe-west1';
 const REGLES = {
   client: { validite: 10 * 60 * 1000, essais: 5, parQuart: 3 },
   equipe: { validite: 5 * 60 * 1000, essais: 3, parQuart: 3 },
+  /* Un testeur se connecte souvent, depuis un téléphone, entre deux
+     scénarios : lui imposer la sévérité d'un compte d'équipe le bloquerait
+     en pleine campagne. Il ne voit que son propre travail, le risque n'est
+     pas le même. */
+  testeur: { validite: 15 * 60 * 1000, essais: 5, parQuart: 4 },
 };
 const QUART = 15 * 60 * 1000;
 const PLAFOND_IP = 12;            // demandes par quart d'heure et par adresse IP
@@ -84,6 +89,14 @@ async function compteDe(email) {
 
 async function estEquipe(uid) {
   try { const d = await bdd.doc(`equipe/${uid}`).get(); return d.exists && d.data().actif !== false; }
+  catch (err) { return false; }
+}
+
+/* Un testeur vit dans le vivier, à la racine : il sert sur plusieurs
+   projets sans qu'on lui refasse un compte. Sa fiche porte la liste des
+   projets où il est inscrit, et c'est elle qui fonde son accès. */
+async function estTesteur(uid) {
+  try { const d = await bdd.doc(`testeurs/${uid}`).get(); return d.exists && d.data().actif !== false; }
   catch (err) { return false; }
 }
 
@@ -168,7 +181,10 @@ async function demanderCode(req, res) {
   if (!compte) { await audit('connexion.inconnue', { email, ip: adresseIp }); return muet(); }
 
   const equipe = await estEquipe(compte.uid);
-  const regles = equipe ? REGLES.equipe : REGLES.client;
+  /* L'équipe prime : quelqu'un peut être les deux, et c'est alors la règle
+     la plus stricte qui doit s'appliquer. */
+  const testeur = !equipe && await estTesteur(compte.uid);
+  const regles = equipe ? REGLES.equipe : (testeur ? REGLES.testeur : REGLES.client);
 
   const ref = bdd.doc(`connexions/${clePour(email)}`);
   const maintenant = Date.now();
@@ -183,7 +199,7 @@ async function demanderCode(req, res) {
     const envois = neuve ? 1 : Number(brut.envois || 0) + 1;
     if (envois > regles.parQuart) return true;
     t.set(ref, {
-      email, uid: compte.uid, equipe,
+      email, uid: compte.uid, equipe, testeur,
       empreinte: empreinte(code, sel), sel,
       expire: new Date(maintenant + regles.validite),
       essais: 0, essaisMax: regles.essais,
@@ -236,7 +252,7 @@ async function verifierCode(req, res) {
     }
     /* Bon code : il meurt ici, il ne servira pas deux fois. */
     t.update(ref, { empreinte: null, sel: null, essais: 0, ouverte: FieldValue.serverTimestamp() });
-    return { etat: 'bon', uid: c.uid, equipe: c.equipe === true };
+    return { etat: 'bon', uid: c.uid, equipe: c.equipe === true, testeur: c.testeur === true };
   });
 
   if (verdict.etat !== 'bon') {
@@ -262,6 +278,20 @@ async function verifierCode(req, res) {
    * le brûle après usage. À garanties égales, on prend la voie qui ne
    * dépend de rien.
    */
+  /* La revendication « testeur » vit dans le jeton, parce que c'est lui que
+     les règles Firestore lisent. Elle se pose AVANT de fabriquer le lien :
+     posée après, le jeton en cours ne la porterait pas et le testeur
+     arriverait devant un écran vide sans comprendre pourquoi.
+
+     On la retire aussi quand elle n'a plus lieu d'être : un testeur sorti
+     du vivier garderait sinon son accès jusqu'à sa prochaine connexion. */
+  try {
+    await getAuth().setCustomUserClaims(verdict.uid, verdict.testeur ? { testeur: true } : {});
+  } catch (err) {
+    console.error('Revendication non posée', err);
+    await audit('connexion.revendication-impossible', { email, uid: verdict.uid });
+  }
+
   let lien;
   try {
     lien = await getAuth().generateSignInWithEmailLink(email, { url: `${courriels.BASE}`, handleCodeInApp: true });
@@ -287,4 +317,4 @@ async function verifierCode(req, res) {
 }
 
 /* --- Exposé pour l'épreuve ----------------------------------------------- */
-exports._outils = { clePour, empreinte, tirerCode, memeEmpreinte, emailPlausible, REGLES, VIE_INVITATION };
+exports._outils = { clePour, empreinte, tirerCode, memeEmpreinte, emailPlausible, REGLES, VIE_INVITATION, estTesteur };

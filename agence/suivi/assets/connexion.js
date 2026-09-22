@@ -59,7 +59,7 @@ const envoyerLien = async (email) => {
 /* --- Où va-t-on, une fois la session ouverte ---------------------------- */
 
 const orienter = async () => {
-  const { utilisateur, equipe, erreur: refus } = await session();
+  const { utilisateur, equipe, testeur, erreur: refus } = await session();
   if (!utilisateur) { montrer('#forme'); return; }
 
   /* Une destination demandée avant la connexion est honorée, à condition
@@ -68,6 +68,10 @@ const orienter = async () => {
   if (demande && /^\/suivi\/[\w./?=&#%-]*$/.test(demande)) { location.replace(demande); return; }
 
   if (equipe) { location.replace('./admin'); return; }
+  /* Le testeur avant le client : il n'est membre d'aucun projet, donc la
+     lecture des projets lui est refusée et il tomberait sur l'écran
+     d'attente sans comprendre pourquoi. */
+  if (testeur) { location.replace('./tests'); return; }
   if (!refus) { location.replace('./app'); return; }
 
   const bloc = document.querySelector('#attente .encart p:last-child');
