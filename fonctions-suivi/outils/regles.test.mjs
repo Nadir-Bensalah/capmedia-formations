@@ -9,7 +9,7 @@
 
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
-import { doc, getDoc, getDocs, setDoc, updateDoc, addDoc, deleteDoc, collection, query, where, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, getDocs, setDoc, updateDoc, addDoc, deleteDoc, collection, collectionGroup, query, where, serverTimestamp } from 'firebase/firestore';
 
 const PROJET = process.env.GCLOUD_PROJECT || 'capmedia-1f90d';
 const env = await initializeTestEnvironment({
@@ -330,6 +330,21 @@ await doit("L'équipe classe une anomalie", updateDoc(doc(equipe(), 'projets/ate
 await refuse('Karim ne lit pas les anomalies', getDocs(collection(karim(), 'projets/atelier/anomalies')));
 await refuse('Camille ne classe pas une anomalie', updateDoc(doc(camille(), 'projets/atelier/anomalies/a1'), { statut: 'sans-suite' }));
 await refuse('Léa ne lit pas les anomalies d un autre projet', getDocs(collection(lea(), 'projets/atelier/anomalies')));
+
+console.log('\n== La plateforme de tests : les lectures en groupe');
+/* La console regarde tous les projets d'un coup. C'est un privilège
+   d'équipe : ouvert plus largement, il donnerait à un client la liste des
+   campagnes de tous les autres, ce qui est exactement ce qu'on refuse
+   partout ailleurs dans ce fichier. */
+await doit("L'équipe lit toutes les campagnes en groupe", getDocs(collectionGroup(equipe(), 'campagnes')));
+await doit("L'équipe lit toutes les anomalies en groupe", getDocs(collectionGroup(equipe(), 'anomalies')));
+await doit("L'équipe lit tous les scénarios en groupe", getDocs(collectionGroup(equipe(), 'scenarios')));
+await refuse('Camille ne lit pas les campagnes de tous les projets', getDocs(collectionGroup(camille(), 'campagnes')));
+await refuse('Camille ne lit pas les anomalies de tous les projets', getDocs(collectionGroup(camille(), 'anomalies')));
+await refuse('Camille ne lit pas les scénarios de tous les projets', getDocs(collectionGroup(camille(), 'scenarios')));
+await refuse('Karim ne lit pas les campagnes en groupe', getDocs(collectionGroup(karim(), 'campagnes')));
+await refuse('Karim ne lit pas les scénarios en groupe', getDocs(collectionGroup(karim(), 'scenarios')));
+await refuse('Un visiteur ne lit rien en groupe', getDocs(collectionGroup(anonyme(), 'campagnes')));
 
 console.log('\n== La plateforme de tests : le testeur reste dehors');
 /* Un testeur n'est pas membre du projet. Il n'a rien à faire dans les

@@ -683,9 +683,20 @@ service cloud.firestore {
       }
     }
 
-    // Les scénarios se lisent aussi en groupe, pour la bibliothèque de
-    // l'équipe qui couvre tous les projets.
+    // La console de tests regarde tous les projets d'un coup. Ces trois
+    // lectures en groupe ne sont ouvertes qu'à l'équipe : un client n'a
+    // aucune raison de voir ce qui se teste ailleurs, et un testeur encore
+    // moins. Chacun passe par la collection de son projet, qui porte ses
+    // propres contrôles.
     match /{chemin=**}/scenarios/{scenarioId} {
+      allow read: if estEquipe();
+    }
+
+    match /{chemin=**}/campagnes/{campagneId} {
+      allow read: if estEquipe();
+    }
+
+    match /{chemin=**}/anomalies/{anomalieId} {
       allow read: if estEquipe();
     }
 

@@ -15,11 +15,20 @@ import { onSnapshot } from './noyau.js';
 
 const entrees = new Map();
 
+/* Une lecture en groupe rassemble les documents de tous les projets, et la
+   donnée seule ne dit pas d'où elle vient : c'est le chemin qui le sait.
+   On garde donc l'identifiant du parent, sous un nom que personne n'écrit
+   en base, faute de quoi un scénario lu en groupe est orphelin. */
+const parentDe = (ref) => {
+  const p = ref && ref.parent && ref.parent.parent;
+  return p ? p.id : '';
+};
+
 const normaliser = (instantane) => {
   if (typeof instantane.docs !== 'undefined') {
-    return instantane.docs.map((d) => ({ id: d.id, ...d.data() }));
+    return instantane.docs.map((d) => ({ id: d.id, ...d.data(), _parent: parentDe(d.ref) }));
   }
-  return instantane.exists() ? { id: instantane.id, ...instantane.data() } : null;
+  return instantane.exists() ? { id: instantane.id, ...instantane.data(), _parent: parentDe(instantane.ref) } : null;
 };
 
 const obtenir = (cle) => {

@@ -17,6 +17,7 @@ import * as demande from './vues/demande.js';
 import * as brique from './vues/brique.js';
 import * as adminDemandes from './vues/admin-demandes.js';
 import * as adminTaches from './vues/admin-taches.js';
+import * as tests from './vues/tests.js';
 import * as adminPlanning from './vues/admin-planning.js';
 import * as messages from './vues/messages.js';
 import * as adminValidations from './vues/admin-validations.js';
@@ -69,6 +70,11 @@ const construireNavigation = () => {
   const nouveauxPreprojets = demandesProjet.filter((d) => d.statut === 'nouvelle').length;
   const piecesDues = documents.filter((d) => FACTURES_DUES.includes(d.statut) || d.statut === 'envoye').length;
 
+  /* La console de tests annonce ce qui tourne et ce qui bloque : une
+     campagne en cours, et une anomalie qu'on n'a pas encore refermée. */
+  const campagnesEnCours = (magasin.lire(K.campagnesToutes) || []).filter((c) => c.statut === 'en-cours').length;
+  const anomaliesOuvertes = (magasin.lire(K.anomaliesToutes) || []).filter((a) => !['corrigee', 'sans-suite'].includes(a.statut)).length;
+
   definirNavigation([
     { items: [{ chemin: '/', libelle: 'Accueil', icone: 'accueil', exact: true }] },
     {
@@ -84,6 +90,7 @@ const construireNavigation = () => {
       items: [
         { chemin: '/demandes', libelle: 'Demandes', icone: 'inbox', compte: { total: ouvertes, neuf: nouvelles } },
         { chemin: '/taches', libelle: 'Tâches', icone: 'taches', compte: { total: aFaire, neuf: enRetard } },
+        { chemin: '/tests', libelle: 'Tests', icone: 'bug', compte: { total: campagnesEnCours, neuf: anomaliesOuvertes } },
         { chemin: '/planning', libelle: 'Planning', icone: 'calendrier', compte: { total: reunions.length } },
         { chemin: '/messages', libelle: 'Messages', icone: 'messages', compte: { total: projets.filter((p) => !p.archive && !p.interne).length, neuf: nonLus } },
         { chemin: '/validations', libelle: 'Validations', icone: 'valider', compte: { total: attendues } },
@@ -162,6 +169,7 @@ definir([
   { chemin: '/nouveaux-projets/:id', vue: (ctx) => nouveauProjet.detail(ctx, env) },
   { chemin: '/demandes', vue: (ctx) => adminDemandes.vue(ctx, env) },
   { chemin: '/taches', vue: (ctx) => adminTaches.vue(ctx, env) },
+  { chemin: '/tests', vue: (ctx) => tests.vue(ctx, env) },
   { chemin: '/planning', vue: (ctx) => adminPlanning.vue(ctx, env) },
   { chemin: '/messages', vue: (ctx) => messages.vue(ctx, env) },
   { chemin: '/messages/:pid', vue: (ctx) => messages.vue(ctx, env) },

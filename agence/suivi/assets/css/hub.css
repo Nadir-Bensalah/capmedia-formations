@@ -1767,7 +1767,7 @@ input, select, textarea { font: inherit; color: inherit; }
 .bloc-tete {
   display: flex; align-items: center; gap: 8px;
   font-size: 13px; font-weight: 600; letter-spacing: .02em;
-  color: var(--t-3); text-transform: uppercase;
+  color: var(--encre-3); text-transform: uppercase;
   margin: 0 0 8px;
 }
 
@@ -1794,7 +1794,7 @@ input, select, textarea { font: inherit; color: inherit; }
   flex: 0 0 auto; min-width: 58px;
   font-size: 12px; font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: var(--t-3);
+  color: var(--encre-3);
 }
 
 .scenario-titre {
@@ -1818,3 +1818,23 @@ input, select, textarea { font: inherit; color: inherit; }
 .couverture .puce { gap: 6px; }
 
 .puce--mini { font-size: 11px; padding: 1px 6px; }
+
+/* La console de tests : la barre de filtres, et les chiffres du haut. */
+.barre-tests { gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+
+.chiffres-tests { gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.chiffre {
+  flex: 1 1 140px; min-width: 0;
+  padding: 14px 16px;
+  background: var(--fond-2);
+  border-radius: 14px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.chiffre-valeur {
+  font-size: 30px; font-weight: 650; line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.chiffre-nom { font: var(--t-micro); font-weight: 400; color: var(--encre-3); }
+/* Le seul chiffre qui change de couleur est celui qui demande une action :
+   une anomalie ouverte. Colorer les quatre reviendrait à n'en colorer aucun. */
+.chiffre--alerte .chiffre-valeur { color: var(--alerte); }

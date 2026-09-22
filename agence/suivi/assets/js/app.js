@@ -19,6 +19,7 @@ import * as brique from './vues/brique.js';
 import * as messages from './vues/messages.js';
 import * as valider from './vues/valider.js';
 import * as calendrier from './vues/calendrier.js';
+import * as tests from './vues/tests.js';
 import * as finances from './vues/finances.js';
 import * as documents from './vues/documents.js';
 import * as parametres from './vues/parametres.js';
@@ -49,7 +50,11 @@ const compter = () => {
   });
   const profil = magasin.lire(K.profil);
   const nonLus = projets.reduce((s, p) => s + nonLusProjet(magasin.lire(K.messages(p.id)) || [], profil, p.id, session.utilisateur.uid), 0);
-  return { projets, attente, nonLus, profil };
+  /* L'entrée Tests n'apparaît chez le client que si des scénarios le
+     concernent : un menu qui ouvre sur une page vide inquiète plus qu'il
+     n'informe. */
+  const scenariosDuClient = projets.reduce((n, p) => n + (magasin.lire(K.scenarios(p.id)) || []).filter((x) => x.actif !== false).length, 0);
+  return { projets, attente, nonLus, profil, scenariosDuClient };
 };
 
 /* Les sections d'un projet, dans l'ordre de ses onglets. */
@@ -73,7 +78,7 @@ const projetOuvert = () => {
 const ouvertSur = (pid) => projetOuvert() === pid;
 
 const construireNavigation = () => {
-  const { projets, attente, nonLus } = compter();
+  const { projets, attente, nonLus, scenariosDuClient } = compter();
   const parProjet = (pid) => attente.filter((a) => a.projet === pid).length;
   const validations = attente.filter((a) => a.genre === 'validation').length;
   const dues = attente.filter((a) => a.genre === 'facture' || a.genre === 'devis').length;
@@ -112,6 +117,7 @@ const construireNavigation = () => {
         { chemin: '/valider', libelle: 'En attente de vous', icone: 'valider', compte: { total: attente.length, neuf: attente.length } },
         { chemin: '/messages', libelle: 'Messages', icone: 'messages', compte: { total: 0, neuf: nonLus } },
         { chemin: '/calendrier', libelle: 'Calendrier', icone: 'calendrier', compte: { total: reunionsAVenir.length } },
+        ...(scenariosDuClient ? [{ chemin: '/tests', libelle: 'Tests', icone: 'bug', compte: { total: scenariosDuClient } }] : []),
         { chemin: '/finances', libelle: 'Devis et factures', icone: 'finances', compte: { total: pieces.length, neuf: dues } },
         { chemin: '/documents', libelle: 'Documents', icone: 'documents', compte: { total: fichiers.length } },
       ],
@@ -164,6 +170,7 @@ definir([
   { chemin: '/valider', vue: (ctx) => valider.vue(ctx, env) },
   { chemin: '/valider/:vid', vue: (ctx) => valider.vue(ctx, env) },
   { chemin: '/calendrier', vue: (ctx) => calendrier.vue(ctx, env) },
+  { chemin: '/tests', vue: (ctx) => tests.vue(ctx, env) },
   { chemin: '/finances', vue: (ctx) => finances.vue(ctx, env) },
   { chemin: '/finances/:did', vue: (ctx) => finances.vue(ctx, env) },
   { chemin: '/documents', vue: (ctx) => documents.vue(ctx, env) },

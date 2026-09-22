@@ -66,6 +66,8 @@ export const K = {
   blocagesTous: 'blocages:*',
   jalonsTous: 'jalons:*',
   scenariosTous: 'scenarios:*',
+  campagnesToutes: 'campagnes:*',
+  anomaliesToutes: 'anomalies:*',
   testeurs: 'testeurs',
   audit: 'audit',
   envois: 'envois',
@@ -135,6 +137,12 @@ export const abonnerGlobal = (lot, session) => {
     lot.abonner(K.activiteToute, () => query(col('activite'), orderBy('date', 'desc'), limit(200)));
     lot.abonner(K.demandesProjet, () => col('demandesProjet'));
     lot.abonner(K.jalonsTous, () => collectionGroup(bdd, 'jalons'));
+    /* La console de tests regarde tous les projets d'un coup : campagnes,
+       anomalies et scénarios se lisent donc en groupe, comme les étapes. */
+    lot.abonner(K.campagnesToutes, () => collectionGroup(bdd, 'campagnes'));
+    lot.abonner(K.anomaliesToutes, () => collectionGroup(bdd, 'anomalies'));
+    lot.abonner(K.scenariosTous, () => collectionGroup(bdd, 'scenarios'));
+    lot.abonner(K.testeurs, () => col('testeurs'));
   } else {
     const uid = session.utilisateur.uid;
     lot.abonner(K.projets, () => query(col('projets'), where('membres', 'array-contains', uid)));

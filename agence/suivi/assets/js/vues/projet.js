@@ -10,7 +10,7 @@ import {
   STATUTS_PROJET, STATUTS_COMPOSANT, TYPES_COMPOSANT, STATUTS_ETAPE, STATUTS_TACHE, PRIORITES, STATUTS, TYPES, URGENCES, OUVERTS, ATTEND_CLIENT,
   CATEGORIES_FICHIER, CATEGORIES_LIEN, STATUTS_RELEASE, TYPES_CHANGEMENT, TYPES_NOTE, SANTES, STATUTS_VALIDATION, QUALIFICATIONS, statutProjet, PLATEFORMES, nomsContacts, contactsProjet, PORTEES_DEVIS, age,
   verdictDelai, reportsDe, dateOrigine, MOTIFS_REPORT, dateLongue, enDate,
-  NIVEAUX_SCENARIO, BLOCS_SCENARIO, PLATEFORMES_TEST, STATUTS_CAMPAGNE, GRAVITES_ANOMALIE, STATUTS_ANOMALIE
+  STATUTS_CAMPAGNE, STATUTS_ANOMALIE
 } from '../noyau.js';
 import {
   icone, pastille, pastilleTexte, puce, pucePlateforme, iconePlateforme, tonPlateforme, avatarProjet, avatar, progression, anneau, ligne, vide, fait, chronoItem, parJour, squelette, titrePage,
@@ -243,7 +243,6 @@ export const vue = async (ctx, env) => {
     if (action === 'ouvrir-etape') { const j = d.jalons.find((x) => x.id === id); if (j) ouvrirEtape(j, d, { pid, env }); return null; }
     if (action === 'ouvrir-reunion') { const r = d.reunions.find((x) => x.id === id); if (r) ouvrirReunion(r, { pid, env }); return null; }
     if (action === 'ouvrir-note') { const n = d.notes.find((x) => x.id === id); if (n) ouvrirNote(n, { pid, env }); return null; }
-    if (action === 'ouvrir-scenario') { const x = d.scenarios.find((y) => y.ref === el.dataset.ref); if (x) ouvrirScenario(x, { pid, env }); return null; }
     if (action === 'ouvrir-release') { const r = d.releases.find((x) => x.id === id); if (r) ouvrirRelease(r, { pid, env }); return null; }
     if (action === 'ouvrir-validation') return naviguer(equipe ? `/validations/${id}` : `/valider/${id}`);
     return null;
@@ -406,118 +405,57 @@ const boutonsEdition = (env, genre, id, libelle) => (env.role === 'equipe'
    passent, et c'est la seule donnée qui coûte de l'argent : un scénario
    doublé est payé deux fois.
    ------------------------------------------------------------------------ */
+/* --- Tests ---------------------------------------------------------------
+   Un résumé, pas la console. Ici on répond à « où en sont les tests de ce
+   projet », et on renvoie vers la console pour tout le reste : la
+   comparaison entre projets, les filtres par système, le pilotage.
+   ------------------------------------------------------------------------ */
 const tests = (d, { pid, env }) => {
   const equipe = env.role === 'equipe';
   const scenarios = d.scenarios;
-  const campagnes = d.campagnes.slice().sort((a, b) => ((STATUTS_CAMPAGNE[a.statut] || {}).ordre || 9) - ((STATUTS_CAMPAGNE[b.statut] || {}).ordre || 9));
-  const anomalies = d.anomalies.slice().sort((a, b) => ((GRAVITES_ANOMALIE[a.gravite] || {}).rang || 9) - ((GRAVITES_ANOMALIE[b.gravite] || {}).rang || 9));
+  const campagnes = d.campagnes;
+  const anomalies = d.anomalies;
 
-  /* Le coût d'une campagne complète, en passages. Un scénario doublé compte
-     deux fois côté mobile, une seule côté web : le web n'a qu'un moteur. */
-  const compte = { socle: 0, transversal: 0, reparti: 0 };
-  scenarios.forEach((s) => { compte[s.niveau] = (compte[s.niveau] || 0) + 1; });
-  const mobiles = compte.socle * 2 + compte.transversal * 2 + compte.reparti;
-  const webs = scenarios.filter((s) => (s.plateformes || []).includes('web')).length;
-
-  if (!scenarios.length) {
+  if (!scenarios.length && !campagnes.length) {
     return `<section class="section" style="margin-top:0">
       <div class="section-tete"><h2>Tests</h2>${boutonNouveau(env, 'scenario', 'Nouveau scénario')}</div>
-      ${vide({ icone: 'check', titre: 'Aucun scénario', texte: equipe ? 'Écrivez-en un, ou versez un plan de tests existant avec l\'outil d\'import.' : 'Les scénarios de test apparaîtront ici.' })}
+      ${vide({ icone: 'bug', titre: 'Aucun scénario', texte: equipe ? 'Écrivez-en un, ou versez un plan de tests existant avec l\'outil d\'import.' : 'Les scénarios de test apparaîtront ici.' })}
     </section>`;
   }
 
-  /* Rangés par bloc, dans l'ordre du plan. */
-  const parBloc = [];
-  scenarios.forEach((s) => {
-    let g = parBloc.find((x) => x.cle === s.bloc);
-    if (!g) { g = { cle: s.bloc, libelle: (BLOCS_SCENARIO[s.bloc] || {}).libelle || s.blocLibelle || 'Divers', items: [] }; parBloc.push(g); }
-    g.items.push(s);
-  });
-
-  const ligneScenario = (s) => `
-    <div class="scenario${NIVEAUX_SCENARIO[s.niveau] && NIVEAUX_SCENARIO[s.niveau].double ? ' scenario--double' : ''}">
-      <button class="scenario-corps" type="button" data-action="ouvrir-scenario" data-ref="${echapper(s.ref)}">
-        <span class="scenario-ref">${echapper(s.ref)}</span>
-        <span class="scenario-titre">${echapper(s.titre)}</span>
-        <span class="scenario-fin">
-          ${(s.plateformes || []).length < 3 ? `<span class="puce puce--mini">${echapper((s.plateformes || []).map((p) => (PLATEFORMES_TEST[p] || {}).court || p).join(' '))}</span>` : ''}
-          ${pastille(NIVEAUX_SCENARIO, s.niveau || 'reparti')}
-        </span>
-      </button>
-      ${boutonsEdition(env, 'scenario', s.ref, s.ref)}
-    </div>`;
+  const parNiveau = { socle: 0, transversal: 0, reparti: 0 };
+  scenarios.forEach((s) => { parNiveau[s.niveau] = (parNiveau[s.niveau] || 0) + 1; });
+  const passages = parNiveau.socle * 2 + parNiveau.transversal * 2 + parNiveau.reparti;
+  const enCours = campagnes.filter((c) => c.statut === 'en-cours');
+  const ouvertes = anomalies.filter((a) => !['corrigee', 'sans-suite'].includes(a.statut));
+  const bloquantes = ouvertes.filter((a) => a.gravite === 'bloquant');
 
   return `
   <section class="section" style="margin-top:0">
     <div class="section-tete">
-      <div><h2>Scénarios</h2><p class="chapo">${pluriel(scenarios.length, 'scénario', 'scénarios')} dans la bibliothèque. Une campagne complète représente ${mobiles} passages sur mobile et ${webs} sur le web.</p></div>
-      ${boutonNouveau(env, 'scenario', 'Nouveau scénario')}
+      <div><h2>Tests</h2><p class="chapo">${pluriel(scenarios.length, 'scénario', 'scénarios')}, soit ${passages} passages sur mobile par campagne complète.</p></div>
+      <a class="btn btn-principal btn-petit" href="#/tests?projet=${echapper(pid)}">${icone('bug')} Ouvrir la console</a>
     </div>
 
-    <div class="rang couverture">
-      ${Object.entries(NIVEAUX_SCENARIO).map(([cle, f]) => `<span class="puce" data-astuce="${echapper(f.aide)}">${pastille(NIVEAUX_SCENARIO, cle)} ${compte[cle] || 0}</span>`).join('')}
+    <div class="rang chiffres-tests">
+      <div class="chiffre"><span class="chiffre-valeur">${scenarios.length}</span><span class="chiffre-nom">scénarios</span></div>
+      <div class="chiffre"><span class="chiffre-valeur">${parNiveau.socle + parNiveau.transversal}</span><span class="chiffre-nom">passés deux fois</span></div>
+      <div class="chiffre"><span class="chiffre-valeur">${enCours.length}</span><span class="chiffre-nom">campagnes en cours</span></div>
+      <div class="chiffre${ouvertes.length ? ' chiffre--alerte' : ''}"><span class="chiffre-valeur">${ouvertes.length}</span><span class="chiffre-nom">anomalies ouvertes</span></div>
     </div>
 
-    ${parBloc.map((g) => `
-      <div class="bloc-scenarios">
-        <h3 class="bloc-tete">${echapper(g.libelle)}<span class="badge">${g.items.length}</span></h3>
-        <div class="liste liste--serree">${g.items.map(ligneScenario).join('')}</div>
-      </div>`).join('')}
-  </section>
+    ${bloquantes.length ? `<div class="liste" style="margin-top:16px">${bloquantes.slice(0, 3).map((a) => ligne({
+      icone: 'alerte', ton: 'rouge', titre: echapper(a.titre || 'Anomalie bloquante'),
+      sous: (a.plateformes || []).join(', ') || 'Bloquant', fin: pastille(STATUTS_ANOMALIE, a.statut || 'nouvelle'),
+    })).join('')}</div>` : ''}
 
-  <section class="section">
-    <div class="section-tete">
-      <div><h2>Campagnes</h2><p class="chapo">Une campagne déroule une sélection de scénarios sur une version précise.</p></div>
-      ${boutonNouveau(env, 'campagne', 'Nouvelle campagne')}
-    </div>
-    ${campagnes.length ? `<div class="liste">${campagnes.map((c) => ligne({
-      icone: c.statut === 'close' ? 'check' : 'check', ton: c.statut === 'close' ? 'vert' : c.statut === 'en-cours' ? 'bleu' : '',
+    ${enCours.length ? `<div class="liste" style="margin-top:16px">${enCours.map((c) => ligne({
+      href: `#/tests?projet=${echapper(pid)}`, icone: 'bug', ton: 'bleu',
       titre: echapper(c.titre || 'Campagne'),
-      sous: `${(c.testeurs || []).length ? pluriel((c.testeurs || []).length, 'testeur', 'testeurs') : 'aucun testeur'}${c.debut ? ` · ${echapper(dateCourte(c.debut))}` : ''}`,
-      fin: pastille(STATUTS_CAMPAGNE, c.statut || 'preparation'),
-      action: 'ouvrir-campagne', attrs: `data-id="${echapper(c.id)}"`,
-    })).join('')}</div>`
-    : vide({ icone: 'check', titre: 'Aucune campagne', texte: 'Une campagne prend des scénarios, les distribue aux testeurs, et garde le résultat daté.', compact: true })}
-  </section>
-
-  ${anomalies.length ? `<section class="section">
-    <div class="section-tete"><div><h2>Anomalies</h2><p class="chapo">Plusieurs échecs sur le même scénario font une seule anomalie.</p></div></div>
-    <div class="liste">${anomalies.map((a) => ligne({
-      icone: 'alerte', ton: (GRAVITES_ANOMALIE[a.gravite] || {}).voile === 'rouge' ? 'rouge' : (GRAVITES_ANOMALIE[a.gravite] || {}).voile === 'ambre' ? 'ambre' : '',
-      titre: echapper(a.titre || 'Anomalie'),
-      sous: `${(a.passages || []).length ? pluriel((a.passages || []).length, 'passage', 'passages') : ''}${(a.plateformes || []).length ? ` · ${echapper((a.plateformes || []).join(', '))}` : ''}`,
-      fin: `${pastille(GRAVITES_ANOMALIE, a.gravite || 'mineur')}${pastille(STATUTS_ANOMALIE, a.statut || 'nouvelle')}`,
-    })).join('')}</div>
-  </section>` : ''}`;
-};
-
-/* Le détail d'un scénario, dans une feuille. On y lit ce que le testeur
-   lira : les options à poser, et le résultat attendu. */
-/* Le plan de tests est écrit en markdown, et son gras porte du sens : il
-   désigne l'option exacte à choisir dans l'application (« Type **Rappel** »).
-   On le rend, et rien d'autre : le texte est échappé avant, donc aucune
-   balise venue de la fiche ne peut s'ouvrir ici. */
-const gras = (texte) => echapper(texte || '').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-
-const ouvrirScenario = (s, { pid, env }) => {
-  const equipe = env.role === 'equipe';
-  const niveau = NIVEAUX_SCENARIO[s.niveau] || NIVEAUX_SCENARIO.reparti;
-  const m = modale({
-    titre: s.titre, sousTitre: `${s.ref} · ${(BLOCS_SCENARIO[s.bloc] || {}).libelle || s.blocLibelle || ''}`, feuille: true,
-    corps: `
-      <div class="rang" style="gap:8px;flex-wrap:wrap;margin-bottom:16px">
-        ${pastille(NIVEAUX_SCENARIO, s.niveau || 'reparti')}
-        ${(s.plateformes || []).map((p) => `<span class="puce">${echapper((PLATEFORMES_TEST[p] || {}).libelle || p)}</span>`).join('')}
-      </div>
-      <p class="aide" style="margin-bottom:20px">${echapper(niveau.aide)}</p>
-      ${s.options ? `<div class="groupe"><span class="etiquette-champ">Options à poser</span><p class="t-corps">${gras(s.options)}</p></div>` : ''}
-      <div class="groupe"><span class="etiquette-champ">Résultat attendu</span><p class="t-corps">${gras(s.attendu)}</p></div>
-      <p class="aide" style="margin-top:18px">Un scénario où rien ne se passe est un échec, jamais une réussite.</p>`,
-    pied: equipe ? `<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button><button class="btn btn-principal" type="button" data-editer>Modifier</button>` : '<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>',
-  });
-  const bouton = m.el.querySelector('[data-editer]');
-  if (bouton) bouton.addEventListener('click', async () => { m.fermer(); await editer('scenario', env, { pid, fiche: s }); });
-  return m.fin;
+      sous: `${(c.testeurs || []).length ? pluriel((c.testeurs || []).length, 'testeur', 'testeurs') : 'aucun testeur'}${c.debut ? ` · depuis le ${echapper(dateCourte(c.debut))}` : ''}`,
+      fin: pastille(STATUTS_CAMPAGNE, c.statut),
+    })).join('')}</div>` : ''}
+  </section>`;
 };
 
 const rendreOnglet = (onglet, d, c) => {
