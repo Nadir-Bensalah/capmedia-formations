@@ -38,8 +38,16 @@ const verifier=(c,b,m)=>c?ok(b):dire(m?`${b} · ${m}`:b);
   await pause(2500);
   await page.evaluate(()=>{try{localStorage.setItem('suivi:cle-admin','cle-essai-locale');}catch(e){}});
   await page.reload({waitUntil:'domcontentloaded'}); await pause(3500);
-  await page.evaluate(()=>{location.hash='/tests?projet=atelier';window.dispatchEvent(new HashChangeEvent('hashchange'));});
-  await pause(3000);
+  /* Poser l'adresse une fois et attendre trois secondes ne suffit pas :
+     sous charge, la page n'a pas fini de se monter et la suite accuse
+     l'absence d'un élément qui n'est simplement pas encore là. On repose
+     l'adresse jusqu'à ce que la SECTION soit rendue, comme les autres
+     suites le font déjà. */
+  for (let i=0;i<8;i++){
+    await page.evaluate(()=>{location.hash='/tests?projet=atelier';window.dispatchEvent(new HashChangeEvent('hashchange'));});
+    await pause(2000);
+    if (await page.evaluate(()=>!!document.querySelector('[data-editer-campagne]'))) break;
+  }
 
   console.log('\n== Le crayon reste dans la ligne');
   const g=await page.evaluate(()=>{
