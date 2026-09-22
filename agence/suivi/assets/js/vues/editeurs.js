@@ -172,7 +172,9 @@ const feuille = ({ titre, sousTitre, corps, enregistrer, libelle = 'Enregistrer'
     if (boiteDepot && boiteDepot.occupe) { toast('Attendez la fin des envois.', 'erreur'); return; }
     const bouton = $('button[type="submit"]', m.pied);
     const ok = await agir(bouton, async () => {
-      const resultat = await enregistrer(lireForme(forme), boiteDepot ? boiteDepot.pieces : []);
+      /* La racine en troisième argument : un éditeur peut porter des
+         contrôles hors du formulaire, que « lireForme » ne voit pas. */
+      const resultat = await enregistrer(lireForme(forme), boiteDepot ? boiteDepot.pieces : [], m.el);
       /* Un éditeur qui renvoie « undefined » refuse la saisie et l'a déjà
          dit : fermer la feuille effacerait le formulaire sous les yeux de
          celui qui vient de se tromper, et il devrait tout retaper. */
@@ -422,6 +424,116 @@ const editeurs = {
       return true;
     },
   }),
+
+  /* Une campagne. Elle ne possède pas les scénarios, elle y pioche : les
+     mêmes 173 sont rejoués d'une version à l'autre, et c'est ce qui permet
+     de dire « DI-15 est tombé trois fois sur quatre campagnes ». Une
+     campagne qui posséderait ses scénarios obligerait à tout réécrire à
+     chaque version, et perdrait l'histoire au passage. */
+  campagne: (env, { pid, fiche }) => {
+    /* L'équipe lit les scénarios en groupe, tous projets confondus : la
+       clé par projet n'est alimentée que côté client. On prend la première
+       qui répond, et on retient ceux de ce projet. */
+    const tous = [
+      ...(magasin.lire(K.scenarios(pid)) || []),
+      ...(magasin.lire(K.scenariosTous) || []).filter((x) => (x.projet || x._parent) === pid),
+    ].filter((x, i, l) => x.actif !== false && l.findIndex((y) => y.ref === x.ref) === i);
+    const blocs = [];
+    tous.forEach((x) => {
+      let g = blocs.find((b) => b.cle === x.bloc);
+      if (!g) { g = { cle: x.bloc, libelle: (BLOCS_SCENARIO[x.bloc] || {}).libelle || x.blocLibelle || 'Divers', n: 0 }; blocs.push(g); }
+      g.n += 1;
+    });
+    const choisis = new Set(fiche ? (fiche.scenarios || []) : tous.map((x) => x.ref));
+
+    return feuille({
+      titre: fiche ? 'La campagne' : 'Nouvelle campagne',
+      sousTitre: fiche ? fiche.titre : 'Elle déroule une sélection de scénarios sur une version précise.',
+      libelle: fiche ? 'Enregistrer' : 'Créer la campagne',
+      corps: `
+        ${champ('titre', 'Titre', fiche ? fiche.titre : '', { placeholder: 'Campagne Octobre 2026, mise en production 1.2.0' })}
+        <div class="forme-rang">
+          ${champ('debut', 'Début', fiche ? dateISO(fiche.debut) : '', { type: 'date', facultatif: true })}
+          ${champ('fin', 'Fin prévue', fiche ? dateISO(fiche.fin) : '', { type: 'date', facultatif: true })}
+        </div>
+        ${select('statut', 'Statut', STATUTS_CAMPAGNE, fiche ? fiche.statut : 'preparation')}
+        <div class="groupe">
+          <span class="etiquette-champ">Numéros de build</span>
+          <div class="forme-rang">
+            ${champ('build_ios', 'iOS', fiche ? ((fiche.builds || {}).ios || '') : '', { facultatif: true, placeholder: '24' })}
+            ${champ('build_android', 'Android', fiche ? ((fiche.builds || {}).android || '') : '', { facultatif: true, placeholder: '31' })}
+          </div>
+          ${champ('build_web', 'Web', fiche ? ((fiche.builds || {}).web || '') : '', { facultatif: true, placeholder: 'qa-1.2.0' })}
+          <p class="aide">Un rapport dont on ne sait pas à quelle version il correspond ne sert à rien.</p>
+        </div>
+
+        <div class="groupe">
+          <span class="etiquette-champ">Scénarios déroulés</span>
+          <div class="rang" style="gap:8px;flex-wrap:wrap;margin-bottom:10px">
+            <button class="btn btn-secondaire btn-petit" type="button" data-tout>Tous les blocs</button>
+            <button class="btn btn-secondaire btn-petit" type="button" data-rien>Aucun bloc</button>
+          </div>
+          <label class="case" style="margin-bottom:10px"><input type="checkbox" id="ed-socle-seul"> Ne garder que les scénarios du socle et transversaux</label>
+          <div class="cases-blocs">${blocs.map((b) => `
+            <label class="case"><input type="checkbox" data-bloc="${echapper(b.cle)}" checked> ${echapper(b.libelle)} <span class="badge">${b.n}</span></label>`).join('')}</div>
+          <p class="aide" id="compte-scenarios"></p>
+        </div>`,
+      surMontage: (racine) => {
+        const cases = [...racine.querySelectorAll('[data-bloc]')];
+        const compte = racine.querySelector('#compte-scenarios');
+
+        /* Le nombre de passages, pas le nombre de scénarios : c'est lui qui
+           dit ce que la campagne coûte en temps de testeur, puisqu'un
+           scénario du socle est déroulé deux fois. */
+        const socleSeul = racine.querySelector('#ed-socle-seul');
+
+        /* Deux filtres qui se croisent : les blocs disent QUOI tester, le
+           socle dit À QUELLE PROFONDEUR. Les confondre donnait un bouton
+           « socle seulement » qui ne retirait rien, puisque chaque bloc
+           contient au moins un scénario du socle. */
+        const retenus = () => {
+          const pris = new Set(cases.filter((c) => c.checked).map((c) => c.dataset.bloc));
+          return tous.filter((x) => pris.has(x.bloc)
+            && (!socleSeul.checked || (NIVEAUX_SCENARIO[x.niveau] || {}).double));
+        };
+
+        const majCompte = () => {
+          const liste = retenus();
+          const doubles = liste.filter((x) => (NIVEAUX_SCENARIO[x.niveau] || {}).double).length;
+          compte.textContent = liste.length
+            ? `${liste.length} scénarios, soit ${liste.length + doubles} passages sur mobile et ${liste.filter((x) => (x.plateformes || []).includes('web')).length} sur le web.`
+            : 'Aucun scénario : la campagne n\'aurait rien à distribuer.';
+        };
+
+        cases.forEach((c) => c.addEventListener('change', majCompte));
+        socleSeul.addEventListener('change', majCompte);
+        racine.querySelector('[data-tout]').addEventListener('click', () => { cases.forEach((c) => { c.checked = true; }); majCompte(); });
+        racine.querySelector('[data-rien]').addEventListener('click', () => { cases.forEach((c) => { c.checked = false; }); majCompte(); });
+        majCompte();
+      },
+      regles: { titre: obligatoire() },
+      enregistrer: async (d, _pieces, racine) => {
+        const boite = racine || document;
+        const pris = new Set([...boite.querySelectorAll('[data-bloc]')].filter((c) => c.checked).map((c) => c.dataset.bloc));
+        const seulementSocle = Boolean((boite.querySelector('#ed-socle-seul') || {}).checked);
+        const refs = tous
+          .filter((x) => pris.has(x.bloc) && (!seulementSocle || (NIVEAUX_SCENARIO[x.niveau] || {}).double))
+          .map((x) => x.ref);
+        if (!refs.length) { toast('Choisissez au moins un bloc de scénarios.', 'erreur'); return undefined; }
+        const donnees = {
+          titre: d.titre, statut: d.statut,
+          debut: d.debut ? new Date(d.debut) : null,
+          fin: d.fin ? new Date(d.fin) : null,
+          builds: { ios: d.build_ios || '', android: d.build_android || '', web: d.build_web || '' },
+          scenarios: refs,
+        };
+        if (fiche) await ecrire.majCampagne(pid, fiche.id, donnees);
+        else await ecrire.creerCampagne(pid, { ...donnees, testeurs: [], affectation: {} });
+        toast(fiche ? 'Campagne enregistrée.' : `Campagne créée, ${refs.length} scénarios retenus.`);
+        return true;
+      },
+    });
+  },
 
   jalon: (env, { pid, fiche, defaut = {} }) => feuille({
     titre: fiche ? "L'étape" : 'Nouvelle étape', sousTitre: 'Une étape de la feuille de route.',

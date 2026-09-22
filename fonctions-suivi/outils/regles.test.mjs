@@ -82,6 +82,7 @@ await env.withSecurityRulesDisabled(async (ctx) => {
      Sonia, une campagne close, et un passage de chacun. */
   await setDoc(doc(b, 'testeurs', KARIM), { prenom: 'Karim', email: 'karim.essai@exemple.test', profil: { age: '25-34' }, projets: ['atelier'] });
   await setDoc(doc(b, 'testeurs', SONIA), { prenom: 'Sonia', email: 'sonia.essai@exemple.test', profil: { age: '35-44' }, projets: ['atelier'] });
+  await setDoc(doc(b, 'testeurs', MARC), { prenom: 'Marc', email: 'marc.essai@exemple.test', profil: { age: '45-54' }, projets: [] });
   await setDoc(doc(b, 'projets/atelier/scenarios/DI-15'), { ref: 'DI-15', bloc: 'dates-importantes', titre: 'Rappel fin de mois', niveau: 'socle', actif: true });
   await setDoc(doc(b, 'projets/atelier/scenarios/ID-01'), { ref: 'ID-01', bloc: 'idees', titre: 'Idee minimale', niveau: 'reparti', actif: true });
   await setDoc(doc(b, 'projets/atelier/campagnes/c1'), { titre: 'Passe 1.2.0', statut: 'en-cours', testeurs: [KARIM, SONIA], builds: { ios: '24' } });
@@ -330,6 +331,37 @@ await doit("L'équipe classe une anomalie", updateDoc(doc(equipe(), 'projets/ate
 await refuse('Karim ne lit pas les anomalies', getDocs(collection(karim(), 'projets/atelier/anomalies')));
 await refuse('Camille ne classe pas une anomalie', updateDoc(doc(camille(), 'projets/atelier/anomalies/a1'), { statut: 'sans-suite' }));
 await refuse('Léa ne lit pas les anomalies d un autre projet', getDocs(collection(lea(), 'projets/atelier/anomalies')));
+
+console.log('\n== La plateforme de tests : les angles morts');
+/* Trois trous trouvés en auditant, et qui avaient tous la même cause : la
+   garde existait, mais rien ne l'éprouvait sous le bon angle.
+
+   1. Un titre de scénario nomme un client, une fonctionnalité, un
+      prestataire. « estTesteur() » seul ouvrait la bibliothèque de tout le
+      hub à quiconque porte la revendication. */
+await doit('Karim lit les scénarios du projet où il est inscrit', getDocs(collection(karim(), 'projets/atelier/scenarios')));
+await refuse('Karim ne lit pas les scénarios d un projet où il n est pas', getDocs(collection(karim(), 'projets/boutique/scenarios')));
+await refuse('Marc non plus, même par adresse directe', getDoc(doc(marc(), 'projets/boutique/scenarios/DI-15')));
+
+/* 2. Firestore fait l'union des règles : la plus permissive gagne. Un
+      « allow update: if estEquipe() » nu dans le même bloc annulait les
+      quarante lignes de garde-fous posées au-dessus, gel de la campagne
+      close compris. C'est le pire cas, parce que le fichier a l'air juste
+      à la lecture. */
+await doit("L'équipe rattache un passage à une anomalie", updateDoc(doc(equipe(), `projets/atelier/campagnes/c1/passages/${KARIM}__DI-15`), { anomalie: 'a1' }));
+await refuse("L'équipe ne réécrit pas le résultat d'un passage", updateDoc(doc(equipe(), `projets/atelier/campagnes/c1/passages/${KARIM}__DI-15`), { resultat: 'ok' }));
+await refuse("L'équipe ne déplace pas un passage vers un autre testeur", updateDoc(doc(equipe(), `projets/atelier/campagnes/c1/passages/${KARIM}__DI-15`), { testeur: SONIA }));
+await refuse("L'équipe n'ajoute pas un champ à un passage", updateDoc(doc(equipe(), `projets/atelier/campagnes/c1/passages/${KARIM}__DI-15`), { bidon: 'x' }));
+await doit("Le tri se fait aussi après la clôture", updateDoc(doc(equipe(), `projets/atelier/campagnes/close/passages/${KARIM}__ID-01`), { anomalie: 'a1' }));
+await refuse("Mais rien d'autre sur une campagne close", updateDoc(doc(equipe(), `projets/atelier/campagnes/close/passages/${KARIM}__ID-01`), { resultat: 'ko', preuves: ['p/x.mp4'] }));
+
+/* 3. L'appréciation n'avait ni borne ni protection contre l'effacement,
+      alors que le passage voisin refuse les deux. Une appréciation est une
+      donnée de campagne au même titre : se raviser après coup la falsifie. */
+await doit('Sonia dépose une appréciation bornée', setDoc(doc(sonia(), `projets/atelier/campagnes/c1/appreciations/${SONIA}`), { beaute: 3, prix: 7, libre: 'Rien à signaler' }));
+await refuse('Un texte libre sans fin est refusé', setDoc(doc(sonia(), `projets/atelier/campagnes/c1/appreciations/${SONIA}`), { beaute: 3, libre: 'x'.repeat(9000) }));
+await refuse('Une appréciation ne s efface pas', deleteDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`)));
+await refuse("L'équipe non plus n'efface pas une appréciation", deleteDoc(doc(equipe(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`)));
 
 console.log('\n== La plateforme de tests : les lectures en groupe');
 /* La console regarde tous les projets d'un coup. C'est un privilège

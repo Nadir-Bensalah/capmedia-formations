@@ -54,6 +54,10 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   page.on('console',m=>{if(m.type()==='error')err.push(m.text().slice(0,140));});
 
   await connecter(page,'agent.essai@exemple.test');
+  /* Laisser l'application finir de démarrer : juste après la connexion le
+     document vient d'être remplacé, et le routeur peut manquer le premier
+     événement. Un humain qui clique n'arrive jamais aussi vite. */
+  await pause(2500);
 
   console.log('\n== La barre latérale');
   const lat = await page.evaluate(()=>[...document.querySelectorAll('.lat a')].map(a=>a.textContent.trim().split('\n')[0]));
@@ -86,13 +90,15 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
     chiffres:[...document.querySelectorAll('.chiffre')].map(c=>c.innerText.replace(/\n/g,' ')),
     scenarios:document.querySelectorAll('.scenario').length,
     doubles:document.querySelectorAll('.scenario--double').length,
-    lien: !!document.querySelector('a[href*="/projets/atelier/tests"]'),
+    plier: !!document.querySelector('[data-plier-scenarios]'),
+    creer: !!document.querySelector('[data-nouvelle-campagne]'),
   }));
   console.log('    chiffres :', u.chiffres.join(' | '));
-  verifier(u.scenarios===173,`les 173 scénarios s'affichent`,`${u.scenarios} vus`);
+  verifier(u.scenarios===173,`les 173 scénarios sont dans la page`,`${u.scenarios} vus`);
   verifier(u.doubles===82,'82 marqués double',`${u.doubles} vus`);
   verifier(u.chiffres.length===4,'les 4 chiffres du haut');
-  verifier(u.lien,'le lien vers l\'onglet du projet');
+  verifier(u.plier,'la bibliothèque est repliable');
+  verifier(u.creer,'le bouton de création de campagne est là');
 
   console.log('\n== Le filtre par plateforme');
   await page.click('[data-plateforme="web"]'); await pause(1400);
@@ -102,6 +108,9 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
 
   console.log('\n== Le détail d\'un scénario');
   await page.click('[data-plateforme=""]'); await pause(1200);
+  /* La bibliothèque est repliée par défaut : sans la déplier, le scénario
+     est dans la page mais invisible, et le clic échoue sans rien dire. */
+  await page.click('[data-plier-scenarios]'); await pause(900);
   const b = await page.$('[data-scenario]');
   if (b) { await b.click(); await pause(900);
     const m = await page.evaluate(()=>{const v=document.querySelector('.voile');return v?v.innerText.slice(0,200).replace(/\n+/g,' | '):'';});
@@ -127,9 +136,6 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   console.log('\n== Le client');
   const nav2=await chromium.launch();
   const cl=await (await nav2.newContext({viewport:{width:1500,height:1100}})).newPage();
-  const errC=[];
-  cl.on('pageerror',e=>errC.push('PAGE: '+e.message.slice(0,220)));
-  cl.on('console',m=>{if(m.type()==='error')errC.push(m.text().slice(0,220));});
   await connecter(cl,'camille.essai@exemple.test');
   const latC = await cl.evaluate(()=>[...document.querySelectorAll('.lat a')].map(a=>a.textContent.trim().split('\n')[0]));
   verifier(latC.some(x=>/^Tests/.test(x)),'le client a aussi l\'entrée Tests',latC.join(' / '));
@@ -140,15 +146,22 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
     options: [...document.querySelectorAll('#f-projet option')].map(o=>o.textContent.trim()),
     sections: [...document.querySelectorAll('.section-tete h2')].map(h=>h.innerText.trim()),
     chapo: (document.querySelector('.chapo')||{}).innerText||'',
+    projets: (document.body.innerText.match(/(\d+) projets? actifs?/)||[])[1],
   }));
-  /* Camille a deux projets : le sélecteur doit donc apparaître, et il ne
-     doit proposer QUE les siens. C'est le vrai contrôle de cloisonnement :
-     un client ne doit jamais voir le nom du projet d'un autre. */
-  verifier(c.selecteur,'un client à plusieurs projets a le sélecteur');
-  verifier(c.options.length===3,`le sélecteur ne propose que ses projets (${c.options.join(', ')})`);
-  verifier(!c.options.some(o=>/boutique/i.test(o)),'le projet d\'un autre client n\'y figure pas',c.options.join(', '));
-  verifier(c.sections[0]==='Ce qui ne va pas','le client voit les mêmes sections',c.sections.join('/'));
-  verifier(/173 scénarios/.test(c.chapo),'ses scénarios sont comptés',c.chapo);
+  /* Un client à projet unique n'a rien à choisir : son projet s'ouvre
+     d'office et le sélecteur disparaît. Dès qu'il en a deux, le sélecteur
+     revient et ne doit proposer QUE les siens : c'est le vrai contrôle de
+     cloisonnement, un client ne voit jamais le nom du projet d'un autre. */
+  if (c.selecteur) {
+    verifier(c.options.length>=2,`le sélecteur propose ses projets (${c.options.join(', ')})`);
+    verifier(!c.options.some(o=>/boutique/i.test(o)),'le projet d\'un autre client n\'y figure pas',c.options.join(', '));
+    verifier(c.sections[0]==='Ce qui ne va pas','il voit la vue globale',c.sections.join('/'));
+  } else {
+    verifier(c.sections.includes('Campagnes'),'son projet unique s\'ouvre d\'office',c.sections.join('/'));
+    verifier(c.sections.includes('Scénarios'),'avec sa bibliothèque');
+    const fuite = await cl.evaluate(()=>/boutique/i.test(document.body.innerText));
+    verifier(!fuite,'et rien du projet d\'un autre client');
+  }
 
   await aller(cl,'/tests?projet=atelier',null,'Tests');
   await pause(1400);

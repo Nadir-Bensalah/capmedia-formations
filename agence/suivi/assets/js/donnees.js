@@ -391,6 +391,10 @@ export const ecrire = {
     titre: d.titre, statut: d.statut || 'preparation',
     debut: d.debut || null, fin: d.fin || null,
     builds: d.builds || {}, testeurs: d.testeurs || [], affectation: d.affectation || {},
+    /* La sélection de scénarios est le cœur de la campagne : une liste
+       blanche qui l'oublie crée une campagne qui n'a rien à distribuer,
+       sans rien dire à personne. */
+    scenarios: d.scenarios || [],
     cree: serverTimestamp(), maj: serverTimestamp(),
   })),
   majCampagne: (pid, cid, d) => updateDoc(doc(bdd, 'projets', pid, 'campagnes', cid), nettoyer({ ...d, maj: serverTimestamp() })),

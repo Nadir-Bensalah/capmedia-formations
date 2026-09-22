@@ -562,6 +562,13 @@ service cloud.firestore {
       return connecte() && request.auth.token.testeur == true;
     }
 
+    // Inscrit sur ce projet, d'après sa fiche du vivier. C'est le serveur
+    // qui tient cette liste, au moment où on l'affecte à une campagne.
+    function testeurDuProjet(projetId) {
+      return estTesteur()
+          && projetId in get(/databases/$(database)/documents/testeurs/$(moi())).data.projets;
+    }
+
     function ficheCampagne(projetId, campagneId) {
       return get(/databases/$(database)/documents/projets/$(projetId)/campagnes/$(campagneId)).data;
     }
@@ -591,8 +598,13 @@ service cloud.firestore {
 
       // La bibliothèque. Le client la lit pour savoir ce qui sera vérifié,
       // le testeur pour lire l'énoncé de ce qu'il doit dérouler.
+      //
+      // Le testeur ne lit QUE les projets où il est inscrit : un titre de
+      // scénario nomme un client, une fonctionnalité, un prestataire, et
+      // « estTesteur() » seul ouvrait la bibliothèque de tout le hub à
+      // quiconque porte la revendication.
       match /scenarios/{scenarioId} {
-        allow read:   if accesProjet(projetId) || estTesteur();
+        allow read:   if accesProjet(projetId) || testeurDuProjet(projetId);
         allow write:  if estEquipe();
       }
 
@@ -658,8 +670,16 @@ service cloud.firestore {
           // Un passage ne s'efface pas : c'est la mémoire de la campagne.
           allow delete: if false;
 
-          // Le rattachement à une anomalie est un geste de tri : l'équipe.
-          allow update: if estEquipe();
+          // Le rattachement à une anomalie est un geste de tri, et c'est le
+          // SEUL champ que l'équipe touche sur un passage. Un « allow
+          // update: if estEquipe() » nu annulerait tout ce qui précède :
+          // Firestore fait l'union des règles, donc la plus permissive
+          // gagne, et le gel de la campagne close tomberait avec elle.
+          //
+          // Le tri se fait souvent après la clôture : on l'autorise donc
+          // sur une campagne close, mais sur ce champ et rien d'autre.
+          allow update: if estEquipe()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['anomalie']);
         }
 
         // L'appréciation : ce que le testeur pense de l'application. Une par
@@ -667,10 +687,19 @@ service cloud.firestore {
         match /appreciations/{testeurId} {
           allow read:   if accesProjet(projetId)
                         || (estTesteur() && testeurId == moi());
-          allow write:  if estTesteur()
+
+          // Bornée, comme tout ce qu'un testeur écrit : sans plafond, un
+          // champ libre est une porte ouverte sur le stockage du projet.
+          allow create, update: if estTesteur()
             && testeurId == moi()
             && testeurDeLaCampagne(projetId, campagneId)
-            && campagneOuverte(projetId, campagneId);
+            && campagneOuverte(projetId, campagneId)
+            && request.resource.data.size() <= 60
+            && texteBorne(request.resource.data.get('libre', ''), 8000);
+
+          // Une appréciation ne s'efface pas plus qu'un passage : c'est la
+          // mémoire de la campagne, et se raviser après coup la falsifie.
+          allow delete: if false;
         }
       }
 

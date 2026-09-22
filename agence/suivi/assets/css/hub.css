@@ -1838,3 +1838,11 @@ input, select, textarea { font: inherit; color: inherit; }
 /* Le seul chiffre qui change de couleur est celui qui demande une action :
    une anomalie ouverte. Colorer les quatre reviendrait à n'en colorer aucun. */
 .chiffre--alerte .chiffre-valeur { color: var(--alerte); }
+
+/* Le choix des blocs, dans la feuille d'une campagne. Deux colonnes : neuf
+   blocs en une seule colonne poussent le bouton d'enregistrement trop bas. */
+.cases-blocs {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 6px 14px;
+}
+.cases-blocs .case { padding: 4px 0; }

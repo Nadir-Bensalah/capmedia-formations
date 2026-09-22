@@ -17,13 +17,14 @@
 import {
   echapper, dateCourte, depuis, pluriel, joursAvant, parDateDesc,
   NIVEAUX_SCENARIO, BLOCS_SCENARIO, PLATEFORMES_TEST, STATUTS_CAMPAGNE,
-  GRAVITES_ANOMALIE, STATUTS_ANOMALIE, RESULTATS_PASSAGE,
+  GRAVITES_ANOMALIE, STATUTS_ANOMALIE,
 } from '../noyau.js';
 import {
-  icone, pastille, puce, ligne, vide, squelette, titrePage, sur, modale,
+  icone, pastille, ligne, vide, squelette, titrePage, sur, modale,
 } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K } from '../donnees.js';
+import { editer } from './editeurs.js';
 import { filAriane } from '../coquille.js';
 
 /* La mémoire des filtres tient dans l'adresse, pas dans le stockage : un
@@ -76,13 +77,13 @@ const dansPlateforme = (x, plateforme) => {
    Section 1 · Ce qui ne va pas
    -------------------------------------------------------------------------- */
 
-const alertes = (d, { nomProjet }) => {
+const alertes = (d, { nomProjet, plateforme }) => {
   const soucis = [];
 
   /* Les anomalies qui bloquent, d'abord. Une anomalie bloquante non
      corrigée est la seule chose qui justifie d'arrêter une campagne. */
   d.anomalies
-    .filter((a) => a.gravite === 'bloquant' && !['corrigee', 'sans-suite'].includes(a.statut))
+    .filter((a) => a.gravite === 'bloquant' && !['corrigee', 'sans-suite'].includes(a.statut) && dansPlateforme(a, plateforme))
     .forEach((a) => soucis.push({
       ton: 'rouge', icone: 'alerte',
       titre: a.titre || 'Anomalie bloquante',
@@ -161,12 +162,12 @@ const avancement = (d, { nomProjet, plateforme }) => {
    Section 3 · L'activité
    -------------------------------------------------------------------------- */
 
-const activite = (d, { nomProjet }) => {
+const activite = (d, { nomProjet, plateforme }) => {
   const faits = [
     ...d.campagnes.map((c) => ({ date: c.maj || c.cree, icone: 'bug',
       titre: `${c.titre || 'Campagne'} · ${(STATUTS_CAMPAGNE[c.statut] || {}).libelle || ''}`,
       sous: nomProjet(projetDe(c)) })),
-    ...d.anomalies.map((a) => ({ date: a.maj || a.cree, icone: 'alerte',
+    ...d.anomalies.filter((a) => dansPlateforme(a, plateforme)).map((a) => ({ date: a.maj || a.cree, icone: 'alerte',
       ton: (GRAVITES_ANOMALIE[a.gravite] || {}).voile === 'rouge' ? 'rouge' : '',
       titre: a.titre || 'Anomalie',
       sous: `${nomProjet(projetDe(a))} · ${(STATUTS_ANOMALIE[a.statut] || {}).libelle || ''}` })),
@@ -187,7 +188,7 @@ const activite = (d, { nomProjet }) => {
    Un projet choisi : toute la panoplie
    -------------------------------------------------------------------------- */
 
-const unProjet = (d, { pid, nomProjet, plateforme }) => {
+const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
   const projet = d.projets.find((p) => p.id === pid);
   if (!projet) return vide({ icone: 'bug', titre: 'Projet introuvable', texte: 'Il a peut-être été archivé.' });
 
@@ -219,12 +220,15 @@ const unProjet = (d, { pid, nomProjet, plateforme }) => {
   </div>
 
   <section class="section">
-    <div class="section-tete"><div><h2>Campagnes</h2><p class="chapo">Une campagne déroule une sélection de scénarios sur une version précise.</p></div></div>
+    <div class="section-tete">
+      <div><h2>Campagnes</h2><p class="chapo">Une campagne pioche dans la bibliothèque : les mêmes scénarios sont rejoués d'une version à l'autre.</p></div>
+      ${equipe ? `<button class="btn btn-principal btn-petit" type="button" data-nouvelle-campagne="${echapper(pid)}">${icone('plus')} Nouvelle campagne</button>` : ''}
+    </div>
     ${camp.length ? `<div class="liste">${camp.map((c) => ligne({
       icone: 'bug', ton: c.statut === 'close' ? 'vert' : c.statut === 'en-cours' ? 'bleu' : '',
       titre: echapper(c.titre || 'Campagne'),
-      sous: `${(c.testeurs || []).length ? pluriel((c.testeurs || []).length, 'testeur', 'testeurs') : 'aucun testeur'}${c.debut ? ` · ${echapper(dateCourte(c.debut))}` : ''}`,
-      fin: pastille(STATUTS_CAMPAGNE, c.statut || 'preparation'),
+      sous: `${(c.scenarios || []).length ? pluriel((c.scenarios || []).length, 'scénario', 'scénarios') : 'aucun scénario'} · ${(c.testeurs || []).length ? pluriel((c.testeurs || []).length, 'testeur', 'testeurs') : 'aucun testeur'}${c.debut ? ` · ${echapper(dateCourte(c.debut))}` : ''}`,
+      fin: `${pastille(STATUTS_CAMPAGNE, c.statut || 'preparation')}${equipe ? `<span class="rang boutons-edition"><button class="btn-icone" type="button" data-editer-campagne="${echapper(c.id)}" aria-label="Modifier" data-astuce="Modifier">${icone('edit')}</button></span>` : ''}`,
     })).join('')}</div>`
     : vide({ icone: 'bug', titre: 'Aucune campagne', texte: 'Une campagne prend des scénarios, les distribue aux testeurs, et garde le résultat daté.', compact: true })}
   </section>
@@ -241,10 +245,11 @@ const unProjet = (d, { pid, nomProjet, plateforme }) => {
 
   <section class="section">
     <div class="section-tete">
-      <div><h2>Scénarios</h2><p class="chapo">${scen.length ? `${pluriel(scen.length, 'scénario', 'scénarios')}${plateforme ? ` sur ${(PLATEFORMES_TEST[plateforme] || {}).libelle}` : ''}.` : ''}</p></div>
-      <a class="btn btn-secondaire btn-petit" href="#/projets/${echapper(pid)}/tests">${icone('externe')} Dans le projet</a>
+      <div><h2>Scénarios</h2><p class="chapo">La bibliothèque du projet${plateforme ? `, sur ${(PLATEFORMES_TEST[plateforme] || {}).libelle}` : ''}. ${scen.length ? pluriel(scen.length, 'scénario', 'scénarios') : 'Vide.'}</p></div>
+      <button class="btn btn-secondaire btn-petit" type="button" data-plier-scenarios aria-expanded="false">${icone('deplier')} Voir la bibliothèque</button>
     </div>
     ${scen.length ? `
+    <div id="bibliotheque" hidden>
     <div class="rang couverture">
       ${Object.entries(NIVEAUX_SCENARIO).map(([cle, f]) => `<span class="puce" data-astuce="${echapper(f.aide)}">${pastille(NIVEAUX_SCENARIO, cle)} ${parNiveau[cle] || 0}</span>`).join('')}
     </div>
@@ -262,7 +267,8 @@ const unProjet = (d, { pid, nomProjet, plateforme }) => {
               </span>
             </button>
           </div>`).join('')}</div>
-      </div>`).join('')}`
+      </div>`).join('')}
+    </div>`
     : vide({ icone: 'bug', titre: plateforme ? 'Aucun scénario sur cette plateforme' : 'Aucun scénario', texte: plateforme ? 'Changez de filtre, ou élargissez les plateformes de vos scénarios.' : 'Versez un plan de tests sur ce projet.', compact: true })}
   </section>`;
 };
@@ -306,10 +312,26 @@ export const vue = async (ctx, env) => {
   };
 
   let empreinte = '';
-  const cles = [K.projets, K.scenariosTous, K.campagnesToutes, K.anomaliesToutes, K.testeurs];
+  /* Les lectures en groupe n'existent que côté équipe : les règles les lui
+     réservent. Un client reçoit ses données sur les clés de ses projets, et
+     s'abonner aux mauvaises laisse l'écran figé sur son premier rendu, sans
+     la moindre erreur pour le dire. */
+  const clesSuivies = () => (env.role === 'equipe'
+    ? [K.projets, K.scenariosTous, K.campagnesToutes, K.anomaliesToutes, K.testeurs]
+    : [K.projets, ...(magasin.lire(K.projets) || (env.session || {}).projets || [])
+        .flatMap((p) => [K.scenarios(p.id), K.campagnes(p.id), K.anomalies(p.id)])]);
+
+  /* Le projet ouvert : celui qu'on a choisi, ou le seul que le client ait.
+     Le rendu et les gestes doivent lire la MÊME valeur, faute de quoi le
+     bouton s'affiche et le clic ne fait rien, sans le moindre message. */
+  const projetCourant = () => {
+    if (etat.projet) return etat.projet;
+    const p = magasin.lire(K.projets) || [];
+    return env.role !== 'equipe' && p.length === 1 ? p[0].id : '';
+  };
 
   const rendre = (force = false) => {
-    const sceau = magasin.empreinte(cles) + '|' + etat.projet + '|' + etat.plateforme;
+    const sceau = magasin.empreinte(clesSuivies()) + '|' + etat.projet + '|' + etat.plateforme;
     if (!force && sceau === empreinte) return;
     empreinte = sceau;
 
@@ -319,7 +341,7 @@ export const vue = async (ctx, env) => {
     /* Un client qui n'a qu'un projet ne choisit rien : le sélecteur
        disparaît et son projet s'ouvre directement. */
     const seul = env.role !== 'equipe' && d.projets.length === 1 ? d.projets[0].id : '';
-    const pid = etat.projet || seul;
+    const pid = projetCourant();
 
     sortie.innerHTML = `<div class="page">
       <header class="page-tete">
@@ -341,19 +363,39 @@ export const vue = async (ctx, env) => {
       </div>
 
       ${pid
-        ? unProjet(d, { pid, nomProjet, plateforme: etat.plateforme })
-        : `${alertes(d, { nomProjet })}${avancement(d, { nomProjet, plateforme: etat.plateforme })}${activite(d, { nomProjet })}`}
+        ? unProjet(d, { pid, nomProjet, plateforme: etat.plateforme, equipe: env.role === 'equipe' })
+        : `${alertes(d, { nomProjet, plateforme: etat.plateforme })}${avancement(d, { nomProjet, plateforme: etat.plateforme })}${activite(d, { nomProjet, plateforme: etat.plateforme })}`}
     </div>`;
 
     const sel = sortie.querySelector('#f-projet');
     if (sel) sel.addEventListener('change', (e) => { etat.projet = e.target.value; poser({ projet: etat.projet, plateforme: etat.plateforme }); rendre(true); });
   };
 
-  const gestes = sur(sortie, 'click', '[data-plateforme], [data-scenario]', (el) => {
+  const gestes = sur(sortie, 'click', '[data-plateforme], [data-scenario], [data-plier-scenarios], [data-nouvelle-campagne], [data-editer-campagne]', async (el) => {
+    /* Une référence n'est unique qu'à l'intérieur d'un projet : deux plans
+       de tests portent chacun leur « DI-15 ». Chercher sans le projet
+       ouvrirait l'énoncé d'une autre application, sans rien dire. */
     if (el.dataset.scenario) {
-      const d = lireTout(env);
-      const s = d.scenarios.find((x) => x.ref === el.dataset.scenario);
+      const s = lireTout(env).scenarios.find((x) => x.ref === el.dataset.scenario && projetDe(x) === projetCourant());
       if (s) ouvrirScenario(s);
+      return;
+    }
+    /* La bibliothèque se déplie sur demande : 173 lignes au-dessus des
+       campagnes, c'est la campagne qu'on ne voit plus. */
+    if (el.hasAttribute('data-plier-scenarios')) {
+      const boite = sortie.querySelector('#bibliotheque');
+      if (!boite) return;
+      const ouverte = !boite.hidden;
+      boite.hidden = ouverte;
+      el.setAttribute('aria-expanded', String(!ouverte));
+      el.innerHTML = `${icone(ouverte ? 'deplier' : 'plier')} ${ouverte ? 'Voir la bibliothèque' : 'Replier'}`;
+      return;
+    }
+    if (el.dataset.nouvelleCampagne) { await editer('campagne', env, { pid: el.dataset.nouvelleCampagne }); return; }
+    if (el.dataset.editerCampagne) {
+      const pid = projetCourant();
+      const c = lireTout(env).campagnes.find((x) => x.id === el.dataset.editerCampagne && projetDe(x) === pid);
+      if (c) await editer('campagne', env, { pid, fiche: c });
       return;
     }
     etat.plateforme = el.dataset.plateforme;
@@ -361,7 +403,18 @@ export const vue = async (ctx, env) => {
     rendre(true);
   });
 
-  cles.forEach((c) => lot.sur(c, rendre));
+  /* La liste des projets d'un client peut grandir en cours de session, quand
+     l'équipe lève un rideau. On réabonne alors les clés qui viennent
+     d'apparaître, faute de quoi le nouveau projet n'arriverait jamais. */
+  const suivies = new Set();
+  const suivre = () => {
+    clesSuivies().forEach((c) => {
+      if (suivies.has(c)) return;
+      suivies.add(c);
+      lot.sur(c, () => { suivre(); rendre(); });
+    });
+  };
+  suivre();
   rendre(true);
 
   return () => { gestes(); lot.fin(); };
