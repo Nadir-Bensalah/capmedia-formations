@@ -20,10 +20,10 @@ import {
   GRAVITES_ANOMALIE, STATUTS_ANOMALIE,
 } from '../noyau.js';
 import {
-  icone, pastille, ligne, vide, squelette, titrePage, sur, modale,
+  icone, pastille, ligne, vide, squelette, titrePage, sur, modale, toast, agir,
 } from '../ui.js';
 import * as magasin from '../magasin.js';
-import { K } from '../donnees.js';
+import { K, ecrire, repartir } from '../donnees.js';
 import { editer } from './editeurs.js';
 import { filAriane } from '../coquille.js';
 
@@ -229,6 +229,7 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
       titre: echapper(c.titre || 'Campagne'),
       sous: `${(c.scenarios || []).length ? pluriel((c.scenarios || []).length, 'scénario', 'scénarios') : 'aucun scénario'} · ${(c.testeurs || []).length ? pluriel((c.testeurs || []).length, 'testeur', 'testeurs') : 'aucun testeur'}${c.debut ? ` · ${echapper(dateCourte(c.debut))}` : ''}`,
       fin: `${pastille(STATUTS_CAMPAGNE, c.statut || 'preparation')}${equipe ? `<span class="rang boutons-edition"><button class="btn-icone" type="button" data-editer-campagne="${echapper(c.id)}" aria-label="Modifier" data-astuce="Modifier">${icone('edit')}</button></span>` : ''}`,
+      action: 'ouvrir-campagne', attrs: `data-id="${echapper(c.id)}"`,
     })).join('')}</div>`
     : vide({ icone: 'bug', titre: 'Aucune campagne', texte: 'Une campagne prend des scénarios, les distribue aux testeurs, et garde le résultat daté.', compact: true })}
   </section>
@@ -259,6 +260,7 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
         <div class="liste liste--serree">${g.items.map((s) => `
           <div class="scenario${(NIVEAUX_SCENARIO[s.niveau] || {}).double ? ' scenario--double' : ''}">
             <button class="scenario-corps" type="button" data-scenario="${echapper(s.ref)}">
+              <span class="scenario-marque" aria-hidden="true"></span>
               <span class="scenario-ref">${echapper(s.ref)}</span>
               <span class="scenario-titre">${echapper(s.titre)}</span>
               <span class="scenario-fin">
@@ -295,6 +297,75 @@ const ouvrirScenario = (s) => {
       <p class="aide" style="margin-top:18px">Un scénario où rien ne se passe est un échec, jamais une réussite.</p>`,
     pied: '<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>',
   }).fin;
+};
+
+/* L'affectation des testeurs à une campagne.
+   Le calcul propose, il ne décide pas : un testeur tombe malade, un autre
+   demande un bloc précis, et aucun calcul ne prévoit cela. */
+const ouvrirCampagne = async (c, { pid, env, scenarios }) => {
+  const equipe = env.role === 'equipe';
+  const vivier = magasin.lire(K.testeurs) || [];
+  const retenus = c.scenarios || [];
+  const dedans = scenarios.filter((s) => retenus.includes(s.ref));
+  const doubles = dedans.filter((s) => (NIVEAUX_SCENARIO[s.niveau] || {}).double).length;
+
+  const affectation = c.affectation || {};
+  const charges = (c.testeurs || []).map((id) => {
+    const t = vivier.find((x) => x.id === id) || { id };
+    return { id, nom: t.prenom || t.email || id, mobile: t.mobile || '', n: (affectation[id] || []).length };
+  });
+
+  const m = modale({
+    titre: c.titre || 'Campagne', sousTitre: `${(STATUTS_CAMPAGNE[c.statut] || {}).libelle || ''} · ${pluriel(dedans.length, 'scénario', 'scénarios')}`,
+    feuille: true,
+    corps: `
+      <div class="rang chiffres-tests" style="margin-bottom:18px">
+        <div class="chiffre"><span class="chiffre-valeur">${dedans.length}</span><span class="chiffre-nom">scénarios</span></div>
+        <div class="chiffre"><span class="chiffre-valeur">${dedans.length + doubles}</span><span class="chiffre-nom">passages mobiles</span></div>
+        <div class="chiffre"><span class="chiffre-valeur">${(c.testeurs || []).length}</span><span class="chiffre-nom">testeurs</span></div>
+      </div>
+
+      ${(c.builds && (c.builds.ios || c.builds.android || c.builds.web)) ? `<div class="groupe">
+        <span class="etiquette-champ">Builds</span>
+        <div class="rang" style="gap:8px;flex-wrap:wrap">
+          ${c.builds.ios ? `<span class="puce">${icone('apple')} ${echapper(c.builds.ios)}</span>` : ''}
+          ${c.builds.android ? `<span class="puce">${icone('android')} ${echapper(c.builds.android)}</span>` : ''}
+          ${c.builds.web ? `<span class="puce">${icone('globe')} ${echapper(c.builds.web)}</span>` : ''}
+        </div></div>` : ''}
+
+      <div class="groupe">
+        <span class="etiquette-champ">Testeurs</span>
+        ${charges.length ? `<div class="liste liste--serree">${charges.map((t) => `
+          <div class="rang" style="justify-content:space-between;padding:8px 10px;border-radius:10px;background:var(--fond-2)">
+            <span>${echapper(t.nom)}${t.mobile ? ` <span class="puce puce--mini">${echapper((PLATEFORMES_TEST[t.mobile] || {}).court || t.mobile)}</span>` : ''}</span>
+            <span class="t-micro">${t.n ? pluriel(t.n, 'passage', 'passages') : 'rien encore'}</span>
+          </div>`).join('')}</div>`
+          : `<p class="aide">Aucun testeur pour l'instant. ${vivier.length ? 'Choisissez-les ci-dessous.' : 'Le vivier est vide : le serveur seul y inscrit quelqu\'un.'}</p>`}
+      </div>
+
+      ${equipe && vivier.length ? `<div class="groupe">
+        <span class="etiquette-champ">Le vivier</span>
+        <div class="cases-blocs">${vivier.map((t) => `
+          <label class="case"><input type="checkbox" data-testeur="${echapper(t.id)}" ${(c.testeurs || []).includes(t.id) ? 'checked' : ''}> ${echapper(t.prenom || t.email || t.id)}${t.mobile ? ` · ${echapper((PLATEFORMES_TEST[t.mobile] || {}).court || t.mobile)}` : ''}</label>`).join('')}</div>
+        <p class="aide">Chaque testeur couvre le web plus un mobile. Un scénario dont le comportement dépend du système part chez un testeur iOS et un testeur Android : c'est la seule chose qu'on paie deux fois.</p>
+      </div>` : ''}`,
+    pied: equipe
+      ? `<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button><button class="btn btn-principal" type="button" data-repartir>${icone('eclair')} Répartir</button>`
+      : '<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>',
+  });
+
+  const bouton = m.el.querySelector('[data-repartir]');
+  if (bouton) bouton.addEventListener('click', () => agir(bouton, async () => {
+    const ids = [...m.el.querySelectorAll('[data-testeur]')].filter((x) => x.checked).map((x) => x.dataset.testeur);
+    if (!ids.length) { toast('Choisissez au moins un testeur.', 'erreur'); return; }
+    const gens = ids.map((id) => { const t = vivier.find((x) => x.id === id) || {}; return { id, mobile: t.mobile || 'ios' }; });
+    const plan = repartir(dedans, gens);
+    await ecrire.majCampagne(pid, c.id, { testeurs: ids, affectation: plan });
+    const n = Object.values(plan).reduce((a, r) => a + r.length, 0);
+    toast(`${n} passages répartis entre ${pluriel(ids.length, 'testeur', 'testeurs')}.`);
+    m.fermer(true);
+  }));
+  return m.fin;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -371,7 +442,7 @@ export const vue = async (ctx, env) => {
     if (sel) sel.addEventListener('change', (e) => { etat.projet = e.target.value; poser({ projet: etat.projet, plateforme: etat.plateforme }); rendre(true); });
   };
 
-  const gestes = sur(sortie, 'click', '[data-plateforme], [data-scenario], [data-plier-scenarios], [data-nouvelle-campagne], [data-editer-campagne]', async (el) => {
+  const gestes = sur(sortie, 'click', '[data-plateforme], [data-scenario], [data-plier-scenarios], [data-nouvelle-campagne], [data-editer-campagne], [data-action="ouvrir-campagne"]', async (el) => {
     /* Une référence n'est unique qu'à l'intérieur d'un projet : deux plans
        de tests portent chacun leur « DI-15 ». Chercher sans le projet
        ouvrirait l'énoncé d'une autre application, sans rien dire. */
@@ -392,6 +463,13 @@ export const vue = async (ctx, env) => {
       return;
     }
     if (el.dataset.nouvelleCampagne) { await editer('campagne', env, { pid: el.dataset.nouvelleCampagne }); return; }
+    if (el.dataset.action === 'ouvrir-campagne') {
+      const pid = projetCourant();
+      const d = lireTout(env);
+      const c = d.campagnes.find((x) => x.id === el.dataset.id && projetDe(x) === pid);
+      if (c) await ouvrirCampagne(c, { pid, env, scenarios: d.scenarios.filter((x) => projetDe(x) === pid) });
+      return;
+    }
     if (el.dataset.editerCampagne) {
       const pid = projetCourant();
       const c = lireTout(env).campagnes.find((x) => x.id === el.dataset.editerCampagne && projetDe(x) === pid);

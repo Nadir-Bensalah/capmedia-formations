@@ -14,7 +14,7 @@ import {
   serverTimestamp, arrayUnion, arrayRemove, Timestamp,
   nomAffiche, enDate, parDateDesc, parDateAsc, joursAvant, borner, age, retard, dateCourte,
   OUVERTS, ATTEND_CLIENT, ATTEND_EQUIPE, FACTURES_DUES, PROJETS_ACTIFS, CATEGORIES_CLIENT, projetEstActif,
-  statutProjet, pluriel, verdictDelai,
+  statutProjet, pluriel, verdictDelai, NIVEAUX_SCENARIO,
 } from './noyau.js';
 import * as magasin from './magasin.js';
 
@@ -730,3 +730,64 @@ export const parStatut = (items, vocabulaire) => Object.keys(vocabulaire).map((c
 }));
 
 export { OUVERTS, ATTEND_CLIENT, ATTEND_EQUIPE, FACTURES_DUES };
+
+/* ==========================================================================
+   L'affectation des testeurs
+   ========================================================================== */
+
+/*
+ * Qui passe quoi. La règle, décidée avec Nadir : chaque testeur couvre le
+ * web plus un mobile, et tout scénario dont le comportement dépend du
+ * système est passé par au moins un testeur iOS ET un testeur Android.
+ *
+ * Le reste est réparti une seule fois : passer deux fois coûte le double,
+ * on ne le fait que là où la réponse peut différer. C'est la seule donnée
+ * de cette page qui se compte en argent.
+ *
+ * Le calcul propose, il ne décide pas : l'affectation reste modifiable à
+ * la main tant que la campagne n'est pas lancée. Un testeur tombe malade,
+ * un autre demande un bloc précis, et aucun calcul ne prévoit cela.
+ */
+export const repartir = (scenarios, testeurs) => {
+  const plan = {};
+  testeurs.forEach((t) => { plan[t.id] = []; });
+  if (!testeurs.length || !scenarios.length) return plan;
+
+  const ios = testeurs.filter((t) => t.mobile === 'ios');
+  const android = testeurs.filter((t) => t.mobile === 'android');
+
+  /* On sert toujours le moins chargé : sans cela les premiers de la liste
+     prennent tout, et le dernier repart avec trois lignes. */
+  const moinsCharge = (groupe) => groupe.reduce((a, b) => (plan[a.id].length <= plan[b.id].length ? a : b));
+
+  const poser = (t, ref) => { if (t && !plan[t.id].includes(ref)) plan[t.id].push(ref); };
+
+  /* L'ordre compte : les scénarios doublés d'abord, pendant que les
+     compteurs sont à zéro. Les répartir en dernier laisserait des paquets
+     de deux qui déséquilibrent tout le monde. */
+  const doubles = scenarios.filter((s) => (NIVEAUX_SCENARIO[s.niveau] || {}).double);
+  const simples = scenarios.filter((s) => !(NIVEAUX_SCENARIO[s.niveau] || {}).double);
+
+  doubles.forEach((s) => {
+    const p = s.plateformes || ['ios', 'android', 'web'];
+    if (p.includes('ios') && ios.length) poser(moinsCharge(ios), s.ref);
+    if (p.includes('android') && android.length) poser(moinsCharge(android), s.ref);
+    /* Aucun testeur sur un système : le scénario n'est pas perdu, il part
+       chez quelqu'un. Mieux vaut un passage sur un seul système que rien. */
+    if (!ios.length && !android.length) poser(moinsCharge(testeurs), s.ref);
+  });
+
+  simples.forEach((s) => {
+    const p = s.plateformes || ['ios', 'android', 'web'];
+    const eligibles = testeurs.filter((t) => p.includes(t.mobile) || p.includes('web'));
+    poser(moinsCharge(eligibles.length ? eligibles : testeurs), s.ref);
+  });
+
+  return plan;
+};
+
+/* Ce que l'affectation donne, testeur par testeur : de quoi voir d'un coup
+   d'œil si quelqu'un est écrasé ou oublié. */
+export const chargeParTesteur = (plan, testeurs) => testeurs.map((t) => ({
+  ...t, passages: (plan[t.id] || []).length,
+}));

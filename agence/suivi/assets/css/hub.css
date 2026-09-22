@@ -1776,11 +1776,18 @@ input, select, textarea { font: inherit; color: inherit; }
 .scenario {
   display: flex; align-items: center; gap: 4px;
   border-radius: 10px;
-  border-left: 3px solid transparent;
   transition: background-color .12s ease;
 }
 .scenario:hover { background: var(--fond-2); }
-.scenario--double { border-left-color: var(--bleu-systeme); }
+
+/* Un point discret devant la référence : il marque les scénarios passés
+   par deux testeurs, donc payés deux fois. Un liseré vertical découpait la
+   liste en tronçons et donnait l'impression d'un tableau cassé. */
+.scenario-marque {
+  flex: 0 0 auto; width: 6px; height: 6px; margin-right: 2px;
+  border-radius: 50%; background: transparent;
+}
+.scenario--double .scenario-marque { background: var(--bleu-systeme); }
 
 .scenario-corps {
   flex: 1; min-width: 0;
