@@ -579,6 +579,7 @@ exports.suiviProfilTesteur = onDocumentWritten(
         sexe: p.sexe || '', age: p.age || '', fonction: p.fonction || '',
         aisance: p.aisance || '', langue: p.langue || '',
         mobile: apres.mobile || '',
+        plateformes: apres.plateformes || [],
         maj: FieldValue.serverTimestamp(),
       });
     } catch (err) { console.error('Profil public non recopié', err); }
@@ -1526,7 +1527,9 @@ exports.suiviAdmin = onRequest(
         const adresse = normaliserEmail(email);
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(adresse)) return res.status(400).send('adresse invalide');
         if (!String(prenom || '').trim()) return res.status(400).send('prenom requis');
-        if (mobile && !['ios', 'android'].includes(String(mobile))) return res.status(400).send('mobile inconnu');
+        const surQuoi = Array.isArray(req.body.plateformes) ? req.body.plateformes.map(String) : [];
+        if (!surQuoi.length) return res.status(400).send('plateformes requises');
+        if (surQuoi.some((x) => !['ios', 'android', 'web'].includes(x))) return res.status(400).send('plateforme inconnue');
 
         let compte;
         try { compte = await getAuth().getUserByEmail(adresse); }
@@ -1541,7 +1544,12 @@ exports.suiviAdmin = onRequest(
         const projets = Array.isArray(req.body.projets) ? req.body.projets.map(String) : (projet ? [String(projet)] : []);
         await bdd.doc(`testeurs/${compte.uid}`).set({
           prenom: String(prenom).trim(), email: adresse,
-          mobile: String(mobile || ''), projets, actif: true,
+          /* Le mobile à côté des plateformes : c'est lui que la répartition
+             regarde pour décider qui voit quoi sur iOS et sur Android. Un
+             testeur qui ne fait que le web n'en a pas. */
+          plateformes: surQuoi,
+          mobile: surQuoi.find((x) => x !== 'web') || '',
+          projets, actif: true,
           profil: {
             sexe: String((profil || {}).sexe || ''),
             age: String((profil || {}).age || ''),
@@ -1565,7 +1573,13 @@ exports.suiviAdmin = onRequest(
 
         const changements = { maj: FieldValue.serverTimestamp() };
         if (prenom !== undefined) changements.prenom = String(prenom).trim();
-        if (mobile !== undefined) changements.mobile = String(mobile);
+        if (Array.isArray(req.body.plateformes)) {
+          const liste = req.body.plateformes.map(String);
+          if (!liste.length) return res.status(400).send('plateformes requises');
+          if (liste.some((x) => !['ios', 'android', 'web'].includes(x))) return res.status(400).send('plateforme inconnue');
+          changements.plateformes = liste;
+          changements.mobile = liste.find((x) => x !== 'web') || '';
+        } else if (mobile !== undefined) changements.mobile = String(mobile);
         if (archive !== undefined) changements.actif = archive !== true;
         if (Array.isArray(req.body.projets)) changements.projets = req.body.projets.map(String);
         if (profil) changements.profil = { ...(fiche.data().profil || {}), ...profil };

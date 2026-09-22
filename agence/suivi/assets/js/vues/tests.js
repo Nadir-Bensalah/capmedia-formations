@@ -18,6 +18,7 @@ import {
   echapper, dateCourte, depuis, pluriel, joursAvant, parDateDesc,
   NIVEAUX_SCENARIO, BLOCS_SCENARIO, PLATEFORMES_TEST, STATUTS_CAMPAGNE,
   GRAVITES_ANOMALIE, STATUTS_ANOMALIE, FAMILLES_AVIS,
+  ETATS_PARCOURS, OUTILS_PARCOURS, PARCOURS_A_REGARDER,
 } from '../noyau.js';
 import {
   icone, pastille, ligne, vide, squelette, titrePage, sur, modale, toast, agir, confirmer,
@@ -60,6 +61,7 @@ const lireTout = (env) => {
     scenarios: rassembler(K.scenariosTous, K.scenarios),
     campagnes: rassembler(K.campagnesToutes, K.campagnes),
     anomalies: rassembler(K.anomaliesToutes, K.anomalies),
+    parcours: rassembler(K.parcoursTous, K.parcours),
     testeurs: magasin.lire(K.testeurs) || [],
   };
 };
@@ -88,8 +90,8 @@ const alertes = (d, { nomProjet, plateforme }) => {
     .filter((a) => a.gravite === 'bloquant' && !['corrigee', 'sans-suite'].includes(a.statut) && dansPlateforme(a, plateforme))
     .forEach((a) => soucis.push({
       ton: 'rouge', icone: 'alerte',
-      titre: a.titre || 'Anomalie bloquante',
-      sous: `${nomProjet(projetDe(a))} · ${(GRAVITES_ANOMALIE[a.gravite] || {}).libelle || ''}`,
+      titre: echapper(a.titre || 'Anomalie bloquante'),
+      sous: `${echapper(nomProjet(projetDe(a)))} · ${echapper((GRAVITES_ANOMALIE[a.gravite] || {}).libelle || '')}`,
       fin: pastille(STATUTS_ANOMALIE, a.statut || 'nouvelle'),
     }));
 
@@ -99,9 +101,21 @@ const alertes = (d, { nomProjet, plateforme }) => {
     .filter((c) => c.statut === 'en-cours' && c.fin && joursAvant(c.fin) < 0)
     .forEach((c) => soucis.push({
       ton: 'ambre', icone: 'horloge',
-      titre: `${c.titre || 'Campagne'} dépasse sa date de fin`,
-      sous: `${nomProjet(projetDe(c))} · fin prévue ${dateCourte(c.fin)}`,
+      titre: `${echapper(c.titre || 'Campagne')} dépasse sa date de fin`,
+      sous: `${echapper(nomProjet(projetDe(c)))} · fin prévue ${echapper(dateCourte(c.fin))}`,
       fin: pastille(STATUTS_CAMPAGNE, c.statut),
+    }));
+
+  /* Un parcours rouge ou instable. L'instable est le pire des deux : le
+     rouge dit qu'il y a un défaut, l'instable n'apprend rien, et un
+     parcours qu'on finit par ignorer ne garde plus rien. */
+  (d.parcours || [])
+    .filter((x) => x.actif !== false && PARCOURS_A_REGARDER.includes(x.etat))
+    .forEach((x) => soucis.push({
+      ton: x.etat === 'rouge' ? 'rouge' : 'ambre', icone: 'code',
+      titre: `${echapper(x.ref)} · ${echapper(x.titre || '')}`,
+      sous: `${echapper(nomProjet(projetDe(x)))} · ${echapper((ETATS_PARCOURS[x.etat] || {}).libelle || '')}${x.note ? ` · ${echapper(x.note.slice(0, 50))}` : ''}`,
+      fin: pastille(ETATS_PARCOURS, x.etat),
     }));
 
   /* Un projet qui a des campagnes mais aucun scénario : la campagne ne
@@ -111,7 +125,7 @@ const alertes = (d, { nomProjet, plateforme }) => {
   [...avecCampagne].filter((pid) => pid && !avecScenario.has(pid)).forEach((pid) => soucis.push({
     ton: 'ambre', icone: 'bug',
     titre: 'Campagne sans aucun scénario',
-    sous: `${nomProjet(pid)} · la campagne n'a rien à distribuer`,
+    sous: `${echapper(nomProjet(pid))} · la campagne n'a rien à distribuer`,
     fin: '',
   }));
 
@@ -187,6 +201,54 @@ const activite = (d, { nomProjet, plateforme }) => {
 };
 
 /* --------------------------------------------------------------------------
+   Les parcours automatisés
+   -------------------------------------------------------------------------- */
+
+/* Ce que la machine rejoue à chaque version. Un parcours ne remplace pas
+   un testeur, il remplace la partie répétitive de son travail : celle qui
+   consiste à revérifier que ce qui marchait marche encore.
+
+   Un parcours instable est pire qu'un parcours rouge. Le rouge dit qu'il y
+   a un défaut ; l'instable n'apprend rien, et on finit par l'ignorer. Il
+   remonte donc au même niveau. */
+const parcoursHtml = (d, { pid, equipe }) => {
+  const liste = (d.parcours || []).filter((x) => x.actif !== false && (!pid || projetDe(x) === pid))
+    .sort((a, b) => ((ETATS_PARCOURS[a.etat] || {}).ordre || 9) - ((ETATS_PARCOURS[b.etat] || {}).ordre || 9) || (a.ordre || 0) - (b.ordre || 0));
+
+  const par = {};
+  liste.forEach((x) => { par[x.etat] = (par[x.etat] || 0) + 1; });
+  const aRegarder = liste.filter((x) => PARCOURS_A_REGARDER.includes(x.etat)).length;
+  const eprouves = liste.filter((x) => x.mutation).length;
+  const couverts = new Set(liste.flatMap((x) => x.scenarios || [])).size;
+
+  return `<section class="section">
+    <div class="section-tete">
+      <div><h2>Parcours automatisés</h2><p class="chapo">${liste.length ? `${pluriel(liste.length, 'parcours', 'parcours')} rejoués à chaque version${couverts ? `, couvrant ${pluriel(couverts, 'scénario', 'scénarios')}` : ''}.` : 'Ce que la machine rejouera à chaque version.'}</p></div>
+      ${equipe && pid ? `<button class="btn btn-principal btn-petit" type="button" data-nouveau-parcours="${echapper(pid)}">${icone('plus')} Nouveau parcours</button>` : ''}
+    </div>
+
+    ${liste.length ? `
+    <div class="rang chiffres-tests" style="margin-bottom:16px">
+      <div class="chiffre"><span class="chiffre-valeur">${par.vert || 0}</span><span class="chiffre-nom">au vert</span></div>
+      <div class="chiffre${aRegarder ? ' chiffre--alerte' : ''}"><span class="chiffre-valeur">${aRegarder}</span><span class="chiffre-nom">à regarder</span></div>
+      <div class="chiffre"><span class="chiffre-valeur">${par['a-ecrire'] || 0}</span><span class="chiffre-nom">à écrire</span></div>
+      <div class="chiffre"><span class="chiffre-valeur">${eprouves} / ${liste.length}</span><span class="chiffre-nom">éprouvés par mutation</span></div>
+    </div>
+    ${eprouves < liste.length ? `<p class="aide" style="margin-bottom:14px">Un parcours qui passe au vert ne prouve rien tant qu'on n'a pas vérifié qu'il sait tomber. ${pluriel(liste.length - eprouves, 'parcours n\'a pas encore été remis en défaut', 'parcours n\'ont pas encore été remis en défaut')}.</p>` : ''}
+
+    <div class="liste">${liste.map((x) => ligne({
+      icone: x.outil === 'playwright' ? 'globe' : x.outil === 'jest' ? 'code' : 'smartphone',
+      ton: x.etat === 'vert' ? 'vert' : x.etat === 'rouge' ? 'rouge' : x.etat === 'instable' ? 'ambre' : '',
+      titre: `${echapper(x.ref)} · ${echapper(x.titre || '')}${x.mutation ? '' : ' <span class="etiquette">Non éprouvé</span>'}`,
+      sous: `${echapper((OUTILS_PARCOURS[x.outil] || {}).court || x.outil)}${(x.plateformes || []).length ? ` · ${echapper((x.plateformes || []).map((p) => (PLATEFORMES_TEST[p] || {}).court || p).join(', '))}` : ''}${(x.scenarios || []).length ? ` · ${pluriel((x.scenarios || []).length, 'scénario', 'scénarios')}` : ''}${x.note ? ` · ${echapper(x.note.slice(0, 60))}` : ''}`,
+      fin: `${pastille(ETATS_PARCOURS, x.etat || 'a-ecrire')}${equipe ? `<span class="rang boutons-edition"><button class="btn-icone" type="button" data-editer-parcours="${echapper(x.ref)}" aria-label="Modifier" data-astuce="Modifier">${icone('edit')}</button></span>` : ''}`,
+    })).join('')}</div>`
+    : vide({ icone: 'code', titre: 'Aucun parcours',
+        texte: equipe && pid ? 'Un parcours est rejoué par une machine à chaque version : c\'est ce qui empêche un défaut corrigé de revenir.' : 'Les parcours automatisés apparaîtront ici.', compact: true })}
+  </section>`;
+};
+
+/* --------------------------------------------------------------------------
    Section 4 · Le vivier
    -------------------------------------------------------------------------- */
 
@@ -220,7 +282,7 @@ const vivierHtml = (d, { equipe }) => {
         icone: 'utilisateur', ton: t.actif === false ? '' : (n ? 'bleu' : 'ambre'),
         titre: `${echapper(t.prenom || t.email || '')}${t.actif === false ? ' <span class="etiquette">Retiré</span>' : ''}`,
         sous: `${echapper(t.email || '')}${traits ? ` · ${echapper(traits)}` : ''}`,
-        fin: `${t.mobile ? `<span class="puce">${icone(t.mobile === 'ios' ? 'apple' : 'android')} ${echapper((PLATEFORMES_TEST[t.mobile] || {}).court || t.mobile)}</span>` : ''}
+        fin: `${(t.plateformes || (t.mobile ? [t.mobile, 'web'] : [])).map((x) => `<span class="puce puce--mini">${icone(x === 'ios' ? 'apple' : x === 'android' ? 'android' : 'globe')} ${echapper((PLATEFORMES_TEST[x] || {}).court || x)}</span>`).join('')}
           <span class="puce${n ? '' : ' puce--vide'}">${n ? pluriel(n, 'passage', 'passages') : 'rien à faire'}</span>`,
         action: 'ouvrir-testeur', attrs: `data-id="${echapper(t.id)}"`,
       });
@@ -289,6 +351,8 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
       fin: `${pastille(GRAVITES_ANOMALIE, a.gravite || 'mineur')}${pastille(STATUTS_ANOMALIE, a.statut || 'nouvelle')}`,
     })).join('')}</div>
   </section>` : ''}
+
+  ${parcoursHtml(d, { pid, equipe })}
 
   ${equipe ? vivierHtml({ ...d, testeurs: (d.testeurs || []).filter((t) => (t.projets || []).includes(pid)) }, { equipe }) : ''}
 
@@ -372,12 +436,10 @@ const ouvrirTesteur = (fiche, { env, projets }) => {
           ${neuf ? '' : '<p class="aide">L\'adresse ne se change pas : elle est la clé de son compte.</p>'}</div>
       </div>
 
-      <div class="groupe"><span class="etiquette-champ">Son mobile</span>
-        <div class="segments" role="group">
-          <button type="button" data-mobile="ios" aria-pressed="${f.mobile === 'ios'}">${icone('apple')} iOS</button>
-          <button type="button" data-mobile="android" aria-pressed="${f.mobile === 'android'}">${icone('android')} Android</button>
-        </div>
-        <p class="aide">Chacun couvre le web plus un mobile. C'est ce choix qui décide de ce qu'il recevra : un scénario dont le comportement dépend du système part chez un testeur iOS et un testeur Android.</p>
+      <div class="groupe"><span class="etiquette-champ">Ce qu'il teste</span>
+        <div class="cases-blocs">${Object.entries(PLATEFORMES_TEST).map(([cle, x]) => `
+          <label class="case"><input type="checkbox" data-plateforme-t="${echapper(cle)}" ${(f.plateformes || (f.mobile ? [f.mobile, 'web'] : [])).includes(cle) ? 'checked' : ''}> ${icone(cle === 'ios' ? 'apple' : cle === 'android' ? 'android' : 'globe')} ${echapper(x.libelle)}</label>`).join('')}</div>
+        <p class="aide">C'est ce choix qui décide de ce qu'il recevra. Un scénario dont le comportement dépend du système part chez un testeur iOS et un testeur Android : il faut donc au moins un de chaque dans une campagne, sinon la moitié du travail n'est pas payée pour rien, elle n'est simplement pas faite.</p>
       </div>
 
       <div class="groupe"><span class="etiquette-champ">Son profil</span>
@@ -408,14 +470,6 @@ const ouvrirTesteur = (fiche, { env, projets }) => {
       <button class="btn btn-principal" type="button" data-enregistrer>${neuf ? 'Inscrire' : 'Enregistrer'}</button>`,
   });
 
-  let mobile = f.mobile || '';
-  m.el.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-mobile]');
-    if (!b) return;
-    mobile = b.dataset.mobile;
-    m.el.querySelectorAll('[data-mobile]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
-  });
-
   const retirer = m.el.querySelector('[data-retirer]');
   if (retirer) retirer.addEventListener('click', async () => {
     const sur = await confirmer({
@@ -437,10 +491,16 @@ const ouvrirTesteur = (fiche, { env, projets }) => {
     const emailV = (m.el.querySelector('#t-email').value || '').trim();
     if (!prenomV) { toast('Donnez-lui un prénom.', 'erreur'); return; }
     if (neuf && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(emailV)) { toast('Cette adresse a l\'air incomplète.', 'erreur'); return; }
-    if (!mobile) { toast('Dites sur quel mobile il teste.', 'erreur'); return; }
+    const plateformes = [...m.el.querySelectorAll('[data-plateforme-t]')].filter((x) => x.checked).map((x) => x.dataset.plateformeT);
+    if (!plateformes.length) { toast('Dites ce qu\'il teste.', 'erreur'); return; }
 
+    /* Le mobile reste, à côté des plateformes : c'est lui que la
+       répartition regarde pour décider qui voit quoi sur iOS et sur
+       Android. Un testeur qui ne fait que le web n'en a pas, et ne
+       reçoit alors que ce qui a un sens sur le web. */
     const donnees = {
-      prenom: prenomV, mobile,
+      prenom: prenomV, plateformes,
+      mobile: plateformes.find((x) => x !== 'web') || '',
       projets: [...m.el.querySelectorAll('[data-projet]')].filter((x) => x.checked).map((x) => x.dataset.projet),
       profil: {
         sexe: m.el.querySelector('#t-sexe').value,
@@ -687,9 +747,9 @@ export const vue = async (ctx, env) => {
      s'abonner aux mauvaises laisse l'écran figé sur son premier rendu, sans
      la moindre erreur pour le dire. */
   const clesSuivies = () => (env.role === 'equipe'
-    ? [K.projets, K.scenariosTous, K.campagnesToutes, K.anomaliesToutes, K.testeurs]
+    ? [K.projets, K.scenariosTous, K.campagnesToutes, K.anomaliesToutes, K.parcoursTous, K.testeurs]
     : [K.projets, ...(magasin.lire(K.projets) || (env.session || {}).projets || [])
-        .flatMap((p) => [K.scenarios(p.id), K.campagnes(p.id), K.anomalies(p.id)])]);
+        .flatMap((p) => [K.scenarios(p.id), K.campagnes(p.id), K.anomalies(p.id), K.parcours(p.id)])]);
 
   /* Le projet ouvert : celui qu'on a choisi, ou le seul que le client ait.
      Le rendu et les gestes doivent lire la MÊME valeur, faute de quoi le
@@ -734,14 +794,14 @@ export const vue = async (ctx, env) => {
 
       ${pid
         ? unProjet(d, { pid, nomProjet, plateforme: etat.plateforme, equipe: env.role === 'equipe' })
-        : `${alertes(d, { nomProjet, plateforme: etat.plateforme })}${avancement(d, { nomProjet, plateforme: etat.plateforme })}${vivierHtml(d, { equipe: env.role === 'equipe' })}${activite(d, { nomProjet, plateforme: etat.plateforme })}`}
+        : `${alertes(d, { nomProjet, plateforme: etat.plateforme })}${avancement(d, { nomProjet, plateforme: etat.plateforme })}${parcoursHtml(d, { pid: '', equipe: env.role === 'equipe' })}${vivierHtml(d, { equipe: env.role === 'equipe' })}${activite(d, { nomProjet, plateforme: etat.plateforme })}`}
     </div>`;
 
     const sel = sortie.querySelector('#f-projet');
     if (sel) sel.addEventListener('change', (e) => { etat.projet = e.target.value; poser({ projet: etat.projet, plateforme: etat.plateforme }); rendre(true); });
   };
 
-  const gestes = sur(sortie, 'click', '[data-plateforme], [data-scenario], [data-plier-scenarios], [data-nouvelle-campagne], [data-editer-campagne], [data-action="ouvrir-campagne"], [data-nouveau-testeur], [data-action="ouvrir-testeur"]', async (el) => {
+  const gestes = sur(sortie, 'click', '[data-plateforme], [data-scenario], [data-plier-scenarios], [data-nouvelle-campagne], [data-editer-campagne], [data-action="ouvrir-campagne"], [data-nouveau-testeur], [data-action="ouvrir-testeur"], [data-nouveau-parcours], [data-editer-parcours]', async (el) => {
     /* Une référence n'est unique qu'à l'intérieur d'un projet : deux plans
        de tests portent chacun leur « DI-15 ». Chercher sans le projet
        ouvrirait l'énoncé d'une autre application, sans rien dire. */
@@ -762,6 +822,13 @@ export const vue = async (ctx, env) => {
       return;
     }
     if (el.dataset.nouvelleCampagne) { await editer('campagne', env, { pid: el.dataset.nouvelleCampagne }); return; }
+    if (el.dataset.nouveauParcours) { await editer('parcours', env, { pid: el.dataset.nouveauParcours }); return; }
+    if (el.dataset.editerParcours) {
+      const pid = projetCourant();
+      const x = lireTout(env).parcours.find((y) => y.ref === el.dataset.editerParcours && projetDe(y) === pid);
+      if (x) await editer('parcours', env, { pid, fiche: x });
+      return;
+    }
     if (el.hasAttribute('data-nouveau-testeur')) {
       await ouvrirTesteur(null, { env, projets: magasin.lire(K.projets) || [] });
       return;

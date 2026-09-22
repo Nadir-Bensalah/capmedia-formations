@@ -100,7 +100,9 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   console.log('    chiffres :', u.chiffres.join(' | '));
   verifier(u.scenarios===173,`les 173 scénarios sont dans la page`,`${u.scenarios} vus`);
   verifier(u.doubles===82,'82 marqués double',`${u.doubles} vus`);
-  verifier(u.chiffres.length===4,'les 4 chiffres du haut');
+  /* Quatre chiffres pour la campagne, quatre pour les parcours : la page
+     en porte huit dès qu'un projet a des parcours automatisés. */
+  verifier(u.chiffres.length>=4,`les chiffres du haut (${u.chiffres.length})`);
   verifier(u.plier,'la bibliothèque est repliable');
   verifier(u.creer,'le bouton de création de campagne est là');
 
@@ -133,7 +135,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
     texte:(document.querySelector('#onglet-corps')||{}).innerText||'',
   }));
   verifier(o.scenarios===0,'la liste complète n\'est plus dans l\'onglet',`${o.scenarios} scénarios encore`);
-  verifier(o.chiffres===4,'le résumé affiche les 4 chiffres');
+  verifier(o.chiffres===4,'le résumé affiche ses quatre chiffres',`${o.chiffres}`);
   verifier(o.console,'le bouton « Ouvrir la console » est là');
   verifier(/Passe manuelle 1\.2\.0/.test(o.texte),'la campagne en cours est rappelée');
 
@@ -174,7 +176,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
     chiffres: document.querySelectorAll('.chiffre').length,
   }));
   verifier(cp.scenarios===173,'il voit les 173 scénarios de son projet',`${cp.scenarios} vus`);
-  verifier(cp.chiffres===4,'et les quatre chiffres');
+  verifier(cp.chiffres>=4,`et les chiffres du haut (${cp.chiffres})`);
 
   console.log('\n'+(soucis.length?`${soucis.length} ÉCART(S)`:'tout est conforme'));
   console.log('Erreurs JS :', err.length?err.slice(0,4).join('\n  '):'aucune');

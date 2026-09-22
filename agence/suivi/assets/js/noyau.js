@@ -346,6 +346,36 @@ export const STATUTS_ANOMALIE = {
    et que c'est la référence qui fait foi dans les rapports. */
 export const REF_SCENARIO = /^[A-Z]{2}-R?\d{1,3}$/;
 
+/* Les parcours automatisés.
+
+   Un parcours est rejoué par une machine à chaque version : c'est ce qui
+   empêche un défaut corrigé de revenir. Il ne remplace pas un testeur, il
+   remplace la partie répétitive de son travail.
+
+   Le dernier état vient de l'outil, pas d'une saisie : Maestro et
+   Playwright rendent un verdict, et le recopier à la main serait la
+   première chose qu'on oublierait de faire. */
+export const ETATS_PARCOURS = {
+  'a-ecrire':  { libelle: 'À écrire',   voile: 'gris',   ordre: 1 },
+  'ecrit':     { libelle: 'Écrit',      voile: 'bleu',   ordre: 2 },
+  'vert':      { libelle: 'Vert',       voile: 'vert',   ordre: 3 },
+  'rouge':     { libelle: 'Rouge',      voile: 'rouge',  ordre: 4 },
+  'instable':  { libelle: 'Instable',   voile: 'ambre',  ordre: 5 },
+  'suspendu':  { libelle: 'Suspendu',   voile: 'gris',   ordre: 6 },
+};
+
+export const OUTILS_PARCOURS = {
+  'maestro':    { libelle: 'Maestro',    court: 'Maestro',    ou: 'iOS et Android' },
+  'playwright': { libelle: 'Playwright', court: 'Playwright', ou: 'Web' },
+  'testlab':    { libelle: 'Firebase Test Lab', court: 'Test Lab', ou: 'Matrice Android' },
+  'jest':       { libelle: 'Jest',       court: 'Jest',       ou: 'Règles métier' },
+};
+
+/* Un parcours instable est pire qu'un parcours rouge : le rouge dit qu'il
+   y a un défaut, l'instable n'apprend rien et on finit par l'ignorer.
+   C'est la raison d'être de ce compte. */
+export const PARCOURS_A_REGARDER = ['rouge', 'instable'];
+
 /* Le questionnaire d'appréciation.
 
    Les 173 scénarios disent si l'application MARCHE. Ceci dit si elle

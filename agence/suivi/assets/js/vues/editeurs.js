@@ -11,6 +11,7 @@ import {
   STATUTS_PROJET, TYPES_PROJET, SANTES, STATUTS, URGENCES, QUALIFICATIONS, PLATEFORMES_CHOIX, contactsProjet,
   MOTIFS_REPORT, nomAffiche, dateCourte,
   NIVEAUX_SCENARIO, BLOCS_SCENARIO, STATUTS_CAMPAGNE, PLATEFORMES_TEST, REF_SCENARIO,
+  ETATS_PARCOURS, OUTILS_PARCOURS,
 } from '../noyau.js';
 import { modale, confirmer, toast, lireForme, valider, obligatoire, longueurMax, urlValide, emailValide, optionsDe, depot, agir, lisible, choixPlateformes } from '../ui.js';
 import { appelServeur } from '../serveur.js';
@@ -535,6 +536,79 @@ const editeurs = {
     });
   },
 
+  /* Un parcours automatisé. Il ne remplace pas un testeur, il remplace la
+     partie répétitive de son travail : ce qu'on rejoue à chaque version
+     pour qu'un défaut corrigé ne revienne pas.
+
+     L'état vient de l'outil, pas d'une saisie : Maestro et Playwright
+     rendent un verdict, et le recopier à la main serait la première chose
+     qu'on oublierait de faire. Il reste modifiable tant que le parcours
+     n'est pas branché. */
+  parcours: (env, { pid, fiche, defaut = {} }) => {
+    const scen = [
+      ...(magasin.lire(K.scenarios(pid)) || []),
+      ...(magasin.lire(K.scenariosTous) || []).filter((x) => (x.projet || x._parent) === pid),
+    ].filter((x, i, l) => x.actif !== false && l.findIndex((y) => y.ref === x.ref) === i)
+      .sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
+
+    return feuille({
+      titre: fiche ? 'Le parcours' : 'Nouveau parcours',
+      sousTitre: fiche ? fiche.ref : 'Rejoué par une machine à chaque version.',
+      corps: `
+        <div class="forme-rang">
+          ${champ('ref', 'Référence', fiche ? fiche.ref : (defaut.ref || ''), { placeholder: 'P-01', attrs: fiche ? 'readonly' : '', aide: fiche ? "Elle ne change pas : c'est elle que l'outil renvoie dans son rapport." : "C'est par elle qu'on recolle le verdict de l'outil au parcours." })}
+          ${select('outil', 'Outil', OUTILS_PARCOURS, fiche ? fiche.outil : 'maestro')}
+        </div>
+        ${champ('titre', 'Ce qu il déroule', fiche ? fiche.titre : '', { placeholder: 'Créer une tâche récurrente et la cocher' })}
+        <div class="groupe"><span class="etiquette-champ">Où il tourne</span>
+          <div class="rang" style="gap:14px;flex-wrap:wrap">${Object.entries(PLATEFORMES_TEST).map(([cle, f]) => `<label class="case"><input type="checkbox" name="plateformes" value="${echapper(cle)}" ${((fiche && fiche.plateformes) || ['ios', 'android']).includes(cle) ? 'checked' : ''}> ${echapper(f.libelle)}</label>`).join('')}</div>
+        </div>
+        ${champ('fichier', 'Le fichier', fiche ? fiche.fichier : '', { facultatif: true, placeholder: '.maestro/taches/recurrente.yaml' })}
+        <div class="forme-rang">
+          ${select('etat', 'État', ETATS_PARCOURS, fiche ? fiche.etat : 'a-ecrire')}
+          ${champ('ordre', 'Ordre', fiche ? fiche.ordre : (defaut.ordre || 0), { type: 'number' })}
+        </div>
+        <div class="groupe">
+          <label class="case"><input type="checkbox" name="mutation" ${fiche && fiche.mutation ? 'checked' : ''}> Éprouvé par mutation</label>
+          <p class="aide">Un parcours qui passe au vert ne prouve rien tant qu'on n'a pas vérifié qu'il sait tomber. Remettre le défaut d'origine et voir le parcours échouer : c'est le seul contrôle qui répond à la question posée.</p>
+        </div>
+        <div class="groupe"><label class="etiquette-champ" for="ed-scenarios">Scénarios couverts</label>
+          <select class="select" id="ed-scenarios" name="scenarios" multiple size="6">${scen.map((x) => `<option value="${echapper(x.ref)}"${((fiche && fiche.scenarios) || []).includes(x.ref) ? ' selected' : ''}>${echapper(x.ref)} — ${echapper(x.titre)}</option>`).join('')}</select>
+          <p class="aide">Ce que ce parcours vérifie tout seul. Maintenez ⌘ ou Ctrl pour en choisir plusieurs.</p>
+        </div>
+        ${zone('note', 'Notes', fiche ? fiche.note : '', { facultatif: true, lignes: 3, placeholder: 'Ce qui bloque, ce qu\'il reste à faire, pourquoi il est instable.' })}`,
+      regles: {
+        ref: (v) => {
+          if (!String(v || '').trim()) return 'Donnez une référence.';
+          if (!/^[A-Z]{1,3}-\d{1,3}$/.test(String(v).trim().toUpperCase())) return 'Des lettres, un tiret, un numéro. Par exemple P-01.';
+          return '';
+        },
+        titre: obligatoire(),
+      },
+      enregistrer: async (d) => {
+        const ref = fiche ? fiche.ref : String(d.ref || '').trim().toUpperCase();
+        if (!fiche && (magasin.lire(K.parcours(pid)) || []).some((x) => x.ref === ref)) {
+          toast(`${ref} existe déjà dans ce projet.`, 'erreur');
+          return undefined;
+        }
+        const liste = (v) => (Array.isArray(v) ? v : (v ? [v] : []));
+        const plateformes = liste(d.plateformes);
+        if (!plateformes.length) { toast('Dites où il tourne.', 'erreur'); return undefined; }
+        const donnees = {
+          ref, titre: d.titre, outil: d.outil, plateformes,
+          scenarios: liste(d.scenarios), fichier: d.fichier || '',
+          etat: d.etat, note: d.note || '',
+          mutation: d.mutation === true || d.mutation === 'on',
+          ordre: Number(d.ordre) || 0,
+        };
+        if (fiche) await ecrire.majParcours(pid, ref, donnees);
+        else await ecrire.creerParcours(pid, { ...donnees, actif: true });
+        toast(fiche ? 'Parcours enregistré.' : `${ref} créé.`);
+        return true;
+      },
+    });
+  },
+
   jalon: (env, { pid, fiche, defaut = {} }) => feuille({
     titre: fiche ? "L'étape" : 'Nouvelle étape', sousTitre: 'Une étape de la feuille de route.',
     corps: `
@@ -822,6 +896,7 @@ export const supprimer = async (genre, env, { pid, fiche, libelle }) => {
     else if (genre === 'blocage') await ecrire.supprimerBlocage(fiche.id);
     else if (genre === 'scenario') await ecrire.supprimerScenario(pid, fiche.ref);
     else if (genre === 'campagne') await ecrire.supprimerCampagne(pid, fiche.id);
+    else if (genre === 'parcours') await ecrire.supprimerParcours(pid, fiche.ref);
     toast('Supprimé.');
     return true;
   } catch (e) { toast(lisible(e), 'erreur'); return false; }

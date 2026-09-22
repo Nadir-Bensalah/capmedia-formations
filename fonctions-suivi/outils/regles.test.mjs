@@ -409,6 +409,23 @@ await refuse('Un questionnaire démesuré est refusé', setDoc(doc(karim(), `pro
 await doit('La première impression se dépose seule', setDoc(doc(sonia(), `projets/atelier/campagnes/c1/appreciations/${SONIA}`), { 'impression.compris': 4, testeur: SONIA }, { merge: true }));
 await doit('Le reste vient s y ajouter', setDoc(doc(sonia(), `projets/atelier/campagnes/c1/appreciations/${SONIA}`), { 'esthetique.belle': 5, testeur: SONIA }, { merge: true }));
 
+console.log('\n== La plateforme de tests : les parcours automatisés');
+/* Le client les lit : savoir que quarante-huit parcours sont rejoués à
+   chaque version fait partie de ce qu'il paie. Le testeur, lui, n'a rien
+   à y faire : lui montrer ce que la machine couvre l'inciterait à
+   survoler les mêmes chemins, qui sont justement les plus critiques. */
+await env.withSecurityRulesDisabled(async (ctx) => {
+  await setDoc(doc(ctx.firestore(), 'projets/atelier/parcours/P-01'), { ref: 'P-01', titre: 'Créer une tâche', outil: 'maestro', etat: 'vert', actif: true });
+});
+await doit("L'équipe lit les parcours", getDocs(collection(equipe(), 'projets/atelier/parcours')));
+await doit('Camille les lit aussi', getDocs(collection(camille(), 'projets/atelier/parcours')));
+await refuse('Karim ne lit pas les parcours', getDocs(collection(karim(), 'projets/atelier/parcours')));
+await refuse('Léa ne lit pas ceux d un autre projet', getDocs(collection(lea(), 'projets/atelier/parcours')));
+await refuse('Camille n écrit pas un parcours', setDoc(doc(camille(), 'projets/atelier/parcours/P-02'), { ref: 'P-02', titre: 'Inventé' }));
+await doit("L'équipe en écrit un", setDoc(doc(equipe(), 'projets/atelier/parcours/P-02'), { ref: 'P-02', titre: 'Cocher une tâche', outil: 'playwright', etat: 'a-ecrire', actif: true }));
+await doit("L'équipe les lit en groupe", getDocs(collectionGroup(equipe(), 'parcours')));
+await refuse('Camille ne les lit pas en groupe', getDocs(collectionGroup(camille(), 'parcours')));
+
 console.log('\n== La plateforme de tests : les lectures en groupe');
 /* La console regarde tous les projets d'un coup. C'est un privilège
    d'équipe : ouvert plus largement, il donnerait à un client la liste des

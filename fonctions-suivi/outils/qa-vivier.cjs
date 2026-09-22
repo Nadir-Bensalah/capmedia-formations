@@ -75,12 +75,12 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   const f = await page.evaluate(()=>({
     feuille: !!document.querySelector('.feuille'),
     champs: ['#t-prenom','#t-email','#t-sexe','#t-age','#t-fonction','#t-aisance'].filter(s=>document.querySelector(s)).length,
-    mobiles: document.querySelectorAll('[data-mobile]').length,
+    plateformes: document.querySelectorAll('[data-plateforme-t]').length,
     projets: document.querySelectorAll('[data-projet]').length,
   }));
   verifier(f.feuille,'la feuille s\'ouvre');
   verifier(f.champs===6,'les six champs du profil',`${f.champs}`);
-  verifier(f.mobiles===2,'le choix du mobile');
+  verifier(f.plateformes===3,'les trois plateformes, à cocher',`${f.plateformes}`);
   verifier(f.projets>0,'et ses projets',`${f.projets}`);
 
   /* Sans mobile : le calcul de repartition ne saurait pas quoi lui donner. */
@@ -88,9 +88,11 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   await page.fill('#t-email','nadia.qa@essai.test');
   await page.click('[data-enregistrer]'); await pause(900);
   const t1 = await page.evaluate(()=>((document.querySelector('.toasts')||{}).innerText||'').trim());
-  verifier(/mobile/i.test(t1),'sans mobile, c\'est refusé',t1||'(rien)');
+  verifier(/ce qu.il teste/i.test(t1),'sans plateforme, c\'est refusé',t1||'(rien)');
 
-  await page.click('[data-mobile="android"]'); await pause(300);
+  /* Web ET Android : un testeur peut couvrir les deux, ou le web seul. */
+  await page.check('[data-plateforme-t="android"]'); await pause(200);
+  await page.check('[data-plateforme-t="web"]'); await pause(200);
   await page.selectOption('#t-sexe','femme');
   await page.selectOption('#t-age','25-34');
   await page.fill('#t-fonction','Testeuse QA');
@@ -103,7 +105,10 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   const nadia = apres.find(d=>((d.fields.email||{}).stringValue||'')==='nadia.qa@essai.test');
   verifier(!!nadia,'avec la bonne adresse');
   if (nadia) {
-    verifier((nadia.fields.mobile||{}).stringValue==='android','son mobile est retenu');
+    verifier((nadia.fields.mobile||{}).stringValue==='android','son mobile est déduit');
+    const pf = ((nadia.fields.plateformes||{}).arrayValue||{}).values||[];
+    verifier(pf.length===2,'ses deux plateformes sont retenues',pf.map(x=>x.stringValue).join(','));
+    verifier(pf.some(x=>x.stringValue==='web'),'dont le web');
     const p = ((nadia.fields.profil||{}).mapValue||{}).fields||{};
     verifier((p.fonction||{}).stringValue==='Testeuse QA','son profil aussi');
     verifier(((nadia.fields.projets||{}).arrayValue||{}).values?.length>0,'et son projet');

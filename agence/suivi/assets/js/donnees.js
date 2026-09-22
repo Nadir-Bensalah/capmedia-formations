@@ -29,6 +29,7 @@ export const K = {
   scenarios: (p) => `scenarios:${p}`,
   campagnes: (p) => `campagnes:${p}`,
   anomalies: (p) => `anomalies:${p}`,
+  parcours: (p) => `parcours:${p}`,
   liens: (p) => `liens:${p}`,
   messages: (p) => `messages:${p}`,
   lectures: (p) => `lectures:${p}`,
@@ -68,6 +69,7 @@ export const K = {
   scenariosTous: 'scenarios:*',
   campagnesToutes: 'campagnes:*',
   anomaliesToutes: 'anomalies:*',
+  parcoursTous: 'parcours:*',
   testeurs: 'testeurs',
   audit: 'audit',
   envois: 'envois',
@@ -104,6 +106,7 @@ export const abonnerProjet = (lot, pid, role) => {
   lot.abonner(K.scenarios(pid), () => col('projets', pid, 'scenarios'));
   lot.abonner(K.campagnes(pid), () => col('projets', pid, 'campagnes'));
   lot.abonner(K.anomalies(pid), () => col('projets', pid, 'anomalies'));
+  lot.abonner(K.parcours(pid), () => col('projets', pid, 'parcours'));
   lot.abonner(K.taches(pid), () => surProjetVisible('taches'));
   lot.abonner(K.tickets(pid), () => surProjet('tickets'));
   lot.abonner(K.validations(pid), () => surProjet('validations'));
@@ -141,6 +144,7 @@ export const abonnerGlobal = (lot, session) => {
        anomalies et scénarios se lisent donc en groupe, comme les étapes. */
     lot.abonner(K.campagnesToutes, () => collectionGroup(bdd, 'campagnes'));
     lot.abonner(K.anomaliesToutes, () => collectionGroup(bdd, 'anomalies'));
+    lot.abonner(K.parcoursTous, () => collectionGroup(bdd, 'parcours'));
     lot.abonner(K.scenariosTous, () => collectionGroup(bdd, 'scenarios'));
     lot.abonner(K.testeurs, () => col('testeurs'));
   } else {
@@ -386,6 +390,21 @@ export const ecrire = {
   scenarioExiste: async (pid, ref) => (await getDoc(doc(bdd, 'projets', pid, 'scenarios', ref))).exists(),
   majScenario: (pid, ref, d) => updateDoc(doc(bdd, 'projets', pid, 'scenarios', ref), nettoyer({ ...d, maj: serverTimestamp() })),
   supprimerScenario: (pid, ref) => deleteDoc(doc(bdd, 'projets', pid, 'scenarios', ref)),
+
+  /* Un parcours porte sa référence comme identifiant, comme un scénario :
+     c'est elle que l'outil renvoie dans son rapport, et c'est par elle
+     qu'on recolle le verdict au parcours. */
+  creerParcours: (pid, d) => setDoc(doc(bdd, 'projets', pid, 'parcours', d.ref), nettoyer({
+    ref: d.ref, titre: d.titre, outil: d.outil || 'maestro',
+    plateformes: d.plateformes || ['ios', 'android'],
+    scenarios: d.scenarios || [], fichier: d.fichier || '',
+    etat: d.etat || 'a-ecrire', note: d.note || '',
+    mutation: d.mutation === true, dernier: d.dernier || null,
+    ordre: Number(d.ordre) || 0, actif: d.actif !== false,
+    cree: serverTimestamp(), maj: serverTimestamp(),
+  })),
+  majParcours: (pid, ref, d) => updateDoc(doc(bdd, 'projets', pid, 'parcours', ref), nettoyer({ ...d, maj: serverTimestamp() })),
+  supprimerParcours: (pid, ref) => deleteDoc(doc(bdd, 'projets', pid, 'parcours', ref)),
 
   creerCampagne: (pid, d) => addDoc(col('projets', pid, 'campagnes'), nettoyer({
     titre: d.titre, statut: d.statut || 'preparation',
