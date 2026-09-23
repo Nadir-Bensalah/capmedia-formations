@@ -64,13 +64,33 @@ const dateDeLaCible = async (d) => {
       if (trouvee) return trouvee;
     } catch (err) { /* un chemin qui n'existe pas n'est pas une panne */ }
   }
+
+  /* Le dernier repère honnête : le PROJET que la ligne concerne. Une ligne
+     d'activité ne peut pas être antérieure à la création de son projet, ni
+     postérieure à sa dernière modification. On prend donc la création du
+     projet, qui borne la ligne par le bas et ne prétend rien de plus.
+
+     C'est volontairement approximatif, et c'est assumé : l'ordre relatif de
+     deux lignes du même projet reste inconnu, mais le fil cesse d'être
+     mélangé ENTRE projets et entre années, ce qui est le vrai symptôme. */
+  const projetId = d.projet || (/^\/projets\/([^/?]+)/.exec(lien) || [])[1];
+  if (projetId) {
+    try {
+      const doc = await bdd.doc(`projets/${projetId}`).get();
+      if (doc.exists) {
+        const x = doc.data();
+        const trouvee = vraieDate(x.cree) || vraieDate(x.debut);
+        if (trouvee) return { date: trouvee, approx: true };
+      }
+    } catch (err) { /* idem */ }
+  }
   return null;
 };
 
 /* Une collection à réparer : son nom, le champ de date, et les champs
    voisins où chercher un repli. */
 const reparer = async ({ titre, docs, champ, replis }) => {
-  let sansDate = 0; let reparees = 0; let perdues = 0;
+  let sansDate = 0; let reparees = 0; let perdues = 0; let approchees = 0;
   const exemples = [];
   let lot = bdd.batch(); let enAttente = 0;
 
@@ -81,16 +101,27 @@ const reparer = async ({ titre, docs, champ, replis }) => {
 
     let date = null;
     for (const r of replis) { date = date || vraieDate(d[r]); }
-    if (!date) date = await dateDeLaCible(d);
+    let approx = false;
+    if (!date) {
+      const trouve = await dateDeLaCible(d);
+      if (trouve && trouve.approx) { date = trouve.date; approx = true; }
+      else date = trouve;
+    }
     /* Dernier repli : l'identifiant d'un document Firestore n'encode pas
        l'heure, on ne l'invente donc pas. Une ligne sans aucun repère reste
        telle quelle, et on la compte : mieux vaut une ligne sans date qu'une
        date fausse dans l'historique d'un client. */
     if (!date) { perdues += 1; continue; }
 
-    if (exemples.length < 3) exemples.push(`${date.toISOString().slice(0, 16).replace('T', ' ')} · ${String(d.texte || d.titre || doc.id).slice(0, 62)}`);
+    if (exemples.length < 3) exemples.push(`${date.toISOString().slice(0, 16).replace('T', ' ')}${approx ? ' ~' : '  '} · ${String(d.texte || d.titre || doc.id).slice(0, 60)}`);
+    if (approx) approchees += 1;
     if (VRAI) {
-      lot.update(doc.ref, { [champ]: Timestamp.fromDate(date) });
+      /* « dateApprochee » dit noir sur blanc que cette date est reconstruite
+         et non mesurée : si un jour on veut les distinguer à l'écran, ou les
+         reprendre, l'information est là plutôt que perdue. */
+      lot.update(doc.ref, approx
+        ? { [champ]: Timestamp.fromDate(date), dateApprochee: true }
+        : { [champ]: Timestamp.fromDate(date) });
       enAttente += 1;
       if (enAttente >= 400) { await lot.commit(); lot = bdd.batch(); enAttente = 0; }
     }
@@ -100,7 +131,7 @@ const reparer = async ({ titre, docs, champ, replis }) => {
 
   console.log(`\n  ${titre}`);
   console.log(`    ${docs.length} document(s), ${sansDate} sans date`);
-  console.log(`    ${reparees} ${VRAI ? 'réparée(s)' : 'réparable(s)'}, ${perdues} sans repère`);
+  console.log(`    ${reparees} ${VRAI ? 'réparée(s)' : 'réparable(s)'} dont ${approchees} approchée(s), ${perdues} sans repère`);
   exemples.forEach((e) => console.log(`      ${e}`));
   return { sansDate, reparees, perdues };
 };
