@@ -66,8 +66,11 @@ export const vue = async (ctx, env) => {
   /* Tant que les écoutes n'ont pas rendu leur première valeur, on garde le
      squelette : un accueil qui se complète par morceaux donne l'impression
      que des choses manquent. Passé le délai de garde, on montre ce qu'on a. */
+  /* Le délai de garde meurt avec la vue. Oublié, il redessinait l'accueil
+     par-dessus la page qu'on venait d'ouvrir dans les premières secondes :
+     on cliquait « Tableau des tests » et l'accueil revenait. */
   let impatient = false;
-  setTimeout(() => { impatient = true; planifier(); }, 2500);
+  const garde = setTimeout(() => { impatient = true; planifier(); }, 2500);
 
   const rendre = () => {
     if (!impatient && !cles.every((c) => magasin.chargee(c))) return;
@@ -224,5 +227,5 @@ export const vue = async (ctx, env) => {
   cles.forEach((c) => lot.sur(c, planifier));
   planifier();
   void enDate; void echeanceHtml; void echeance; void depuis;
-  return () => { clearTimeout(minuteur); lot.fin(); };
+  return () => { clearTimeout(garde); clearTimeout(minuteur); lot.fin(); };
 };

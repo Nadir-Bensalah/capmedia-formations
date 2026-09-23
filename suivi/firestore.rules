@@ -790,6 +790,72 @@ service cloud.firestore {
         allow read:   if accesProjet(projetId);
         allow write:  if estEquipe();
       }
+
+      // Les exécutions des robots : branche, commit, machine, messages
+      // d'erreur. Le client lit le verdict de chaque parcours, en direct,
+      // sur le parcours lui-même ; le détail de la machine ne regarde que
+      // l'équipe. Seule la porte des robots écrit ici.
+      match /executions/{executionId} {
+        allow read:   if estEquipe();
+        allow write:  if false;
+        match /resultats/{ref} {
+          allow read:   if estEquipe();
+          allow write:  if false;
+        }
+      }
+    }
+
+    // Les jetons des robots de tests. Seule leur empreinte est ici : le
+    // jeton lui-même n'est montré qu'une fois, à sa création.
+    match /robots/{jetonId} {
+      allow read:   if estEquipe();
+      allow write:  if false;
+    }
+
+    // La présence des testeurs : qui est là, depuis quand, sur quel
+    // scénario. L'équipe seule la lit ; le client ne voit que des
+    // résultats, et un testeur ne voit jamais les autres.
+    //
+    // Les dates viennent du serveur (« request.time »), jamais du
+    // navigateur : une durée de session qu'on pourrait antidater ne
+    // mesurerait rien. Le début ne bouge plus une fois posé.
+    function presenceBornee(d) {
+      return texteBorne(d.get('campagne', ''), 40)
+          && texteBorne(d.get('projet', ''), 40)
+          && d.get('plateforme', '') in ['', 'ios', 'android', 'web']
+          && texteBorne(d.get('scenario', ''), 24)
+          && texteBorne(d.get('session', ''), 40);
+    }
+
+    match /presences/{uid} {
+      allow read: if estEquipe();
+      allow create, update: if estTesteur() && uid == moi()
+        && request.resource.data.keys().hasOnly([
+             'campagne', 'projet', 'plateforme', 'scenario', 'vue',
+             'session', 'debut', 'vu', 'enLigne'
+           ])
+        && presenceBornee(request.resource.data)
+        && request.resource.data.get('vue', '') in ['', 'grille', 'liste']
+        && request.resource.data.enLigne is bool
+        && request.resource.data.vu == request.time
+        && (request.resource.data.debut == request.time
+            || (resource != null && request.resource.data.debut == resource.data.debut));
+      allow delete: if false;
+
+      match /sessions/{sessionId} {
+        allow read: if estEquipe();
+        allow create: if estTesteur() && uid == moi()
+          && request.resource.data.keys().hasOnly(['debut', 'vu', 'campagne', 'projet', 'plateforme', 'agent'])
+          && presenceBornee(request.resource.data)
+          && texteBorne(request.resource.data.get('agent', ''), 300)
+          && request.resource.data.debut == request.time
+          && request.resource.data.vu == request.time;
+        allow update: if estTesteur() && uid == moi()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['vu', 'plateforme'])
+          && request.resource.data.get('plateforme', '') in ['', 'ios', 'android', 'web']
+          && request.resource.data.vu == request.time;
+        allow delete: if false;
+      }
     }
 
     // La console de tests regarde tous les projets d'un coup. Ces trois

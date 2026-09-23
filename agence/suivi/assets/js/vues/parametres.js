@@ -94,8 +94,10 @@ export const vue = async (ctx, env) => {
   });
   let premier = true;
   lot.sur(K.profil, () => { if (premier) { premier = false; rendre(); } });
-  setTimeout(() => { if (premier) { premier = false; rendre(); } }, 600);
-  return () => { gestes(); lot.fin(); };
+  /* Le même délai que l'accueil, et le même piège : il meurt avec la vue,
+     sinon il dessine les paramètres par-dessus la page suivante. */
+  const garde = setTimeout(() => { if (premier) { premier = false; rendre(); } }, 600);
+  return () => { premier = false; clearTimeout(garde); gestes(); lot.fin(); };
 };
 
 void toast;

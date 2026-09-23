@@ -28,6 +28,7 @@ const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getAuth } = require('firebase-admin/auth');
 const { getStorage } = require('firebase-admin/storage');
 const courriels = require('./courriels');
+const robot = require('./robot');
 
 /* index.js initialise déjà l'application ; la garde permet de charger ce
    module seul (script de vérification, émulateur, test unitaire). */
@@ -640,6 +641,13 @@ exports.suiviPassageKo = onDocumentWritten(
   async (evenement) => {
     const apres = evenement.data.after.exists ? evenement.data.after.data() : null;
     if (!apres || apres.resultat !== 'ko' || !apres.scenario) return;
+    /* Seul un geste du TESTEUR fait un témoin, et un testeur qui écrit
+       pose toujours une date neuve. Le serveur qui marque le passage « à
+       rejouer », ou l'équipe qui le rattache à une anomalie, laisse la date
+       intacte : sans cette garde, marquer un KO corrigé rouvrait aussitôt
+       l'anomalie en régression. */
+    const avant = evenement.data.before.exists ? evenement.data.before.data() : null;
+    if (avant && avant.le && apres.le && typeof avant.le.isEqual === 'function' && avant.le.isEqual(apres.le)) return;
     const { projetId, campagneId, passageId } = evenement.params;
 
     const ref = bdd.doc(`projets/${projetId}/anomalies/ko-${apres.scenario}`);
@@ -681,6 +689,45 @@ exports.suiviPassageKo = onDocumentWritten(
         t.update(ref, maj);
       });
     } catch (err) { console.error('Anomalie non posée depuis le passage', err); }
+  },
+);
+
+/**
+ * Une anomalie corrigée se rejoue.
+ *
+ * Quand l'équipe passe une anomalie en « corrigée », chaque KO qui en
+ * témoigne dans une campagne EN COURS est marqué « à rejouer ». Le testeur
+ * le voit en orange sur son tableau, sans jamais lire l'anomalie : la
+ * marque arrive sur SON passage, pas sur la campagne, où il lirait les
+ * échecs des autres. En rejouant, il réécrit son passage et la marque
+ * tombe ; un nouveau KO rouvre l'anomalie en régression.
+ *
+ * Si l'équipe revient sur sa décision, la marque est retirée.
+ */
+exports.suiviAnomalieCorrigee = onDocumentUpdated(
+  { region: REGION, document: 'projets/{projetId}/anomalies/{anomalieId}' },
+  async (evenement) => {
+    const avant = evenement.data.before.data() || {};
+    const apres = evenement.data.after.data() || {};
+    const corrigee = apres.statut === 'corrigee';
+    if ((avant.statut === 'corrigee') === corrigee) return;
+    const { projetId } = evenement.params;
+
+    const campagnes = new Map();
+    for (const t of apres.temoins || []) {
+      if (!t.passage || !t.campagne) continue;
+      if (!campagnes.has(t.campagne)) {
+        const c = await bdd.doc(`projets/${projetId}/campagnes/${t.campagne}`).get();
+        campagnes.set(t.campagne, c.exists && c.data().statut === 'en-cours');
+      }
+      if (!campagnes.get(t.campagne)) continue;
+      const ref = bdd.doc(`projets/${projetId}/campagnes/${t.passage.replace('/', '/passages/')}`);
+      try {
+        const p = await ref.get();
+        if (!p.exists || p.data().resultat !== 'ko') continue;
+        await ref.update(corrigee ? { aRevoir: true } : { aRevoir: FieldValue.delete() });
+      } catch (err) { console.error('Passage à rejouer non marqué', t.passage, err); }
+    }
   },
 );
 
@@ -1965,6 +2012,18 @@ exports.suiviAdmin = onRequest(
         await bdd.doc(`invitations/${jeton}`).set({ revoquee: true, maj: FieldValue.serverTimestamp() }, { merge: true });
         await audit('invitation.revoquee', { jeton });
         return res.json({ ok: true });
+      }
+
+      /* Les jetons des robots de tests. Un jeton ouvre un seul projet, en
+         écriture de verdicts : il ne se relit jamais, on ne garde que son
+         empreinte. */
+      if (action === 'creerJetonRobot') {
+        try { return res.json({ ok: true, ...(await robot.creerJetonRobot({ projet, nom })) }); }
+        catch (err) { if (err.code === 404) return res.status(404).send(err.message); throw err; }
+      }
+      if (action === 'revoquerJetonRobot') {
+        try { return res.json(await robot.revoquerJetonRobot({ id })); }
+        catch (err) { if (err.code === 404) return res.status(404).send(err.message); throw err; }
       }
 
       /* La porte d'entrée par code repose sur des jetons signés par le

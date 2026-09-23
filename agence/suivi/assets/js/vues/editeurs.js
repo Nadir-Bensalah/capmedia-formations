@@ -562,6 +562,13 @@ const editeurs = {
           .filter((x) => pris.has(x.bloc) && (!seulementSocle || (NIVEAUX_SCENARIO[x.niveau] || {}).double))
           .map((x) => x.ref);
         if (!refs.length) { toast('Choisissez au moins un bloc de scénarios.', 'erreur'); return undefined; }
+        /* Une fin avant le début : le tableau ne saurait plus dire quel
+           jour on est ni ce qu'il reste. La campagne ForgeMe d'octobre
+           2026 est née ainsi, du 1er octobre au 30 septembre. */
+        if (d.debut && d.fin && new Date(d.fin) < new Date(d.debut)) {
+          toast('La fin prévue tombe avant le début. Corrigez l\'une des deux dates.', 'erreur');
+          return undefined;
+        }
         const donnees = {
           titre: d.titre, statut: d.statut,
           debut: d.debut ? new Date(d.debut) : null,

@@ -91,7 +91,7 @@ const passagesDe = (c) => (magasin.lire(K.passages(c.id)) || []);
    « Testeur 2 » doit désigner la même personne dans toutes les sections,
    sinon le numéro ne dit rien. Le profil, lui, reste : un avis de 22 ans
    et un de 55 ans ne disent pas la même chose. */
-const nommeur = (d, { equipe, pid }) => {
+export const nommeur = (d, { equipe, pid }) => {
   const gens = (equipe ? (d.testeurs || []) : (d.profils || [])).filter((t) => (t.projets || []).includes(pid));
   const rangs = new Map(gens.map((t, i) => [t.id, i + 1]));
   const rang = (uid) => { if (!rangs.has(uid)) rangs.set(uid, rangs.size + 1); return rangs.get(uid); };

@@ -13,11 +13,13 @@
    ========================================================================== */
 
 import {
-  bdd, auth, doc, getDoc, getDocs, setDoc, collection, query, where, signOut,
+  bdd, auth, doc, getDoc, setDoc, updateDoc, collection, query, where, signOut, onSnapshot,
   serverTimestamp, session, echapper, envoyerPiece,
   NIVEAUX_SCENARIO, BLOCS_SCENARIO, PLATEFORMES_TEST, RESULTATS_PASSAGE, FAMILLES_AVIS,
 } from './noyau.js';
 import { icone, pastille, toast, agir, modale, vide } from './ui.js';
+import { tableauTesteur, ETATS_CASE } from './verdicts.js';
+import { barreHtml, famillesHtml } from './grille.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const racine = $('#racine');
@@ -45,13 +47,26 @@ let plateformeCourante = (() => {
   try { return localStorage.getItem('suivi:testeur-plateforme') || ''; } catch (e) { return ''; }
 })();
 
-const etat = { campagne: null, scenarios: [], passages: new Map(), avis: null, bloc: '', reste: true };
+/* Tableau ou liste : le tableau dit d'un coup d'œil où l'on en est, la
+   liste se lit ligne à ligne. Le choix reste d'une visite à l'autre. */
+let vueCourante = (() => {
+  try { return localStorage.getItem('suivi:testeur-vue') || 'grille'; } catch (e) { return 'grille'; }
+})();
+
+const etat = { campagne: null, scenarios: [], passages: new Map(), avis: null, bloc: '', reste: true, charge: false };
 
 /* -------------------------------------------------------------------------- */
 
+/* Fait, c'est passé et pas à rejouer : un KO que l'équipe a corrigé
+   revient dans ce qui reste, jusqu'à ce qu'on le rejoue. */
+const fait = (ref) => {
+  const p = etat.passages.get(ref);
+  return Boolean(p) && !(p.resultat === 'ko' && p.aRevoir === true);
+};
+
 const enTete = (moi, campagne) => {
   const total = etat.scenarios.length;
-  const faits = etat.scenarios.filter((s) => etat.passages.has(s.ref)).length;
+  const faits = etat.scenarios.filter((s) => fait(s.ref)).length;
   const part = total ? Math.round((faits / total) * 100) : 0;
   return `
   <header class="testeur-tete">
@@ -68,9 +83,7 @@ const enTete = (moi, campagne) => {
       <button class="btn-icone" type="button" data-sortir aria-label="Se déconnecter" data-astuce="Se déconnecter">${icone('dehors')}</button>
     </div>
 
-    <div class="testeur-jauge" role="img" aria-label="${faits} sur ${total}">
-      <div class="testeur-jauge-barre" style="width:${part}%"></div>
-    </div>
+    <div style="margin-top:14px">${barreHtml(tableauTesteur({ scenarios: etat.scenarios, passages: etat.passages, blocs: BLOCS_SCENARIO }), { legende: false })}</div>
     <p class="chapo">${faits} sur ${total} · ${part} %${faits === total && total ? ' · vous avez tout déroulé, merci' : ''}</p>
 
     <div class="segments" role="group" aria-label="Sur quoi vous testez" style="margin-top:12px">
@@ -129,26 +142,40 @@ const appelAvis = () => {
   return '';
 };
 
+/* La légende du testeur : ses mots à lui. L'orange n'est pas « pas
+   fait » (ce serait tout orange le premier jour), c'est « rejouez ». */
+const legendeTesteur = () => ['vide', 'ok', 'ko', 'revoir', 'na']
+  .map((k) => `<span><i class="tb-puce" data-e="${k}"${k === 'vide' ? ' style="background:transparent;box-shadow:inset 0 0 0 1.5px var(--encre-4)"' : ''}></i>${echapper(ETATS_CASE[k].libelle)}</span>`).join('');
+
 const rendre = (moi) => {
   const campagne = etat.campagne;
   if (!campagne) {
-    racine.innerHTML = `<div class="page page--testeur">${vide({
-      icone: 'bug', titre: 'Aucune campagne en cours',
-      texte: 'Vous serez prévenu dès qu\'une campagne vous est confiée.',
-    })}<div class="rang" style="justify-content:center;margin-top:18px"><button class="btn btn-fantome" type="button" data-sortir>Se déconnecter</button></div></div>`;
+    if (!etat.charge) return;
+    /* Même sans campagne, il doit savoir où il est : un écran nu qui dit
+       « Aucune campagne » ressemble à une erreur. Et la page s'allume
+       toute seule quand l'équipe passe une campagne « en cours ». */
+    racine.innerHTML = `<div class="page page--testeur">
+      <header class="testeur-tete"><div class="rang" style="justify-content:space-between;align-items:center;gap:16px">
+        <div><p class="surtitre">Capmedia Tests</p><h1>Bonjour ${echapper(moi.prenom || '')}</h1></div>
+        <button class="btn-icone" type="button" data-sortir aria-label="Se déconnecter" data-astuce="Se déconnecter">${icone('dehors')}</button>
+      </div></header>
+      ${vide({
+        icone: 'bug', titre: 'Aucune campagne en cours',
+        texte: 'Vos scénarios apparaîtront ici dès qu\'une campagne vous est confiée, sans recharger la page.',
+      })}</div>`;
     return;
   }
 
   /* Rangés par bloc, dans l'ordre du plan : un testeur qui déroule les
      dates importantes d'affilée garde le contexte en tête. */
   const visibles = etat.scenarios.filter((s) => (!etat.bloc || s.bloc === etat.bloc)
-    && (etat.reste ? !etat.passages.has(s.ref) : true));
+    && (etat.reste ? !fait(s.ref) : true));
   const blocs = [];
   etat.scenarios.forEach((s) => {
     let g = blocs.find((b) => b.cle === s.bloc);
     if (!g) { g = { cle: s.bloc, libelle: (BLOCS_SCENARIO[s.bloc] || {}).libelle || s.blocLibelle || 'Divers', n: 0, faits: 0 }; blocs.push(g); }
     g.n += 1;
-    if (etat.passages.has(s.ref)) g.faits += 1;
+    if (fait(s.ref)) g.faits += 1;
   });
 
   const parBloc = [];
@@ -163,10 +190,20 @@ const rendre = (moi) => {
 
     ${appelAvis()}
 
+    <div class="segments" role="group" aria-label="Affichage" style="margin-bottom:16px">
+      <button type="button" data-vue="grille" aria-pressed="${vueCourante === 'grille'}">Tableau</button>
+      <button type="button" data-vue="liste" aria-pressed="${vueCourante === 'liste'}">Liste</button>
+    </div>
+
+    ${vueCourante === 'grille' ? `<div class="tb tb--testeur">
+      <div class="tb-legende">${legendeTesteur()}</div>
+      ${famillesHtml(tableauTesteur({ scenarios: etat.scenarios, passages: etat.passages, blocs: BLOCS_SCENARIO }), { mode: 'testeur' })}
+      <p class="aide">Touchez une case pour lire le scénario et poser votre résultat.</p>
+    </div>` : `
     <div class="rang testeur-filtres">
       <select class="select" id="f-bloc" style="width:auto">
         <option value="">Tous les blocs</option>
-        ${blocs.map((b) => `<option value="${echapper(b.cle)}"${etat.bloc === b.cle ? ' selected' : ''}>${echapper(b.libelle)} — ${b.faits}/${b.n}</option>`).join('')}
+        ${blocs.map((b) => `<option value="${echapper(b.cle)}"${etat.bloc === b.cle ? ' selected' : ''}>${echapper(b.libelle)} · ${b.faits}/${b.n}</option>`).join('')}
       </select>
       <label class="case"><input type="checkbox" id="f-reste" ${etat.reste ? 'checked' : ''}> Ne montrer que ce qui reste</label>
     </div>
@@ -177,7 +214,7 @@ const rendre = (moi) => {
         <div class="liste liste--serree">${g.items.map(ligneScenario).join('')}</div>
       </div>`).join('')
       : vide({ icone: 'check', titre: etat.reste ? 'Rien ne reste ici' : 'Aucun scénario',
-          texte: etat.reste ? 'Décochez « ce qui reste » pour revoir ce que vous avez déjà coché.' : 'Changez de bloc.', compact: true })}
+          texte: etat.reste ? 'Décochez « ce qui reste » pour revoir ce que vous avez déjà coché.' : 'Changez de bloc.', compact: true })}`}
   </div>`;
 
   const b = $('#f-bloc'); if (b) b.addEventListener('change', (e) => { etat.bloc = e.target.value; rendre(moi); });
@@ -251,9 +288,11 @@ const poser = async (s, resultat, moi) => {
     etat.passages.set(s.ref, passage);
     rendre(moi);
     if (resultat === 'ko') toast('Échec enregistré, merci. On le reproduit de notre côté.');
+    return true;
   } catch (e) {
     console.error(e);
     toast("Ce résultat n'a pas pu être enregistré. Réessayez.", 'erreur');
+    return false;
   }
 };
 
@@ -367,65 +406,223 @@ const ouvrirAvis = async (moi, quand) => {
 };
 
 /* --------------------------------------------------------------------------
-   Le montage
+   La présence
+
+   L'équipe voit qui est là, depuis quand, sur quel scénario, et combien de
+   temps chacun a passé. Un signe toutes les trente secondes tant que la
+   page est visible ; les dates sont celles du serveur, les règles refusent
+   toute autre. Personne d'autre ne lit ces documents : ni le client, ni
+   les autres testeurs.
    -------------------------------------------------------------------------- */
 
-const charger = async (moi) => {
-  /* La campagne en cours où ce testeur figure. Les règles ne lui servent
-     que celles-là : une requête plus large serait refusée, pas filtrée. */
-  const projets = moi.projets || [];
-  for (const pid of projets) {
-    let camps;
-    try {
-      camps = await getDocs(query(collection(bdd, 'projets', pid, 'campagnes'),
-        where('testeurs', 'array-contains', moi.uid)));
-    } catch (e) { continue; }
-    const enCours = camps.docs.map((d) => ({ id: d.id, projet: pid, ...d.data() }))
-      .find((c) => c.statut === 'en-cours');
-    if (!enCours) continue;
+const SIGNE_MS = 30000;
+/* Une absence de plus d'une demi-heure ouvre une nouvelle session : on ne
+   compte pas une pause déjeuner comme du temps de test. */
+const PAUSE_MS = 30 * 60000;
 
-    etat.campagne = enCours;
+const presence = {
+  uid: '', session: '', scenario: '', minuterie: null, cache: 0, lancee: false, campagneVue: undefined,
+};
 
-    /* Ses scénarios à lui : ceux que l'affectation lui a confiés, et non
-       toute la campagne. Un testeur qui verrait les 173 ne saurait plus
-       lesquels sont les siens. */
-    const miens = new Set((enCours.affectation || {})[moi.uid] || enCours.scenarios || []);
-    const tous = await getDocs(collection(bdd, 'projets', pid, 'scenarios'));
-    etat.scenarios = tous.docs.map((d) => ({ ref: d.id, ...d.data() }))
-      .filter((x) => x.actif !== false && miens.has(x.ref))
+const nouvelleSession = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+
+const ouvrirSession = async () => {
+  presence.session = nouvelleSession();
+  const c = etat.campagne || {};
+  const base = { campagne: c.id || '', projet: c.projet || '', plateforme: plateformeCourante || '' };
+  try {
+    await setDoc(doc(bdd, 'presences', presence.uid), {
+      ...base, scenario: presence.scenario, vue: vueCourante, session: presence.session,
+      debut: serverTimestamp(), vu: serverTimestamp(), enLigne: true,
+    });
+    await setDoc(doc(bdd, 'presences', presence.uid, 'sessions', presence.session), {
+      ...base, agent: String(navigator.userAgent || '').slice(0, 300), debut: serverTimestamp(), vu: serverTimestamp(),
+    });
+    presence.lancee = true;
+  } catch (e) { console.warn('[presence] session non ouverte', e); }
+};
+
+const signe = async (enLigne = true) => {
+  if (!presence.uid) return;
+  if (!presence.lancee) { if (enLigne) await ouvrirSession(); return; }
+  const c = etat.campagne || {};
+  try {
+    await updateDoc(doc(bdd, 'presences', presence.uid), {
+      campagne: c.id || '', projet: c.projet || '', plateforme: plateformeCourante || '',
+      scenario: enLigne ? presence.scenario : '', vue: vueCourante, vu: serverTimestamp(), enLigne,
+    });
+    await updateDoc(doc(bdd, 'presences', presence.uid, 'sessions', presence.session), {
+      vu: serverTimestamp(), plateforme: plateformeCourante || '',
+    });
+  } catch (e) { console.warn('[presence] signe perdu', e); }
+};
+
+/* Ce qu'il regarde en ce moment : l'équipe voit la case pulser. */
+const regarder = (ref) => {
+  if (presence.scenario === ref) return;
+  presence.scenario = ref || '';
+  signe(true);
+};
+
+const demarrerPresence = (uid) => {
+  presence.uid = uid;
+  ouvrirSession();
+  presence.minuterie = setInterval(() => { if (document.visibilityState === 'visible') signe(true); }, SIGNE_MS);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') { presence.cache = Date.now(); signe(false); return; }
+    if (presence.cache && Date.now() - presence.cache > PAUSE_MS) { presence.lancee = false; ouvrirSession(); }
+    else signe(true);
+    presence.cache = 0;
+  });
+  window.addEventListener('pagehide', () => { signe(false); });
+};
+
+/* --------------------------------------------------------------------------
+   La feuille d'un scénario, depuis le tableau
+   -------------------------------------------------------------------------- */
+
+const ouvrirFeuille = (s, moi) => {
+  const niveau = NIVEAUX_SCENARIO[s.niveau] || NIVEAUX_SCENARIO.reparti;
+  const p = etat.passages.get(s.ref);
+  const v = tableauTesteur({ scenarios: [s], passages: etat.passages }).familles[0].cases[0].etat;
+  regarder(s.ref);
+  const m = modale({
+    titre: s.titre, sousTitre: `${s.ref} · ${(BLOCS_SCENARIO[s.bloc] || {}).libelle || ''}`, feuille: true,
+    corps: `
+      ${v === 'revoir' ? '<div class="encart encart--attention" style="margin-bottom:14px"><div><strong>À rejouer.</strong><p>L\'équipe a corrigé ce que vous aviez signalé. Refaites-le : un OK ferme la boucle, un nouvel échec la rouvre.</p></div></div>' : ''}
+      ${p && v !== 'revoir' ? `<p class="aide" style="margin-bottom:12px">Votre résultat : ${pastille(RESULTATS_PASSAGE, p.resultat)}${p.commentaire ? ` · ${echapper(p.commentaire)}` : ''}. Vous pouvez vous corriger.</p>` : ''}
+      ${s.options ? `<div class="groupe"><span class="etiquette-champ">Ce qu'il faut poser</span><p class="t-corps">${echapper(s.options).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')}</p></div>` : ''}
+      <div class="groupe"><span class="etiquette-champ">Ce qui doit se passer</span><p class="t-corps">${echapper(s.attendu || '')}</p></div>
+      <p class="aide">Un scénario où rien ne se passe est un échec, jamais une réussite.</p>
+      <p class="aide">${echapper(niveau.aide)}</p>
+      ${!plateformeCourante ? '<p class="aide"><strong>Dites d\'abord sur quoi vous testez</strong>, en haut de la page.</p>' : ''}`,
+    pied: `<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>
+      ${Object.entries(RESULTATS_PASSAGE).map(([cle, f]) => `<button type="button" class="btn ${cle === 'ok' ? 'btn-principal' : 'btn-secondaire'} t-choix--${cle}" data-feuille-poser="${cle}">${echapper(f.libelle)}</button>`).join('')}`,
+  });
+  m.el.addEventListener('click', async (ev) => {
+    const b = ev.target.closest('[data-feuille-poser]');
+    if (!b) return;
+    const resultat = b.dataset.feuillePoser;
+    if (!plateformeCourante) { toast('Dites d\'abord sur quoi vous testez, en haut de la page.', 'erreur'); return; }
+    m.fermer(true);
+    await poser(s, resultat, moi);
+  });
+  m.fin.then(() => regarder(''));
+};
+
+/* --------------------------------------------------------------------------
+   Le montage
+
+   Tout arrive en direct : la campagne qui passe « en cours », une
+   affectation qui change, un KO que l'équipe marque « à rejouer ». Un
+   testeur n'a jamais à recharger sa page.
+   -------------------------------------------------------------------------- */
+
+const ecoutes = { campagnes: [], campagne: [] };
+const couper = (liste) => liste.splice(0).forEach((f) => { try { f(); } catch (e) { /* rien */ } });
+
+const suivreCampagne = (moi, c, redessiner) => {
+  couper(ecoutes.campagne);
+  etat.campagne = c;
+  etat.passages = new Map();
+  etat.avis = null;
+  if (!c) { etat.scenarios = []; redessiner(); return; }
+
+  const pid = c.projet;
+  /* Ses scénarios à lui : ceux que l'affectation lui a confiés, et non
+     toute la campagne. Un testeur qui verrait les 173 ne saurait plus
+     lesquels sont les siens. */
+  const miens = () => new Set((c.affectation || {})[moi.uid] || c.scenarios || []);
+  ecoutes.campagne.push(onSnapshot(collection(bdd, 'projets', pid, 'scenarios'), (inst) => {
+    const m = miens();
+    etat.scenarios = inst.docs.map((d) => ({ ref: d.id, ...d.data() }))
+      .filter((x) => x.actif !== false && m.has(x.ref))
       .sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
+    redessiner();
+  }, (e) => console.warn('[testeur] scénarios', e)));
 
-    try {
-      const deja = await getDocs(query(collection(bdd, 'projets', pid, 'campagnes', enCours.id, 'passages'),
-        where('testeur', '==', moi.uid)));
-      deja.forEach((d) => { const x = d.data(); etat.passages.set(x.scenario, x); });
-    } catch (e) { /* aucun passage encore */ }
+  ecoutes.campagne.push(onSnapshot(query(collection(bdd, 'projets', pid, 'campagnes', c.id, 'passages'), where('testeur', '==', moi.uid)), (inst) => {
+    etat.passages = new Map(inst.docs.map((d) => { const x = d.data(); return [x.scenario, x]; }));
+    redessiner();
+  }, (e) => console.warn('[testeur] passages', e)));
 
-    try {
-      const a = await getDoc(doc(bdd, 'projets', pid, 'campagnes', enCours.id, 'appreciations', moi.uid));
-      if (a.exists()) etat.avis = a.data();
-    } catch (e) { /* pas encore d'avis */ }
-    return;
-  }
+  getDoc(doc(bdd, 'projets', pid, 'campagnes', c.id, 'appreciations', moi.uid))
+    .then((a) => { if (a.exists()) { etat.avis = a.data(); redessiner(); } })
+    .catch(() => { /* pas encore d'avis */ });
+};
+
+/* La campagne en cours où ce testeur figure. Les règles ne lui servent
+   que celles-là : une requête plus large serait refusée, pas filtrée. */
+const ecouterCampagnes = (moi, redessiner) => {
+  const parProjet = new Map();
+  const choisir = () => {
+    const toutes = [...parProjet.values()].flat();
+    const enCours = toutes.find((c) => c.statut === 'en-cours') || null;
+    etat.charge = true;
+    const avant = etat.campagne;
+    if (!enCours) { if (avant) suivreCampagne(moi, null, redessiner); else redessiner(); return; }
+    const memeAffectation = avant && JSON.stringify((avant.affectation || {})[moi.uid] || []) === JSON.stringify((enCours.affectation || {})[moi.uid] || []);
+    if (avant && avant.id === enCours.id && avant.projet === enCours.projet && memeAffectation) {
+      etat.campagne = enCours;
+      redessiner();
+      return;
+    }
+    suivreCampagne(moi, enCours, redessiner);
+  };
+  const projets = moi.projets || [];
+  if (!projets.length) { etat.charge = true; redessiner(); return; }
+  projets.forEach((pid) => {
+    ecoutes.campagnes.push(onSnapshot(query(collection(bdd, 'projets', pid, 'campagnes'), where('testeurs', 'array-contains', moi.uid)), (inst) => {
+      parProjet.set(pid, inst.docs.map((d) => ({ id: d.id, projet: pid, ...d.data() })));
+      choisir();
+    }, () => { parProjet.set(pid, []); choisir(); }));
+  });
 };
 
 const monter = async () => {
   const { utilisateur, testeur } = await session();
   if (!utilisateur || !testeur) { location.replace('./'); return; }
 
-  await charger(testeur);
-  rendre(testeur);
+  /* Un seul dessin par image : dix instantanés qui arrivent d'un coup ne
+     redessinent pas dix fois. */
+  let prevu = false;
+  const redessiner = () => {
+    if (prevu) return;
+    prevu = true;
+    requestAnimationFrame(() => {
+      prevu = false;
+      rendre(testeur);
+      /* La présence part quand on sait sur quelle campagne il est : une
+         session sans campagne ne dirait rien à l'équipe. Ensuite, un
+         changement de campagne se signale tout de suite. */
+      if (etat.charge && !presence.uid) demarrerPresence(testeur.uid);
+      else if (presence.lancee && (etat.campagne || {}).id !== presence.campagneVue) signe(true);
+      presence.campagneVue = (etat.campagne || {}).id;
+    });
+  };
+
+  racine.innerHTML = `<div class="page page--testeur"><p class="aide" style="text-align:center;margin-top:40px">Chargement de votre campagne…</p></div>`;
+  ecouterCampagnes(testeur, redessiner);
 
   document.addEventListener('click', async (e) => {
-    const el = e.target.closest('[data-sortir], [data-sur], [data-poser], [data-ouvrir], [data-avis]');
+    const el = e.target.closest('[data-sortir], [data-sur], [data-poser], [data-ouvrir], [data-avis], [data-vue], [data-case]');
     if (!el) return;
 
-    if (el.hasAttribute('data-sortir')) { await signOut(auth); location.replace('./'); return; }
+    if (el.hasAttribute('data-sortir')) { await signe(false); await signOut(auth); location.replace('./'); return; }
+
+    if (el.dataset.vue) {
+      vueCourante = el.dataset.vue;
+      try { localStorage.setItem('suivi:testeur-vue', vueCourante); } catch (err) { /* stockage refusé */ }
+      rendre(testeur);
+      signe(true);
+      return;
+    }
 
     if (el.dataset.sur !== undefined) {
       plateformeCourante = el.dataset.sur;
       try { localStorage.setItem('suivi:testeur-plateforme', plateformeCourante); } catch (err) { /* stockage refusé */ }
       rendre(testeur);
+      signe(true);
       return;
     }
 
@@ -438,10 +635,17 @@ const monter = async () => {
       return;
     }
 
+    if (el.dataset.case) {
+      const s = etat.scenarios.find((x) => x.ref === el.dataset.case);
+      if (s) ouvrirFeuille(s, testeur);
+      return;
+    }
+
     if (el.dataset.ouvrir) {
       const s = etat.scenarios.find((x) => x.ref === el.dataset.ouvrir);
       if (!s) return;
       const niveau = NIVEAUX_SCENARIO[s.niveau] || NIVEAUX_SCENARIO.reparti;
+      regarder(s.ref);
       modale({
         titre: s.titre, sousTitre: `${s.ref} · ${(BLOCS_SCENARIO[s.bloc] || {}).libelle || ''}`, feuille: true,
         corps: `
@@ -450,7 +654,7 @@ const monter = async () => {
           <p class="aide">Un scénario où rien ne se passe est un échec, jamais une réussite.</p>
           <p class="aide">${echapper(niveau.aide)}</p>`,
         pied: '<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>',
-      });
+      }).fin.then(() => regarder(''));
       return;
     }
 

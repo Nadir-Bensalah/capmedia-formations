@@ -18,6 +18,7 @@ import * as brique from './vues/brique.js';
 import * as adminDemandes from './vues/admin-demandes.js';
 import * as adminTaches from './vues/admin-taches.js';
 import * as tests from './vues/tests.js';
+import * as tableau from './vues/tableau.js';
 import * as adminPlanning from './vues/admin-planning.js';
 import * as messages from './vues/messages.js';
 import * as adminValidations from './vues/admin-validations.js';
@@ -101,6 +102,7 @@ const construireNavigation = () => {
         { chemin: '/demandes', libelle: 'Demandes', icone: 'inbox', compte: { total: ouvertes, neuf: nouvelles } },
         { chemin: '/taches', libelle: 'Tâches', icone: 'taches', compte: { total: aFaire, neuf: enRetard } },
         { chemin: '/tests', libelle: 'Tests', icone: 'bug', compte: { total: campagnesEnCours, neuf: anomaliesOuvertes } },
+        { chemin: '/tableau', libelle: 'Tableau des tests', icone: 'kanban' },
         { chemin: '/planning', libelle: 'Planning', icone: 'calendrier', compte: { total: reunions.length } },
         { chemin: '/messages', libelle: 'Messages', icone: 'messages', compte: { total: projets.filter((p) => !p.archive && !p.interne).length, neuf: nonLus } },
         { chemin: '/validations', libelle: 'Validations', icone: 'valider', compte: { total: attendues } },
@@ -188,6 +190,7 @@ definir([
   { chemin: '/demandes', vue: (ctx) => adminDemandes.vue(ctx, env) },
   { chemin: '/taches', vue: (ctx) => adminTaches.vue(ctx, env) },
   { chemin: '/tests', vue: (ctx) => tests.vue(ctx, env) },
+  { chemin: '/tableau', vue: (ctx) => tableau.vue(ctx, env) },
   { chemin: '/planning', vue: (ctx) => adminPlanning.vue(ctx, env) },
   { chemin: '/messages', vue: (ctx) => messages.vue(ctx, env) },
   { chemin: '/messages/:pid', vue: (ctx) => messages.vue(ctx, env) },

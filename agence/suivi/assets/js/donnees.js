@@ -80,6 +80,12 @@ export const K = {
   maintenanceToute: 'maintenance:*',
   profils: 'profils:*',
   testeurs: 'testeurs',
+  /* Le tableau des tests : qui est là (équipe seule), ce que la machine
+     joue, et les jetons de ses robots. */
+  presences: 'presences',
+  sessions: (uid) => `sessions:${uid}`,
+  executions: (p) => `executions:${p}`,
+  robots: 'robots',
   audit: 'audit',
   envois: 'envois',
 };

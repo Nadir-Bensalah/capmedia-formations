@@ -523,6 +523,45 @@ await refuse('Camille ne la lit pas en groupe', getDocs(collectionGroup(camille(
 await refuse('Karim ne la lit pas en groupe', getDocs(collectionGroup(karim(), 'maintenance')));
 await doit("L'équipe retire un élément", deleteDoc(doc(equipe(), 'projets/atelier/maintenance/j-1')));
 
+
+console.log('\n== Le tableau des tests : présence, exécutions, robots');
+await env.withSecurityRulesDisabled(async (ctx) => {
+  const b = ctx.firestore();
+  await setDoc(doc(b, 'projets/atelier/executions/ci-1'), { outil: 'maestro', branche: 'main', commit: 'abc', statut: 'finie' });
+  await setDoc(doc(b, 'projets/atelier/executions/ci-1/resultats/R-01'), { resultat: 'rouge', message: 'Trace interne' });
+  await setDoc(doc(b, 'robots/empreinte-1'), { projet: 'atelier', nom: 'Maestro', fin: 'abcd' });
+});
+const presence = (extra = {}) => ({ campagne: 'c1', projet: 'atelier', plateforme: 'ios', scenario: 'DI-15', vue: 'grille', session: 's1', debut: serverTimestamp(), vu: serverTimestamp(), enLigne: true, ...extra });
+await doit('Karim signale sa présence, dates du serveur', setDoc(doc(karim(), `presences/${KARIM}`), presence()));
+await doit('Karim la rafraîchit', updateDoc(doc(karim(), `presences/${KARIM}`), { vu: serverTimestamp(), scenario: 'DI-16', enLigne: true }));
+await refuse('Karim ne signale pas la présence de Sonia', setDoc(doc(karim(), `presences/${SONIA}`), presence()));
+await refuse('Karim n antidate pas le début de sa présence', setDoc(doc(karim(), `presences/${KARIM}`), presence({ debut: new Date(Date.now() - 3 * 3600000) })));
+await refuse('Karim ne recule pas son dernier signe', updateDoc(doc(karim(), `presences/${KARIM}`), { vu: new Date(Date.now() + 3600000) }));
+await refuse('Karim ne glisse pas de champ en plus', setDoc(doc(karim(), `presences/${KARIM}`), presence({ note: 'x' })));
+await refuse('Karim ne pose pas un scénario sans borne', updateDoc(doc(karim(), `presences/${KARIM}`), { vu: serverTimestamp(), scenario: 'x'.repeat(200) }));
+await refuse('Camille, cliente, ne se déclare pas présente', setDoc(doc(camille(), `presences/${CAMILLE}`), presence()));
+await doit('Karim ouvre une session', setDoc(doc(karim(), `presences/${KARIM}/sessions/s1`), { debut: serverTimestamp(), vu: serverTimestamp(), campagne: 'c1', projet: 'atelier', plateforme: 'ios', agent: 'Safari' }));
+await doit('Karim prolonge sa session', updateDoc(doc(karim(), `presences/${KARIM}/sessions/s1`), { vu: serverTimestamp() }));
+await refuse('Karim n allonge pas une session en reculant son début', updateDoc(doc(karim(), `presences/${KARIM}/sessions/s1`), { debut: new Date(Date.now() - 5 * 3600000), vu: serverTimestamp() }));
+await refuse('Karim n ouvre pas une session antidatée', setDoc(doc(karim(), `presences/${KARIM}/sessions/s2`), { debut: new Date(Date.now() - 3600000), vu: serverTimestamp(), campagne: 'c1', projet: 'atelier', plateforme: 'ios', agent: '' }));
+await refuse('Karim ne supprime pas une session', deleteDoc(doc(karim(), `presences/${KARIM}/sessions/s1`)));
+await doit("L'équipe lit qui est là", getDocs(collection(equipe(), 'presences')));
+await doit("L'équipe lit les sessions d un testeur", getDocs(collection(equipe(), `presences/${KARIM}/sessions`)));
+await refuse('Camille ne lit pas qui est connecté', getDocs(collection(camille(), 'presences')));
+await refuse('Camille ne lit pas la présence de Karim', getDoc(doc(camille(), `presences/${KARIM}`)));
+await refuse('Camille ne lit pas les sessions de Karim', getDocs(collection(camille(), `presences/${KARIM}/sessions`)));
+await refuse('Sonia ne lit pas la présence de Karim', getDoc(doc(sonia(), `presences/${KARIM}`)));
+await refuse('Karim ne relit pas même la sienne', getDoc(doc(karim(), `presences/${KARIM}`)));
+await doit("L'équipe lit les exécutions des robots", getDocs(collection(equipe(), 'projets/atelier/executions')));
+await doit("L'équipe lit le message d erreur d un parcours", getDoc(doc(equipe(), 'projets/atelier/executions/ci-1/resultats/R-01')));
+await refuse('Camille ne lit pas la branche ni le commit', getDocs(collection(camille(), 'projets/atelier/executions')));
+await refuse('Camille ne lit pas les messages d erreur', getDoc(doc(camille(), 'projets/atelier/executions/ci-1/resultats/R-01')));
+await refuse('Karim ne lit pas les exécutions', getDocs(collection(karim(), 'projets/atelier/executions')));
+await refuse("Même l'équipe n'écrit pas une exécution à la main", setDoc(doc(equipe(), 'projets/atelier/executions/ci-2'), { statut: 'finie' }));
+await doit("L'équipe voit les jetons de robot (leur empreinte)", getDocs(collection(equipe(), 'robots')));
+await refuse('Camille ne voit pas les jetons', getDocs(collection(camille(), 'robots')));
+await refuse("Personne ne pose un jeton depuis le navigateur", setDoc(doc(equipe(), 'robots/x'), { projet: 'atelier' }));
+
 console.log(`\n${ok} contrôle(s) conforme(s)${ecarts.length ? `, ${ecarts.length} ÉCART(S) :\n  - ${ecarts.join('\n  - ')}` : ''}`);
 await env.cleanup();
 process.exit(ecarts.length ? 1 : 0);

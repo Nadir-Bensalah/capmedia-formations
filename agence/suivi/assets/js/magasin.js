@@ -101,11 +101,15 @@ export const erreur = (cle) => (entrees.get(cle) || {}).erreur || null;
    sans que rien d'autre bouge. Un devis accepté, une facture payée, un
    fichier archivé ne redessinaient donc pas l'écran tant qu'un autre
    document ne changeait pas. */
+/* Un passage n'a pas de « maj » mais une date « le », une présence un
+   « vu » ; un parcours change d'« etat », et passe « en cours » quand un
+   robot le joue. Sans eux, un OK qui remplaçait un KO sous le même
+   identifiant ne redessinait pas le tableau des tests. */
 const marque = (v) => {
   if (!v) return '';
-  const t = v.maj || v.date || v.cree;
-  const quand = t && typeof t.seconds === 'number' ? t.seconds : '';
-  const etat = `${v.statut || ''}${v.archive ? '!' : ''}`;
+  const t = v.maj || v.le || v.vu || v.date || v.cree;
+  const quand = t && typeof t.seconds === 'number' ? `${t.seconds}.${t.nanoseconds || 0}` : '';
+  const etat = `${v.statut || ''}${v.etat || ''}${v.resultat || ''}${v.enCours ? '~' : ''}${v.aRevoir ? '^' : ''}${v.archive ? '!' : ''}`;
   return etat ? `${quand}:${etat}` : quand;
 };
 

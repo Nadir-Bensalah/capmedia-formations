@@ -17,8 +17,7 @@
 
      firebase emulators:start --config firebase.suivi.json --project capmedia-1f90d
      node fonctions-suivi/outils/semer-suivi.mjs
-     node fonctions-suivi/outils/importer-scenarios.mjs atelier <plan.md> --vrai
-     (puis semer une campagne en cours avec six testeurs)
+     node fonctions-suivi/outils/semer-campagne.mjs <plan.md>
      node fonctions-suivi/outils/qa-testeur.cjs
    ========================================================================== */
 
@@ -54,13 +53,21 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   console.log('\n== Le testeur arrive sur son espace');
   await connecter(page,'karim.testeur@essai.test');
   const ou = await page.evaluate(()=>({ url: location.pathname, titre: document.title, h1:(document.querySelector('h1')||{}).innerText||'' }));
-  verifier(/tests/.test(ou.url),'il est redirigé vers son espace',ou.url);
+  verifier(/\/suivi\/testeur/.test(ou.url),'il est redirigé vers son espace',ou.url);
   verifier(/Bonjour Karim/.test(ou.h1),'la page le nomme',ou.h1);
+
+  /* Depuis le 23/09/2026, il arrive sur son TABLEAU : une case par
+     scénario. La liste, elle, reste à un geste. */
+  await page.waitForSelector('.tb-case',{timeout:20000}).catch(()=>{});
+  const cases = await page.$$eval('.tb-case',x=>x.length);
+  verifier(cases===43,'son tableau a 43 cases, pas 173',`${cases}`);
+  verifier(await page.$$eval('.tb-case',x=>x.every(b=>b.dataset.e==='vide')),'toutes à faire, en contour, aucune orange le premier jour');
+  await page.click('[data-vue="liste"]'); await pause(800);
 
   const v = await page.evaluate(()=>({
     scenarios: document.querySelectorAll('.t-scenario').length,
     choix: document.querySelectorAll('.t-choix').length,
-    jauge: !!document.querySelector('.testeur-jauge'),
+    jauge: !!document.querySelector('.testeur-tete .tb-barre'),
     plateformes: [...document.querySelectorAll('[data-sur]')].map(b=>b.textContent.trim()),
     chapo:(document.querySelector('.chapo')||{}).innerText||'',
     autres: /Sonia|Marc|Ines|Hugo|Leila/.test(document.body.innerText),

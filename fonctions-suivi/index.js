@@ -21,11 +21,15 @@ exports.suiviDocumentModifie = suivi.suiviDocumentModifie;
 exports.suiviFacteur         = suivi.suiviFacteur;
 exports.suiviProfilTesteur   = suivi.suiviProfilTesteur;
 exports.suiviPassageKo       = suivi.suiviPassageKo;
+exports.suiviAnomalieCorrigee = suivi.suiviAnomalieCorrigee;
 exports.suiviAdmin           = suivi.suiviAdmin;
 
 /* Les automatisations du hub : activité, notifications, e-mails, progression. */
 const hub = require('./hub');
 Object.assign(exports, hub);
+
+/* La porte des robots : les tests automatisés rendent leur verdict en direct. */
+exports.suiviRobot = require('./robot').suiviRobot;
 
 /* La porte d'entrée : lien d'invitation, code à six chiffres, session. */
 const connexion = require('./connexion');
