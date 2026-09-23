@@ -80,7 +80,7 @@ export const vue = async (ctx, env) => {
           </section>
           <section>
             <div class="section-tete"><h2>Activité récente</h2><a class="lien" href="#/activite">Tout</a></div>
-            ${activiteHtml(activite.slice(0, 10).map((a) => ({ ...a, projetNom: nomProjet(a.projet) })), { avecProjet: true })}
+            ${activiteHtml(activite.slice(0, 10).map((a) => ({ ...a, projetNom: nomProjet(a.projet) })), { avecProjet: true, equipe: true })}
           </section>
         </div>
         <aside class="pile" style="gap:var(--e-5)">

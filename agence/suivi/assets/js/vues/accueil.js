@@ -4,7 +4,7 @@
    ========================================================================== */
 
 import {
-  echapper, prenom, nomAffiche, depuis, dateCourte, heure, dateHeure, montant, enDate, parDateDesc,
+  echapper, prenom, nomAffiche, depuis, dateCourte, heure, dateHeure, montant, montantTTC, enDate, parDateDesc,
   OUVERTS, STATUTS_PROJET, pluriel, statutProjet, verdictDelai
 } from '../noyau.js';
 import { icone, pastille, avatarProjet, progression, progressionOuPas, verdictHtml, ligne, vide, chronoItem, parJour, titrePage, echeanceHtml, squelette } from '../ui.js';
@@ -20,6 +20,29 @@ const iconeActivite = {
 };
 const tonActivite = { 'validation': 'violet', 'facture': 'ambre', 'paiement': 'vert', 'release': 'vert', 'blocage': 'rouge', 'devis': 'bleu' };
 
+/* Une ligne d'activité porte UNE adresse, écrite par le serveur, mais les
+   deux espaces n'ont pas les mêmes routes : « /valider/x » n'existe que
+   chez le client, « /validations/x » que dans le cockpit. Une adresse écrite
+   pour l'un retombait donc sur l'accueil de l'autre, en silence.
+
+   On la traduit à l'affichage, là où le rôle est connu : c'est le seul
+   endroit qui sait de quel côté on se trouve. */
+const ROUTES_EQUIPE = [
+  [/^\/valider(\/|$)/, '/validations$1'],
+  [/^\/projets\/([^/]+)\/roadmap$/, '/projets/$1/etapes'],
+];
+const ROUTES_CLIENT = [
+  [/^\/validations(\/|$)/, '/valider$1'],
+  [/^\/projets\/([^/]+)\/roadmap$/, '/projets/$1/etapes'],
+];
+export const lienPourMoi = (lien, equipe) => {
+  const brut = String(lien || '').replace(/^#/, '');
+  if (!brut.startsWith('/')) return '';
+  const regles = equipe ? ROUTES_EQUIPE : ROUTES_CLIENT;
+  for (const [motif, vers] of regles) if (motif.test(brut)) return brut.replace(motif, vers);
+  return brut;
+};
+
 export const activiteHtml = (liste, options = {}) => {
   const activite = liste.filter((a) => a.date);
   if (!activite.length) return vide({ icone: 'activite', titre: "Pas encore d'activité", texte: 'Chaque mouvement du projet apparaîtra ici.', compact: true });
@@ -28,7 +51,7 @@ export const activiteHtml = (liste, options = {}) => {
     <div class="chrono">${g.items.map((a) => chronoItem({
       icone: iconeActivite[a.type] || 'activite', ton: tonActivite[a.type] || '',
       texte: `${a.par && a.par.nom && !options.sansAuteur ? `<strong>${echapper(a.par.nom)}</strong> ` : ''}${echapper(a.texte || '')}${options.avecProjet && a.projetNom ? ` <span class="t-3">· ${echapper(a.projetNom)}</span>` : ''}`,
-      date: heure(a.date), lien: a.lien ? `#${a.lien}` : '',
+      date: heure(a.date), lien: (() => { const l = lienPourMoi(a.lien, options.equipe); return l ? `#${l}` : ''; })(),
     })).join('')}</div>`).join('');
 };
 
@@ -65,7 +88,10 @@ export const vue = async (ctx, env) => {
     const reunion = prochaineReunion(reunions);
     const { total: du, factures: dues } = resteAPayer(documents, paiements);
     const ouverts = tickets.filter((t) => OUVERTS.includes(t.statut) && !t.archive);
-    const recentes = activite.slice(0, 12).map((a) => ({ ...a, projetNom: nomProjet(a.projet) }));
+    /* Cinq lignes, pas douze : l'activité occupait la moitié de la page, sur
+       téléphone comme sur ordinateur, et c'est le bloc Finances qu'on ne
+       voyait plus. Le reste se lit d'un clic. */
+    const recentes = activite.slice(0, 5).map((a) => ({ ...a, projetNom: nomProjet(a.projet) }));
     const depuisPassage = depuisVisite(activite, env.derniereVisite);
     const dernieresReleases = releases.filter((r) => r.statut === 'disponible').sort(parDateDesc('date')).slice(0, 3);
     const nonLus = projets.reduce((s, p) => s + nonLusProjet(magasin.lire(K.messages(p.id)) || [], profil, p.id, session.utilisateur.uid), 0);
@@ -155,7 +181,7 @@ export const vue = async (ctx, env) => {
       <div class="grille grille-tiers section">
         <section>
           <div class="section-tete"><h2>Activité récente</h2>${projets[0] ? `<a class="lien" href="#/projets/${echapper(projets[0].id)}/activite">Tout voir</a>` : ''}</div>
-          ${activiteHtml(recentes, { avecProjet: projets.length > 1 })}
+          ${activiteHtml(recentes, { avecProjet: projets.length > 1, equipe: false })}
         </section>
         <aside class="pile" style="gap:var(--e-5)">
           <div class="carte carte--creuse">
@@ -170,7 +196,7 @@ export const vue = async (ctx, env) => {
           <div class="carte carte--creuse">
             <p class="surtitre">Finances</p>
             ${dues.length ? `
-              <p class="prix" style="margin-top:8px"><span class="montant">${echapper(montant(du))}</span><span class="unite">à régler</span></p>
+              <p class="prix" style="margin-top:8px"><span class="montant">${echapper(montant(du))}</span><span class="unite">TTC à régler</span></p>
               <p class="t-petit t-2" style="margin-top:4px">${pluriel(dues.length, 'facture en attente', 'factures en attente')}</p>`
             : '<p class="t-petit t-2" style="margin-top:8px">Aucune facture en attente.</p>'}
             <p style="margin-top:10px"><a class="t-petit" href="#/finances">Devis et factures</a></p>

@@ -433,6 +433,18 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') fermerDerniere();
 });
 
+/* Une feuille ouverte par une adresse (« #/finances/D-2026-014 ») restait
+   posée sur l'écran suivant : le routeur démonte la vue, pas ce qui flotte
+   au-dessus d'elle. On ferme donc tout ce qui flotte au changement
+   d'adresse, et le menu contextuel avec.
+
+   Une modale de confirmation ouverte PENDANT une navigation n'existe pas :
+   la navigation est un geste, la confirmation en est un autre. */
+export const fermerFlottants = () => {
+  piles.splice(0).reverse().forEach((p) => { try { p.fermer(); } catch (e) { /* déjà partie */ } });
+  document.querySelectorAll('.menu').forEach((m) => m.remove());
+};
+
 /**
  * Une modale ou une feuille latérale. Renvoie { el, corps, fermer, fin }.
  * `fin` est une promesse résolue à la fermeture avec la valeur passée.

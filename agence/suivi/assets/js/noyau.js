@@ -960,6 +960,30 @@ export const montant = (valeur, decimales = 0) => (typeof valeur === 'number' &&
   ? valeur.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: decimales, maximumFractionDigits: Math.max(decimales, 2) })
   : '';
 
+/* Un montant SANS sa mention est un piège à virement : le client lit
+   « Reste à payer 2 875 € » sous un chiffre hors taxes, et vire 575 € de
+   moins que le dû. La mention n'est donc pas décorative, elle fait partie
+   du montant, et c'est pour ça qu'elle vit ici et pas dans chaque écran.
+
+   « TTC » quand la pièce porte une TVA, « HT » quand elle n'en porte pas :
+   dire « TTC » sur un montant sans taxe serait exact mais trompeur. */
+export const montantHT = (valeur, decimales = 0) => (montant(valeur, decimales) ? `${montant(valeur, decimales)} HT` : '');
+export const montantTTC = (valeur, decimales = 0) => (montant(valeur, decimales) ? `${montant(valeur, decimales)} TTC` : '');
+
+/* Le TTC d'une pièce : le champ s'il existe, sinon le calcul. Trois écrans
+   en avaient chacun leur copie, avec trois comportements différents sur un
+   montant absent. */
+export const ttcDe = (d) => (typeof (d || {}).ttc === 'number'
+  ? d.ttc
+  : (Number((d || {}).montant) || 0) * (1 + (Number((d || {}).tva) || 0) / 100));
+
+/* Le montant d'une pièce, avec la mention qui va avec. Une pièce sans TVA
+   n'a qu'un seul montant : on l'annonce « HT », ce qui est ce qu'elle est. */
+export const montantPiece = (d, decimales = 0) => {
+  const avecTaxe = Number((d || {}).tva) > 0 || (typeof (d || {}).ttc === 'number' && (d || {}).ttc !== Number((d || {}).montant));
+  return avecTaxe ? montantTTC(ttcDe(d), decimales) : montantHT(Number((d || {}).montant) || ttcDe(d), decimales);
+};
+
 export const poids = (octets) => {
   if (!octets) return '';
   const ko = octets / 1024;

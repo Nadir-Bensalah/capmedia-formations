@@ -123,24 +123,34 @@ function montantHT(valeur) {
    ========================================================================== */
 
 const STATUTS = {
-  'nouveau': 'Nouveau',
+  'nouveau': 'Reçue',
+  'a-analyser': 'À analyser',
+  'en-attente-client': "Besoin d'information",
+  'acceptee': 'Acceptée',
+  'planifiee': 'Planifiée',
   'en-cours': 'En cours',
-  'en-attente-client': 'En attente de votre réponse',
+  'en-revue': 'En revue',
   'a-valider': 'À valider',
-  'resolu': 'Résolu',
-  'ferme': 'Fermé',
-  'refuse': 'Hors périmètre',
+  'resolu': 'Terminée',
+  'refuse': 'Refusée',
+  'annulee': 'Annulée',
+  'ferme': 'Fermée',
 };
 
-/** Le bout de phrase qui passe dans l'objet : « votre ticket ... ». */
+/** Le bout de phrase qui passe dans l'objet : « votre demande ... ». */
 const PHRASES_STATUT = {
-  'nouveau': 'est revenu au statut nouveau',
-  'en-cours': 'est passé en cours',
+  'nouveau': 'est revenue au statut reçue',
+  'a-analyser': 'est à analyser',
   'en-attente-client': 'attend votre réponse',
+  'acceptee': 'est acceptée',
+  'planifiee': 'est planifiée',
+  'en-cours': 'est passée en cours',
+  'en-revue': 'est en relecture chez nous',
   'a-valider': 'attend votre validation',
-  'resolu': 'est résolu',
-  'ferme': 'est fermé',
-  'refuse': 'est classé hors périmètre',
+  'resolu': 'est terminée',
+  'refuse': 'est refusée',
+  'annulee': 'est annulée',
+  'ferme': 'est fermée',
 };
 
 const URGENCES = {
@@ -333,12 +343,12 @@ function invitation(v) {
   };
 }
 
-/* 2. Ticket créé. Deux voix : l'accusé au client, l'alerte à l'équipe. */
+/* 2. Demande créée. Deux voix : l'accusé au client, l'alerte à l'équipe. */
 function ticketCree(v) {
   const numero = valeurTexte(v.numero);
   const titre = valeurTexte(v.titre);
   const faits = [
-    ['Ticket', numero],
+    ['Demande', numero],
     ['Projet', valeurTexte(v.projetNom)],
     ['Type', libelle(TYPES, v.type)],
     ['Urgence', libelle(URGENCES, v.urgence)],
@@ -349,29 +359,49 @@ function ticketCree(v) {
 
   if (valeurTexte(v.cote) === 'equipe') {
     return {
-      objet: objetAvecNumero(numero, `Nouveau ticket : ${titre || 'sans titre'}`),
+      objet: objetAvecNumero(numero, `Nouvelle demande : ${titre || 'sans titre'}`),
       ...rendreGabarit({
-        titre: titre || 'Nouveau ticket',
-        intro: `${valeurTexte(v.auteurNom).trim() || 'Un client'} vient d'ouvrir un ticket`
+        titre: titre || 'Nouvelle demande',
+        intro: `${valeurTexte(v.auteurNom).trim() || 'Un client'} vient d'ouvrir une demande`
           + `${valeurTexte(v.projetNom).trim() ? ` sur ${valeurTexte(v.projetNom)}` : ''}.`,
         faits: faits.concat([['Ouvert par', valeurTexte(v.auteurNom)], ['Adresse', valeurTexte(v.auteurEmail)]]),
         citation: extrait(v.description, 900),
-        bouton: { libelle: 'Traiter le ticket', url: lien },
+        bouton: { libelle: 'Traiter la demande', url: lien },
+      }),
+    };
+  }
+
+  /* Une demande ouverte par l'équipe pour le compte du client ne peut pas
+     lui être accusée comme si c'était lui qui l'avait écrite : il lisait
+     « Bonjour Équipe Capmedia, nous avons bien reçu votre demande ». */
+  const parLEquipe = v.parLEquipe === true || valeurTexte(v.parLEquipe) === 'true';
+  const bonjour = `Bonjour${valeurTexte(v.clientNom).trim() ? ` ${valeurTexte(v.clientNom)}` : ''},\n\n`;
+
+  if (parLEquipe) {
+    return {
+      objet: objetAvecNumero(numero, 'Une demande a été ouverte pour vous'),
+      ...rendreGabarit({
+        titre: 'Une demande a été ouverte pour vous',
+        intro: `${bonjour}Nous avons ouvert une demande${numero ? ` ${numero}` : ''}`
+          + `${titre ? `, « ${titre} »` : ''} à la suite de nos échanges. Vous la suivez depuis votre espace, et vous pouvez y répondre.`,
+        faits,
+        citation: extrait(v.description, 600),
+        bouton: { libelle: 'Suivre la demande', url: lien },
+        note: "Si nous avons mal compris votre besoin, dites-le dans la demande : nous corrigeons.",
       }),
     };
   }
 
   return {
-    objet: objetAvecNumero(numero, 'Votre ticket est enregistré'),
+    objet: objetAvecNumero(numero, 'Votre demande est enregistrée'),
     ...rendreGabarit({
-      titre: 'Votre ticket est enregistré',
-      intro: `Bonjour${valeurTexte(v.clientNom).trim() ? ` ${valeurTexte(v.clientNom)}` : ''},\n\n`
-        + `Nous avons bien reçu votre ticket${numero ? ` ${numero}` : ''}`
-        + `${titre ? `, « ${titre} »` : ''}. Il est en file, nous revenons vers vous dès sa prise en charge.`,
+      titre: 'Votre demande est enregistrée',
+      intro: `${bonjour}Nous avons bien reçu votre demande${numero ? ` ${numero}` : ''}`
+        + `${titre ? `, « ${titre} »` : ''}. Elle est en file, nous revenons vers vous dès sa prise en charge.`,
       faits,
       citation: extrait(v.description, 600),
-      bouton: { libelle: 'Suivre le ticket', url: lien },
-      note: "Tout se passe désormais dans votre espace : ajoutez une précision ou une capture d'écran depuis le ticket.",
+      bouton: { libelle: 'Suivre la demande', url: lien },
+      note: "Tout se passe désormais dans votre espace : ajoutez une précision ou une capture d'écran depuis la demande.",
     }),
   };
 }
@@ -388,22 +418,22 @@ function statut(v) {
   return {
     objet: objetAvecNumero(numero, pourEquipe
       ? `Statut modifié : ${libelle(STATUTS, apres, apres) || 'inconnu'}`
-      : `Votre ticket ${phrase}`),
+      : `Votre demande ${phrase}`),
     ...rendreGabarit({
-      titre: pourEquipe ? 'Statut modifié par le client' : `Votre ticket ${phrase}`,
+      titre: pourEquipe ? 'Statut modifié par le client' : `Votre demande ${phrase}`,
       intro: pourEquipe
-        ? `Le ticket ${numero || 'concerné'}${valeurTexte(v.titre) ? `, « ${valeurTexte(v.titre)} »` : ''} a changé de statut depuis l'espace client.`
-        : `Le ticket${numero ? ` ${numero}` : ''}${valeurTexte(v.titre) ? `, « ${valeurTexte(v.titre)} »` : ''} vient de changer d'état.`
+        ? `La demande ${numero || 'concernée'}${valeurTexte(v.titre) ? `, « ${valeurTexte(v.titre)} »` : ''} a changé de statut depuis l'espace client.`
+        : `La demande${numero ? ` ${numero}` : ''}${valeurTexte(v.titre) ? `, « ${valeurTexte(v.titre)} »` : ''} vient de changer d'état.`
           + (apres === 'en-attente-client' ? '\n\nNous avons besoin d\'une précision de votre part pour avancer.' : '')
-          + (apres === 'a-valider' ? '\n\nLa correction est livrée. Vérifiez de votre côté, puis validez depuis le ticket.' : ''),
+          + (apres === 'a-valider' ? '\n\nLa correction est livrée. Vérifiez de votre côté, puis validez depuis la demande.' : ''),
       faits: [
-        ['Ticket', numero],
+        ['Demande', numero],
         ['Titre', valeurTexte(v.titre)],
         ['Avant', libelle(STATUTS, v.statutAvant)],
         ['Maintenant', libelle(STATUTS, apres, apres)],
         ['Projet', valeurTexte(v.projetNom)],
       ],
-      bouton: { libelle: 'Voir le ticket', url: valeurTexte(v.lien) || lienEspace() },
+      bouton: { libelle: 'Voir la demande', url: valeurTexte(v.lien) || lienEspace() },
     }),
   };
 }
@@ -412,24 +442,24 @@ function statut(v) {
 function assignation(v) {
   const numero = valeurTexte(v.numero);
   return {
-    objet: objetAvecNumero(numero, `Ticket assigné : ${valeurTexte(v.titre) || 'sans titre'}`),
+    objet: objetAvecNumero(numero, `Demande assignée : ${valeurTexte(v.titre) || 'sans titre'}`),
     ...rendreGabarit({
-      titre: 'Un ticket vous est assigné',
-      intro: `${valeurTexte(v.assigneNom).trim() ? `${valeurTexte(v.assigneNom)}, ce` : 'Ce'} ticket est désormais sous votre responsabilité.`,
+      titre: 'Une demande vous est assignée',
+      intro: `${valeurTexte(v.assigneNom).trim() ? `${valeurTexte(v.assigneNom)}, cette` : 'Cette'} demande est désormais sous votre responsabilité.`,
       faits: [
-        ['Ticket', numero],
+        ['Demande', numero],
         ['Titre', valeurTexte(v.titre)],
         ['Projet', valeurTexte(v.projetNom)],
         ['Type', libelle(TYPES, v.type)],
         ['Urgence', libelle(URGENCES, v.urgence)],
         ['Statut', libelle(STATUTS, v.statut)],
       ],
-      bouton: { libelle: 'Traiter le ticket', url: valeurTexte(v.lien) || lienEspace() },
+      bouton: { libelle: 'Traiter la demande', url: valeurTexte(v.lien) || lienEspace() },
     }),
   };
 }
 
-/* 5. Nouveau message sur un ticket, vers l'autre partie. */
+/* 5. Nouveau message sur une demande, vers l'autre partie. */
 function message(v) {
   const numero = valeurTexte(v.numero);
   const auteur = valeurTexte(v.auteurNom).trim();
@@ -438,60 +468,60 @@ function message(v) {
   return {
     objet: objetAvecNumero(numero, versEquipe
       ? `Réponse du client${auteur ? ` (${auteur})` : ''}`
-      : 'Nouveau message sur votre ticket'),
+      : 'Nouveau message sur votre demande'),
     ...rendreGabarit({
-      titre: versEquipe ? 'Le client a répondu' : 'Nouveau message sur votre ticket',
-      intro: `${auteur || (versEquipe ? 'Le client' : "L'équipe")} a écrit sur le ticket`
+      titre: versEquipe ? 'Le client a répondu' : 'Nouveau message sur votre demande',
+      intro: `${auteur || (versEquipe ? 'Le client' : "L'équipe")} a écrit sur la demande`
         + `${numero ? ` ${numero}` : ''}${valeurTexte(v.titre) ? `, « ${valeurTexte(v.titre)} »` : ''}.`,
       faits: [
-        ['Ticket', numero],
+        ['Demande', numero],
         ['Projet', valeurTexte(v.projetNom)],
         ['Statut', libelle(STATUTS, v.statut)],
       ],
       citation: extrait(v.texte, 1200),
       bouton: { libelle: 'Répondre', url: valeurTexte(v.lien) || lienEspace() },
-      note: "Répondez depuis l'espace de suivi : un e-mail de retour ne serait pas rattaché au ticket.",
+      note: "Répondez depuis l'espace de suivi : un e-mail de retour ne serait pas rattaché à la demande.",
     }),
   };
 }
 
-/* 6. Ticket résolu. */
+/* 6. Demande terminée. */
 function resolu(v) {
   const numero = valeurTexte(v.numero);
   return {
-    objet: objetAvecNumero(numero, 'Votre ticket est résolu'),
+    objet: objetAvecNumero(numero, 'Votre demande est terminée'),
     ...rendreGabarit({
-      titre: 'Votre ticket est résolu',
-      intro: `Le ticket${numero ? ` ${numero}` : ''}${valeurTexte(v.titre) ? `, « ${valeurTexte(v.titre)} »` : ''} est marqué comme résolu.\n\n`
-        + 'Si le problème revient, vous pouvez rouvrir ce ticket depuis votre espace pendant sept jours. Passé ce délai, ouvrez un nouveau ticket, qui gardera le lien avec celui-ci.',
+      titre: 'Votre demande est terminée',
+      intro: `La demande${numero ? ` ${numero}` : ''}${valeurTexte(v.titre) ? `, « ${valeurTexte(v.titre)} »` : ''} est marquée comme terminée.\n\n`
+        + 'Si le problème revient, vous pouvez la rouvrir depuis votre espace pendant sept jours. Passé ce délai, ouvrez une nouvelle demande, qui gardera le lien avec celle-ci.',
       faits: [
-        ['Ticket', numero],
+        ['Demande', numero],
         ['Titre', valeurTexte(v.titre)],
         ['Projet', valeurTexte(v.projetNom)],
         ['Résolu le', dateFr(v.date)],
       ],
-      bouton: { libelle: 'Voir le ticket', url: valeurTexte(v.lien) || lienEspace() },
+      bouton: { libelle: 'Voir la demande', url: valeurTexte(v.lien) || lienEspace() },
     }),
   };
 }
 
-/* 7. Ticket fermé. */
+/* 7. Demande fermée. */
 function ferme(v) {
   const numero = valeurTexte(v.numero);
   return {
-    objet: objetAvecNumero(numero, 'Votre ticket est fermé'),
+    objet: objetAvecNumero(numero, 'Votre demande est fermée'),
     ...rendreGabarit({
-      titre: 'Votre ticket est fermé',
-      intro: `Le ticket${numero ? ` ${numero}` : ''}${valeurTexte(v.titre) ? `, « ${valeurTexte(v.titre)} »` : ''} est clos. `
+      titre: 'Votre demande est fermée',
+      intro: `La demande${numero ? ` ${numero}` : ''}${valeurTexte(v.titre) ? `, « ${valeurTexte(v.titre)} »` : ''} est close. `
         + 'Il reste consultable dans votre espace, avec tout son historique.\n\n'
-        + 'Un ticket fermé ne se rouvre pas. Si le sujet revient, ouvrez un nouveau ticket : nous y retrouverons le contexte.',
+        + 'Une demande fermée ne se rouvre pas. Si le sujet revient, ouvrez une nouvelle demande : nous y retrouverons le contexte.',
       faits: [
-        ['Ticket', numero],
+        ['Demande', numero],
         ['Titre', valeurTexte(v.titre)],
         ['Projet', valeurTexte(v.projetNom)],
         ['Fermé le', dateFr(v.date)],
       ],
-      bouton: { libelle: 'Consulter le ticket', url: valeurTexte(v.lien) || lienEspace() },
+      bouton: { libelle: 'Consulter la demande', url: valeurTexte(v.lien) || lienEspace() },
     }),
   };
 }
@@ -580,8 +610,8 @@ function facture(v) {
    conversation, qualification, nouveaux projets
    ========================================================================== */
 
-const QUALIFS = { 'incluse': 'incluse au contrat', 'hors-perimetre': 'hors du perimetre prevu', 'a-chiffrer': 'a chiffrer', 'offerte': 'offerte' };
-const CHANGEMENTS = { nouveau: 'Nouveau', amelioration: 'Amelioration', correction: 'Correction', technique: 'Technique' };
+const QUALIFS = { 'incluse': 'incluse au contrat', 'hors-périmètre': 'hors du périmètre prévu', 'a-chiffrer': 'à chiffrer', 'offerte': 'offerte' };
+const CHANGEMENTS = { nouveau: 'Nouveau', amelioration: 'Amélioration', correction: 'Correction', technique: 'Technique' };
 
 function tacheAttente(v) {
   const projet = valeurTexte(v.projetNom).trim();
@@ -590,9 +620,9 @@ function tacheAttente(v) {
     ...rendreGabarit({
       titre: 'Nous attendons votre retour',
       intro: `Bonjour,\n\nPour avancer sur ${projet || 'votre projet'}, nous avons besoin de vous sur le point suivant.`,
-      faits: [['Tache', valeurTexte(v.titre)], ['Detail', valeurTexte(v.description)]],
-      bouton: { libelle: 'Voir et repondre', url: valeurTexte(v.lien) || lienEspace() },
-      note: 'Repondez depuis votre espace ou dans la conversation du projet.',
+      faits: [['Tâche', valeurTexte(v.titre)], ['Détail', valeurTexte(v.description)]],
+      bouton: { libelle: 'Voir et répondre', url: valeurTexte(v.lien) || lienEspace() },
+      note: 'Répondez depuis votre espace ou dans la conversation du projet.',
     }),
   };
 }
@@ -607,7 +637,7 @@ function release(v) {
       intro: `Bonjour,\n\nUne nouvelle version${projet ? ` de ${projet}` : ''} est en ligne${v.titre ? ` : ${valeurTexte(v.titre)}` : ''}.`,
       faits: notes.slice(0, 12).map((n) => [CHANGEMENTS[n.type] || 'Changement', valeurTexte(n.texte)]),
       bouton: { libelle: v.lienStore ? 'Ouvrir dans le store' : 'Voir les changements', url: valeurTexte(v.lienStore) || valeurTexte(v.lien) || lienEspace() },
-      note: v.lienStore ? `Le detail des changements est dans votre espace : ${valeurTexte(v.lien)}` : '',
+      note: v.lienStore ? `Le détail des changements est dans votre espace : ${valeurTexte(v.lien)}` : '',
     }),
   };
 }
@@ -616,11 +646,11 @@ function fichier(v) {
   const projet = valeurTexte(v.projetNom).trim();
   const versEquipe = v.cote === 'equipe';
   return {
-    objet: versEquipe ? `${projet} · Fichier recu de ${valeurTexte(v.par)}` : `${projet ? `${projet} · ` : ''}Nouveau fichier disponible`,
+    objet: versEquipe ? `${projet} · Fichier reçu de ${valeurTexte(v.par)}` : `${projet ? `${projet} · ` : ''}Nouveau fichier disponible`,
     ...rendreGabarit({
-      titre: versEquipe ? 'Un client a depose un fichier' : 'Un nouveau fichier vous attend',
-      intro: versEquipe ? `${valeurTexte(v.par)} a depose un fichier sur ${projet}.` : `Bonjour,\n\nUn fichier vient d'etre ajoute a votre espace${projet ? ` ${projet}` : ''}.`,
-      faits: [['Fichier', valeurTexte(v.nom)], ['Categorie', valeurTexte(v.categorie)]],
+      titre: versEquipe ? 'Un client a déposé un fichier' : 'Un nouveau fichier vous attend',
+      intro: versEquipe ? `${valeurTexte(v.par)} a déposé un fichier sur ${projet}.` : `Bonjour,\n\nUn fichier vient d'être ajoute a votre espace${projet ? ` ${projet}` : ''}.`,
+      faits: [['Fichier', valeurTexte(v.nom)], ['Catégorie', valeurTexte(v.categorie)]],
       bouton: { libelle: 'Ouvrir les fichiers', url: valeurTexte(v.lien) || lienEspace() },
     }),
   };
@@ -629,12 +659,12 @@ function fichier(v) {
 function reunion(v) {
   const projet = valeurTexte(v.projetNom).trim();
   return {
-    objet: `${projet ? `${projet} · ` : ''}${v.deplacee ? 'Reunion deplacee' : 'Reunion programmee'} : ${valeurTexte(v.titre)}`,
+    objet: `${projet ? `${projet} · ` : ''}${v.deplacee ? 'Réunion déplacée' : 'Réunion programmée'} : ${valeurTexte(v.titre)}`,
     ...rendreGabarit({
-      titre: v.deplacee ? 'Reunion deplacee' : 'Reunion programmee',
-      intro: `Bonjour,\n\n${v.deplacee ? 'La reunion suivante change de date.' : 'Une reunion est programmee.'}`,
-      faits: [['Objet', valeurTexte(v.titre)], ['Quand', valeurTexte(v.date)], ['Duree', v.duree ? `${valeurTexte(v.duree)} min` : ''], ['Visio', valeurTexte(v.lienVisio)], ['Ordre du jour', valeurTexte(v.ordreDuJour)]],
-      bouton: { libelle: v.lienVisio ? 'Rejoindre la reunion' : 'Voir la reunion', url: valeurTexte(v.lienVisio) || valeurTexte(v.lien) || lienEspace() },
+      titre: v.deplacee ? 'Réunion déplacée' : 'Réunion programmée',
+      intro: `Bonjour,\n\n${v.deplacee ? 'La réunion suivante change de date.' : 'Une réunion est programmée.'}`,
+      faits: [['Objet', valeurTexte(v.titre)], ['Quand', valeurTexte(v.date)], ['Durée', v.duree ? `${valeurTexte(v.duree)} min` : ''], ['Visio', valeurTexte(v.lienVisio)], ['Ordre du jour', valeurTexte(v.ordreDuJour)]],
+      bouton: { libelle: v.lienVisio ? 'Rejoindre la réunion' : 'Voir la réunion', url: valeurTexte(v.lienVisio) || valeurTexte(v.lien) || lienEspace() },
       note: `Le fichier d'agenda est disponible dans votre espace : ${valeurTexte(v.lien)}`,
     }),
   };
@@ -648,7 +678,7 @@ function validationDemandee(v) {
       titre: 'Votre validation est attendue',
       intro: `Bonjour,\n\nNous avons besoin de votre accord pour continuer.`,
       faits: [['A valider', valeurTexte(v.titre)], ['Ce qu\'il faut regarder', valeurTexte(v.description)]],
-      bouton: { libelle: 'Examiner et repondre', url: valeurTexte(v.lien) || lienEspace() },
+      bouton: { libelle: 'Examiner et répondre', url: valeurTexte(v.lien) || lienEspace() },
       note: 'Vous pouvez approuver, ou demander des modifications en un commentaire.',
     }),
   };
@@ -661,7 +691,7 @@ function validationReponse(v) {
     ...rendreGabarit({
       titre: approuvee ? 'Validation approuvee' : 'Modifications demandees',
       intro: `${valeurTexte(v.par) || 'Le client'} a repondu sur « ${valeurTexte(v.titre)} ».`,
-      faits: [['Reponse', approuvee ? 'Approuvee' : 'Modifications demandees'], ['Commentaire', valeurTexte(v.commentaire)]],
+      faits: [['Réponse', approuvee ? 'Approuvee' : 'Modifications demandees'], ['Commentaire', valeurTexte(v.commentaire)]],
       bouton: { libelle: 'Ouvrir dans le cockpit', url: valeurTexte(v.lien) || lienEspace() },
     }),
   };
@@ -676,9 +706,9 @@ function messageProjet(v) {
     ...rendreGabarit({
       titre: `${valeurTexte(v.auteur)} vous ecrit`,
       intro: texte.length > 1200 ? `${texte.slice(0, 1200)}…` : texte,
-      faits: v.pieces ? [['Pieces jointes', String(v.pieces)]] : [],
+      faits: v.pieces ? [['Pièces jointes', String(v.pieces)]] : [],
       bouton: { libelle: 'Repondre', url: valeurTexte(v.lien) || lienEspace() },
-      note: versEquipe ? '' : 'Repondez depuis votre espace : la conversation y reste au complet.',
+      note: versEquipe ? '' : 'Répondez depuis votre espace : la conversation y reste au complet.',
     }),
   };
 }
@@ -689,8 +719,8 @@ function qualification(v) {
   return {
     objet: `${projet ? `${projet} · ` : ''}${valeurTexte(v.numero)} : demande ${q}`,
     ...rendreGabarit({
-      titre: v.qualification === 'a-chiffrer' ? 'Un devis va vous etre propose' : 'Cette demande sort du perimetre prevu',
-      intro: `Bonjour,\n\nNous avons etudie votre demande « ${valeurTexte(v.titre)} ». Elle est ${q}. ${v.qualification === 'a-chiffrer' ? 'Nous vous proposons un devis avant tout developpement.' : 'Nous revenons vers vous pour en discuter ou vous proposer un chiffrage.'}`,
+      titre: v.qualification === 'a-chiffrer' ? 'Un devis va vous être proposé' : 'Cette demande sort du périmètre prévu',
+      intro: `Bonjour,\n\nNous avons étudié votre demande « ${valeurTexte(v.titre)} ». Elle est ${q}. ${v.qualification === 'a-chiffrer' ? 'Nous vous proposons un devis avant tout développement.' : 'Nous revenons vers vous pour en discuter ou vous proposer un chiffrage.'}`,
       faits: [['Demande', valeurTexte(v.numero)], ['Titre', valeurTexte(v.titre)]],
       bouton: { libelle: 'Voir la demande', url: valeurTexte(v.lien) || lienEspace() },
     }),
@@ -700,11 +730,11 @@ function qualification(v) {
 function preprojet(v) {
   const versEquipe = v.cote === 'equipe';
   return {
-    objet: versEquipe ? `Nouveau projet demande : ${valeurTexte(v.titre)}` : `Bien recu : ${valeurTexte(v.titre)}`,
+    objet: versEquipe ? `Nouveau projet demande : ${valeurTexte(v.titre)}` : `Bien reçu : ${valeurTexte(v.titre)}`,
     ...rendreGabarit({
-      titre: versEquipe ? 'Un client decrit un nouveau projet' : 'Votre demande est bien recue',
+      titre: versEquipe ? 'Un client decrit un nouveau projet' : 'Votre demande est bien reçue',
       intro: versEquipe ? `${valeurTexte(v.par)} (${valeurTexte(v.email)}) vient de decrire un projet.` : `Bonjour ${valeurTexte(v.par)},\n\nMerci pour votre demande. Nous la lisons, puis nous en discutons ensemble dans votre espace.`,
-      faits: versEquipe ? [['Titre', valeurTexte(v.titre)], ['Type', valeurTexte(v.type)], ['Budget', valeurTexte(v.budget)], ['Delai', valeurTexte(v.delai)], ['Idee', valeurTexte(v.idee).slice(0, 600)]] : [['Projet', valeurTexte(v.titre)]],
+      faits: versEquipe ? [['Titre', valeurTexte(v.titre)], ['Type', valeurTexte(v.type)], ['Budget', valeurTexte(v.budget)], ['Délai', valeurTexte(v.delai)], ['Idee', valeurTexte(v.idee).slice(0, 600)]] : [['Projet', valeurTexte(v.titre)]],
       bouton: { libelle: versEquipe ? 'Ouvrir la demande' : 'Suivre ma demande', url: valeurTexte(v.lien) || lienEspace() },
     }),
   };
@@ -719,11 +749,11 @@ function maintenance(v) {
   if (v.cote === 'equipe') {
     const evolution = v.evenement === 'evolution';
     return {
-      objet: evolution ? `${projet} : une evolution proposee` : `${projet} : forfait de maintenance demande`,
+      objet: evolution ? `${projet} : une évolution proposée` : `${projet} : forfait de maintenance demandé`,
       ...rendreGabarit({
-        titre: evolution ? 'Le client propose une evolution' : 'Le client demande un forfait de maintenance',
+        titre: evolution ? 'Le client propose une évolution' : 'Le client demande un forfait de maintenance',
         intro: `${valeurTexte(v.par)} (${valeurTexte(v.email)}) vient d'ecrire depuis son espace.`,
-        faits: [['Projet', projet], evolution ? ['Evolution', valeurTexte(v.titre)] : ['Rythme souhaite', valeurTexte(v.rythme)]],
+        faits: [['Projet', projet], evolution ? ['Évolution', valeurTexte(v.titre)] : ['Rythme souhaité', valeurTexte(v.rythme)]],
         citation: valeurTexte(v.message),
         bouton: { libelle: 'Ouvrir la maintenance', url: valeurTexte(v.lien) || lienEspace() },
       }),
@@ -733,11 +763,11 @@ function maintenance(v) {
     proposition: 'Une proposition de maintenance vous attend',
     actif: 'Votre forfait de maintenance est en cours',
     suspendu: 'Votre forfait de maintenance est suspendu',
-    termine: 'Votre forfait de maintenance est termine',
+    termine: 'Votre forfait de maintenance est terminé',
   };
   const INTROS = {
     proposition: "Nous avons pose les modalites d'un forfait de maintenance continue pour votre projet : ce qui est compris, le rythme, les delais. Tout se lit dans votre espace, et le devis vous y attend. Rien ne s'engage avant que vous l'ayez accepte.",
-    actif: 'Le forfait tourne. Chaque jour travaille et chaque evolution livree apparaissent dans votre espace, au fur et a mesure.',
+    actif: 'Le forfait tourne. Chaque jour travaille et chaque evolution livrée apparaissent dans votre espace, au fur et a mesure.',
     suspendu: "Le forfait est mis en pause. Rien n'est perdu : les sequences et les evolutions restent dans votre espace, et il reprend quand vous le souhaitez.",
     termine: 'Le forfait est arrive a son terme. Son histoire reste consultable dans votre espace.',
   };
@@ -771,10 +801,10 @@ function relance(v) {
   const n = lignes.length;
   return {
     objet: n > 1
-      ? `${valeurTexte(v.projet)} : ${n} points attendent votre reponse`
-      : `${valeurTexte(v.projet)} : un point attend votre reponse`,
+      ? `${valeurTexte(v.projet)} : ${n} points attendent votre réponse`
+      : `${valeurTexte(v.projet)} : un point attend votre réponse`,
     ...rendreGabarit({
-      titre: n > 1 ? `${n} points attendent votre reponse` : 'Un point attend votre reponse',
+      titre: n > 1 ? `${n} points attendent votre réponse` : 'Un point attend votre réponse',
       intro: `Bonjour ${valeurTexte(v.par)},\n\nRien d'urgent de notre cote, mais ces points sont bloques tant qu'ils n'ont pas votre retour. Tout se traite depuis votre espace, en quelques minutes.`,
       faits: lignes.slice(0, 8).map((l) => [valeurTexte(l.quoi), valeurTexte(l.detail)]),
       bouton: { libelle: 'Voir ce qui vous attend', url: valeurTexte(v.lien) || lienEspace() },
@@ -806,12 +836,12 @@ function code(v) {
    projets, une ouverture qu'on n'a pas faite doit se remarquer. */
 function connexionEquipe(v) {
   return {
-    objet: 'Une session du cockpit vient de s ouvrir',
+    objet: "Une session du cockpit vient de s'ouvrir",
     ...rendreGabarit({
       titre: 'Session du cockpit ouverte',
-      intro: "Une session d'equipe vient d'etre ouverte avec votre adresse. Si c'est vous, il n'y a rien a faire.",
+      intro: "Une session d'équipe vient d'être ouverte avec votre adresse. Si c'est vous, il n'y a rien à faire.",
       faits: [['Quand', valeurTexte(v.quand)], ['Depuis', valeurTexte(v.ip)]],
-      note: "Si ce n'est pas vous, changez l'acces a votre boite immediatement : c'est elle qui ouvre le cockpit.",
+      note: "Si ce n'est pas vous, changez l'accès à votre boîte immédiatement : c'est elle qui ouvre le cockpit.",
     }),
   };
 }

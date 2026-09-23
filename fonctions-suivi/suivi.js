@@ -49,8 +49,13 @@ const EXPEDITEUR = { email: 'contact@capmedia.app', nom: 'Capmedia Digital' };
    doit jamais boucler aux frais du projet. */
 const ESSAIS_MAX = 3;
 
-const STATUTS_CONNUS = ['nouveau', 'en-cours', 'en-attente-client', 'a-valider',
-  'resolu', 'ferme', 'refuse'];
+/* Les DOUZE statuts de noyau.js, pas sept. Les cinq qui manquaient
+   (« à analyser », « acceptée », « planifiée », « en revue », « annulée »)
+   n'envoyaient aucune lettre et écrivaient « Statut inconnu » en erreur :
+   le client ne savait donc rien des cinq étapes du milieu. */
+const STATUTS_CONNUS = ['nouveau', 'a-analyser', 'en-attente-client', 'acceptee',
+  'planifiee', 'en-cours', 'en-revue', 'a-valider', 'resolu', 'refuse',
+  'annulee', 'ferme'];
 
 /* ==========================================================================
    0. Outils communs
@@ -312,9 +317,15 @@ exports.suiviTicketCree = onDocumentCreated(
     };
 
     /* L'accusé au client, puis l'alerte à l'équipe : deux envois distincts,
-       parce que les deux lettres ne disent pas la même chose. */
+       parce que les deux lettres ne disent pas la même chose.
+
+       Une demande ouverte DEPUIS LE COCKPIT porte l'équipe comme auteur :
+       la lettre disait alors au client « Bonjour Équipe Capmedia, nous
+       avons bien reçu votre demande ». On la lui adresse à son nom, et on
+       dit ce qui s'est vraiment passé. */
     await mettreEnFile('ticket-cree', contactsClient(projet, auteur), {
       ...communes,
+      parLEquipe: (auteur && auteur.cote) === 'equipe',
       cote: 'client',
       clientNom: auteur.nom || nomClient(projet),
     });
@@ -548,7 +559,10 @@ exports.suiviDocumentCree = onDocumentCreated(
       numero: document.numero,
       libelle: document.libelle,
       montant: document.montant,
-      echeance: document.echeance || null,
+      /* Un devis range sa date de validité dans « expiration », une facture
+         dans « echeance » : la lettre lisait toujours « echeance », donc la
+         ligne « Valable jusqu'au » d'un devis était toujours vide. */
+      echeance: (document.type === 'devis' ? document.expiration : document.echeance) || null,
       projetNom: nomProjet(projet),
       clientNom: nomClient(projet),
       lien: courriels.lienProjet(document.projet),

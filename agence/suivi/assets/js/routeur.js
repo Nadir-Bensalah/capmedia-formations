@@ -8,6 +8,8 @@
    fonction de nettoyage, appelée quand on quitte la route.
    ========================================================================== */
 
+import { fermerFlottants } from './ui.js';
+
 let routes = [];
 let routeDefaut = '/';
 let nettoyage = null;
@@ -71,6 +73,9 @@ const rendre = async () => {
   }
 
   if (typeof nettoyage === 'function') { try { nettoyage(); } catch (e) { console.error(e); } }
+  /* Ce qui flotte au-dessus de la vue part avec elle : sans cela, une fiche
+     ouverte par son adresse restait affichée sur la page suivante. */
+  fermerFlottants();
   nettoyage = null;
   majEnPlace = null;
   cleCourante = cle;

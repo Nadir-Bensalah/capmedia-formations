@@ -101,7 +101,10 @@ const construireNavigation = () => {
           /* Le projet porte son propre logo : dans une liste de plusieurs, l'œil
              retrouve le sien avant d'avoir lu le nom. */
           chemin: `/projets/${p.id}`, libelle: p.nom, ecusson: avatarProjet(p, 'mini'),
-          compte: { total: ouverts.filter((t) => t.projet === p.id).length, neuf: parProjet(p.id) },
+          /* Un seul chiffre : ce qui attend VOTRE main sur ce projet. Le gris
+             comptait les demandes ouvertes et le rouge les points en attente :
+             deux familles différentes, donc « 5 9 » ne voulait rien dire. */
+          compte: { total: parProjet(p.id), neuf: parProjet(p.id) },
         },
         /* Les sections d'un projet sont à lui : elles se déplient sous son
            nom quand on y entre, et se replient quand on en sort. Les cinq
@@ -117,12 +120,12 @@ const construireNavigation = () => {
     {
       titre: 'Suivi',
       items: [
-        { chemin: '/valider', libelle: 'En attente de vous', icone: 'valider', compte: { total: attente.length, neuf: attente.length } },
+        { chemin: '/valider', libelle: 'En attente de vous', icone: 'valider', compte: { neuf: attente.length } },
         { chemin: '/messages', libelle: 'Messages', icone: 'messages', compte: { total: 0, neuf: nonLus } },
         { chemin: '/calendrier', libelle: 'Calendrier', icone: 'calendrier', compte: { total: reunionsAVenir.length } },
         ...(scenariosDuClient ? [{ chemin: '/tests', libelle: 'Tests', icone: 'bug', compte: { total: scenariosDuClient } }] : []),
         { chemin: '/maintenance', libelle: 'Maintenance', icone: 'sante', compte: { total: forfaits } },
-        { chemin: '/finances', libelle: 'Devis et factures', icone: 'finances', compte: { total: pieces.length, neuf: dues } },
+        { chemin: '/finances', libelle: 'Devis et factures', icone: 'finances', compte: { total: dues, neuf: dues } },
         { chemin: '/documents', libelle: 'Documents', icone: 'documents', compte: { total: fichiers.length } },
       ],
     },
@@ -132,7 +135,7 @@ const construireNavigation = () => {
 
 let minuteurNav = null;
 const planifierNav = () => { clearTimeout(minuteurNav); minuteurNav = setTimeout(construireNavigation, 80); };
-[K.projets, K.profil, ...session.projets.flatMap((p) => [K.tickets(p.id), K.validations(p.id), K.documents(p.id), K.taches(p.id), K.blocages(p.id), K.messages(p.id), K.maintenance(p.id)])]
+[K.projets, K.profil, ...session.projets.flatMap((p) => [K.tickets(p.id), K.validations(p.id), K.documents(p.id), K.taches(p.id), K.blocages(p.id), K.messages(p.id), K.maintenance(p.id), K.scenarios(p.id)])]
   .forEach((cle) => magasin.sur(cle, planifierNav));
 construireNavigation();
 surChangement(construireNavigation);

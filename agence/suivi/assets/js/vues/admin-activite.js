@@ -26,7 +26,7 @@ export const vue = async (ctx, env) => {
       <div class="page-tete"><div><h1>Activité</h1><p class="chapo">Chaque mouvement, issu des vrais événements des projets.</p></div>
         <div class="actions"><select class="select" id="f-projet" style="width:auto"><option value="">Tous les projets</option>${projets.map((p) => `<option value="${echapper(p.id)}" ${etat.projet === p.id ? 'selected' : ''}>${echapper(p.nom)}</option>`).join('')}</select><label class="case"><input type="checkbox" id="f-interne" ${etat.interne ? 'checked' : ''}> Inclure l'interne</label></div></div>
       <div class="filtres" style="margin-bottom:20px">${Object.entries(NATURES).map(([c, l]) => `<button class="filtre${etat.nature === c ? ' actif' : ''}" type="button" data-nature="${c}">${l}</button>`).join('')}</div>
-      ${activiteHtml(activite.slice(0, 200), { avecProjet: true })}
+      ${activiteHtml(activite.slice(0, 200), { avecProjet: true, equipe: true })}
     </div>`;
     sortie.querySelector('#f-projet').addEventListener('change', (e) => { etat.projet = e.target.value; rendre(); });
     sortie.querySelector('#f-interne').addEventListener('change', (e) => { etat.interne = e.target.checked; rendre(); });

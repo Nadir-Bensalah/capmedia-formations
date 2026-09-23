@@ -96,10 +96,17 @@ export const chargee = (cle) => Boolean((entrees.get(cle) || {}).chargee);
 /** L'erreur d'une clé, ou null. Un accès refusé vaut mieux qu'un écran qui attend. */
 export const erreur = (cle) => (entrees.get(cle) || {}).erreur || null;
 
+/* Ce qui distingue deux versions d'un document. La date de modification ne
+   suffit pas : une pièce comptable n'a pas de « maj », et son statut change
+   sans que rien d'autre bouge. Un devis accepté, une facture payée, un
+   fichier archivé ne redessinaient donc pas l'écran tant qu'un autre
+   document ne changeait pas. */
 const marque = (v) => {
   if (!v) return '';
   const t = v.maj || v.date || v.cree;
-  return t && typeof t.seconds === 'number' ? t.seconds : '';
+  const quand = t && typeof t.seconds === 'number' ? t.seconds : '';
+  const etat = `${v.statut || ''}${v.archive ? '!' : ''}`;
+  return etat ? `${quand}:${etat}` : quand;
 };
 
 /**

@@ -48,14 +48,18 @@ const construireNavigation = () => {
   const tickets = (magasin.lire(K.ticketsTous) || []).filter((t) => !t.archive);
   const taches = (magasin.lire(K.tachesToutes) || []).filter((t) => !t.archive);
   const validations = magasin.lire(K.validationsToutes) || [];
-  const documents = magasin.lire(K.documentsTous) || [];
+  /* Les pièces archivées ne comptent nulle part ailleurs : la barre les
+     comptait, et annonçait donc un nombre que la page ne montrait pas. */
+  const documents = (magasin.lire(K.documentsTous) || []).filter((d) => !d.archive);
   const demandesProjet = magasin.lire(K.demandesProjet) || [];
   const nouvelles = tickets.filter((t) => t.statut === 'nouveau').length;
   const aNous = tickets.filter((t) => ATTEND_EQUIPE.includes(t.statut)).length;
   const enRetard = taches.filter((t) => t.statut !== 'terminee' && t.echeance && joursAvant(t.echeance) < 0).length;
   const attendues = validations.filter((v) => v.statut === 'en-attente').length;
   const impayees = documents.filter((d) => d.type === 'facture' && FACTURES_DUES.includes(d.statut)).length;
-  const preprojets = demandesProjet.filter((d) => ['nouvelle', 'discussion', 'qualification', 'estimation'].includes(d.statut)).length;
+  /* Les mêmes six statuts que la page « Nouveaux projets » : la barre en
+     comptait quatre, et deux demandes vivantes n'étaient annoncées nulle part. */
+  const preprojets = demandesProjet.filter((d) => ['nouvelle', 'discussion', 'qualification', 'estimation', 'devis', 'acceptee'].includes(d.statut)).length;
 
   /* Les totaux, en gris : combien il y en a. Les pastilles rouges : combien
      attendent une action de notre côté. */
@@ -87,7 +91,7 @@ const construireNavigation = () => {
       titre: 'Portefeuille',
       items: [
         { chemin: '/clients', libelle: 'Clients', icone: 'entreprise', compte: { total: organisations.length } },
-        { chemin: '/projets', libelle: 'Projets', icone: 'projets', compte: { total: projets.filter((p) => projetEstActif(p) && !p.interne).length } },
+        { chemin: '/projets', libelle: 'Projets', icone: 'projets', compte: { total: projets.filter((p) => projetEstActif(p) && !p.interne && p.ouvert !== false).length } },
         { chemin: '/nouveaux-projets', libelle: 'Nouveaux projets', icone: 'sparkle', compte: { total: preprojets, neuf: nouveauxPreprojets } },
       ],
     },
@@ -106,7 +110,9 @@ const construireNavigation = () => {
     {
       titre: 'Gestion',
       items: [
-        { chemin: '/finances', libelle: 'Devis, factures, paiements', icone: 'finances', compte: { total: piecesDues, neuf: impayees } },
+        /* Le libellé ne tenait pas dans la barre : le titre de la page dit
+           « Finances », la barre disait autre chose et se faisait couper. */
+        { chemin: '/finances', libelle: 'Finances', icone: 'finances', compte: { total: piecesDues, neuf: piecesDues } },
         { chemin: '/maintenance', libelle: 'Maintenance', icone: 'sante', compte: { total: forfaitsActifs, neuf: forfaitsDemandes } },
         { chemin: '/activite', libelle: 'Activité', icone: 'activite' },
         { chemin: '/archives', libelle: 'Archives', icone: 'archive' },
@@ -125,7 +131,12 @@ const suivreConversations = () => {
        coûterait cinquante abonnements pour une pastille toujours vide. */
     if (p.archive || p.interne || conversationsSuivies.has(p.id)) continue;
     conversationsSuivies.add(p.id);
-    lotGlobal.abonner(K.messages(p.id), () => query(collection(bdd, 'projets', p.id, 'messages'), orderBy('date', 'desc'), limit(40)));
+    /* La MÊME requête que « abonnerProjet » : le magasin partage une écoute
+       par clé, et la première posée gagne. Le cockpit posait ici une requête
+       décroissante bornée à 40, que la bulle de conversation réutilisait
+       ensuite : elle montrait donc au plus quarante messages, à l'envers,
+       et l'accusé « Lu » se calculait sur le plus ancien des quarante. */
+    lotGlobal.abonner(K.messages(p.id), () => query(collection(bdd, 'projets', p.id, 'messages'), orderBy('date', 'asc'), limit(300)));
     lotGlobal.sur(K.messages(p.id), () => planifierNav());
   }
 };

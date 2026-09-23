@@ -15,7 +15,7 @@
    compte comme les autres.
    ========================================================================== */
 
-import { echapper, montant, dateCourte, STATUTS_ETAPE } from '../noyau.js';
+import { echapper, montant, montantHT, dateCourte, STATUTS_ETAPE } from '../noyau.js';
 import { icone, pastille, toast, menu } from '../ui.js';
 import { ecrire, K } from '../donnees.js';
 import * as magasin from '../magasin.js';
@@ -43,7 +43,7 @@ export const friseDevis = (devis, jalons, { equipe, pid }) => {
     <div class="frise-tete">
       <div>
         <p class="frise-titre">${echapper(devis.numero || 'Devis')}${devis.libelle ? ` · ${echapper(devis.libelle)}` : ''}</p>
-        <p class="frise-sous"><b>${faites.length} / ${etapes.length}</b> ${etapes.length > 1 ? 'étapes faites' : 'étape faite'}${total ? ` · <b>${echapper(montant(fait))}</b> sur ${echapper(montant(total))} HT` : ''}</p>
+        <p class="frise-sous"><b>${faites.length} / ${etapes.length}</b> ${etapes.length > 1 ? 'étapes faites' : 'étape faite'}${total ? ` · <b>${echapper(montant(fait))}</b> sur ${echapper(montantHT(total))}` : ''}</p>
       </div>
       <span class="frise-pct">${pct} %</span>
     </div>
@@ -56,9 +56,14 @@ export const friseDevis = (devis, jalons, { equipe, pid }) => {
         <span class="frise-num">${String(i + 1).padStart(2, '0')}</span>
         <span class="frise-corps">
           <span class="frise-libelle">${echapper(j.titre)}</span>
-          ${j.fin || j.description ? `<span class="frise-detail">${[j.fin ? (j.statut === 'termine' ? `faite le ${dateCourte(j.maj || j.fin)}` : `prévue le ${dateCourte(j.fin)}`) : '', j.description].filter(Boolean).map(echapper).join(' · ')}</span>` : ''}
+          ${j.fin || j.description || j.faiteLe ? `<span class="frise-detail">${[
+            j.statut === 'termine'
+              ? (j.faiteLe ? `faite le ${dateCourte(j.faiteLe)}` : (j.fin ? `prévue le ${dateCourte(j.fin)}` : ''))
+              : (j.fin ? `prévue le ${dateCourte(j.fin)}` : ''),
+            j.description,
+          ].filter(Boolean).map(echapper).join(' · ')}</span>` : ''}
         </span>
-        <span class="frise-fin">${Number(j.montant) ? `<span class="frise-montant">${echapper(montant(j.montant))}</span>` : ''}${equipe
+        <span class="frise-fin">${Number(j.montant) ? `<span class="frise-montant">${echapper(montantHT(j.montant))}</span>` : ''}${equipe
           ? `<button class="frise-statut" type="button" data-statut-etape="${echapper(j.id)}" data-projet="${echapper(pid)}" aria-label="Changer le statut" data-astuce="Changer le statut">${pastille(STATUTS_ETAPE, j.statut || 'a-venir')}${icone('chevron')}</button><button class="btn-icone" type="button" data-editer-etape="${echapper(j.id)}" data-projet="${echapper(pid)}" aria-label="Modifier l'étape" data-astuce="Modifier">${icone('edit')}</button>`
           : pastille(STATUTS_ETAPE, j.statut || 'a-venir')}</span>
       </li>`).join('')}
@@ -76,7 +81,12 @@ export const cocherEtape = async (el) => {
   const fait = el.checked;
   el.disabled = true;
   try {
-    await ecrire.majJalon(pid, id, fait ? { statut: 'termine', progression: 100 } : { statut: 'en-cours' });
+    /* On consigne le jour de la coche. « maj » disait la dernière
+       modification : renommer une étape livrée changeait donc sa date de
+       livraison sous les yeux du client. */
+    await ecrire.majJalon(pid, id, fait
+      ? { statut: 'termine', progression: 100, faiteLe: new Date() }
+      : { statut: 'en-cours', faiteLe: null });
     toast(fait ? 'Étape faite.' : 'Étape rouverte.');
   } catch (err) {
     el.checked = !fait;
@@ -106,7 +116,9 @@ export const changerStatut = (el) => {
       action: async () => {
         if (cle === actuel) return;
         try {
-          await ecrire.majJalon(pid, id, cle === 'termine' ? { statut: cle, progression: 100 } : { statut: cle });
+          await ecrire.majJalon(pid, id, cle === 'termine'
+            ? { statut: cle, progression: 100, faiteLe: (etapeDe(pid, id) || {}).faiteLe || new Date() }
+            : { statut: cle, faiteLe: null });
           toast(`Étape ${f.libelle.toLowerCase()}.`);
         } catch (err) { toast("Le statut n'a pas pu être enregistré.", 'erreur'); }
       },

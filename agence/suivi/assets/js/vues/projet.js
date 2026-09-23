@@ -473,7 +473,7 @@ const rendreOnglet = (onglet, d, c) => {
     case 'reunions': return reunions(d, c);
     case 'notes': return notes(d, c);
     case 'tests': return tests(d, c);
-    case 'activite': return `<section class="section" style="margin-top:0"><div class="section-tete"><h2>Activité du projet</h2></div>${activiteHtml(d.activite.slice(0, 80))}</section>`;
+    case 'activite': return `<section class="section" style="margin-top:0"><div class="section-tete"><h2>Activité du projet</h2></div>${activiteHtml(d.activite.slice(0, 80), { equipe: c.env.role === 'equipe' })}</section>`;
     default: return '';
   }
 };
@@ -557,7 +557,7 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
         </section>
         <section>
           <div class="section-tete"><h2>Activité récente</h2><a class="lien" href="#/projets/${echapper(pid)}/activite">Tout voir</a></div>
-          ${activiteHtml(d.activite.slice(0, 8))}
+          ${activiteHtml(d.activite.slice(0, 8), { equipe: env.role === 'equipe' })}
         </section>
       </div>
       <aside class="pile" style="gap:var(--e-5)">
