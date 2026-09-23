@@ -71,6 +71,9 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
      compter sur une autre suite : l'anomalie bloquante, la campagne dont
      la date de fin est passée, et celle qui n'a aucun scénario. */
   const hier = new Date(Date.now() - 86400000).toISOString();
+  /* Datées, sinon la section Activité n'a rien à montrer et la suite
+     dépend d'une campagne qu'une autre suite aurait créée avant elle. */
+  const maintenant = { timestampValue: new Date().toISOString() };
   const poser = async (chemin, corps) => fetch(bdd(chemin), {
     method: 'PATCH', headers: { ...prop, 'Content-Type': 'application/json' },
     body: JSON.stringify({ fields: corps }),
@@ -78,16 +81,16 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   await poser('projets/atelier/anomalies/qa-bloquante', {
     titre: { stringValue: 'Le rappel fin de mois ne part jamais' },
     gravite: { stringValue: 'bloquant' }, statut: { stringValue: 'confirmee' },
-    actif: { booleanValue: true },
+    actif: { booleanValue: true }, maj: maintenant,
   });
   await poser('projets/atelier/campagnes/qa-retard', {
     nom: { stringValue: 'Passe en retard' }, statut: { stringValue: 'en-cours' },
-    fin: { stringValue: hier.slice(0, 10) }, actif: { booleanValue: true },
+    fin: { stringValue: hier.slice(0, 10) }, actif: { booleanValue: true }, maj: maintenant,
     scenarios: { arrayValue: { values: [{ stringValue: 'DI-06' }] } },
   });
   await poser('projets/atelier/campagnes/qa-vide', {
     nom: { stringValue: 'Passe sans scénario' }, statut: { stringValue: 'en-cours' },
-    actif: { booleanValue: true }, scenarios: { arrayValue: { values: [] } },
+    actif: { booleanValue: true }, scenarios: { arrayValue: { values: [] } }, maj: maintenant,
   });
 
   await connecter(page,'agent.essai@exemple.test');
@@ -229,6 +232,20 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
     chiffres: document.querySelectorAll('.chiffre').length,
   }));
   verifier(cp.scenarios===nScen,`il voit les ${nScen} scénarios de son projet`,`${cp.scenarios} vus`);
+
+  /* Le client voit les testeurs de son projet, mais pas leur nom ni leur
+     adresse, et n'a rien à y cliquer. C'est le contrôle de fuite : une
+     adresse e-mail dans cette page serait un défaut grave. */
+  const ct = await cl.evaluate(()=>{
+    const s=document.querySelector('#testeurs');
+    return { section:!!s, texte:s?s.innerText:'', lignes:s?s.querySelectorAll('.ligne').length:0,
+      boutons:s?s.querySelectorAll('button:not(.btn-info)').length:0 };
+  });
+  verifier(ct.section,'il voit la section Testeurs');
+  verifier(ct.lignes>0,`avec les testeurs de son projet (${ct.lignes})`);
+  verifier(!/@/.test(ct.texte),'sans aucune adresse e-mail');
+  verifier(!/karim|sonia/i.test(ct.texte),'sans aucun prénom');
+  verifier(ct.boutons===0,'et rien à cliquer');
   verifier(cp.chiffres>=4,`et les chiffres du haut (${cp.chiffres})`);
 
   console.log('\n'+(soucis.length?`${soucis.length} ÉCART(S)`:'tout est conforme'));

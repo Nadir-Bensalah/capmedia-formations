@@ -64,6 +64,10 @@ const lireTout = (env) => {
     parcours: rassembler(K.parcoursTous, K.parcours),
     regles: rassembler(K.reglesToutes, K.regles),
     testeurs: magasin.lire(K.testeurs) || [],
+    /* Le client ne lit pas le vivier, il lit les profils publics : le
+       même testeur, sans le nom ni l'adresse. Le magasin garde le parent
+       du document, qui est l'identifiant du testeur. */
+    profils: (magasin.lire(K.profils) || []).filter((x) => x.id === 'profil').map((x) => ({ ...x, id: x._parent })),
   };
 };
 
@@ -118,7 +122,7 @@ const EXPLICATIONS = {
   'testeurs': { titre: 'Les testeurs', corps: `
     <p>Les personnes qui utilisent l'application pour de vrai et notent ce qui cloche. Elles ne travaillent pas sur le projet : c'est justement ce qui rend leur regard utile.</p>
     <p>Chacune teste sur son propre téléphone, iPhone ou Android, et sur le web. On s'arrange pour que les vérifications importantes soient faites par au moins deux personnes sur deux systèmes différents.</p>
-    <p>La colonne de droite dit ce qu'il reste à faire à chacune dans les campagnes en cours.</p>` },
+    <p>Côté client, les testeurs apparaissent sans leur nom ni leur adresse : on voit l'âge, le métier, l'aisance avec un téléphone et les appareils. C'est ce qu'il faut pour lire un avis en sachant d'où il vient, et rien de plus.</p>` },
   'parcours': { titre: 'Les parcours automatisés', corps: `
     <p>Un parcours automatisé, c'est une vérification qu'un robot rejoue tout seul, à chaque nouvelle version de l'application, sans qu'un humain touche à rien. Par exemple : « créer un rappel, puis vérifier qu'il apparaît bien dans la liste ».</p>
     <p>L'intérêt : une fois écrit, il tourne à chaque fois, pour toujours. Un défaut corrigé ne peut plus revenir sans qu'on le voie.</p>
@@ -450,7 +454,7 @@ const reglesHtml = (d, { pid, equipe }) => {
 /* Qui teste, sur quoi, et où il en est. Le tableau répond à la seule
    question qui compte en cours de campagne : qui traîne, et qui a fini. */
 const vivierHtml = (d, { equipe }) => {
-  if (!equipe) return '';
+  if (!equipe) return vivierClientHtml(d);
   const gens = d.testeurs || [];
 
   /* Ce que chacun a rendu, toutes campagnes en cours confondues. Un
@@ -487,6 +491,29 @@ const vivierHtml = (d, { equipe }) => {
   </section>`;
 };
 
+/* Le même vivier vu par le client : qui teste pour lui, sans le nom ni
+   l'adresse, qui ne lui ont jamais été recopiés. Il voit l'âge, la
+   fonction, l'aisance, les appareils : de quoi lire un avis en sachant
+   d'où il vient. Et rien à cliquer, parce qu'il n'a rien à y faire. */
+const vivierClientHtml = (d) => {
+  const gens = d.profils || [];
+  return `<section class="section" id="testeurs">
+    <div class="section-tete">
+      <div><h2>Testeurs ${infoBouton('testeurs')}</h2><p class="chapo">${gens.length ? `${pluriel(gens.length, 'personne teste', 'personnes testent')} pour vous. Leur nom ne vous est pas montré : ce qui compte, c'est d'où vient chaque avis.` : 'Personne n\'est encore affecté à ce projet.'}</p></div>
+    </div>
+    ${gens.length ? `<div class="liste">${gens.map((p, i) => {
+      const traits = [p.age ? `${p.age} ans` : '', p.fonction, p.sexe, p.aisance ? `à l'aise : ${p.aisance}` : ''].filter(Boolean).join(' · ');
+      return ligne({
+        icone: 'utilisateur', ton: 'bleu',
+        titre: `Testeur ${i + 1}`,
+        sous: echapper(traits || 'Profil non renseigné'),
+        fin: (p.plateformes || (p.mobile ? [p.mobile, 'web'] : [])).map((x) => `<span class="puce puce--mini">${icone(x === 'ios' ? 'apple' : x === 'android' ? 'android' : 'globe')} ${echapper((PLATEFORMES_TEST[x] || {}).court || x)}</span>`).join(''),
+      });
+    }).join('')}</div>`
+    : vide({ icone: 'utilisateurs', titre: 'Aucun testeur pour l\'instant', texte: 'Ils apparaîtront ici dès qu\'ils seront affectés au projet.', compact: true })}
+  </section>`;
+};
+
 /* --------------------------------------------------------------------------
    Un projet choisi : toute la panoplie
    -------------------------------------------------------------------------- */
@@ -517,20 +544,20 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
 
   /* Ce que chaque étage résume, calculé ici pour que la phrase et les
      sections en dessous lisent les mêmes listes. */
-  const gens = equipe ? (d.testeurs || []).filter((t) => (t.projets || []).includes(pid)) : [];
+  const gens = (equipe ? (d.testeurs || []) : (d.profils || [])).filter((t) => (t.projets || []).includes(pid));
   const parc = (d.parcours || []).filter((x) => x.actif !== false && projetDe(x) === pid);
   const regl = (d.regles || []).filter((x) => x.actif !== false && projetDe(x) === pid);
   const casRegles = regl.reduce((n, x) => n + (Number(x.cas) || 0), 0);
   const parcVerts = parc.filter((x) => x.etat === 'vert').length;
 
-  const humain = `${enCours ? `<b>${enCours}</b> ${enCours > 1 ? 'campagnes en cours' : 'campagne en cours'}` : `<b>${camp.length}</b> ${camp.length > 1 ? 'campagnes' : 'campagne'}, aucune en cours`}${equipe ? `, <b>${gens.length}</b> ${gens.length > 1 ? 'testeurs' : 'testeur'}` : ''}, <b>${ouvertes}</b> ${ouvertes > 1 ? 'anomalies ouvertes' : 'anomalie ouverte'}.`;
+  const humain = `${enCours ? `<b>${enCours}</b> ${enCours > 1 ? 'campagnes en cours' : 'campagne en cours'}` : `<b>${camp.length}</b> ${camp.length > 1 ? 'campagnes' : 'campagne'}, aucune en cours`}, <b>${gens.length}</b> ${gens.length > 1 ? 'testeurs' : 'testeur'}, <b>${ouvertes}</b> ${ouvertes > 1 ? 'anomalies ouvertes' : 'anomalie ouverte'}.`;
   const machine = `<b>${parc.length}</b> parcours d'interface et <b>${casRegles}</b> cas de règles rejoués à chaque version${parc.length ? `, <b>${parcVerts}</b> ${parcVerts > 1 ? 'parcours au vert' : 'parcours au vert'}` : ''}.`;
   const bibli = `<b>${scen.length}</b> scénarios en <b>${parBloc.length}</b> blocs, soit <b>${passages}</b> passages mobiles par campagne complète.`;
 
   const index = [
     ['campagnes', 'Campagnes', camp.length],
     ...(ano.length ? [['anomalies', 'Anomalies', ano.length]] : []),
-    ...(equipe ? [['testeurs', 'Testeurs', gens.length]] : []),
+    ['testeurs', 'Testeurs', gens.length],
     ['parcours', 'Parcours', parc.length],
     ['regles', 'Règles', casRegles],
     ['scenarios', 'Scénarios', scen.length],
@@ -601,7 +628,7 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
 
   <div class="tests-corps tests-corps--index">
     <div>
-      ${etage('etage-humain', 'Tests humains', humain, `${sectionCampagnes}${sectionAnomalies}${equipe ? vivierHtml({ ...d, testeurs: gens }, { equipe }) : ''}`)}
+      ${etage('etage-humain', 'Tests humains', humain, `${sectionCampagnes}${sectionAnomalies}${vivierHtml({ ...d, testeurs: gens, profils: gens }, { equipe })}`)}
       ${etage('etage-machine', 'Tests automatisés', machine, `${parcoursHtml(d, { pid, equipe })}${reglesHtml(d, { pid, equipe })}`)}
       ${etage('etage-bibli', 'Bibliothèque', bibli, sectionScenarios)}
     </div>
@@ -974,7 +1001,7 @@ export const vue = async (ctx, env) => {
   const clesSuivies = () => (env.role === 'equipe'
     ? [K.projets, K.scenariosTous, K.campagnesToutes, K.anomaliesToutes, K.parcoursTous, K.reglesToutes, K.testeurs]
     : [K.projets, ...(magasin.lire(K.projets) || (env.session || {}).projets || [])
-        .flatMap((p) => [K.scenarios(p.id), K.campagnes(p.id), K.anomalies(p.id), K.parcours(p.id), K.regles(p.id)])]);
+        .flatMap((p) => [K.scenarios(p.id), K.campagnes(p.id), K.anomalies(p.id), K.parcours(p.id), K.regles(p.id)]), K.profils]);
 
   /* Le projet ouvert : celui qu'on a choisi, ou le seul que le client ait.
      Le rendu et les gestes doivent lire la MÊME valeur, faute de quoi le

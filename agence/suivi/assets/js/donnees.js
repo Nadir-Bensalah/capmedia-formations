@@ -72,6 +72,7 @@ export const K = {
   anomaliesToutes: 'anomalies:*',
   parcoursTous: 'parcours:*',
   reglesToutes: 'regles:*',
+  profils: 'profils:*',
   testeurs: 'testeurs',
   audit: 'audit',
   envois: 'envois',
@@ -149,9 +150,14 @@ export const abonnerGlobal = (lot, session) => {
     lot.abonner(K.anomaliesToutes, () => collectionGroup(bdd, 'anomalies'));
     lot.abonner(K.parcoursTous, () => collectionGroup(bdd, 'parcours'));
     lot.abonner(K.reglesToutes, () => collectionGroup(bdd, 'regles'));
+    lot.abonner(K.profils, () => collectionGroup(bdd, 'public'));
     lot.abonner(K.scenariosTous, () => collectionGroup(bdd, 'scenarios'));
     lot.abonner(K.testeurs, () => col('testeurs'));
   } else {
+    /* Le client lit les profils publics des testeurs, pas le vivier : le
+       même document sans le nom ni l'adresse. Oublier cette ligne laisse
+       sa section Testeurs vide, sans la moindre erreur pour le dire. */
+    lot.abonner(K.profils, () => collectionGroup(bdd, 'public'));
     const uid = session.utilisateur.uid;
     lot.abonner(K.projets, () => query(col('projets'), where('membres', 'array-contains', uid)));
     lot.abonner(K.organisations, () => query(col('organisations'), where('membres', 'array-contains', uid)));

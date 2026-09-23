@@ -444,6 +444,20 @@ await doit("L'équipe les lit en groupe", getDocs(collectionGroup(equipe(), 'reg
 await refuse('Camille ne les lit pas en groupe', getDocs(collectionGroup(camille(), 'regles')));
 await refuse('Karim ne les lit pas en groupe', getDocs(collectionGroup(karim(), 'regles')));
 
+console.log('\n== Les profils publics, lus en groupe');
+/* Le client voit qui teste pour lui, sans le nom ni l'adresse : ils ne
+   sont pas dans ce document. La lecture en groupe ne révèle donc rien de
+   plus que la lecture un par un, déjà ouverte à tout connecté. */
+await env.withSecurityRulesDisabled(async (ctx) => {
+  await setDoc(doc(ctx.firestore(), `testeurs/${KARIM}/public/profil`), { age: '25-34', fonction: 'Infirmier', plateformes: ['android', 'web'], projets: ['atelier'] });
+});
+await doit('Camille lit les profils en groupe', getDocs(collectionGroup(camille(), 'public')));
+await doit('Karim aussi', getDocs(collectionGroup(karim(), 'public')));
+await doit("L'équipe aussi", getDocs(collectionGroup(equipe(), 'public')));
+await refuse('Un anonyme ne les lit pas', getDocs(collectionGroup(env.unauthenticatedContext().firestore(), 'public')));
+await refuse('Camille n écrit pas un profil public', setDoc(doc(camille(), `testeurs/${KARIM}/public/profil`), { fonction: 'Inventé' }));
+await refuse('Karim ne réécrit pas le sien', setDoc(doc(karim(), `testeurs/${KARIM}/public/profil`), { fonction: 'Inventé' }));
+
 console.log('\n== La plateforme de tests : les lectures en groupe');
 /* La console regarde tous les projets d'un coup. C'est un privilège
    d'équipe : ouvert plus largement, il donnerait à un client la liste des

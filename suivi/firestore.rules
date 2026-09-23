@@ -765,6 +765,15 @@ service cloud.firestore {
       allow read: if estEquipe();
     }
 
+    // Les profils publics des testeurs, lus d'un coup. Le client voit qui
+    // teste pour lui : l'âge, la fonction, les appareils, jamais le nom ni
+    // l'adresse, qui ne sont pas recopiés ici. Le même document est déjà
+    // lisible un par un par tout connecté ; la lecture en groupe ne révèle
+    // rien de plus.
+    match /{chemin=**}/public/{docId} {
+      allow read: if connecte();
+    }
+
     // La porte d'entrée. Ces trois collections portent l'empreinte des
     // codes en cours, les compteurs de tentatives et les jetons
     // d'invitation : rien de tout cela ne se lit ni ne s'écrit depuis un

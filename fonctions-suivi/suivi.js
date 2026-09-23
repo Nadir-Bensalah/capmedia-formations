@@ -580,6 +580,9 @@ exports.suiviProfilTesteur = onDocumentWritten(
         aisance: p.aisance || '', langue: p.langue || '',
         mobile: apres.mobile || '',
         plateformes: apres.plateformes || [],
+        /* Les projets servis, pour que le client retrouve les testeurs de
+           SON projet : un identifiant de projet n'identifie personne. */
+        projets: apres.projets || [],
         maj: FieldValue.serverTimestamp(),
       });
     } catch (err) { console.error('Profil public non recopié', err); }
