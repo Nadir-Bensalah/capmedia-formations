@@ -1851,6 +1851,25 @@ input, select, textarea { font: inherit; color: inherit; }
    jamais à un titre.
    --------------------------------------------------------------------- */
 .etage { margin-top: 56px; }
+
+/* Le « i » d'un titre : discret au repos, il ne concurrence pas le
+   titre. Il s'allume au survol, parce que c'est là qu'on le cherche. */
+.btn-info {
+  display: inline-grid; place-items: center; vertical-align: 2px;
+  width: 20px; height: 20px; margin-left: 4px;
+  border: 0; border-radius: 50%; background: none; padding: 0;
+  color: var(--encre-4); cursor: pointer;
+}
+.btn-info svg { width: 16px; height: 16px; }
+.btn-info:hover, .btn-info:focus-visible { color: var(--accent); background: var(--accent-voile); }
+
+/* Le texte d'une explication : des paragraphes courts, une liste quand
+   il y a des états à distinguer. */
+.prose p { font: var(--t-corps); color: var(--encre-2); margin: 0 0 12px; max-width: 62ch; }
+.prose p:last-child { margin-bottom: 0; }
+.prose b { color: var(--encre); font-weight: 600; }
+.prose ul { margin: 0 0 12px; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+.prose li { font: var(--t-corps); color: var(--encre-2); }
 .etage-tete {
   display: flex; flex-direction: column; gap: 6px;
   padding-bottom: 14px; margin-bottom: 4px;

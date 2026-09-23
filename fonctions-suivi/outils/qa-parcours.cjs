@@ -136,6 +136,16 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   verifier(forme.legende===5,'la légende porte les cinq états',`${forme.legende}`);
   verifier(forme.refs>0,'les références sont en chasse fixe');
   verifier(forme.etage,'dans l étage des tests automatisés');
+
+  /* Le « i » du titre ouvre une explication en langage courant. Elle
+     doit dire ce que veut dire « à écrire », parce que c'est la question
+     que la page pose à quiconque la découvre. */
+  await page.click('#parcours [data-info]'); await pause(900);
+  const expl = await page.evaluate(()=>{const v=document.querySelector('.voile');return v?v.innerText:'';});
+  verifier(/À écrire/.test(expl) && /robot/i.test(expl),'le « i » explique les parcours et « à écrire »',expl.slice(0,80));
+  verifier(!/hasOnly|Firestore|Maestro/.test(expl),'sans jargon');
+  await page.keyboard.press('Escape'); await pause(600);
+  verifier(await page.evaluate(()=>!document.querySelector('.voile')),'et se referme');
   const m = v.texte.match(/(\d+) parcours rejoués[^.]*/);
   if (m) console.log('    ', m[0]);
 

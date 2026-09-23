@@ -94,6 +94,61 @@ const etage = (id, sur, resume, corps) => `<div class="etage" id="${echapper(id)
   ${corps}
 </div>`;
 
+/* Ce que chaque section veut dire, expliqué à quelqu'un qui n'a jamais
+   testé un logiciel. Pas de jargon : si un mot du métier est
+   indispensable, il est expliqué dans la phrase qui le porte. Un client
+   qui comprend sa page ne demande pas pourquoi elle est rouge. */
+const EXPLICATIONS = {
+  'soucis': { titre: 'Ce qui ne va pas', corps: `
+    <p>C'est la liste de ce qui mérite votre attention aujourd'hui, et rien d'autre. Si elle est vide, tout va bien.</p>
+    <p>On y trouve trois choses : un problème grave trouvé par un testeur et confirmé, une campagne de tests qui a dépassé sa date de fin, et un test automatique qui vient d'échouer.</p>
+    <p>Quand quelque chose apparaît ici, c'est qu'il faut agir. Le reste de la page est là pour le contexte.</p>` },
+  'avancement': { titre: 'Avancement', corps: `
+    <p>Un projet par ligne, avec ce qu'il contient : combien de vérifications sont prévues, combien de campagnes sont en cours, et s'il reste des problèmes ouverts.</p>
+    <p>Cliquez sur un projet pour voir tout le détail.</p>` },
+  'campagnes': { titre: 'Les campagnes', corps: `
+    <p>Une campagne, c'est une session de tests avec un début et une fin. On choisit une liste de vérifications à faire, on les distribue à des testeurs, et on note ce qu'ils ont trouvé.</p>
+    <p>Elle passe par trois états : <b>en préparation</b> (on décide quoi tester et qui), <b>en cours</b> (les testeurs travaillent), puis <b>close</b> (on a le résultat, et on ne peut plus rien y changer).</p>
+    <p>On refait une campagne avant chaque nouvelle version de l'application, avec les mêmes vérifications : c'est ce qui permet de voir si quelque chose qui marchait s'est cassé.</p>` },
+  'anomalies': { titre: 'Les anomalies', corps: `
+    <p>Une anomalie, c'est un problème réel, constaté et reproduit : l'application ne fait pas ce qu'elle devrait.</p>
+    <p>Quand plusieurs testeurs échouent sur la même vérification, ça ne fait qu'une seule anomalie, pas une par personne.</p>
+    <p>Chacune a une gravité : <b>bloquant</b> (on ne peut pas continuer), <b>critique</b> (une fonction importante est cassée), <b>important</b> (gênant, mais on peut contourner), <b>mineur</b> (un détail, souvent d'apparence).</p>
+    <p>Et un statut : nouvelle, confirmée, corrigée, ou sans suite si ce n'était finalement pas un défaut.</p>` },
+  'testeurs': { titre: 'Les testeurs', corps: `
+    <p>Les personnes qui utilisent l'application pour de vrai et notent ce qui cloche. Elles ne travaillent pas sur le projet : c'est justement ce qui rend leur regard utile.</p>
+    <p>Chacune teste sur son propre téléphone, iPhone ou Android, et sur le web. On s'arrange pour que les vérifications importantes soient faites par au moins deux personnes sur deux systèmes différents.</p>
+    <p>La colonne de droite dit ce qu'il reste à faire à chacune dans les campagnes en cours.</p>` },
+  'parcours': { titre: 'Les parcours automatisés', corps: `
+    <p>Un parcours automatisé, c'est une vérification qu'un robot rejoue tout seul, à chaque nouvelle version de l'application, sans qu'un humain touche à rien. Par exemple : « créer un rappel, puis vérifier qu'il apparaît bien dans la liste ».</p>
+    <p>L'intérêt : une fois écrit, il tourne à chaque fois, pour toujours. Un défaut corrigé ne peut plus revenir sans qu'on le voie.</p>
+    <p>Les états, dans l'ordre :</p>
+    <ul>
+      <li><b>À écrire</b> : le parcours est prévu et nommé, mais le programme qui le joue n'existe pas encore. C'est une ligne sur une liste, rien ne tourne.</li>
+      <li><b>Écrit</b> : le programme existe, mais il n'a pas encore été lancé sur une vraie version.</li>
+      <li><b>Vert</b> : il a tourné, et tout s'est passé comme prévu.</li>
+      <li><b>Rouge</b> : il a tourné, et quelque chose n'a pas marché. C'est ce qu'on cherche.</li>
+      <li><b>Instable</b> : il réussit une fois, échoue la fois suivante, sans que rien n'ait changé. C'est pire que rouge, parce qu'on finit par ne plus le croire.</li>
+    </ul>
+    <p><b>Éprouvé par mutation</b>, ça veut dire qu'on a cassé l'application exprès pour vérifier que le parcours s'en apercevait. Un parcours vert qui n'a jamais été éprouvé ne prouve rien : peut-être qu'il ne regarde pas la bonne chose. C'est le chiffre le plus honnête de la page.</p>
+    <p>La jauge montre la part de chaque état. Aujourd'hui elle est presque entièrement grise : les parcours sont prévus, pas encore écrits.</p>` },
+  'regles': { titre: 'Les règles métier', corps: `
+    <p>Une règle métier, c'est un calcul que l'application fait dans son coin, sans écran : par exemple « une tâche tous les mardis pendant deux mois, ça donne quelles dates ? ».</p>
+    <p>Ces calculs se vérifient sans téléphone et sans robot qui clique : on donne une question, on compare la réponse. Ça prend une fraction de seconde, donc on peut en essayer des centaines là où un testeur humain en essaie trois. C'est pour ça qu'on compte en <b>cas essayés</b> et pas en tests.</p>
+    <p>Une <b>famille</b> regroupe les cas d'une même règle. Les barres montrent combien de cas chaque famille essaie : plus la barre est longue, plus la règle est fouillée.</p>
+    <p>Les états sont les mêmes que pour les parcours : <b>à écrire</b> (prévu, pas encore programmé), <b>vert</b> (tout juste), <b>rouge</b> (une réponse fausse).</p>` },
+  'scenarios': { titre: 'La bibliothèque de scénarios', corps: `
+    <p>Un scénario, c'est une vérification écrite pour un humain : ce qu'il doit faire dans l'application, pas à pas, et ce qu'il doit obtenir à la fin. Par exemple : « créer un anniversaire sans année de naissance, et vérifier qu'il s'affiche quand même ».</p>
+    <p>La bibliothèque contient tous les scénarios du projet, rangés par partie de l'application. Une campagne pioche dedans.</p>
+    <p>Trois niveaux : <b>socle</b>, les vérifications essentielles, faites par deux testeurs sur deux systèmes différents ; <b>transversal</b>, ce qui traverse toute l'application (la langue, le mode hors ligne), aussi en double ; <b>réparti</b>, le reste, fait par une seule personne.</p>` },
+  'activite': { titre: 'Activité', corps: `
+    <p>Ce qui s'est passé récemment sur tous les projets, du plus récent au plus ancien : une campagne qui change d'état, une anomalie signalée ou corrigée.</p>` },
+};
+
+/* Le petit « i » à côté d'un titre. Il n'explique rien lui-même : il
+   ouvre l'explication, pour que le titre reste un titre. */
+const infoBouton = (cle) => `<button class="btn-info" type="button" data-info="${echapper(cle)}" aria-label="Qu'est-ce que c'est ?" data-astuce="Qu'est-ce que c'est ?">${icone('info')}</button>`;
+
 const projetDe = (x) => x.projet || x._parent || '';
 
 const dansPlateforme = (x, plateforme) => {
@@ -169,13 +224,13 @@ const alertes = (d, { nomProjet, plateforme }) => {
 
   if (!soucis.length) {
     return `<section class="section" style="margin-top:0">
-      <div class="section-tete"><h2>Ce qui ne va pas</h2></div>
+      <div class="section-tete"><h2>Ce qui ne va pas ${infoBouton('soucis')}</h2></div>
       <p class="calme">${icone('check')} Rien à signaler : aucune anomalie bloquante, aucune campagne en retard, aucun parcours rouge.</p>
     </section>`;
   }
 
   return `<section class="section section--alerte" style="margin-top:0">
-    <div class="section-tete"><div><h2>Ce qui ne va pas</h2><p class="chapo">${pluriel(soucis.length, 'point à regarder', 'points à regarder')}.</p></div></div>
+    <div class="section-tete"><div><h2>Ce qui ne va pas ${infoBouton('soucis')}</h2><p class="chapo">${pluriel(soucis.length, 'point à regarder', 'points à regarder')}.</p></div></div>
     <div class="liste">${soucis.map((s) => ligne(s)).join('')}</div>
   </section>`;
 };
@@ -195,13 +250,13 @@ const avancement = (d, { nomProjet, plateforme }) => {
 
   if (!lignes.length) {
     return `<section class="section">
-      <div class="section-tete"><h2>Avancement</h2></div>
+      <div class="section-tete"><h2>Avancement ${infoBouton('avancement')}</h2></div>
       ${vide({ icone: 'bug', titre: 'Aucun projet testé', texte: 'Versez un plan de tests sur un projet pour commencer.', compact: true })}
     </section>`;
   }
 
   return `<section class="section">
-    <div class="section-tete"><div><h2>Avancement</h2><p class="chapo">${pluriel(lignes.length, 'projet suivi', 'projets suivis')}.</p></div></div>
+    <div class="section-tete"><div><h2>Avancement ${infoBouton('avancement')}</h2><p class="chapo">${pluriel(lignes.length, 'projet suivi', 'projets suivis')}.</p></div></div>
     <div class="liste">${lignes.map((x) => ligne({
       href: `#/tests?projet=${echapper(x.p.id)}${plateforme ? `&plateforme=${echapper(plateforme)}` : ''}`,
       icone: 'bug', ton: x.ano ? 'rouge' : x.enCours ? 'bleu' : '',
@@ -230,7 +285,7 @@ const activite = (d, { nomProjet, plateforme }) => {
   if (!faits.length) return '';
 
   return `<section class="section">
-    <div class="section-tete"><h2>Activité</h2></div>
+    <div class="section-tete"><h2>Activité ${infoBouton('activite')}</h2></div>
     <div class="liste">${faits.map((f) => ligne({
       icone: f.icone, ton: f.ton || '',
       titre: echapper(f.titre), sous: `${echapper(f.sous)} · ${echapper(depuis(f.date))}`,
@@ -272,14 +327,14 @@ const parcoursHtml = (d, { pid, equipe }) => {
   const rangee = (x) => ligne({
     icone: x.outil === 'playwright' ? 'globe' : x.outil === 'jest' ? 'code' : 'smartphone',
     ton: x.etat === 'vert' ? 'vert' : x.etat === 'rouge' ? 'rouge' : x.etat === 'instable' ? 'ambre' : '',
-    titre: `${ref(x.ref)} ${echapper(x.titre || '')}${x.mutation ? '' : ' <span class="etiquette">Non éprouvé</span>'}`,
+    titre: `${ref(x.ref)} ${echapper(x.titre || '')}${x.mutation || x.etat !== 'vert' ? '' : ' <span class="etiquette">Non éprouvé</span>'}`,
     sous: `${echapper((OUTILS_PARCOURS[x.outil] || {}).court || x.outil)}${(x.plateformes || []).length ? ` · ${echapper((x.plateformes || []).map((p) => (PLATEFORMES_TEST[p] || {}).court || p).join(', '))}` : ''}${(x.scenarios || []).length ? ` · ${pluriel((x.scenarios || []).length, 'scénario', 'scénarios')}` : ''}${x.note ? ` · ${echapper(x.note.slice(0, 60))}` : ''}`,
     fin: `${pastille(ETATS_PARCOURS, x.etat || 'a-ecrire')}${equipe ? `<span class="rang boutons-edition"><button class="btn-icone" type="button" data-editer-parcours="${echapper(x.ref)}" aria-label="Modifier" data-astuce="Modifier">${icone('edit')}</button></span>` : ''}`,
   });
 
   return `<section class="section" id="parcours">
     <div class="section-tete">
-      <div><h2>Parcours automatisés</h2><p class="chapo">${liste.length ? `${pluriel(liste.length, 'parcours', 'parcours')} rejoués à chaque version${couverts ? `, couvrant ${pluriel(couverts, 'scénario', 'scénarios')}` : ''}.` : 'Ce que la machine rejouera à chaque version.'}</p></div>
+      <div><h2>Parcours automatisés ${infoBouton('parcours')}</h2><p class="chapo">${liste.length ? `${pluriel(liste.length, 'parcours', 'parcours')} rejoués à chaque version${couverts ? `, couvrant ${pluriel(couverts, 'scénario', 'scénarios')}` : ''}.` : 'Ce que la machine rejouera à chaque version.'}</p></div>
       ${equipe && pid ? `<button class="btn btn-principal btn-petit" type="button" data-nouveau-parcours="${echapper(pid)}">${icone('plus')} Nouveau parcours</button>` : ''}
     </div>
 
@@ -331,7 +386,7 @@ const reglesHtml = (d, { pid, equipe }) => {
   if (!liste.length) {
     return `<section class="section">
       <div class="section-tete">
-        <div><h2>Règles métier</h2><p class="chapo">Ce que la machine vérifie en millisecondes.</p></div>
+        <div><h2>Règles métier ${infoBouton('regles')}</h2><p class="chapo">Ce que la machine vérifie en millisecondes.</p></div>
         ${equipe && pid ? `<button class="btn btn-principal btn-petit" type="button" data-nouvelle-regle="${echapper(pid)}">${icone('plus')} Nouvelle famille</button>` : ''}
       </div>
       ${vide({ icone: 'code', titre: 'Aucune règle',
@@ -354,14 +409,14 @@ const reglesHtml = (d, { pid, equipe }) => {
   const rangee = (x) => ligne({
     icone: 'code',
     ton: x.etat === 'vert' ? 'vert' : x.etat === 'rouge' ? 'rouge' : '',
-    titre: `${ref(x.ref)} ${echapper(x.titre || '')}${x.mutation ? '' : ' <span class="etiquette">Non éprouvée</span>'}`,
+    titre: `${ref(x.ref)} ${echapper(x.titre || '')}${x.mutation || x.etat !== 'vert' ? '' : ' <span class="etiquette">Non éprouvée</span>'}`,
     sous: `${pluriel(Number(x.cas) || 0, 'cas essayé', 'cas essayés')}${x.cherche ? ` · ${echapper(x.cherche)}` : ''}`,
     fin: `${pastille(ETATS_REGLE, x.etat || 'a-ecrire')}${equipe ? `<span class="rang boutons-edition"><button class="btn-icone" type="button" data-editer-regle="${echapper(x.ref)}" aria-label="Modifier" data-astuce="Modifier">${icone('edit')}</button></span>` : ''}`,
   });
 
   return `<section class="section" id="regles">
     <div class="section-tete">
-      <div><h2>Règles métier</h2><p class="chapo">${pluriel(liste.length, 'famille', 'familles')}, ${pluriel(cas, 'cas essayé', 'cas essayés')} à chaque enregistrement.</p></div>
+      <div><h2>Règles métier ${infoBouton('regles')}</h2><p class="chapo">${pluriel(liste.length, 'famille', 'familles')}, ${pluriel(cas, 'cas essayé', 'cas essayés')} à chaque enregistrement.</p></div>
       ${equipe && pid ? `<button class="btn btn-principal btn-petit" type="button" data-nouvelle-regle="${echapper(pid)}">${icone('plus')} Nouvelle famille</button>` : ''}
     </div>
 
@@ -411,7 +466,7 @@ const vivierHtml = (d, { equipe }) => {
 
   return `<section class="section" id="testeurs">
     <div class="section-tete">
-      <div><h2>Testeurs</h2><p class="chapo">${gens.length ? pluriel(gens.length, 'personne au vivier', 'personnes au vivier') : 'Le vivier est vide.'}</p></div>
+      <div><h2>Testeurs ${infoBouton('testeurs')}</h2><p class="chapo">${gens.length ? pluriel(gens.length, 'personne au vivier', 'personnes au vivier') : 'Le vivier est vide.'}</p></div>
       <button class="btn btn-principal btn-petit" type="button" data-nouveau-testeur>${icone('plus')} Inscrire un testeur</button>
     </div>
     ${gens.length ? `<div class="liste">${gens.map((t) => {
@@ -483,7 +538,7 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
 
   const sectionCampagnes = `<section class="section" id="campagnes">
     <div class="section-tete">
-      <div><h2>Campagnes</h2><p class="chapo">Une campagne pioche dans la bibliothèque : les mêmes scénarios sont rejoués d'une version à l'autre.</p></div>
+      <div><h2>Campagnes ${infoBouton('campagnes')}</h2><p class="chapo">Une campagne pioche dans la bibliothèque : les mêmes scénarios sont rejoués d'une version à l'autre.</p></div>
       ${equipe ? `<button class="btn btn-principal btn-petit" type="button" data-nouvelle-campagne="${echapper(pid)}">${icone('plus')} Nouvelle campagne</button>` : ''}
     </div>
     ${camp.length ? `<div class="liste">${camp.map((c) => ligne({
@@ -497,7 +552,7 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
   </section>`;
 
   const sectionAnomalies = ano.length ? `<section class="section" id="anomalies">
-    <div class="section-tete"><div><h2>Anomalies</h2><p class="chapo">Plusieurs échecs sur le même scénario font une seule anomalie.</p></div></div>
+    <div class="section-tete"><div><h2>Anomalies ${infoBouton('anomalies')}</h2><p class="chapo">Plusieurs échecs sur le même scénario font une seule anomalie.</p></div></div>
     <div class="liste">${ano.map((a) => ligne({
       icone: 'alerte', ton: (GRAVITES_ANOMALIE[a.gravite] || {}).voile === 'rouge' ? 'rouge' : (GRAVITES_ANOMALIE[a.gravite] || {}).voile === 'ambre' ? 'ambre' : '',
       titre: echapper(a.titre || 'Anomalie'),
@@ -508,7 +563,7 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
 
   const sectionScenarios = `<section class="section" id="scenarios">
     <div class="section-tete">
-      <div><h2>Scénarios</h2><p class="chapo">La bibliothèque du projet${plateforme ? `, sur ${(PLATEFORMES_TEST[plateforme] || {}).libelle}` : ''}. ${scen.length ? pluriel(scen.length, 'scénario', 'scénarios') : 'Vide.'}</p></div>
+      <div><h2>Scénarios ${infoBouton('scenarios')}</h2><p class="chapo">La bibliothèque du projet${plateforme ? `, sur ${(PLATEFORMES_TEST[plateforme] || {}).libelle}` : ''}. ${scen.length ? pluriel(scen.length, 'scénario', 'scénarios') : 'Vide.'}</p></div>
       <button class="btn btn-secondaire btn-petit" type="button" data-plier-scenarios aria-expanded="false">${icone('deplier')} Voir la bibliothèque</button>
     </div>
     ${scen.length ? `
@@ -975,7 +1030,7 @@ export const vue = async (ctx, env) => {
     if (sel) sel.addEventListener('change', (e) => { etat.projet = e.target.value; poser({ projet: etat.projet, plateforme: etat.plateforme }); rendre(true); });
   };
 
-  const gestes = sur(sortie, 'click', '[data-aller], [data-plateforme], [data-scenario], [data-plier-scenarios], [data-plier-parcours], [data-plier-regles], [data-nouvelle-regle], [data-editer-regle], [data-nouvelle-campagne], [data-editer-campagne], [data-action="ouvrir-campagne"], [data-nouveau-testeur], [data-action="ouvrir-testeur"], [data-nouveau-parcours], [data-editer-parcours]', async (el) => {
+  const gestes = sur(sortie, 'click', '[data-info], [data-aller], [data-plateforme], [data-scenario], [data-plier-scenarios], [data-plier-parcours], [data-plier-regles], [data-nouvelle-regle], [data-editer-regle], [data-nouvelle-campagne], [data-editer-campagne], [data-action="ouvrir-campagne"], [data-nouveau-testeur], [data-action="ouvrir-testeur"], [data-nouveau-parcours], [data-editer-parcours]', async (el) => {
     /* Une référence n'est unique qu'à l'intérieur d'un projet : deux plans
        de tests portent chacun leur « DI-15 ». Chercher sans le projet
        ouvrirait l'énoncé d'une autre application, sans rien dire. */
@@ -988,6 +1043,11 @@ export const vue = async (ctx, env) => {
        campagnes, c'est la campagne qu'on ne voit plus. */
     /* L'index de page ne pose pas d'ancre dans l'adresse : le routeur y
        verrait un changement de vue. On fait défiler, rien d'autre. */
+    if (el.dataset.info) {
+      const x = EXPLICATIONS[el.dataset.info];
+      if (x) modale({ titre: x.titre, corps: `<div class="prose">${x.corps}</div>` });
+      return;
+    }
     if (el.dataset.aller) {
       const cible = sortie.querySelector(`#${el.dataset.aller}`);
       if (cible) cible.scrollIntoView({ behavior: 'smooth', block: 'start' });
