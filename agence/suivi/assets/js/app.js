@@ -31,7 +31,7 @@ if (!session) throw new Error('session absente');
 
 /* Un compte d'équipe a son propre cockpit. */
 if (session.equipe) {
-  location.replace(`./admin${location.hash || ''}`);
+  location.replace(`./cockpit${location.hash || ''}`);
   throw new Error('redirection');
 }
 

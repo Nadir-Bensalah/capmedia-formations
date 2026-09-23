@@ -34,7 +34,7 @@ const session = await exigerSession();
 if (!session) throw new Error('session absente');
 
 if (!session.equipe) {
-  location.replace(`./app${location.hash || ''}`);
+  location.replace(`./hub${location.hash || ''}`);
   throw new Error('redirection');
 }
 

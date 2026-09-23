@@ -1096,7 +1096,7 @@ exports.suiviAdmin = onRequest(
           await org.ref.update({ contacts });
           await synchroniserMembres(orgId);
           await mettreEnFile('invitation', [{ email: ficheClient.email, nom: ficheClient.nom || '' }], {
-            projetNom: String(nom).trim(), clientNom: ficheClient.nom || '', email: normaliserEmail(ficheClient.email), lien: `${courriels.BASE}app#/projets/${nouveau.id}`,
+            projetNom: String(nom).trim(), clientNom: ficheClient.nom || '', email: normaliserEmail(ficheClient.email), lien: `${courriels.BASE}hub#/projets/${nouveau.id}`,
           });
         }
 
@@ -1359,7 +1359,7 @@ exports.suiviAdmin = onRequest(
         const premierProjet = await bdd.collection('projets').where('organisation', '==', String(id)).limit(1).get();
         const projetNom = premierProjet.empty ? '' : premierProjet.docs[0].data().nom;
         await mettreEnFile('invitation', [{ email, nom: String(nom || '').trim() }], {
-          projetNom, clientNom: String(nom || '').trim(), email: normaliserEmail(email), lien: `${courriels.BASE}app`,
+          projetNom, clientNom: String(nom || '').trim(), email: normaliserEmail(email), lien: `${courriels.BASE}hub`,
         });
         await bdd.collection('audit').add({ action: 'membre-invite', organisation: String(id), uid: utilisateur.uid, email: normaliserEmail(email), date: FieldValue.serverTimestamp() });
         return res.status(200).json({ ok: true, uid: utilisateur.uid, compteCree: cree });
@@ -1588,7 +1588,7 @@ exports.suiviAdmin = onRequest(
         if (req.body.prevenir !== false) {
           for (const a of adresses) {
             await mettreEnFile('invitation', [a], {
-              projetNom: p.nom || '', clientNom: a.nom || '', email: a.email, lien: `${courriels.BASE}app#/projets/${id}`,
+              projetNom: p.nom || '', clientNom: a.nom || '', email: a.email, lien: `${courriels.BASE}hub#/projets/${id}`,
             });
           }
         }

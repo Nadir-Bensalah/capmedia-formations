@@ -57,8 +57,13 @@ const enTete = (moi, campagne) => {
   <header class="testeur-tete">
     <div class="rang" style="justify-content:space-between;align-items:center;gap:16px">
       <div style="min-width:0">
-        <p class="surtitre">${echapper(campagne.titre || 'Campagne')}</p>
+        <!-- Le testeur arrive sur un écran qui ne ressemble ni au cockpit
+             ni à l'espace client : il faut lui dire où il est et ce qu'on
+             attend de lui, sinon il lit « Bonjour » et un nom de campagne
+             sans comprendre son rôle. -->
+        <p class="surtitre">Capmedia Tests</p>
         <h1>Bonjour ${echapper(moi.prenom || '')}</h1>
+        <p class="t-petit t-2" style="margin-top:2px">${echapper(campagne.titre || 'Campagne en cours')}</p>
       </div>
       <button class="btn-icone" type="button" data-sortir aria-label="Se déconnecter" data-astuce="Se déconnecter">${icone('dehors')}</button>
     </div>

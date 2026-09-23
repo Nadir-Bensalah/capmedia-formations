@@ -163,8 +163,8 @@ async function audit(action, details) {
   } catch (err) { console.error('Audit non écrit', err); }
 }
 
-const LIEN = (chemin) => `${courriels.BASE}app#${chemin}`;
-const LIEN_ADMIN = (chemin) => `${courriels.BASE}admin#${chemin}`;
+const LIEN = (chemin) => `${courriels.BASE}hub#${chemin}`;
+const LIEN_ADMIN = (chemin) => `${courriels.BASE}cockpit#${chemin}`;
 const nomProjet = (p) => ((p && p.nom) || '');
 const auteurDe = (doc, defaut = 'equipe') => ((doc && doc.par) ? { uid: doc.par.uid, nom: doc.par.nom, cote: doc.par.cote || defaut } : null);
 

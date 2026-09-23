@@ -5,6 +5,6 @@
   // L'ancienne adresse ne porte que l'identifiant du ticket : la page d'accueil
   // du hub retrouve le projet et ouvre la fiche.
   var t = new URLSearchParams(location.search).get('t');
-  location.replace('./app' + (t ? '#/demande/' + encodeURIComponent(t) : ''));
+  location.replace('./hub' + (t ? '#/demande/' + encodeURIComponent(t) : ''));
 })();
 </script></head><body><p style="font-family:system-ui;padding:24px">Redirection vers votre espace...</p></body></html>

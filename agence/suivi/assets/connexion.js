@@ -67,12 +67,12 @@ const orienter = async () => {
   const demande = new URLSearchParams(location.search).get('retour');
   if (demande && /^\/suivi\/[\w./?=&#%-]*$/.test(demande)) { location.replace(demande); return; }
 
-  if (equipe) { location.replace('./admin'); return; }
+  if (equipe) { location.replace('./cockpit'); return; }
   /* Le testeur avant le client : il n'est membre d'aucun projet, donc la
      lecture des projets lui est refusée et il tomberait sur l'écran
      d'attente sans comprendre pourquoi. */
-  if (testeur) { location.replace('./tests'); return; }
-  if (!refus) { location.replace('./app'); return; }
+  if (testeur) { location.replace('./testeur'); return; }
+  if (!refus) { location.replace('./hub'); return; }
 
   const bloc = document.querySelector('#attente .encart p:last-child');
   if (bloc) bloc.textContent = "Vos projets n'ont pas pu être lus. Prévenez-nous, nous vérifions le rattachement de votre compte.";

@@ -303,12 +303,12 @@ const attendre = async (page, motif, secondes = 12) => {
   await connecter(lea, 'lea.essai@exemple.test');
   /* Une vraie arrivée par adresse, comme si on lui avait transmis le lien :
      c'est la façon dont un client tomberait sur le projet d'un autre. */
-  await lea.goto(`${SITE}/suivi/app?emul#/projets/atelier`, { waitUntil: 'domcontentloaded' });
+  await lea.goto(`${SITE}/suivi/hub?emul#/projets/atelier`, { waitUntil: 'domcontentloaded' });
   await lea.waitForSelector('.page', { timeout: 30000 }).catch(() => {});
   const chezLea = await attendre(lea, /introuvable|plus accès/i, 20);
   const diagLea = await lea.evaluate(() => ({ url: location.pathname + location.hash, pages: document.querySelectorAll('.page').length, vue: (document.querySelector('#vue') || {}).childElementCount }));
   verifier(/introuvable|plus accès/i.test(chezLea), "Léa ne lit pas le projet de Camille", `${JSON.stringify(diagLea)} · ${chezLea.slice(0, 100).replace(/\n/g, ' | ')}`);
-  await lea.goto(`${SITE}/suivi/app?emul#/finances`, { waitUntil: 'domcontentloaded' });
+  await lea.goto(`${SITE}/suivi/hub?emul#/finances`, { waitUntil: 'domcontentloaded' });
   await lea.waitForSelector('.page', { timeout: 30000 }).catch(() => {});
   await pause(2500);
   const financesLea = await texte(lea, '.page');

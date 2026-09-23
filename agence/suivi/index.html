@@ -20,9 +20,14 @@
 <main class="porte">
   <div class="porte-boite">
     <div class="marque"><img src="../assets/img/capmedia-digital.png" alt="" width="28" height="28">Capmedia Digital</div>
-    <p class="surtitre">Espace client</p>
+    <!-- La porte est la même pour un client, un testeur et l'équipe : elle
+         ne peut pas savoir qui frappe AVANT que l'adresse soit saisie, et
+         le serveur répond volontairement la même chose à tout le monde
+         pour ne pas révéler qui a un compte. Le titre reste donc neutre, et
+         c'est la session ouverte qui dit à chacun où il arrive. -->
+    <p class="surtitre" id="surtitre-porte">Votre espace</p>
     <h1 style="margin-top:4px">Bienvenue</h1>
-    <p class="t-corps t-2" style="margin-top:8px">Vos projets, vos demandes, vos fichiers, vos devis et vos factures. Au même endroit.</p>
+    <p class="t-corps t-2" style="margin-top:8px" id="chapo-porte">Vos projets, vos tests, vos échanges avec Capmedia. Au même endroit.</p>
 
     <!-- Étape 1 : l'adresse -->
     <form id="forme" class="forme" style="margin-top:28px" novalidate>
