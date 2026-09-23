@@ -11,6 +11,7 @@ import { K, G, agreger, ecrire, resteAPayer } from '../donnees.js';
 import { filAriane } from '../coquille.js';
 import { naviguer } from '../routeur.js';
 import { lienPiece } from '../noyau.js';
+import { friseDevis, brancherFrise } from './frise.js';
 
 const ttcDe = (d) => (typeof d.ttc === 'number' ? d.ttc : (typeof d.montant === 'number' ? d.montant * (1 + (Number(d.tva) || 0) / 100) : 0));
 
@@ -37,6 +38,16 @@ export const ouvrirDocument = (d, env, { projets, paiements }) => {
         </dl>
         ${!devis && (payes.length || FACTURES_DUES.includes(d.statut)) ? `<dl class="faits" style="grid-template-columns:repeat(2,1fr);margin-top:14px;padding-top:14px;border-top:1px solid var(--trait)">${fait('Payé', echapper(montant(totalPaye, 2)))}${fait('Reste à payer', `<strong style="color:${reste > 0 ? 'var(--attention)' : 'var(--ok)'}">${echapper(montant(reste, 2))}</strong>`)}</dl>` : ''}
       </div>
+      ${devis ? (() => {
+        /* Les lignes du devis, à cocher. Pour l'équipe la lecture en groupe
+           porte toutes les étapes ; le client n'a que celles de son projet. */
+        const jalons = [...(magasin.lire(K.jalons(d.projet)) || []), ...(magasin.lire(K.jalonsTous) || []).filter((j) => (j.projet || j._parent) === d.projet)]
+          .filter((j, i, l) => l.findIndex((y) => y.id === j.id) === i);
+        const frise = friseDevis(d, jalons, { equipe, pid: d.projet });
+        return frise
+          ? `<div style="margin-top:20px">${frise}${equipe ? `<p class="t-micro t-3" style="margin-top:8px"><a href="#/projets/${echapper(d.projet)}/etapes">Gérer les étapes</a></p>` : ''}</div>`
+          : (equipe ? `<p class="aide" style="margin-top:16px">Ce devis n'a pas encore ses lignes en étapes. <a href="#/projets/${echapper(d.projet)}/etapes">Posez-les dans la feuille de route</a>, avec ce devis en « ligne du devis » : le client les verra se cocher.</p>` : '');
+      })() : ''}
       <dl class="faits" style="margin-top:20px">${fait('Émis le', echapper(dateCourte(d.date)))}${fait(devis ? 'Expire le' : 'Échéance', echapper(dateCourte(devis ? d.expiration : d.echeance)))}${d.description ? fait('Détail', avecLiens(d.description)) : ''}</dl>
       ${d.reponse ? `<div style="margin-top:20px">${encart(`<strong>${d.statut === 'accepte' ? 'Accepté' : 'Refusé'}</strong> par ${echapper(d.reponse.nom || '')} le ${echapper(dateHeure(d.reponse.date))}${d.reponse.commentaire ? `<div style="margin-top:6px">${avecLiens(d.reponse.commentaire)}</div>` : ''}`, d.statut === 'accepte' ? 'ok' : 'attention', d.statut === 'accepte' ? 'check' : 'info')}</div>` : ''}
       ${(d.liens || []).length ? `<div style="margin-top:20px"><p class="surtitre">À consulter</p><div class="pile" style="margin-top:8px;gap:8px">${d.liens.map((l) => `<a class="lien-env" href="${echapper(l.url)}" target="_blank" rel="noopener"><span class="ligne-icone ligne-icone--bleu">${icone('externe')}</span><span style="min-width:0"><span class="t-corps-fort" style="display:block">${echapper(l.nom)}</span><span class="url" style="display:block">${echapper(l.url.replace(/^https?:\/\//, ''))}</span></span><span class="chevron" style="color:var(--encre-4)">${icone('externe')}</span></a>`).join('')}</div></div>` : ''}
@@ -53,6 +64,7 @@ export const ouvrirDocument = (d, env, { projets, paiements }) => {
       : `<span class="pousse"></span><button class="btn btn-principal" type="button" data-fermer>Fermer</button>`}`,
   });
   brancherPieces(m.el);
+  brancherFrise(m.el);
   sur(m.el, 'click', '[data-joindre]', async () => { m.fermer(); await joindreFichier(d); });
   sur(m.el, 'click', '[data-liens]', async () => { m.fermer(); await editerLiens(d); });
   const commentaire = () => (m.el.querySelector('#commentaire-devis') || { value: '' }).value.trim();

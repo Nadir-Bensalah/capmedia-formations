@@ -693,6 +693,10 @@ const editeurs = {
         ${champ('ordre', 'Ordre', fiche ? fiche.ordre : (defaut.ordre || 0), { type: 'number' })}
         ${select('responsable', 'Responsable', equipeCarte(), fiche ? fiche.responsable : '', { vide: 'Non défini' })}
       </div>
+      <div class="forme-rang">
+        ${select('devis', 'Ligne du devis', Object.fromEntries((magasin.lire(K.documents(pid)) || []).concat(magasin.lire(K.documentsTous) || []).filter((x, i, l) => x.type === 'devis' && x.projet === pid && l.findIndex((y) => y.id === x.id) === i).map((x) => [x.id, { libelle: `${x.numero || 'Devis'} · ${x.libelle || ''}` }])), fiche ? fiche.devis : (defaut.devis || ''), { vide: 'Aucun', aide: "Rattachée à un devis, l'étape apparaît sur sa frise et se coche comme une ligne livrée." })}
+        ${champ('montant', 'Montant HT (€)', fiche ? (fiche.montant || '') : (defaut.montant || ''), { type: 'number', facultatif: true, attrs: 'min="0" step="1"' })}
+      </div>
       <div class="groupe"><label class="etiquette-champ" for="ed-composants">Parties concernées</label>
         <select class="select" id="ed-composants" name="composants" multiple size="4">${optionsMultiples(composantsDe(pid), (fiche && fiche.composants) || [])}</select>
         <p class="aide">Maintenez ⌘ ou Ctrl pour en choisir plusieurs.</p></div>
@@ -704,6 +708,7 @@ const editeurs = {
         ...d, progression: borner(d.progression),
         debut: d.debut ? new Date(d.debut) : null, fin: d.fin ? new Date(d.fin) : null,
         reports: reportsMaj(fiche, 'fin', d.fin, d, env.session),
+        devis: d.devis || '', montant: d.montant === '' || d.montant === undefined ? null : Number(d.montant),
       };
       delete donnees.reportMotif; delete donnees.reportNote;
       if (fiche) await ecrire.majJalon(pid, fiche.id, donnees); else await ecrire.creerJalon(pid, donnees);

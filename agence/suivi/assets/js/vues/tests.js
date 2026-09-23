@@ -14,6 +14,7 @@
    et quand il n'en a qu'un, il n'y a plus de sélecteur du tout.
    ========================================================================== */
 
+import { friseDevis, devisAvecEtapes, brancherFrise } from './frise.js';
 import {
   echapper, dateCourte, depuis, pluriel, joursAvant, parDateDesc,
   NIVEAUX_SCENARIO, BLOCS_SCENARIO, PLATEFORMES_TEST, STATUTS_CAMPAGNE,
@@ -63,6 +64,10 @@ const lireTout = (env) => {
     anomalies: rassembler(K.anomaliesToutes, K.anomalies),
     parcours: rassembler(K.parcoursTous, K.parcours),
     regles: rassembler(K.reglesToutes, K.regles),
+    /* Le devis de la campagne et ses étapes : ce que le client a acheté,
+       ligne par ligne, et ce qu'il vient vérifier en premier. */
+    documents: rassembler(K.documentsTous, K.documents),
+    jalons: rassembler(K.jalonsTous, K.jalons),
     testeurs: magasin.lire(K.testeurs) || [],
     /* Le client ne lit pas le vivier, il lit les profils publics : le
        même testeur, sans le nom ni l'adresse. Le magasin garde le parent
@@ -554,7 +559,14 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
   const machine = `<b>${parc.length}</b> parcours d'interface et <b>${casRegles}</b> cas de règles rejoués à chaque version${parc.length ? `, <b>${parcVerts}</b> ${parcVerts > 1 ? 'parcours au vert' : 'parcours au vert'}` : ''}.`;
   const bibli = `<b>${scen.length}</b> scénarios en <b>${parBloc.length}</b> blocs, soit <b>${passages}</b> passages mobiles par campagne complète.`;
 
+  const devisProjet = devisAvecEtapes((d.documents || []).filter((x) => x.projet === pid), (d.jalons || []).filter((j) => projetDe(j) === pid));
+  const jalonsProjet = (d.jalons || []).filter((j) => projetDe(j) === pid);
+  const etapesDevis = jalonsProjet.filter((j) => devisProjet.some((dv) => dv.id === j.devis));
+  const etapesFaites = etapesDevis.filter((j) => j.statut === 'termine');
+  const resumeDevis = `<b>${etapesFaites.length} / ${etapesDevis.length}</b> ${etapesDevis.length > 1 ? 'lignes du devis livrées' : 'ligne du devis livrée'}${devisProjet.length > 1 ? `, sur <b>${devisProjet.length}</b> devis` : ''}.`;
+
   const index = [
+    ...(devisProjet.length ? [['etage-devis', 'Le devis', `${etapesFaites.length}/${etapesDevis.length}`]] : []),
     ['campagnes', 'Campagnes', camp.length],
     ...(ano.length ? [['anomalies', 'Anomalies', ano.length]] : []),
     ['testeurs', 'Testeurs', gens.length],
@@ -628,6 +640,7 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
 
   <div class="tests-corps tests-corps--index">
     <div>
+      ${devisProjet.length ? etage('etage-devis', 'Le devis, ligne par ligne', resumeDevis, `<div style="margin-top:20px">${devisProjet.map((dv) => friseDevis(dv, jalonsProjet, { equipe, pid })).join('')}</div>`) : ''}
       ${etage('etage-humain', 'Tests humains', humain, `${sectionCampagnes}${sectionAnomalies}${vivierHtml({ ...d, testeurs: gens, profils: gens }, { equipe })}`)}
       ${etage('etage-machine', 'Tests automatisés', machine, `${parcoursHtml(d, { pid, equipe })}${reglesHtml(d, { pid, equipe })}`)}
       ${etage('etage-bibli', 'Bibliothèque', bibli, sectionScenarios)}
@@ -999,9 +1012,9 @@ export const vue = async (ctx, env) => {
      s'abonner aux mauvaises laisse l'écran figé sur son premier rendu, sans
      la moindre erreur pour le dire. */
   const clesSuivies = () => (env.role === 'equipe'
-    ? [K.projets, K.scenariosTous, K.campagnesToutes, K.anomaliesToutes, K.parcoursTous, K.reglesToutes, K.testeurs]
+    ? [K.projets, K.scenariosTous, K.campagnesToutes, K.anomaliesToutes, K.parcoursTous, K.reglesToutes, K.documentsTous, K.jalonsTous, K.testeurs]
     : [K.projets, ...(magasin.lire(K.projets) || (env.session || {}).projets || [])
-        .flatMap((p) => [K.scenarios(p.id), K.campagnes(p.id), K.anomalies(p.id), K.parcours(p.id), K.regles(p.id)]), K.profils]);
+        .flatMap((p) => [K.scenarios(p.id), K.campagnes(p.id), K.anomalies(p.id), K.parcours(p.id), K.regles(p.id), K.documents(p.id), K.jalons(p.id)]), K.profils]);
 
   /* Le projet ouvert : celui qu'on a choisi, ou le seul que le client ait.
      Le rendu et les gestes doivent lire la MÊME valeur, faute de quoi le
@@ -1057,6 +1070,7 @@ export const vue = async (ctx, env) => {
     if (sel) sel.addEventListener('change', (e) => { etat.projet = e.target.value; poser({ projet: etat.projet, plateforme: etat.plateforme }); rendre(true); });
   };
 
+  brancherFrise(sortie);
   const gestes = sur(sortie, 'click', '[data-info], [data-aller], [data-plateforme], [data-scenario], [data-plier-scenarios], [data-plier-parcours], [data-plier-regles], [data-nouvelle-regle], [data-editer-regle], [data-nouvelle-campagne], [data-editer-campagne], [data-action="ouvrir-campagne"], [data-nouveau-testeur], [data-action="ouvrir-testeur"], [data-nouveau-parcours], [data-editer-parcours]', async (el) => {
     /* Une référence n'est unique qu'à l'intérieur d'un projet : deux plans
        de tests portent chacun leur « DI-15 ». Chercher sans le projet

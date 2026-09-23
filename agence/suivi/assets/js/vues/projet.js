@@ -5,6 +5,7 @@
    éditeurs, l'interne, les points bloquants et la santé.
    ========================================================================== */
 
+import { friseDevis, devisAvecEtapes, brancherFrise } from './frise.js';
 import {
   echapper, dateCourte, dateHeure, depuis, heure, montant, pluriel, joursAvant, echeance as calcEcheance, enParagraphes, avecLiens, parDateDesc, parDateAsc, borner,
   STATUTS_PROJET, STATUTS_COMPOSANT, TYPES_COMPOSANT, STATUTS_ETAPE, STATUTS_TACHE, PRIORITES, STATUTS, TYPES, URGENCES, OUVERTS, ATTEND_CLIENT,
@@ -178,6 +179,7 @@ export const vue = async (ctx, env) => {
   };
 
   /* --- Les gestes ------------------------------------------------------ */
+  brancherFrise(sortie);
   const gestes = sur(sortie, 'click', '[data-action]', async (el) => {
     const d = lireTout(pid);
     const action = el.dataset.action;
@@ -803,8 +805,15 @@ const etapes = (d, { env, pid }) => {
   /* Ce qui bouge d'abord, puis du plus récent au plus ancien : autant
      dans la frise que dans les phases, et les phases entre elles. */
   const phases = phasesTriees(d.jalons);
+  /* Les devis qui ont leurs lignes en étapes viennent d'abord : c'est ce
+     que le client a acheté, ligne par ligne, et ce qu'il vient vérifier. */
+  const frises = devisAvecEtapes(d.documents, d.jalons).map((dv) => friseDevis(dv, d.jalons, { equipe: env.role === 'equipe', pid })).join('');
   return `
-  <section class="section" style="margin-top:0">
+  ${frises ? `<section class="section" style="margin-top:0">
+    <div class="section-tete"><div><h2>Le devis, ligne par ligne</h2><p class="chapo">Chaque ligne du devis est une étape. ${env.role === 'equipe' ? 'Cochez ce qui est livré : le client le voit aussitôt.' : 'Ce qui est coché est livré.'}</p></div></div>
+    ${frises}
+  </section>` : ''}
+  <section class="section" style="${frises ? '' : 'margin-top:0'}">
     <div class="section-tete"><h2>Feuille de route</h2>${boutonNouveau(env, 'jalon', 'Nouvelle étape', { ordre: d.jalons.length + 1 })}</div>
     ${d.jalons.length ? `<div class="route" style="margin-bottom:var(--e-6)">${trierEtapes(d.jalons).map(phaseHtml).join('')}</div>
     ${phases.map((p) => `<div class="section" style="margin-top:var(--e-5)">

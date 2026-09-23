@@ -1850,6 +1850,45 @@ input, select, textarea { font: inherit; color: inherit; }
    réservée à ce qui porte une donnée (une jauge, une barre, une alerte),
    jamais à un titre.
    --------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------
+   La frise d'un devis : les lignes du devis, dans l'ordre, à cocher.
+   Une case pour l'équipe, une coche pour le client, la même frise pour
+   les deux. La couleur ne va qu'à ce qui est fait.
+   --------------------------------------------------------------------- */
+.frise { border: 1px solid var(--trait); border-radius: var(--r-carte); padding: 18px 20px 8px; background: var(--fond-2); }
+.frise + .frise { margin-top: 16px; }
+.frise-tete { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.frise-titre { font: var(--t-corps-fort); color: var(--encre); }
+.frise-sous { font: var(--t-petit); color: var(--encre-3); margin-top: 2px; }
+.frise-sous b { font-weight: 650; color: var(--encre); font-variant-numeric: tabular-nums; }
+.frise-pct { font: var(--t-titre-2); font-weight: 650; font-variant-numeric: tabular-nums; color: var(--encre); white-space: nowrap; }
+.frise-jauge { height: 6px; border-radius: 999px; background: var(--fond-3); overflow: hidden; margin: 14px 0 6px; }
+.frise-jauge i { display: block; height: 100%; background: var(--ok); border-radius: 999px; transition: width var(--vite); }
+.frise-etapes { list-style: none; margin: 0; padding: 0; }
+.frise-etape {
+  display: grid; grid-template-columns: 28px 30px minmax(0, 1fr) auto;
+  gap: 0 12px; align-items: center;
+  padding: 12px 0; border-top: 1px solid var(--trait);
+}
+.frise-case { display: grid; place-items: center; cursor: pointer; }
+.frise-case input { width: 18px; height: 18px; accent-color: var(--ok); margin: 0; cursor: pointer; }
+.frise-coche { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--trait-fort); display: grid; place-items: center; color: #fff; }
+.frise-coche svg { width: 12px; height: 12px; }
+.est-faite .frise-coche { background: var(--ok); border-color: var(--ok); }
+.frise-num { font-family: var(--police-mono); font-size: 12px; color: var(--encre-4); font-variant-numeric: tabular-nums; }
+.frise-corps { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.frise-libelle { font: var(--t-corps-fort); color: var(--encre); overflow-wrap: anywhere; }
+.est-faite .frise-libelle { color: var(--encre-2); }
+.frise-detail { font: var(--t-petit); color: var(--encre-3); }
+.frise-fin { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+.frise-montant { font: var(--t-petit); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--encre-2); }
+.est-faite .frise-montant { color: var(--ok); }
+@media (max-width: 640px) {
+  .frise-etape { grid-template-columns: 28px minmax(0, 1fr); }
+  .frise-num { display: none; }
+  .frise-fin { grid-column: 2; justify-content: flex-start; }
+}
+
 .etage { margin-top: 56px; }
 
 /* Le « i » d'un titre : discret au repos, il ne concurrence pas le

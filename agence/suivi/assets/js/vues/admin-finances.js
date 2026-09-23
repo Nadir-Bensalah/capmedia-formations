@@ -6,7 +6,7 @@
 import { echapper, dateCourte, dateISO, montant, pluriel, parDateDesc, joursAvant, STATUTS_DEVIS, STATUTS_FACTURE, FACTURES_DUES, MOYENS_PAIEMENT, PORTEES_DEVIS, age, retard } from '../noyau.js';
 import { icone, pastille, ligne, vide, squelette, titrePage, sur, modale, toast, agir, lireForme, valider, obligatoire, optionsDe, depot, metrique, menu, confirmer } from '../ui.js';
 import * as magasin from '../magasin.js';
-import { K, resteAPayer } from '../donnees.js';
+import { K, ecrire, resteAPayer } from '../donnees.js';
 import { filAriane } from '../coquille.js';
 import { naviguer } from '../routeur.js';
 import { appelServeur } from '../serveur.js';
@@ -29,6 +29,10 @@ const deposer = (env, projets, type) => {
       <div class="forme-rang"><div class="groupe"><label class="etiquette-champ" for="d-montant">Montant HT (€)</label><input class="champ" id="d-montant" name="montant" type="number" min="0" step="0.01"></div><div class="groupe"><label class="etiquette-champ" for="d-tva">TVA (%)</label><input class="champ" id="d-tva" name="tva" type="number" min="0" step="0.1" value="0"><p class="aide">0 pour une auto-entreprise sans TVA.</p></div></div>
       <div class="groupe"><label class="etiquette-champ" for="d-echeance">${type === 'devis' ? 'Valable jusqu\'au' : 'Échéance de paiement'}</label><input class="champ" id="d-echeance" name="echeance" type="date"></div>
       <div class="groupe"><label class="etiquette-champ" for="d-desc">Détail <span class="facultatif">(facultatif)</span></label><textarea class="zone" id="d-desc" name="description" rows="2" maxlength="2000"></textarea></div>
+      ${type === 'devis' ? `<div class="groupe"><label class="etiquette-champ" for="d-etapes">Les lignes du devis, en étapes</label><textarea class="zone" id="d-etapes" name="etapes" rows="5" placeholder="Une ligne par étape, dans l'ordre du devis :
+Cadrage et maquettes · 1200
+Développement · 4800
+Mise en ligne · 600"></textarea><p class="aide">Chaque ligne devient une étape à cocher, que le client voit se cocher. Le montant après le « · » est facultatif.</p></div>` : ''}
       <div class="groupe"><label class="etiquette-champ" for="d-lien">Lien <span class="facultatif">(facultatif)</span></label><input class="champ" id="d-lien" name="lien" type="url" placeholder="https://... proposition en ligne, détail, justificatif"></div>
       <div class="groupe"><span class="etiquette-champ">Le PDF</span><div id="d-depot"></div></div></form>`,
     pied: `<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button><button class="btn btn-principal" type="submit" form="f-doc">Déposer</button>`,
@@ -64,7 +68,26 @@ const deposer = (env, projets, type) => {
     const d = lireForme(forme);
     const fichier = boite.pieces[0] || null;
     const liens = d.lien ? [{ nom: type === 'devis' ? 'La proposition en ligne' : 'Le justificatif', url: d.lien }] : [];
-    if (await agir(m.pied.querySelector('[type="submit"]'), () => appelServeur('deposerDocument', { projet: d.projet, type, numero: d.numero, libelle: d.libelle, montant: d.montant, tva: d.tva || 0, echeance: d.echeance || null, date: d.date || null, description: d.description, portee: d.portee, fichier, liens }), `${type === 'devis' ? 'Devis' : 'Facture'} déposé.`)) m.fermer(true);
+    /* Les lignes du devis, telles que saisies : « Libellé · 1200 » ou juste
+       « Libellé ». Elles deviennent des étapes rattachées au devis dès que
+       le serveur a rendu son identifiant. */
+    const lignes = String(d.etapes || '').split('\n').map((l) => l.trim()).filter(Boolean).map((l) => {
+      const m2 = l.match(/^(.*?)(?:\s*[·:\-–]\s*([\d\s.,]+)\s*€?)?$/);
+      const somme = m2 && m2[2] ? Number(String(m2[2]).replace(/\s/g, '').replace(',', '.')) : null;
+      return { titre: (m2 ? m2[1] : l).trim(), montant: Number.isFinite(somme) ? somme : null };
+    }).filter((l) => l.titre);
+    let reponse = null;
+    if (await agir(m.pied.querySelector('[type="submit"]'), async () => { reponse = await appelServeur('deposerDocument', { projet: d.projet, type, numero: d.numero, libelle: d.libelle, montant: d.montant, tva: d.tva || 0, echeance: d.echeance || null, date: d.date || null, description: d.description, portee: d.portee, fichier, liens }); return reponse; }, `${type === 'devis' ? 'Devis' : 'Facture'} déposé.`)) {
+      if (type === 'devis' && lignes.length && reponse && reponse.id) {
+        const deja = (magasin.lire(K.jalonsTous) || []).filter((x) => (x.projet || x._parent) === d.projet).length;
+        await Promise.all(lignes.map((l, k) => ecrire.creerJalon(d.projet, {
+          titre: l.titre, montant: l.montant, devis: reponse.id, ordre: deja + k + 1,
+          statut: 'a-venir', progression: 0, phase: d.libelle || 'Devis',
+        })));
+        toast(`${lignes.length} étape${lignes.length > 1 ? 's' : ''} posée${lignes.length > 1 ? 's' : ''} sur la feuille de route.`);
+      }
+      m.fermer(true);
+    }
   });
 };
 
