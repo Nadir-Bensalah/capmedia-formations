@@ -421,6 +421,17 @@ export const ecrire = {
   majRegle: (pid, ref, d) => updateDoc(doc(bdd, 'projets', pid, 'regles', ref), nettoyer({ ...d, maj: serverTimestamp() })),
   supprimerRegle: (pid, ref) => deleteDoc(doc(bdd, 'projets', pid, 'regles', ref)),
 
+  /* Une anomalie posée à la main par l'équipe. Celles qui viennent d'un
+     échec de testeur sont posées par le serveur, sous « ko-<scénario> » ;
+     celles-ci prennent un identifiant libre, et la même feuille les
+     qualifie toutes. */
+  creerAnomalie: (pid, d) => addDoc(col('projets', pid, 'anomalies'), nettoyer({
+    ...d, origine: 'equipe', passages: d.passages || [], temoins: d.temoins || [],
+    cree: serverTimestamp(), maj: serverTimestamp(),
+  })),
+  majAnomalie: (pid, id, d) => updateDoc(doc(bdd, 'projets', pid, 'anomalies', id), nettoyer({ ...d, maj: serverTimestamp() })),
+  supprimerAnomalie: (pid, id) => deleteDoc(doc(bdd, 'projets', pid, 'anomalies', id)),
+
   majParcours: (pid, ref, d) => updateDoc(doc(bdd, 'projets', pid, 'parcours', ref), nettoyer({ ...d, maj: serverTimestamp() })),
   supprimerParcours: (pid, ref) => deleteDoc(doc(bdd, 'projets', pid, 'parcours', ref)),
 

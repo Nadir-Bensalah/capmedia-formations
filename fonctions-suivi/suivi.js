@@ -589,6 +589,73 @@ exports.suiviProfilTesteur = onDocumentWritten(
   },
 );
 
+/**
+ * Un échec de testeur devient une anomalie, tout seul.
+ *
+ * Le testeur répond KO, joint sa capture, et s'arrête là : ce n'est pas
+ * son travail de qualifier. Ici, l'échec est rangé sous une anomalie par
+ * SCÉNARIO : plusieurs testeurs qui échouent au même endroit font une
+ * seule anomalie avec plusieurs témoins, pas trois lignes qui disent la
+ * même chose. C'est ce que la page promet au client.
+ *
+ * L'anomalie naît « nouvelle », gravité « important » : c'est à l'équipe
+ * de la reproduire puis de trancher, et la proposition dit que rien n'est
+ * validé sans reproduction. Un KO qui revient sur une anomalie déjà
+ * corrigée la rouvre : c'est une régression, et c'est la pire nouvelle,
+ * donc la plus visible.
+ *
+ * Les témoins sont recopiés dans l'anomalie (qui, sur quoi, quand, le
+ * commentaire, les preuves) pour que le Hub n'ait rien d'autre à lire.
+ */
+exports.suiviPassageKo = onDocumentWritten(
+  { region: REGION, document: 'projets/{projetId}/campagnes/{campagneId}/passages/{passageId}' },
+  async (evenement) => {
+    const apres = evenement.data.after.exists ? evenement.data.after.data() : null;
+    if (!apres || apres.resultat !== 'ko' || !apres.scenario) return;
+    const { projetId, campagneId, passageId } = evenement.params;
+
+    const ref = bdd.doc(`projets/${projetId}/anomalies/ko-${apres.scenario}`);
+    const scenario = await bdd.doc(`projets/${projetId}/scenarios/${apres.scenario}`).get();
+    const le = apres.le && apres.le.toDate ? apres.le.toDate() : new Date();
+    const temoin = {
+      passage: `${campagneId}/${passageId}`, campagne: campagneId,
+      testeur: apres.testeur || '', plateforme: apres.plateforme || '',
+      commentaire: apres.commentaire || '', preuves: apres.preuves || [],
+      appareil: (apres.contexte && apres.contexte.appareil) || '', le,
+    };
+
+    try {
+      await bdd.runTransaction(async (t) => {
+        const d = await t.get(ref);
+        if (!d.exists) {
+          t.set(ref, {
+            titre: scenario.exists ? scenario.data().titre || apres.scenario : `Échec sur ${apres.scenario}`,
+            scenario: apres.scenario, bloc: scenario.exists ? scenario.data().bloc || '' : '',
+            gravite: 'important', statut: 'nouvelle', origine: 'testeur',
+            description: '', passages: [temoin.passage], temoins: [temoin],
+            plateformes: temoin.plateforme ? [temoin.plateforme] : [],
+            cree: FieldValue.serverTimestamp(), maj: FieldValue.serverTimestamp(),
+          });
+          return;
+        }
+        const x = d.data();
+        const deja = (x.passages || []).includes(temoin.passage);
+        const maj = { maj: FieldValue.serverTimestamp(), passages: FieldValue.arrayUnion(temoin.passage) };
+        if (temoin.plateforme) maj.plateformes = FieldValue.arrayUnion(temoin.plateforme);
+        /* Le même testeur qui corrige son commentaire ne fait pas un second
+           témoin : on remplace le sien. */
+        maj.temoins = (x.temoins || []).filter((w) => w.passage !== temoin.passage).concat([temoin]);
+        if (['corrigee', 'sans-suite'].includes(x.statut)) {
+          maj.statut = 'nouvelle';
+          maj.retours = FieldValue.increment(1);
+        }
+        void deja;
+        t.update(ref, maj);
+      });
+    } catch (err) { console.error('Anomalie non posée depuis le passage', err); }
+  },
+);
+
 exports.suiviDocumentModifie = onDocumentUpdated(
   { region: REGION, document: 'documents/{documentId}' },
   async (evenement) => {

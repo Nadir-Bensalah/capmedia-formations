@@ -12,8 +12,9 @@ import {
   MOTIFS_REPORT, nomAffiche, dateCourte,
   NIVEAUX_SCENARIO, BLOCS_SCENARIO, STATUTS_CAMPAGNE, PLATEFORMES_TEST, REF_SCENARIO,
   ETATS_PARCOURS, OUTILS_PARCOURS, FAMILLES_REGLE, ETATS_REGLE,
+  GRAVITES_ANOMALIE, STATUTS_ANOMALIE,
 } from '../noyau.js';
-import { modale, confirmer, toast, lireForme, valider, obligatoire, longueurMax, urlValide, emailValide, optionsDe, depot, agir, lisible, choixPlateformes } from '../ui.js';
+import { icone, modale, confirmer, toast, lireForme, valider, obligatoire, longueurMax, urlValide, emailValide, optionsDe, depot, agir, lisible, choixPlateformes } from '../ui.js';
 import { appelServeur } from '../serveur.js';
 import * as magasin from '../magasin.js';
 import { K, ecrire } from '../donnees.js';
@@ -670,6 +671,62 @@ const editeurs = {
         if (fiche) await ecrire.majRegle(pid, ref, donnees);
         else await ecrire.creerRegle(pid, { ...donnees, actif: true });
         toast(fiche ? 'Famille enregistrée.' : `${ref} créée.`);
+        return true;
+      },
+    });
+  },
+
+  /* Une anomalie, qu'elle vienne d'un testeur ou de l'équipe. La feuille
+     qualifie : la gravité et le statut sont les deux décisions qui
+     comptent, et la proposition dit qu'une anomalie n'est confirmée
+     qu'après reproduction. La description est écrite pour qui devra la
+     reproduire : les étapes, dans l'ordre. */
+  anomalie: (env, { pid, fiche, defaut = {} }) => {
+    const scen = [
+      ...(magasin.lire(K.scenarios(pid)) || []),
+      ...(magasin.lire(K.scenariosTous) || []).filter((x) => (x.projet || x._parent) === pid),
+    ].filter((x, i, l) => x.actif !== false && l.findIndex((y) => y.ref === x.ref) === i)
+      .sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
+    const prises = (fiche && fiche.plateformes) || defaut.plateformes || [];
+
+    return feuille({
+      titre: fiche ? "L'anomalie" : 'Nouvelle anomalie',
+      sousTitre: fiche ? (fiche.origine === 'testeur' ? 'Venue d\'un échec de testeur.' : 'Posée par l\'équipe.') : 'Un défaut constaté, à reproduire puis à trancher.',
+      corps: `
+        ${champ('titre', 'Ce qui ne va pas', fiche ? fiche.titre : (defaut.titre || ''), { placeholder: 'Le rappel de fin de mois ne part jamais' })}
+        <div class="forme-rang">
+          ${select('gravite', 'Gravité', GRAVITES_ANOMALIE, fiche ? fiche.gravite : 'important', { aide: 'Bloquant : on ne peut pas continuer. Critique : une fonction importante est cassée. Important : gênant, mais on contourne. Mineur : un détail.' })}
+          ${select('statut', 'Statut', STATUTS_ANOMALIE, fiche ? fiche.statut : 'nouvelle', { aide: 'Confirmée seulement après l\'avoir reproduite. Sans suite si ce n\'était pas un défaut.' })}
+        </div>
+        <div class="groupe"><label class="etiquette-champ" for="ed-scenario">Scénario concerné <span class="facultatif">(facultatif)</span></label>
+          <select class="select" id="ed-scenario" name="scenario"><option value="">Aucun</option>${scen.map((x) => `<option value="${echapper(x.ref)}"${fiche && fiche.scenario === x.ref ? ' selected' : ''}>${echapper(x.ref)} — ${echapper(x.titre)}</option>`).join('')}</select></div>
+        <div class="groupe"><span class="etiquette-champ">Sur quoi</span>
+          <div class="cases-blocs">${Object.entries(PLATEFORMES_TEST).map(([cle, x]) => `<label class="case"><input type="checkbox" data-plateforme-a="${echapper(cle)}"${prises.includes(cle) ? ' checked' : ''}> ${echapper(x.libelle)}</label>`).join('')}</div></div>
+        ${zone('description', 'Ce qu\'on sait', fiche ? fiche.description : '', { facultatif: true, lignes: 5, placeholder: 'Les étapes pour la reproduire, dans l\'ordre. Ce qui se passe, ce qui devrait se passer.' })}
+        ${fiche && (fiche.temoins || []).length ? `<p class="aide">${(fiche.temoins || []).length} témoin${(fiche.temoins || []).length > 1 ? 's' : ''} venu${(fiche.temoins || []).length > 1 ? 's' : ''} des testeurs : ils restent attachés, quoi que vous changiez ici.</p>` : ''}
+        ${fiche ? `<div class="groupe" style="margin-top:8px"><button class="btn btn-doux btn-petit" type="button" data-supprimer>${icone('corbeille')} Supprimer cette anomalie</button></div>` : ''}`,
+      regles: { titre: obligatoire() },
+      surMontage: (racine) => {
+        const b = racine.querySelector('[data-supprimer]');
+        if (!b || !fiche) return;
+        b.addEventListener('click', async () => {
+          const ok = await confirmer({ titre: 'Supprimer cette anomalie ?', texte: (fiche.temoins || []).length ? 'Les témoins des testeurs seront perdus avec elle. Pour un défaut qui n\'en était pas un, préférez le statut « sans suite ».' : 'Elle disparaît de la page du client aussi.', ok: 'Supprimer', danger: true });
+          if (!ok) return;
+          await ecrire.supprimerAnomalie(pid, fiche.id);
+          toast('Anomalie supprimée.');
+          const fermer = racine.querySelector('[data-fermer]');
+          if (fermer) fermer.click();
+        });
+      },
+      enregistrer: async (d, pieces, racine) => {
+        const plateformes = [...racine.querySelectorAll('[data-plateforme-a]:checked')].map((c) => c.dataset.plateformeA);
+        const donnees = {
+          titre: d.titre, gravite: d.gravite, statut: d.statut,
+          scenario: d.scenario || '', plateformes, description: d.description || '',
+        };
+        if (fiche) await ecrire.majAnomalie(pid, fiche.id, donnees);
+        else await ecrire.creerAnomalie(pid, donnees);
+        toast(fiche ? 'Anomalie enregistrée.' : 'Anomalie posée.');
         return true;
       },
     });

@@ -20,9 +20,11 @@ import {
   NIVEAUX_SCENARIO, BLOCS_SCENARIO, PLATEFORMES_TEST, STATUTS_CAMPAGNE,
   GRAVITES_ANOMALIE, STATUTS_ANOMALIE, FAMILLES_AVIS, FAMILLES_REGLE, ETATS_REGLE,
   ETATS_PARCOURS, OUTILS_PARCOURS, PARCOURS_A_REGARDER,
+  dateHeure, enDate,
 } from '../noyau.js';
 import {
   icone, pastille, ligne, vide, squelette, titrePage, sur, modale, toast, agir, confirmer,
+  brancherPieces,
 } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K, ecrire, repartir } from '../donnees.js';
@@ -590,14 +592,21 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
     : vide({ icone: 'bug', titre: 'Aucune campagne', texte: 'Une campagne prend des scénarios, les distribue aux testeurs, et garde le résultat daté.', compact: true })}
   </section>`;
 
-  const sectionAnomalies = ano.length ? `<section class="section" id="anomalies">
-    <div class="section-tete"><div><h2>Anomalies ${infoBouton('anomalies')}</h2><p class="chapo">Plusieurs échecs sur le même scénario font une seule anomalie.</p></div></div>
-    <div class="liste">${ano.map((a) => ligne({
+  /* La section existe même vide pour l'équipe : c'est là qu'on pose une
+     anomalie à la main. Pour le client, une section vide ne dit rien. */
+  const sectionAnomalies = (ano.length || equipe) ? `<section class="section" id="anomalies">
+    <div class="section-tete">
+      <div><h2>Anomalies ${infoBouton('anomalies')}</h2><p class="chapo">Plusieurs échecs sur le même scénario font une seule anomalie. ${equipe ? 'Un KO de testeur en crée une tout seul ; vous pouvez aussi en poser une à la main.' : ''}</p></div>
+      ${equipe ? `<button class="btn btn-principal btn-petit" type="button" data-nouvelle-anomalie="${echapper(pid)}">${icone('plus')} Nouvelle anomalie</button>` : ''}
+    </div>
+    ${ano.length ? `<div class="liste">${ano.map((a) => ligne({
       icone: 'alerte', ton: (GRAVITES_ANOMALIE[a.gravite] || {}).voile === 'rouge' ? 'rouge' : (GRAVITES_ANOMALIE[a.gravite] || {}).voile === 'ambre' ? 'ambre' : '',
-      titre: echapper(a.titre || 'Anomalie'),
-      sous: `${(a.passages || []).length ? pluriel((a.passages || []).length, 'passage', 'passages') : ''}${(a.plateformes || []).length ? ` · ${echapper((a.plateformes || []).join(', '))}` : ''}`,
-      fin: `${pastille(GRAVITES_ANOMALIE, a.gravite || 'mineur')}${pastille(STATUTS_ANOMALIE, a.statut || 'nouvelle')}`,
-    })).join('')}</div>
+      titre: `${a.scenario ? `${ref(a.scenario)} ` : ''}${echapper(a.titre || 'Anomalie')}${Number(a.retours) ? ' <span class="etiquette">Revenue</span>' : ''}`,
+      sous: `${(a.temoins || a.passages || []).length ? pluriel((a.temoins || a.passages || []).length, 'témoin', 'témoins') : (a.origine === 'equipe' ? 'posée à la main' : '')}${(a.plateformes || []).length ? ` · ${echapper((a.plateformes || []).map((p) => (PLATEFORMES_TEST[p] || {}).court || p).join(', '))}` : ''}${a.description ? ` · ${echapper(String(a.description).slice(0, 70))}` : ''}`,
+      fin: `${pastille(GRAVITES_ANOMALIE, a.gravite || 'important')}${pastille(STATUTS_ANOMALIE, a.statut || 'nouvelle')}${equipe ? `<span class="rang boutons-edition"><button class="btn-icone" type="button" data-editer-anomalie="${echapper(a.id)}" aria-label="Qualifier" data-astuce="Qualifier">${icone('edit')}</button></span>` : ''}`,
+      action: 'ouvrir-anomalie', attrs: `data-id="${echapper(a.id)}"`,
+    })).join('')}</div>`
+    : vide({ icone: 'alerte', titre: 'Aucune anomalie', texte: 'Un échec de testeur en fera une tout seul, regroupée par scénario. Vous pouvez aussi en poser une à la main.', compact: true })}
   </section>` : '';
 
   const sectionScenarios = `<section class="section" id="scenarios">
@@ -657,6 +666,35 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
    On le rend, et rien d'autre : le texte est échappé avant, donc aucune
    balise venue de la fiche ne peut s'ouvrir ici. */
 const gras = (texte) => echapper(texte || '').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+/* La fiche d'une anomalie : la gravité, l'état, ce qu'on sait, et chaque
+   témoin, avec sa preuve. C'est ce que l'équipe lit avant de reproduire,
+   et ce que le client lit pour savoir où on en est. */
+const ouvrirAnomalie = (a, { equipe, pid, env, scenarios }) => {
+  const s = (scenarios || []).find((x) => x.ref === a.scenario);
+  const temoins = (a.temoins || []).slice().sort((x, y) => (enDate(y.le) || 0) - (enDate(x.le) || 0));
+  return modale({
+    titre: a.titre || 'Anomalie', sousTitre: [a.scenario, (BLOCS_SCENARIO[a.bloc] || {}).libelle].filter(Boolean).join(' · '), feuille: true,
+    corps: `
+      <div class="rang" style="gap:8px;flex-wrap:wrap;margin-bottom:16px">
+        ${pastille(GRAVITES_ANOMALIE, a.gravite || 'important')}${pastille(STATUTS_ANOMALIE, a.statut || 'nouvelle')}
+        ${Number(a.retours) ? `<span class="etiquette">Revenue ${a.retours > 1 ? `${a.retours} fois` : 'une fois'} après correction</span>` : ''}
+        ${(a.plateformes || []).map((p) => `<span class="puce">${echapper((PLATEFORMES_TEST[p] || {}).libelle || p)}</span>`).join('')}
+      </div>
+      <p class="aide" style="margin-bottom:16px">${echapper((GRAVITES_ANOMALIE[a.gravite] || {}).aide || '')}</p>
+      ${a.description ? `<div class="groupe"><span class="etiquette-champ">Ce qu'on sait</span><div class="prose"><p>${echapper(a.description).replace(/\n/g, '<br>')}</p></div></div>` : ''}
+      ${s ? `<div class="groupe"><span class="etiquette-champ">Le scénario</span><p class="t-corps">${gras(s.attendu)}</p></div>` : ''}
+      <div class="groupe"><span class="etiquette-champ">${temoins.length ? pluriel(temoins.length, 'témoin', 'témoins') : 'Aucun témoin'}</span>
+        ${temoins.length ? `<div class="liste liste--serree">${temoins.map((t) => ligne({
+          icone: 'utilisateur', ton: 'ambre',
+          titre: `${echapper((PLATEFORMES_TEST[t.plateforme] || {}).libelle || t.plateforme || 'Plateforme inconnue')}${t.appareil ? ` · ${echapper(t.appareil)}` : ''}`,
+          sous: `${t.le ? `${echapper(dateHeure(t.le))} · ` : ''}${echapper(t.commentaire || 'Sans commentaire')}`,
+          fin: (t.preuves || []).map((c, i) => `<button class="btn btn-doux btn-petit" type="button" data-piece="${echapper(c)}">${icone('image')} Preuve ${i + 1}</button>`).join(''),
+        })).join('')}</div>` : `<p class="aide">Posée à la main, sans échec de testeur derrière.</p>`}
+      </div>`,
+    pied: `${equipe ? `<button class="btn btn-secondaire" type="button" data-qualifier>${icone('edit')} Qualifier</button>` : ''}<span class="pousse"></span><button class="btn btn-principal" type="button" data-fermer>Fermer</button>`,
+  });
+};
 
 /* Le détail d'un scénario : ce que le testeur lira, mot pour mot. */
 const ouvrirScenario = (s) => {
@@ -1071,7 +1109,7 @@ export const vue = async (ctx, env) => {
   };
 
   brancherFrise(sortie, env);
-  const gestes = sur(sortie, 'click', '[data-info], [data-aller], [data-plateforme], [data-scenario], [data-plier-scenarios], [data-plier-parcours], [data-plier-regles], [data-nouvelle-regle], [data-editer-regle], [data-nouvelle-campagne], [data-editer-campagne], [data-action="ouvrir-campagne"], [data-nouveau-testeur], [data-action="ouvrir-testeur"], [data-nouveau-parcours], [data-editer-parcours]', async (el) => {
+  const gestes = sur(sortie, 'click', '[data-info], [data-aller], [data-nouvelle-anomalie], [data-editer-anomalie], [data-action="ouvrir-anomalie"], [data-plateforme], [data-scenario], [data-plier-scenarios], [data-plier-parcours], [data-plier-regles], [data-nouvelle-regle], [data-editer-regle], [data-nouvelle-campagne], [data-editer-campagne], [data-action="ouvrir-campagne"], [data-nouveau-testeur], [data-action="ouvrir-testeur"], [data-nouveau-parcours], [data-editer-parcours]', async (el) => {
     /* Une référence n'est unique qu'à l'intérieur d'un projet : deux plans
        de tests portent chacun leur « DI-15 ». Chercher sans le projet
        ouvrirait l'énoncé d'une autre application, sans rien dire. */
@@ -1128,6 +1166,23 @@ export const vue = async (ctx, env) => {
       const pid = projetCourant();
       const x = lireTout(env).regles.find((y) => y.ref === el.dataset.editerRegle && projetDe(y) === pid);
       if (x) await editer('regle', env, { pid, fiche: x });
+      return;
+    }
+    if (el.dataset.nouvelleAnomalie) { await editer('anomalie', env, { pid: el.dataset.nouvelleAnomalie }); return; }
+    if (el.dataset.editerAnomalie) {
+      const pid = projetCourant();
+      const a = lireTout(env).anomalies.find((x) => x.id === el.dataset.editerAnomalie && projetDe(x) === pid);
+      if (a) await editer('anomalie', env, { pid, fiche: a });
+      return;
+    }
+    if (el.dataset.action === 'ouvrir-anomalie') {
+      const pid = projetCourant();
+      const d = lireTout(env);
+      const a = d.anomalies.find((x) => x.id === el.dataset.id && projetDe(x) === pid);
+      if (!a) return;
+      const m = ouvrirAnomalie(a, { equipe: env.role === 'equipe', pid, env, scenarios: d.scenarios.filter((x) => projetDe(x) === pid) });
+      brancherPieces(m.el);
+      sur(m.el, 'click', '[data-qualifier]', async () => { m.fermer(); await editer('anomalie', env, { pid, fiche: a }); });
       return;
     }
     if (el.dataset.nouvelleCampagne) { await editer('campagne', env, { pid: el.dataset.nouvelleCampagne }); return; }
