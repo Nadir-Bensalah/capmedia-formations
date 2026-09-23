@@ -144,9 +144,14 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   await page.click('[data-retirer]'); await pause(900);
   const oui = await page.$$('.voile [data-oui]');
   if (oui.length) { await oui[oui.length-1].click(); await pause(2800); }
-  verifier(!(await lire(`testeurs/${uid}`)),'le testeur est retiré du vivier');
+  /* Le retrait garde la fiche : les passages d'une campagne portent
+     l'identifiant du testeur, et sans elle le rapport ne sait plus de qui
+     il parle. Ce qui doit partir, c'est l'accès et le profil public. */
+  const fiche = await lire(`testeurs/${uid}`);
+  verifier(!!fiche, 'la fiche du testeur reste, pour la mémoire de la campagne');
+  verifier(fiche && (((fiche.fields||{}).actif||{}).booleanValue) === false, 'mais il est retiré du vivier');
   await pause(2500);
-  verifier(!(await lire(`testeurs/${uid}/public/profil`)),'et son profil public part avec lui');
+  verifier(!(await lire(`testeurs/${uid}/public/profil`)),'et son profil public part avec son accès');
 
   console.log('\n'+(soucis.length?`${soucis.length} ÉCART(S)`:'tout est conforme'));
   console.log('Erreurs JS :', err.length?err.slice(0,4).join('\n  '):'aucune');

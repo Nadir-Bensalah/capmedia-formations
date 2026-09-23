@@ -24,7 +24,7 @@ import {
 } from '../noyau.js';
 import {
   icone, pastille, ligne, vide, squelette, titrePage, sur, modale, toast, agir, confirmer,
-  brancherPieces,
+  brancherPieces, lisible,
 } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K, ecrire, repartir } from '../donnees.js';
@@ -819,7 +819,9 @@ const ouvrirTesteur = (fiche, { env, projets }) => {
       </div>`,
     pied: `<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button>
       ${neuf ? '' : `<button class="btn btn-doux" type="button" data-inviter>${icone('envoyer')} Renvoyer l'invitation</button>`}
-      ${neuf ? '' : '<button class="btn btn-danger" type="button" data-retirer>Retirer du vivier</button>'}
+      ${neuf ? '' : '<button class="btn btn-doux" type="button" data-retirer>Retirer du vivier</button>'}
+      ${neuf || f.actif === false ? '' : ''}
+      ${neuf ? '' : `<button class="btn btn-danger" type="button" data-supprimer-testeur>${icone('corbeille')} Supprimer</button>`}
       <button class="btn btn-principal" type="button" data-enregistrer>${neuf ? 'Inscrire' : 'Enregistrer'}</button>`,
   });
 
@@ -831,11 +833,13 @@ const ouvrirTesteur = (fiche, { env, projets }) => {
     toast(`Invitation renvoyée à ${f.email || 'ce testeur'}.`);
   }));
 
+  /* Retirer : l'accès se ferme, la fiche et les résultats restent. C'est
+     le geste courant, celui d'un testeur qui ne travaille plus avec nous. */
   const retirer = m.el.querySelector('[data-retirer]');
   if (retirer) retirer.addEventListener('click', async () => {
     const sur = await confirmer({
       titre: `Retirer ${f.prenom || 'ce testeur'} du vivier ?`,
-      texte: "Son accès se ferme. Ses résultats restent : ils sont la mémoire de la campagne, et les effacer falsifierait le rapport.",
+      texte: "Son accès se ferme tout de suite. Ses résultats restent : ils sont la mémoire de la campagne, et les effacer falsifierait le rapport. Vous pourrez le réinscrire plus tard.",
       ok: 'Retirer', danger: true,
     });
     if (!sur) return;
@@ -843,6 +847,31 @@ const ouvrirTesteur = (fiche, { env, projets }) => {
       await appelServeur('retirerTesteur', { testeur: f.id });
       toast('Testeur retiré. Ses résultats sont conservés.');
       m.fermer(true);
+    });
+  });
+
+  /* Supprimer : tout part, compte compris. Pour un essai ou une erreur de
+     saisie. Le serveur refuse si le testeur a consigné un passage. */
+  const supprimer = m.el.querySelector('[data-supprimer-testeur]');
+  if (supprimer) supprimer.addEventListener('click', async () => {
+    const sur = await confirmer({
+      titre: `Supprimer ${f.prenom || 'ce testeur'} définitivement ?`,
+      texte: `Sa fiche et son compte disparaissent${f.email ? `, y compris ${f.email}` : ''}. Cela ne se rattrape pas. Si ce testeur a déjà consigné un résultat, la suppression sera refusée : préférez « Retirer du vivier ».`,
+      ok: 'Supprimer', danger: true,
+    });
+    if (!sur) return;
+    await agir(supprimer, async () => {
+      try {
+        await appelServeur('retirerTesteur', { testeur: f.id, definitif: true });
+        toast(`${f.prenom || 'Le testeur'} est supprimé.`);
+        m.fermer(true);
+      } catch (e) {
+        /* Le refus du serveur n'est pas une panne : c'est une réponse, et
+           elle dit quoi faire à la place. */
+        toast(/passages/.test(String(e && e.message))
+          ? 'Ce testeur a déjà consigné des résultats. Retirez-le du vivier plutôt que de le supprimer.'
+          : lisible(e), 'erreur');
+      }
     });
   });
 

@@ -591,9 +591,15 @@ exports.suiviProfilTesteur = onDocumentWritten(
     const apres = evenement.data.after.exists ? evenement.data.after.data() : null;
     const cible = bdd.doc(`testeurs/${evenement.params.testeurId}/public/profil`);
 
-    /* Un testeur retiré du vivier voit son profil public disparaître avec
-       lui : le laisser derrière serait une trace que plus rien ne justifie. */
-    if (!apres) { try { await cible.delete(); } catch (err) { /* déjà parti */ } return; }
+    /* Un testeur qui n'est plus au vivier voit son profil public disparaître :
+       le laisser derrière serait une trace que plus rien ne justifie, et le
+       client continuerait de le compter parmi ceux qui testent pour lui.
+
+       Deux cas, et il faut les deux : la fiche supprimée, et la fiche qui
+       reste mais devient inactive. Le retrait garde désormais la fiche pour
+       que le rapport d'une campagne sache de qui il parle, donc regarder la
+       seule disparition ne suffit plus. */
+    if (!apres || apres.actif === false) { try { await cible.delete(); } catch (err) { /* déjà parti */ } return; }
 
     const p = apres.profil || {};
     try {
@@ -1734,10 +1740,50 @@ exports.suiviAdmin = onRequest(
       if (action === 'retirerTesteur') {
         const tid = String(testeur || uid || '');
         if (!tid) return res.status(400).send('testeur requis');
-        await bdd.doc(`testeurs/${tid}`).delete().catch(() => {});
-        try { await getAuth().setCustomUserClaims(tid, {}); } catch (err) { /* compte parti */ }
+
+        /* Deux gestes différents, et le second ne se rattrape pas.
+
+           « Retirer » ferme l'accès et garde la fiche : les passages d'une
+           campagne portent l'identifiant du testeur, et sans sa fiche le
+           rapport ne sait plus de qui il parle. C'est le geste courant.
+
+           « Supprimer » efface tout, y compris le compte : pour un essai,
+           une erreur de saisie, ou quelqu'un qui demande son effacement.
+           Il est refusé si le testeur a consigné le moindre passage, parce
+           qu'une campagne amputée de ses résultats ment. */
+        const definitif = req.body.definitif === true;
+        const fiche = await bdd.doc(`testeurs/${tid}`).get();
+
+        if (definitif) {
+          let passages = 0;
+          try {
+            const q = await bdd.collectionGroup('passages').where('testeur', '==', tid).limit(1).get();
+            passages = q.size;
+          } catch (err) {
+            console.error('Passages du testeur illisibles', err);
+            return res.status(500).send('passages illisibles');
+          }
+          if (passages) return res.status(409).send('ce testeur a consigne des passages : retirez-le du vivier plutot que de le supprimer');
+
+          await bdd.doc(`testeurs/${tid}`).delete().catch(() => {});
+          try { await getAuth().deleteUser(tid); } catch (err) { /* compte deja parti */ }
+          await audit('testeur.supprime', { uid: tid, email: fiche.exists ? fiche.data().email : '' });
+          return res.json({ ok: true, supprime: true });
+        }
+
+        /* Le retrait : l'accès se ferme, la fiche reste, les résultats
+           aussi. La revendication part, et les jetons en cours sont
+           révoqués, sinon l'accès survivrait jusqu'à leur expiration. */
+        await bdd.doc(`testeurs/${tid}`).set({ actif: false, maj: FieldValue.serverTimestamp() }, { merge: true });
+        try {
+          const compte = await getAuth().getUser(tid);
+          const gardees = { ...(compte.customClaims || {}) };
+          delete gardees.testeur;
+          await getAuth().setCustomUserClaims(tid, gardees);
+          await getAuth().revokeRefreshTokens(tid);
+        } catch (err) { /* compte parti */ }
         await audit('testeur.retire', { uid: tid });
-        return res.json({ ok: true });
+        return res.json({ ok: true, supprime: false });
       }
 
       if (action === 'creerInvitation') {

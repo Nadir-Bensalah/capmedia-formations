@@ -39,6 +39,18 @@ const lettrePour=(email,modele)=>attendre(async()=>{
     && (((champ(d,'a').arrayValue||{}).values)||[]).some(x=>((((x.mapValue||{}).fields||{}).email)||{}).stringValue===email));
 });
 const variables=(d)=>(((champ(d,'variables').mapValue||{}).fields)||{});
+/* Un passage consigné par ce testeur : c'est lui qui doit rendre la
+   suppression impossible. */
+const poserPassage=async(uid)=>{
+  const S=(v)=>({stringValue:String(v)});
+  await fetch(bdd('projets/atelier/campagnes/qa-suppr'),{method:'PATCH',headers:{...prop,'Content-Type':'application/json'},
+    body:JSON.stringify({fields:{titre:S('Passe de suppression'),statut:S('en-cours'),
+      testeurs:{arrayValue:{values:[S(uid)]}},scenarios:{arrayValue:{values:[S('DI-06')]}}}})});
+  await fetch(bdd(`projets/atelier/campagnes/qa-suppr/passages/${uid}__DI-06`),{method:'PATCH',headers:{...prop,'Content-Type':'application/json'},
+    body:JSON.stringify({fields:{scenario:S('DI-06'),testeur:S(uid),plateforme:S('web'),resultat:S('ok'),
+      commentaire:S('Comme prévu'),preuves:{arrayValue:{values:[]}},le:{timestampValue:new Date().toISOString()}}})});
+  await pause(900);
+};
 
 (async()=>{
   const adresse='testeur.invite@exemple.test';
@@ -111,11 +123,53 @@ const variables=(d)=>(((champ(d,'variables').mapValue||{}).fields)||{});
     verifier(r4.code===404,`un testeur inconnu est refusé (${r4.code})`);
   }
 
-  console.log("\n== 4 · Le bouton dans la fiche du testeur");
+  console.log("\n== 4 · Retirer, et supprimer");
+  {
+    const j=await lire('testeurs?pageSize=100');
+    const fiche=((j&&j.documents)||[]).find(d=>str(d,'email')===adresse);
+    const tid=fiche?fiche.name.split('/').pop():'';
+    verifier(!!tid,'le testeur est là pour l essai');
+
+    /* Retirer : la fiche RESTE, l'accès se ferme. */
+    const r=await serveur('retirerTesteur',{testeur:tid});
+    verifier(r.code===200,`retirer est accepté (${r.code})`,r.texte.slice(0,60));
+    const apres=await lire(`testeurs/${tid}`);
+    verifier(!!apres,'la fiche reste en base, pour que le rapport sache de qui il parle');
+    verifier(apres&&champ(apres,'actif').booleanValue===false,'mais le testeur est inactif');
+
+    /* Réinscrire : on doit pouvoir revenir en arrière. */
+    await serveur('majTesteur',{testeur:tid,archive:false});
+    await pause(700);
+    verifier(champ(await lire(`testeurs/${tid}`),'actif').booleanValue===true,'et il se réinscrit');
+
+    /* Supprimer, sans passage : tout part. */
+    const s1=await serveur('retirerTesteur',{testeur:tid,definitif:true});
+    verifier(s1.code===200,`supprimer est accepté quand rien n a été consigné (${s1.code})`,s1.texte.slice(0,70));
+    verifier(!(await lire(`testeurs/${tid}`)),'la fiche a disparu');
+
+    /* Supprimer, AVEC un passage : refusé, parce qu'une campagne amputée
+       de ses résultats ment. C'est le garde-fou qui compte. */
+    const r2=await serveur('inscrireTesteur',{email:adresse,prenom:'Yasmine',plateformes:['web'],projets:['atelier']});
+    let uid2=''; try{uid2=JSON.parse(r2.texte).uid;}catch(e){}
+    verifier(!!uid2,'un second testeur est inscrit pour le garde-fou');
+    await poserPassage(uid2);
+    const s2=await serveur('retirerTesteur',{testeur:uid2,definitif:true});
+    verifier(s2.code===409,`supprimer est REFUSÉ quand un passage existe (${s2.code})`,s2.texte.slice(0,80));
+    verifier(/retirez-le du vivier/.test(s2.texte),'et le refus dit quoi faire à la place',s2.texte.slice(0,90));
+    verifier(!!(await lire(`testeurs/${uid2}`)),'la fiche est toujours là');
+    /* Ménage du passage et du compte. */
+    await fetch(`http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/documents/projets/atelier/campagnes/qa-suppr/passages/${uid2}__DI-06`,{method:'DELETE',headers:prop}).catch(()=>{});
+    await serveur('retirerTesteur',{testeur:uid2,definitif:true});
+  }
+
+  console.log("\n== 5 · Les boutons dans la fiche du testeur");
   {
     const src=require('fs').readFileSync(`${__dirname}/../../agence/suivi/assets/js/vues/tests.js`,'utf8');
     verifier(/data-inviter/.test(src),"la fiche porte un bouton « Renvoyer l'invitation »");
     verifier(/appelServeur\('inviterTesteur'/.test(src),"et il appelle la bonne action");
+    verifier(/data-supprimer-testeur/.test(src),'elle porte aussi « Supprimer »');
+    verifier(/definitif: true/.test(src),'qui demande bien une suppression définitive');
+    verifier(/data-retirer/.test(src),'et « Retirer du vivier » à côté');
   }
 
   /* Ménage : le compte d'essai ne reste pas dans le vivier. */
