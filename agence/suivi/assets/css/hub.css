@@ -1841,44 +1841,104 @@ input, select, textarea { font: inherit; color: inherit; }
 .barre-tests { gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
 
 /* ---------------------------------------------------------------------
-   L'identité visuelle des sections de la console de tests.
+   La console de tests : trois étages, pas neuf sections plates.
 
-   Neuf sections empilées, même taille de titre, mêmes tuiles grises :
-   l'œil n'a nulle part où se poser et tout se ressemble. Chaque section
-   reçoit donc un médaillon coloré qui ne sert qu'à une chose, la
-   reconnaître de loin en faisant défiler.
-
-   La couleur suit le SENS, elle ne décore pas : rouge pour ce qui ne va
-   pas, ambre pour ce qui attend, vert pour ce qui tourne, violet pour la
-   machine, bleu pour les gens et la bibliothèque. Les tons sont ceux qui
-   servent déjà aux lignes et aux pastilles, pas une seconde palette.
+   Un tableau de bord se balaie, il ne se lit pas. Ce qui donne un repère
+   à l'œil, ce n'est pas un pictogramme dans une pastille, c'est la
+   STRUCTURE : un surtitre d'étage, une phrase de résumé avec les chiffres
+   en gras, puis les sections de l'étage en retrait. La couleur est
+   réservée à ce qui porte une donnée (une jauge, une barre, une alerte),
+   jamais à un titre.
    --------------------------------------------------------------------- */
-.section-marque {
-  display: flex; align-items: center; gap: 12px;
+.etage { margin-top: 56px; }
+.etage-tete {
+  display: flex; flex-direction: column; gap: 6px;
+  padding-bottom: 14px; margin-bottom: 4px;
+  border-bottom: 1px solid var(--trait-fort);
 }
-.section-medaille {
-  flex: none;
-  width: 34px; height: 34px;
-  border-radius: 10px;
-  display: grid; place-items: center;
-  background: var(--gris-voile); color: var(--encre-3);
+.etage-sur {
+  font: var(--t-micro); font-weight: 600; letter-spacing: var(--ls-large);
+  text-transform: uppercase; color: var(--encre-3);
 }
-.section-medaille svg { width: 18px; height: 18px; }
-.section-medaille--rouge  { background: var(--alerte-voile);    color: var(--alerte); }
-.section-medaille--ambre  { background: var(--attention-voile); color: var(--attention); }
-.section-medaille--vert   { background: var(--ok-voile);        color: var(--ok); }
-.section-medaille--violet { background: var(--violet-voile);    color: var(--violet); }
-.section-medaille--bleu   { background: var(--accent-voile);    color: var(--accent); }
+.etage-resume {
+  font: var(--t-titre-3); font-weight: 450; color: var(--encre-2);
+  max-width: 62ch; text-wrap: balance;
+}
+.etage-resume b { font-weight: 650; color: var(--encre); font-variant-numeric: tabular-nums; }
+.etage .section { margin-top: 36px; }
 
-/* Un filet neutre sous le titre : il sépare les sections sans ajouter
-   une boîte de plus. La couleur reste au médaillon seul, parce que neuf
-   filets teintés empilés redeviendraient exactement le bruit qu'on
-   cherche à retirer. */
-.section--marquee > .section-tete {
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--trait);
-  margin-bottom: 16px;
+/* Une référence de test est un code, pas un mot. La chasse fixe le dit
+   d'elle-même, et donne aux sections machine une texture différente des
+   sections humaines sans ajouter un seul pictogramme. */
+.ref {
+  font-family: var(--police-mono); font-size: 12.5px; font-weight: 500;
+  color: var(--encre-2); background: var(--fond-2);
+  border: 1px solid var(--trait); border-radius: 6px;
+  padding: 1px 6px; vertical-align: 1px; white-space: nowrap;
 }
+.scenario-ref { font-family: var(--police-mono); font-weight: 500; }
+
+/* La jauge : l'état des parcours en une seule forme. Quatre tuiles
+   disaient la même chose en quatre fois plus de place, et sans montrer
+   les proportions. */
+.jauge {
+  display: flex; gap: 2px; height: 10px;
+  border-radius: 999px; overflow: hidden; background: var(--fond-3);
+}
+.jauge > i { display: block; height: 100%; min-width: 0; background: var(--encre-4); }
+.jauge > i[data-ton="vert"]  { background: var(--ok); }
+.jauge > i[data-ton="rouge"] { background: var(--alerte); }
+.jauge > i[data-ton="ambre"] { background: var(--attention); }
+.jauge > i[data-ton="bleu"]  { background: var(--accent); }
+.jauge-legende { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 10px; }
+.jauge-legende .puce b { font-weight: 650; font-variant-numeric: tabular-nums; color: var(--encre); }
+
+/* Les barres : une famille par ligne, la longueur dit le nombre de cas.
+   C'est le graphique le plus lisible qui existe, et il n'a besoin
+   d'aucune bibliothèque. */
+.barres {
+  display: grid; grid-template-columns: minmax(120px, 190px) minmax(0, 1fr) 52px;
+  gap: 9px 14px; align-items: center;
+}
+.barres-nom { font: var(--t-petit); color: var(--encre-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.barres-piste { height: 8px; border-radius: 999px; overflow: hidden; background: var(--fond-3); }
+.barres-piste i { display: block; height: 100%; border-radius: 999px; background: var(--encre-4); }
+.barres-piste i[data-ton="vert"]  { background: var(--ok); }
+.barres-piste i[data-ton="rouge"] { background: var(--alerte); }
+.barres-val { font: var(--t-petit); font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; color: var(--encre); }
+
+/* La doctrine, sous chaque jauge : le seul chiffre qui distingue une
+   garde d'un fichier. Il est gros parce qu'il est le plus important, et
+   il n'a pas de tuile parce qu'il n'est pas un compteur, c'est un aveu. */
+.doctrine { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-top: 16px; font: var(--t-petit); color: var(--encre-3); }
+.doctrine b { font: var(--t-titre-3); font-weight: 650; font-variant-numeric: tabular-nums; color: var(--encre); white-space: nowrap; }
+
+/* Le seul endroit où la couleur est dépensée en surface : ce qui ne va
+   pas. Quand il n'y a rien, le panneau disparaît et il reste une ligne :
+   l'absence de couleur est l'information. */
+.section--alerte { background: var(--alerte-voile); border-radius: var(--r-carte); padding: 18px 22px 20px; }
+.section--alerte .section-tete h2 { color: var(--alerte); }
+.section--alerte .ligne { background: transparent; }
+.calme { display: flex; align-items: center; gap: 10px; font: var(--t-petit); color: var(--encre-3); margin-top: 6px; }
+.calme svg { width: 16px; height: 16px; color: var(--ok); flex: none; }
+
+/* L'index de page, collé à droite sur grand écran. Trois étages et huit
+   sections, ça se saute, ça ne se fait pas défiler. */
+.tests-corps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 48px; align-items: start; }
+.index-page { display: none; }
+@media (min-width: 1360px) {
+  .tests-corps--index { grid-template-columns: minmax(0, 1fr) 172px; }
+  .index-page { display: block; position: sticky; top: 84px; padding-top: 60px; }
+}
+.index-page .etage-sur { display: block; margin-bottom: 8px; }
+.index-page button {
+  display: flex; justify-content: space-between; gap: 10px; width: 100%;
+  background: none; border: 0; padding: 5px 0; cursor: pointer;
+  font: var(--t-petit); color: var(--encre-3); text-align: left;
+}
+.index-page button:hover { color: var(--encre); }
+.index-page button b { font-weight: 500; font-variant-numeric: tabular-nums; color: var(--encre-4); }
+.index-page .index-etage { margin-top: 14px; }
 
 .chiffres-tests { gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
 .chiffre {
@@ -1889,11 +1949,7 @@ input, select, textarea { font: inherit; color: inherit; }
   border-radius: 14px;
   display: flex; flex-direction: column; gap: 2px;
 }
-/* La tuile qui porte le chiffre principal de la section : c'est celui
-   qu'on vient lire, les autres sont du contexte. Un liseré suffit, une
-   couleur de fond en ferait un bouton. */
-.chiffre--tete { border-color: var(--trait-fort); }
-.chiffre--tete .chiffre-valeur { color: var(--encre); }
+
 .chiffre-valeur {
   font-size: 30px; font-weight: 650; line-height: 1.1;
   font-variant-numeric: tabular-nums;

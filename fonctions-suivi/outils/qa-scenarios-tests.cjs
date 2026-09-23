@@ -42,8 +42,12 @@ const dernierCode = async (email) => {
   }
   return '';
 };
+/* Les courriels de code ne sont jamais purgés par l'application, et la
+   lecture REST rend les cent premiers par identifiant, pas par date :
+   passé cent envois, le code le plus récent peut manquer à la page, et la
+   suite tape un code périmé. On vide donc AVANT d'en demander un neuf. */
 const connecter = async (page, email) => {
-  await vider('connexions'); await vider('connexionsIp');
+  await vider('envois'); await vider('connexions'); await vider('connexionsIp');
   await page.goto(`${SITE}/suivi/?emul`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#forme:not(.masque)', { timeout: 25000 });
   await page.fill('#email', email); await page.click('#envoyer');

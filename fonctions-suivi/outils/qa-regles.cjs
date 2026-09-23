@@ -45,15 +45,21 @@ const dernierCode = async (email) => {
   return '';
 };
 const vider = async (col) => { const j = await lire(`${col}?pageSize=300`); for (const d of (j && j.documents) || []) await fetch(`http://127.0.0.1:8080/v1/${d.name}`, { method: 'DELETE', headers: prop }); };
+/* Les courriels de code ne sont jamais purgés par l'application, et la
+   lecture REST rend les cent premiers par identifiant, pas par date :
+   passé cent envois, le code le plus récent peut manquer à la page, et la
+   suite tape un code périmé. On vide donc AVANT d'en demander un neuf. */
 const connecter = async (page, email) => {
-  await vider('connexions'); await vider('connexionsIp');
+  await vider('envois'); await vider('connexions'); await vider('connexionsIp');
   await page.goto(`${SITE}/suivi/?emul`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#forme:not(.masque)', { timeout: 25000 });
   await page.fill('#email', email); await page.click('#envoyer');
   await page.waitForSelector('#forme-code:not(.masque)', { timeout: 25000 });
   await page.fill('#code', await dernierCode(email));
-  await page.waitForSelector('.page h1', { timeout: 30000 }).catch(() => {});
-  await pause(1800);
+  /* La barre latérale ne se dessine qu'avec un rôle : c'est elle qui
+     prouve que la connexion a pris, pas le titre de page. */
+  await page.waitForSelector('.lat a', { timeout: 60000 }).catch(() => {});
+  await pause(1200);
 };
 const aller = async (page, hash, sel, titre) => {
   for (let i = 0; i < 6; i += 1) {
@@ -78,7 +84,7 @@ const aller = async (page, hash, sel, titre) => {
 
   await connecter(page, 'agent.essai@exemple.test');
   await page.evaluate(() => { try { localStorage.setItem('suivi:cle-admin', 'cle-essai-locale'); } catch (e) {} });
-  await page.reload({ waitUntil: 'domcontentloaded' }); await pause(3500);
+  await page.reload({ waitUntil: 'domcontentloaded' }); await page.waitForSelector('.lat a', { timeout: 60000 }).catch(() => {}); await pause(1200);
 
   /* Le compte réel, lu en base. Rien en dur. */
   /* Firestore pagine sa réponse REST quelle que soit la pageSize demandée :
@@ -106,12 +112,36 @@ const aller = async (page, hash, sel, titre) => {
     texte: document.body.innerText,
     bouton: !!document.querySelector('[data-nouvelle-regle]'),
   }));
+  /* Quand la section manque, dire OÙ la page en est : sans cela un
+     écart de rendu et un écart de connexion se ressemblent trait pour
+     trait, et on accuse le mauvais. */
+  if (!v.sections.includes('Règles métier')) {
+    console.log('    [où en est la page]', JSON.stringify(await page.evaluate(() => ({
+      hash: location.hash, h1: (document.querySelector('.page h1') || {}).innerText || '(aucun)',
+      lat: document.querySelectorAll('.lat a').length, forme: !!document.querySelector('#forme:not(.masque)'),
+      corps: document.body.innerText.slice(0, 160).replace(/\n+/g, ' | '),
+    }))));
+  }
   verifier(v.sections.includes('Règles métier'), 'la section existe', v.sections.join('/'));
   verifier(v.bouton, 'le bouton de création est là');
   verifier(new RegExp(`${nb} familles`).test(v.texte), `les ${nb} familles sont annoncées`);
   verifier(new RegExp(`${cas} cas`).test(v.texte), `les ${cas} cas aussi`);
   verifier(/milliseconde/.test(v.texte), 'la page dit pourquoi c est gratuit');
   verifier(/éprouvées par mutation/.test(v.texte), 'et le compte des éprouvées');
+
+  /* Une barre par famille, la longueur dit le nombre de cas. La plus
+     longue fait toute la piste : sinon l'échelle ment. */
+  const forme = await page.evaluate(()=>{
+    const pistes=[...document.querySelectorAll('#regles .barres-piste i')];
+    const largeurs=pistes.map(i=>parseFloat(i.style.width||'0'));
+    return { barres:pistes.length, max:Math.max(0,...largeurs),
+      noms:document.querySelectorAll('#regles .barres-nom').length,
+      vals:[...document.querySelectorAll('#regles .barres-val')].map(v=>Number(v.innerText)).reduce((a,b)=>a+b,0) };
+  });
+  verifier(forme.barres>=6,`une barre par famille (${forme.barres})`);
+  verifier(forme.barres===forme.noms,'chacune avec son nom');
+  verifier(Math.round(forme.max)===100,'la plus longue fait toute la piste',`${forme.max}`);
+  verifier(forme.vals===cas,`et les nombres font le total (${forme.vals})`,`${cas} attendus`);
 
   console.log('\n== Le catalogue se replie, groupé par famille');
   const r1 = await page.evaluate(() => {
@@ -167,7 +197,10 @@ const aller = async (page, hash, sel, titre) => {
   const nav2 = await chromium.launch();
   const cl = await (await nav2.newContext({ viewport: { width: 1500, height: 1100 } })).newPage();
   await connecter(cl, 'camille.essai@exemple.test');
-  await aller(cl, '/tests?projet=atelier', null, 'Tests');
+  /* Le titre « Tests » arrive avant les sections, qui se montent après
+     la lecture des données. Attendre le titre seul faisait lire une page
+     encore vide : on attend la section elle-même. */
+  await aller(cl, '/tests?projet=atelier', '#regles', 'Tests');
   await pause(1600);
   const c = await cl.evaluate(() => ({
     voit: /Règles métier/.test(document.body.innerText),

@@ -29,7 +29,7 @@ const verifier=(c,b,m)=>c?ok(b):dire(m?`${b} · ${m}`:b);
 (async()=>{
   const nav=await chromium.launch();
   const page=await (await nav.newContext({viewport:{width:1500,height:1100}})).newPage();
-  await vider('connexions'); await vider('connexionsIp');
+  await vider('envois'); await vider('connexions'); await vider('connexionsIp');
   await page.goto('http://127.0.0.1:8787/suivi/?emul',{waitUntil:'domcontentloaded'});
   await page.waitForSelector('#forme:not(.masque)',{timeout:25000});
   await page.fill('#email','agent.essai@exemple.test'); await page.click('#envoyer');

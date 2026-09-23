@@ -30,13 +30,21 @@ const bdd=(c)=>`http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/
 const lire=async(c)=>{const r=await fetch(bdd(c),{headers:prop});return r.ok?r.json():null;};
 const vider=async(col)=>{const j=await lire(`${col}?pageSize=300`);for(const d of (j&&j.documents)||[])await fetch(`http://127.0.0.1:8080/v1/${d.name}`,{method:'DELETE',headers:prop});};
 const dernierCode=async(e)=>{for(let i=0;i<40;i++){const j=await lire('envois?pageSize=100');const p=((j&&j.documents)||[]).filter(d=>{const a=((((d.fields||{}).a||{}).arrayValue)||{}).values||[];return a.some(x=>((((x.mapValue||{}).fields||{}).email)||{}).stringValue===e);});if(p.length){p.sort((x,y)=>new Date(((y.fields.cree||{}).timestampValue)||0)-new Date(((x.fields.cree||{}).timestampValue)||0));const v=(((p[0].fields.variables||{}).mapValue||{}).fields)||{};if(v.code&&v.code.stringValue)return v.code.stringValue;}await pause(300);}return'';};
-const connecter=async(page,email)=>{await vider('connexions');await vider('connexionsIp');
+/* Les courriels de code ne sont jamais purgés par l'application, et la
+   lecture REST rend les cent premiers par identifiant, pas par date :
+   passé cent envois, le code le plus récent peut manquer à la page, et la
+   suite tape un code périmé. On vide donc AVANT d'en demander un neuf. */
+const connecter=async(page,email)=>{await vider('envois');await vider('connexions');await vider('connexionsIp');
   await page.goto(`${SITE}/suivi/?emul`,{waitUntil:'domcontentloaded'});
   await page.waitForSelector('#forme:not(.masque)',{timeout:25000});
   await page.fill('#email',email);await page.click('#envoyer');
   await page.waitForSelector('#forme-code:not(.masque)',{timeout:25000});
   await page.fill('#code',await dernierCode(email));
-  await page.waitForSelector('.page h1',{timeout:30000}).catch(()=>{});await pause(1800);};
+  /* Le titre de page arrive avant la session : ce qui prouve que la
+     connexion a pris, c'est la barre latérale, qui ne se dessine qu'avec
+     un rôle. Sous charge, une attente aveugle laissait tout le reste de
+     la suite courir sur une page encore anonyme. */
+  await page.waitForSelector('.lat a',{timeout:60000}).catch(()=>{});await pause(1200);};
 /* Attendre « .page h1 » ne prouve rien : l'accueil en a un aussi, et le
    test sortait en croyant avoir navigué. On attend donc le TEXTE du titre,
    qui est le seul signe que la bonne vue a pris la main. */
@@ -190,8 +198,8 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   await connecter(cl,'camille.essai@exemple.test');
   const latC = await cl.evaluate(()=>[...document.querySelectorAll('.lat a')].map(a=>a.textContent.trim().split('\n')[0]));
   verifier(latC.some(x=>/^Tests/.test(x)),'le client a aussi l\'entrée Tests',latC.join(' / '));
-  await aller(cl,'/tests',null,'Tests');
-  await pause(1800);
+  await aller(cl,'/tests','.section-tete h2','Tests');
+  await pause(1200);
   const c = await cl.evaluate(()=>({
     selecteur: !!document.querySelector('#f-projet'),
     options: [...document.querySelectorAll('#f-projet option')].map(o=>o.textContent.trim()),
@@ -214,8 +222,8 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
     verifier(!fuite,'et rien du projet d\'un autre client');
   }
 
-  await aller(cl,'/tests?projet=atelier',null,'Tests');
-  await pause(1400);
+  await aller(cl,'/tests?projet=atelier','#parcours','Tests');
+  await pause(1000);
   const cp = await cl.evaluate(()=>({
     scenarios: document.querySelectorAll('.scenario').length,
     chiffres: document.querySelectorAll('.chiffre').length,

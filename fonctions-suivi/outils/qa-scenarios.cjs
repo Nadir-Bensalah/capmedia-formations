@@ -69,8 +69,12 @@ const dernierCode = async (email) => {
   }
   return '';
 };
-const rouvrirLesVannes = async () => { await vider('connexions'); await vider('connexionsIp'); };
+const rouvrirLesVannes = async () => { await vider('envois'); await vider('connexions'); await vider('connexionsIp'); };
 
+/* Les courriels de code ne sont jamais purgés par l'application, et la
+   lecture REST rend les cent premiers par identifiant, pas par date :
+   passé cent envois, le code le plus récent peut manquer à la page, et la
+   suite tape un code périmé. On vide donc AVANT d'en demander un neuf. */
 const connecter = async (page, email) => {
   await rouvrirLesVannes();
   await page.goto(`${SITE}/suivi/?emul`, { waitUntil: 'domcontentloaded' });

@@ -46,7 +46,11 @@ const bdd=(c)=>`http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/
 const lire=async(c)=>{const r=await fetch(bdd(c),{headers:prop});return r.ok?r.json():null;};
 const vider=async(col)=>{const j=await lire(`${col}?pageSize=300`);for(const d of (j&&j.documents)||[])await fetch(`http://127.0.0.1:8080/v1/${d.name}`,{method:'DELETE',headers:prop});};
 const dernierCode=async(e)=>{for(let i=0;i<40;i++){const j=await lire('envois?pageSize=100');const p=((j&&j.documents)||[]).filter(d=>{const a=((((d.fields||{}).a||{}).arrayValue)||{}).values||[];return a.some(x=>((((x.mapValue||{}).fields||{}).email)||{}).stringValue===e);});if(p.length){p.sort((x,y)=>new Date(((y.fields.cree||{}).timestampValue)||0)-new Date(((x.fields.cree||{}).timestampValue)||0));const v=(((p[0].fields.variables||{}).mapValue||{}).fields)||{};if(v.code&&v.code.stringValue)return v.code.stringValue;}await pause(300);}return'';};
-const connecter=async(page,email)=>{await vider('connexions');await vider('connexionsIp');
+/* Les courriels de code ne sont jamais purgés par l'application, et la
+   lecture REST rend les cent premiers par identifiant, pas par date :
+   passé cent envois, le code le plus récent peut manquer à la page, et la
+   suite tape un code périmé. On vide donc AVANT d'en demander un neuf. */
+const connecter=async(page,email)=>{await vider('envois');await vider('connexions');await vider('connexionsIp');
   await page.goto(`${SITE}/suivi/?emul`,{waitUntil:'domcontentloaded'});
   await page.waitForSelector('#forme:not(.masque)',{timeout:25000});
   await page.fill('#email',email);await page.click('#envoyer');
@@ -76,7 +80,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
 
   await connecter(page,'agent.essai@exemple.test');
   await page.evaluate(()=>{ try{localStorage.setItem('suivi:cle-admin','cle-essai-locale');}catch(e){} });
-  await page.reload({waitUntil:'domcontentloaded'}); await pause(3500);
+  await page.reload({waitUntil:'domcontentloaded'}); await page.waitForSelector('.lat a',{timeout:60000}).catch(()=>{}); await pause(1200);
 
   /* Le compte réel, lu en base. Coder 48 en dur ferait tomber la suite au
      premier parcours ajouté, pour une raison qui n'est pas un défaut. */
@@ -113,6 +117,25 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   verifier(new RegExp(`${refsCouvertes.size} scénarios`).test(v.texte),`avec les ${refsCouvertes.size} scénarios couverts`);
   verifier(/éprouvés par mutation/.test(v.texte),'et le compte des éprouvés');
   verifier(/remis en défaut/.test(v.texte),'la page dit pourquoi ça compte');
+
+  /* L'état des parcours est une FORME, pas quatre tuiles : une jauge dont
+     les parts sont proportionnelles, et une référence en chasse fixe sur
+     chaque ligne. Sans ces deux choses, la section redevient un bloc de
+     texte gris que l'œil ne distingue plus de ses voisins. */
+  const forme = await page.evaluate(()=>{
+    const j=document.querySelector('#parcours .jauge');
+    const parts=j?[...j.querySelectorAll('i')]:[];
+    const somme=parts.reduce((n,i)=>n+parseFloat(i.style.flexBasis||'0'),0);
+    return { jauge:!!j, parts:parts.length, somme:Math.round(somme),
+      legende:document.querySelectorAll('#parcours .jauge-legende .puce').length,
+      refs:document.querySelectorAll('#parcours .ligne .ref').length,
+      etage:!!document.querySelector('#etage-machine .etage-sur') };
+  });
+  verifier(forme.jauge,'la jauge est là');
+  verifier(forme.parts>0 && forme.somme===100,`ses parts font cent pour cent (${forme.somme})`);
+  verifier(forme.legende===5,'la légende porte les cinq états',`${forme.legende}`);
+  verifier(forme.refs>0,'les références sont en chasse fixe');
+  verifier(forme.etage,'dans l étage des tests automatisés');
   const m = v.texte.match(/(\d+) parcours rejoués[^.]*/);
   if (m) console.log('    ', m[0]);
 

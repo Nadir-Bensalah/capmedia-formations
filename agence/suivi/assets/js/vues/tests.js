@@ -70,16 +70,29 @@ const lireTout = (env) => {
 /* Une lecture en groupe ne dit pas de quel projet vient le document : la
    donnée ne porte pas son chemin. Le magasin garde l'identifiant du parent
    sous « _parent », et c'est lui qui répond quand le champ manque. */
-/* Le médaillon d'une section. Neuf sections empilées se ressemblaient
-   toutes : même titre, mêmes tuiles, aucun repère. Chaque section porte
-   désormais une icône dans une pastille colorée, dont le seul rôle est
-   de la faire reconnaître de loin en faisant défiler.
+/* Une référence de test est un code : on la compose en chasse fixe. */
+const ref = (r) => `<span class="ref">${echapper(r)}</span>`;
 
-   La couleur suit le sens : rouge pour ce qui ne va pas, ambre pour ce
-   qui attend, vert pour ce qui tourne, violet pour la machine, bleu pour
-   les gens et la bibliothèque. */
-const marque = (nomIcone, ton) =>
-  `<span class="section-medaille section-medaille--${ton}" aria-hidden="true">${icone(nomIcone)}</span>`;
+/* La jauge : plusieurs états, une seule forme. Chaque part est
+   proportionnelle, et la légende porte les nombres. */
+const jauge = (parts) => {
+  const total = parts.reduce((n, p) => n + p.n, 0) || 1;
+  return `<div class="jauge" role="img" aria-label="${echapper(parts.map((p) => `${p.n} ${p.nom}`).join(', '))}">${parts.filter((p) => p.n).map((p) => `<i data-ton="${p.ton}" style="flex-basis:${((p.n / total) * 100).toFixed(2)}%"></i>`).join('')}</div>
+  <div class="jauge-legende">${parts.map((p) => `<span class="puce puce--${p.ton}"><i></i><b>${p.n}</b> ${echapper(p.nom)}</span>`).join('')}</div>`;
+};
+
+/* Les barres : une ligne par famille, la longueur dit le nombre. */
+const barres = (lignes) => {
+  const max = Math.max(1, ...lignes.map((l) => l.n));
+  return `<div class="barres">${lignes.map((l) => `<span class="barres-nom" title="${echapper(l.aide || '')}">${echapper(l.nom)}</span><span class="barres-piste"><i data-ton="${l.ton || ''}" style="width:${((l.n / max) * 100).toFixed(1)}%"></i></span><span class="barres-val">${l.n}</span>`).join('')}</div>`;
+};
+
+/* Un étage : un surtitre, une phrase avec les chiffres en gras, puis ses
+   sections. C'est la structure qui donne un repère, pas une icône. */
+const etage = (id, sur, resume, corps) => `<div class="etage" id="${echapper(id)}">
+  <div class="etage-tete"><span class="etage-sur">${echapper(sur)}</span><p class="etage-resume">${resume}</p></div>
+  ${corps}
+</div>`;
 
 const projetDe = (x) => x.projet || x._parent || '';
 
@@ -155,14 +168,14 @@ const alertes = (d, { nomProjet, plateforme }) => {
     }));
 
   if (!soucis.length) {
-    return `<section class="section section--marquee" style="margin-top:0">
-      <div class="section-tete"><div class="section-marque">${marque('valider', 'vert')}<h2>Ce qui ne va pas</h2></div></div>
-      ${vide({ icone: 'check', titre: 'Rien à signaler', texte: 'Aucune anomalie bloquante, aucune campagne en retard.', compact: true })}
+    return `<section class="section" style="margin-top:0">
+      <div class="section-tete"><h2>Ce qui ne va pas</h2></div>
+      <p class="calme">${icone('check')} Rien à signaler : aucune anomalie bloquante, aucune campagne en retard, aucun parcours rouge.</p>
     </section>`;
   }
 
-  return `<section class="section section--marquee" style="margin-top:0">
-    <div class="section-tete"><div class="section-marque">${marque('alerte', 'rouge')}<div><h2>Ce qui ne va pas</h2><p class="chapo">${pluriel(soucis.length, 'point à regarder', 'points à regarder')}.</p></div></div></div>
+  return `<section class="section section--alerte" style="margin-top:0">
+    <div class="section-tete"><div><h2>Ce qui ne va pas</h2><p class="chapo">${pluriel(soucis.length, 'point à regarder', 'points à regarder')}.</p></div></div>
     <div class="liste">${soucis.map((s) => ligne(s)).join('')}</div>
   </section>`;
 };
@@ -181,14 +194,14 @@ const avancement = (d, { nomProjet, plateforme }) => {
   }).filter((x) => x.scen || x.camp.length);
 
   if (!lignes.length) {
-    return `<section class="section section--marquee">
-      <div class="section-tete"><div class="section-marque">${marque('trend', 'bleu')}<h2>Avancement</h2></div></div>
+    return `<section class="section">
+      <div class="section-tete"><h2>Avancement</h2></div>
       ${vide({ icone: 'bug', titre: 'Aucun projet testé', texte: 'Versez un plan de tests sur un projet pour commencer.', compact: true })}
     </section>`;
   }
 
-  return `<section class="section section--marquee">
-    <div class="section-tete"><div class="section-marque">${marque('trend', 'bleu')}<div><h2>Avancement</h2><p class="chapo">${pluriel(lignes.length, 'projet suivi', 'projets suivis')}.</p></div></div></div>
+  return `<section class="section">
+    <div class="section-tete"><div><h2>Avancement</h2><p class="chapo">${pluriel(lignes.length, 'projet suivi', 'projets suivis')}.</p></div></div>
     <div class="liste">${lignes.map((x) => ligne({
       href: `#/tests?projet=${echapper(x.p.id)}${plateforme ? `&plateforme=${echapper(plateforme)}` : ''}`,
       icone: 'bug', ton: x.ano ? 'rouge' : x.enCours ? 'bleu' : '',
@@ -216,8 +229,8 @@ const activite = (d, { nomProjet, plateforme }) => {
 
   if (!faits.length) return '';
 
-  return `<section class="section section--marquee">
-    <div class="section-tete"><div class="section-marque">${marque('activite', 'bleu')}<h2>Activité</h2></div></div>
+  return `<section class="section">
+    <div class="section-tete"><h2>Activité</h2></div>
     <div class="liste">${faits.map((f) => ligne({
       icone: f.icone, ton: f.ton || '',
       titre: echapper(f.titre), sous: `${echapper(f.sous)} · ${echapper(depuis(f.date))}`,
@@ -259,30 +272,31 @@ const parcoursHtml = (d, { pid, equipe }) => {
   const rangee = (x) => ligne({
     icone: x.outil === 'playwright' ? 'globe' : x.outil === 'jest' ? 'code' : 'smartphone',
     ton: x.etat === 'vert' ? 'vert' : x.etat === 'rouge' ? 'rouge' : x.etat === 'instable' ? 'ambre' : '',
-    titre: `${echapper(x.ref)} · ${echapper(x.titre || '')}${x.mutation ? '' : ' <span class="etiquette">Non éprouvé</span>'}`,
+    titre: `${ref(x.ref)} ${echapper(x.titre || '')}${x.mutation ? '' : ' <span class="etiquette">Non éprouvé</span>'}`,
     sous: `${echapper((OUTILS_PARCOURS[x.outil] || {}).court || x.outil)}${(x.plateformes || []).length ? ` · ${echapper((x.plateformes || []).map((p) => (PLATEFORMES_TEST[p] || {}).court || p).join(', '))}` : ''}${(x.scenarios || []).length ? ` · ${pluriel((x.scenarios || []).length, 'scénario', 'scénarios')}` : ''}${x.note ? ` · ${echapper(x.note.slice(0, 60))}` : ''}`,
     fin: `${pastille(ETATS_PARCOURS, x.etat || 'a-ecrire')}${equipe ? `<span class="rang boutons-edition"><button class="btn-icone" type="button" data-editer-parcours="${echapper(x.ref)}" aria-label="Modifier" data-astuce="Modifier">${icone('edit')}</button></span>` : ''}`,
   });
 
-  return `<section class="section section--marquee">
+  return `<section class="section" id="parcours">
     <div class="section-tete">
-      <div class="section-marque">${marque('eclair', 'violet')}<div><h2>Parcours automatisés</h2><p class="chapo">${liste.length ? `${pluriel(liste.length, 'parcours', 'parcours')} rejoués à chaque version${couverts ? `, couvrant ${pluriel(couverts, 'scénario', 'scénarios')}` : ''}.` : 'Ce que la machine rejouera à chaque version.'}</p></div></div>
+      <div><h2>Parcours automatisés</h2><p class="chapo">${liste.length ? `${pluriel(liste.length, 'parcours', 'parcours')} rejoués à chaque version${couverts ? `, couvrant ${pluriel(couverts, 'scénario', 'scénarios')}` : ''}.` : 'Ce que la machine rejouera à chaque version.'}</p></div>
       ${equipe && pid ? `<button class="btn btn-principal btn-petit" type="button" data-nouveau-parcours="${echapper(pid)}">${icone('plus')} Nouveau parcours</button>` : ''}
     </div>
 
     ${liste.length ? `
-    <div class="rang chiffres-tests" style="margin-bottom:16px">
-      <div class="chiffre chiffre--tete"><span class="chiffre-valeur">${par.vert || 0}</span><span class="chiffre-nom">au vert</span></div>
-      <div class="chiffre${aRegarder ? ' chiffre--alerte' : ''}"><span class="chiffre-valeur">${aRegarder}</span><span class="chiffre-nom">à regarder</span></div>
-      <div class="chiffre"><span class="chiffre-valeur">${par['a-ecrire'] || 0}</span><span class="chiffre-nom">à écrire</span></div>
-      <div class="chiffre"><span class="chiffre-valeur">${eprouves} / ${liste.length}</span><span class="chiffre-nom">éprouvés par mutation</span></div>
-    </div>
+    ${jauge([
+      { n: par.vert || 0, nom: 'au vert', ton: 'vert' },
+      { n: par.rouge || 0, nom: 'rouges', ton: 'rouge' },
+      { n: par.instable || 0, nom: 'instables', ton: 'ambre' },
+      { n: par.ecrit || 0, nom: 'écrits', ton: 'bleu' },
+      { n: (par['a-ecrire'] || 0) + (par.suspendu || 0), nom: 'à écrire', ton: 'gris' },
+    ])}
 
-    <div class="rang couverture" style="margin-bottom:14px">
-      ${parOutil.map((g) => `<span class="puce" data-astuce="${echapper(g.f.ou)}">${echapper(g.f.court)} ${g.items.length}</span>`).join('')}
-    </div>
+    <p class="doctrine"><b>${eprouves} / ${liste.length}</b> éprouvés par mutation${eprouves < liste.length ? ` · ${pluriel(liste.length - eprouves, 'parcours n\'a pas encore été remis en défaut', 'parcours n\'ont pas encore été remis en défaut')}. Un parcours au vert ne prouve rien tant qu'on ne l'a pas vu tomber.` : '.'}</p>
 
-    ${eprouves < liste.length ? `<p class="aide" style="margin-bottom:14px">Un parcours qui passe au vert ne prouve rien tant qu'on n'a pas vérifié qu'il sait tomber. ${pluriel(liste.length - eprouves, 'parcours n\'a pas encore été remis en défaut', 'parcours n\'ont pas encore été remis en défaut')}.</p>` : ''}
+    <div class="rang couverture" style="margin:18px 0 14px">
+      ${parOutil.map((g) => `<span class="puce" data-astuce="${echapper(g.f.ou)}"><b>${g.items.length}</b> ${echapper(g.f.court)}</span>`).join('')}
+    </div>
 
     ${aVoir.length ? `<div class="liste" style="margin-bottom:14px">${aVoir.map(rangee).join('')}</div>` : ''}
 
@@ -315,9 +329,9 @@ const parcoursHtml = (d, { pid, equipe }) => {
 const reglesHtml = (d, { pid, equipe }) => {
   const liste = (d.regles || []).filter((x) => x.actif !== false && (!pid || projetDe(x) === pid));
   if (!liste.length) {
-    return `<section class="section section--marquee">
+    return `<section class="section">
       <div class="section-tete">
-        <div class="section-marque">${marque('code', 'violet')}<div><h2>Règles métier</h2><p class="chapo">Ce que la machine vérifie en millisecondes.</p></div></div>
+        <div><h2>Règles métier</h2><p class="chapo">Ce que la machine vérifie en millisecondes.</p></div>
         ${equipe && pid ? `<button class="btn btn-principal btn-petit" type="button" data-nouvelle-regle="${echapper(pid)}">${icone('plus')} Nouvelle famille</button>` : ''}
       </div>
       ${vide({ icone: 'code', titre: 'Aucune règle',
@@ -340,31 +354,27 @@ const reglesHtml = (d, { pid, equipe }) => {
   const rangee = (x) => ligne({
     icone: 'code',
     ton: x.etat === 'vert' ? 'vert' : x.etat === 'rouge' ? 'rouge' : '',
-    titre: `${echapper(x.ref)} · ${echapper(x.titre || '')}${x.mutation ? '' : ' <span class="etiquette">Non éprouvée</span>'}`,
+    titre: `${ref(x.ref)} ${echapper(x.titre || '')}${x.mutation ? '' : ' <span class="etiquette">Non éprouvée</span>'}`,
     sous: `${pluriel(Number(x.cas) || 0, 'cas essayé', 'cas essayés')}${x.cherche ? ` · ${echapper(x.cherche)}` : ''}`,
     fin: `${pastille(ETATS_REGLE, x.etat || 'a-ecrire')}${equipe ? `<span class="rang boutons-edition"><button class="btn-icone" type="button" data-editer-regle="${echapper(x.ref)}" aria-label="Modifier" data-astuce="Modifier">${icone('edit')}</button></span>` : ''}`,
   });
 
-  return `<section class="section section--marquee">
+  return `<section class="section" id="regles">
     <div class="section-tete">
-      <div class="section-marque">${marque('code', 'violet')}<div><h2>Règles métier</h2><p class="chapo">${pluriel(liste.length, 'famille', 'familles')}, ${pluriel(cas, 'cas essayé', 'cas essayés')} à chaque enregistrement.</p></div></div>
+      <div><h2>Règles métier</h2><p class="chapo">${pluriel(liste.length, 'famille', 'familles')}, ${pluriel(cas, 'cas essayé', 'cas essayés')} à chaque enregistrement.</p></div>
       ${equipe && pid ? `<button class="btn btn-principal btn-petit" type="button" data-nouvelle-regle="${echapper(pid)}">${icone('plus')} Nouvelle famille</button>` : ''}
     </div>
 
-    <div class="rang chiffres-tests" style="margin-bottom:16px">
-      <div class="chiffre chiffre--tete"><span class="chiffre-valeur">${cas}</span><span class="chiffre-nom">cas essayés</span></div>
-      <div class="chiffre"><span class="chiffre-valeur">${casVerts}</span><span class="chiffre-nom">au vert</span></div>
-      <div class="chiffre${rouges.length ? ' chiffre--alerte' : ''}"><span class="chiffre-valeur">${rouges.length}</span><span class="chiffre-nom">familles rouges</span></div>
-      <div class="chiffre"><span class="chiffre-valeur">${eprouvees} / ${liste.length}</span><span class="chiffre-nom">éprouvées par mutation</span></div>
-    </div>
+    ${barres(parFamille.map((g) => ({
+      nom: g.f.libelle, n: g.cas, aide: g.f.aide,
+      ton: g.items.some((r) => r.etat === 'rouge') ? 'rouge' : g.items.length && g.items.every((r) => r.etat === 'vert') ? 'vert' : '',
+    })))}
 
-    <p class="aide" style="margin-bottom:14px">Une règle métier tourne en une milliseconde : les ${cas} passent en moins d'une minute, à chaque enregistrement. C'est ce qui permet d'essayer le 29 février sur cinquante ans, ou les cent vingt-sept combinaisons de jours d'une répétition hebdomadaire, là où un parcours d'interface en essaie trois.</p>
+    <p class="doctrine"><b>${eprouvees} / ${liste.length}</b> éprouvées par mutation · <b>${casVerts}</b> cas au vert${rouges.length ? ` · <b>${rouges.length}</b> ${rouges.length > 1 ? 'familles rouges' : 'famille rouge'}` : ''}</p>
+
+    <p class="aide" style="margin:14px 0">Une règle métier tourne en une milliseconde : les ${cas} passent en moins d'une minute, à chaque enregistrement. C'est ce qui permet d'essayer le 29 février sur cinquante ans, ou les cent vingt-sept combinaisons de jours d'une répétition hebdomadaire, là où un parcours d'interface en essaie trois.</p>
 
     ${rouges.length ? `<div class="liste" style="margin-bottom:14px">${rouges.map(rangee).join('')}</div>` : ''}
-
-    <div class="rang couverture" style="margin-bottom:14px">
-      ${parFamille.map((g) => `<span class="puce" data-astuce="${echapper(g.f.aide)}">${echapper(g.f.libelle)} ${g.cas}</span>`).join('')}
-    </div>
 
     <button class="btn btn-secondaire btn-petit" type="button" data-plier-regles aria-expanded="false">${icone('deplier')} Voir les ${liste.length} familles</button>
     <div id="catalogue-regles" hidden style="margin-top:14px">
@@ -399,9 +409,9 @@ const vivierHtml = (d, { equipe }) => {
     return du;
   };
 
-  return `<section class="section section--marquee">
+  return `<section class="section" id="testeurs">
     <div class="section-tete">
-      <div class="section-marque">${marque('utilisateurs', 'bleu')}<div><h2>Testeurs</h2><p class="chapo">${gens.length ? pluriel(gens.length, 'personne au vivier', 'personnes au vivier') : 'Le vivier est vide.'}</p></div></div>
+      <div><h2>Testeurs</h2><p class="chapo">${gens.length ? pluriel(gens.length, 'personne au vivier', 'personnes au vivier') : 'Le vivier est vide.'}</p></div>
       <button class="btn btn-principal btn-petit" type="button" data-nouveau-testeur>${icone('plus')} Inscrire un testeur</button>
     </div>
     ${gens.length ? `<div class="liste">${gens.map((t) => {
@@ -448,18 +458,32 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
   });
 
   const ouvertes = ano.filter((a) => !['corrigee', 'sans-suite'].includes(a.statut)).length;
+  const enCours = camp.filter((c) => c.statut === 'en-cours').length;
 
-  return `
-  <div class="rang chiffres-tests">
-    <div class="chiffre"><span class="chiffre-valeur">${scen.length}</span><span class="chiffre-nom">scénarios</span></div>
-    <div class="chiffre"><span class="chiffre-valeur">${passages}</span><span class="chiffre-nom">passages mobiles</span></div>
-    <div class="chiffre"><span class="chiffre-valeur">${camp.filter((c) => c.statut === 'en-cours').length}</span><span class="chiffre-nom">campagnes en cours</span></div>
-    <div class="chiffre${ouvertes ? ' chiffre--alerte' : ''}"><span class="chiffre-valeur">${ouvertes}</span><span class="chiffre-nom">anomalies ouvertes</span></div>
-  </div>
+  /* Ce que chaque étage résume, calculé ici pour que la phrase et les
+     sections en dessous lisent les mêmes listes. */
+  const gens = equipe ? (d.testeurs || []).filter((t) => (t.projets || []).includes(pid)) : [];
+  const parc = (d.parcours || []).filter((x) => x.actif !== false && projetDe(x) === pid);
+  const regl = (d.regles || []).filter((x) => x.actif !== false && projetDe(x) === pid);
+  const casRegles = regl.reduce((n, x) => n + (Number(x.cas) || 0), 0);
+  const parcVerts = parc.filter((x) => x.etat === 'vert').length;
 
-  <section class="section section--marquee">
+  const humain = `${enCours ? `<b>${enCours}</b> ${enCours > 1 ? 'campagnes en cours' : 'campagne en cours'}` : `<b>${camp.length}</b> ${camp.length > 1 ? 'campagnes' : 'campagne'}, aucune en cours`}${equipe ? `, <b>${gens.length}</b> ${gens.length > 1 ? 'testeurs' : 'testeur'}` : ''}, <b>${ouvertes}</b> ${ouvertes > 1 ? 'anomalies ouvertes' : 'anomalie ouverte'}.`;
+  const machine = `<b>${parc.length}</b> parcours d'interface et <b>${casRegles}</b> cas de règles rejoués à chaque version${parc.length ? `, <b>${parcVerts}</b> ${parcVerts > 1 ? 'parcours au vert' : 'parcours au vert'}` : ''}.`;
+  const bibli = `<b>${scen.length}</b> scénarios en <b>${parBloc.length}</b> blocs, soit <b>${passages}</b> passages mobiles par campagne complète.`;
+
+  const index = [
+    ['campagnes', 'Campagnes', camp.length],
+    ...(ano.length ? [['anomalies', 'Anomalies', ano.length]] : []),
+    ...(equipe ? [['testeurs', 'Testeurs', gens.length]] : []),
+    ['parcours', 'Parcours', parc.length],
+    ['regles', 'Règles', casRegles],
+    ['scenarios', 'Scénarios', scen.length],
+  ];
+
+  const sectionCampagnes = `<section class="section" id="campagnes">
     <div class="section-tete">
-      <div class="section-marque">${marque('cible', 'ambre')}<div><h2>Campagnes</h2><p class="chapo">Une campagne pioche dans la bibliothèque : les mêmes scénarios sont rejoués d'une version à l'autre.</p></div></div>
+      <div><h2>Campagnes</h2><p class="chapo">Une campagne pioche dans la bibliothèque : les mêmes scénarios sont rejoués d'une version à l'autre.</p></div>
       ${equipe ? `<button class="btn btn-principal btn-petit" type="button" data-nouvelle-campagne="${echapper(pid)}">${icone('plus')} Nouvelle campagne</button>` : ''}
     </div>
     ${camp.length ? `<div class="liste">${camp.map((c) => ligne({
@@ -470,27 +494,21 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
       action: 'ouvrir-campagne', attrs: `data-id="${echapper(c.id)}"`,
     })).join('')}</div>`
     : vide({ icone: 'bug', titre: 'Aucune campagne', texte: 'Une campagne prend des scénarios, les distribue aux testeurs, et garde le résultat daté.', compact: true })}
-  </section>
+  </section>`;
 
-  ${ano.length ? `<section class="section section--marquee">
-    <div class="section-tete"><div class="section-marque">${marque('bug', 'rouge')}<div><h2>Anomalies</h2><p class="chapo">Plusieurs échecs sur le même scénario font une seule anomalie.</p></div></div></div>
+  const sectionAnomalies = ano.length ? `<section class="section" id="anomalies">
+    <div class="section-tete"><div><h2>Anomalies</h2><p class="chapo">Plusieurs échecs sur le même scénario font une seule anomalie.</p></div></div>
     <div class="liste">${ano.map((a) => ligne({
       icone: 'alerte', ton: (GRAVITES_ANOMALIE[a.gravite] || {}).voile === 'rouge' ? 'rouge' : (GRAVITES_ANOMALIE[a.gravite] || {}).voile === 'ambre' ? 'ambre' : '',
       titre: echapper(a.titre || 'Anomalie'),
       sous: `${(a.passages || []).length ? pluriel((a.passages || []).length, 'passage', 'passages') : ''}${(a.plateformes || []).length ? ` · ${echapper((a.plateformes || []).join(', '))}` : ''}`,
       fin: `${pastille(GRAVITES_ANOMALIE, a.gravite || 'mineur')}${pastille(STATUTS_ANOMALIE, a.statut || 'nouvelle')}`,
     })).join('')}</div>
-  </section>` : ''}
+  </section>` : '';
 
-  ${parcoursHtml(d, { pid, equipe })}
-
-  ${reglesHtml(d, { pid, equipe })}
-
-  ${equipe ? vivierHtml({ ...d, testeurs: (d.testeurs || []).filter((t) => (t.projets || []).includes(pid)) }, { equipe }) : ''}
-
-  <section class="section section--marquee">
+  const sectionScenarios = `<section class="section" id="scenarios">
     <div class="section-tete">
-      <div class="section-marque">${marque('liste', 'bleu')}<div><h2>Scénarios</h2><p class="chapo">La bibliothèque du projet${plateforme ? `, sur ${(PLATEFORMES_TEST[plateforme] || {}).libelle}` : ''}. ${scen.length ? pluriel(scen.length, 'scénario', 'scénarios') : 'Vide.'}</p></div></div>
+      <div><h2>Scénarios</h2><p class="chapo">La bibliothèque du projet${plateforme ? `, sur ${(PLATEFORMES_TEST[plateforme] || {}).libelle}` : ''}. ${scen.length ? pluriel(scen.length, 'scénario', 'scénarios') : 'Vide.'}</p></div>
       <button class="btn btn-secondaire btn-petit" type="button" data-plier-scenarios aria-expanded="false">${icone('deplier')} Voir la bibliothèque</button>
     </div>
     ${scen.length ? `
@@ -517,6 +535,26 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
     </div>`
     : vide({ icone: 'bug', titre: plateforme ? 'Aucun scénario sur cette plateforme' : 'Aucun scénario', texte: plateforme ? 'Changez de filtre, ou élargissez les plateformes de vos scénarios.' : 'Versez un plan de tests sur ce projet.', compact: true })}
   </section>`;
+
+  return `
+  <div class="rang chiffres-tests">
+    <div class="chiffre"><span class="chiffre-valeur">${scen.length}</span><span class="chiffre-nom">scénarios</span></div>
+    <div class="chiffre"><span class="chiffre-valeur">${passages}</span><span class="chiffre-nom">passages mobiles</span></div>
+    <div class="chiffre"><span class="chiffre-valeur">${enCours}</span><span class="chiffre-nom">campagnes en cours</span></div>
+    <div class="chiffre${ouvertes ? ' chiffre--alerte' : ''}"><span class="chiffre-valeur">${ouvertes}</span><span class="chiffre-nom">anomalies ouvertes</span></div>
+  </div>
+
+  <div class="tests-corps tests-corps--index">
+    <div>
+      ${etage('etage-humain', 'Tests humains', humain, `${sectionCampagnes}${sectionAnomalies}${equipe ? vivierHtml({ ...d, testeurs: gens }, { equipe }) : ''}`)}
+      ${etage('etage-machine', 'Tests automatisés', machine, `${parcoursHtml(d, { pid, equipe })}${reglesHtml(d, { pid, equipe })}`)}
+      ${etage('etage-bibli', 'Bibliothèque', bibli, sectionScenarios)}
+    </div>
+    <aside class="index-page" aria-label="Sur cette page">
+      <span class="etage-sur">Sur cette page</span>
+      ${index.map(([id, nom, n]) => `<button type="button" data-aller="${id}">${echapper(nom)}<b>${n}</b></button>`).join('')}
+    </aside>
+  </div>`;
 };
 
 /* Le plan de tests est écrit en markdown, et son gras porte du sens : il
@@ -926,14 +964,18 @@ export const vue = async (ctx, env) => {
 
       ${pid
         ? unProjet(d, { pid, nomProjet, plateforme: etat.plateforme, equipe: env.role === 'equipe' })
-        : `${alertes(d, { nomProjet, plateforme: etat.plateforme })}${avancement(d, { nomProjet, plateforme: etat.plateforme })}${parcoursHtml(d, { pid: '', equipe: env.role === 'equipe' })}${vivierHtml(d, { equipe: env.role === 'equipe' })}${activite(d, { nomProjet, plateforme: etat.plateforme })}`}
+        : `${alertes(d, { nomProjet, plateforme: etat.plateforme })}
+          ${etage('etage-projets', 'Projets', `<b>${d.projets.length}</b> ${d.projets.length > 1 ? 'projets' : 'projet'}, <b>${d.campagnes.filter((c) => c.statut === 'en-cours').length}</b> ${d.campagnes.filter((c) => c.statut === 'en-cours').length > 1 ? 'campagnes en cours' : 'campagne en cours'}.`, avancement(d, { nomProjet, plateforme: etat.plateforme }))}
+          ${etage('etage-machine', 'Tests automatisés', `<b>${(d.parcours || []).filter((x) => x.actif !== false).length}</b> parcours et <b>${(d.regles || []).reduce((n, x) => n + (x.actif !== false ? (Number(x.cas) || 0) : 0), 0)}</b> cas de règles, tous projets confondus.`, `${parcoursHtml(d, { pid: '', equipe: env.role === 'equipe' })}${reglesHtml(d, { pid: '', equipe: env.role === 'equipe' })}`)}
+          ${env.role === 'equipe' ? etage('etage-gens', 'Testeurs', `<b>${(d.testeurs || []).length}</b> ${(d.testeurs || []).length > 1 ? 'personnes au vivier' : 'personne au vivier'}.`, vivierHtml(d, { equipe: true })) : ''}
+          ${activite(d, { nomProjet, plateforme: etat.plateforme })}`}
     </div>`;
 
     const sel = sortie.querySelector('#f-projet');
     if (sel) sel.addEventListener('change', (e) => { etat.projet = e.target.value; poser({ projet: etat.projet, plateforme: etat.plateforme }); rendre(true); });
   };
 
-  const gestes = sur(sortie, 'click', '[data-plateforme], [data-scenario], [data-plier-scenarios], [data-plier-parcours], [data-plier-regles], [data-nouvelle-regle], [data-editer-regle], [data-nouvelle-campagne], [data-editer-campagne], [data-action="ouvrir-campagne"], [data-nouveau-testeur], [data-action="ouvrir-testeur"], [data-nouveau-parcours], [data-editer-parcours]', async (el) => {
+  const gestes = sur(sortie, 'click', '[data-aller], [data-plateforme], [data-scenario], [data-plier-scenarios], [data-plier-parcours], [data-plier-regles], [data-nouvelle-regle], [data-editer-regle], [data-nouvelle-campagne], [data-editer-campagne], [data-action="ouvrir-campagne"], [data-nouveau-testeur], [data-action="ouvrir-testeur"], [data-nouveau-parcours], [data-editer-parcours]', async (el) => {
     /* Une référence n'est unique qu'à l'intérieur d'un projet : deux plans
        de tests portent chacun leur « DI-15 ». Chercher sans le projet
        ouvrirait l'énoncé d'une autre application, sans rien dire. */
@@ -944,6 +986,13 @@ export const vue = async (ctx, env) => {
     }
     /* La bibliothèque se déplie sur demande : 173 lignes au-dessus des
        campagnes, c'est la campagne qu'on ne voit plus. */
+    /* L'index de page ne pose pas d'ancre dans l'adresse : le routeur y
+       verrait un changement de vue. On fait défiler, rien d'autre. */
+    if (el.dataset.aller) {
+      const cible = sortie.querySelector(`#${el.dataset.aller}`);
+      if (cible) cible.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
     if (el.hasAttribute('data-plier-scenarios')) {
       const boite = sortie.querySelector('#bibliotheque');
       if (!boite) return;
