@@ -8,7 +8,7 @@ import {
   echapper, dateISO, dateHeureISO, borner, enDate,
   TYPES_COMPOSANT, STATUTS_COMPOSANT, STATUTS_ETAPE, STATUTS_TACHE, PRIORITES, CATEGORIES_LIEN,
   STATUTS_RELEASE, TYPES_CHANGEMENT, TYPES_NOTE, TYPES_VALIDATION, CATEGORIES_FICHIER,
-  STATUTS_PROJET, TYPES_PROJET, SANTES, STATUTS, URGENCES, QUALIFICATIONS, PLATEFORMES_CHOIX, contactsProjet,
+  STATUTS_PROJET, TYPES_PROJET, SANTES, STATUTS, URGENCES, QUALIFICATIONS, PLATEFORMES_CHOIX, contactsProjet, statutProjet,
   MOTIFS_REPORT, nomAffiche, dateCourte,
   NIVEAUX_SCENARIO, BLOCS_SCENARIO, STATUTS_CAMPAGNE, PLATEFORMES_TEST, REF_SCENARIO,
   ETATS_PARCOURS, OUTILS_PARCOURS, FAMILLES_REGLE, ETATS_REGLE,
@@ -131,6 +131,16 @@ const releasesDe = (pid) => (magasin.lire(K.releases(pid)) || [])
 const devisDe = (pid) => Object.fromEntries((magasin.lire(K.documents(pid)) || []).concat(magasin.lire(K.documentsTous) || [])
   .filter((x, i, l) => x.type === 'devis' && x.projet === pid && l.findIndex((y) => y.id === x.id) === i)
   .map((x) => [x.id, { libelle: `${x.numero || 'Devis'} · ${x.libelle || ''}` }]));
+/* Une référence est unique DANS un projet. Le garde-fou anti-doublon lisait
+   la seule clé du projet, que la console de tests n'abonne jamais (elle lit
+   en groupe) : depuis la console, une référence déjà prise passait, et
+   l'écriture remplaçait la fiche entière, verdict et notes compris. On lit
+   donc les deux clés, comme la liste des scénarios le fait déjà. */
+const refsDuProjet = (pid, parProjet, globale) => new Set([
+  ...(magasin.lire(parProjet(pid)) || []),
+  ...(magasin.lire(globale) || []).filter((x) => (x.projet || x._parent) === pid),
+].map((x) => x.ref));
+
 const maintenanceDe = (pid) => (magasin.lire(K.maintenance(pid)) || []).concat(magasin.lire(K.maintenanceToute) || [])
   .filter((x, i, l) => (x.projet || x._parent) === pid && l.findIndex((y) => y.id === x.id) === i);
 const sequencesDe = (pid) => Object.fromEntries(maintenanceDe(pid).filter((x) => x.genre === 'sequence').map((x) => [x.id, { libelle: x.titre || 'Séquence' }]));
@@ -233,7 +243,11 @@ const editeurs = {
         <p class="aide">PNG, JPEG, WebP ou SVG, 2 Mo au maximum. Il remplace les initiales partout.</p>
       </div>
       ${champ('nom', 'Nom', fiche.nom)}
-      ${select('statut', 'Statut', STATUTS_PROJET, fiche.statut || 'en-cours')}
+      ${/* Les projets d'avant le Hub portent « actif », que « statutProjet »
+            traduit. Sans lui, le sélecteur ne trouvait aucune option, le
+            navigateur prenait la première (« brouillon »), et enregistrer
+            une description remettait le projet en préparation. */ ''}
+      ${select('statut', 'Statut', STATUTS_PROJET, statutProjet(fiche))}
       ${select('type', 'Type', TYPES_PROJET, fiche.type || 'application-mobile')}
       ${zone('description', 'Description', fiche.description, { facultatif: true, lignes: 3 })}
       <div class="groupe"><span class="etiquette-champ">Plateformes</span>${choixPlateformes('plateformes', fiche.plateformes || [])}</div>
@@ -614,7 +628,7 @@ const editeurs = {
       },
       enregistrer: async (d) => {
         const ref = fiche ? fiche.ref : String(d.ref || '').trim().toUpperCase();
-        if (!fiche && (magasin.lire(K.parcours(pid)) || []).some((x) => x.ref === ref)) {
+        if (!fiche && refsDuProjet(pid, K.parcours, K.parcoursTous).has(ref)) {
           toast(`${ref} existe déjà dans ce projet.`, 'erreur');
           return undefined;
         }
@@ -682,7 +696,7 @@ const editeurs = {
       },
       enregistrer: async (d) => {
         const ref = fiche ? fiche.ref : String(d.ref || '').trim().toUpperCase();
-        if (!fiche && (magasin.lire(K.regles(pid)) || []).some((x) => x.ref === ref)) {
+        if (!fiche && refsDuProjet(pid, K.regles, K.reglesToutes).has(ref)) {
           toast(`${ref} existe déjà dans ce projet.`, 'erreur');
           return undefined;
         }

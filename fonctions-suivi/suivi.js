@@ -66,12 +66,20 @@ const patienter = (ms) => new Promise((suite) => setTimeout(suite, ms));
  * assemblées à partir de champs facultatifs : on les nettoie avant l'écriture
  * plutôt que de multiplier les « || null » à l'appel.
  */
+/* Voir hub.js : une marque du serveur (date, incrément, union) est un objet
+   qu'il ne faut surtout pas parcourir, sous peine de l'écrire vide. */
+const marqueServeur = (v) => v instanceof Date
+  || (v && typeof v === 'object'
+      && (typeof v.toDate === 'function'
+          || typeof v.isEqual === 'function'
+          || v.constructor === undefined
+          || (v.constructor && v.constructor.name && v.constructor.name !== 'Object')));
+
 function sansIndefini(valeur) {
   if (Array.isArray(valeur)) {
     return valeur.map(sansIndefini).filter((v) => v !== undefined);
   }
-  if (valeur && typeof valeur === 'object'
-      && !(valeur instanceof Date) && typeof valeur.toDate !== 'function') {
+  if (valeur && typeof valeur === 'object' && !marqueServeur(valeur)) {
     const propre = {};
     for (const [clef, v] of Object.entries(valeur)) {
       const nettoye = sansIndefini(v);

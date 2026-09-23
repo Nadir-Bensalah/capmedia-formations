@@ -30,9 +30,24 @@ const EQUIPE_NOM = 'Équipe Capmedia';
 const normaliserEmail = (v) => String(v || '').trim().toLowerCase();
 const emailPlausible = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(normaliserEmail(v));
 
+/* Une valeur que Firestore doit recevoir telle quelle : la marque « date du
+   serveur », une suppression de champ, un incrément, une union de tableau.
+   Ce sont des objets, et les parcourir les remplace par un objet vide.
+
+   C'est exactement ce qui est arrivé : toute l'activité et toutes les
+   notifications ont été écrites avec « date: {} », donc sans date, et le
+   fil du client se triait au hasard. Un document déjà lu par Firestore
+   (Timestamp, GeoPoint, DocumentReference) porte les mêmes cicatrices. */
+const marqueServeur = (v) => v instanceof Date
+  || (v && typeof v === 'object'
+      && (typeof v.toDate === 'function'
+          || typeof v.isEqual === 'function'
+          || v.constructor === undefined
+          || (v.constructor && v.constructor.name && v.constructor.name !== 'Object')));
+
 function sansIndefini(valeur) {
   if (Array.isArray(valeur)) return valeur.map(sansIndefini).filter((v) => v !== undefined);
-  if (valeur && typeof valeur === 'object' && !(valeur instanceof Date) && typeof valeur.toDate !== 'function') {
+  if (valeur && typeof valeur === 'object' && !marqueServeur(valeur)) {
     const propre = {};
     for (const [k, v] of Object.entries(valeur)) { const n = sansIndefini(v); if (n !== undefined) propre[k] = n; }
     return propre;

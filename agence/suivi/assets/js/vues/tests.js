@@ -1046,9 +1046,12 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, nommer }) => {
   const doubles = dedans.filter((s) => (NIVEAUX_SCENARIO[s.niveau] || {}).double).length;
 
   const affectation = c.affectation || {};
+  /* Le nom passe par le nommeur : prénom pour l'équipe, « Testeur N » pour
+     le client, le même numéro que partout ailleurs sur la page. Sans lui,
+     le client lisait l'identifiant Firebase, vingt-huit caractères. */
   const charges = (c.testeurs || []).map((id) => {
     const t = vivier.find((x) => x.id === id) || { id };
-    return { id, nom: t.prenom || t.email || id, mobile: t.mobile || '', n: (affectation[id] || []).length };
+    return { id, nom: nommer(id).nom, mobile: t.mobile || '', n: (affectation[id] || []).length };
   });
 
   const m = modale({

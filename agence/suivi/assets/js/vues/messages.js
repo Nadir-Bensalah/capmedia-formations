@@ -38,6 +38,12 @@ export const vue = async (ctx, env) => {
     if (!magasin.chargee(K.projets) && !liste.length) return;
     liste.forEach((p) => abonnerMessages(p.id));
     if (!pid && liste[0]) pid = liste[0].id;
+    /* Une adresse peut désigner un projet archivé, fermé, ou qui n'a jamais
+       été le sien : un lien de notification, un vieux favori. Lire son nom
+       sans vérifier faisait tomber la vue entière sur « Cette page n'a pas
+       pu s'ouvrir », sans autre issue que recharger. On retombe donc sur la
+       première conversation. */
+    if (pid && !liste.some((p) => p.id === pid) && liste[0]) pid = liste[0].id;
     const profil = magasin.lire(K.profil);
     const courant = liste.find((p) => p.id === pid);
     const messages = courant ? (magasin.lire(K.messages(pid)) || []) : [];

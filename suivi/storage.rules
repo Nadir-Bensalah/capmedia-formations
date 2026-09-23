@@ -68,10 +68,27 @@ service firebase.storage {
       allow delete: if estEquipe();
     }
 
+    // Les preuves d'un testeur : une capture, une vidéo courte, jointe à un
+    // passage. Le testeur écrit dans SON dossier et nulle part ailleurs ;
+    // l'équipe et le client du projet les lisent, puisque la fiche d'une
+    // anomalie les montre.
+    //
+    // Sans cette règle, le dossier tombait dans le « refus général » de la
+    // fin : l'envoi échouait, et comme les règles Firestore exigent une
+    // preuve pour un KO, aucun échec ne pouvait être consigné.
+    match /campagnes/{projetId}/{campagneId}/{uid}/{fichier=**} {
+      allow read:   if estEquipe() || surSonProjet(projetId);
+      allow write:  if request.auth != null
+                    && request.auth.uid == uid
+                    && request.auth.token.testeur == true
+                    && fichierAccepte();
+      allow delete: if estEquipe();
+    }
+
     // Une demande de nouveau projet : le demandeur dépose dans son dossier, l'équipe lit.
     match /preprojets/{uid}/{fichier=**} {
       allow read:   if estEquipe() || (request.auth != null && request.auth.uid == uid);
-      allow write:  if request.auth != null && request.auth.uid == uid && fichierAccepte();
+      allow write:  if (estEquipe() || (request.auth != null && request.auth.uid == uid)) && fichierAccepte();
       allow delete: if estEquipe();
     }
 

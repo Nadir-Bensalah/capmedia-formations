@@ -285,8 +285,17 @@ async function verifierCode(req, res) {
 
      On la retire aussi quand elle n'a plus lieu d'être : un testeur sorti
      du vivier garderait sinon son accès jusqu'à sa prochaine connexion. */
+  /* setCustomUserClaims REMPLACE la totalité des revendications. Poser
+     « testeur » seul effaçait donc « equipe » et « projets », les deux que
+     lisent les règles de stockage : après chaque connexion, déposer une
+     capture dans une demande ou joindre un PDF à un devis était refusé,
+     sans le moindre message. On relit donc ce qui existe, et on ne touche
+     qu'à « testeur ». */
   try {
-    await getAuth().setCustomUserClaims(verdict.uid, verdict.testeur ? { testeur: true } : {});
+    const compte = await getAuth().getUser(verdict.uid);
+    const gardees = { ...(compte.customClaims || {}) };
+    delete gardees.testeur;
+    await getAuth().setCustomUserClaims(verdict.uid, verdict.testeur ? { ...gardees, testeur: true } : gardees);
   } catch (err) {
     console.error('Revendication non posée', err);
     await audit('connexion.revendication-impossible', { email, uid: verdict.uid });

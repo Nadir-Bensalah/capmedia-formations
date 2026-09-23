@@ -352,7 +352,9 @@ const texteEvenement = (e, nomEquipe) => {
   const par = (e.par && e.par.nom) || 'Capmedia';
   if (e.type === 'creation') return `Demande créée par <strong>${echapper(par)}</strong>`;
   if (e.type === 'statut') return `Statut passé de <strong>${echapper((STATUTS[e.avant] || {}).libelle || e.avant || '')}</strong> à <strong>${echapper((STATUTS[e.apres] || {}).libelle || e.apres || '')}</strong> par ${echapper(par)}`;
-  if (e.type === 'assignation') return `Confiée à <strong>${echapper(e.apres || nomEquipe(e.apres) || '')}</strong>`;
+  /* Le champ porte un identifiant : on cherche le nom AVANT de se rabattre
+     dessus, faute de quoi le client lit un code Firebase. */
+  if (e.type === 'assignation') return `Confiée à <strong>${echapper(nomEquipe(e.apres) || 'Capmedia')}</strong>`;
   if (e.type === 'urgence') return `Urgence passée à <strong>${echapper((URGENCES[e.apres] || {}).libelle || e.apres || '')}</strong>`;
   if (e.type === 'qualification') return `Qualifiée <strong>${echapper((QUALIFICATIONS[e.apres] || {}).libelle || e.apres || '')}</strong>`;
   if (e.type === 'archive') return e.apres ? 'Archivée' : 'Sortie des archives';
