@@ -32,7 +32,7 @@ import { bdd, collection } from '../noyau.js';
 import { editer } from './editeurs.js';
 import { appelServeur } from '../serveur.js';
 import { filAriane } from '../coquille.js';
-import { ongletsTests } from './tableau.js';
+import { monter as monterTableau } from './tableau.js';
 
 /* La mémoire des filtres tient dans l'adresse, pas dans le stockage : un
    lien vers « les anomalies Android de ForgeMe » doit pouvoir se coller
@@ -695,6 +695,8 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
     <div class="chiffre${ouvertes ? ' chiffre--alerte' : ''}"><span class="chiffre-valeur">${ouvertes}</span><span class="chiffre-nom">anomalies ouvertes</span></div>
   </div>
 
+  <div id="tableau-ici"></div>
+
   <div class="tests-corps tests-corps--index">
     <div>
       ${alertes({ ...d, anomalies: ano, campagnes: camp, parcours: parc, scenarios: scen }, { nomProjet, plateforme })}
@@ -1168,7 +1170,7 @@ export const vue = async (ctx, env) => {
   const lot = magasin.lot();
   const sortie = ctx.sortie;
   titrePage('Tests');
-  filAriane([{ libelle: 'Tests', chemin: '/tests/tableau' }, { libelle: 'Détail' }]);
+  filAriane([{ libelle: 'Tests' }]);
   sortie.innerHTML = `<div class="page">${squelette('page', 5)}</div>`;
 
   const etat = {
@@ -1184,6 +1186,9 @@ export const vue = async (ctx, env) => {
   /* Les avis et les passages du projet ouvert, campagne par campagne :
      abonnés quand la campagne apparaît, et comptés dans l'empreinte, sans
      quoi une réponse qui arrive ne redessinerait rien. */
+  const boiteTableau = document.createElement('div');
+  let tableau = null;
+  let pidTableau = null;
   const campagnesSuivies = new Set();
   const clesSuivies = () => [
     ...(env.role === 'equipe'
@@ -1236,7 +1241,6 @@ export const vue = async (ctx, env) => {
           <p class="chapo">${pid ? echapper(nomProjet(pid)) : `${pluriel(d.projets.length, 'projet', 'projets')}, ${pluriel(d.scenarios.filter((s) => s.actif !== false).length, 'scénario', 'scénarios')}`}</p>
         </div>
       </header>
-      ${ongletsTests('detail', pid)}
 
       <div class="rang barre-tests">
         ${!seul ? `<select class="select" id="f-projet" style="width:auto">
@@ -1251,12 +1255,24 @@ export const vue = async (ctx, env) => {
 
       ${pid
         ? unProjet(d, { pid, nomProjet, plateforme: etat.plateforme, equipe: env.role === 'equipe' })
-        : `${alertes(d, { nomProjet, plateforme: etat.plateforme })}
+        : `<div id="tableau-ici"></div>
+          ${alertes(d, { nomProjet, plateforme: etat.plateforme })}
           ${etage('etage-projets', 'Projets', `<b>${d.projets.length}</b> ${d.projets.length > 1 ? 'projets' : 'projet'}, <b>${d.campagnes.filter((c) => c.statut === 'en-cours').length}</b> ${d.campagnes.filter((c) => c.statut === 'en-cours').length > 1 ? 'campagnes en cours' : 'campagne en cours'}.`, avancement(d, { nomProjet, plateforme: etat.plateforme }))}
           ${etage('etage-machine', 'Tests automatisés', `<b>${(d.parcours || []).filter((x) => x.actif !== false).length}</b> parcours et <b>${(d.regles || []).reduce((n, x) => n + (x.actif !== false ? (Number(x.cas) || 0) : 0), 0)}</b> cas de règles, tous projets confondus.`, `${parcoursHtml(d, { pid: '', equipe: env.role === 'equipe' })}${reglesHtml(d, { pid: '', equipe: env.role === 'equipe' })}`)}
           ${env.role === 'equipe' ? etage('etage-gens', 'Testeurs', `<b>${(d.testeurs || []).length}</b> ${(d.testeurs || []).length > 1 ? 'personnes au vivier' : 'personne au vivier'}.`, vivierHtml(d, { equipe: true })) : ''}
           ${activite(d, { nomProjet, plateforme: etat.plateforme })}`}
     </div>`;
+
+    /* Le tableau des tests : une section qui garde son élément, ses
+       écoutes et son état (déplié ou non) quand la page se redessine. On
+       la raccroche à sa place à chaque rendu. */
+    const ici = sortie.querySelector('#tableau-ici');
+    if (ici) {
+      ici.replaceWith(boiteTableau);
+      if (!tableau) tableau = monterTableau(boiteTableau, env, { projet: projetCourant, plateforme: () => etat.plateforme });
+      else if (`${pid}|${etat.plateforme}` !== pidTableau) tableau.rafraichir();
+      pidTableau = `${pid}|${etat.plateforme}`;
+    }
 
     const sel = sortie.querySelector('#f-projet');
     if (sel) sel.addEventListener('change', (e) => { etat.projet = e.target.value; poser({ projet: etat.projet, plateforme: etat.plateforme }); rendre(true); });
@@ -1388,5 +1404,5 @@ export const vue = async (ctx, env) => {
   suivre();
   rendre(true);
 
-  return () => { gestes(); lot.fin(); };
+  return () => { gestes(); lot.fin(); if (tableau) tableau.fin(); };
 };

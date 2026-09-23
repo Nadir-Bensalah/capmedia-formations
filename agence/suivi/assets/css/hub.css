@@ -2327,5 +2327,22 @@ input, select, textarea { font: inherit; color: inherit; }
   .tb-case--vivante::before { animation: none; }
 }
 
-/* Les deux onglets de Tests : Tableau, puis Détail. */
-.onglets-tests { margin: 0 0 var(--e-5); }
+/* La section du tableau, sous les quatre chiffres de Tests : l'avancement
+   se lit replié, le tableau entier se déploie d'un geste. */
+.tb-section { margin: var(--e-5) 0 var(--e-6); }
+.tb-section:empty { display: none; }
+.tb-resume { gap: 18px; }
+.tb-ligne { display: grid; gap: 10px; }
+.tb-ligne-tete { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
+.tb-ligne-nom { display: block; font: 600 15px/1.3 var(--police); }
+.tb-ligne-meta { display: block; font: var(--t-petit); color: var(--encre-3); margin-top: 2px; }
+.tb-ligne-pc { font: 700 28px/1 var(--police); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tb-ligne-pc small { font-size: 15px; color: var(--encre-3); font-weight: 600; }
+.tb-deplier { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px 16px; border: 1px solid var(--trait); border-radius: 14px;
+  background: var(--fond-2); color: var(--encre); font: 500 14px/1.3 var(--police); cursor: pointer; transition: background var(--vite); }
+.tb-deplier:hover { background: var(--fond-3); }
+.tb-deplier:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tb-deplier svg { width: 16px; height: 16px; }
+/* Le chevron pointe vers ce qui va s'ouvrir, et se retourne une fois ouvert. */
+.tb-deplier svg { transition: transform var(--vite); }
+.tb-deplier[aria-expanded="true"] svg { transform: rotate(180deg); }

@@ -15,7 +15,11 @@
      testeurs sont numérotés, et les données de présence lui sont fermées
      par les règles, pas par cet écran : un affichage ne protège rien.
 
-   Ce module s'ajoute à la console de tests, il ne la remplace pas.
+   Ce n'est pas une page : c'est une section de la page Tests, sous les
+   quatre chiffres. Repliée, elle montre l'avancement (deux barres, qui est
+   là, ce qui tourne) ; dépliée, tout le tableau. La page Tests se redessine
+   souvent : la section garde son propre élément, que la page raccroche à
+   chaque fois, et ses propres écoutes.
    ========================================================================== */
 
 import {
@@ -24,44 +28,27 @@ import {
   GRAVITES_ANOMALIE, STATUTS_ANOMALIE, OUTILS_PARCOURS, RESULTATS_PASSAGE,
   bdd, collection, query, orderBy, limit, doc, getDoc,
 } from '../noyau.js';
-import { icone, pastille, vide, squelette, titrePage, sur, modale, agir, brancherPieces, copier } from '../ui.js';
+import { icone, pastille, vide, sur, modale, agir, brancherPieces, copier } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K } from '../donnees.js';
-import { filAriane } from '../coquille.js';
 import { editer } from './editeurs.js';
 import { nommeur } from './tests.js';
 import { appelServeur, URL_SUIVI } from '../serveur.js';
 import { tableauHumain, tableauMachine, rythme, ETATS_CASE } from '../verdicts.js';
-import { enteteHtml, famillesHtml } from '../grille.js';
+import { barreHtml, famillesHtml } from '../grille.js';
 
 /* Un testeur est « là » si son dernier signe a moins de 75 secondes : il
    en envoie un toutes les 30, et un réseau lent en perd un. */
 const PRESENT_MS = 75000;
 
-const lire = (ctx, cle, defaut = '') => (ctx.requete && ctx.requete[cle]) || defaut;
-const poser = (cles) => {
-  const p = new URLSearchParams(location.hash.split('?')[1] || '');
-  Object.entries(cles).forEach(([k, v]) => { if (v) p.set(k, v); else p.delete(k); });
-  const chaine = p.toString();
-  history.replaceState(null, '', `#/tests/tableau${chaine ? `?${chaine}` : ''}`);
-};
 
 const projetDe = (x) => x.projet || x._parent || '';
 
-/* Les deux onglets de Tests : le tableau d'abord, la console en détail.
-   Le projet choisi suit d'un onglet à l'autre. */
-export const ongletsTests = (courant, projet = '') => {
-  const q = projet ? `?projet=${encodeURIComponent(projet)}` : '';
-  return `<div class="segments onglets-tests" role="tablist" aria-label="Tests">
-    <a href="#/tests/tableau${q}" role="tab" aria-selected="${courant === 'tableau'}"${courant === 'tableau' ? ' class="actif"' : ''}>Tableau</a>
-    <a href="#/tests${q}" role="tab" aria-selected="${courant === 'detail'}"${courant === 'detail' ? ' class="actif"' : ''}>Détail</a>
-  </div>`;
-};
-
-/* L'ancienne adresse du tableau, gardée pour les liens déjà partagés. */
+/* Les anciennes adresses du tableau, gardées pour les liens déjà
+   partagés : elles mènent à Tests, où le tableau vit désormais. */
 export const ancienne = (ctx) => {
-  const q = new URLSearchParams(ctx.requete || {}).toString();
-  history.replaceState(null, '', `#/tests/tableau${q ? `?${q}` : ''}`);
+  const projet = (ctx.requete || {}).projet;
+  history.replaceState(null, '', `#/tests${projet ? `?projet=${encodeURIComponent(projet)}` : ''}`);
   window.dispatchEvent(new HashChangeEvent('hashchange'));
   return () => {};
 };
@@ -98,20 +85,27 @@ const pourquoi = (c) => {
   }
 };
 
-export const vue = async (ctx, env) => {
+const CLE_DEPLIE = 'suivi:tableau-deplie';
+/* Changer un filtre de la page Tests la remonte entièrement : la campagne
+   et la voie choisies survivent ici, le temps de la visite. */
+const memoire = { campagne: '', voie: 'humains' };
+const lireDeplie = () => { try { return localStorage.getItem(CLE_DEPLIE) === '1'; } catch (e) { return false; } };
+
+/**
+ * Monte la section dans `boite`. `projet()` rend le projet choisi sur la
+ * page Tests ('' pour tous : la section prend alors celui qui a une
+ * campagne en cours). Rend la fonction de démontage.
+ */
+export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme: plateformeChoisie = () => '' } = {}) => {
   const equipe = env.role === 'equipe';
   const lot = magasin.lot();
-  const sortie = ctx.sortie;
-  titrePage('Tests');
-  filAriane([{ libelle: 'Tests', chemin: '/tests/tableau' }, { libelle: 'Tableau' }]);
-  sortie.innerHTML = `<div class="page">${squelette('page', 4)}</div>`;
+  const sortie = boite;
+  boite.classList.add('tb-section');
 
-  const etat = {
-    projet: lire(ctx, 'projet'),
-    campagne: lire(ctx, 'campagne'),
-    voie: lire(ctx, 'voie', 'humains'),
-    plateforme: lire(ctx, 'plateforme'),
-  };
+  /* La plateforme n'est pas un choix de la section : c'est le filtre de
+     la page Tests, en haut, qui vaut pour tout ce qu'elle montre. */
+  const etat = { campagne: memoire.campagne, voie: memoire.voie, deplie: lireDeplie() };
+  Object.defineProperty(etat, 'plateforme', { get: () => plateformeChoisie() || '', enumerable: true });
 
   /* La présence et les robots ne s'ouvrent qu'à l'équipe : les règles
      refuseraient la lecture à un client. */
@@ -142,7 +136,8 @@ export const vue = async (ctx, env) => {
      en cours, sinon le premier qui a des tests. */
   const projetCourant = (d) => {
     const avecTests = d.projets.filter((p) => d.scenarios.some((s) => projetDe(s) === p.id) || d.parcours.some((x) => projetDe(x) === p.id));
-    if (etat.projet && avecTests.some((p) => p.id === etat.projet)) return { pid: etat.projet, avecTests };
+    const choisi = projetChoisi();
+    if (choisi) return { pid: avecTests.some((p) => p.id === choisi) ? choisi : '', avecTests };
     const enCours = avecTests.find((p) => d.campagnes.some((c) => projetDe(c) === p.id && c.statut === 'en-cours'));
     return { pid: (enCours || avecTests[0] || {}).id || '', avecTests };
   };
@@ -185,93 +180,108 @@ export const vue = async (ctx, env) => {
 
     /* La présence vieillit sans que rien ne change en base : l'horloge
        redessine, et l'empreinte doit donc compter la minute. */
-    const sceau = `${magasin.empreinte(cles())}|${JSON.stringify(etat)}|${pid}|${equipe ? Math.floor(Date.now() / 15000) : ''}|${(d.presences || []).map((p) => `${p.id}${p.scenario || ''}${p.enLigne}${(enDate(p.vu) || 0).valueOf()}`).join(',')}`;
+    const sceau = `${magasin.empreinte(cles())}|${JSON.stringify(etat)}|${pid}|${boite.isConnected}|${equipe ? Math.floor(Date.now() / 15000) : ''}|${(d.presences || []).map((p) => `${p.id}${p.scenario || ''}${p.enLigne}${(enDate(p.vu) || 0).valueOf()}`).join(',')}`;
     if (!force && sceau === empreinte) return;
     empreinte = sceau;
 
-    if (!avecTests.length) {
-      sortie.innerHTML = `<div class="page"><header class="page-tete"><div><h1>Tests</h1></div></header>${ongletsTests('tableau')}
-        ${vide({ icone: 'kanban', titre: 'Aucun test pour l\'instant', texte: equipe ? 'Importez des scénarios ou des parcours dans un projet : ils apparaîtront ici, famille par famille.' : 'Quand les tests de votre application commenceront, vous suivrez ici chaque résultat en direct.' })}</div>`;
-      return;
-    }
+    if (!pid) { sortie.innerHTML = ''; dernier = null; return; }
 
-    const controles = `<div class="rang">
-        ${avecTests.length > 1 ? `<select class="select" id="tb-projet" style="width:auto" aria-label="Projet">${avecTests.map((p) => `<option value="${echapper(p.id)}"${p.id === pid ? ' selected' : ''}>${echapper(p.nom)}</option>`).join('')}</select>` : ''}
+    const nom = (d.projets.find((p) => p.id === pid) || {}).nom || '';
+    const passages = campagne ? (magasin.lire(K.passages(campagne.id)) || []) : [];
+    const th = campagne ? tableauHumain({
+      scenarios: d.scenarios.filter((s) => projetDe(s) === pid), campagne, passages,
+      anomalies: d.anomalies.filter((a) => projetDe(a) === pid), blocs: BLOCS_SCENARIO, trous: equipe,
+    }) : null;
+    const tm = tableauMachine({
+      parcours: d.parcours.filter((x) => projetDe(x) === pid), regles: d.regles.filter((x) => projetDe(x) === pid),
+      scenarios: d.scenarios.filter((s) => projetDe(s) === pid), blocs: BLOCS_SCENARIO, outils: OUTILS_PARCOURS,
+    });
+
+    /* Le rythme de la campagne, en mots. */
+    const r = campagne ? rythme({ debut: enDate(campagne.debut), fin: enDate(campagne.fin), faits: th.faits, attendus: th.attendus }) : null;
+    const datesFausses = campagne && enDate(campagne.debut) && enDate(campagne.fin) && enDate(campagne.fin) < enDate(campagne.debut);
+    const metaHumain = campagne ? [
+      echapper(campagne.titre || 'Campagne'),
+      (STATUTS_CAMPAGNE[campagne.statut] || {}).libelle || '',
+      `${th.faits} passages sur ${th.attendus}`,
+      r && r.avant ? `commence dans ${pluriel(r.avant, 'jour', 'jours')}` : '',
+      r && !r.avant ? `jour ${r.jour} sur ${r.jours}` : '',
+      r && !r.avant && r.reste !== null && r.reste > 0 ? `reste ≈ ${r.reste} j au rythme actuel` : '',
+      equipe && datesFausses ? '<span class="tb-rouge">dates de campagne inversées</span>' : '',
+    ].filter(Boolean).join(' · ') : 'Aucune campagne pour ce projet';
+
+    const derniers = d.parcours.filter((x) => projetDe(x) === pid).map((x) => enDate((x.dernier || {}).le)).filter(Boolean).sort((a, b) => b - a);
+    const metaMachine = tm.total
+      ? [`${tm.compte.ok} au vert sur ${tm.total}`, tm.tournent ? `<span class="tb-bleu">${pluriel(tm.tournent, 'test', 'tests')} en exécution</span>` : '', derniers.length ? `dernier résultat ${echapper(depuis(derniers[0]))}` : 'jamais exécutés'].filter(Boolean).join(' · ')
+      : 'Aucun test automatisé déclaré';
+
+    const ligneResume = (nomLigne, meta, t, pc) => `<div class="tb-ligne">
+      <div class="tb-ligne-tete">
+        <div><span class="tb-ligne-nom">${nomLigne}</span><span class="tb-ligne-meta">${meta}</span></div>
+        <b class="tb-ligne-pc">${pc}<small> %</small></b>
+      </div>
+      ${t && t.total ? barreHtml(t) : '<div class="tb-barre"></div>'}
+    </div>`;
+
+    const maintenant = Date.now();
+    const nommer = nommeur(d, { equipe, pid });
+    const presents = equipe && campagne ? d.presences.filter((p) => estLa(p, maintenant) && p.campagne === campagne.id) : [];
+    const execs = equipe ? (magasin.lire(K.executions(pid)) || []) : [];
+    const execEnCours = execs.find((e) => e.statut === 'en-cours');
+    const direct = `<div class="tb-direct" aria-live="polite">${presents.map((p) => {
+      const qui = nommer(p.id).nom;
+      const sc = p.scenario ? d.scenarios.find((x) => x.ref === p.scenario && projetDe(x) === pid) : null;
+      return `<button type="button" class="tb-present" data-personne="${echapper(p.id)}"><i></i>${echapper(qui)}<span>${p.plateforme ? `${echapper((PLATEFORMES_TEST[p.plateforme] || {}).court || p.plateforme)} · ` : ''}${sc ? `sur ${echapper(sc.ref)}` : 'sur son tableau'} · là depuis ${duree(maintenant - (enDate(p.debut) || new Date()).getTime())}</span></button>`;
+    }).join('')}${tm.tournent ? `<span class="tb-present" role="status"><i style="background:var(--case-cours)"></i>Exécution en cours<span>${equipe && execEnCours
+      ? `${echapper((OUTILS_PARCOURS[execEnCours.outil] || {}).court || execEnCours.outil)}${execEnCours.plateforme ? ` · ${echapper(execEnCours.plateforme)}` : ''}${execEnCours.branche ? ` · ${echapper(execEnCours.branche)}` : ''}${execEnCours.commit ? `@${echapper(execEnCours.commit.slice(0, 8))}` : ''} · ${execEnCours.faits || 0}/${execEnCours.total || 0} rendus · ${echapper(depuis(execEnCours.debut))}`
+      : `${pluriel(tm.tournent, 'test', 'tests')} en cours`}</span></span>` : ''}</div>`;
+
+    const pcHumain = th ? Math.round((th.faits / (th.attendus || 1)) * 100) : 0;
+    const pcMachine = Math.round((tm.compte.ok / (tm.total || 1)) * 100);
+    const combien = `${th ? pluriel(th.total, 'scénario', 'scénarios') : ''}${th && tm.total ? ' et ' : ''}${tm.total ? pluriel(tm.total, 'test automatisé', 'tests automatisés') : ''}`;
+
+    const controles = `<div class="tb-controles">
+      <div class="rang">
         <div class="segments" role="group" aria-label="Voie">
           <button type="button" data-voie="humains" aria-pressed="${etat.voie !== 'machine'}">Tests humains</button>
           <button type="button" data-voie="machine" aria-pressed="${etat.voie === 'machine'}">Tests automatisés</button>
         </div>
         ${etat.voie !== 'machine' && camps.length > 1 ? `<select class="select" id="tb-campagne" style="width:auto" aria-label="Campagne">${camps.map((c) => `<option value="${echapper(c.id)}"${campagne && c.id === campagne.id ? ' selected' : ''}>${echapper(c.titre || 'Campagne')} · ${echapper((STATUTS_CAMPAGNE[c.statut] || {}).libelle || '')}</option>`).join('')}</select>` : ''}
       </div>
-      ${etat.voie !== 'machine' ? `<div class="segments" role="group" aria-label="Plateforme">
-        <button type="button" data-plateforme="" aria-pressed="${!etat.plateforme}">Toutes</button>
-        ${Object.entries(PLATEFORMES_TEST).map(([cle, f]) => `<button type="button" data-plateforme="${cle}" aria-pressed="${etat.plateforme === cle}">${echapper(f.libelle)}</button>`).join('')}
-      </div>` : ''}`;
+    </div>`;
 
-    const corps = etat.voie === 'machine'
-      ? voieMachine(d, pid, controles)
-      : voieHumains(d, pid, campagne, controles);
-    sortie.innerHTML = `<div class="page">
-      <header class="page-tete"><div><h1>Tests</h1></div></header>
-      ${ongletsTests('tableau', pid)}
-      <div class="tb${etat.voie === 'machine' ? ' tb--machine' : ''}">${corps}</div></div>`;
+    sortie.innerHTML = `<div class="tb${etat.voie === 'machine' ? ' tb--machine' : ''}">
+      <div class="tb-tete tb-resume">
+        <div class="tb-resume-tete">
+          <div><p class="surtitre">Tableau des tests${projetChoisi() ? '' : ` · ${echapper(nom)}`}</p><h2 class="tb-titre">Avancement</h2></div>
+        </div>
+        ${ligneResume('Tests humains', metaHumain, th, pcHumain)}
+        ${ligneResume('Tests automatisés', metaMachine, tm, pcMachine)}
+        ${direct}
+        <button type="button" class="tb-deplier" data-deplier aria-expanded="${etat.deplie}">${icone('chevron')} ${etat.deplie ? 'Replier le tableau' : `Déployer le tableau${combien ? ` · ${combien}` : ''}`}</button>
+      </div>
+      ${etat.deplie ? `${controles}${etat.voie === 'machine' ? voieMachine(d, pid, tm, execs) : voieHumains(d, pid, campagne, th, passages, nommer, maintenant, presents)}` : ''}
+    </div>`;
     dernier = { d, pid, campagne };
 
-    const sel = sortie.querySelector('#tb-projet');
-    if (sel) sel.addEventListener('change', (e) => { etat.projet = e.target.value; etat.campagne = ''; poser(etat); rendre(true); });
     const selC = sortie.querySelector('#tb-campagne');
-    if (selC) selC.addEventListener('change', (e) => { etat.campagne = e.target.value; poser(etat); rendre(true); });
+    if (selC) selC.addEventListener('change', (e) => { etat.campagne = e.target.value; memoire.campagne = etat.campagne; rendre(true); });
   };
 
   /* ------------------------------------------------------------------------
      Les tests humains
      ------------------------------------------------------------------------ */
-  const voieHumains = (d, pid, campagne, controles) => {
+  const voieHumains = (d, pid, campagne, thToutes, passages, nommer, maintenant, presents) => {
     if (!campagne) {
-      return `${enteteHtml({ titre: 'Aucune campagne', meta: 'Une campagne prend des scénarios, les répartit entre les testeurs, et garde le résultat daté.', pourcent: 0, tableau: { ordre: [], compte: {}, total: 0 }, controles })}
-        ${equipe ? `<p class="aide">Créez-la depuis <a href="#/tests?projet=${encodeURIComponent(pid)}">la console de tests</a>.</p>` : ''}`;
+      return `<p class="aide">Aucune campagne pour ce projet.${equipe ? ' Créez-la dans la section Campagnes ci-dessous.' : ''}</p>`;
     }
-    const passages = magasin.lire(K.passages(campagne.id)) || [];
-    const t = tableauHumain({
+    const t = etat.plateforme ? tableauHumain({
       scenarios: d.scenarios.filter((s) => projetDe(s) === pid), campagne, passages,
       anomalies: d.anomalies.filter((a) => projetDe(a) === pid), plateforme: etat.plateforme,
       blocs: BLOCS_SCENARIO, trous: equipe,
-    });
-
-    /* Qui est là, sur quoi. L'équipe seule : d.presences est vide chez le
-       client, les règles la lui refusent. */
-    const maintenant = Date.now();
-    const presents = equipe ? d.presences.filter((p) => estLa(p, maintenant) && p.campagne === campagne.id) : [];
+    }) : thToutes;
     const vivants = new Set(presents.map((p) => p.scenario).filter(Boolean));
-    const nommer = nommeur(d, { equipe, pid });
-
-    const r = rythme({ debut: enDate(campagne.debut), fin: enDate(campagne.fin), faits: t.faits, attendus: t.attendus });
-    const datesFausses = enDate(campagne.debut) && enDate(campagne.fin) && enDate(campagne.fin) < enDate(campagne.debut);
-    const sous = [
-      etat.plateforme ? `filtré sur ${(PLATEFORMES_TEST[etat.plateforme] || {}).libelle}` : `${t.faits} passages sur ${t.attendus}`,
-      r && r.avant ? `commence dans ${pluriel(r.avant, 'jour', 'jours')}` : '',
-      r && !r.avant ? `jour ${r.jour} sur ${r.jours}` : '',
-      r && !r.avant && r.reste !== null && r.reste > 0 ? `reste ≈ ${r.reste} j au rythme actuel` : '',
-      equipe && datesFausses ? 'dates de campagne inversées' : '',
-    ].filter(Boolean).join(' · ');
-
-    const direct = equipe ? `<div class="tb-direct" aria-live="polite">${presents.map((p) => {
-      const qui = nommer(p.id).nom;
-      const s = p.scenario ? d.scenarios.find((x) => x.ref === p.scenario && projetDe(x) === pid) : null;
-      return `<button type="button" class="tb-present" data-personne="${echapper(p.id)}"><i></i>${echapper(qui)}<span>${p.plateforme ? `${echapper((PLATEFORMES_TEST[p.plateforme] || {}).court || p.plateforme)} · ` : ''}${s ? `sur ${echapper(s.ref)}` : 'sur son tableau'} · là depuis ${duree(maintenant - (enDate(p.debut) || new Date()).getTime())}</span></button>`;
-    }).join('')}</div>` : '';
-
-    const pourcent = etat.plateforme
-      ? Math.round(((t.compte.ok + t.compte.fragile + t.compte.casse + t.compte.na) / (t.total || 1)) * 100)
-      : Math.round((t.faits / (t.attendus || 1)) * 100);
-
-    return `${enteteHtml({
-      surtitre: equipe ? 'Capmedia Cockpit' : 'Capmedia Hub',
-      titre: campagne.titre || 'Campagne',
-      meta: `${(STATUTS_CAMPAGNE[campagne.statut] || {}).libelle || ''} · ${pluriel(t.total, 'scénario', 'scénarios')} · ${pluriel(t.familles.length, 'famille', 'familles')} · ${pluriel((campagne.testeurs || []).length, 'testeur', 'testeurs')}`,
-      pourcent, sousPourcent: sous, tableau: t, controles, direct,
-    })}
-    ${t.total ? famillesHtml(t, { mode: equipe ? 'equipe' : 'client', vivants, choisie: '' }) : vide({ icone: 'bug', titre: 'Cette campagne n\'a aucun scénario', compact: true })}
+    return `${t.total ? famillesHtml(t, { mode: equipe ? 'equipe' : 'client', vivants, choisie: '' }) : vide({ icone: 'bug', titre: 'Cette campagne n\'a aucun scénario', compact: true })}
     ${equipe ? personnesHtml(d, pid, campagne, passages, nommer, maintenant) : ''}`;
   };
 
@@ -303,31 +313,9 @@ export const vue = async (ctx, env) => {
   /* ------------------------------------------------------------------------
      Les tests automatisés
      ------------------------------------------------------------------------ */
-  const voieMachine = (d, pid, controles) => {
-    const t = tableauMachine({
-      parcours: d.parcours.filter((x) => projetDe(x) === pid), regles: d.regles.filter((x) => projetDe(x) === pid),
-      scenarios: d.scenarios.filter((s) => projetDe(s) === pid), blocs: BLOCS_SCENARIO, outils: OUTILS_PARCOURS,
-    });
-    const execs = equipe ? (magasin.lire(K.executions(pid)) || []) : [];
-    const enCours = execs.find((e) => e.statut === 'en-cours');
-    const derniers = d.parcours.filter((x) => projetDe(x) === pid).map((x) => enDate((x.dernier || {}).le)).filter(Boolean).sort((a, b) => b - a);
+  const voieMachine = (d, pid, t, execs) => {
     const vivants = new Set(t.familles.flatMap((f) => f.cases).filter((c) => c.etat === 'tourne').map((c) => c.ref));
-
-    const direct = t.tournent
-      ? `<div class="tb-direct" aria-live="polite"><span class="tb-present" role="status"><i style="background:var(--case-cours)"></i>Exécution en cours<span>${equipe && enCours
-        ? `${echapper((OUTILS_PARCOURS[enCours.outil] || {}).court || enCours.outil)}${enCours.plateforme ? ` · ${echapper(enCours.plateforme)}` : ''}${enCours.branche ? ` · ${echapper(enCours.branche)}` : ''}${enCours.commit ? `@${echapper(enCours.commit.slice(0, 8))}` : ''} · ${enCours.faits || 0}/${enCours.total || 0} rendus · ${echapper(depuis(enCours.debut))}`
-        : `${pluriel(t.tournent, 'parcours', 'parcours')} en cours`}</span></span></div>`
-      : '';
-
-    return `${enteteHtml({
-      surtitre: equipe ? 'Capmedia Cockpit' : 'Capmedia Hub',
-      titre: 'Tests automatisés',
-      meta: `${pluriel(t.total, 'test', 'tests')} · ${pluriel(t.familles.length, 'famille', 'familles')}${derniers.length ? ` · dernier résultat ${echapper(depuis(derniers[0]))}` : ' · aucune exécution encore'}`,
-      pourcent: Math.round((t.compte.ok / (t.total || 1)) * 100),
-      sousPourcent: `${t.compte.ok} au vert sur ${t.total}`,
-      tableau: t, controles, direct,
-    })}
-    ${t.total ? famillesHtml(t, { mode: 'machine', vivants }) : vide({ icone: 'code', titre: 'Aucun test automatisé', texte: equipe ? 'Déclarez vos parcours dans la console de tests, puis branchez un robot : chaque résultat s\'allumera ici en direct.' : 'Les tests automatisés apparaîtront ici.', compact: true })}
+    return `${t.total ? famillesHtml(t, { mode: 'machine', vivants }) : vide({ icone: 'code', titre: 'Aucun test automatisé', texte: equipe ? 'Déclarez vos parcours dans la section Parcours ci-dessous, puis branchez un robot : chaque résultat s\'allumera ici en direct.' : 'Les tests automatisés apparaîtront ici.', compact: true })}
     ${equipe ? robotsHtml(pid, execs) : ''}`;
   };
 
@@ -480,9 +468,14 @@ export const vue = async (ctx, env) => {
 
   /* ------------------------------------------------------------------------ */
 
-  const gestes = sur(sortie, 'click', '[data-voie], [data-plateforme], [data-case], [data-personne], [data-robot-neuf], [data-revoquer]', async (el) => {
-    if (el.dataset.voie) { etat.voie = el.dataset.voie; poser(etat); rendre(true); return; }
-    if (el.dataset.plateforme !== undefined) { etat.plateforme = el.dataset.plateforme; poser(etat); rendre(true); return; }
+  const gestes = sur(sortie, 'click', '[data-deplier], [data-voie], [data-case], [data-personne], [data-robot-neuf], [data-revoquer]', async (el) => {
+    if (el.hasAttribute('data-deplier')) {
+      etat.deplie = !etat.deplie;
+      try { localStorage.setItem(CLE_DEPLIE, etat.deplie ? '1' : '0'); } catch (e) { /* stockage refusé */ }
+      rendre(true);
+      return;
+    }
+    if (el.dataset.voie) { etat.voie = el.dataset.voie; memoire.voie = etat.voie; rendre(true); return; }
     if (el.dataset.case) { if (etat.voie === 'machine') await ouvrirCaseMachine(el.dataset.case); else ouvrirCaseHumaine(el.dataset.case); return; }
     if (el.dataset.personne) { ouvrirPersonne(el.dataset.personne); return; }
     if (el.dataset.robotNeuf) { await brancherRobot(el.dataset.robotNeuf); return; }
@@ -503,6 +496,10 @@ export const vue = async (ctx, env) => {
   const horloge = equipe ? setInterval(() => rendre(), 15000) : null;
   rendre(true);
 
-  return () => { gestes(); lot.fin(); if (horloge) clearInterval(horloge); };
+  return {
+    /* La page Tests a changé de projet : on redessine tout de suite. */
+    rafraichir: () => rendre(true),
+    fin: () => { gestes(); lot.fin(); if (horloge) clearInterval(horloge); },
+  };
 };
 

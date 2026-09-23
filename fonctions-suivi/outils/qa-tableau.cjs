@@ -54,14 +54,24 @@ const connecter=async(page,email)=>{
   await page.waitForURL(/\/suivi\/(hub|cockpit|testeur)/,{timeout:40000}).catch(()=>{});
   await pause(2500);
 };
-/* Juste après la connexion, l'accueil finit parfois de se dessiner après
-   qu'on a changé d'adresse : on repose l'adresse tant que le tableau n'est
-   pas là, comme le ferait quelqu'un qui clique une seconde fois. */
+/* Le tableau vit dans la page Tests, sous les quatre chiffres, replié
+   par défaut. On ouvre la page du projet, on le déploie s'il ne l'est pas,
+   puis on choisit la campagne et la voie comme le ferait quelqu'un.
+   Juste après la connexion, l'accueil finit parfois de se dessiner après
+   qu'on a changé d'adresse : on repose l'adresse tant que la section
+   n'est pas là. */
 const allerTableau=async(page,requete)=>{
+  const q=new URLSearchParams(requete||'');
   for (let i=0;i<6;i++){
-    await page.evaluate(h=>{location.hash=h;window.dispatchEvent(new HashChangeEvent('hashchange'));},`#/tests/tableau${requete?`?${requete}`:''}`);
-    if (await page.waitForSelector('.tb-case',{timeout:5000}).then(()=>true).catch(()=>false)) break;
+    await page.evaluate(h=>{location.hash=h;window.dispatchEvent(new HashChangeEvent('hashchange'));},`#/tests${q.get('projet')?`?projet=${q.get('projet')}`:''}`);
+    if (await page.waitForSelector('[data-deplier]',{timeout:5000}).then(()=>true).catch(()=>false)) break;
   }
+  if (await page.$eval('[data-deplier]',b=>b.getAttribute('aria-expanded')!=='true').catch(()=>false)) await page.click('[data-deplier]');
+  await page.waitForSelector('[data-voie]',{timeout:10000}).catch(()=>{});
+  const voie=q.get('voie')||'humains';
+  await page.click(`[data-voie="${voie}"]`).catch(()=>{});
+  if (q.get('campagne') && voie==='humains') { await page.selectOption('#tb-campagne',q.get('campagne')).catch(()=>{}); }
+  await page.waitForSelector('.tb-case',{timeout:20000}).catch(()=>{});
   await pause(1200);
 };
 const etats=(page)=>page.$$eval('.tb-case',els=>Object.fromEntries(els.map(e=>[e.dataset.case,e.dataset.e+(e.hasAttribute('data-revoir')?'+revoir':'')])));
@@ -150,7 +160,7 @@ const SCENARIOS=[
   const e0=await etats(equipe);
   const voulu={ 'TB-01':'ok','TB-02':'casse','TB-03':'fragile','TB-04':'cours','TB-05':'vide','TB-06':'trou','TB-07':'na','TB-08':'cours+revoir' };
   for (const [ref,v] of Object.entries(voulu)) verifier(e0[ref]===v,`${ref} : ${v}`,`vu ${e0[ref]}`);
-  const pourcent=await equipe.$eval('.tb-pourcent b',b=>b.textContent.replace(/\s/g,'')).catch(()=>'');
+  const pourcent=await equipe.$eval('.tb-ligne-pc',b=>b.textContent.replace(/\s/g,'')).catch(()=>'');
   verifier(pourcent.startsWith('70'),'l avancement se compte en passages : 7 sur 10',pourcent);
   verifier(await equipe.$$eval('.tb-personne',x=>x.length).catch(()=>0)===3,'les trois testeurs ont leur carte');
   verifier(erreursPage.length===0,'aucune erreur dans la page',erreursPage.join(' | ').slice(0,200));
@@ -161,21 +171,33 @@ const SCENARIOS=[
   verifier(/Nina/.test(feuille)&&/Omar/.test(feuille),'et nomme les testeurs, côté équipe');
   await equipe.keyboard.press('Escape'); await equipe.click('.feuille [data-fermer]').catch(()=>{}); await pause(300);
 
-  console.log('\n== Le tableau vit DANS Tests');
+  console.log('\n== Le tableau vit DANS Tests, replié sous les quatre chiffres');
   {
     const entrees=await equipe.$$eval('.lat-lien',as=>as.map(a=>a.textContent.trim()));
-    verifier(!entrees.some(t=>/Tableau des tests/.test(t)),'plus d entrée séparée « Tableau des tests » dans le menu');
-    verifier(!!(await equipe.$('.lat-lien[href="#/tests/tableau"]')),'l entrée « Tests » ouvre le tableau');
-    verifier(await equipe.$eval('.lat-lien[href="#/tests/tableau"]',a=>a.classList.contains('actif')).catch(()=>false),'et reste allumée sur le tableau');
-    verifier(!!(await equipe.$('.onglets-tests a[href^="#/tests/tableau"].actif')),'l onglet Tableau est actif');
-    await equipe.click('.onglets-tests a[href^="#/tests?"], .onglets-tests a[href="#/tests"]');
-    await equipe.waitForSelector('#campagnes, .section-tete',{timeout:20000}).catch(()=>{});
-    verifier(/#\/tests(\?|$)/.test(await equipe.evaluate(()=>location.hash)),'l onglet Détail ouvre la console',await equipe.evaluate(()=>location.hash));
-    verifier(await equipe.$eval('.lat-lien[href="#/tests/tableau"]',a=>a.classList.contains('actif')).catch(()=>false),'et « Tests » reste allumé sur le détail');
-    verifier(/projet=atelier/.test(await equipe.evaluate(()=>location.hash)),'le projet choisi suit d un onglet à l autre',await equipe.evaluate(()=>location.hash));
-    await equipe.evaluate(()=>{location.hash='#/tableau?projet=atelier';});
-    const redirige=await attendre(async()=>/^#\/tests\/tableau/.test(await equipe.evaluate(()=>location.hash)),20,300);
-    verifier(redirige,'l ancienne adresse #/tableau mène au tableau dans Tests');
+    verifier(!entrees.some(t=>/Tableau/.test(t)),'aucune entrée « Tableau » dans le menu');
+    verifier(!(await equipe.$('.onglets-tests')),'et pas d onglets : une seule page');
+    const ordre=await equipe.evaluate(()=>{const c=document.querySelector('.chiffres-tests'),t=document.querySelector('.tb-section');return !!(c&&t&&(c.compareDocumentPosition(t)&Node.DOCUMENT_POSITION_FOLLOWING));});
+    verifier(ordre,'la section vient juste sous les quatre chiffres');
+    /* Une autre personne, un navigateur neuf : replié par défaut. */
+    const neuf=await (await nav.newContext({viewport:{width:1440,height:900}})).newPage();
+    await connecter(neuf,'agent.essai@exemple.test');
+    for (let i=0;i<6;i++){ await neuf.evaluate(()=>{location.hash='#/tests?projet=atelier';window.dispatchEvent(new HashChangeEvent('hashchange'));}); if (await neuf.waitForSelector('[data-deplier]',{timeout:5000}).then(()=>true).catch(()=>false)) break; }
+    verifier(await neuf.$eval('[data-deplier]',b=>b.getAttribute('aria-expanded')==='false').catch(()=>false),'replié par défaut');
+    verifier((await neuf.$$eval('.tb-case',x=>x.length))===0,'aucune case tant qu on ne déploie pas');
+    verifier((await neuf.$$eval('.tb-resume .tb-barre',x=>x.length))===2,'mais les deux barres de progression sont là : humains et automatisés');
+    const resume=await neuf.textContent('.tb-resume');
+    verifier(/Passe du tableau/.test(resume)&&/passages sur/.test(resume),'avec la campagne et où elle en est',resume.replace(/\s+/g,' ').slice(0,140));
+    await neuf.click('[data-deplier]');
+    verifier(!!(await neuf.waitForSelector('.tb-case',{timeout:10000}).catch(()=>null)),'un geste, et tout le tableau se déploie');
+    await neuf.evaluate(()=>location.reload()); await neuf.waitForSelector('[data-deplier]',{timeout:30000}).catch(()=>{});
+    for (let i=0;i<6;i++){ await neuf.evaluate(()=>{location.hash='#/tests?projet=atelier';window.dispatchEvent(new HashChangeEvent('hashchange'));}); if (await neuf.waitForSelector('[data-deplier]',{timeout:5000}).then(()=>true).catch(()=>false)) break; }
+    verifier(await neuf.$eval('[data-deplier]',b=>b.getAttribute('aria-expanded')==='true').catch(()=>false),'et il reste déployé à la visite suivante');
+    await neuf.context().close();
+    for (const ancienne of ['#/tableau?projet=atelier','#/tests/tableau?projet=atelier']) {
+      await equipe.evaluate(h=>{location.hash=h;},ancienne);
+      const ok2=await attendre(async()=>/^#\/tests\?projet=atelier$/.test(await equipe.evaluate(()=>location.hash)),20,300);
+      verifier(ok2,`l ancienne adresse ${ancienne.split('?')[0]} mène à Tests`);
+    }
     await allerTableau(equipe,`projet=${PID}&campagne=${CID}`);
   }
 
@@ -260,15 +282,16 @@ const SCENARIOS=[
   const client=await ctxC.newPage();
   const erreursClient=[]; client.on('pageerror',e=>erreursClient.push(e.message)); client.on('console',m=>{if(m.type()==='error'||m.type()==='warning')erreursClient.push('console '+m.text().slice(0,300));});
   await connecter(client,'camille.essai@exemple.test');
-  const lien=await client.$('.lat-lien[href="#/tests/tableau"]');
-  verifier(!!lien,'chez le client aussi, « Tests » ouvre le tableau');
+  verifier(!(await client.$$eval('.lat-lien',as=>as.some(a=>/Tableau/.test(a.textContent)))),'chez le client non plus, pas d entrée séparée : le tableau est dans Tests');
   await allerTableau(client,`projet=${PID}&campagne=${CID}`);
   const eC=await etats(client);
   verifier(eC['TB-02']==='casse'&&eC['TB-05']==='ok','il voit les mêmes verdicts',JSON.stringify(eC)+' '+(await client.textContent('body')).replace(/\s+/g,' ').slice(0,400)+' '+erreursClient.join('|'));
   verifier(!('TB-06' in eC),'mais pas les trous d affectation, affaire interne');
   const texteC=await client.textContent('main, #contenu, body');
   verifier(!/Nina|Omar|Paul/.test(texteC),'aucun prénom de testeur dans sa page');
-  verifier(!/en ligne|Les testeurs|Les robots/.test(texteC),'ni présence, ni cartes de testeurs, ni robots');
+  const sectionC=await client.textContent('.tb-section').catch(()=>'');
+  verifier(sectionC.length>0,'le client a la section du tableau');
+  verifier(!/en ligne|Les testeurs|Les robots|là depuis/.test(sectionC),'ni présence, ni cartes de testeurs, ni robots dans son tableau');
   await client.click('[data-case="TB-02"]'); await pause(600);
   const fC=await client.textContent('.feuille').catch(()=>'');
   verifier(/Testeur \d/.test(fC)&&!/Nina|Omar/.test(fC),'dans le détail, des testeurs numérotés',fC.slice(0,100));
@@ -364,8 +387,8 @@ const SCENARIOS=[
     await attendre(async()=>(await equipe.$$eval('.tb-case',x=>x.length))===refs.length,30,500);
     const n=await equipe.$$eval('.tb-case',x=>x.length);
     verifier(n===173,'173 cases',String(n));
-    const bas=await equipe.$eval('.tb-familles',el=>el.getBoundingClientRect().bottom+window.scrollY);
-    verifier(bas<=1000,'les 9 familles tiennent en un écran de 1440 × 900, à un souffle près',`bas des cartes à ${Math.round(bas)} px`);
+    const haut=await equipe.$eval('.tb-familles',el=>el.getBoundingClientRect().height);
+    verifier(haut<=720,'les 9 familles tiennent dans la hauteur d un écran de 1440 × 900',`${Math.round(haut)} px`);
     await equipe.screenshot({path:path.join(require('os').tmpdir(),'qa-tableau-173.png')});
     for (const ref of refs) await effacer(`projets/boutique/scenarios/${ref}`);
     await effacer('projets/boutique/campagnes/qa-grande');

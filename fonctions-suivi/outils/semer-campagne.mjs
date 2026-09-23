@@ -56,7 +56,7 @@ affectation[uids[0]] = refs.slice(0, 43);
 refs.slice(43).forEach((r, i) => { affectation[uids[1 + (i % 5)]].push(r); });
 
 await bdd.doc('projets/atelier/campagnes/c-oct').set({
-  titre: 'Campagne Octobre 2026', statut: 'en-cours', testeurs: uids, scenarios: refs, affectation,
+  titre: 'Campagne du banc', statut: 'en-cours', testeurs: uids, scenarios: refs, affectation,
   builds: { ios: '24' }, cree: FieldValue.serverTimestamp(), maj: FieldValue.serverTimestamp(),
 });
 console.log(`${refs.length} scénarios, ${uids.length} testeurs, Karim en a ${affectation[uids[0]].length}.`);
