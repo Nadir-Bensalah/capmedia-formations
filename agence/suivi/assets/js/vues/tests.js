@@ -868,20 +868,16 @@ const ouvrirTesteur = (fiche, { env, projets }) => {
   const supprimerTesteur = async () => {
     const sur = await confirmer({
       titre: `Supprimer ${f.prenom || 'ce testeur'} définitivement ?`,
-      texte: `Sa fiche et son compte disparaissent${f.email ? `, y compris ${f.email}` : ''}. Cela ne se rattrape pas. Si ce testeur a déjà consigné un résultat, la suppression sera refusée : préférez « Retirer du vivier ».`,
+      texte: `Tout part : sa fiche, son compte${f.email ? ` (${f.email})` : ''}, ses résultats, ses avis, ses captures et sa place dans les campagnes. Cela ne se rattrape pas. Pour un testeur qui arrête simplement, préférez « Retirer » : ses résultats restent.`,
       ok: 'Supprimer', danger: true,
     });
     if (!sur) return;
     try {
       await appelServeur('retirerTesteur', { testeur: f.id, definitif: true });
-      toast(`${f.prenom || 'Le testeur'} est supprimé.`);
+      toast(`${f.prenom || 'Le testeur'} est supprimé, avec tout ce qui le concernait.`);
       m.fermer(true);
     } catch (e) {
-      /* Le refus du serveur n'est pas une panne : c'est une réponse, et
-         elle dit quoi faire à la place. */
-      toast(/passages/.test(String(e && e.message))
-        ? 'Ce testeur a déjà consigné des résultats. Retirez-le du vivier plutôt que de le supprimer.'
-        : lisible(e), 'erreur');
+      toast(lisible(e), 'erreur');
     }
   };
 

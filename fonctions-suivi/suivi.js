@@ -1755,20 +1755,76 @@ exports.suiviAdmin = onRequest(
         const fiche = await bdd.doc(`testeurs/${tid}`).get();
 
         if (definitif) {
-          let passages = 0;
-          try {
-            const q = await bdd.collectionGroup('passages').where('testeur', '==', tid).limit(1).get();
-            passages = q.size;
-          } catch (err) {
-            console.error('Passages du testeur illisibles', err);
-            return res.status(500).send('passages illisibles');
-          }
-          if (passages) return res.status(409).send('ce testeur a consigne des passages : retirez-le du vivier plutot que de le supprimer');
+          /* Supprimer, c'est TOUT effacer : pour une adresse d'essai, une
+             erreur de saisie, ou quelqu'un qui demande son effacement. Le
+             geste prudent, qui garde les résultats, reste « Retirer ».
 
+             La version précédente refusait si le testeur avait consigné un
+             passage, et le vérifiait par une requête en groupe qui exige un
+             index absent en production : la requête échouait, et TOUTE
+             suppression était refusée, même d'un testeur sans aucune
+             entrée. On parcourt donc projet par projet, campagne par
+             campagne : aucune requête en groupe, aucun index requis. */
+          const email = fiche.exists ? String(fiche.data().email || '') : '';
+          const bilan = { passages: 0, avis: 0, campagnes: 0, temoins: 0, preuves: 0 };
+
+          const projets = await bdd.collection('projets').get();
+          for (const p of projets.docs) {
+            const campagnes = await p.ref.collection('campagnes').get();
+            for (const c of campagnes.docs) {
+              /* Ses passages : l'identifiant commence par son uid. */
+              const passages = await c.ref.collection('passages').get();
+              for (const x of passages.docs) {
+                if (x.id.startsWith(`${tid}__`) || x.data().testeur === tid) { await x.ref.delete(); bilan.passages += 1; }
+              }
+              /* Son avis. */
+              const avis = c.ref.collection('appreciations').doc(tid);
+              if ((await avis.get()).exists) { await avis.delete(); bilan.avis += 1; }
+              /* Sa place dans la campagne et son affectation. */
+              const cd = c.data();
+              if ((cd.testeurs || []).includes(tid) || (cd.affectation && cd.affectation[tid])) {
+                await c.ref.update({ testeurs: FieldValue.arrayRemove(tid), [`affectation.${tid}`]: FieldValue.delete() });
+                bilan.campagnes += 1;
+              }
+            }
+            /* Ses témoignages dans les anomalies : une anomalie qui n'a plus
+               aucun témoin et qui venait d'un testeur disparaît avec lui. */
+            const anomalies = await p.ref.collection('anomalies').get();
+            for (const a of anomalies.docs) {
+              const d = a.data();
+              const temoins = Array.isArray(d.temoins) ? d.temoins : [];
+              const restants = temoins.filter((t) => t.testeur !== tid);
+              if (restants.length === temoins.length) continue;
+              bilan.temoins += temoins.length - restants.length;
+              if (!restants.length && d.origine === 'testeur') { await a.ref.delete(); continue; }
+              await a.ref.update({
+                temoins: restants,
+                passages: (d.passages || []).filter((x) => !String(x).startsWith(`${tid}__`)),
+                plateformes: [...new Set(restants.map((t) => t.plateforme).filter(Boolean))],
+                maj: FieldValue.serverTimestamp(),
+              });
+            }
+          }
+
+          /* Ses preuves : campagnes/{projet}/{campagne}/{uid}/... */
+          try {
+            const [fichiers] = await getStorage().bucket().getFiles({ prefix: 'campagnes/' });
+            for (const f of fichiers.filter((x) => x.name.split('/')[3] === tid)) { await f.delete().catch(() => {}); bilan.preuves += 1; }
+          } catch (err) { console.error('Preuves du testeur non effacées', err); }
+
+          /* Sa fiche, son profil public, son compte, et sa file de connexion. */
+          await bdd.doc(`testeurs/${tid}/public/profil`).delete().catch(() => {});
           await bdd.doc(`testeurs/${tid}`).delete().catch(() => {});
           try { await getAuth().deleteUser(tid); } catch (err) { /* compte deja parti */ }
-          await audit('testeur.supprime', { uid: tid, email: fiche.exists ? fiche.data().email : '' });
-          return res.json({ ok: true, supprime: true });
+          if (email) {
+            const envois = await bdd.collection('envois').get();
+            for (const e of envois.docs) {
+              if ((e.data().a || []).some((x) => normaliserEmail(x.email) === normaliserEmail(email))) await e.ref.delete().catch(() => {});
+            }
+          }
+
+          await audit('testeur.supprime', { uid: tid, email, ...bilan });
+          return res.json({ ok: true, supprime: true, ...bilan });
         }
 
         /* Le retrait : l'accès se ferme, la fiche reste, les résultats
