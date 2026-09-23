@@ -935,8 +935,57 @@ async function poserRevendications(uid) {
   return revendications;
 }
 
-/** Le compte Auth de cette adresse, créé au besoin. */
-async function compteAuth(email, nom) {
+/*
+ * UNE ADRESSE, UN SEUL RÔLE.
+ *
+ * Une adresse est soit de l'équipe, soit testeur, soit cliente, jamais deux
+ * à la fois. Le mélange a coûté cher le 23/09/2026 : une adresse inscrite
+ * au vivier alors qu'elle était déjà cliente atterrissait tantôt sur un
+ * espace, tantôt sur l'autre, et supprimer le testeur a effacé le compte
+ * de connexion du client, qui était le même.
+ *
+ * Le rôle se lit dans la base, jamais dans la demande : le compte de
+ * connexion d'abord (fiche d'équipe, fiche de testeur, membre d'un projet
+ * ou d'une organisation), puis les contacts, parce qu'une adresse peut être
+ * cliente avant même d'avoir un compte.
+ */
+const LIBELLES_ROLE = { equipe: "l'équipe", testeur: 'un testeur', client: 'un client' };
+
+async function roleDeLAdresse(email) {
+  const adresse = normaliserEmail(email);
+  if (!adresse) return null;
+  let uid = null;
+  try { uid = (await getAuth().getUserByEmail(adresse)).uid; } catch (err) {
+    if (err.code !== 'auth/user-not-found') throw err;
+  }
+  if (uid) {
+    if ((await bdd.doc(`equipe/${uid}`).get()).exists) return 'equipe';
+    if ((await bdd.doc(`testeurs/${uid}`).get()).exists) return 'testeur';
+    if (!(await bdd.collection('projets').where('membres', 'array-contains', uid).limit(1).get()).empty) return 'client';
+    if (!(await bdd.collection('organisations').where('membres', 'array-contains', uid).limit(1).get()).empty) return 'client';
+  }
+  const memeAdresse = (x) => normaliserEmail(x) === adresse;
+  const orgs = await bdd.collection('organisations').get();
+  if (orgs.docs.some((o) => memeAdresse(o.data().email) || (o.data().contacts || []).some((c) => memeAdresse(c.email)))) return 'client';
+  const projets = await bdd.collection('projets').get();
+  if (projets.docs.some((p) => memeAdresse((p.data().client || {}).email) || (p.data().contacts || []).some((c) => memeAdresse(c.email)))) return 'client';
+  return null;
+}
+
+/** Refuse une adresse qui porte déjà un autre rôle que celui voulu. */
+async function exigerRole(email, voulu) {
+  const actuel = await roleDeLAdresse(email);
+  if (actuel && actuel !== voulu) {
+    const e = new Error(`Cette adresse appartient déjà à ${LIBELLES_ROLE[actuel]}. Une adresse ne peut avoir qu'un seul rôle : utilisez-en une autre.`);
+    e.conflitDeRole = true;
+    throw e;
+  }
+}
+
+/** Le compte Auth de cette adresse, créé au besoin. Avec `role`, l'adresse
+ *  ne doit porter aucun autre rôle. */
+async function compteAuth(email, nom, role) {
+  if (role) await exigerRole(email, role);
   const adresse = normaliserEmail(email);
   try {
     const existant = await getAuth().getUserByEmail(adresse);
@@ -1089,7 +1138,7 @@ exports.suiviAdmin = onRequest(
            explicitement. Par defaut le projet reste ferme : on ne garnit
            pas un espace sous les yeux du client. */
         if (inviter === true && emailPlausible(ficheClient.email)) {
-          const { utilisateur } = await compteAuth(ficheClient.email, ficheClient.nom);
+          const { utilisateur } = await compteAuth(ficheClient.email, ficheClient.nom, 'client');
           await bdd.doc(`organisations/${orgId}`).update({ membres: FieldValue.arrayUnion(utilisateur.uid), [`roles.${utilisateur.uid}`]: 'owner', maj: FieldValue.serverTimestamp() });
           const org = await bdd.doc(`organisations/${orgId}`).get();
           const contacts = (org.data().contacts || []).map((c) => (memeEmail(c.email, ficheClient.email) ? { ...c, uid: utilisateur.uid } : c));
@@ -1120,7 +1169,7 @@ exports.suiviAdmin = onRequest(
         if (!docProjet.exists) return res.status(404).send('projet inconnu');
         const ficheProjet = { id: docProjet.id, ...docProjet.data() };
 
-        const { utilisateur, cree } = await compteAuth(email, nom);
+        const { utilisateur, cree } = await compteAuth(email, nom, 'client');
 
         await refProjet.update({
           membres: FieldValue.arrayUnion(utilisateur.uid),
@@ -1321,6 +1370,7 @@ exports.suiviAdmin = onRequest(
       if (action === 'creerOrganisation') {
         if (!String(entreprise || nom || '').trim()) return res.status(400).send('nom requis');
         if (!emailPlausible(email)) return res.status(400).send('email valide requis');
+        await exigerRole(email, 'client');
         const orgRef = await bdd.collection('organisations').add(sansIndefini({
           nom: String(nom || '').trim(), entreprise: String(entreprise || '').trim(), email: normaliserEmail(email),
           telephone: String(telephone || '').trim(), adresse: String(adresse || '').trim(), notesInternes: String(notesInternes || ''),
@@ -1336,6 +1386,11 @@ exports.suiviAdmin = onRequest(
         const orgRef = bdd.doc(`organisations/${String(id)}`);
         if (!(await orgRef.get()).exists) return res.status(404).send('organisation inconnue');
         if (email && !emailPlausible(email)) return res.status(400).send('email invalide');
+        /* L'adresse d'une fiche client est celle à qui l'on écrit : elle ne
+           peut pas être celle d'un testeur ou d'un membre de l'équipe. Elle
+           ne déplace AUCUN accès pour autant : l'accès appartient aux comptes
+           invités, pas à l'adresse affichée sur la fiche. */
+        if (email) await exigerRole(email, 'client');
         await orgRef.update(sansIndefini({
           nom: nom !== undefined ? String(nom).trim() : undefined, entreprise: entreprise !== undefined ? String(entreprise).trim() : undefined,
           email: email !== undefined ? normaliserEmail(email) : undefined, telephone: telephone !== undefined ? String(telephone).trim() : undefined,
@@ -1350,7 +1405,7 @@ exports.suiviAdmin = onRequest(
         const orgRef = bdd.doc(`organisations/${String(id)}`);
         const org = await orgRef.get();
         if (!org.exists) return res.status(404).send('organisation inconnue');
-        const { utilisateur, cree } = await compteAuth(email, nom);
+        const { utilisateur, cree } = await compteAuth(email, nom, 'client');
         const fonction = role === 'owner' ? 'owner' : 'member';
         const contacts = (org.data().contacts || []).filter((c) => !memeEmail(c.email, email));
         contacts.push({ nom: String(nom || '').trim(), email: normaliserEmail(email), role: fonction, uid: utilisateur.uid });
@@ -1410,7 +1465,7 @@ exports.suiviAdmin = onRequest(
         if (!String(nom || '').trim()) return res.status(400).send('nom requis');
         const fonction = role === 'admin' ? 'admin' : 'agent';
 
-        const { utilisateur, cree } = await compteAuth(email, nom);
+        const { utilisateur, cree } = await compteAuth(email, nom, 'equipe');
         await bdd.doc(`equipe/${utilisateur.uid}`).set({
           nom: String(nom).trim(),
           email: normaliserEmail(email),
@@ -1568,7 +1623,7 @@ exports.suiviAdmin = onRequest(
 
         const uids = [];
         for (const a of adresses) {
-          const { utilisateur } = await compteAuth(a.email, a.nom);
+          const { utilisateur } = await compteAuth(a.email, a.nom, 'client');
           uids.push(utilisateur.uid);
         }
 
@@ -1629,15 +1684,13 @@ exports.suiviAdmin = onRequest(
         if (!surQuoi.length) return res.status(400).send('plateformes requises');
         if (surQuoi.some((x) => !['ios', 'android', 'web'].includes(x))) return res.status(400).send('plateforme inconnue');
 
+        /* Une adresse déjà cliente ou d'équipe ne devient pas testeur : le
+           refus AVANT de créer quoi que ce soit, pour ne rien laisser derrière. */
+        await exigerRole(adresse, 'testeur');
+
         let compte;
         try { compte = await getAuth().getUserByEmail(adresse); }
         catch (err) { compte = await getAuth().createUser({ email: adresse, emailVerified: true, displayName: String(prenom).trim() }); }
-
-        /* Un compte d'équipe ne devient pas testeur : il verrait alors son
-           propre travail à travers deux écrans qui ne disent pas la même
-           chose, et la revendication brouillerait ses propres règles. */
-        const estDeLEquipe = (await bdd.doc(`equipe/${compte.uid}`).get()).exists;
-        if (estDeLEquipe) return res.status(409).send('ce compte appartient a l equipe');
 
         const projets = Array.isArray(req.body.projets) ? req.body.projets.map(String) : (projet ? [String(projet)] : []);
         await bdd.doc(`testeurs/${compte.uid}`).set({
@@ -1815,8 +1868,31 @@ exports.suiviAdmin = onRequest(
           /* Sa fiche, son profil public, son compte, et sa file de connexion. */
           await bdd.doc(`testeurs/${tid}/public/profil`).delete().catch(() => {});
           await bdd.doc(`testeurs/${tid}`).delete().catch(() => {});
-          try { await getAuth().deleteUser(tid); } catch (err) { /* compte deja parti */ }
-          if (email) {
+
+          /* Le compte de connexion ne part que s'il ne sert à RIEN d'autre.
+             Le 23/09/2026, supprimer un testeur a effacé le compte d'un client
+             qui portait la même adresse : le client a perdu son accès. La
+             règle d'un seul rôle l'empêche désormais, mais des données
+             d'avant peuvent encore mélanger les rôles. Dans ce cas on retire
+             seulement la revendication de testeur, et le compte reste. */
+          const sertAilleurs = (await bdd.doc(`equipe/${tid}`).get()).exists
+            || !(await bdd.collection('projets').where('membres', 'array-contains', tid).limit(1).get()).empty
+            || !(await bdd.collection('organisations').where('membres', 'array-contains', tid).limit(1).get()).empty;
+          bilan.compte = sertAilleurs ? 'garde' : 'efface';
+          if (sertAilleurs) {
+            try {
+              const u = await getAuth().getUser(tid);
+              const gardees = { ...(u.customClaims || {}) };
+              delete gardees.testeur;
+              await getAuth().setCustomUserClaims(tid, gardees);
+              await getAuth().revokeRefreshTokens(tid);
+            } catch (err) { /* compte parti */ }
+          } else {
+            try { await getAuth().deleteUser(tid); } catch (err) { /* compte deja parti */ }
+          }
+          /* Les lettres en file ne partent que pour un compte effacé : celles
+             d'un client qui garde son compte lui appartiennent encore. */
+          if (email && !sertAilleurs) {
             const envois = await bdd.collection('envois').get();
             for (const e of envois.docs) {
               if ((e.data().a || []).some((x) => normaliserEmail(x.email) === normaliserEmail(email))) await e.ref.delete().catch(() => {});
@@ -1856,7 +1932,7 @@ exports.suiviAdmin = onRequest(
         /* Le compte existe, ou nait ici : sans lui, le code n'aurait
            personne a qui ouvrir. Le rattachement au projet reste le geste
            separe d'« inviterClient », qui donne l'acces. */
-        const { utilisateur } = await compteAuth(adresse, nom);
+        const { utilisateur } = await compteAuth(adresse, nom, 'client');
 
         const jeton = require('node:crypto').randomBytes(24).toString('base64url');
         await bdd.doc(`invitations/${jeton}`).set({
@@ -2062,6 +2138,9 @@ exports.suiviAdmin = onRequest(
 
       return res.status(400).send('action inconnue');
     } catch (err) {
+      /* Un conflit de rôle n'est pas une panne : c'est une réponse, et elle
+         dit quoi faire. Elle part telle quelle vers l'écran. */
+      if (err && err.conflitDeRole) return res.status(409).send(err.message);
       console.error(`suiviAdmin, action « ${action} »`, err);
       return res.status(500).send('erreur interne');
     }

@@ -35,6 +35,15 @@ if (session.equipe) {
   throw new Error('redirection');
 }
 
+/* Un testeur a le sien. La porte l'y envoie déjà, mais un favori, un
+   lien collé ou une copie en cache d'un ancien script peuvent le poser
+   ici : le hub le renvoie alors chez lui, plutôt que de lui montrer un
+   espace client vide. */
+if (session.testeur) {
+  location.replace('./testeur');
+  throw new Error('redirection');
+}
+
 const env = { session, role: 'client' };
 const lotGlobal = magasin.lot();
 abonnerGlobal(lotGlobal, session);

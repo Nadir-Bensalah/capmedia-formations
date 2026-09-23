@@ -54,7 +54,11 @@ jobs:
           # « from './x.js' » et les « import('./x.js') ».
           motif = re.compile(r"((?:from|import)\s*\(?\s*['\"])(\.{1,2}/[^'\"?]+\.js)(['\"])")
           touches = 0
-          for racine, _, fichiers in os.walk('agence/suivi/assets/js'):
+          # Tout le dossier assets, pas seulement assets/js : la page de
+          # connexion (assets/connexion.js) importe le noyau, et sans version
+          # le navigateur le gardait sept jours en cache. Les corrections de
+          # la session n'atteignaient donc pas la porte.
+          for racine, _, fichiers in os.walk('agence/suivi/assets'):
               for f in fichiers:
                   if not f.endswith('.js'): continue
                   chemin = os.path.join(racine, f)
