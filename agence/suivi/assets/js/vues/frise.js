@@ -16,8 +16,10 @@
    ========================================================================== */
 
 import { echapper, montant, dateCourte, STATUTS_ETAPE } from '../noyau.js';
-import { icone, pastille, toast } from '../ui.js';
-import { ecrire } from '../donnees.js';
+import { icone, pastille, toast, menu } from '../ui.js';
+import { ecrire, K } from '../donnees.js';
+import * as magasin from '../magasin.js';
+import { editer } from './editeurs.js';
 
 /** Les étapes rattachées à un devis, dans l'ordre du devis. */
 export const etapesDuDevis = (devis, jalons) => (jalons || [])
@@ -56,7 +58,9 @@ export const friseDevis = (devis, jalons, { equipe, pid }) => {
           <span class="frise-libelle">${echapper(j.titre)}</span>
           ${j.fin || j.description ? `<span class="frise-detail">${[j.fin ? (j.statut === 'termine' ? `faite le ${dateCourte(j.maj || j.fin)}` : `prévue le ${dateCourte(j.fin)}`) : '', j.description].filter(Boolean).map(echapper).join(' · ')}</span>` : ''}
         </span>
-        <span class="frise-fin">${Number(j.montant) ? `<span class="frise-montant">${echapper(montant(j.montant))}</span>` : ''}${pastille(STATUTS_ETAPE, j.statut || 'a-venir')}</span>
+        <span class="frise-fin">${Number(j.montant) ? `<span class="frise-montant">${echapper(montant(j.montant))}</span>` : ''}${equipe
+          ? `<button class="frise-statut" type="button" data-statut-etape="${echapper(j.id)}" data-projet="${echapper(pid)}" aria-label="Changer le statut" data-astuce="Changer le statut">${pastille(STATUTS_ETAPE, j.statut || 'a-venir')}${icone('chevron')}</button><button class="btn-icone" type="button" data-editer-etape="${echapper(j.id)}" data-projet="${echapper(pid)}" aria-label="Modifier l'étape" data-astuce="Modifier">${icone('edit')}</button>`
+          : pastille(STATUTS_ETAPE, j.statut || 'a-venir')}</span>
       </li>`).join('')}
     </ol>
   </div>`;
@@ -82,13 +86,54 @@ export const cocherEtape = async (el) => {
   }
 };
 
+/* L'étape telle qu'elle est en ce moment, d'où qu'on la lise : le
+   client n'a que celles de son projet, l'équipe les a toutes en groupe. */
+const etapeDe = (pid, id) => [...(magasin.lire(K.jalons(pid)) || []), ...(magasin.lire(K.jalonsTous) || [])]
+  .find((j) => j.id === id && (j.projet || j._parent || pid) === pid);
+
+/* La pastille de statut est un bouton : elle ouvre le choix des cinq
+   statuts. La case, elle, ne connaît que fait ou pas fait ; entre les
+   deux il y a « en cours » et « bloqué », et c'est justement ce qu'on
+   veut pouvoir dire sans ouvrir la fiche. */
+export const changerStatut = (el) => {
+  const id = el.dataset.statutEtape;
+  const pid = el.dataset.projet;
+  const actuel = (etapeDe(pid, id) || {}).statut || 'a-venir';
+  menu(el, [
+    { titre: 'Statut' },
+    ...Object.entries(STATUTS_ETAPE).map(([cle, f]) => ({
+      cle, libelle: `${f.libelle}${cle === actuel ? '  ·  actuel' : ''}`,
+      action: async () => {
+        if (cle === actuel) return;
+        try {
+          await ecrire.majJalon(pid, id, cle === 'termine' ? { statut: cle, progression: 100 } : { statut: cle });
+          toast(`Étape ${f.libelle.toLowerCase()}.`);
+        } catch (err) { toast("Le statut n'a pas pu être enregistré.", 'erreur'); }
+      },
+    })),
+  ]);
+};
+
 /* Un seul écouteur par conteneur, posé une fois : le contenu est
-   redessiné à chaque changement, l'écouteur sur le conteneur survit. */
-export const brancherFrise = (racine) => {
+   redessiné à chaque changement, l'écouteur sur le conteneur survit.
+   L'environnement sert au crayon, qui ouvre la fiche complète. */
+export const brancherFrise = (racine, env) => {
   if (!racine || racine.dataset.friseBranchee) return;
   racine.dataset.friseBranchee = '1';
   racine.addEventListener('change', (e) => {
     const el = e.target && e.target.closest ? e.target.closest('[data-cocher-etape]') : null;
     if (el) cocherEtape(el);
+  });
+  racine.addEventListener('click', (e) => {
+    if (!e.target || !e.target.closest) return;
+    const statut = e.target.closest('[data-statut-etape]');
+    if (statut) { e.preventDefault(); e.stopPropagation(); changerStatut(statut); return; }
+    const crayon = e.target.closest('[data-editer-etape]');
+    if (crayon) {
+      e.preventDefault(); e.stopPropagation();
+      const pid = crayon.dataset.projet;
+      const fiche = etapeDe(pid, crayon.dataset.editerEtape);
+      if (fiche && env) editer('jalon', env, { pid, fiche });
+    }
   });
 };

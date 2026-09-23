@@ -64,7 +64,7 @@ export const ouvrirDocument = (d, env, { projets, paiements }) => {
       : `<span class="pousse"></span><button class="btn btn-principal" type="button" data-fermer>Fermer</button>`}`,
   });
   brancherPieces(m.el);
-  brancherFrise(m.el);
+  brancherFrise(m.el, env);
   sur(m.el, 'click', '[data-joindre]', async () => { m.fermer(); await joindreFichier(d); });
   sur(m.el, 'click', '[data-liens]', async () => { m.fermer(); await editerLiens(d); });
   const commentaire = () => (m.el.querySelector('#commentaire-devis') || { value: '' }).value.trim();

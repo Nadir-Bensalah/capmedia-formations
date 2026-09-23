@@ -1881,6 +1881,14 @@ input, select, textarea { font: inherit; color: inherit; }
 .est-faite .frise-libelle { color: var(--encre-2); }
 .frise-detail { font: var(--t-petit); color: var(--encre-3); }
 .frise-fin { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+/* La pastille de statut est un bouton pour l'équipe : même apparence,
+   plus un chevron qui dit qu'elle s'ouvre. */
+.frise-statut { display: inline-flex; align-items: center; gap: 2px; background: none; border: 0; padding: 0; cursor: pointer; border-radius: var(--r-pilule); }
+.frise-statut svg { width: 14px; height: 14px; color: var(--encre-4); }
+.frise-statut:hover svg, .frise-statut:focus-visible svg { color: var(--encre); }
+.frise-statut:focus-visible { outline: 2px solid var(--anneau); outline-offset: 2px; }
+.frise-fin .btn-icone { width: 28px; height: 28px; }
+.frise-fin .btn-icone svg { width: 16px; height: 16px; }
 .frise-montant { font: var(--t-petit); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--encre-2); }
 .est-faite .frise-montant { color: var(--ok); }
 @media (max-width: 640px) {

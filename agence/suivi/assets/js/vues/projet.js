@@ -179,7 +179,7 @@ export const vue = async (ctx, env) => {
   };
 
   /* --- Les gestes ------------------------------------------------------ */
-  brancherFrise(sortie);
+  brancherFrise(sortie, env);
   const gestes = sur(sortie, 'click', '[data-action]', async (el) => {
     const d = lireTout(pid);
     const action = el.dataset.action;

@@ -70,6 +70,27 @@ const statutEnBase=async(id)=>((((await lire(`projets/atelier/jalons/${id}`))||{
   await page.uncheck(`[data-cocher-etape="${cible}"]`); await pause(2200);
   verifier((await statutEnBase(cible))==='en-cours','décocher la rouvre');
 
+  console.log('\n== Changer le statut sans ouvrir la fiche');
+  const deux='devis-02-environnement';
+  await page.click(`[data-statut-etape="${deux}"]`); await pause(700);
+  const choix=await page.evaluate(()=>[...document.querySelectorAll('.menu [data-cle]')].map(b=>b.dataset.cle));
+  verifier(choix.length===5,'la pastille ouvre les cinq statuts',choix.join('/'));
+  await page.click('.menu [data-cle="bloque"]'); await pause(2200);
+  verifier((await statutEnBase(deux))==='bloque','choisir « bloqué » l écrit en base');
+  const pb=await page.evaluate(()=>{const b=document.querySelector('[data-statut-etape="devis-02-environnement"]');return b?b.innerText.trim():'';});
+  verifier(/Bloqué/.test(pb),'et la pastille le montre sans recharger',pb);
+  await page.click(`[data-statut-etape="${deux}"]`); await pause(700);
+  await page.click('.menu [data-cle="a-venir"]'); await pause(2200);
+  verifier((await statutEnBase(deux))==='a-venir','et on peut revenir en arrière');
+
+  console.log('\n== Le crayon ouvre la fiche complète');
+  await page.click(`[data-editer-etape="${deux}"]`); await pause(1200);
+  const fiche=await page.evaluate(()=>({feuille:!!document.querySelector('.feuille'), titre:(document.querySelector('#ed-titre')||{}).value||'', devis:(document.querySelector('#ed-devis')||{}).value||'', montant:(document.querySelector('#ed-montant')||{}).value||''}));
+  verifier(fiche.feuille&&fiche.titre==='Environnement de test dédié','la fiche s ouvre sur la bonne étape',fiche.titre);
+  verifier(fiche.devis==='d-qa','avec son devis de rattachement',fiche.devis);
+  verifier(fiche.montant==='760','et son montant',fiche.montant);
+  await page.keyboard.press('Escape'); await pause(700);
+
   console.log('\n== La feuille de route la porte aussi');
   await aller(page,'/projets/atelier/etapes','.frise');
   verifier(await page.evaluate(()=>document.querySelectorAll('.frise').length)>=1,'la frise est en tête de la feuille de route');
@@ -85,6 +106,7 @@ const statutEnBase=async(id)=>((((await lire(`projets/atelier/jalons/${id}`))||{
   verifier(c.frise,'il voit la frise');
   verifier(c.etapes===5,'les cinq lignes');
   verifier(c.cases===0,'sans aucune case à cocher');
+  verifier(await cl.evaluate(()=>document.querySelectorAll('#etage-devis [data-statut-etape], #etage-devis [data-editer-etape]').length)===0,'ni statut à changer, ni crayon');
   verifier(c.coches===5,'avec une coche par ligne');
   await aller(cl,'/projets/atelier/etapes','.frise');
   verifier(await cl.evaluate(()=>document.querySelectorAll('.frise').length)>=1 && await cl.evaluate(()=>document.querySelectorAll('.frise input').length)===0,'et sur sa feuille de route, sans case non plus');
