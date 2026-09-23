@@ -1653,8 +1653,30 @@ exports.suiviAdmin = onRequest(
           cree: FieldValue.serverTimestamp(), maj: FieldValue.serverTimestamp(),
         }, { merge: true });
 
-        await audit('testeur.inscrit', { uid: compte.uid, email: adresse, projets });
-        return res.json({ ok: true, uid: compte.uid });
+        /* L'invitation, sans quoi le testeur ne sait pas qu'il est attendu :
+           l'inscription créait son compte en silence, et il n'avait aucun
+           moyen de deviner ni l'adresse de son espace, ni son rôle.
+
+           Un envoi qui échoue ne doit pas faire échouer l'inscription : le
+           testeur existe, et la lettre se renvoie. On le consigne. */
+        let invite = false;
+        try {
+          const premier = projets[0] || '';
+          const fiche = premier ? await lireProjet(premier) : null;
+          await mettreEnFile('invitation-testeur', [{ email: adresse, nom: String(prenom).trim() }], {
+            prenom: String(prenom).trim(),
+            email: adresse,
+            projetNom: fiche ? (fiche.nom || '') : '',
+            plateformes: surQuoi,
+            lien: `${courriels.BASE}`,
+          });
+          invite = true;
+        } catch (err) {
+          console.error(`Invitation du testeur ${adresse} non mise en file`, err);
+        }
+
+        await audit('testeur.inscrit', { uid: compte.uid, email: adresse, projets, invite });
+        return res.json({ ok: true, uid: compte.uid, invite });
       }
 
       if (action === 'majTesteur') {
@@ -1678,6 +1700,31 @@ exports.suiviAdmin = onRequest(
 
         await bdd.doc(`testeurs/${tid}`).set(changements, { merge: true });
         await audit('testeur.modifie', { uid: tid, champs: Object.keys(changements) });
+        return res.json({ ok: true });
+      }
+
+      /* Renvoyer l'invitation. Utile pour les testeurs inscrits avant que la
+         lettre existe, et pour ceux dont la boîte l'a perdue : sans elle, ils
+         ne savent pas qu'ils sont attendus. */
+      if (action === 'inviterTesteur') {
+        const tid = String(testeur || uid || '');
+        if (!tid) return res.status(400).send('testeur requis');
+        const fiche = await bdd.doc(`testeurs/${tid}`).get();
+        if (!fiche.exists) return res.status(404).send('testeur inconnu');
+        const t = fiche.data();
+        if (t.actif === false) return res.status(409).send('ce testeur est retire du vivier');
+
+        const premier = (t.projets || [])[0] || '';
+        const p = premier ? await lireProjet(premier) : null;
+        const envoi = await mettreEnFile('invitation-testeur', [{ email: t.email, nom: t.prenom || '' }], {
+          prenom: t.prenom || '',
+          email: t.email,
+          projetNom: p ? (p.nom || '') : '',
+          plateformes: t.plateformes || (t.mobile ? [t.mobile, 'web'] : []),
+          lien: `${courriels.BASE}`,
+        });
+        if (!envoi) return res.status(502).send('invitation non mise en file');
+        await audit('testeur.invite', { uid: tid, email: t.email });
         return res.json({ ok: true });
       }
 

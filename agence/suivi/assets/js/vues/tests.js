@@ -818,9 +818,18 @@ const ouvrirTesteur = (fiche, { env, projets }) => {
           <label class="case"><input type="checkbox" data-projet="${echapper(x.id)}" ${(f.projets || []).includes(x.id) ? 'checked' : ''}> ${echapper(x.nom)}</label>`).join('')}</div>
       </div>`,
     pied: `<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button>
+      ${neuf ? '' : `<button class="btn btn-doux" type="button" data-inviter>${icone('envoyer')} Renvoyer l'invitation</button>`}
       ${neuf ? '' : '<button class="btn btn-danger" type="button" data-retirer>Retirer du vivier</button>'}
       <button class="btn btn-principal" type="button" data-enregistrer>${neuf ? 'Inscrire' : 'Enregistrer'}</button>`,
   });
+
+  /* L'invitation part à l'inscription, mais une boîte la perd, et les
+     testeurs inscrits avant qu'elle existe n'ont jamais rien reçu. */
+  const inviter = m.el.querySelector('[data-inviter]');
+  if (inviter) inviter.addEventListener('click', () => agir(inviter, async () => {
+    await appelServeur('inviterTesteur', { testeur: f.id });
+    toast(`Invitation renvoyée à ${f.email || 'ce testeur'}.`);
+  }));
 
   const retirer = m.el.querySelector('[data-retirer]');
   if (retirer) retirer.addEventListener('click', async () => {

@@ -332,13 +332,47 @@ function invitation(v) {
       intro: `${prenom ? `Bonjour ${prenom},` : 'Bonjour,'}\n\n`
         + `Votre espace de suivi${projet ? ` pour ${projet}` : ''} est en ligne. Vous y déclarez une anomalie ou une demande, `
         + 'vous suivez son avancement, vous échangez avec nous et vous retrouvez vos devis et vos factures.\n\n'
-        + "La connexion se fait sans mot de passe : saisissez votre adresse e-mail, un lien de connexion vous est envoyé, un clic ouvre la session.",
+        + "La connexion se fait sans mot de passe : saisissez votre adresse e-mail, un code à six chiffres vous est envoyé, et il ouvre la session. Il est valable quinze minutes et ne sert qu'une fois.",
       faits: [
         ['Projet', projet],
         ['Votre adresse', valeurTexte(v.email)],
       ],
       bouton: { libelle: 'Ouvrir mon espace', url: valeurTexte(v.lien) || lienEspace() },
       note: "Utilisez bien l'adresse à laquelle vous avez reçu cet e-mail : c'est elle qui donne accès au projet.",
+    }),
+  };
+}
+
+/* 1 bis. L'invitation d'un testeur.
+
+   Elle était absente : inscrire un testeur créait son compte en silence, et
+   personne ne lui disait ni qu'il était attendu, ni où aller. Il ne pouvait
+   donc pas entrer, même avec un compte valide.
+
+   Un testeur n'est membre d'aucun projet : il ne voit que les scénarios
+   qu'on lui confie, jamais le reste. La lettre le dit, parce que son écran
+   ne ressemble à rien de ce qu'il connaît. */
+function invitationTesteur(v) {
+  const prenom = valeurTexte(v.prenom).trim();
+  const projet = valeurTexte(v.projetNom).trim();
+  const plateformes = (Array.isArray(v.plateformes) ? v.plateformes : [])
+    .map((p) => libelle(PLATEFORMES, p, p)).filter(Boolean).join(', ');
+  return {
+    objet: projet ? `Vous testez ${projet} : votre espace est ouvert` : 'Votre espace de test est ouvert',
+    ...rendreGabarit({
+      titre: 'Votre espace de test est ouvert',
+      intro: `${prenom ? `Bonjour ${prenom},` : 'Bonjour,'}\n\n`
+        + `Nous vous avons inscrit comme testeur${projet ? ` sur ${projet}` : ''}. Votre travail consiste à dérouler des scénarios précis, `
+        + "écrits pas à pas, et à dire pour chacun ce que vous avez obtenu : cela a marché, cela n'a pas marché, ou cela ne s'appliquait pas.\n\n"
+        + "Quand quelque chose ne marche pas, une capture d'écran est demandée : c'est elle qui permet de reproduire le problème, donc de le corriger.\n\n"
+        + "La connexion se fait sans mot de passe : saisissez votre adresse e-mail, un code à six chiffres vous est envoyé, et il ouvre la session. Il est valable quinze minutes et ne sert qu'une fois.",
+      faits: [
+        ['Projet', projet],
+        ['Votre adresse', valeurTexte(v.email)],
+        ['Ce que vous testez', plateformes],
+      ],
+      bouton: { libelle: 'Ouvrir mon espace de test', url: valeurTexte(v.lien) || lienEspace() },
+      note: "Utilisez bien l'adresse à laquelle vous avez reçu cet e-mail : c'est elle qui ouvre votre espace. Vous ne voyez que les scénarios qui vous sont confiés, et vous n'avez accès à rien d'autre du projet.",
     }),
   };
 }
@@ -848,6 +882,7 @@ function connexionEquipe(v) {
 
 const MODELES = {
   'invitation': invitation,
+  'invitation-testeur': invitationTesteur,
   'ticket-cree': ticketCree,
   'statut': statut,
   'assignation': assignation,
