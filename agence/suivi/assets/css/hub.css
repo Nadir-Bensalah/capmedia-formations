@@ -2160,3 +2160,41 @@ input, select, textarea { font: inherit; color: inherit; }
 
 /* Un testeur inscrit mais affecté à rien : une place payée pour rien. */
 .puce--vide { color: var(--encre-3); }
+
+/* --- Le questionnaire sur la page, et les résultats d'une campagne ------
+   Une question sans réponse reste lisible : l'énoncé, puis ce qu'on
+   attend comme réponse, en retrait. C'est ce que le client lit avant
+   que la campagne commence. */
+.avis-question { font: var(--t-corps); color: var(--encre); }
+.avis-mesure--vide { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-bottom: 1px solid var(--trait); margin-bottom: 0; }
+.avis-mesure--vide:last-child { border-bottom: 0; }
+.avis-forme { font: var(--t-petit); color: var(--encre-3); }
+.avis-famille .bloc-tete .etiquette { margin-left: 10px; vertical-align: middle; }
+.jauge > i[data-ton="gris"]  { background: var(--encre-4); }
+.puce--gris i { background: var(--encre-4); }
+
+.resultat { margin-top: 14px; }
+.resultat-tete { display: flex; align-items: baseline; gap: 8px; margin: 0 0 6px; font: var(--t-corps-fort); color: var(--encre); }
+.resultat-tete span { font-weight: 500; color: var(--encre-2); }
+
+/* --- La maintenance continue -------------------------------------------
+   Le forfait est une carte, comme la frise d'un devis : même bord, même
+   fond, mêmes chiffres en gras. Une séquence est une frise à son tour,
+   avec sa jauge de jours. Rien de nouveau à apprendre pour l'œil. */
+.forfait { border: 1px solid var(--trait); border-radius: var(--r-carte); padding: 18px 20px; background: var(--fond-2); }
+.forfait-tete { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.forfait-titre { font: var(--t-titre-2); letter-spacing: var(--ls-titre); color: var(--encre); margin: 0; }
+.forfait-sous { font: var(--t-petit); color: var(--encre-3); margin: 4px 0 0; }
+.forfait-sous b { font-weight: 650; color: var(--encre); font-variant-numeric: tabular-nums; }
+.forfait-actions { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.forfait-chiffres { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px 20px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--trait); }
+.forfait-chiffre { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.forfait-chiffre b { font-size: 24px; font-weight: 650; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--encre); }
+.forfait-chiffre span { font: var(--t-micro); color: var(--encre-3); }
+.liste-points { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+.liste-points li { font: var(--t-corps); color: var(--encre-2); }
+.citation { border-left: 2px solid var(--trait-fort); padding: 6px 0 6px 16px; margin: 0; font: var(--t-corps); color: var(--encre-2); white-space: pre-line; overflow-wrap: anywhere; }
+.citation cite { display: block; margin-top: 8px; font: var(--t-petit); font-style: normal; color: var(--encre-3); }
+.sequence-journees { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--trait); }
+.sequence-journees .ligne { padding-top: 8px; padding-bottom: 8px; }
+.deux-colonnes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px 32px; }

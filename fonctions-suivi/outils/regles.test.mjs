@@ -484,6 +484,45 @@ await refuse('Karim ne lit pas les fichiers', getDocs(query(collection(karim(), 
 await refuse('Karim ne lit pas les tâches', getDocs(query(collection(karim(), 'taches'), where('projet', '==', 'atelier'))));
 await refuse('Karim ne lit pas l équipe du projet', getDocs(collection(karim(), 'projets/atelier/jalons')));
 
+console.log('\n== La maintenance continue : le client demande, l équipe configure');
+/* Le contrat n'existe pas encore. Camille le fait naître avec sa seule
+   demande ; toute modalité glissée dedans est refusée. */
+const demande = { par: { uid: CAMILLE, nom: 'Camille', email: 'camille.essai@exemple.test' }, message: 'Un suivi chaque mois, avec les mises à jour iOS.', rythme: 'mensuelle', le: serverTimestamp() };
+await refuse('Camille ne pose pas un contrat avec un montant', setDoc(doc(camille(), 'projets/atelier/maintenance/contrat'), { genre: 'contrat', statut: 'demande', demande, montant: 1, cree: serverTimestamp(), maj: serverTimestamp() }));
+await refuse('Camille ne pose pas un contrat déjà « en cours »', setDoc(doc(camille(), 'projets/atelier/maintenance/contrat'), { genre: 'contrat', statut: 'actif', demande, cree: serverTimestamp(), maj: serverTimestamp() }));
+await refuse('Camille ne signe pas la demande d un autre', setDoc(doc(camille(), 'projets/atelier/maintenance/contrat'), { genre: 'contrat', statut: 'demande', demande: { ...demande, par: { uid: LEA, nom: 'Léa', email: 'x' } }, cree: serverTimestamp(), maj: serverTimestamp() }));
+await refuse('Léa ne demande rien sur le projet de Camille', setDoc(doc(lea(), 'projets/atelier/maintenance/contrat'), { genre: 'contrat', statut: 'demande', demande: { ...demande, par: { uid: LEA, nom: 'Léa', email: 'x' } }, cree: serverTimestamp(), maj: serverTimestamp() }));
+await refuse('Karim ne demande rien non plus', setDoc(doc(karim(), 'projets/atelier/maintenance/contrat'), { genre: 'contrat', statut: 'demande', demande: { ...demande, par: { uid: KARIM } }, cree: serverTimestamp(), maj: serverTimestamp() }));
+await doit('Camille demande un forfait', setDoc(doc(camille(), 'projets/atelier/maintenance/contrat'), { genre: 'contrat', statut: 'demande', demande, cree: serverTimestamp(), maj: serverTimestamp() }));
+await doit('Camille lit son contrat', getDoc(doc(camille(), 'projets/atelier/maintenance/contrat')));
+await doit('Camille corrige sa demande', updateDoc(doc(camille(), 'projets/atelier/maintenance/contrat'), { statut: 'demande', demande: { ...demande, message: 'Plutôt chaque trimestre.' }, maj: serverTimestamp() }));
+await refuse('Camille ne passe pas son forfait « en cours »', updateDoc(doc(camille(), 'projets/atelier/maintenance/contrat'), { statut: 'actif', maj: serverTimestamp() }));
+await refuse('Camille ne se pose pas des jours', updateDoc(doc(camille(), 'projets/atelier/maintenance/contrat'), { jours: 10, maj: serverTimestamp() }));
+await refuse('Léa ne lit pas le contrat de Camille', getDoc(doc(lea(), 'projets/atelier/maintenance/contrat')));
+await refuse('Karim ne lit pas le contrat', getDoc(doc(karim(), 'projets/atelier/maintenance/contrat')));
+await doit("L'équipe configure le forfait", updateDoc(doc(equipe(), 'projets/atelier/maintenance/contrat'), { statut: 'proposition', formule: 'Sérénité', montant: 900, jours: 2, reconduction: 'mensuelle', maj: serverTimestamp() }));
+await refuse('Une fois proposé, Camille ne le remet plus en « demandé »', updateDoc(doc(camille(), 'projets/atelier/maintenance/contrat'), { statut: 'demande', demande, maj: serverTimestamp() }));
+await refuse('Camille ne supprime pas le contrat', deleteDoc(doc(camille(), 'projets/atelier/maintenance/contrat')));
+await doit("L'équipe ouvre une séquence", setDoc(doc(equipe(), 'projets/atelier/maintenance/seq-1'), { genre: 'sequence', titre: 'Octobre', statut: 'en-cours', jours: 2 }));
+await doit("L'équipe consigne une journée", setDoc(doc(equipe(), 'projets/atelier/maintenance/j-1'), { genre: 'journee', sequence: 'seq-1', duree: 0.5, statut: 'faite', objet: 'Mise à jour iOS 27' }));
+await doit('Camille lit les séquences et les journées', getDocs(collection(camille(), 'projets/atelier/maintenance')));
+await refuse('Camille n ouvre pas une séquence', setDoc(doc(camille(), 'projets/atelier/maintenance/seq-2'), { genre: 'sequence', titre: 'Novembre', statut: 'a-venir' }));
+await refuse('Camille ne consigne pas une journée', addDoc(collection(camille(), 'projets/atelier/maintenance'), { genre: 'journee', sequence: 'seq-1', duree: 1, statut: 'faite', objet: 'x' }));
+await refuse('Camille ne coche pas une journée', updateDoc(doc(camille(), 'projets/atelier/maintenance/j-1'), { statut: 'prevue' }));
+const evolution = { genre: 'evolution', titre: 'Exporter mes tâches en tableur', description: 'Pour ma comptabilité.', statut: 'proposee', origine: 'client', par: { uid: CAMILLE, nom: 'Camille', email: 'camille.essai@exemple.test' }, cree: serverTimestamp(), maj: serverTimestamp() };
+await doit('Camille propose une évolution', addDoc(collection(camille(), 'projets/atelier/maintenance'), evolution));
+await refuse('Camille ne la pose pas déjà acceptée', addDoc(collection(camille(), 'projets/atelier/maintenance'), { ...evolution, statut: 'acceptee' }));
+await refuse('Camille ne se fait pas passer pour l équipe', addDoc(collection(camille(), 'projets/atelier/maintenance'), { ...evolution, origine: 'equipe' }));
+await refuse('Camille ne lui met pas une estimation', addDoc(collection(camille(), 'projets/atelier/maintenance'), { ...evolution, estimation: 3 }));
+await refuse('Camille ne propose pas sans titre', addDoc(collection(camille(), 'projets/atelier/maintenance'), { ...evolution, titre: '' }));
+await refuse('Léa ne propose rien chez Camille', addDoc(collection(lea(), 'projets/atelier/maintenance'), { ...evolution, par: { uid: LEA, nom: 'Léa', email: 'x' } }));
+await doit("L'équipe tranche une évolution", setDoc(doc(equipe(), 'projets/atelier/maintenance/ev-1'), { ...evolution, origine: 'equipe', statut: 'acceptee', estimation: 1 }));
+await refuse('Camille ne tranche pas', updateDoc(doc(camille(), 'projets/atelier/maintenance/ev-1'), { statut: 'livree' }));
+await doit("L'équipe lit la maintenance en groupe", getDocs(collectionGroup(equipe(), 'maintenance')));
+await refuse('Camille ne la lit pas en groupe', getDocs(collectionGroup(camille(), 'maintenance')));
+await refuse('Karim ne la lit pas en groupe', getDocs(collectionGroup(karim(), 'maintenance')));
+await doit("L'équipe retire un élément", deleteDoc(doc(equipe(), 'projets/atelier/maintenance/j-1')));
+
 console.log(`\n${ok} contrôle(s) conforme(s)${ecarts.length ? `, ${ecarts.length} ÉCART(S) :\n  - ${ecarts.join('\n  - ')}` : ''}`);
 await env.cleanup();
 process.exit(ecarts.length ? 1 : 0);

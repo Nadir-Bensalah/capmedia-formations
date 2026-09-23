@@ -19,7 +19,7 @@ import {
   echapper, dateCourte, depuis, pluriel, joursAvant, parDateDesc,
   NIVEAUX_SCENARIO, BLOCS_SCENARIO, PLATEFORMES_TEST, STATUTS_CAMPAGNE,
   GRAVITES_ANOMALIE, STATUTS_ANOMALIE, FAMILLES_AVIS, FAMILLES_REGLE, ETATS_REGLE,
-  ETATS_PARCOURS, OUTILS_PARCOURS, PARCOURS_A_REGARDER,
+  ETATS_PARCOURS, OUTILS_PARCOURS, PARCOURS_A_REGARDER, RESULTATS_PASSAGE,
   dateHeure, enDate,
 } from '../noyau.js';
 import {
@@ -28,7 +28,7 @@ import {
 } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K, ecrire, repartir } from '../donnees.js';
-import { bdd, collection, getDocs, doc, getDoc } from '../noyau.js';
+import { bdd, collection } from '../noyau.js';
 import { editer } from './editeurs.js';
 import { appelServeur } from '../serveur.js';
 import { filAriane } from '../coquille.js';
@@ -75,6 +75,32 @@ const lireTout = (env) => {
        même testeur, sans le nom ni l'adresse. Le magasin garde le parent
        du document, qui est l'identifiant du testeur. */
     profils: (magasin.lire(K.profils) || []).filter((x) => x.id === 'profil').map((x) => ({ ...x, id: x._parent })),
+  };
+};
+
+/* Les avis et les passages vivent sous chaque campagne, et se lisent
+   campagne par campagne : c'est la seule porte que les règles ouvrent au
+   client. Le magasin garde l'identifiant du testeur (le nom du document)
+   et celui de la campagne (son parent). */
+const avisDe = (campagnes) => campagnes.flatMap((c) => (magasin.lire(K.appreciations(c.id)) || [])
+  .map((a) => ({ ...a, testeur: a.id, campagne: c.id })));
+const passagesDe = (c) => (magasin.lire(K.passages(c.id)) || []);
+
+/* Comment on nomme un testeur. L'équipe lit son prénom ; le client lit un
+   numéro, le MÊME partout sur la page, du vivier aux réponses libres :
+   « Testeur 2 » doit désigner la même personne dans toutes les sections,
+   sinon le numéro ne dit rien. Le profil, lui, reste : un avis de 22 ans
+   et un de 55 ans ne disent pas la même chose. */
+const nommeur = (d, { equipe, pid }) => {
+  const gens = (equipe ? (d.testeurs || []) : (d.profils || [])).filter((t) => (t.projets || []).includes(pid));
+  const rangs = new Map(gens.map((t, i) => [t.id, i + 1]));
+  const rang = (uid) => { if (!rangs.has(uid)) rangs.set(uid, rangs.size + 1); return rangs.get(uid); };
+  return (uid) => {
+    const t = (equipe ? (d.testeurs || []) : (d.profils || [])).find((x) => x.id === uid) || {};
+    const p = equipe ? (t.profil || {}) : t;
+    const traits = [p.sexe, p.age ? `${p.age} ans` : '', p.fonction].filter(Boolean).join(', ');
+    const nom = equipe ? (t.prenom || t.email || 'Testeur') : `Testeur ${rang(uid)}`;
+    return { nom, traits, libelle: traits ? `${nom} · ${traits}` : nom };
   };
 };
 
@@ -152,6 +178,16 @@ const EXPLICATIONS = {
     <p>Un scénario, c'est une vérification écrite pour un humain : ce qu'il doit faire dans l'application, pas à pas, et ce qu'il doit obtenir à la fin. Par exemple : « créer un anniversaire sans année de naissance, et vérifier qu'il s'affiche quand même ».</p>
     <p>La bibliothèque contient tous les scénarios du projet, rangés par partie de l'application. Une campagne pioche dedans.</p>
     <p>Trois niveaux : <b>socle</b>, les vérifications essentielles, faites par deux testeurs sur deux systèmes différents ; <b>transversal</b>, ce qui traverse toute l'application (la langue, le mode hors ligne), aussi en double ; <b>réparti</b>, le reste, fait par une seule personne.</p>` },
+  'avis': { titre: 'Le questionnaire', corps: `
+    <p>Les scénarios disent si l'application <b>marche</b>. Le questionnaire dit si elle <b>plaît</b>, et c'est la seconde question qui décide si les gens la gardent.</p>
+    <p>Chaque testeur y répond deux fois. Trois questions <b>avant de commencer</b>, en deux minutes : c'est le seul regard qu'on ne retrouve jamais, une fois qu'on connaît l'application. Puis tout le reste <b>après avoir tout déroulé</b> : l'esthétique, la facilité, l'utilité, l'argent, la vitesse ressentie, et quatre questions libres.</p>
+    <p>Les notes sont des moyennes. Les réponses libres sont rendues <b>mot pour mot</b>, jamais résumées : c'est là qu'est la vraie information.</p>
+    <p>Les quatre questions sur le prix ne sont pas une invention : c'est une méthode connue qui donne une <b>fourchette</b> plutôt qu'un chiffre en l'air. En dessous du bas de la fourchette, les gens se méfient de la qualité ; au-dessus du haut, ils renoncent.</p>
+    <p>Quand personne n'a encore répondu, la page montre quand même toutes les questions : c'est ce qui sera demandé, et vous pouvez le lire avant que la campagne commence.</p>` },
+  'resultats': { titre: 'Les résultats, scénario par scénario', corps: `
+    <p>Chaque fois qu'un testeur déroule un scénario, il consigne un <b>passage</b> : ce qu'il a obtenu, sur quel appareil, avec un commentaire et une capture s'il y a eu un problème.</p>
+    <p><b>OK</b> : ça a marché comme prévu. <b>KO</b> : ça n'a pas marché, et une preuve est jointe. <b>NA</b> : le scénario ne s'appliquait pas sur cet appareil.</p>
+    <p>Un scénario important est déroulé par deux personnes sur deux systèmes différents : il a donc deux passages. Un KO fait naître une anomalie tout seul, regroupée par scénario.</p>` },
   'activite': { titre: 'Activité', corps: `
     <p>Ce qui s'est passé récemment sur tous les projets, du plus récent au plus ancien : une campagne qui change d'état, une anomalie signalée ou corrigée.</p>` },
 };
@@ -567,11 +603,22 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
   const etapesFaites = etapesDevis.filter((j) => j.statut === 'termine');
   const resumeDevis = `<b>${etapesFaites.length} / ${etapesDevis.length}</b> ${etapesDevis.length > 1 ? 'lignes du devis livrées' : 'ligne du devis livrée'}${devisProjet.length > 1 ? `, sur <b>${devisProjet.length}</b> devis` : ''}.`;
 
+  /* Le questionnaire : toutes les campagnes du projet confondues. Le
+     nommeur donne le même numéro à un testeur partout sur la page. */
+  const nommer = nommeur(d, { equipe, pid });
+  const avis = avisDe(camp);
+  const { recommande, suspect, cher } = mesuresAvis(avis);
+  const nbQuestions = Object.values(FAMILLES_AVIS).reduce((n, f) => n + f.questions.length, 0);
+  const resumeAvis = avis.length
+    ? `<b>${avis.length}</b> ${avis.length > 1 ? 'testeurs ont répondu' : 'testeur a répondu'} au questionnaire${recommande ? `, recommandation <b>${recommande.v.toFixed(1)}</b> sur 10` : ''}${suspect && cher ? `, prix acceptable entre <b>${suspect.median}</b> et <b>${cher.median} €</b> par mois` : ''}.`
+    : `Personne n'a encore répondu. Les <b>${nbQuestions}</b> questions posées à chaque testeur sont ci-dessous.`;
+
   const index = [
     ...(devisProjet.length ? [['etage-devis', 'Le devis', `${etapesFaites.length}/${etapesDevis.length}`]] : []),
     ['campagnes', 'Campagnes', camp.length],
     ...(ano.length ? [['anomalies', 'Anomalies', ano.length]] : []),
     ['testeurs', 'Testeurs', gens.length],
+    ['avis', 'Questionnaire', avis.length],
     ['parcours', 'Parcours', parc.length],
     ['regles', 'Règles', casRegles],
     ['scenarios', 'Scénarios', scen.length],
@@ -649,8 +696,10 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
 
   <div class="tests-corps tests-corps--index">
     <div>
+      ${alertes({ ...d, anomalies: ano, campagnes: camp, parcours: parc, scenarios: scen }, { nomProjet, plateforme })}
       ${devisProjet.length ? etage('etage-devis', 'Le devis, ligne par ligne', resumeDevis, `<div style="margin-top:20px">${devisProjet.map((dv) => friseDevis(dv, jalonsProjet, { equipe, pid })).join('')}</div>`) : ''}
       ${etage('etage-humain', 'Tests humains', humain, `${sectionCampagnes}${sectionAnomalies}${vivierHtml({ ...d, testeurs: gens, profils: gens }, { equipe })}`)}
+      ${etage('etage-avis', 'Ce que les testeurs en pensent', resumeAvis, avisHtml(avis, { nommer }))}
       ${etage('etage-machine', 'Tests automatisés', machine, `${parcoursHtml(d, { pid, equipe })}${reglesHtml(d, { pid, equipe })}`)}
       ${etage('etage-bibli', 'Bibliothèque', bibli, sectionScenarios)}
     </div>
@@ -827,9 +876,101 @@ const ouvrirTesteur = (fiche, { env, projets }) => {
    qu'est la vraie information, et un résumé la tue.
 
    Chez le client, les noms sont masqués et les profils restent : « Testeur
-   3, femme, 35-44 ans » suffit à comprendre qui parle sans le nommer. */
-const ouvrirAvis = (campagne, { env, vivier }) => {
-  const equipe = env.role === 'equipe';
+   3 · femme, 35-44 ans » suffit à comprendre qui parle sans le nommer.
+
+   Avec « toutes », chaque question est montrée même sans réponse : c'est
+   ce qui sera demandé, et le client peut le lire avant la campagne. */
+const mesuresAvis = (avis) => {
+  const moyenne = (cle) => {
+    const n = avis.map((a) => Number(a[cle])).filter((x) => !Number.isNaN(x) && x !== null);
+    return n.length ? { v: n.reduce((x, y) => x + y, 0) / n.length, sur: n.length } : null;
+  };
+  const euros = (cle) => {
+    const n = avis.map((a) => Number(a[cle])).filter((x) => !Number.isNaN(x) && x > 0).sort((x, y) => x - y);
+    return n.length ? { bas: n[0], haut: n[n.length - 1], median: n[Math.floor(n.length / 2)], sur: n.length } : null;
+  };
+  /* La fourchette acceptable : entre ce qu'on trouve suspect et ce qu'on
+     trouve cher. En dessous on doute de la qualité, au-dessus on renonce. */
+  return { moyenne, euros, suspect: euros('argent.suspect'), cher: euros('argent.cher'), recommande: moyenne('facilite.recommande') };
+};
+
+/* Ce qu'une question attend, dit en clair : c'est ce qu'on lit quand
+   personne n'a encore répondu. */
+const formeDe = (q) => {
+  if (q.type === 'echelle') return `Une note de 1 à 5${q.bas ? `, de « ${q.bas} » à « ${q.haut} »` : ''}`;
+  if (q.type === 'note10') return 'Une note de 0 à 10';
+  if (q.type === 'choix') return `Au choix : ${(q.options || []).join(', ')}`;
+  if (q.type === 'euros') return 'Un montant en euros, par mois';
+  return 'Une réponse libre, rendue mot pour mot';
+};
+
+const restitutionHtml = (avis, { nommer, toutes = false }) => {
+  const { moyenne, euros } = mesuresAvis(avis);
+  const repondu = (cle) => avis.filter((a) => a[cle] !== undefined && a[cle] !== null && a[cle] !== '');
+
+  const questionHtml = (cle, q) => {
+    const id = `${cle}.${q.cle}`;
+    const enonce = `<span class="avis-question">${echapper(q.libelle)}</span>`;
+    if (!repondu(id).length) {
+      return toutes ? `<div class="avis-mesure avis-mesure--vide">${enonce}<span class="avis-forme">${echapper(formeDe(q))}</span></div>` : '';
+    }
+    if (q.type === 'echelle' || q.type === 'note10') {
+      const m = moyenne(id);
+      if (!m) return '';
+      const part = q.type === 'note10' ? (m.v / 10) * 100 : (m.v / 5) * 100;
+      return `<div class="avis-mesure">
+        <div class="rang" style="justify-content:space-between;gap:12px">${enonce}<strong>${m.v.toFixed(1)}${q.type === 'note10' ? ' / 10' : ' / 5'}</strong></div>
+        <div class="testeur-jauge" style="margin-top:6px"><div class="testeur-jauge-barre" style="width:${Math.round(part)}%"></div></div>
+        ${q.bas ? `<div class="rang avis-bornes"><span>${echapper(q.bas)}</span><span>${echapper(q.haut || '')}</span></div>` : ''}
+      </div>`;
+    }
+    if (q.type === 'choix') {
+      const comptes = {};
+      avis.forEach((a) => { const v = a[id]; if (v) comptes[v] = (comptes[v] || 0) + 1; });
+      const lignes = Object.entries(comptes).sort((a, b) => b[1] - a[1]);
+      return `<div class="avis-mesure">${enonce}
+        <div class="rang" style="gap:8px;flex-wrap:wrap;margin-top:6px">${lignes.map(([v, n]) => `<span class="puce">${echapper(v)} <strong>${n}</strong></span>`).join('')}</div>
+      </div>`;
+    }
+    if (q.type === 'euros') {
+      const e = euros(id);
+      if (!e) return '';
+      return `<div class="avis-mesure">
+        <div class="rang" style="justify-content:space-between;gap:12px">${enonce}<strong>${e.median} €</strong></div>
+        <p class="aide" style="margin-top:4px">${e.bas === e.haut ? `${pluriel(e.sur, 'réponse', 'réponses')}` : `de ${e.bas} à ${e.haut} €, sur ${pluriel(e.sur, 'réponse', 'réponses')}`}</p>
+      </div>`;
+    }
+    const dits = avis.map((a) => ({ texte: a[id], uid: a.testeur })).filter((x) => x.texte);
+    return `<div class="avis-mesure">${enonce}
+      <div class="avis-verbatims">${dits.map((x) => `
+        <blockquote class="avis-verbatim">
+          <p>${echapper(String(x.texte))}</p>
+          <cite>${echapper(nommer(x.uid).libelle)}</cite>
+        </blockquote>`).join('')}</div>
+    </div>`;
+  };
+
+  return Object.entries(FAMILLES_AVIS).map(([cle, f]) => `
+    <section class="avis-famille">
+      <h3 class="bloc-tete">${echapper(f.libelle)}${toutes ? `<span class="etiquette">${f.quand === 'avant' ? 'Avant de commencer' : 'Après avoir tout déroulé'}</span>` : ''}</h3>
+      ${toutes && f.aide ? `<p class="aide" style="margin:0 0 10px">${echapper(f.aide)}</p>` : ''}
+      ${f.questions.map((q) => questionHtml(cle, q)).join('')}
+    </section>`).join('');
+};
+
+/* Les trois chiffres qui résument un questionnaire : qui recommande, à
+   quel prix, et combien de personnes l'ont dit. */
+const chiffresAvis = (avis) => {
+  const { recommande, suspect, cher } = mesuresAvis(avis);
+  return `<div class="rang chiffres-tests" style="margin-bottom:22px">
+    ${recommande ? `<div class="chiffre"><span class="chiffre-valeur">${recommande.v.toFixed(1)}</span><span class="chiffre-nom">recommandation sur 10</span></div>` : ''}
+    ${suspect && cher ? `<div class="chiffre"><span class="chiffre-valeur">${suspect.median} à ${cher.median} €</span><span class="chiffre-nom">fourchette acceptable</span></div>` : ''}
+    <div class="chiffre"><span class="chiffre-valeur">${avis.length}</span><span class="chiffre-nom">${avis.length > 1 ? 'testeurs ont répondu' : 'testeur a répondu'}</span></div>
+  </div>
+  ${suspect && cher ? `<p class="aide" style="margin-bottom:22px">En dessous de ${suspect.median} €, ils se méfient de la qualité. Au-dessus de ${cher.median} €, ils renoncent. Sur ${pluriel(avis.length, 'réponse', 'réponses')}, c'est une direction, pas une étude de marché.</p>` : ''}`;
+};
+
+const ouvrirAvis = (campagne, { nommer }) => {
   const avis = campagne._avis || [];
 
   if (!avis.length) {
@@ -841,103 +982,63 @@ const ouvrirAvis = (campagne, { env, vivier }) => {
     }).fin;
   }
 
-  /* Le nom d'un testeur ne regarde que l'équipe. Le profil, lui, éclaire
-     la réponse : un avis de 22 ans et un de 55 ans ne disent pas la même
-     chose, et le masquer priverait le client de l'essentiel. */
-  const qui = (uid, rang) => {
-    const t = vivier.find((x) => x.id === uid) || {};
-    const p = t.profil || {};
-    const traits = [p.sexe, p.age ? `${p.age} ans` : '', p.fonction].filter(Boolean).join(', ');
-    return equipe
-      ? `${t.prenom || uid}${traits ? ` · ${traits}` : ''}`
-      : `Testeur ${rang + 1}${traits ? ` · ${traits}` : ''}`;
-  };
-
-  const moyenne = (cle) => {
-    const n = avis.map((a) => Number(a[cle])).filter((x) => !Number.isNaN(x) && x !== null);
-    return n.length ? { v: n.reduce((x, y) => x + y, 0) / n.length, sur: n.length } : null;
-  };
-
-  const euros = (cle) => {
-    const n = avis.map((a) => Number(a[cle])).filter((x) => !Number.isNaN(x) && x > 0).sort((x, y) => x - y);
-    return n.length ? { bas: n[0], haut: n[n.length - 1], median: n[Math.floor(n.length / 2)], sur: n.length } : null;
-  };
-
-  /* La fourchette acceptable : entre ce qu'on trouve suspect et ce qu'on
-     trouve cher. En dessous on doute de la qualité, au-dessus on renonce. */
-  const suspect = euros('argent.suspect');
-  const cher = euros('argent.cher');
-  const recommande = moyenne('facilite.recommande');
-
-  const familleHtml = (cle, f) => {
-    const chiffrees = f.questions.filter((q) => ['echelle', 'note10'].includes(q.type));
-    const libres = f.questions.filter((q) => q.type === 'texte');
-    const choix = f.questions.filter((q) => q.type === 'choix');
-    return `
-    <section class="avis-famille">
-      <h3 class="bloc-tete">${echapper(f.libelle)}</h3>
-
-      ${chiffrees.map((q) => {
-        const m = moyenne(`${cle}.${q.cle}`);
-        if (!m) return '';
-        const part = q.type === 'note10' ? (m.v / 10) * 100 : (m.v / 5) * 100;
-        return `<div class="avis-mesure">
-          <div class="rang" style="justify-content:space-between;gap:12px">
-            <span>${echapper(q.libelle)}</span>
-            <strong>${m.v.toFixed(1)}${q.type === 'note10' ? ' / 10' : ' / 5'}</strong>
-          </div>
-          <div class="testeur-jauge" style="margin-top:6px"><div class="testeur-jauge-barre" style="width:${Math.round(part)}%"></div></div>
-        </div>`;
-      }).join('')}
-
-      ${choix.map((q) => {
-        const comptes = {};
-        avis.forEach((a) => { const v = a[`${cle}.${q.cle}`]; if (v) comptes[v] = (comptes[v] || 0) + 1; });
-        const lignes = Object.entries(comptes).sort((a, b) => b[1] - a[1]);
-        if (!lignes.length) return '';
-        return `<div class="avis-mesure">
-          <span class="etiquette-champ">${echapper(q.libelle)}</span>
-          <div class="rang" style="gap:8px;flex-wrap:wrap;margin-top:6px">
-            ${lignes.map(([v, n]) => `<span class="puce">${echapper(v)} <strong>${n}</strong></span>`).join('')}
-          </div>
-        </div>`;
-      }).join('')}
-
-      ${libres.map((q) => {
-        const dits = avis.map((a, i) => ({ texte: a[`${cle}.${q.cle}`], uid: a.testeur, rang: i })).filter((x) => x.texte);
-        if (!dits.length) return '';
-        return `<div class="avis-mesure">
-          <span class="etiquette-champ">${echapper(q.libelle)}</span>
-          <div class="avis-verbatims">${dits.map((x) => `
-            <blockquote class="avis-verbatim">
-              <p>${echapper(String(x.texte))}</p>
-              <cite>${echapper(qui(x.uid, x.rang))}</cite>
-            </blockquote>`).join('')}</div>
-        </div>`;
-      }).join('')}
-    </section>`;
-  };
-
   return modale({
     titre: 'Ce que les testeurs en pensent',
     sousTitre: `${pluriel(avis.length, 'réponse', 'réponses')} · ${echapper(campagne.titre || '')}`,
     feuille: true,
-    corps: `
-      <div class="rang chiffres-tests" style="margin-bottom:22px">
-        ${recommande ? `<div class="chiffre"><span class="chiffre-valeur">${recommande.v.toFixed(1)}</span><span class="chiffre-nom">recommandation sur 10</span></div>` : ''}
-        ${suspect && cher ? `<div class="chiffre"><span class="chiffre-valeur">${suspect.median} à ${cher.median} €</span><span class="chiffre-nom">fourchette acceptable</span></div>` : ''}
-        <div class="chiffre"><span class="chiffre-valeur">${avis.length}</span><span class="chiffre-nom">testeurs ont répondu</span></div>
-      </div>
-      ${suspect && cher ? `<p class="aide" style="margin-bottom:22px">En dessous de ${suspect.median} €, ils se méfient de la qualité. Au-dessus de ${cher.median} €, ils renoncent. Sur ${pluriel(avis.length, 'réponse', 'réponses')}, c'est une direction, pas une étude de marché.</p>` : ''}
-      ${Object.entries(FAMILLES_AVIS).map(([cle, f]) => familleHtml(cle, f)).join('')}`,
+    corps: `${chiffresAvis(avis)}${restitutionHtml(avis, { nommer })}`,
     pied: '<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>',
   }).fin;
+};
+
+/* Le questionnaire sur la page : ce qui sera demandé, et ce qui a été
+   répondu, toutes campagnes du projet confondues. */
+const avisHtml = (avis, { nommer }) => {
+  const nbQuestions = Object.values(FAMILLES_AVIS).reduce((n, f) => n + f.questions.length, 0);
+  return `<section class="section" id="avis">
+    <div class="section-tete">
+      <div><h2>Le questionnaire ${infoBouton('avis')}</h2><p class="chapo">${nbQuestions} questions en sept familles. Trois avant de commencer, le reste après avoir tout déroulé. ${avis.length ? 'Les réponses libres sont rendues mot pour mot.' : 'Personne n\'a encore répondu : voici ce qui sera demandé.'}</p></div>
+    </div>
+    ${avis.length ? chiffresAvis(avis) : ''}
+    ${restitutionHtml(avis, { nommer, toutes: true })}
+  </section>`;
+};
+
+/* Les résultats d'une campagne, scénario par scénario : chaque passage,
+   avec qui l'a fait, sur quoi, ce qu'il a obtenu, et sa preuve. C'est ce
+   que le client vient lire pendant la campagne, et il le lit en entier. */
+const resultatsHtml = (c, { dedans, nommer }) => {
+  const passages = passagesDe(c).slice().sort((a, b) => (enDate(b.le) || 0) - (enDate(a.le) || 0));
+  const attendus = Object.values(c.affectation || {}).reduce((n, r) => n + r.length, 0);
+  const compte = (r) => passages.filter((x) => x.resultat === r).length;
+  const parScenario = dedans.map((s) => ({ s, p: passages.filter((x) => x.scenario === s.ref) })).filter((x) => x.p.length);
+  return `<div class="groupe" id="resultats">
+    <span class="etiquette-champ">Les résultats, scénario par scénario ${infoBouton('resultats')}</span>
+    ${passages.length ? `
+      ${jauge([{ n: compte('ok'), nom: 'réussis', ton: 'vert' }, { n: compte('ko'), nom: 'échoués', ton: 'rouge' }, { n: compte('na'), nom: 'sans objet', ton: 'gris' }])}
+      <p class="aide" style="margin:8px 0 12px">${pluriel(passages.length, 'passage consigné', 'passages consignés')}${attendus ? ` sur ${attendus} ${attendus > 1 ? 'attendus' : 'attendu'}` : ''}.</p>
+      ${parScenario.map(({ s, p }) => `<div class="resultat">
+        <p class="resultat-tete">${ref(s.ref)} <span>${echapper(s.titre)}</span></p>
+        <div class="liste liste--serree">${p.map((x) => {
+          const qui = nommer(x.testeur);
+          const appareil = (x.contexte || {}).appareil || (x.contexte || {}).modele || '';
+          return ligne({
+            icone: x.resultat === 'ko' ? 'alerte' : x.resultat === 'ok' ? 'check' : 'moins',
+            ton: x.resultat === 'ko' ? 'rouge' : x.resultat === 'ok' ? 'vert' : '',
+            titre: `${echapper(qui.nom)} · ${echapper((PLATEFORMES_TEST[x.plateforme] || {}).libelle || x.plateforme || '')}${appareil ? ` · ${echapper(appareil)}` : ''}`,
+            sous: `${x.le ? `${echapper(dateHeure(x.le))} · ` : ''}${echapper(x.commentaire || (x.resultat === 'ok' ? 'Comme prévu' : 'Sans commentaire'))}${qui.traits ? ` · <span class="t-3">${echapper(qui.traits)}</span>` : ''}`,
+            fin: `${pastille(RESULTATS_PASSAGE, x.resultat || 'na')}${(x.preuves || []).map((ch, i) => `<button class="btn btn-doux btn-petit" type="button" data-piece="${echapper(ch)}">${icone('image')} Preuve ${i + 1}</button>`).join('')}`,
+          });
+        }).join('')}</div>
+      </div>`).join('')}`
+    : `<p class="aide">Aucun passage consigné pour l'instant${attendus ? ` : ${attendus} ${attendus > 1 ? 'sont attendus' : 'est attendu'}` : ''}.</p>`}
+  </div>`;
 };
 
 /* L'affectation des testeurs à une campagne.
    Le calcul propose, il ne décide pas : un testeur tombe malade, un autre
    demande un bloc précis, et aucun calcul ne prévoit cela. */
-const ouvrirCampagne = async (c, { pid, env, scenarios }) => {
+const ouvrirCampagne = async (c, { pid, env, scenarios, nommer }) => {
   const equipe = env.role === 'equipe';
   const vivier = magasin.lire(K.testeurs) || [];
   const retenus = c.scenarios || [];
@@ -978,6 +1079,8 @@ const ouvrirCampagne = async (c, { pid, env, scenarios }) => {
           : `<p class="aide">Aucun testeur pour l'instant. ${vivier.length ? 'Choisissez-les ci-dessous.' : 'Le vivier est vide : le serveur seul y inscrit quelqu\'un.'}</p>`}
       </div>
 
+      ${resultatsHtml(c, { dedans, nommer })}
+
       ${equipe && vivier.length ? `<div class="groupe">
         <span class="etiquette-champ">Le vivier</span>
         <div class="cases-blocs">${vivier.map((t) => `
@@ -989,31 +1092,12 @@ const ouvrirCampagne = async (c, { pid, env, scenarios }) => {
       ${equipe ? `<button class="btn btn-principal" type="button" data-repartir>${icone('eclair')} Répartir</button>` : ''}`,
   });
 
+  brancherPieces(m.el);
   const voir = m.el.querySelector('[data-voir-avis]');
   if (voir) voir.addEventListener('click', () => agir(voir, async () => {
-    /* Les avis se lisent à l'ouverture, pas en permanence : ils ne
-       changent qu'à la toute fin d'une campagne, et les abonner en
-       continu ferait un écouteur de plus pour rien. */
-    const lot = [];
-    try {
-      const inst = await getDocs(collection(bdd, 'projets', pid, 'campagnes', c.id, 'appreciations'));
-      inst.forEach((d) => lot.push({ testeur: d.id, ...d.data() }));
-    } catch (e) { toast("Les avis n'ont pas pu être lus.", 'erreur'); return; }
-
-    /* Le client ne lit pas le vivier : le nom d'un testeur ne le regarde
-       pas. Son profil, lui, éclaire la réponse, et le serveur l'a recopié
-       à part, sans rien qui identifie. */
-    let profils = vivier;
-    if (env.role !== 'equipe') {
-      profils = [];
-      for (const a of lot) {
-        try {
-          const d = await getDoc(doc(bdd, 'testeurs', a.testeur, 'public', 'profil'));
-          profils.push({ id: a.testeur, profil: d.exists() ? d.data() : {} });
-        } catch (err) { profils.push({ id: a.testeur, profil: {} }); }
-      }
-    }
-    await ouvrirAvis({ ...c, _avis: lot }, { env, vivier: profils });
+    /* Les avis de la campagne sont déjà dans le magasin, abonnés par la
+       page : la feuille les lit tels quels, sans requête de plus. */
+    await ouvrirAvis({ ...c, _avis: avisDe([c]) }, { nommer });
   }));
 
   const bouton = m.el.querySelector('[data-repartir]');
@@ -1049,10 +1133,17 @@ export const vue = async (ctx, env) => {
      réservent. Un client reçoit ses données sur les clés de ses projets, et
      s'abonner aux mauvaises laisse l'écran figé sur son premier rendu, sans
      la moindre erreur pour le dire. */
-  const clesSuivies = () => (env.role === 'equipe'
-    ? [K.projets, K.scenariosTous, K.campagnesToutes, K.anomaliesToutes, K.parcoursTous, K.reglesToutes, K.documentsTous, K.jalonsTous, K.testeurs]
-    : [K.projets, ...(magasin.lire(K.projets) || (env.session || {}).projets || [])
-        .flatMap((p) => [K.scenarios(p.id), K.campagnes(p.id), K.anomalies(p.id), K.parcours(p.id), K.regles(p.id), K.documents(p.id), K.jalons(p.id)]), K.profils]);
+  /* Les avis et les passages du projet ouvert, campagne par campagne :
+     abonnés quand la campagne apparaît, et comptés dans l'empreinte, sans
+     quoi une réponse qui arrive ne redessinerait rien. */
+  const campagnesSuivies = new Set();
+  const clesSuivies = () => [
+    ...(env.role === 'equipe'
+      ? [K.projets, K.scenariosTous, K.campagnesToutes, K.anomaliesToutes, K.parcoursTous, K.reglesToutes, K.documentsTous, K.jalonsTous, K.testeurs]
+      : [K.projets, ...(magasin.lire(K.projets) || (env.session || {}).projets || [])
+          .flatMap((p) => [K.scenarios(p.id), K.campagnes(p.id), K.anomalies(p.id), K.parcours(p.id), K.regles(p.id), K.documents(p.id), K.jalons(p.id)]), K.profils]),
+    ...[...campagnesSuivies].flatMap((cid) => [K.appreciations(cid), K.passages(cid)]),
+  ];
 
   /* Le projet ouvert : celui qu'on a choisi, ou le seul que le client ait.
      Le rendu et les gestes doivent lire la MÊME valeur, faute de quoi le
@@ -1063,7 +1154,21 @@ export const vue = async (ctx, env) => {
     return env.role !== 'equipe' && p.length === 1 ? p[0].id : '';
   };
 
+  const suivreCampagnes = () => {
+    const pid = projetCourant();
+    if (!pid) return;
+    lireTout(env).campagnes.filter((c) => projetDe(c) === pid).forEach((c) => {
+      if (campagnesSuivies.has(c.id)) return;
+      campagnesSuivies.add(c.id);
+      lot.abonner(K.appreciations(c.id), () => collection(bdd, 'projets', pid, 'campagnes', c.id, 'appreciations'));
+      lot.abonner(K.passages(c.id), () => collection(bdd, 'projets', pid, 'campagnes', c.id, 'passages'));
+      lot.sur(K.appreciations(c.id), () => rendre());
+      lot.sur(K.passages(c.id), () => rendre());
+    });
+  };
+
   const rendre = (force = false) => {
+    suivreCampagnes();
     const sceau = magasin.empreinte(clesSuivies()) + '|' + etat.projet + '|' + etat.plateforme;
     if (!force && sceau === empreinte) return;
     empreinte = sceau;
@@ -1206,7 +1311,7 @@ export const vue = async (ctx, env) => {
       const pid = projetCourant();
       const d = lireTout(env);
       const c = d.campagnes.find((x) => x.id === el.dataset.id && projetDe(x) === pid);
-      if (c) await ouvrirCampagne(c, { pid, env, scenarios: d.scenarios.filter((x) => projetDe(x) === pid) });
+      if (c) await ouvrirCampagne(c, { pid, env, scenarios: d.scenarios.filter((x) => projetDe(x) === pid), nommer: nommeur(d, { equipe: env.role === 'equipe', pid }) });
       return;
     }
     if (el.dataset.editerCampagne) {

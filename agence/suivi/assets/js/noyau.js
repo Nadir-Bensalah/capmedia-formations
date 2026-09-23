@@ -189,6 +189,78 @@ export const PORTEES_DEVIS = {
   'complementaire': { libelle: 'Devis complémentaire', court: 'Avenant', aide: "Une extension d'un projet déjà lancé. Sa signature ne change pas l'état du projet." },
 };
 
+/* --- La maintenance continue -------------------------------------------
+
+   Un forfait par projet, dans « projets/{p}/maintenance/contrat ». Autour
+   de lui, dans la même collection : les séquences (une période, un
+   nombre de jours compris), les journées (un jour travaillé, ce qu'on y
+   a fait) et les évolutions (ce qu'on ajoute au fil du forfait).
+
+   Le client lit tout. Il n'écrit que deux choses : sa demande de forfait
+   et ses propositions d'évolution. Les modalités, c'est l'équipe. */
+export const STATUTS_MAINTENANCE = {
+  'demande':     { libelle: 'Demandé',             voile: 'ambre', ordre: 1, aide: 'Le client a demandé un forfait. Une proposition lui est due.' },
+  'proposition': { libelle: 'Proposition envoyée', voile: 'bleu',  ordre: 2, aide: 'Les modalités sont posées. Le devis est chez le client.' },
+  'actif':       { libelle: 'En cours',            voile: 'vert',  ordre: 3, aide: 'Le forfait tourne : des jours sont travaillés à chaque période.' },
+  'suspendu':    { libelle: 'Suspendu',            voile: 'gris',  ordre: 4, aide: 'En pause, d\'un commun accord. Rien n\'est perdu.' },
+  'termine':     { libelle: 'Terminé',             voile: 'gris',  ordre: 5, aide: 'Le forfait est arrivé à son terme. Son histoire reste lisible.' },
+};
+
+export const RECONDUCTIONS_MAINTENANCE = {
+  'mensuelle':     { libelle: 'Chaque mois',      periode: 'mois' },
+  'trimestrielle': { libelle: 'Chaque trimestre', periode: 'trimestre' },
+  'annuelle':      { libelle: 'Chaque année',     periode: 'an' },
+};
+
+/* Les quatre pas d'un forfait, dans l'ordre. La frise les coche d'après
+   le statut du contrat et la réponse au devis : rien à cocher à la main. */
+export const ETAPES_FORFAIT = [
+  { cle: 'demande',     libelle: 'Demande reçue',        detail: 'Le client a dit ce dont il a besoin.' },
+  { cle: 'proposition', libelle: 'Proposition envoyée',  detail: 'Les modalités et le devis sont dans son espace.' },
+  { cle: 'accord',      libelle: 'Devis accepté',        detail: 'Le client a accepté le devis du forfait.' },
+  { cle: 'actif',       libelle: 'Forfait en cours',     detail: 'Les séquences s\'enchaînent, les jours se comptent.' },
+];
+
+export const STATUTS_SEQUENCE = {
+  'a-venir':  { libelle: 'À venir',  voile: 'gris', ordre: 2 },
+  'en-cours': { libelle: 'En cours', voile: 'bleu', ordre: 1 },
+  'close':    { libelle: 'Close',    voile: 'vert', ordre: 3 },
+};
+
+export const STATUTS_JOURNEE = {
+  'prevue': { libelle: 'Prévue', voile: 'gris' },
+  'faite':  { libelle: 'Faite',  voile: 'vert' },
+};
+
+/* Une journée se compte en fractions : un quart pour une correction
+   rapide, la journée entière pour une évolution. */
+export const DUREES_JOURNEE = {
+  '0.25': 'Un quart de journée',
+  '0.5':  'Une demi-journée',
+  '1':    'Une journée',
+  '1.5':  'Une journée et demie',
+  '2':    'Deux journées',
+  '3':    'Trois journées',
+};
+
+export const STATUTS_EVOLUTION = {
+  'proposee':  { libelle: 'Proposée',  voile: 'ambre', ordre: 1, aide: 'Quelqu\'un l\'a suggérée. Rien n\'est décidé.' },
+  'acceptee':  { libelle: 'Acceptée',  voile: 'bleu',  ordre: 2, aide: 'On la fera. Reste à dire quand.' },
+  'planifiee': { libelle: 'Planifiée', voile: 'bleu',  ordre: 3, aide: 'Elle a sa séquence.' },
+  'livree':    { libelle: 'Livrée',    voile: 'vert',  ordre: 4, aide: 'Elle est dans l\'application.' },
+  'refusee':   { libelle: 'Écartée',   voile: 'gris',  ordre: 5, aide: 'On ne la fera pas, et on a dit pourquoi.' },
+};
+
+/* Le nombre de jours, dit en français : « 1,5 jour », « une demi-journée ». */
+export const joursEnClair = (n) => {
+  const v = Number(n) || 0;
+  if (v === 0.25) return 'un quart de journée';
+  if (v === 0.5) return 'une demi-journée';
+  if (v === 1) return 'une journée';
+  const texte = Number.isInteger(v) ? String(v) : String(v).replace('.', ',');
+  return `${texte} jours`;
+};
+
 /* Les projets créés avant le Client Hub portent « actif », un statut qui
    n'existe plus. On le traduit à la lecture, sans attendre la migration. */
 const ALIAS_STATUT_PROJET = { actif: 'en-cours', inactif: 'suspendu', 'en-pause': 'suspendu' };

@@ -23,6 +23,7 @@ import * as messages from './vues/messages.js';
 import * as adminValidations from './vues/admin-validations.js';
 import * as adminFinances from './vues/admin-finances.js';
 import * as documents from './vues/documents.js';
+import * as maintenance from './vues/maintenance.js';
 import * as adminActivite from './vues/admin-activite.js';
 import * as adminArchives from './vues/admin-archives.js';
 import * as adminParametres from './vues/admin-parametres.js';
@@ -74,6 +75,11 @@ const construireNavigation = () => {
      campagne en cours, et une anomalie qu'on n'a pas encore refermée. */
   const campagnesEnCours = (magasin.lire(K.campagnesToutes) || []).filter((c) => c.statut === 'en-cours').length;
   const anomaliesOuvertes = (magasin.lire(K.anomaliesToutes) || []).filter((a) => !['corrigee', 'sans-suite'].includes(a.statut)).length;
+  /* La maintenance : les forfaits qui tournent, et les demandes qui
+     attendent une proposition. */
+  const contrats = (magasin.lire(K.maintenanceToute) || []).filter((x) => x.id === 'contrat');
+  const forfaitsActifs = contrats.filter((x) => x.statut === 'actif').length;
+  const forfaitsDemandes = contrats.filter((x) => x.statut === 'demande').length;
 
   definirNavigation([
     { items: [{ chemin: '/', libelle: 'Accueil', icone: 'accueil', exact: true }] },
@@ -101,6 +107,7 @@ const construireNavigation = () => {
       titre: 'Gestion',
       items: [
         { chemin: '/finances', libelle: 'Devis, factures, paiements', icone: 'finances', compte: { total: piecesDues, neuf: impayees } },
+        { chemin: '/maintenance', libelle: 'Maintenance', icone: 'sante', compte: { total: forfaitsActifs, neuf: forfaitsDemandes } },
         { chemin: '/activite', libelle: 'Activité', icone: 'activite' },
         { chemin: '/archives', libelle: 'Archives', icone: 'archive' },
         { chemin: '/parametres', libelle: 'Paramètres', icone: 'parametres' },
@@ -125,7 +132,7 @@ const suivreConversations = () => {
 
 let minuteurNav = null;
 const planifierNav = () => { clearTimeout(minuteurNav); minuteurNav = setTimeout(() => { suivreConversations(); construireNavigation(); }, 80); };
-[K.ticketsTous, K.tachesToutes, K.validationsToutes, K.documentsTous, K.demandesProjet, K.projets, K.organisations, K.reunionsToutes, K.fichiersTous, K.profil].forEach((cle) => magasin.sur(cle, planifierNav));
+[K.ticketsTous, K.tachesToutes, K.validationsToutes, K.documentsTous, K.demandesProjet, K.projets, K.organisations, K.reunionsToutes, K.fichiersTous, K.profil, K.maintenanceToute, K.campagnesToutes, K.anomaliesToutes].forEach((cle) => magasin.sur(cle, planifierNav));
 surCle(planifierNav);
 construireNavigation();
 
@@ -178,6 +185,7 @@ definir([
   { chemin: '/documents', vue: (ctx) => documents.vue(ctx, env) },
   { chemin: '/finances', vue: (ctx) => adminFinances.vue(ctx, env) },
   { chemin: '/finances/:did', vue: (ctx) => adminFinances.vue(ctx, env) },
+  { chemin: '/maintenance', vue: (ctx) => maintenance.vue(ctx, env) },
   { chemin: '/activite', vue: (ctx) => adminActivite.vue(ctx, env) },
   { chemin: '/archives', vue: (ctx) => adminArchives.vue(ctx, env) },
   { chemin: '/parametres', vue: (ctx) => adminParametres.vue(ctx, env) },

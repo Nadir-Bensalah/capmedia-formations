@@ -711,6 +711,56 @@ function preprojet(v) {
 }
 
 /*
+ * La maintenance continue. Vers l'equipe : le client demande un forfait,
+ * ou propose une evolution. Vers le client : l'etat de son forfait change.
+ */
+function maintenance(v) {
+  const projet = valeurTexte(v.projet);
+  if (v.cote === 'equipe') {
+    const evolution = v.evenement === 'evolution';
+    return {
+      objet: evolution ? `${projet} : une evolution proposee` : `${projet} : forfait de maintenance demande`,
+      ...rendreGabarit({
+        titre: evolution ? 'Le client propose une evolution' : 'Le client demande un forfait de maintenance',
+        intro: `${valeurTexte(v.par)} (${valeurTexte(v.email)}) vient d'ecrire depuis son espace.`,
+        faits: [['Projet', projet], evolution ? ['Evolution', valeurTexte(v.titre)] : ['Rythme souhaite', valeurTexte(v.rythme)]],
+        citation: valeurTexte(v.message),
+        bouton: { libelle: 'Ouvrir la maintenance', url: valeurTexte(v.lien) || lienEspace() },
+      }),
+    };
+  }
+  const TITRES = {
+    proposition: 'Une proposition de maintenance vous attend',
+    actif: 'Votre forfait de maintenance est en cours',
+    suspendu: 'Votre forfait de maintenance est suspendu',
+    termine: 'Votre forfait de maintenance est termine',
+  };
+  const INTROS = {
+    proposition: "Nous avons pose les modalites d'un forfait de maintenance continue pour votre projet : ce qui est compris, le rythme, les delais. Tout se lit dans votre espace, et le devis vous y attend. Rien ne s'engage avant que vous l'ayez accepte.",
+    actif: 'Le forfait tourne. Chaque jour travaille et chaque evolution livree apparaissent dans votre espace, au fur et a mesure.',
+    suspendu: "Le forfait est mis en pause. Rien n'est perdu : les sequences et les evolutions restent dans votre espace, et il reprend quand vous le souhaitez.",
+    termine: 'Le forfait est arrive a son terme. Son histoire reste consultable dans votre espace.',
+  };
+  const PERIODES = { mensuelle: 'mois', trimestrielle: 'trimestre', annuelle: 'an' };
+  const periode = PERIODES[valeurTexte(v.periode)] || 'mois';
+  const evenement = valeurTexte(v.evenement);
+  return {
+    objet: `${projet} : ${(TITRES[evenement] || 'votre forfait de maintenance').replace(/^Votre/, 'votre').replace(/^Une/, 'une')}`,
+    ...rendreGabarit({
+      titre: TITRES[evenement] || 'Votre forfait de maintenance',
+      intro: INTROS[evenement] || 'Votre forfait de maintenance a change. Tout se lit dans votre espace.',
+      faits: [
+        ['Projet', projet],
+        ['Formule', valeurTexte(v.formule)],
+        Number(v.montant) ? ['Montant', `${montantHT(v.montant)} par ${periode}`] : ['', ''],
+        Number(v.jours) ? ['Jours de travail', `${valeurTexte(v.jours)} par ${periode}`] : ['', ''],
+      ],
+      bouton: { libelle: 'Voir la maintenance', url: valeurTexte(v.lien) || lienEspace() },
+    }),
+  };
+}
+
+/*
  * La relance hebdomadaire. Rien dans l'espace n'allait chercher le client :
  * tout attendait qu'il vienne. S'il n'ouvre pas le hub pendant trois
  * semaines, personne ne lui dit que six choses l'attendent. Cette lettre
@@ -786,6 +836,7 @@ const MODELES = {
   'message-projet': messageProjet,
   'qualification': qualification,
   'preprojet': preprojet,
+  'maintenance': maintenance,
   'relance': relance,
   'code': code,
   'connexion-equipe': connexionEquipe,

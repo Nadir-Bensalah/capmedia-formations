@@ -13,6 +13,7 @@ import {
   NIVEAUX_SCENARIO, BLOCS_SCENARIO, STATUTS_CAMPAGNE, PLATEFORMES_TEST, REF_SCENARIO,
   ETATS_PARCOURS, OUTILS_PARCOURS, FAMILLES_REGLE, ETATS_REGLE,
   GRAVITES_ANOMALIE, STATUTS_ANOMALIE,
+  STATUTS_MAINTENANCE, RECONDUCTIONS_MAINTENANCE, STATUTS_SEQUENCE, STATUTS_JOURNEE, DUREES_JOURNEE, STATUTS_EVOLUTION,
 } from '../noyau.js';
 import { icone, modale, confirmer, toast, lireForme, valider, obligatoire, longueurMax, urlValide, emailValide, optionsDe, depot, agir, lisible, choixPlateformes } from '../ui.js';
 import { appelServeur } from '../serveur.js';
@@ -124,6 +125,31 @@ const equipeCarte = () => (magasin.lire(K.equipe) || []).reduce((c, x) => ({ ...
 const releasesDe = (pid) => (magasin.lire(K.releases(pid)) || [])
   .slice().sort((a, b) => (enDate(b.date) || 0) - (enDate(a.date) || 0))
   .reduce((c, r) => ({ ...c, [r.id]: [(PLATEFORMES_CHOIX[r.plateforme] || {}).libelle, r.version, r.titre].filter(Boolean).join(' · ') }), {});
+
+/* Les devis d'un projet, pour rattacher une étape ou un forfait. L'équipe
+   les a en groupe, et le client sur sa clé : on lit les deux. */
+const devisDe = (pid) => Object.fromEntries((magasin.lire(K.documents(pid)) || []).concat(magasin.lire(K.documentsTous) || [])
+  .filter((x, i, l) => x.type === 'devis' && x.projet === pid && l.findIndex((y) => y.id === x.id) === i)
+  .map((x) => [x.id, { libelle: `${x.numero || 'Devis'} · ${x.libelle || ''}` }]));
+const maintenanceDe = (pid) => (magasin.lire(K.maintenance(pid)) || []).concat(magasin.lire(K.maintenanceToute) || [])
+  .filter((x, i, l) => (x.projet || x._parent) === pid && l.findIndex((y) => y.id === x.id) === i);
+const sequencesDe = (pid) => Object.fromEntries(maintenanceDe(pid).filter((x) => x.genre === 'sequence').map((x) => [x.id, { libelle: x.titre || 'Séquence' }]));
+const evolutionsDe = (pid) => Object.fromEntries(maintenanceDe(pid).filter((x) => x.genre === 'evolution').map((x) => [x.id, { libelle: x.titre || 'Évolution' }]));
+
+/* Le bouton « Supprimer » d'une fiche de maintenance : une confirmation,
+   l'écriture, et la feuille se referme. */
+const brancherSuppression = (racine, fiche, pid, quoi, texte) => {
+  const b = racine.querySelector('[data-supprimer]');
+  if (!b || !fiche) return;
+  b.addEventListener('click', async () => {
+    const ok = await confirmer({ titre: `Supprimer ${quoi} ?`, texte, ok: 'Supprimer', danger: true });
+    if (!ok) return;
+    await ecrire.supprimerElementMaintenance(pid, fiche.id);
+    toast('Supprimé.');
+    const fermer = racine.querySelector('[data-fermer]');
+    if (fermer) fermer.click();
+  });
+};
 
 /** Ouvre une feuille, branche le formulaire, résout la valeur d'`enregistrer`. */
 /** Le choix d'un logo : on l'envoie tout de suite, l'aperçu suit. */
@@ -731,6 +757,146 @@ const editeurs = {
       },
     });
   },
+
+  /* --- La maintenance continue ------------------------------------------
+     Le contrat d'abord : ce que le client lit dans « Modalités », mot pour
+     mot. Puis les séquences, les journées, les évolutions. */
+  maintenance: (env, { pid, fiche }) => {
+    const f = fiche || {};
+    const lignes = (t) => String(t || '').split('\n').map((l) => l.trim()).filter(Boolean);
+    return feuille({
+      titre: fiche ? 'Le forfait de maintenance' : 'Configurer un forfait de maintenance',
+      sousTitre: 'Ce que le client lit dans son espace Maintenance, mot pour mot.',
+      libelle: fiche ? 'Enregistrer' : 'Configurer',
+      corps: `
+        <div class="forme-rang">
+          ${champ('formule', 'Nom de la formule', f.formule || '', { placeholder: 'Sérénité, Essentiel, Sur mesure...' })}
+          ${select('statut', 'Statut', STATUTS_MAINTENANCE, f.statut || 'proposition', { aide: 'En « proposition envoyée », le client reçoit un e-mail et lit les modalités. En « en cours », le forfait tourne.' })}
+        </div>
+        <div class="forme-rang">
+          ${champ('montant', 'Montant HT par période (€)', f.montant ?? '', { type: 'number', attrs: 'min="0" step="1"' })}
+          ${champ('jours', 'Jours de travail par période', f.jours ?? '', { type: 'number', attrs: 'min="0" step="0.5"', aide: 'Ce qui est compris dans le forfait, à chaque période.' })}
+        </div>
+        <div class="forme-rang">
+          ${select('reconduction', 'La période', RECONDUCTIONS_MAINTENANCE, f.reconduction || 'mensuelle')}
+          ${select('devis', 'Le devis du forfait', devisDe(pid), f.devis || '', { vide: 'Aucun', aide: 'Son acceptation coche le troisième pas. Ses lignes en étapes se cochent sur la page Maintenance.' })}
+        </div>
+        <div class="forme-rang">
+          ${champ('debut', 'Début', f.debut ? dateISO(f.debut) : '', { type: 'date', facultatif: true })}
+          ${champ('fin', 'Fin, ou prochaine échéance', f.fin ? dateISO(f.fin) : '', { type: 'date', facultatif: true })}
+        </div>
+        <div class="forme-rang">
+          ${champ('horaires', 'Jours et heures', f.horaires || '', { facultatif: true, placeholder: 'Du lundi au vendredi, de 9 h à 18 h' })}
+          ${champ('delaiReponse', 'Délai de réponse', f.delaiReponse || '', { facultatif: true, placeholder: 'Sous 24 h ouvrées' })}
+        </div>
+        ${champ('delaiCorrection', 'Correction d\'un défaut bloquant', f.delaiCorrection || '', { facultatif: true, placeholder: 'Sous 48 h ouvrées' })}
+        ${zone('inclus', 'Compris dans le forfait', (f.inclus || []).join('\n'), { facultatif: true, aide: 'Une ligne par point.', placeholder: 'Corrections de défauts\nMises à jour iOS et Android\nSurveillance des plantages\nPetites évolutions dans les jours du forfait' })}
+        ${zone('exclus', 'Sur devis à part', (f.exclus || []).join('\n'), { facultatif: true, aide: 'Une ligne par point.', placeholder: 'Nouvelle fonctionnalité majeure\nRefonte graphique' })}
+        ${zone('modalites', 'Comment ça se passe, en toutes lettres', f.modalites || '', { facultatif: true, lignes: 6, placeholder: 'La demande, la priorité, le report des jours non consommés, la facturation, la résiliation.' })}
+        ${fiche ? `<div class="groupe" style="margin-top:8px"><button class="btn btn-doux btn-petit" type="button" data-supprimer>${icone('corbeille')} Retirer le forfait</button></div>` : ''}`,
+      regles: { formule: obligatoire() },
+      surMontage: (racine) => {
+        const b = racine.querySelector('[data-supprimer]');
+        if (!b || !fiche) return;
+        b.addEventListener('click', async () => {
+          const ok = await confirmer({ titre: 'Retirer le forfait ?', texte: 'Les séquences, les journées et les évolutions partent avec lui. Pour une pause, préférez le statut « suspendu ».', ok: 'Retirer', danger: true });
+          if (!ok) return;
+          await ecrire.supprimerMaintenance(pid);
+          toast('Forfait retiré.');
+          const fermer = racine.querySelector('[data-fermer]');
+          if (fermer) fermer.click();
+        });
+      },
+      enregistrer: async (d) => {
+        const donnees = {
+          formule: d.formule, statut: d.statut,
+          montant: d.montant === '' || d.montant === undefined ? null : Number(d.montant),
+          jours: d.jours === '' || d.jours === undefined ? null : Number(d.jours),
+          reconduction: d.reconduction, devis: d.devis || '',
+          debut: d.debut ? new Date(d.debut) : null, fin: d.fin ? new Date(d.fin) : null,
+          horaires: d.horaires || '', delaiReponse: d.delaiReponse || '', delaiCorrection: d.delaiCorrection || '',
+          inclus: lignes(d.inclus), exclus: lignes(d.exclus), modalites: d.modalites || '',
+        };
+        await ecrire.poserContratMaintenance(pid, donnees, { neuf: !fiche });
+        toast(fiche ? 'Forfait enregistré.' : 'Forfait configuré. Le client le lit dans son espace.');
+        return true;
+      },
+    });
+  },
+
+  sequence: (env, { pid, fiche, defaut = {} }) => feuille({
+    titre: fiche ? 'La séquence' : 'Nouvelle séquence', sousTitre: 'Une période du forfait, avec ses jours.',
+    corps: `
+      ${champ('titre', 'Titre', fiche ? fiche.titre : '', { placeholder: 'Octobre 2026' })}
+      <div class="forme-rang">
+        ${champ('debut', 'Début', fiche ? dateISO(fiche.debut) : '', { type: 'date', facultatif: true })}
+        ${champ('fin', 'Fin', fiche ? dateISO(fiche.fin) : '', { type: 'date', facultatif: true })}
+      </div>
+      <div class="forme-rang">
+        ${champ('jours', 'Jours prévus', fiche ? (fiche.jours ?? '') : (defaut.jours ?? ''), { type: 'number', attrs: 'min="0" step="0.25"', aide: 'Vide : les jours du forfait.' })}
+        ${select('statut', 'Statut', STATUTS_SEQUENCE, fiche ? fiche.statut : (defaut.statut || 'a-venir'))}
+      </div>
+      ${zone('note', 'Une note', fiche ? fiche.note : '', { facultatif: true, lignes: 2, placeholder: 'Ce qui est prévu dans cette période.' })}
+      ${fiche ? `<div class="groupe" style="margin-top:8px"><button class="btn btn-doux btn-petit" type="button" data-supprimer>${icone('corbeille')} Supprimer cette séquence</button></div>` : ''}`,
+    regles: { titre: obligatoire() },
+    surMontage: (racine) => brancherSuppression(racine, fiche, pid, 'cette séquence', 'Les journées qui y sont rattachées restent, sans séquence.'),
+    enregistrer: async (d) => {
+      const donnees = { genre: 'sequence', titre: d.titre, statut: d.statut, note: d.note || '', debut: d.debut ? new Date(d.debut) : null, fin: d.fin ? new Date(d.fin) : null, jours: d.jours === '' ? null : Number(d.jours) };
+      if (fiche) await ecrire.majElementMaintenance(pid, fiche.id, donnees); else await ecrire.creerElementMaintenance(pid, donnees);
+      toast(fiche ? 'Séquence enregistrée.' : 'Séquence ouverte.');
+      return true;
+    },
+  }),
+
+  journee: (env, { pid, fiche, defaut = {} }) => feuille({
+    titre: fiche ? 'La journée' : 'Nouvelle journée', sousTitre: 'Un jour travaillé, et ce qu\'on y a fait.',
+    corps: `
+      <div class="forme-rang">
+        ${champ('date', 'Date', fiche ? dateISO(fiche.date) : dateISO(new Date()), { type: 'date' })}
+        ${select('duree', 'Durée', DUREES_JOURNEE, fiche ? String(fiche.duree ?? '1') : '1')}
+      </div>
+      <div class="forme-rang">
+        ${select('sequence', 'Séquence', sequencesDe(pid), fiche ? fiche.sequence : (defaut.sequence || ''), { vide: 'Aucune' })}
+        ${select('statut', 'Statut', STATUTS_JOURNEE, fiche ? fiche.statut : (defaut.statut || 'faite'))}
+      </div>
+      ${select('evolution', 'Évolution concernée', evolutionsDe(pid), fiche ? fiche.evolution : '', { vide: 'Aucune' })}
+      ${zone('objet', 'Ce qui a été fait', fiche ? fiche.objet : '', { lignes: 3, placeholder: 'Mise à jour iOS 27, correction du rappel de fin de mois.' })}
+      ${fiche ? `<div class="groupe" style="margin-top:8px"><button class="btn btn-doux btn-petit" type="button" data-supprimer>${icone('corbeille')} Supprimer cette journée</button></div>` : ''}`,
+    regles: { objet: obligatoire('Dites ce qui a été fait, même en trois mots.') },
+    surMontage: (racine) => brancherSuppression(racine, fiche, pid, 'cette journée', 'Elle ne comptera plus dans sa séquence.'),
+    enregistrer: async (d) => {
+      const donnees = { genre: 'journee', date: d.date ? new Date(d.date) : null, duree: Number(d.duree) || 1, sequence: d.sequence || '', evolution: d.evolution || '', statut: d.statut, objet: d.objet || '' };
+      if (fiche) await ecrire.majElementMaintenance(pid, fiche.id, donnees); else await ecrire.creerElementMaintenance(pid, donnees);
+      toast(fiche ? 'Journée enregistrée.' : 'Journée consignée.');
+      return true;
+    },
+  }),
+
+  evolution: (env, { pid, fiche, defaut = {} }) => feuille({
+    titre: fiche ? 'L\'évolution' : 'Nouvelle évolution', sousTitre: fiche && fiche.origine === 'client' ? `Proposée par ${(fiche.par || {}).nom || 'le client'}.` : 'Ce qu\'on ajoute à l\'application.',
+    corps: `
+      ${champ('titre', 'En une ligne', fiche ? fiche.titre : (defaut.titre || ''), { placeholder: 'Exporter les tâches en tableur' })}
+      ${zone('description', 'L\'idée', fiche ? fiche.description : '', { facultatif: true, lignes: 4 })}
+      <div class="forme-rang">
+        ${select('statut', 'Statut', STATUTS_EVOLUTION, fiche ? fiche.statut : (defaut.statut || 'proposee'), { aide: 'Acceptée : on la fera. Planifiée : elle a sa séquence. Livrée : elle est dans l\'application. Écartée : on ne la fera pas.' })}
+        ${champ('estimation', 'Estimation (jours)', fiche ? (fiche.estimation ?? '') : '', { type: 'number', facultatif: true, attrs: 'min="0" step="0.25"' })}
+      </div>
+      <div class="forme-rang">
+        ${select('sequence', 'Séquence', sequencesDe(pid), fiche ? fiche.sequence : '', { vide: 'Aucune' })}
+        ${champ('version', 'Version livrée', fiche ? fiche.version : '', { facultatif: true, placeholder: '1.3.0' })}
+      </div>
+      ${zone('reponse', 'Ce qu\'on en dit au client', fiche ? fiche.reponse : '', { facultatif: true, lignes: 3, placeholder: 'Pourquoi on l\'accepte, ou pourquoi on l\'écarte. Le client le lit sur la fiche.' })}
+      ${fiche ? `<div class="groupe" style="margin-top:8px"><button class="btn btn-doux btn-petit" type="button" data-supprimer>${icone('corbeille')} Supprimer cette évolution</button></div>` : ''}`,
+    regles: { titre: obligatoire() },
+    surMontage: (racine) => brancherSuppression(racine, fiche, pid, 'cette évolution', fiche && fiche.origine === 'client' ? 'Le client l\'a proposée : préférez « écartée » avec une raison.' : 'Elle disparaît de la page du client aussi.'),
+    enregistrer: async (d) => {
+      const donnees = { genre: 'evolution', titre: d.titre, description: d.description || '', statut: d.statut, estimation: d.estimation === '' ? null : Number(d.estimation), sequence: d.sequence || '', version: d.version || '', reponse: d.reponse || '' };
+      if (fiche) await ecrire.majElementMaintenance(pid, fiche.id, donnees);
+      else await ecrire.creerElementMaintenance(pid, { ...donnees, origine: 'equipe' });
+      toast(fiche ? 'Évolution enregistrée.' : 'Évolution posée.');
+      return true;
+    },
+  }),
 
   jalon: (env, { pid, fiche, defaut = {} }) => feuille({
     titre: fiche ? "L'étape" : 'Nouvelle étape', sousTitre: 'Une étape de la feuille de route.',

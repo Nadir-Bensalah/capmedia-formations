@@ -10,7 +10,7 @@
    ========================================================================== */
 
 import {
-  bdd, collection, collectionGroup, query, where, orderBy, limit, doc, getDoc, addDoc, updateDoc, setDoc, deleteDoc,
+  bdd, collection, collectionGroup, query, where, orderBy, limit, doc, getDoc, getDocs, addDoc, updateDoc, setDoc, deleteDoc,
   serverTimestamp, arrayUnion, arrayRemove, Timestamp,
   nomAffiche, enDate, parDateDesc, parDateAsc, joursAvant, borner, age, retard, dateCourte,
   OUVERTS, ATTEND_CLIENT, ATTEND_EQUIPE, FACTURES_DUES, PROJETS_ACTIFS, CATEGORIES_CLIENT, projetEstActif,
@@ -31,6 +31,11 @@ export const K = {
   anomalies: (p) => `anomalies:${p}`,
   parcours: (p) => `parcours:${p}`,
   regles: (p) => `regles:${p}`,
+  maintenance: (p) => `maintenance:${p}`,
+  /* Les avis et les passages vivent sous une campagne, pas sous un projet :
+     c'est la seule granularité que les règles ouvrent au client. */
+  appreciations: (c) => `appreciations:${c}`,
+  passages: (c) => `passages:${c}`,
   liens: (p) => `liens:${p}`,
   messages: (p) => `messages:${p}`,
   lectures: (p) => `lectures:${p}`,
@@ -72,6 +77,7 @@ export const K = {
   anomaliesToutes: 'anomalies:*',
   parcoursTous: 'parcours:*',
   reglesToutes: 'regles:*',
+  maintenanceToute: 'maintenance:*',
   profils: 'profils:*',
   testeurs: 'testeurs',
   audit: 'audit',
@@ -111,6 +117,9 @@ export const abonnerProjet = (lot, pid, role) => {
   lot.abonner(K.anomalies(pid), () => col('projets', pid, 'anomalies'));
   lot.abonner(K.parcours(pid), () => col('projets', pid, 'parcours'));
   lot.abonner(K.regles(pid), () => col('projets', pid, 'regles'));
+  /* La maintenance continue : le contrat, ses séquences, ses journées et
+     ses évolutions. Le client lit tout, c'est son espace. */
+  lot.abonner(K.maintenance(pid), () => col('projets', pid, 'maintenance'));
   lot.abonner(K.taches(pid), () => surProjetVisible('taches'));
   lot.abonner(K.tickets(pid), () => surProjet('tickets'));
   lot.abonner(K.validations(pid), () => surProjet('validations'));
@@ -150,6 +159,7 @@ export const abonnerGlobal = (lot, session) => {
     lot.abonner(K.anomaliesToutes, () => collectionGroup(bdd, 'anomalies'));
     lot.abonner(K.parcoursTous, () => collectionGroup(bdd, 'parcours'));
     lot.abonner(K.reglesToutes, () => collectionGroup(bdd, 'regles'));
+    lot.abonner(K.maintenanceToute, () => collectionGroup(bdd, 'maintenance'));
     lot.abonner(K.profils, () => collectionGroup(bdd, 'public'));
     lot.abonner(K.scenariosTous, () => collectionGroup(bdd, 'scenarios'));
     lot.abonner(K.testeurs, () => col('testeurs'));
@@ -183,7 +193,7 @@ export const abonnerGlobal = (lot, session) => {
            sur des clés qu'aucun d'eux n'écoute. On réveille donc la liste
            des projets, que tous écoutent, à mesure qu'elles arrivent. */
         if (!premier) {
-          for (const cle of [K.documents(p.id), K.tickets(p.id), K.taches(p.id), K.fichiers(p.id), K.reunions(p.id), K.validations(p.id), K.jalons(p.id)]) {
+          for (const cle of [K.documents(p.id), K.tickets(p.id), K.taches(p.id), K.fichiers(p.id), K.reunions(p.id), K.validations(p.id), K.jalons(p.id), K.maintenance(p.id)]) {
             lot.sur(cle, () => magasin.reveiller(K.projets));
           }
         }
@@ -434,6 +444,44 @@ export const ecrire = {
 
   majParcours: (pid, ref, d) => updateDoc(doc(bdd, 'projets', pid, 'parcours', ref), nettoyer({ ...d, maj: serverTimestamp() })),
   supprimerParcours: (pid, ref) => deleteDoc(doc(bdd, 'projets', pid, 'parcours', ref)),
+
+  /* --- La maintenance continue ---------------------------------------- */
+
+  /* La demande du client : le contrat naît avec elle, ou y revient si un
+     forfait passé s'est arrêté. Les règles n'acceptent que ces champs, et
+     rien d'autre : un client ne pose pas ses propres modalités. */
+  async demanderMaintenance(session, pid, { message = '', rythme = '' } = {}) {
+    const par = auteurDe(session);
+    const demande = { par: { uid: par.uid, nom: par.nom, email: par.email }, message, rythme, le: serverTimestamp() };
+    const ref = doc(bdd, 'projets', pid, 'maintenance', 'contrat');
+    const deja = await getDoc(ref);
+    if (deja.exists()) await updateDoc(ref, { statut: 'demande', demande, maj: serverTimestamp() });
+    else await setDoc(ref, { genre: 'contrat', statut: 'demande', demande, cree: serverTimestamp(), maj: serverTimestamp() });
+  },
+
+  /* Une évolution proposée par le client : un titre, une description. Le
+     statut et l'origine sont imposés, l'équipe tranche ensuite. */
+  proposerEvolution(session, pid, d) {
+    const par = auteurDe(session);
+    return addDoc(col('projets', pid, 'maintenance'), {
+      genre: 'evolution', titre: d.titre, description: d.description || '', statut: 'proposee', origine: 'client',
+      par: { uid: par.uid, nom: par.nom, email: par.email }, cree: serverTimestamp(), maj: serverTimestamp(),
+    });
+  },
+
+  /* Le contrat, posé ou repris par l'équipe. « merge » garde la demande
+     du client telle qu'il l'a écrite. */
+  poserContratMaintenance: (pid, d, { neuf = false } = {}) => setDoc(doc(bdd, 'projets', pid, 'maintenance', 'contrat'),
+    nettoyer({ ...d, genre: 'contrat', ...(neuf ? { cree: serverTimestamp() } : {}), maj: serverTimestamp() }), { merge: true }),
+  creerElementMaintenance: (pid, d) => addDoc(col('projets', pid, 'maintenance'), nettoyer({ ...d, cree: serverTimestamp(), maj: serverTimestamp() })),
+  majElementMaintenance: (pid, id, d) => updateDoc(doc(bdd, 'projets', pid, 'maintenance', id), nettoyer({ ...d, maj: serverTimestamp() })),
+  supprimerElementMaintenance: (pid, id) => deleteDoc(doc(bdd, 'projets', pid, 'maintenance', id)),
+  /* Retirer le forfait emporte tout ce qui vivait sous lui : une séquence
+     sans contrat n'aurait plus de sens à l'écran. */
+  async supprimerMaintenance(pid) {
+    const inst = await getDocs(col('projets', pid, 'maintenance'));
+    await Promise.all(inst.docs.map((x) => deleteDoc(x.ref)));
+  },
 
   creerCampagne: (pid, d) => addDoc(col('projets', pid, 'campagnes'), nettoyer({
     titre: d.titre, statut: d.statut || 'preparation',

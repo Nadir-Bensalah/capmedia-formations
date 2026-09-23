@@ -22,6 +22,7 @@ import * as calendrier from './vues/calendrier.js';
 import * as tests from './vues/tests.js';
 import * as finances from './vues/finances.js';
 import * as documents from './vues/documents.js';
+import * as maintenance from './vues/maintenance.js';
 import * as parametres from './vues/parametres.js';
 import * as nouveauProjet from './vues/nouveau-projet.js';
 
@@ -54,7 +55,9 @@ const compter = () => {
      concernent : un menu qui ouvre sur une page vide inquiète plus qu'il
      n'informe. */
   const scenariosDuClient = projets.reduce((n, p) => n + (magasin.lire(K.scenarios(p.id)) || []).filter((x) => x.actif !== false).length, 0);
-  return { projets, attente, nonLus, profil, scenariosDuClient };
+  /* Les forfaits de maintenance en cours : le gris de l'entrée Maintenance. */
+  const forfaits = projets.filter((p) => (magasin.lire(K.maintenance(p.id)) || []).some((x) => x.id === 'contrat' && x.statut === 'actif')).length;
+  return { projets, attente, nonLus, profil, scenariosDuClient, forfaits };
 };
 
 /* Les sections d'un projet, dans l'ordre de ses onglets. */
@@ -78,7 +81,7 @@ const projetOuvert = () => {
 const ouvertSur = (pid) => projetOuvert() === pid;
 
 const construireNavigation = () => {
-  const { projets, attente, nonLus, scenariosDuClient } = compter();
+  const { projets, attente, nonLus, scenariosDuClient, forfaits } = compter();
   const parProjet = (pid) => attente.filter((a) => a.projet === pid).length;
   const validations = attente.filter((a) => a.genre === 'validation').length;
   const dues = attente.filter((a) => a.genre === 'facture' || a.genre === 'devis').length;
@@ -118,6 +121,7 @@ const construireNavigation = () => {
         { chemin: '/messages', libelle: 'Messages', icone: 'messages', compte: { total: 0, neuf: nonLus } },
         { chemin: '/calendrier', libelle: 'Calendrier', icone: 'calendrier', compte: { total: reunionsAVenir.length } },
         ...(scenariosDuClient ? [{ chemin: '/tests', libelle: 'Tests', icone: 'bug', compte: { total: scenariosDuClient } }] : []),
+        { chemin: '/maintenance', libelle: 'Maintenance', icone: 'sante', compte: { total: forfaits } },
         { chemin: '/finances', libelle: 'Devis et factures', icone: 'finances', compte: { total: pieces.length, neuf: dues } },
         { chemin: '/documents', libelle: 'Documents', icone: 'documents', compte: { total: fichiers.length } },
       ],
@@ -128,7 +132,7 @@ const construireNavigation = () => {
 
 let minuteurNav = null;
 const planifierNav = () => { clearTimeout(minuteurNav); minuteurNav = setTimeout(construireNavigation, 80); };
-[K.projets, K.profil, ...session.projets.flatMap((p) => [K.tickets(p.id), K.validations(p.id), K.documents(p.id), K.taches(p.id), K.blocages(p.id), K.messages(p.id)])]
+[K.projets, K.profil, ...session.projets.flatMap((p) => [K.tickets(p.id), K.validations(p.id), K.documents(p.id), K.taches(p.id), K.blocages(p.id), K.messages(p.id), K.maintenance(p.id)])]
   .forEach((cle) => magasin.sur(cle, planifierNav));
 construireNavigation();
 surChangement(construireNavigation);
@@ -174,6 +178,7 @@ definir([
   { chemin: '/finances', vue: (ctx) => finances.vue(ctx, env) },
   { chemin: '/finances/:did', vue: (ctx) => finances.vue(ctx, env) },
   { chemin: '/documents', vue: (ctx) => documents.vue(ctx, env) },
+  { chemin: '/maintenance', vue: (ctx) => maintenance.vue(ctx, env) },
   { chemin: '/parametres', vue: (ctx) => parametres.vue(ctx, env) },
   { chemin: '/nouveau-projet', vue: (ctx) => nouveauProjet.nouvelle(ctx, env) },
   { chemin: '/nouveaux-projets/:id', vue: (ctx) => nouveauProjet.detail(ctx, env) },

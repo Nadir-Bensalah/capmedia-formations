@@ -73,6 +73,15 @@ service cloud.firestore {
       return valeur is string && valeur.size() > 0 && valeur.size() <= max;
     }
 
+    // La demande d'un forfait de maintenance, écrite par le client : qui,
+    // quoi, à quel rythme, quand. Rien d'autre ne passe par lui.
+    function demandeDeForfait(d) {
+      return d.keys().hasOnly(['par', 'message', 'rythme', 'le'])
+          && d.par.uid == moi()
+          && texteBorne(d.message, 4000)
+          && texteBorne(d.rythme, 60);
+    }
+
     function auteurCoherent(champ) {
       return champ.uid == moi()
           && champ.cote == (estEquipe() ? 'equipe' : 'client');
@@ -162,6 +171,44 @@ service cloud.firestore {
         allow write:  if estEquipe();
       }
 
+      // La maintenance continue : le contrat (document « contrat »), puis
+      // les séquences, les journées et les évolutions, dans la même
+      // collection. Le client lit tout : c'est son espace. Il n'écrit que
+      // sa demande de forfait et ses propositions d'évolution ; les
+      // modalités, les jours, les statuts restent à l'équipe.
+      match /maintenance/{docId} {
+        allow read:  if accesProjet(projetId);
+        allow write: if estEquipe();
+
+        // Le client demande un forfait : il crée le contrat avec sa seule
+        // demande, ou le remet en « demandé » quand le précédent s'est
+        // arrêté. Un forfait proposé ou en cours ne se réécrit pas par lui.
+        allow create: if membreDuProjet(projetId)
+          && docId == 'contrat'
+          && request.resource.data.keys().hasOnly(['genre', 'statut', 'demande', 'cree', 'maj'])
+          && request.resource.data.genre == 'contrat'
+          && request.resource.data.statut == 'demande'
+          && demandeDeForfait(request.resource.data.demande);
+        allow update: if membreDuProjet(projetId)
+          && docId == 'contrat'
+          && resource.data.statut in ['demande', 'suspendu', 'termine']
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statut', 'demande', 'maj'])
+          && request.resource.data.statut == 'demande'
+          && demandeDeForfait(request.resource.data.demande);
+
+        // Le client propose une évolution : un titre, une description, et
+        // c'est tout. Le statut et l'origine sont imposés, l'équipe tranche.
+        allow create: if membreDuProjet(projetId)
+          && docId != 'contrat'
+          && request.resource.data.keys().hasOnly(['genre', 'titre', 'description', 'statut', 'origine', 'par', 'cree', 'maj'])
+          && request.resource.data.genre == 'evolution'
+          && request.resource.data.statut == 'proposee'
+          && request.resource.data.origine == 'client'
+          && request.resource.data.par.uid == moi()
+          && texteRequis(request.resource.data.titre, 160)
+          && texteBorne(request.resource.data.description, 4000);
+      }
+
       match /liens/{lienId} {
         allow read:   if accesProjet(projetId) && visiblePourMoi();
         allow write:  if estEquipe()
@@ -194,6 +241,11 @@ service cloud.firestore {
 
     // Les jalons se lisent aussi en groupe, pour le planning de l'équipe.
     match /{chemin=**}/jalons/{jalonId} {
+      allow read: if estEquipe();
+    }
+
+    // La maintenance de tous les projets d'un coup, pour le cockpit.
+    match /{chemin=**}/maintenance/{docId} {
       allow read: if estEquipe();
     }
 

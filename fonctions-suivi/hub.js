@@ -495,6 +495,92 @@ exports.hubMessageDemandeProjet = onDocumentCreated({ region: REGION, document: 
 });
 
 /* ==========================================================================
+   11 bis. La maintenance continue
+   Le client demande : l'équipe est prévenue. L'équipe change l'état du
+   forfait, tranche une évolution, consigne une journée : le client le
+   lit dans son activité, et reçoit une lettre quand l'état change.
+   ========================================================================== */
+
+const joursEnClair = (n) => {
+  const v = Number(n) || 0;
+  if (v === 0.25) return 'un quart de journée';
+  if (v === 0.5) return 'une demi-journée';
+  if (v === 1) return 'une journée';
+  return `${String(v).replace('.', ',')} jours`;
+};
+
+exports.hubMaintenanceEcrite = onDocumentWritten({ region: REGION, document: 'projets/{projetId}/maintenance/{docId}' }, async (evenement) => {
+  const projetId = evenement.params.projetId;
+  const docId = evenement.params.docId;
+  const avant = evenement.data.before.exists ? evenement.data.before.data() : null;
+  const apres = evenement.data.after.exists ? evenement.data.after.data() : null;
+  const genre = (apres || avant || {}).genre || (docId === 'contrat' ? 'contrat' : '');
+  const lien = `/maintenance?projet=${projetId}`;
+  const projet = await lireProjet(projetId);
+  const nom = nomProjet(projet);
+
+  if (genre === 'contrat') {
+    if (!apres) { await activite({ projet: projetId, type: 'maintenance', texte: 'a retiré le forfait de maintenance', lien, visibilite: 'interne' }); return; }
+    const statutAvant = avant ? avant.statut : null;
+    if (statutAvant === apres.statut) return;
+
+    /* Le client demande : c'est à nous de répondre. */
+    if (apres.statut === 'demande') {
+      const d = apres.demande || {};
+      const par = d.par || {};
+      await activite({ projet: projetId, type: 'maintenance', texte: 'a demandé un forfait de maintenance continue', par: par.uid ? { uid: par.uid, nom: par.nom || '', cote: 'client' } : null, lien });
+      await notifier(await uidsEquipe(), { type: 'maintenance', titre: 'Forfait de maintenance demandé', texte: `${nom} · ${par.nom || ''}`, lien: `#${lien}`, projet: projetId });
+      await mettreEnFile('maintenance', [{ email: EQUIPE_EMAIL, nom: EQUIPE_NOM }], { cote: 'equipe', evenement: 'demande', projet: nom, par: par.nom, email: par.email, message: d.message, rythme: d.rythme, lien: LIEN_ADMIN(lien) });
+      return;
+    }
+
+    /* L'équipe change l'état : le client l'apprend. */
+    const LIBELLES = { proposition: 'proposition envoyée', actif: 'en cours', suspendu: 'suspendu', termine: 'terminé' };
+    if (!LIBELLES[apres.statut]) return;
+    const TITRES = { proposition: 'Une proposition de maintenance vous attend', actif: 'Votre forfait de maintenance est en cours', suspendu: 'Votre forfait de maintenance est suspendu', termine: 'Votre forfait de maintenance est terminé' };
+    await activite({ projet: projetId, type: 'maintenance', texte: `a passé le forfait de maintenance en « ${LIBELLES[apres.statut]} »`, lien });
+    await notifier(uidsClient(projet), { type: 'maintenance', titre: TITRES[apres.statut], texte: apres.formule || nom, lien: `#${lien}`, projet: projetId });
+    await mettreEnFile('maintenance', await contactsClient(projet), { cote: 'client', evenement: apres.statut, projet: nom, formule: apres.formule, montant: apres.montant, jours: apres.jours, periode: apres.reconduction, lien: LIEN(lien) }, 'projet');
+    return;
+  }
+
+  if (genre === 'evolution') {
+    if (apres && !avant) {
+      if (apres.origine === 'client') {
+        const par = apres.par || {};
+        await activite({ projet: projetId, type: 'maintenance', texte: `a proposé une évolution : « ${apres.titre} »`, par: par.uid ? { uid: par.uid, nom: par.nom || '', cote: 'client' } : null, lien });
+        await notifier(await uidsEquipe(), { type: 'maintenance', titre: 'Évolution proposée', texte: `${nom} · ${apres.titre}`, lien: `#${lien}`, projet: projetId });
+        await mettreEnFile('maintenance', [{ email: EQUIPE_EMAIL, nom: EQUIPE_NOM }], { cote: 'equipe', evenement: 'evolution', projet: nom, par: par.nom, email: par.email, titre: apres.titre, message: apres.description, lien: LIEN_ADMIN(lien) });
+      } else {
+        await activite({ projet: projetId, type: 'maintenance', texte: `a ajouté l'évolution « ${apres.titre} »`, lien });
+      }
+      return;
+    }
+    if (apres && avant && avant.statut !== apres.statut) {
+      const L = { proposee: 'remise en proposition', acceptee: 'acceptée', planifiee: 'planifiée', livree: 'livrée', refusee: 'écartée' };
+      await activite({ projet: projetId, type: 'maintenance', texte: `a marqué l'évolution « ${apres.titre} » comme ${L[apres.statut] || apres.statut}`, lien });
+      await notifier(uidsClient(projet), { type: 'maintenance', titre: `Évolution ${L[apres.statut] || apres.statut}`, texte: apres.titre, lien: `#${lien}`, projet: projetId });
+      return;
+    }
+    if (!apres && avant) await activite({ projet: projetId, type: 'maintenance', texte: `a retiré l'évolution « ${avant.titre} »`, lien, visibilite: 'interne' });
+    return;
+  }
+
+  if (genre === 'journee') {
+    const faiteApres = Boolean(apres && apres.statut === 'faite');
+    const faiteAvant = Boolean(avant && avant.statut === 'faite');
+    if (faiteApres && !faiteAvant) await activite({ projet: projetId, type: 'maintenance', texte: `a travaillé ${joursEnClair(apres.duree)} en maintenance${apres.objet ? ` : ${String(apres.objet).slice(0, 140)}` : ''}`, lien });
+    return;
+  }
+
+  if (genre === 'sequence') {
+    if (apres && !avant) await activite({ projet: projetId, type: 'maintenance', texte: `a ouvert la séquence de maintenance « ${apres.titre} »`, lien });
+    else if (apres && avant && avant.statut !== apres.statut && apres.statut === 'close') await activite({ projet: projetId, type: 'maintenance', texte: `a clos la séquence de maintenance « ${apres.titre} »`, lien });
+    else if (!apres && avant) await activite({ projet: projetId, type: 'maintenance', texte: `a retiré la séquence « ${avant.titre} »`, lien, visibilite: 'interne' });
+  }
+});
+
+/* ==========================================================================
    12. Le projet lui-même
    ========================================================================== */
 
