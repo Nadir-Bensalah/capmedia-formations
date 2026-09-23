@@ -139,12 +139,65 @@ const entrer=async(nav,email)=>{
     await nav.close();
   }
 
-  console.log('\n== 3 · La porte ne dit pas « espace client » à tout le monde');
+  console.log("\n== 3 · Chacun va CHEZ LUI, même en tapant l'adresse d'un autre");
+  {
+    /* Le parcours qui a échoué en production : taper l'adresse de l'espace
+       testeur, se connecter, et se retrouver sur le hub. La page renvoie
+       vers la porte avec « retour », et ce retour passait AVANT le contrôle
+       du rôle : on atterrissait donc là où on avait tapé, puis la page
+       refusait et redirigeait ailleurs. */
+    const nav=await chromium.launch();
+    const essais=[
+      ['camille.essai@exemple.test','/suivi/testeur','/suivi/hub','le client qui tape l adresse du testeur'],
+      ['camille.essai@exemple.test','/suivi/cockpit','/suivi/hub','le client qui tape l adresse du cockpit'],
+      ['agent.essai@exemple.test','/suivi/hub','/suivi/cockpit',"l équipe qui tape l adresse du client"],
+      ['karim.essai@exemple.test','/suivi/hub','/suivi/testeur','le testeur qui tape l adresse du client'],
+    ];
+    for (const [email,tape,attendu,qui] of essais) {
+      const page=await (await nav.newContext({viewport:{width:1200,height:900}})).newPage();
+      await vider('envois');await vider('connexions');await vider('connexionsIp');
+      /* On passe par la page demandée : elle renvoie vers la porte avec
+         « retour », exactement comme dans un navigateur. */
+      await page.goto(`${SITE}${tape}?emul`,{waitUntil:'domcontentloaded'});
+      await page.waitForSelector('#forme:not(.masque)',{timeout:25000}).catch(()=>{});
+      await page.fill('#email',email);await page.click('#envoyer');
+      await page.waitForSelector('#forme-code:not(.masque)',{timeout:25000});
+      await page.fill('#code',await codeDe(email)||'');
+      await pause(7000);
+      const ou=await page.evaluate(()=>location.pathname);
+      verifier(ou===attendu,`${qui} atterrit sur ${attendu}`,`atterri sur ${ou}`);
+      await page.context().close();
+    }
+    await nav.close();
+  }
+
+  console.log("\n== 4 · Le jeton est relu, pas pris en cache");
+  {
+    const src=fs.readFileSync(`${RACINE}/assets/js/noyau.js`,'utf8');
+    verifier(/getIdTokenResult\(true\)/.test(src),
+      "la session force la relecture du jeton : sinon un testeur tout juste inscrit arrive chez le client");
+  }
+
+  console.log('\n== 5 · La porte ne dit pas « espace client » à tout le monde');
   {
     const src=fs.readFileSync(`${RACINE}/index.html`,'utf8');
     verifier(!/<p class="surtitre"[^>]*>Espace client</.test(src),
       "la porte n'annonce plus « Espace client » alors qu'elle sert aussi aux testeurs");
     verifier(/id="surtitre-porte"/.test(src),'son surtitre est neutre et nommé');
+  }
+
+  /* Ménage : l'inscription d'essai laissait une SECONDE fiche à côté de
+     celle du semis, et les suites voisines qui numérotent les testeurs
+     comptaient alors trois personnes au lieu de deux. Une passe ne doit
+     rien laisser derrière elle. */
+  {
+    const j=await lire('testeurs?pageSize=100');
+    for (const d of ((j&&j.documents)||[])) {
+      const id=d.name.split('/').pop();
+      if (str(d,'email')==='karim.essai@exemple.test' && !id.startsWith('uid-')) {
+        await fetch(`http://127.0.0.1:8080/v1/${d.name}`,{method:'DELETE',headers:prop});
+      }
+    }
   }
 
   console.log(soucis.length?`\n${soucis.length} ÉCART(S)`:'\nqa-trois-espaces : tout est conforme');

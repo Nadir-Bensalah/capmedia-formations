@@ -734,7 +734,12 @@ export const session = () => new Promise((resolve) => {
     let testeur = null;
     if (!equipe) {
       try {
-        const { claims } = await utilisateur.getIdTokenResult();
+        /* Le VRAI jeton, pas celui en cache. Sans ce « true », le
+           navigateur garde jusqu'à une heure les revendications d'avant :
+           un testeur tout juste inscrit arrivait alors sur l'espace
+           client, parce que son jeton ne portait pas encore « testeur ».
+           Le même piège vaut après une invitation ou un retrait. */
+        const { claims } = await utilisateur.getIdTokenResult(true);
         if (claims && claims.testeur === true) {
           const fiche = await getDoc(doc(bdd, 'testeurs', utilisateur.uid));
           testeur = { uid: utilisateur.uid, ...(fiche.exists() ? fiche.data() : {}) };

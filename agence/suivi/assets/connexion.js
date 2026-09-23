@@ -62,17 +62,29 @@ const orienter = async () => {
   const { utilisateur, equipe, testeur, erreur: refus } = await session();
   if (!utilisateur) { montrer('#forme'); return; }
 
-  /* Une destination demandée avant la connexion est honorée, à condition
-     qu'elle reste dans cet espace : jamais de renvoi vers l'extérieur. */
-  const demande = new URLSearchParams(location.search).get('retour');
-  if (demande && /^\/suivi\/[\w./?=&#%-]*$/.test(demande)) { location.replace(demande); return; }
+  /* L'espace de CE compte, décidé par ce qu'il est et rien d'autre.
 
-  if (equipe) { location.replace('./cockpit'); return; }
-  /* Le testeur avant le client : il n'est membre d'aucun projet, donc la
+     Le testeur avant le client : il n'est membre d'aucun projet, donc la
      lecture des projets lui est refusée et il tomberait sur l'écran
      d'attente sans comprendre pourquoi. */
-  if (testeur) { location.replace('./testeur'); return; }
-  if (!refus) { location.replace('./hub'); return; }
+  const sien = equipe ? './cockpit' : (testeur ? './testeur' : (!refus ? './hub' : ''));
+
+  /* Une destination demandée avant la connexion n'est honorée que si elle
+     mène à l'espace de ce compte. Sans ce contrôle, taper l'adresse d'un
+     espace qui n'est pas le sien y renvoyait après la connexion : la page
+     refusait alors l'accès et redirigeait ailleurs, ce qui donnait
+     l'impression que la porte se trompait. Une destination d'un autre
+     espace est ignorée en silence, et le compte va chez lui. */
+  const demande = new URLSearchParams(location.search).get('retour');
+  if (sien && demande && /^\/suivi\/[\w./?=&#%-]*$/.test(demande)) {
+    const page = (demande.split('?')[0].split('#')[0].replace(/^\/suivi\//, '').replace(/\/$/, '') || 'hub');
+    const espace = { cockpit: './cockpit', testeur: './testeur', hub: './hub' };
+    /* Une page de partage (projet, ticket) n'est pas un espace : elle sait
+       elle-même où renvoyer, on la laisse passer. */
+    if (!espace[page] || espace[page] === sien) { location.replace(demande); return; }
+  }
+
+  if (sien) { location.replace(sien); return; }
 
   const bloc = document.querySelector('#attente .encart p:last-child');
   if (bloc) bloc.textContent = "Vos projets n'ont pas pu être lus. Prévenez-nous, nous vérifions le rattachement de votre compte.";
