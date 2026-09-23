@@ -105,7 +105,12 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   await page.click('[data-enregistrer]'); await pause(3200);
 
   const apres = ((await lire('testeurs?pageSize=50'))||{}).documents||[];
-  verifier(apres.length===avant.length+1,`le testeur est inscrit (${avant.length} puis ${apres.length})`);
+  /* Compter les fiches ne dit rien : une passe précédente laisse la sienne,
+     et réinscrire la même adresse met à jour au lieu d'ajouter. On vérifie
+     donc que CE testeur est là, ce qui est la vraie question. */
+  const sien = apres.find((d) => (((d.fields||{}).email||{}).stringValue||'') === 'nadia.qa@essai.test');
+  verifier(!!sien, `le testeur est inscrit (${apres.length} au vivier)`);
+  verifier(!!sien && (((sien.fields||{}).actif||{}).booleanValue) === true, 'et il est actif');
   const nadia = apres.find(d=>((d.fields.email||{}).stringValue||'')==='nadia.qa@essai.test');
   verifier(!!nadia,'avec la bonne adresse');
   if (nadia) {
@@ -152,6 +157,16 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   verifier(fiche && (((fiche.fields||{}).actif||{}).booleanValue) === false, 'mais il est retiré du vivier');
   await pause(2500);
   verifier(!(await lire(`testeurs/${uid}/public/profil`)),'et son profil public part avec son accès');
+
+  /* Ménage : la fiche d'essai ne reste pas au vivier du banc. */
+  {
+    const j = ((await lire('testeurs?pageSize=50'))||{}).documents||[];
+    for (const d of j) {
+      if ((((d.fields||{}).email||{}).stringValue||'') === 'nadia.qa@essai.test') {
+        await fetch(`http://127.0.0.1:8080/v1/${d.name}`,{method:'DELETE',headers:prop});
+      }
+    }
+  }
 
   console.log('\n'+(soucis.length?`${soucis.length} ÉCART(S)`:'tout est conforme'));
   console.log('Erreurs JS :', err.length?err.slice(0,4).join('\n  '):'aucune');

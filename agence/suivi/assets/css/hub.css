@@ -976,7 +976,11 @@ input, select, textarea { font: inherit; color: inherit; }
 .forme-pied { display: flex; justify-content: flex-end; gap: var(--e-2); padding-top: var(--e-2); }
 
 .case { display: inline-flex; align-items: center; gap: 10px; font: var(--t-corps); cursor: pointer; }
-.case input { width: 18px; height: 18px; accent-color: var(--accent); margin: 0; }
+.case input { width: 18px; height: 18px; accent-color: var(--accent); margin: 0; flex: none; }
+/* Une icône posée dans une case n'avait pas de taille : le SVG prenait
+   alors la sienne, et remplissait la moitié de la feuille. Toute icône
+   d'un libellé se cale sur la hauteur du texte. */
+.case svg { width: 18px; height: 18px; flex: none; }
 
 .interrupteur { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font: var(--t-corps); }
 .interrupteur input { position: absolute; opacity: 0; }
@@ -1062,7 +1066,20 @@ input, select, textarea { font: inherit; color: inherit; }
 .modale-tete h2 { font: var(--t-titre-2); letter-spacing: var(--ls-titre); }
 .modale-tete p { font: var(--t-petit); color: var(--encre-2); margin-top: 4px; }
 .modale-corps { padding: var(--e-5); overflow-y: auto; }
-.modale-pied { display: flex; justify-content: flex-end; gap: var(--e-2); padding: var(--e-4) var(--e-5) var(--e-5); border-top: 1px solid var(--trait); }
+/* Le pied peut porter quatre gestes : annuler, renvoyer, retirer,
+   supprimer. Sans retour à la ligne, le dernier sortait de la feuille et
+   devenait inatteignable. Les boutons s'alignent à droite et passent à la
+   ligne quand la largeur ne suffit plus. */
+.modale-pied {
+  display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center;
+  gap: var(--e-2); padding: var(--e-4) var(--e-5) var(--e-5);
+  border-top: 1px solid var(--trait);
+}
+/* Un bouton ne se laisse pas écraser sous son texte. */
+.modale-pied .btn { flex: 0 1 auto; min-width: 0; }
+/* « Pousse » sépare la gauche de la droite ; sur une ligne repliée, il ne
+   doit pas créer un trou vertical. */
+.modale-pied .pousse { flex: 1 1 auto; min-width: 0; }
 
 /* La feuille : glisse depuis la droite sur grand écran, depuis le bas sur petit. */
 .voile--feuille { place-items: stretch end; padding: 0; }

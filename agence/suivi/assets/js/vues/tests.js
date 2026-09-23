@@ -24,7 +24,7 @@ import {
 } from '../noyau.js';
 import {
   icone, pastille, ligne, vide, squelette, titrePage, sur, modale, toast, agir, confirmer,
-  brancherPieces, lisible,
+  brancherPieces, lisible, menu,
 } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K, ecrire, repartir } from '../donnees.js';
@@ -817,21 +817,34 @@ const ouvrirTesteur = (fiche, { env, projets }) => {
         <div class="cases-blocs">${projets.map((x) => `
           <label class="case"><input type="checkbox" data-projet="${echapper(x.id)}" ${(f.projets || []).includes(x.id) ? 'checked' : ''}> ${echapper(x.nom)}</label>`).join('')}</div>
       </div>`,
-    pied: `<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button>
-      ${neuf ? '' : `<button class="btn btn-doux" type="button" data-inviter>${icone('envoyer')} Renvoyer l'invitation</button>`}
-      ${neuf ? '' : '<button class="btn btn-doux" type="button" data-retirer>Retirer du vivier</button>'}
-      ${neuf || f.actif === false ? '' : ''}
-      ${neuf ? '' : `<button class="btn btn-danger" type="button" data-supprimer-testeur>${icone('corbeille')} Supprimer</button>`}
+    /* Quatre gestes dans un pied de 520 pixels ne tiennent pas côte à côte.
+       Les deux courants restent visibles, les deux rares passent sous un
+       menu : renvoyer une invitation ne se fait pas tous les jours, et
+       supprimer ne se rattrape pas. */
+    /* Les gestes secondaires à gauche, séparés des trois qui comptent :
+       au milieu du pied, les trois points se lisaient comme une étape du
+       parcours normal, alors qu'ils cachent une suppression. */
+    pied: `${neuf ? '' : `<button class="btn-icone" type="button" data-autres aria-label="Autres actions" data-astuce="Autres actions">${icone('points')}</button>`}
+      <span class="pousse"></span>
+      <button class="btn btn-secondaire" type="button" data-fermer>Annuler</button>
+      ${neuf ? '' : '<button class="btn btn-doux" type="button" data-retirer>Retirer</button>'}
       <button class="btn btn-principal" type="button" data-enregistrer>${neuf ? 'Inscrire' : 'Enregistrer'}</button>`,
   });
 
-  /* L'invitation part à l'inscription, mais une boîte la perd, et les
-     testeurs inscrits avant qu'elle existe n'ont jamais rien reçu. */
-  const inviter = m.el.querySelector('[data-inviter]');
-  if (inviter) inviter.addEventListener('click', () => agir(inviter, async () => {
-    await appelServeur('inviterTesteur', { testeur: f.id });
-    toast(`Invitation renvoyée à ${f.email || 'ce testeur'}.`);
-  }));
+  /* Les deux gestes rares, sous le menu : renvoyer l'invitation pour une
+     boîte qui l'a perdue, et supprimer, qui ne se rattrape pas. */
+  const autres = m.el.querySelector('[data-autres]');
+  if (autres) autres.addEventListener('click', () => menu(autres, [
+    {
+      cle: 'inviter', libelle: "Renvoyer l'invitation", icone: 'envoyer',
+      action: () => agir(autres, async () => {
+        await appelServeur('inviterTesteur', { testeur: f.id });
+        toast(`Invitation renvoyée à ${f.email || 'ce testeur'}.`);
+      }),
+    },
+    '-',
+    { cle: 'supprimer', libelle: 'Supprimer définitivement', icone: 'corbeille', danger: true, action: () => supprimerTesteur() },
+  ]));
 
   /* Retirer : l'accès se ferme, la fiche et les résultats restent. C'est
      le geste courant, celui d'un testeur qui ne travaille plus avec nous. */
@@ -852,28 +865,25 @@ const ouvrirTesteur = (fiche, { env, projets }) => {
 
   /* Supprimer : tout part, compte compris. Pour un essai ou une erreur de
      saisie. Le serveur refuse si le testeur a consigné un passage. */
-  const supprimer = m.el.querySelector('[data-supprimer-testeur]');
-  if (supprimer) supprimer.addEventListener('click', async () => {
+  const supprimerTesteur = async () => {
     const sur = await confirmer({
       titre: `Supprimer ${f.prenom || 'ce testeur'} définitivement ?`,
       texte: `Sa fiche et son compte disparaissent${f.email ? `, y compris ${f.email}` : ''}. Cela ne se rattrape pas. Si ce testeur a déjà consigné un résultat, la suppression sera refusée : préférez « Retirer du vivier ».`,
       ok: 'Supprimer', danger: true,
     });
     if (!sur) return;
-    await agir(supprimer, async () => {
-      try {
-        await appelServeur('retirerTesteur', { testeur: f.id, definitif: true });
-        toast(`${f.prenom || 'Le testeur'} est supprimé.`);
-        m.fermer(true);
-      } catch (e) {
-        /* Le refus du serveur n'est pas une panne : c'est une réponse, et
-           elle dit quoi faire à la place. */
-        toast(/passages/.test(String(e && e.message))
-          ? 'Ce testeur a déjà consigné des résultats. Retirez-le du vivier plutôt que de le supprimer.'
-          : lisible(e), 'erreur');
-      }
-    });
-  });
+    try {
+      await appelServeur('retirerTesteur', { testeur: f.id, definitif: true });
+      toast(`${f.prenom || 'Le testeur'} est supprimé.`);
+      m.fermer(true);
+    } catch (e) {
+      /* Le refus du serveur n'est pas une panne : c'est une réponse, et
+         elle dit quoi faire à la place. */
+      toast(/passages/.test(String(e && e.message))
+        ? 'Ce testeur a déjà consigné des résultats. Retirez-le du vivier plutôt que de le supprimer.'
+        : lisible(e), 'erreur');
+    }
+  };
 
   const enregistrer = m.el.querySelector('[data-enregistrer]');
   enregistrer.addEventListener('click', () => agir(enregistrer, async () => {

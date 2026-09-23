@@ -162,14 +162,63 @@ const poserPassage=async(uid)=>{
     await serveur('retirerTesteur',{testeur:uid2,definitif:true});
   }
 
-  console.log("\n== 5 · Les boutons dans la fiche du testeur");
+  console.log("\n== 5 · La fiche du testeur, à l'écran");
   {
     const src=require('fs').readFileSync(`${__dirname}/../../agence/suivi/assets/js/vues/tests.js`,'utf8');
-    verifier(/data-inviter/.test(src),"la fiche porte un bouton « Renvoyer l'invitation »");
-    verifier(/appelServeur\('inviterTesteur'/.test(src),"et il appelle la bonne action");
-    verifier(/data-supprimer-testeur/.test(src),'elle porte aussi « Supprimer »');
-    verifier(/definitif: true/.test(src),'qui demande bien une suppression définitive');
-    verifier(/data-retirer/.test(src),'et « Retirer du vivier » à côté');
+    verifier(/appelServeur\('inviterTesteur'/.test(src),"« Renvoyer l'invitation » appelle la bonne action");
+    verifier(/definitif: true/.test(src),'et « Supprimer » demande bien une suppression définitive');
+    verifier(/data-retirer/.test(src),'« Retirer » est là aussi');
+
+    /* Deux défauts de mise en page relevés sur une capture : les icônes de
+       plateforme sans taille remplissaient la moitié de la feuille, et le
+       pied à quatre boutons débordait hors de la fenêtre. */
+    const nav=await chromium.launch();
+    const page=await (await nav.newContext({viewport:{width:1500,height:1000}})).newPage();
+    await vider('envois');await vider('connexions');await vider('connexionsIp');
+    await page.goto(`${SITE}/suivi/?emul`,{waitUntil:'domcontentloaded'});
+    await page.waitForSelector('#forme:not(.masque)',{timeout:25000});
+    await page.fill('#email','agent.essai@exemple.test');await page.click('#envoyer');
+    await page.waitForSelector('#forme-code:not(.masque)',{timeout:25000});
+    const code=await attendre(async()=>{
+      const j=await lire('envois?pageSize=50');
+      const p=((j&&j.documents)||[]).filter(d=>str(d,'modele')==='code'
+        && (((champ(d,'a').arrayValue||{}).values)||[]).some(x=>/agent\.essai/.test(((((x.mapValue||{}).fields||{}).email)||{}).stringValue||'')));
+      if(!p.length) return null;
+      return ((((champ(p[0],'variables').mapValue||{}).fields)||{}).code||{}).stringValue||null;
+    });
+    await page.fill('#code',code||'');
+    await page.waitForSelector('.lat a',{timeout:60000}).catch(()=>{});
+    await page.evaluate(()=>{try{localStorage.setItem('suivi:cle-admin','cle-essai-locale');}catch(e){}});
+    for(let i=0;i<8;i++){
+      await page.evaluate(()=>{location.hash='/tests?projet=atelier';window.dispatchEvent(new HashChangeEvent('hashchange'));});
+      await pause(1800); if(await page.evaluate(()=>!!document.querySelector('#testeurs'))) break;
+    }
+    const ouvrir=await page.$('[data-action="ouvrir-testeur"] .ligne-titre, [data-action="ouvrir-testeur"]');
+    if(!ouvrir){ dire('aucun testeur à ouvrir pour le contrôle visuel'); }
+    else {
+      await ouvrir.click(); await pause(1500);
+      const vu=await page.evaluate(()=>{
+        const v=document.querySelector('.voile'); if(!v) return null;
+        const pied=v.querySelector('.modale-pied');
+        const b=[...pied.querySelectorAll('button')].map(x=>({
+          nom:(x.innerText||x.getAttribute('aria-label')||'').trim().slice(0,24),
+          droite:Math.round(x.getBoundingClientRect().right),
+        }));
+        return {
+          icones:[...v.querySelectorAll('.case svg')].map(s=>Math.round(s.getBoundingClientRect().height)),
+          boutons:b, borne:Math.round(pied.getBoundingClientRect().right),
+          deborde:pied.scrollWidth>pied.clientWidth+1,
+        };
+      });
+      verifier(!!vu,'la fiche du testeur s ouvre');
+      const grandes=(vu.icones||[]).filter(h=>h>26);
+      verifier(vu&&(vu.icones||[]).length>0,`les icônes de plateforme sont là (${(vu.icones||[]).length})`);
+      verifier(grandes.length===0,'et aucune ne dépasse la hauteur du texte',JSON.stringify(vu.icones));
+      const dehors=(vu.boutons||[]).filter(x=>x.droite>vu.borne+1);
+      verifier(dehors.length===0,'aucun bouton du pied ne sort de la feuille',dehors.map(x=>x.nom).join(', '));
+      verifier(!vu.deborde,'et le pied ne déborde pas en largeur');
+    }
+    await nav.close();
   }
 
   /* Ménage : le compte d'essai ne reste pas dans le vivier. */
