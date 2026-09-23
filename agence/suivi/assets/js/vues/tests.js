@@ -32,6 +32,7 @@ import { bdd, collection } from '../noyau.js';
 import { editer } from './editeurs.js';
 import { appelServeur } from '../serveur.js';
 import { filAriane } from '../coquille.js';
+import { ongletsTests } from './tableau.js';
 
 /* La mémoire des filtres tient dans l'adresse, pas dans le stockage : un
    lien vers « les anomalies Android de ForgeMe » doit pouvoir se coller
@@ -1167,7 +1168,7 @@ export const vue = async (ctx, env) => {
   const lot = magasin.lot();
   const sortie = ctx.sortie;
   titrePage('Tests');
-  filAriane([{ libelle: 'Tests' }]);
+  filAriane([{ libelle: 'Tests', chemin: '/tests/tableau' }, { libelle: 'Détail' }]);
   sortie.innerHTML = `<div class="page">${squelette('page', 5)}</div>`;
 
   const etat = {
@@ -1235,6 +1236,7 @@ export const vue = async (ctx, env) => {
           <p class="chapo">${pid ? echapper(nomProjet(pid)) : `${pluriel(d.projets.length, 'projet', 'projets')}, ${pluriel(d.scenarios.filter((s) => s.actif !== false).length, 'scénario', 'scénarios')}`}</p>
         </div>
       </header>
+      ${ongletsTests('detail', pid)}
 
       <div class="rang barre-tests">
         ${!seul ? `<select class="select" id="f-projet" style="width:auto">

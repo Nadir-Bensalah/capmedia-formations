@@ -43,10 +43,28 @@ const poser = (cles) => {
   const p = new URLSearchParams(location.hash.split('?')[1] || '');
   Object.entries(cles).forEach(([k, v]) => { if (v) p.set(k, v); else p.delete(k); });
   const chaine = p.toString();
-  history.replaceState(null, '', `#/tableau${chaine ? `?${chaine}` : ''}`);
+  history.replaceState(null, '', `#/tests/tableau${chaine ? `?${chaine}` : ''}`);
 };
 
 const projetDe = (x) => x.projet || x._parent || '';
+
+/* Les deux onglets de Tests : le tableau d'abord, la console en détail.
+   Le projet choisi suit d'un onglet à l'autre. */
+export const ongletsTests = (courant, projet = '') => {
+  const q = projet ? `?projet=${encodeURIComponent(projet)}` : '';
+  return `<div class="segments onglets-tests" role="tablist" aria-label="Tests">
+    <a href="#/tests/tableau${q}" role="tab" aria-selected="${courant === 'tableau'}"${courant === 'tableau' ? ' class="actif"' : ''}>Tableau</a>
+    <a href="#/tests${q}" role="tab" aria-selected="${courant === 'detail'}"${courant === 'detail' ? ' class="actif"' : ''}>Détail</a>
+  </div>`;
+};
+
+/* L'ancienne adresse du tableau, gardée pour les liens déjà partagés. */
+export const ancienne = (ctx) => {
+  const q = new URLSearchParams(ctx.requete || {}).toString();
+  history.replaceState(null, '', `#/tests/tableau${q ? `?${q}` : ''}`);
+  window.dispatchEvent(new HashChangeEvent('hashchange'));
+  return () => {};
+};
 const duree = (ms) => {
   const m = Math.max(0, Math.round(ms / 60000));
   if (m < 60) return `${m} min`;
@@ -84,8 +102,8 @@ export const vue = async (ctx, env) => {
   const equipe = env.role === 'equipe';
   const lot = magasin.lot();
   const sortie = ctx.sortie;
-  titrePage('Tableau des tests');
-  filAriane([{ libelle: 'Tableau des tests' }]);
+  titrePage('Tests');
+  filAriane([{ libelle: 'Tests', chemin: '/tests/tableau' }, { libelle: 'Tableau' }]);
   sortie.innerHTML = `<div class="page">${squelette('page', 4)}</div>`;
 
   const etat = {
@@ -172,7 +190,7 @@ export const vue = async (ctx, env) => {
     empreinte = sceau;
 
     if (!avecTests.length) {
-      sortie.innerHTML = `<div class="page"><header class="page-tete"><div><h1>Tableau des tests</h1></div></header>
+      sortie.innerHTML = `<div class="page"><header class="page-tete"><div><h1>Tests</h1></div></header>${ongletsTests('tableau')}
         ${vide({ icone: 'kanban', titre: 'Aucun test pour l\'instant', texte: equipe ? 'Importez des scénarios ou des parcours dans un projet : ils apparaîtront ici, famille par famille.' : 'Quand les tests de votre application commenceront, vous suivrez ici chaque résultat en direct.' })}</div>`;
       return;
     }
@@ -193,7 +211,10 @@ export const vue = async (ctx, env) => {
     const corps = etat.voie === 'machine'
       ? voieMachine(d, pid, controles)
       : voieHumains(d, pid, campagne, controles);
-    sortie.innerHTML = `<div class="page"><div class="tb${etat.voie === 'machine' ? ' tb--machine' : ''}">${corps}</div></div>`;
+    sortie.innerHTML = `<div class="page">
+      <header class="page-tete"><div><h1>Tests</h1></div></header>
+      ${ongletsTests('tableau', pid)}
+      <div class="tb${etat.voie === 'machine' ? ' tb--machine' : ''}">${corps}</div></div>`;
     dernier = { d, pid, campagne };
 
     const sel = sortie.querySelector('#tb-projet');

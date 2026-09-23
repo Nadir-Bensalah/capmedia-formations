@@ -2326,3 +2326,6 @@ input, select, textarea { font: inherit; color: inherit; }
   .tb-case, .tb-barre i { transition: none; }
   .tb-case--vivante::before { animation: none; }
 }
+
+/* Les deux onglets de Tests : Tableau, puis Détail. */
+.onglets-tests { margin: 0 0 var(--e-5); }

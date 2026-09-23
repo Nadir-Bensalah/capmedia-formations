@@ -59,7 +59,7 @@ const connecter=async(page,email)=>{
    pas là, comme le ferait quelqu'un qui clique une seconde fois. */
 const allerTableau=async(page,requete)=>{
   for (let i=0;i<6;i++){
-    await page.evaluate(h=>{location.hash=h;window.dispatchEvent(new HashChangeEvent('hashchange'));},`#/tableau${requete?`?${requete}`:''}`);
+    await page.evaluate(h=>{location.hash=h;window.dispatchEvent(new HashChangeEvent('hashchange'));},`#/tests/tableau${requete?`?${requete}`:''}`);
     if (await page.waitForSelector('.tb-case',{timeout:5000}).then(()=>true).catch(()=>false)) break;
   }
   await pause(1200);
@@ -161,6 +161,24 @@ const SCENARIOS=[
   verifier(/Nina/.test(feuille)&&/Omar/.test(feuille),'et nomme les testeurs, côté équipe');
   await equipe.keyboard.press('Escape'); await equipe.click('.feuille [data-fermer]').catch(()=>{}); await pause(300);
 
+  console.log('\n== Le tableau vit DANS Tests');
+  {
+    const entrees=await equipe.$$eval('.lat-lien',as=>as.map(a=>a.textContent.trim()));
+    verifier(!entrees.some(t=>/Tableau des tests/.test(t)),'plus d entrée séparée « Tableau des tests » dans le menu');
+    verifier(!!(await equipe.$('.lat-lien[href="#/tests/tableau"]')),'l entrée « Tests » ouvre le tableau');
+    verifier(await equipe.$eval('.lat-lien[href="#/tests/tableau"]',a=>a.classList.contains('actif')).catch(()=>false),'et reste allumée sur le tableau');
+    verifier(!!(await equipe.$('.onglets-tests a[href^="#/tests/tableau"].actif')),'l onglet Tableau est actif');
+    await equipe.click('.onglets-tests a[href^="#/tests?"], .onglets-tests a[href="#/tests"]');
+    await equipe.waitForSelector('#campagnes, .section-tete',{timeout:20000}).catch(()=>{});
+    verifier(/#\/tests(\?|$)/.test(await equipe.evaluate(()=>location.hash)),'l onglet Détail ouvre la console',await equipe.evaluate(()=>location.hash));
+    verifier(await equipe.$eval('.lat-lien[href="#/tests/tableau"]',a=>a.classList.contains('actif')).catch(()=>false),'et « Tests » reste allumé sur le détail');
+    verifier(/projet=atelier/.test(await equipe.evaluate(()=>location.hash)),'le projet choisi suit d un onglet à l autre',await equipe.evaluate(()=>location.hash));
+    await equipe.evaluate(()=>{location.hash='#/tableau?projet=atelier';});
+    const redirige=await attendre(async()=>/^#\/tests\/tableau/.test(await equipe.evaluate(()=>location.hash)),20,300);
+    verifier(redirige,'l ancienne adresse #/tableau mène au tableau dans Tests');
+    await allerTableau(equipe,`projet=${PID}&campagne=${CID}`);
+  }
+
   console.log('\n== Une campagne ne finit pas avant de commencer');
   {
     await equipe.evaluate(()=>{location.hash='#/tests?projet=atelier';});
@@ -242,8 +260,8 @@ const SCENARIOS=[
   const client=await ctxC.newPage();
   const erreursClient=[]; client.on('pageerror',e=>erreursClient.push(e.message)); client.on('console',m=>{if(m.type()==='error'||m.type()==='warning')erreursClient.push('console '+m.text().slice(0,300));});
   await connecter(client,'camille.essai@exemple.test');
-  const lien=await client.$('a[href="#/tableau"]');
-  verifier(!!lien,'le client a l entrée « Tableau des tests »');
+  const lien=await client.$('.lat-lien[href="#/tests/tableau"]');
+  verifier(!!lien,'chez le client aussi, « Tests » ouvre le tableau');
   await allerTableau(client,`projet=${PID}&campagne=${CID}`);
   const eC=await etats(client);
   verifier(eC['TB-02']==='casse'&&eC['TB-05']==='ok','il voit les mêmes verdicts',JSON.stringify(eC)+' '+(await client.textContent('body')).replace(/\s+/g,' ').slice(0,400)+' '+erreursClient.join('|'));
