@@ -6,7 +6,7 @@ import { exigerSession, $, OUVERTS, ATTEND_EQUIPE, FACTURES_DUES, joursAvant, pr
 import { monterCoquille, definirNavigation, enregistrerRecherche } from './coquille.js';
 import { definir, demarrer } from './routeur.js';
 import * as magasin from './magasin.js';
-import { abonnerGlobal, K, nonLusProjet } from './donnees.js';
+import { abonnerGlobal, K, nonLusProjet, requeteMessages, messagesDuProjet } from './donnees.js';
 import { surCle } from './serveur.js';
 
 import * as adminAccueil from './vues/admin-accueil.js';
@@ -14,6 +14,7 @@ import * as adminClients from './vues/admin-clients.js';
 import * as adminProjets from './vues/admin-projets.js';
 import * as projet from './vues/projet.js';
 import * as demande from './vues/demande.js';
+import { resoudreDemande } from './lien-profond.js';
 import * as brique from './vues/brique.js';
 import * as adminDemandes from './vues/admin-demandes.js';
 import * as adminTaches from './vues/admin-taches.js';
@@ -71,7 +72,7 @@ const construireNavigation = () => {
   const fichiers = magasin.lire(K.fichiersTous) || [];
   const profil = magasin.lire(K.profil);
   const uid = session.utilisateur.uid;
-  const nonLus = projets.reduce((n, p) => n + nonLusProjet(magasin.lire(K.messages(p.id)) || [], profil, p.id, uid), 0);
+  const nonLus = projets.reduce((n, p) => n + nonLusProjet(messagesDuProjet(p.id), profil, p.id, uid), 0);
   const ouvertes = tickets.filter((t) => OUVERTS.includes(t.statut)).length;
   const aFaire = taches.filter((t) => t.statut !== 'terminee').length;
   const nouveauxPreprojets = demandesProjet.filter((d) => d.statut === 'nouvelle').length;
@@ -141,7 +142,7 @@ const suivreConversations = () => {
        décroissante bornée à 40, que la bulle de conversation réutilisait
        ensuite : elle montrait donc au plus quarante messages, à l'envers,
        et l'accusé « Lu » se calculait sur le plus ancien des quarante. */
-    lotGlobal.abonner(K.messages(p.id), () => query(collection(bdd, 'projets', p.id, 'messages'), orderBy('date', 'asc'), limit(300)));
+    lotGlobal.abonner(K.messages(p.id), () => requeteMessages(p.id));
     lotGlobal.sur(K.messages(p.id), () => planifierNav());
   }
 };
@@ -190,6 +191,9 @@ definir([
   { chemin: '/projets/:id', cle: (c) => `projet:${c.params.id}`, vue: (ctx) => projet.vue({ ...ctx, onglet: 'apercu' }, env) },
   { chemin: '/projets/:id/nouvelle-demande', vue: (ctx) => demande.nouvelle(ctx, env) },
   { chemin: '/projets/:id/demandes/:tid', vue: (ctx) => demande.detail(ctx, env) },
+  /* Le lien d'un e-mail ou d'une notification de demande : le même que
+     dans le hub, résolu dans le cockpit. */
+  { chemin: '/demande/:tid', vue: (ctx) => resoudreDemande(ctx) },
   { chemin: '/projets/:id/taches/:tid', cle: (c) => `projet:${c.params.id}`, vue: (ctx) => projet.vue({ ...ctx, onglet: 'taches' }, env) },
   { chemin: '/projets/:id/brique/:cid', vue: (ctx) => brique.vue(ctx, env) },
   { chemin: '/projets/:id/:onglet', cle: (c) => `projet:${c.params.id}`, vue: (ctx) => projet.vue({ ...ctx, onglet: ctx.params.onglet }, env) },

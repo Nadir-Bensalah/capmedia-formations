@@ -56,7 +56,7 @@ const verifier = (condition, libelle, detail) => {
   else { ecarts.push(libelle); console.log(`  ÉCART  ${libelle}${detail ? ' · ' + detail : ''}`); }
 };
 
-/* Les six testeurs de la campagne ForgeMe : trois sur iOS, trois sur
+/* Les six testeurs d une campagne de référence : trois sur iOS, trois sur
    Android, tous sur le web. */
 const SIX = [
   { id: 't1', mobile: 'ios' },     { id: 't2', mobile: 'ios' },     { id: 't3', mobile: 'ios' },

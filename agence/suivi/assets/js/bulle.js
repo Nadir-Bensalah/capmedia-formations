@@ -15,7 +15,7 @@ import { echapper, depuis, heure, TYPES, nomsContacts } from './noyau.js';
 import { icone } from './icones.js';
 import { messageHtml, depot, toast, agir, brancherPieces, avatarProjet, menu, sur } from './ui.js';
 import * as magasin from './magasin.js';
-import { K, ecrire } from './donnees.js';
+import { K, ecrire, messagesDuProjet } from './donnees.js';
 import { naviguer } from './routeur.js';
 
 const CLE_SON = 'suivi:son-messages';
@@ -137,7 +137,7 @@ export const monterBulle = ({ pid, env }) => {
     $('#bulle-sous').textContent = p.nom || '';
   };
 
-  const messages = () => magasin.lire(K.messages(pid)) || [];
+  const messages = () => messagesDuProjet(pid);
   const lectures = () => magasin.lire(K.lectures(pid)) || [];
 
   /* Ce que l'autre côté a lu, et s'il écrit en ce moment. */

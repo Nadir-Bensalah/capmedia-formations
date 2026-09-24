@@ -14,7 +14,7 @@ import {
   serverTimestamp, arrayUnion, arrayRemove, Timestamp,
   nomAffiche, enDate, parDateDesc, parDateAsc, joursAvant, borner, age, retard, dateCourte,
   OUVERTS, ATTEND_CLIENT, ATTEND_EQUIPE, FACTURES_DUES, PROJETS_ACTIFS, CATEGORIES_CLIENT, projetEstActif,
-  statutProjet, pluriel, verdictDelai, NIVEAUX_SCENARIO,
+  statutProjet, pluriel, verdictDelai, NIVEAUX_SCENARIO, STATUTS_PIECE_VISIBLES, startAfter,
 } from './noyau.js';
 import * as magasin from './magasin.js';
 
@@ -86,6 +86,13 @@ export const K = {
   sessions: (uid) => `sessions:${uid}`,
   executions: (p) => `executions:${p}`,
   robots: 'robots',
+  /* Ce qui est réservé à Capmedia vit hors des documents que le client lit
+     (voir les règles) : l'équipe seule s'y abonne. */
+  projetsInternes: 'projets-internes',
+  organisationsInternes: 'organisations-internes',
+  paiementsInternes: 'paiements-internes',
+  /* Le profil sans nom des testeurs d'un projet. */
+  profilsTesteurs: (p) => `profils-testeurs:${p}`,
   /* Les notes des projets à faire, hors des projets : équipe seule. */
   idees: 'idees',
   audit: 'audit',
@@ -97,6 +104,34 @@ export const K = {
    ========================================================================== */
 
 const col = (...segments) => collection(bdd, ...segments);
+
+/** Un identifiant de document tiré d'avance : le fichier stocké porte celui de sa fiche. */
+export const nouvelId = (collectionNom) => doc(col(collectionNom)).id;
+
+/* La conversation d'un projet : les messages les PLUS RÉCENTS, en temps réel.
+   L'ancienne requête (« asc », 300) gardait les trois cents premiers : au
+   301e message, plus rien de neuf n'apparaissait. On lit désormais la fin
+   de la conversation, et l'historique plus ancien se charge à la demande
+   (lireMessagesAnterieurs). Une seule fabrique, pour que toutes les vues
+   partagent la même écoute (le magasin garde la première posée). */
+export const FENETRE_MESSAGES = 150;
+export const requeteMessages = (pid) => query(col('projets', pid, 'messages'), orderBy('date', 'desc'), limit(FENETRE_MESSAGES));
+
+/** Les messages d'avant `avant` (date du plus ancien affiché), par pages. Rend une liste dans l'ordre chronologique. */
+export const lireMessagesAnterieurs = async (pid, avant, taille = 50) => {
+  const instantane = await getDocs(query(col('projets', pid, 'messages'), orderBy('date', 'desc'), startAfter(avant), limit(taille)));
+  return instantane.docs.map((d) => ({ id: d.id, ...d.data() })).reverse();
+};
+
+/** La fenêtre récente d'une conversation, dans l'ordre de lecture. */
+export const messagesDuProjet = (pid) => enOrdreChronologique(magasin.lire(K.messages(pid)));
+
+/** Une conversation dans l'ordre de lecture, quelle que soit la requête qui l'a lue. */
+export const enOrdreChronologique = (messages) => (messages || []).slice().sort((a, b) => {
+  const ta = a.date && typeof a.date.toMillis === 'function' ? a.date.toMillis() : (a.date && a.date.seconds ? a.date.seconds * 1000 : 0);
+  const tb = b.date && typeof b.date.toMillis === 'function' ? b.date.toMillis() : (b.date && b.date.seconds ? b.date.seconds * 1000 : 0);
+  return ta - tb;
+});
 
 /** Les collections d'un projet. Un client ne voit que ce qui lui est destiné. */
 export const abonnerProjet = (lot, pid, role) => {
@@ -111,7 +146,7 @@ export const abonnerProjet = (lot, pid, role) => {
   lot.abonner(K.composants(pid), () => col('projets', pid, 'composants'));
   lot.abonner(K.jalons(pid), () => col('projets', pid, 'jalons'));
   lot.abonner(K.liens(pid), () => visible(col('projets', pid, 'liens')));
-  lot.abonner(K.messages(pid), () => query(col('projets', pid, 'messages'), orderBy('date', 'asc'), limit(300)));
+  lot.abonner(K.messages(pid), () => requeteMessages(pid));
   lot.abonner(K.lectures(pid), () => col('projets', pid, 'lectures'));
   /* La fiche technique ne se lit que côté équipe : les règles refuseraient
      la requête à un client, et elle ne lui sert à rien. */
@@ -125,6 +160,7 @@ export const abonnerProjet = (lot, pid, role) => {
   lot.abonner(K.anomalies(pid), () => col('projets', pid, 'anomalies'));
   lot.abonner(K.parcours(pid), () => col('projets', pid, 'parcours'));
   lot.abonner(K.regles(pid), () => col('projets', pid, 'regles'));
+  lot.abonner(K.profilsTesteurs(pid), () => col('projets', pid, 'profilsTesteurs'));
   /* La maintenance continue : le contrat, ses séquences, ses journées et
      ses évolutions. Le client lit tout, c'est son espace. */
   lot.abonner(K.maintenance(pid), () => col('projets', pid, 'maintenance'));
@@ -136,7 +172,11 @@ export const abonnerProjet = (lot, pid, role) => {
   lot.abonner(K.reunions(pid), () => surProjetVisible('reunions'));
   lot.abonner(K.notes(pid), () => surProjetVisible('notes'));
   lot.abonner(K.blocages(pid), () => surProjetVisible('blocages'));
-  lot.abonner(K.documents(pid), () => surProjet('documents'));
+  /* Un brouillon n'est lu que par l'équipe : la requête du client ne
+     demande que les statuts visibles, sans quoi les règles la refusent. */
+  lot.abonner(K.documents(pid), () => (client
+    ? query(col('documents'), where('projet', '==', pid), where('statut', 'in', STATUTS_PIECE_VISIBLES))
+    : surProjet('documents')));
   lot.abonner(K.paiements(pid), () => surProjet('paiements'));
   lot.abonner(K.activite(pid), () => surProjetVisible('activite'));
 };
@@ -168,20 +208,24 @@ export const abonnerGlobal = (lot, session) => {
     lot.abonner(K.parcoursTous, () => collectionGroup(bdd, 'parcours'));
     lot.abonner(K.reglesToutes, () => collectionGroup(bdd, 'regles'));
     lot.abonner(K.maintenanceToute, () => collectionGroup(bdd, 'maintenance'));
-    lot.abonner(K.profils, () => collectionGroup(bdd, 'public'));
+    lot.abonner(K.profils, () => collectionGroup(bdd, 'profilsTesteurs'));
     lot.abonner(K.scenariosTous, () => collectionGroup(bdd, 'scenarios'));
     lot.abonner(K.testeurs, () => col('testeurs'));
+    lot.abonner(K.projetsInternes, () => col('projetsInternes'));
+    lot.abonner(K.organisationsInternes, () => col('organisationsInternes'));
+    lot.abonner(K.paiementsInternes, () => col('paiementsInternes'));
   } else {
-    /* Le client lit les profils publics des testeurs, pas le vivier : le
-       même document sans le nom ni l'adresse. Oublier cette ligne laisse
-       sa section Testeurs vide, sans la moindre erreur pour le dire. */
-    lot.abonner(K.profils, () => collectionGroup(bdd, 'public'));
+    /* Le client lit le profil sans nom des testeurs de SES projets, projet
+       par projet (voir abonnerProjet), jamais le vivier ni les testeurs des
+       autres clients. */
     const uid = session.utilisateur.uid;
     lot.abonner(K.projets, () => query(col('projets'), where('membres', 'array-contains', uid)));
     lot.abonner(K.organisations, () => query(col('organisations'), where('membres', 'array-contains', uid)));
     lot.abonner(K.demandesProjet, () => query(col('demandesProjet'), where('par.uid', '==', uid)));
-    /* Pour mettre un nom sur le responsable du projet, au lieu de « Capmedia ». */
-    lot.abonner(K.equipe, () => col('equipe'));
+    /* Pour mettre un nom sur le responsable du projet, au lieu de
+       « Capmedia » : l'annuaire, qui ne porte que le nom. La fiche d'équipe
+       (adresse, rôle) n'est plus lisible par un client. */
+    lot.abonner(K.equipe, () => col('annuaire'));
 
     /*
      * Les projets d'un client ne sont pas figés au chargement de la page.
@@ -220,6 +264,32 @@ export const abonnerGlobal = (lot, session) => {
  * voyait alors le projet apparaître dans sa barre mais ni son devis ni
  * ses pièces, jusqu'au rechargement.
  */
+/* Les données internes d'un projet, d'une organisation, d'un paiement :
+   lues par l'équipe seule, à part de la fiche que lit le client. */
+export const interneDuProjet = (pid) => (magasin.lire(K.projetsInternes) || []).find((x) => x.id === pid) || {};
+export const interneDeLOrganisation = (oid) => (magasin.lire(K.organisationsInternes) || []).find((x) => x.id === oid) || {};
+export const noteDuPaiement = (paiementId) => ((magasin.lire(K.paiementsInternes) || []).find((x) => x.id === paiementId) || {}).note || '';
+
+/**
+ * Les profils sans nom des testeurs, un par testeur, avec la liste des
+ * projets (parmi ceux que le lecteur voit) où il est inscrit. Chaque
+ * document vit sous « projets/<p>/profilsTesteurs/<uid> » : l'identifiant
+ * est l'uid, le parent est le projet.
+ */
+export const profilsTesteurs = (session) => {
+  const bruts = session && session.equipe
+    ? (magasin.lire(K.profils) || [])
+    : (magasin.lire(K.projets) || (session && session.projets) || []).flatMap((p) => (magasin.lire(K.profilsTesteurs(p.id)) || []).map((x) => ({ ...x, _parent: x._parent || p.id })));
+  const parUid = new Map();
+  for (const x of bruts) {
+    const deja = parUid.get(x.id);
+    if (deja) { if (!deja.projets.includes(x._parent)) deja.projets.push(x._parent); continue; }
+    const { _parent, ...profil } = x;
+    parUid.set(x.id, { ...profil, projets: [_parent] });
+  }
+  return [...parUid.values()];
+};
+
 export const agreger = (session, fabriqueCle) => {
   if (session.equipe) return magasin.lire(fabriqueCle('*')) || [];
   const projets = magasin.lire(K.projets) || session.projets || [];
@@ -347,7 +417,13 @@ export const ecrire = {
     const par = auteurDe(session);
     const client = par.cote === 'client';
     const categorie = client && !CATEGORIES_CLIENT.includes(options.categorie) ? 'autres' : (options.categorie || 'autres');
-    const ref = await addDoc(col('fichiers'), nettoyer({
+    /* Le fichier est rangé sous « projets/<p>/fichiers/<id de la fiche>/ » :
+       la fiche prend cet identifiant, que les règles Storage relisent pour
+       décider qui peut le télécharger. */
+    const id = (String(fiche.chemin || '').match(new RegExp(`^projets/${pid}/fichiers/([^/]+)/`)) || [])[1];
+    if (!id) throw new Error("Ce fichier n'a pas été rangé au bon endroit. Recommencez l'envoi.");
+    const ref = doc(bdd, 'fichiers', id);
+    await setDoc(ref, nettoyer({
       projet: pid, composant: options.composant || '', categorie,
       nom: fiche.nom, chemin: fiche.chemin, taille: fiche.taille, type: fiche.type,
       description: options.description || '', tags: options.tags || [],
@@ -388,6 +464,8 @@ export const ecrire = {
 
   /* --- Ce que l'équipe écrit directement ------------------------------ */
   majProjet: (pid, changements) => updateDoc(doc(bdd, 'projets', pid), nettoyer({ ...changements, maj: serverTimestamp() })),
+  /* Budget, note de budget, santé : réservés à Capmedia, hors de la fiche projet. */
+  majProjetInterne: (pid, changements) => setDoc(doc(bdd, 'projetsInternes', pid), nettoyer({ ...changements, maj: serverTimestamp() }), { merge: true }),
   /* La note d'un projet à faire, réécrite entière à chaque fois. */
   noterIdee: (pid, texte, uid) => setDoc(doc(bdd, 'idees', pid), { texte: String(texte || ''), par: uid, maj: serverTimestamp() }),
 

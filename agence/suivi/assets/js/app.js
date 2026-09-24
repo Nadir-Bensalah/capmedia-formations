@@ -4,17 +4,18 @@
    navigation vivante et la recherche.
    ========================================================================== */
 
-import { exigerSession, $, echapper, prenom, nomAffiche, OUVERTS, ATTEND_CLIENT, FACTURES_DUES, joursAvant } from './noyau.js';
+import { exigerSession, $, echapper, prenom, nomAffiche, OUVERTS, ATTEND_CLIENT, FACTURES_DUES, joursAvant, effacerSecretsLocaux } from './noyau.js';
 import { monterCoquille, definirNavigation, enregistrerRecherche } from './coquille.js';
 import { definir, demarrer, courant, surChangement } from './routeur.js';
 import * as magasin from './magasin.js';
-import { abonnerGlobal, K, G, agreger, enAttenteDeVous, nonLusProjet, ecrire } from './donnees.js';
+import { abonnerGlobal, K, G, agreger, enAttenteDeVous, nonLusProjet, ecrire, messagesDuProjet } from './donnees.js';
 import { icone } from './icones.js';
 import { avatarProjet } from './ui.js';
 
 import * as accueil from './vues/accueil.js';
 import * as projet from './vues/projet.js';
 import * as demande from './vues/demande.js';
+import { resoudreDemande } from './lien-profond.js';
 import * as brique from './vues/brique.js';
 import * as messages from './vues/messages.js';
 import * as valider from './vues/valider.js';
@@ -45,6 +46,10 @@ if (session.testeur) {
   throw new Error('redirection');
 }
 
+/* Un compte client n'a rien à faire d'une clé d'administration laissée
+   dans ce navigateur par une autre session. */
+effacerSecretsLocaux();
+
 const env = { session, role: 'client' };
 const lotGlobal = magasin.lot();
 abonnerGlobal(lotGlobal, session);
@@ -60,7 +65,7 @@ const compter = () => {
     documents: agreger(session, G.documents), taches: agreger(session, G.taches), blocages: agreger(session, G.blocages),
   });
   const profil = magasin.lire(K.profil);
-  const nonLus = projets.reduce((s, p) => s + nonLusProjet(magasin.lire(K.messages(p.id)) || [], profil, p.id, session.utilisateur.uid), 0);
+  const nonLus = projets.reduce((s, p) => s + nonLusProjet(messagesDuProjet(p.id), profil, p.id, session.utilisateur.uid), 0);
   /* L'entrée Tests n'apparaît chez le client que si des scénarios le
      concernent : un menu qui ouvre sur une page vide inquiète plus qu'il
      n'informe. */
@@ -179,7 +184,7 @@ definir([
   { chemin: '/projets/:id', cle: (c) => `projet:${c.params.id}`, vue: (ctx) => projet.vue({ ...ctx, onglet: 'apercu' }, env) },
   { chemin: '/projets/:id/nouvelle-demande', vue: (ctx) => demande.nouvelle(ctx, env) },
   { chemin: '/projets/:id/demandes/:tid', vue: (ctx) => demande.detail(ctx, env) },
-  { chemin: '/demande/:tid', vue: (ctx) => demande.resoudre(ctx, env) },
+  { chemin: '/demande/:tid', vue: (ctx) => resoudreDemande(ctx) },
   { chemin: '/projets/:id/taches/:tid', cle: (c) => `projet:${c.params.id}`, vue: (ctx) => projet.vue({ ...ctx, onglet: 'taches' }, env) },
   { chemin: '/projets/:id/brique/:cid', vue: (ctx) => brique.vue(ctx, env) },
   { chemin: '/projets/:id/:onglet', cle: (c) => `projet:${c.params.id}`, vue: (ctx) => projet.vue({ ...ctx, onglet: ctx.params.onglet }, env) },

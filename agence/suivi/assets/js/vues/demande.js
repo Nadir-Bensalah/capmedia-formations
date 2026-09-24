@@ -6,7 +6,7 @@
 
 import {
   echapper, dateCourte, dateHeure, depuis, enParagraphes, avecLiens, parDateAsc, parDateDesc, joursAvant, age,
-  bdd, collection, query, where, orderBy, doc,
+  bdd, collection, query, where, orderBy, doc, marquerPiece,
   STATUTS, TYPES, URGENCES, PLATEFORMES, QUALIFICATIONS, OUVERTS, ATTEND_CLIENT, STATUTS_RELEASE, pluriel,
 } from '../noyau.js';
 import {
@@ -250,7 +250,8 @@ export const detail = async (ctx, env) => {
     composeur = sortie.querySelector('#texte-message');
     const zonePieces = sortie.querySelector('#zone-pieces-message');
     if (zonePieces) {
-      const boite = depot(zonePieces, { chemin: `projets/${pid}/tickets/${tid}`, texte: 'Joindre des <strong>captures ou documents</strong>.', aide: '' });
+      const modeInterne = () => equipe && sortie.querySelector('#mode-interne') && sortie.querySelector('#mode-interne').checked;
+      const boite = depot(zonePieces, { chemin: `projets/${pid}/tickets/${tid}`, metadonnees: () => ({ visibilite: modeInterne() ? 'interne' : 'client' }), texte: 'Joindre des <strong>captures ou documents</strong>.', aide: '' });
       const forme = sortie.querySelector('#forme-message');
       forme.addEventListener('change', (e) => { if (e.target.name === 'mode') { const int = e.target.value === 'interne'; sortie.querySelector('#aide-message').textContent = int ? 'Visible uniquement par l\'équipe. Aucun e-mail.' : 'Ce texte part au client et déclenche un e-mail.'; forme.querySelector('[type="submit"]').innerHTML = `${icone(int ? 'note' : 'envoyer')} ${int ? 'Noter' : 'Envoyer'}`; } });
       forme.addEventListener('submit', async (e) => {
@@ -260,6 +261,10 @@ export const detail = async (ctx, env) => {
         if (boite.occupe) { toast('Attendez la fin des envois.', 'erreur'); return; }
         const interne = equipe && forme.elements.mode && forme.elements.mode.value === 'interne';
         await agir(forme.querySelector('[type="submit"]'), async () => {
+          /* Une pièce jointe avant d'avoir basculé entre « note interne » et
+             « répondre au client » porte l'ancienne marque : on la remet
+             d'accord avec le message, AVANT de l'envoyer. */
+          if (equipe) await Promise.all(boite.pieces.map((p) => marquerPiece(p, interne ? 'interne' : 'client')));
           await ecrire.messageDemande(env.session, tid, texte || '(pièces jointes)', boite.pieces, interne);
           composeur.value = ''; boite.vider();
         }, interne ? 'Note enregistrée.' : 'Message envoyé.');
@@ -296,18 +301,8 @@ export const detail = async (ctx, env) => {
   return () => { clearTimeout(minuteur); gestes(); lot.fin(); };
 };
 
-/** Une ancienne adresse ne porte que l'identifiant : on retrouve le projet. */
-export const resoudre = async (ctx) => {
-  const tid = ctx.params.tid;
-  ctx.sortie.innerHTML = `<div class="page">${squelette('page', 3)}</div>`;
-  try {
-    const { getDoc } = await import('../noyau.js');
-    const fiche = await getDoc(doc(bdd, 'tickets', tid));
-    if (fiche.exists()) { naviguer(`/projets/${fiche.data().projet}/demandes/${tid}`, { remplacer: true }); return () => {}; }
-  } catch (e) { /* refus ou absence : même écran */ }
-  ctx.sortie.innerHTML = `<div class="page">${vide({ icone: 'demandes', titre: 'Demande introuvable', texte: "Elle a peut-être été archivée, ou vous n'y avez plus accès.", action: '<a class="btn btn-secondaire" href="#/">Retour à l\'accueil</a>' })}</div>`;
-  return () => {};
-};
+/* La résolution d'un lien « /demande/:id » (ancienne adresse, liens
+   d'e-mail) vit dans lien-profond.js, commune au hub et au cockpit. */
 
 /*
  * « Où en est ma demande ». Le client lisait un mot d'état et écrivait un

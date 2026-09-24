@@ -1,5 +1,5 @@
 # ══════════════════════════════════════════════════════════════════════
-#  IMPORTANT — ce dépôt est PUBLIC (GitHub Pages).
+#  IMPORTANT : ce dépôt est PUBLIC (GitHub Pages).
 #  Rien de ce qui suit ne doit jamais y arriver.
 # ══════════════════════════════════════════════════════════════════════
 
@@ -37,3 +37,9 @@ Thumbs.db
 .vscode/
 contenu-en/
 pubsub-debug.log
+
+# Hub : les données réelles des outils (clients, montants, dépôts, chemins
+# du disque) et les captures des bancs. Jamais dans le dépôt public.
+fonctions-suivi/outils/donnees-locales/
+fonctions-suivi/qa/
+paquet-academy/

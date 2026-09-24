@@ -92,9 +92,19 @@ service cloud.firestore {
     // ================================================================
 
     match /equipe/{uid} {
-      // Toute personne connectée lit la fiche d'un membre de l'équipe : un
-      // client doit pouvoir mettre un nom et une adresse professionnelle en
-      // face de son projet. La fiche ne porte que nom, adresse et rôle.
+      // La fiche d'équipe (nom, adresse, rôle) ne se lit que par l'équipe.
+      // Chacun peut lire la SIENNE : c'est ainsi que la session sait si la
+      // personne connectée est de l'équipe. Un client, un testeur ou un
+      // inconnu ne liste plus l'équipe ; pour mettre un nom sur le
+      // responsable de son projet, il lit l'annuaire, qui ne porte que le nom.
+      allow get:   if connecte() && (moi() == uid || estEquipe());
+      allow list:  if estEquipe();
+      allow write: if false;
+    }
+
+    // L'annuaire : le seul nom d'un membre de l'équipe, recopié par le
+    // serveur depuis sa fiche. Ni adresse, ni rôle.
+    match /annuaire/{uid} {
       allow read:  if connecte();
       allow write: if false;
     }
@@ -124,6 +134,37 @@ service cloud.firestore {
     }
 
     // ================================================================
+    // Les données internes, hors des documents que le client lit
+    //
+    // Firestore sert un document ENTIER : un champ « interne » posé sur une
+    // fiche lisible par le client lui est lisible, quoi qu'affiche l'écran.
+    // Ce qui est réservé à Capmedia vit donc dans ces collections à part,
+    // que seule l'équipe lit.
+    // ================================================================
+
+    // Les notes internes d'une organisation. Écrites par le serveur.
+    match /organisationsInternes/{orgId} {
+      allow read:  if estEquipe();
+      allow write: if false;
+    }
+
+    // Le budget, sa note et la santé d'un projet.
+    match /projetsInternes/{projetId} {
+      allow read:  if estEquipe();
+      allow write: if estEquipe()
+        && request.resource.data.keys().hasOnly(['budget', 'budgetNote', 'sante', 'maj'])
+        && (!('budget' in request.resource.data) || request.resource.data.budget == null || request.resource.data.budget is number)
+        && (!('budgetNote' in request.resource.data) || texteBorne(request.resource.data.budgetNote, 2000))
+        && (!('sante' in request.resource.data) || request.resource.data.sante in ['ok', 'attention', 'bloque']);
+    }
+
+    // La note interne d'un paiement. Écrite par le serveur.
+    match /paiementsInternes/{paiementId} {
+      allow read:  if estEquipe();
+      allow write: if false;
+    }
+
+    // ================================================================
     // Les projets et leurs sous-collections
     // ================================================================
 
@@ -136,8 +177,10 @@ service cloud.firestore {
       // qui porte l'accès et la numérotation.
       allow update: if estEquipe()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+             // Ni « budget », ni « budgetNote », ni « sante » : ils vivent
+             // dans projetsInternes, que le client ne lit pas.
              'nom', 'description', 'type', 'statut', 'progression', 'debut', 'cible',
-             'responsable', 'pulse', 'sante', 'archive', 'client', 'plateformes', 'logo', 'budget', 'budgetNote', 'silence', 'maj',
+             'responsable', 'pulse', 'archive', 'client', 'plateformes', 'logo', 'silence', 'maj',
              'contacts', 'interne',
              // L'histoire de la date cible : chaque report, son motif, sa
              // date et son auteur. Le client la lit, c'est tout l'objet.
@@ -448,7 +491,9 @@ service cloud.firestore {
            ])
         && texteRequis(request.resource.data.nom, 240)
         && texteRequis(request.resource.data.chemin, 500)
-        && request.resource.data.chemin.matches('projets/' + request.resource.data.projet + '/.*')
+        // Le fichier stocké porte l'identifiant de SA fiche : c'est elle que
+        // les règles Storage relisent pour décider qui le télécharge.
+        && request.resource.data.chemin.matches('projets/' + request.resource.data.projet + '/fichiers/' + fichierId + '/.+')
         && request.resource.data.par.uid == moi()
         && request.resource.data.archive == false
         && (estEquipe()
@@ -507,10 +552,12 @@ service cloud.firestore {
     // Déposés par le serveur. Le client lit, marque un devis consulté et y
     // répond. Il ne touche jamais un montant, un numéro ni une facture.
     match /documents/{documentId} {
-      // À faire : ranger les brouillons hors de cette collection. Une clause
-      // « statut != brouillon » ici ferait rejeter la requête du client, qui
-      // ne peut pas la porter. En attendant, l'écran les masque.
-      allow read: if estEquipe() || membreDuProjet(resource.data.projet);
+      // Un brouillon ne se lit que par l'équipe. La requête du client porte
+      // donc un filtre sur les statuts visibles (« statut in [...] »), sans
+      // quoi elle est refusée en bloc : c'est la règle qui décide, pas
+      // l'écran.
+      allow read: if estEquipe()
+        || (membreDuProjet(resource.data.projet) && resource.data.statut != 'brouillon');
 
       allow update: if !estEquipe()
         && membreDuProjet(resource.data.projet)
@@ -529,6 +576,8 @@ service cloud.firestore {
       allow create, delete: if false;
     }
 
+    // Un paiement ne porte plus sa note interne : elle vit dans
+    // paiementsInternes.
     match /paiements/{paiementId} {
       allow read:  if estEquipe() || membreDuProjet(resource.data.projet);
       allow write: if false;
@@ -650,18 +699,26 @@ service cloud.firestore {
       allow read:   if estEquipe() || (estTesteur() && testeurId == moi());
       allow write:  if false;   // le serveur seul, via suiviAdmin
 
-      // Le profil sans le nom. Un avis de 22 ans et un avis de 55 ans ne
-      // disent pas la même chose, et masquer le profil priverait le client
-      // de l'essentiel. Mais il n'a aucune raison de connaître le nom ni
-      // l'adresse de qui teste pour lui : le serveur recopie donc ici le
-      // seul profil, sans rien qui identifie.
+      // L'ancien profil public, commun à tous les projets. Il n'est plus
+      // écrit (voir projets/{p}/profilsTesteurs) et ne se lit plus que par
+      // l'équipe, le temps que la migration l'efface.
       match /public/profil {
-        allow read:  if connecte();
+        allow read:  if estEquipe();
         allow write: if false;
       }
     }
 
     match /projets/{projetId} {
+
+      // Le profil des testeurs de CE projet, sans nom ni adresse : âge,
+      // fonction, appareils. Recopié par le serveur depuis le vivier, un
+      // document par projet où le testeur est inscrit. Le client ne lit que
+      // ceux de ses projets, et le document ne dit rien des autres projets
+      // du testeur.
+      match /profilsTesteurs/{testeurId} {
+        allow read:   if accesProjet(projetId);
+        allow write:  if false;
+      }
 
       // La bibliothèque. Le client la lit pour savoir ce qui sera vérifié,
       // le testeur pour lire l'énoncé de ce qu'il doit dérouler.
@@ -900,13 +957,14 @@ service cloud.firestore {
       allow read: if estEquipe();
     }
 
-    // Les profils publics des testeurs, lus d'un coup. Le client voit qui
-    // teste pour lui : l'âge, la fonction, les appareils, jamais le nom ni
-    // l'adresse, qui ne sont pas recopiés ici. Le même document est déjà
-    // lisible un par un par tout connecté ; la lecture en groupe ne révèle
-    // rien de plus.
+    // Les anciens profils publics, lus en groupe : l'équipe seule.
     match /{chemin=**}/public/{docId} {
-      allow read: if connecte();
+      allow read: if estEquipe();
+    }
+
+    // Les profils des testeurs d'un projet, lus d'un coup par l'équipe.
+    match /{chemin=**}/profilsTesteurs/{testeurId} {
+      allow read: if estEquipe();
     }
 
     // La porte d'entrée. Ces trois collections portent l'empreinte des

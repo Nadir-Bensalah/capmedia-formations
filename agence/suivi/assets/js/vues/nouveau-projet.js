@@ -112,9 +112,11 @@ export const detail = async (ctx, env) => {
         <aside class="carte carte--creuse"><p class="surtitre">Parcours</p><div class="chrono" style="margin-top:10px">${Object.entries(STATUTS_PREPROJET).filter(([cle]) => cle !== 'refusee').map(([cle, s], i, arr) => { const idx = arr.findIndex(([k]) => k === d.statut); return `<div class="chrono-item"><span class="chrono-point${i < idx ? ' chrono-point--vert' : i === idx ? ' chrono-point--bleu' : ''}">${i < idx ? icone('check') : ''}</span><div class="chrono-texte" style="${i > idx ? 'color:var(--encre-3)' : ''}">${echapper(s.libelle)}</div></div>`; }).join('')}</div></aside>
       </div></div>`;
     composeur = sortie.querySelector('#texte-message');
-    /* Le dossier porte l'identifiant de la PERSONNE, jamais celui de la
-       demande : c'est ce que les règles de stockage savent vérifier. */
-    const boite = depot(sortie.querySelector('#zone-pieces'), { chemin: `preprojets/${env.session.utilisateur.uid}`, texte: 'Joindre des <strong>fichiers</strong>.', aide: '' });
+    /* Le dossier porte l'identifiant du DEMANDEUR, jamais celui de la
+       demande : c'est ce que les règles de stockage savent vérifier. Les
+       réponses de l'équipe y vont aussi, sinon le demandeur ne peut pas
+       les ouvrir. */
+    const boite = depot(sortie.querySelector('#zone-pieces'), { chemin: `preprojets/${(d.par && d.par.uid) || env.session.utilisateur.uid}`, texte: 'Joindre des <strong>fichiers</strong>.', aide: '' });
     sortie.querySelector('#forme-message').addEventListener('submit', async (e) => {
       e.preventDefault();
       const texte = composeur.value.trim();

@@ -13,7 +13,7 @@
    ========================================================================== */
 
 import {
-  bdd, auth, doc, getDoc, setDoc, updateDoc, collection, query, where, signOut, onSnapshot,
+  bdd, auth, doc, getDoc, setDoc, updateDoc, collection, query, where, signOut, onSnapshot, effacerSecretsLocaux,
   serverTimestamp, session, echapper, envoyerPiece,
   NIVEAUX_SCENARIO, BLOCS_SCENARIO, PLATEFORMES_TEST, RESULTATS_PASSAGE, FAMILLES_AVIS,
 } from './noyau.js';
@@ -608,7 +608,7 @@ const monter = async () => {
     const el = e.target.closest('[data-sortir], [data-sur], [data-poser], [data-ouvrir], [data-avis], [data-vue], [data-case]');
     if (!el) return;
 
-    if (el.hasAttribute('data-sortir')) { await signe(false); await signOut(auth); location.replace('./'); return; }
+    if (el.hasAttribute('data-sortir')) { await signe(false); effacerSecretsLocaux(); await signOut(auth); location.replace('./'); return; }
 
     if (el.dataset.vue) {
       vueCourante = el.dataset.vue;

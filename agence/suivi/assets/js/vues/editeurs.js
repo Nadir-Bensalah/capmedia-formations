@@ -18,7 +18,7 @@ import {
 import { icone, modale, confirmer, toast, lireForme, valider, obligatoire, longueurMax, urlValide, emailValide, optionsDe, depot, agir, lisible, choixPlateformes } from '../ui.js';
 import { appelServeur } from '../serveur.js';
 import * as magasin from '../magasin.js';
-import { K, ecrire } from '../donnees.js';
+import { K, ecrire, nouvelId, interneDuProjet } from '../donnees.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 
@@ -204,22 +204,43 @@ const feuille = ({ titre, sousTitre, corps, enregistrer, libelle = 'Enregistrer'
   if (avecDepot) boiteDepot = depot($('#ed-depot', m.el), avecDepot);
   if (surMontage) surMontage(m.el);
   const forme = $('#ed-forme', m.el);
+  /*
+   * Le contrat d'un éditeur, le même pour tous :
+   *   - succès : la feuille se ferme, quelle que soit la valeur rendue ;
+   *   - erreur levée : la feuille reste ouverte avec ce qui a été saisi
+   *     (« agir » affiche l'erreur) ;
+   *   - refus dit par l'éditeur lui-même (il a déjà expliqué pourquoi) :
+   *     il rend explicitement `false`, et la feuille reste ouverte.
+   * Depuis le 21/09, « undefined » valait refus : treize éditeurs qui ne
+   * rendaient rien laissaient leur feuille ouverte après un succès, et un
+   * second clic créait un doublon.
+   *
+   * Une seule écriture à la fois : tant que la première n'a pas répondu,
+   * une seconde soumission (double clic, touche Entrée) est ignorée.
+   */
+  let enCours = false;
   forme.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (enCours) return;
     if (!valider(forme, regles)) return;
     if (boiteDepot && boiteDepot.occupe) { toast('Attendez la fin des envois.', 'erreur'); return; }
     const bouton = $('button[type="submit"]', m.pied);
-    const ok = await agir(bouton, async () => {
-      /* La racine en troisième argument : un éditeur peut porter des
-         contrôles hors du formulaire, que « lireForme » ne voit pas. */
-      const resultat = await enregistrer(lireForme(forme), boiteDepot ? boiteDepot.pieces : [], m.el);
-      /* Un éditeur qui renvoie « undefined » refuse la saisie et l'a déjà
-         dit : fermer la feuille effacerait le formulaire sous les yeux de
-         celui qui vient de se tromper, et il devrait tout retaper. */
-      if (resultat === undefined) return;
-      m.fermer(resultat);
-    });
-    void ok;
+    enCours = true;
+    forme.setAttribute('aria-busy', 'true');
+    let resultat;
+    let reussi = false;
+    try {
+      reussi = await agir(bouton, async () => {
+        /* La racine en troisième argument : un éditeur peut porter des
+           contrôles hors du formulaire, que « lireForme » ne voit pas. */
+        resultat = await enregistrer(lireForme(forme), boiteDepot ? boiteDepot.pieces : [], m.el);
+      });
+    } finally {
+      enCours = false;
+      forme.removeAttribute('aria-busy');
+    }
+    if (!reussi || resultat === false) return;
+    m.fermer(resultat === undefined ? true : resultat);
   });
   return m.fin;
 };
@@ -262,7 +283,7 @@ const editeurs = {
       </div>
       <div class="forme-rang">
         ${select('responsable', 'Responsable Capmedia', equipeCarte(), fiche.responsable || '', { vide: 'Non défini' })}
-        ${select('sante', 'Santé (interne)', SANTES, fiche.sante || 'ok')}
+        ${select('sante', 'Santé (interne)', SANTES, interneDuProjet(pid).sante || 'ok')}
       </div>
       <p class="surtitre" style="margin-top:8px">Le pouls du projet</p>
       ${champ('pulseEnCours', 'Capmedia travaille sur', (fiche.pulse || {}).enCours, { facultatif: true, placeholder: 'ex. Authentification Android' })}
@@ -295,7 +316,7 @@ const editeurs = {
       debut: d.debut ? new Date(d.debut) : null, cible: d.cible ? new Date(d.cible) : null,
       reports: reportsMaj(fiche, 'cible', d.cible, d, env.session),
       progression: { mode: d.progressionMode, valeur: borner(d.progressionValeur) },
-      responsable: d.responsable, sante: d.sante, silence: Boolean(d.silence), interne: Boolean(d.interne),
+      responsable: d.responsable, silence: Boolean(d.silence), interne: Boolean(d.interne),
       contacts: [
         { nom: d.contact1Nom || '', email: (d.contact1Email || '').trim().toLowerCase() },
         { nom: d.contact2Nom || '', email: (d.contact2Email || '').trim().toLowerCase() },
@@ -304,7 +325,10 @@ const editeurs = {
         ? { ...(fiche.client || {}), nom: d.contact1Nom || '', email: (d.contact1Email || '').trim().toLowerCase() }
         : (fiche.client || null),
       pulse: { enCours: d.pulseEnCours, derniereLivraison: d.pulseDerniereLivraison, prochaineEtape: d.pulseProchaineEtape, attenteClient: d.pulseAttenteClient },
-    }).then(() => toast('Projet mis à jour.')),
+    })
+      /* La santé est interne : elle vit à part, dans projetsInternes. */
+      .then(() => (d.sante !== (interneDuProjet(pid).sante || 'ok') ? ecrire.majProjetInterne(pid, { sante: d.sante }) : null))
+      .then(() => toast('Projet mis à jour.')),
   }),
 
   composant: (env, { pid, fiche, defaut = {} }) => feuille({
@@ -451,10 +475,10 @@ const editeurs = {
          désactivés, et leur référence reste prise. */
       if (!fiche && await ecrire.scenarioExiste(pid, ref)) {
         toast(`${ref} existe déjà dans ce projet.`, 'erreur');
-        return undefined;
+        return false;
       }
       const plateformes = Array.isArray(d.plateformes) ? d.plateformes : (d.plateformes ? [d.plateformes] : []);
-      if (!plateformes.length) { toast('Choisissez au moins une plateforme.', 'erreur'); return undefined; }
+      if (!plateformes.length) { toast('Choisissez au moins une plateforme.', 'erreur'); return false; }
       const donnees = {
         ref, bloc: d.bloc, blocLibelle: (BLOCS_SCENARIO[d.bloc] || {}).libelle || '',
         titre: d.titre, options: d.options || '', attendu: d.attendu,
@@ -561,13 +585,13 @@ const editeurs = {
         const refs = tous
           .filter((x) => pris.has(x.bloc) && (!seulementSocle || (NIVEAUX_SCENARIO[x.niveau] || {}).double))
           .map((x) => x.ref);
-        if (!refs.length) { toast('Choisissez au moins un bloc de scénarios.', 'erreur'); return undefined; }
+        if (!refs.length) { toast('Choisissez au moins un bloc de scénarios.', 'erreur'); return false; }
         /* Une fin avant le début : le tableau ne saurait plus dire quel
-           jour on est ni ce qu'il reste. La campagne ForgeMe d'octobre
-           2026 est née ainsi, du 1er octobre au 30 septembre. */
+           jour on est ni ce qu'il reste. Une vraie campagne est née ainsi,
+           du 1er octobre au 30 septembre. */
         if (d.debut && d.fin && new Date(d.fin) < new Date(d.debut)) {
           toast('La fin prévue tombe avant le début. Corrigez l\'une des deux dates.', 'erreur');
-          return undefined;
+          return false;
         }
         const donnees = {
           titre: d.titre, statut: d.statut,
@@ -621,7 +645,7 @@ const editeurs = {
           <p class="aide">Un parcours qui passe au vert ne prouve rien tant qu'on n'a pas vérifié qu'il sait tomber. Remettre le défaut d'origine et voir le parcours échouer : c'est le seul contrôle qui répond à la question posée.</p>
         </div>
         <div class="groupe"><label class="etiquette-champ" for="ed-scenarios">Scénarios couverts</label>
-          <select class="select" id="ed-scenarios" name="scenarios" multiple size="6">${scen.map((x) => `<option value="${echapper(x.ref)}"${((fiche && fiche.scenarios) || []).includes(x.ref) ? ' selected' : ''}>${echapper(x.ref)} — ${echapper(x.titre)}</option>`).join('')}</select>
+          <select class="select" id="ed-scenarios" name="scenarios" multiple size="6">${scen.map((x) => `<option value="${echapper(x.ref)}"${((fiche && fiche.scenarios) || []).includes(x.ref) ? ' selected' : ''}>${echapper(x.ref)} · ${echapper(x.titre)}</option>`).join('')}</select>
           <p class="aide">Ce que ce parcours vérifie tout seul. Maintenez ⌘ ou Ctrl pour en choisir plusieurs.</p>
         </div>
         ${zone('note', 'Notes', fiche ? fiche.note : '', { facultatif: true, lignes: 3, placeholder: 'Ce qui bloque, ce qu\'il reste à faire, pourquoi il est instable.' })}`,
@@ -637,11 +661,11 @@ const editeurs = {
         const ref = fiche ? fiche.ref : String(d.ref || '').trim().toUpperCase();
         if (!fiche && refsDuProjet(pid, K.parcours, K.parcoursTous).has(ref)) {
           toast(`${ref} existe déjà dans ce projet.`, 'erreur');
-          return undefined;
+          return false;
         }
         const liste = (v) => (Array.isArray(v) ? v : (v ? [v] : []));
         const plateformes = liste(d.plateformes);
-        if (!plateformes.length) { toast('Dites où il tourne.', 'erreur'); return undefined; }
+        if (!plateformes.length) { toast('Dites où il tourne.', 'erreur'); return false; }
         const donnees = {
           ref, titre: d.titre, outil: d.outil, plateformes,
           scenarios: liste(d.scenarios), fichier: d.fichier || '',
@@ -688,7 +712,7 @@ const editeurs = {
         </div>
         <div class="groupe">
           <label class="etiquette-champ" for="ed-scenarios">Scénarios couverts</label>
-          <select class="select" id="ed-scenarios" name="scenarios" multiple size="6">${scen.map((x) => `<option value="${echapper(x.ref)}"${((fiche && fiche.scenarios) || []).includes(x.ref) ? ' selected' : ''}>${echapper(x.ref)} — ${echapper(x.titre)}</option>`).join('')}</select>
+          <select class="select" id="ed-scenarios" name="scenarios" multiple size="6">${scen.map((x) => `<option value="${echapper(x.ref)}"${((fiche && fiche.scenarios) || []).includes(x.ref) ? ' selected' : ''}>${echapper(x.ref)} · ${echapper(x.titre)}</option>`).join('')}</select>
           <p class="aide">Maintenez ⌘ ou Ctrl pour en choisir plusieurs.</p>
         </div>
         ${zone('note', 'Notes', fiche ? fiche.note : '', { facultatif: true, lignes: 3 })}`,
@@ -705,7 +729,7 @@ const editeurs = {
         const ref = fiche ? fiche.ref : String(d.ref || '').trim().toUpperCase();
         if (!fiche && refsDuProjet(pid, K.regles, K.reglesToutes).has(ref)) {
           toast(`${ref} existe déjà dans ce projet.`, 'erreur');
-          return undefined;
+          return false;
         }
         const liste = (v) => (Array.isArray(v) ? v : (v ? [v] : []));
         const donnees = {
@@ -746,7 +770,7 @@ const editeurs = {
           ${select('statut', 'Statut', STATUTS_ANOMALIE, fiche ? fiche.statut : 'nouvelle', { aide: 'Confirmée seulement après l\'avoir reproduite. Sans suite si ce n\'était pas un défaut.' })}
         </div>
         <div class="groupe"><label class="etiquette-champ" for="ed-scenario">Scénario concerné <span class="facultatif">(facultatif)</span></label>
-          <select class="select" id="ed-scenario" name="scenario"><option value="">Aucun</option>${scen.map((x) => `<option value="${echapper(x.ref)}"${fiche && fiche.scenario === x.ref ? ' selected' : ''}>${echapper(x.ref)} — ${echapper(x.titre)}</option>`).join('')}</select></div>
+          <select class="select" id="ed-scenario" name="scenario"><option value="">Aucun</option>${scen.map((x) => `<option value="${echapper(x.ref)}"${fiche && fiche.scenario === x.ref ? ' selected' : ''}>${echapper(x.ref)} · ${echapper(x.titre)}</option>`).join('')}</select></div>
         <div class="groupe"><span class="etiquette-champ">Sur quoi</span>
           <div class="cases-blocs">${Object.entries(PLATEFORMES_TEST).map(([cle, x]) => `<label class="case"><input type="checkbox" data-plateforme-a="${echapper(cle)}"${prises.includes(cle) ? ' checked' : ''}> ${echapper(x.libelle)}</label>`).join('')}</div></div>
         ${zone('description', 'Ce qu\'on sait', fiche ? fiche.description : '', { facultatif: true, lignes: 5, placeholder: 'Les étapes pour la reproduire, dans l\'ordre. Ce qui se passe, ce qui devrait se passer.' })}
@@ -1120,7 +1144,7 @@ const editeurs = {
       ${zone('description', 'Ce que le client doit regarder', defaut.description || '', { lignes: 4 })}
       ${champ('echeance', 'Réponse souhaitée avant le', '', { type: 'date', facultatif: true })}`,
     regles: { titre: obligatoire(), description: obligatoire() },
-    avecDepot: { chemin: `projets/${pid}/documents/validations`, texte: 'Ajoutez une maquette, une capture, un document.' },
+    avecDepot: { chemin: `projets/${pid}/validations`, texte: 'Ajoutez une maquette, une capture, un document.' },
     libelle: 'Envoyer la demande',
     enregistrer: async (d, pieces) => {
       await ecrire.creerValidation(env.session, pid, { ...d, cible: defaut.cible || null }, pieces);
@@ -1139,7 +1163,7 @@ const editeurs = {
       ${champ('version', 'Version', fiche ? fiche.version : '', { facultatif: true, placeholder: 'v2' })}
       ${champ('tags', 'Mots-clés', fiche ? (fiche.tags || []).join(', ') : '', { facultatif: true, aide: 'Séparés par des virgules.' })}
       ${visibilite(fiche ? fiche.visibilite : 'client')}`,
-    avecDepot: fiche ? null : { chemin: `projets/${pid}/documents/fichiers`, max: 20 },
+    avecDepot: fiche ? null : { chemin: () => `projets/${pid}/fichiers/${nouvelId('fichiers')}`, max: 20 },
     libelle: fiche ? 'Enregistrer' : 'Déposer',
     enregistrer: async (d, pieces) => {
       const options = { ...d, tags: d.tags ? d.tags.split(',').map((t) => t.trim()).filter(Boolean) : [] };

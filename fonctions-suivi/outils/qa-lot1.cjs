@@ -106,7 +106,11 @@ const attendre=async(fn,n=25)=>{for(let i=0;i<n;i++){const v=await fn();if(v)ret
     const regles=require('fs').readFileSync(`${__dirname}/../../suivi/storage.rules`,'utf8');
     verifier(/match \/campagnes\/\{projetId\}\/\{campagneId\}\/\{uid\}/.test(regles),'le dossier des preuves existe dans les règles');
     verifier(/request\.auth\.uid == uid[\s\S]{0,120}token\.testeur == true/.test(regles),'et seul le testeur lui-même y écrit');
-    verifier(/match \/campagnes[\s\S]{0,400}allow read:\s+if estEquipe\(\) \|\| surSonProjet\(projetId\)/.test(regles),"l'équipe et le client du projet les lisent");
+    /* Depuis la Release Gate 1, « read » est découpé : « get » pour l'équipe
+       et le client du projet, « list » pour l'équipe seule. Le droit
+       lui-même est éprouvé dans storage.test.mjs. */
+    verifier(/match \/campagnes[\s\S]{0,400}allow get:\s+if estEquipe\(\) \|\| surSonProjet\(projetId\)/.test(regles),"l'équipe et le client du projet les lisent");
+    verifier(/match \/campagnes[\s\S]{0,400}allow list:\s+if estEquipe\(\);/.test(regles),"seule l'équipe parcourt le dossier");
   }
 
   console.log('\n== 4 · Les quatre défauts d\'écran');

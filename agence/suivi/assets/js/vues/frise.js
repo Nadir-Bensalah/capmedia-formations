@@ -7,7 +7,7 @@
 
    L'équipe coche. Le client regarde : la même frise, sans la case. C'est
    le même document pour les deux, et c'est voulu : ce que Nadir coche,
-   [nom retire] le voit dans la minute, sans qu'on ait à le lui écrire.
+   le client le voit dans la minute, sans qu'on ait à le lui écrire.
 
    Une étape de devis n'est rien de plus qu'une étape ordinaire qui porte
    l'identifiant de son devis et son montant : pas de collection à part,

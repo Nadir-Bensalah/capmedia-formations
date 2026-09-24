@@ -9,7 +9,7 @@ import {
 } from '../noyau.js';
 import { icone, pastille, avatarProjet, progression, progressionOuPas, verdictHtml, ligne, vide, chronoItem, parJour, titrePage, echeanceHtml, squelette } from '../ui.js';
 import * as magasin from '../magasin.js';
-import { K, G, agreger, enAttenteDeVous, progressionProjet, jalonCourant, prochaineReunion, resteAPayer, depuisVisite, nonLusProjet, risquesProjet } from '../donnees.js';
+import { K, G, agreger, enAttenteDeVous, progressionProjet, jalonCourant, prochaineReunion, resteAPayer, depuisVisite, nonLusProjet, risquesProjet, messagesDuProjet } from '../donnees.js';
 import { filAriane } from '../coquille.js';
 import { echeance } from '../noyau.js';
 
@@ -97,7 +97,7 @@ export const vue = async (ctx, env) => {
     const recentes = activite.slice(0, 5).map((a) => ({ ...a, projetNom: nomProjet(a.projet) }));
     const depuisPassage = depuisVisite(activite, env.derniereVisite);
     const dernieresReleases = releases.filter((r) => r.statut === 'disponible').sort(parDateDesc('date')).slice(0, 3);
-    const nonLus = projets.reduce((s, p) => s + nonLusProjet(magasin.lire(K.messages(p.id)) || [], profil, p.id, session.utilisateur.uid), 0);
+    const nonLus = projets.reduce((s, p) => s + nonLusProjet(messagesDuProjet(p.id), profil, p.id, session.utilisateur.uid), 0);
 
     const bonjour = (() => { const h = new Date().getHours(); return h < 5 || h >= 18 ? 'Bonsoir' : 'Bonjour'; })();
     const nom = prenom(nomAffiche(session));

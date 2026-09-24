@@ -125,14 +125,19 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   const visible = await page.evaluate(()=>/Nadia/.test(document.body.innerText));
   verifier(visible,'elle apparaît sans recharger');
 
-  console.log('\n== Le profil public est recopié');
+  console.log('\n== Le profil sans nom est recopié sous son projet');
   await pause(3000);
   const uid = nadia ? nadia.name.split('/').pop() : '';
-  const pub = uid ? await lire(`testeurs/${uid}/public/profil`) : null;
-  verifier(!!pub,'le serveur a recopié son profil');
+  const sonProjet = nadia ? ((((nadia.fields.projets||{}).arrayValue||{}).values||[])[0]||{}).stringValue : '';
+  /* Depuis la Release Gate 1, le profil vit sous chaque projet du testeur :
+     l'ancien profil commun (testeurs/<uid>/public/profil) portait la liste
+     de TOUS ses projets et se lisait par n'importe quel compte connecté. */
+  const pub = uid && sonProjet ? await lire(`projets/${sonProjet}/profilsTesteurs/${uid}`) : null;
+  verifier(!!pub,'le serveur a recopié son profil sous son projet');
+  verifier(!(uid && await lire(`testeurs/${uid}/public/profil`)),'et plus aucun profil commun');
   if (pub) {
     const ch = Object.keys(pub.fields||{});
-    verifier(!ch.includes('prenom') && !ch.includes('email'),'sans son nom ni son adresse',ch.join(','));
+    verifier(!ch.includes('prenom') && !ch.includes('nom') && !ch.includes('email') && !ch.includes('projets'),'sans son nom, son adresse ni ses autres projets',ch.join(','));
     verifier(ch.includes('age') && ch.includes('fonction'),'mais avec ce qui éclaire son avis');
   }
 
@@ -156,7 +161,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   verifier(!!fiche, 'la fiche du testeur reste, pour la mémoire de la campagne');
   verifier(fiche && (((fiche.fields||{}).actif||{}).booleanValue) === false, 'mais il est retiré du vivier');
   await pause(2500);
-  verifier(!(await lire(`testeurs/${uid}/public/profil`)),'et son profil public part avec son accès');
+  verifier(!(await lire(`projets/${sonProjet}/profilsTesteurs/${uid}`)),'et son profil part de son projet avec son accès');
 
   /* Ménage : la fiche d'essai ne reste pas au vivier du banc. */
   {

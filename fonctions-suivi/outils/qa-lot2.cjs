@@ -186,11 +186,22 @@ const MONTANT_NU=/\d[\d   ]*€(?![^\n]*(HT|TTC))/;
     verifier(!/dateCourte\(j\.maj \|\| j\.fin\)/.test(src),"et « faite le » ne lit plus la dernière modification");
   }
 
-  console.log('\n== 9 · La conversation n\'est plus bornée à quarante messages');
+  console.log('\n== 9 · La conversation montre ses DERNIERS messages, l historique à la demande');
   {
-    const src=require('fs').readFileSync(`${__dirname}/../../agence/suivi/assets/js/admin.js`,'utf8');
-    verifier(/orderBy\('date', 'asc'\), limit\(300\)/.test(src),'le cockpit abonne la même requête que la bulle');
-    verifier(!/orderBy\('date', 'desc'\), limit\(40\)/.test(src),"et plus la requête décroissante de quarante");
+    /* Avant la Release Gate 1, cette garde exigeait « asc, limit(300) » :
+       elle protégeait le défaut. Passé trois cents messages, la fenêtre
+       gardait les trois cents PREMIERS, et les nouveaux n'apparaissaient
+       plus. Le comportement est éprouvé dans qa-gate1 (320 messages) ; ici,
+       on garde seulement que toutes les vues partagent la même requête. */
+    const fs=require('fs');
+    const admin=fs.readFileSync(`${__dirname}/../../agence/suivi/assets/js/admin.js`,'utf8');
+    const donnees=fs.readFileSync(`${__dirname}/../../agence/suivi/assets/js/donnees.js`,'utf8');
+    verifier(/requeteMessages\(/.test(admin),'le cockpit abonne la même requête que la bulle');
+    verifier(/requeteMessages = \(pid\) => query\(col\('projets', pid, 'messages'\), orderBy\('date', 'desc'\), limit\(FENETRE_MESSAGES\)\)/.test(donnees),'la requête prend les derniers messages, en nombre borné');
+    verifier(/startAfter\(avant\)/.test(donnees),"l'historique se lit par pages avant le plus ancien affiché");
+    const vues=fs.readdirSync(`${__dirname}/../../agence/suivi/assets/js`).filter(f=>f.endsWith('.js')).map(f=>fs.readFileSync(`${__dirname}/../../agence/suivi/assets/js/${f}`,'utf8'))
+      .concat(fs.readdirSync(`${__dirname}/../../agence/suivi/assets/js/vues`).map(f=>fs.readFileSync(`${__dirname}/../../agence/suivi/assets/js/vues/${f}`,'utf8')));
+    verifier(!vues.some(v=>/'messages'\), orderBy\('date', 'asc'\), limit\(/.test(v)),"plus aucune fenêtre croissante qui garde les plus anciens");
   }
 
   verifier(!err.length,'aucune erreur de page',[...new Set(err)].slice(0,3).join(' | '));

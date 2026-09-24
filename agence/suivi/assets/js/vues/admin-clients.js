@@ -6,7 +6,7 @@
 import { echapper, dateCourte, montant, pluriel, parDateDesc, STATUTS_PROJET, STATUTS_FACTURE, STATUTS_DEVIS, statutProjet, projetEstActif} from '../noyau.js';
 import { icone, pastille, avatar, avatarEmpile, avatarProjet, pileProjets, ligne, vide, squelette, titrePage, modale, confirmer, toast, sur, agir, lireForme, valider, obligatoire, emailValide, fait, metrique, menu } from '../ui.js';
 import * as magasin from '../magasin.js';
-import { K, resteAPayer } from '../donnees.js';
+import { K, resteAPayer, interneDeLOrganisation } from '../donnees.js';
 import { filAriane } from '../coquille.js';
 import { naviguer } from '../routeur.js';
 import { appelServeur } from '../serveur.js';
@@ -101,7 +101,7 @@ export const detail = async (ctx, env) => {
         </div>
         <aside class="pile" style="gap:var(--e-5)">
           <div class="carte carte--creuse"><p class="surtitre">Coordonnées</p><dl class="faits" style="margin-top:10px;grid-template-columns:1fr">${fait('Contact', echapper(o.nom || ''))}${fait('E-mail', echapper(o.email || ''))}${fait('Téléphone', echapper(o.telephone || ''))}${fait('Adresse', echapper(o.adresse || ''))}</dl></div>
-          <div class="carte carte--creuse"><p class="surtitre">Notes internes</p><p class="t-petit" style="margin-top:8px;white-space:pre-wrap">${echapper(o.notesInternes || 'Aucune note.')}</p></div>
+          <div class="carte carte--creuse"><p class="surtitre">Notes internes</p><p class="t-petit" style="margin-top:8px;white-space:pre-wrap">${echapper(interneDeLOrganisation(o.id).notesInternes || 'Aucune note.')}</p></div>
         </aside>
       </div></div>`;
   };
@@ -109,7 +109,7 @@ export const detail = async (ctx, env) => {
     const o = (magasin.lire(K.organisations) || []).find((x) => x.id === id);
     if (!o) return;
     if (el.dataset.action === 'modifier') {
-      const m = modale({ titre: 'Le client', feuille: true, corps: `<form class="forme" id="f-org" novalidate>${formulaireOrganisation(o)}</form>`, pied: '<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button><button class="btn btn-principal" type="submit" form="f-org">Enregistrer</button>' });
+      const m = modale({ titre: 'Le client', feuille: true, corps: `<form class="forme" id="f-org" novalidate>${formulaireOrganisation({ ...o, notesInternes: interneDeLOrganisation(o.id).notesInternes || '' })}</form>`, pied: '<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button><button class="btn btn-principal" type="submit" form="f-org">Enregistrer</button>' });
       m.el.querySelector('#f-org').addEventListener('submit', async (e) => { e.preventDefault(); if (!valider(e.target, { entreprise: obligatoire(), nom: obligatoire(), email: emailValide() })) return; if (await agir(m.pied.querySelector('[type="submit"]'), () => appelServeur('majOrganisation', { id, ...lireForme(e.target) }), 'Client mis à jour.')) m.fermer(true); });
     }
     if (el.dataset.action === 'inviter') {
@@ -122,7 +122,7 @@ export const detail = async (ctx, env) => {
         '-', { libelle: 'Retirer l\'accès', icone: 'corbeille', danger: true, action: async () => { if (await confirmer({ titre: `Retirer ${email} ?`, texte: 'Cette personne perd l\'accès à tous les projets de ce client.', ok: 'Retirer', danger: true })) agir(null, () => appelServeur('retirerMembreOrganisation', { id, email }), 'Accès retiré.'); } }]);
     }
   });
-  [K.organisations, K.projets, K.documentsTous, K.paiementsTous].forEach((c) => lot.sur(c, rendre));
+  [K.organisations, K.projets, K.documentsTous, K.paiementsTous, K.organisationsInternes].forEach((c) => lot.sur(c, rendre));
   return () => { gestes(); lot.fin(); };
 };
 

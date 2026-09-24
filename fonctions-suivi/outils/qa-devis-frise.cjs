@@ -1,7 +1,7 @@
 /* ==========================================================================
    CAPMEDIA CLIENT HUB · les lignes d'un devis, cochées et vues
 
-   Ce que Nadir coche, [nom retire] le voit. La suite joue les deux rôles :
+   Ce que l équipe coche, le client le voit. La suite joue les deux rôles :
    l'équipe coche une ligne et la base change ; le client voit la frise,
    la même, sans la case.
 

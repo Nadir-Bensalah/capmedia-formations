@@ -19,7 +19,7 @@ import {
   verdictHtml, anneauOuPas, progressionOuPas,
 } from '../ui.js';
 import * as magasin from '../magasin.js';
-import { K, ecrire, abonnerProjet, progressionProjet, jalonCourant, jalonSuivant, prochaineReunion, enAttenteDeVous, parStatut, risquesProjet, MODES_PROGRESSION, trierEtapes, phasesTriees } from '../donnees.js';
+import { K, ecrire, nouvelId, interneDuProjet, abonnerProjet, progressionProjet, jalonCourant, jalonSuivant, prochaineReunion, enAttenteDeVous, parStatut, risquesProjet, MODES_PROGRESSION, trierEtapes, phasesTriees } from '../donnees.js';
 import { filAriane } from '../coquille.js';
 import { naviguer } from '../routeur.js';
 import { monterBulle } from '../bulle.js';
@@ -88,7 +88,7 @@ export const vue = async (ctx, env) => {
      qu'elle n'a pas fini, un redessin la rejoue au lieu de la couper. */
   let ongletAnime = '';
   const cles = [K.projet(pid), K.composants(pid), K.jalons(pid), K.liens(pid), K.taches(pid), K.tickets(pid), K.validations(pid), K.fichiers(pid), K.releases(pid), K.reunions(pid), K.notes(pid), K.blocages(pid), K.documents(pid), K.paiements(pid), K.activite(pid), K.equipe,
-    K.scenarios(pid), K.campagnes(pid), K.anomalies(pid)];
+    K.scenarios(pid), K.campagnes(pid), K.anomalies(pid), ...(env.role === 'equipe' ? [K.projetsInternes] : [])];
   abonnerProjet(lot, pid, env.role);
 
   let detailOuvert = ctx.params.tid && onglet === 'taches' ? ctx.params.tid : null;
@@ -134,7 +134,7 @@ export const vue = async (ctx, env) => {
               ${projet.interne ? '<span class="etiquette">Mon projet</span>' : ''}
               ${equipe && projet.aFaire && !projet.archive ? `<a class="etiquette etiquette--lien" href="#/a-faire/${echapper(pid)}">${icone('ampoule')} Projet à faire</a>` : ''}
               ${equipe && !projet.interne && nomsContacts(projet) ? `<span class="puce">${icone('utilisateurs')} ${echapper(nomsContacts(projet))}</span>` : ''}
-              ${equipe && projet.sante && projet.sante !== 'ok' ? pastille(SANTES, projet.sante) : ''}
+              ${equipe && interneDuProjet(pid).sante && interneDuProjet(pid).sante !== 'ok' ? pastille(SANTES, interneDuProjet(pid).sante) : ''}
               ${projet.cible ? `<span class="puce">${icone('cible')} Livraison visée ${echapper(dateCourte(projet.cible))}</span>${verdictHtml(delai)}` : ''}
               ${projet.responsable ? `<span class="puce">${icone('utilisateur')} ${echapper(nomEquipe(d.equipe, projet.responsable) || 'Capmedia')}</span>` : ''}
               <span class="puce t-3">${icone('horloge')} ${d.activite[0] ? `Dernière activité ${echapper(depuis(d.activite[0].date))}` : 'Pas encore d\'activité'}</span>
@@ -306,7 +306,7 @@ const ouvrirInvitation = (projet, env) => {
     corps: `<form class="forme" id="forme-invitation" novalidate>
       <div class="groupe">
         <label class="etiquette-champ" for="inv-email">Adresse du destinataire</label>
-        <input class="champ" id="inv-email" name="email" type="email" value="${echapper((contacts[0] || {}).email || '')}" placeholder="prenom@entreprise.fr">
+        <input class="champ" id="inv-email" name="email" type="email" value="${echapper((contacts[0] || {}).email || '')}" placeholder="prenom@entreprise.test">
         ${contacts.length > 1 ? `<p class="aide">Second interlocuteur : ${echapper(contacts[1].email || contacts[1].nom || '')}. Créez-lui son propre lien.</p>` : ''}
       </div>
       <div class="groupe">
@@ -961,7 +961,7 @@ const ouvrirDepotClient = (pid, env) => {
     </form>`,
     pied: `<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button><button class="btn btn-principal" type="submit" form="forme-depot">Envoyer</button>`,
   });
-  const boite = depot(m.el.querySelector('#zone-depot'), { chemin: `projets/${pid}/documents/client`, max: 20 });
+  const boite = depot(m.el.querySelector('#zone-depot'), { chemin: () => `projets/${pid}/fichiers/${nouvelId('fichiers')}`, max: 20 });
   m.el.querySelector('#forme-depot').addEventListener('submit', async (e) => {
     e.preventDefault();
     if (boite.occupe) { toast('Attendez la fin des envois.', 'erreur'); return; }

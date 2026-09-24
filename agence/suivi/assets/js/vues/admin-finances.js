@@ -6,7 +6,7 @@
 import { echapper, dateCourte, dateISO, montant, montantHT, montantTTC, montantPiece, ttcDe, pluriel, parDateDesc, joursAvant, STATUTS_DEVIS, STATUTS_FACTURE, FACTURES_DUES, MOYENS_PAIEMENT, PORTEES_DEVIS, age, retard } from '../noyau.js';
 import { icone, pastille, ligne, vide, squelette, titrePage, sur, modale, toast, agir, lireForme, valider, obligatoire, optionsDe, depot, metrique, menu, confirmer } from '../ui.js';
 import * as magasin from '../magasin.js';
-import { K, ecrire, resteAPayer } from '../donnees.js';
+import { K, ecrire, resteAPayer, nouvelId, noteDuPaiement } from '../donnees.js';
 import { filAriane } from '../coquille.js';
 import { naviguer } from '../routeur.js';
 import { appelServeur } from '../serveur.js';
@@ -39,7 +39,10 @@ Mise en ligne · 600"></textarea><p class="aide">Chaque ligne devient une étape
   const forme = m.el.querySelector('#f-doc');
   const sel = forme.querySelector('#d-projet');
   let boite = null;
-  const rebrancher = () => { boite = depot(m.el.querySelector('#d-depot'), { chemin: `projets/${sel.value}/documents/${type}`, max: 1, texte: 'Déposez le <strong>PDF</strong>.', aide: '' }); };
+  /* Le PDF se range sous l'identifiant de la pièce, tiré d'avance : les
+     règles Storage relisent son statut (jamais de brouillon servi au client). */
+  const idDocument = nouvelId('documents');
+  const rebrancher = () => { boite = depot(m.el.querySelector('#d-depot'), { chemin: () => `projets/${sel.value}/pieces/${idDocument}`, max: 1, texte: 'Déposez le <strong>PDF</strong>.', aide: '' }); };
   rebrancher(); sel.addEventListener('change', rebrancher);
 
   /* La portée propose d'elle-même ce qui est juste : un projet qui n'a pas
@@ -76,7 +79,7 @@ Mise en ligne · 600"></textarea><p class="aide">Chaque ligne devient une étape
       return { titre: (m2 ? m2[1] : l).trim(), montant: Number.isFinite(somme) ? somme : null };
     }).filter((l) => l.titre);
     let reponse = null;
-    if (await agir(m.pied.querySelector('[type="submit"]'), async () => { reponse = await appelServeur('deposerDocument', { projet: d.projet, type, numero: d.numero, libelle: d.libelle, montant: d.montant, tva: d.tva || 0, echeance: d.echeance || null, date: d.date || null, description: d.description, portee: d.portee, fichier, liens }); return reponse; }, `${type === 'devis' ? 'Devis' : 'Facture'} déposé.`)) {
+    if (await agir(m.pied.querySelector('[type="submit"]'), async () => { reponse = await appelServeur('deposerDocument', { idDocument, projet: d.projet, type, numero: d.numero, libelle: d.libelle, montant: d.montant, tva: d.tva || 0, echeance: d.echeance || null, date: d.date || null, description: d.description, portee: d.portee, fichier, liens }); return reponse; }, `${type === 'devis' ? 'Devis' : 'Facture'} déposé.`)) {
       if (type === 'devis' && lignes.length && reponse && reponse.id) {
         const deja = (magasin.lire(K.jalonsTous) || []).filter((x) => (x.projet || x._parent) === d.projet).length;
         await Promise.all(lignes.map((l, k) => ecrire.creerJalon(d.projet, {
@@ -140,7 +143,7 @@ export const vue = async (ctx, env) => {
       <div class="onglets" style="margin-top:24px">${[['factures', 'Factures', factures.length], ['devis', 'Devis', devis.length], ['paiements', 'Paiements', paiements.length]].map(([c, l, n]) => `<button class="onglet${etat.onglet === c ? ' actif' : ''}" type="button" data-onglet="${c}">${l}<span class="badge">${n}</span></button>`).join('')}</div>
       ${etat.onglet === 'factures' ? (factures.length ? `<div class="liste">${factures.map(ligneDoc).join('')}</div>` : vide({ icone: 'euro', titre: 'Aucune facture', compact: true }))
       : etat.onglet === 'devis' ? (devis.length ? `<div class="liste">${devis.map(ligneDoc).join('')}</div>` : vide({ icone: 'receipt', titre: 'Aucun devis', compact: true }))
-      : (paiements.length ? `<div class="liste">${paiements.slice().sort(parDateDesc('date')).map((p) => { const f = documents.find((d) => d.id === p.facture) || {}; return ligne({ icone: 'paiement', ton: 'vert', titre: echapper(montantTTC(p.montant, 2)), sous: `${echapper(dateCourte(p.date))} · ${echapper(MOYENS_PAIEMENT[p.moyen] || p.moyen || '')} · ${echapper(f.numero || '')} · ${echapper(nomProjet(p.projet))}${p.reference ? ` · ${echapper(p.reference)}` : ''}${p.note ? ` · ${echapper(p.note)}` : ''}` }); }).join('')}</div>` : vide({ icone: 'paiement', titre: 'Aucun paiement', compact: true }))}
+      : (paiements.length ? `<div class="liste">${paiements.slice().sort(parDateDesc('date')).map((p) => { const f = documents.find((d) => d.id === p.facture) || {}; return ligne({ icone: 'paiement', ton: 'vert', titre: echapper(montantTTC(p.montant, 2)), sous: `${echapper(dateCourte(p.date))} · ${echapper(MOYENS_PAIEMENT[p.moyen] || p.moyen || '')} · ${echapper(f.numero || '')} · ${echapper(nomProjet(p.projet))}${p.reference ? ` · ${echapper(p.reference)}` : ''}${noteDuPaiement(p.id) ? ` · ${echapper(noteDuPaiement(p.id))}` : ''}` }); }).join('')}</div>` : vide({ icone: 'paiement', titre: 'Aucun paiement', compact: true }))}
     </div>`;
     sortie.querySelector('#f-projet').addEventListener('change', (e) => { etat.projet = e.target.value; rendre(); });
     if (ouvert) { const d = documents.find((x) => x.id === ouvert); ouvert = null; if (d) ouvrirDocument(d, env, { projets, paiements }).then(() => naviguer('/finances', { remplacer: true })); }
@@ -175,6 +178,6 @@ export const vue = async (ctx, env) => {
     const d = documents.find((x) => x.id === el.dataset.id);
     if (d) ouvrirDocument(d, env, { projets, paiements: magasin.lire(K.paiementsTous) || [] });
   });
-  [K.projets, K.documentsTous, K.paiementsTous].forEach((c) => lot.sur(c, rendre));
+  [K.projets, K.documentsTous, K.paiementsTous, K.paiementsInternes].forEach((c) => lot.sur(c, rendre));
   return () => { gestes(); lot.fin(); };
 };

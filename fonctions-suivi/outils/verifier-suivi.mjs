@@ -218,7 +218,7 @@ const photographier = async () => {
 
   const creation = await appeler({
     cle: CLE, action: 'creerProjet', ref: 'ESSAI', nom: 'Projet d essai',
-    client: { nom: 'Client Essai', email: 'client.essai@exemple.fr', entreprise: 'Essai SARL' },
+    client: { nom: 'Client Essai', email: 'client.essai@exemple.test', entreprise: 'Essai SARL' },
     plateformes: ['web'],
   });
   if (creation.code !== 200) dire(`création de projet refusée : ${creation.code} ${creation.texte.slice(0, 80)}`);
@@ -227,7 +227,7 @@ const photographier = async () => {
 
   const doublon = await appeler({
     cle: CLE, action: 'creerProjet', ref: 'ESSAI', nom: 'Doublon',
-    client: { nom: 'x', email: 'x@exemple.fr' },
+    client: { nom: 'x', email: 'x@exemple.test' },
   });
   if (doublon.code === 200) dire('deux projets peuvent porter la même référence');
   else ok('une référence déjà prise est refusée');
@@ -235,7 +235,7 @@ const photographier = async () => {
   if (projetNeuf) {
     const invit = await appeler({
       cle: CLE, action: 'inviterClient', projet: projetNeuf,
-      email: 'client.essai@exemple.fr', nom: 'Client Essai',
+      email: 'client.essai@exemple.test', nom: 'Client Essai',
     });
     if (invit.code !== 200) dire(`invitation refusée : ${invit.code} ${invit.texte.slice(0, 80)}`);
     else {
@@ -283,7 +283,7 @@ const photographier = async () => {
     }
 
     const retrait = await appeler({
-      cle: CLE, action: 'retirerClient', projet: projetNeuf, email: 'client.essai@exemple.fr',
+      cle: CLE, action: 'retirerClient', projet: projetNeuf, email: 'client.essai@exemple.test',
     });
     if (retrait.code !== 200) dire(`retrait refusé : ${retrait.code}`);
     else {

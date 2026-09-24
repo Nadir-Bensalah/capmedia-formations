@@ -76,7 +76,7 @@ await env.withSecurityRulesDisabled(async (ctx) => {
   await setDoc(doc(b, 'activite/a-interne'), { projet: 'atelier', type: 'tache', texte: 'x', visibilite: 'interne' });
   await setDoc(doc(b, `boites/${CAMILLE}/notifications/n1`), { titre: 'x', lu: false });
   await setDoc(doc(b, 'demandesProjet/dp1'), { par: { uid: LEA, email: 'lea.essai@exemple.test' }, titre: 'Appli', statut: 'nouvelle', projet: null, pieces: [] });
-  await setDoc(doc(b, 'contact-messages/c1'), { nom: 'Prospect', email: 'p@x.fr' });
+  await setDoc(doc(b, 'contact-messages/c1'), { nom: 'Prospect', email: 'p@x.test' });
 
   /* La plateforme de tests. Une campagne en cours où figurent Karim et
      Sonia, une campagne close, et un passage de chacun. */
@@ -152,9 +152,11 @@ await refuse("Camille n'écrit pas une note interne", addDoc(collection(camille(
 await doit('Camille approuve une validation', updateDoc(doc(camille(), 'validations/v1'), { statut: 'approuvee', reponse: { par: CAMILLE, nom: 'Camille', date: serverTimestamp(), commentaire: 'ok' }, maj: serverTimestamp() }));
 await refuse('Camille ne répond pas deux fois', updateDoc(doc(camille(), 'validations/v1'), { statut: 'modifications', reponse: { par: CAMILLE, nom: 'Camille', date: serverTimestamp(), commentaire: 'non' }, maj: serverTimestamp() }));
 await refuse('Camille ne crée pas une validation', addDoc(collection(camille(), 'validations'), { projet: 'atelier', titre: 'x', statut: 'en-attente' }));
-await doit('Camille dépose une capture', addDoc(collection(camille(), 'fichiers'), { projet: 'atelier', composant: '', categorie: 'captures', nom: 'c.png', chemin: 'projets/atelier/documents/client/c.png', taille: 1, type: 'image/png', description: '', tags: [], par: { uid: CAMILLE, nom: 'Camille', cote: 'client' }, visibilite: 'client', version: '', archive: false, cree: serverTimestamp() }));
-await refuse('Camille ne dépose pas dans « contrats »', addDoc(collection(camille(), 'fichiers'), { projet: 'atelier', composant: '', categorie: 'contrats', nom: 'c.pdf', chemin: 'projets/atelier/documents/client/c.pdf', taille: 1, type: 'application/pdf', description: '', tags: [], par: { uid: CAMILLE, nom: 'Camille', cote: 'client' }, visibilite: 'client', version: '', archive: false, cree: serverTimestamp() }));
-await refuse("Camille ne dépose pas sous le chemin d'un autre projet", addDoc(collection(camille(), 'fichiers'), { projet: 'atelier', composant: '', categorie: 'captures', nom: 'c.png', chemin: 'projets/boutique/documents/client/c.png', taille: 1, type: 'image/png', description: '', tags: [], par: { uid: CAMILLE, nom: 'Camille', cote: 'client' }, visibilite: 'client', version: '', archive: false, cree: serverTimestamp() }));
+await doit('Camille dépose une capture', setDoc(doc(camille(), 'fichiers/fc-1'), { projet: 'atelier', composant: '', categorie: 'captures', nom: 'c.png', chemin: 'projets/atelier/fichiers/fc-1/c.png', taille: 1, type: 'image/png', description: '', tags: [], par: { uid: CAMILLE, nom: 'Camille', cote: 'client' }, visibilite: 'client', version: '', archive: false, cree: serverTimestamp() }));
+await refuse('Camille ne dépose pas dans « contrats »', setDoc(doc(camille(), 'fichiers/fc-2'), { projet: 'atelier', composant: '', categorie: 'contrats', nom: 'c.pdf', chemin: 'projets/atelier/fichiers/fc-2/c.pdf', taille: 1, type: 'application/pdf', description: '', tags: [], par: { uid: CAMILLE, nom: 'Camille', cote: 'client' }, visibilite: 'client', version: '', archive: false, cree: serverTimestamp() }));
+await refuse("Camille ne dépose pas sous le chemin d'un autre projet", setDoc(doc(camille(), 'fichiers/fc-3'), { projet: 'atelier', composant: '', categorie: 'captures', nom: 'c.png', chemin: 'projets/boutique/fichiers/fc-3/c.png', taille: 1, type: 'image/png', description: '', tags: [], par: { uid: CAMILLE, nom: 'Camille', cote: 'client' }, visibilite: 'client', version: '', archive: false, cree: serverTimestamp() }));
+await refuse("Une fiche ne pointe pas le fichier rangé sous une AUTRE fiche", setDoc(doc(camille(), 'fichiers/fc-4'), { projet: 'atelier', composant: '', categorie: 'captures', nom: 'c.png', chemin: 'projets/atelier/fichiers/fc-1/c.png', taille: 1, type: 'image/png', description: '', tags: [], par: { uid: CAMILLE, nom: 'Camille', cote: 'client' }, visibilite: 'client', version: '', archive: false, cree: serverTimestamp() }));
+await refuse("L'ancien rangement (documents/client) n'est plus accepté", setDoc(doc(camille(), 'fichiers/fc-5'), { projet: 'atelier', composant: '', categorie: 'captures', nom: 'c.png', chemin: 'projets/atelier/documents/client/c.png', taille: 1, type: 'image/png', description: '', tags: [], par: { uid: CAMILLE, nom: 'Camille', cote: 'client' }, visibilite: 'client', version: '', archive: false, cree: serverTimestamp() }));
 await doit('Camille accepte un devis', updateDoc(doc(camille(), 'documents/d1'), { statut: 'accepte', reponse: { par: CAMILLE, nom: 'Camille', date: serverTimestamp(), commentaire: '' } }));
 await refuse('Camille ne touche pas au montant', updateDoc(doc(camille(), 'documents/d1'), { montant: 1 }));
 await refuse('Camille ne marque pas une facture payée', updateDoc(doc(camille(), 'documents/f1'), { statut: 'payee' }));
@@ -186,7 +188,7 @@ await doit("L'équipe crée un jalon", setDoc(doc(equipe(), 'projets/atelier/jal
 await doit("L'équipe lit les jalons en groupe", getDocs(query(collection(equipe(), 'projets/atelier/jalons'))));
 await doit("L'équipe lit les prospects du site", getDoc(doc(equipe(), 'contact-messages/c1')));
 await refuse('Camille ne lit pas les prospects du site', getDoc(doc(camille(), 'contact-messages/c1')));
-await doit('Un visiteur dépose un message de contact', addDoc(collection(anonyme(), 'contact-messages'), { nom: 'x', email: 'x@y.fr' }));
+await doit('Un visiteur dépose un message de contact', addDoc(collection(anonyme(), 'contact-messages'), { nom: 'x', email: 'x@y.test' }));
 
 console.log("\n== L'histoire d'une date, la version d'une correction, l'adresse d'un profil");
 /* L'histoire de la date cible est écrite par l'équipe et lue par le client :
@@ -238,7 +240,7 @@ await refuse("Personne n'écrit une empreinte de code", setDoc(doc(camille(), 'c
 await refuse('Camille ne remet pas son compteur d essais à zéro', updateDoc(doc(camille(), 'connexions/x'), { essais: 0 }));
 await refuse('Camille ne lit pas les compteurs par adresse IP', getDoc(doc(camille(), 'connexionsIp/x')));
 await refuse('Camille ne lit pas un jeton d invitation', getDoc(doc(camille(), 'invitations/x')));
-await refuse("L'équipe ne fabrique pas un jeton d'invitation depuis le navigateur", setDoc(doc(equipe(), 'invitations/x'), { email: 'a@b.fr' }));
+await refuse("L'équipe ne fabrique pas un jeton d'invitation depuis le navigateur", setDoc(doc(equipe(), 'invitations/x'), { email: 'a@b.test' }));
 await refuse('Un visiteur ne lit pas les jetons', getDocs(collection(anonyme(), 'invitations')));
 
 console.log('\n== La plateforme de tests : le vivier');
@@ -254,20 +256,23 @@ await refuse("Karim ne se fabrique pas une fiche", setDoc(doc(karim(), 'testeurs
 await refuse("L'équipe n'inscrit pas un testeur depuis le navigateur", setDoc(doc(equipe(), 'testeurs', MARC), { prenom: 'Marc', projets: ['atelier'] }));
 
 console.log('\n== La plateforme de tests : le profil sans le nom');
-/* Le client doit savoir QUI a donné un avis sans savoir QUI c'est. Le nom
-   et l'adresse lui restent fermés, le profil lui est ouvert : un avis de
-   22 ans et un avis de 55 ans ne disent pas la même chose.
-
-   La recopie vaut mieux qu'une règle qui filtrerait les champs : Firestore
-   sert un document entier ou rien, et une règle ne masque pas un champ. */
+/* Le client doit savoir QUI a donné un avis sans savoir QUI c'est : il lit
+   le profil sans nom des testeurs de SON projet, recopié sous le projet
+   (projets/<p>/profilsTesteurs/<uid>). L'ancien profil commun
+   (testeurs/<uid>/public/profil), lisible par tout compte connecté avec la
+   liste des projets de tous les clients, ne se lit plus que par l'équipe. */
 await env.withSecurityRulesDisabled(async (ctx) => {
-  await setDoc(doc(ctx.firestore(), `testeurs/${KARIM}/public/profil`), { sexe: 'homme', age: '25-34', fonction: 'QA freelance', mobile: 'ios' });
+  await setDoc(doc(ctx.firestore(), `testeurs/${KARIM}/public/profil`), { sexe: 'homme', age: '25-34', fonction: 'QA freelance', mobile: 'ios', projets: ['atelier', 'boutique'] });
+  await setDoc(doc(ctx.firestore(), `projets/atelier/profilsTesteurs/${KARIM}`), { sexe: 'homme', age: '25-34', fonction: 'QA freelance', mobile: 'ios' });
 });
-await doit('Camille lit le profil public d un testeur', getDoc(doc(camille(), `testeurs/${KARIM}/public/profil`)));
+await doit('Camille lit le profil sans nom d un testeur de SON projet', getDoc(doc(camille(), `projets/atelier/profilsTesteurs/${KARIM}`)));
+await doit('et la liste des testeurs de son projet', getDocs(collection(camille(), 'projets/atelier/profilsTesteurs')));
+await refuse('Léa ne lit pas les testeurs du projet de Camille', getDocs(collection(lea(), 'projets/atelier/profilsTesteurs')));
 await refuse('mais pas sa fiche, qui porte son nom', getDoc(doc(camille(), 'testeurs', KARIM)));
-await doit('Karim lit le sien', getDoc(doc(karim(), `testeurs/${KARIM}/public/profil`)));
-await refuse('Personne n écrit un profil public depuis le navigateur', setDoc(doc(equipe(), `testeurs/${KARIM}/public/profil`), { age: '55-64' }));
-await refuse('Un visiteur ne lit aucun profil', getDoc(doc(anonyme(), `testeurs/${KARIM}/public/profil`)));
+await refuse('Camille ne lit plus l ancien profil commun (il listait les projets de tous les clients)', getDoc(doc(camille(), `testeurs/${KARIM}/public/profil`)));
+await refuse('Karim ne lit pas les profils des testeurs', getDocs(collection(karim(), 'projets/atelier/profilsTesteurs')));
+await refuse('Personne n écrit un profil depuis le navigateur', setDoc(doc(equipe(), `projets/atelier/profilsTesteurs/${KARIM}`), { age: '55-64' }));
+await refuse('Un visiteur ne lit aucun profil', getDoc(doc(anonyme(), `projets/atelier/profilsTesteurs/${KARIM}`)));
 
 console.log('\n== La plateforme de tests : la bibliothèque');
 /* Le client lit les scénarios pour savoir ce qui sera vérifié, le testeur
@@ -444,19 +449,16 @@ await doit("L'équipe les lit en groupe", getDocs(collectionGroup(equipe(), 'reg
 await refuse('Camille ne les lit pas en groupe', getDocs(collectionGroup(camille(), 'regles')));
 await refuse('Karim ne les lit pas en groupe', getDocs(collectionGroup(karim(), 'regles')));
 
-console.log('\n== Les profils publics, lus en groupe');
-/* Le client voit qui teste pour lui, sans le nom ni l'adresse : ils ne
-   sont pas dans ce document. La lecture en groupe ne révèle donc rien de
-   plus que la lecture un par un, déjà ouverte à tout connecté. */
-await env.withSecurityRulesDisabled(async (ctx) => {
-  await setDoc(doc(ctx.firestore(), `testeurs/${KARIM}/public/profil`), { age: '25-34', fonction: 'Infirmier', plateformes: ['android', 'web'], projets: ['atelier'] });
-});
-await doit('Camille lit les profils en groupe', getDocs(collectionGroup(camille(), 'public')));
-await doit('Karim aussi', getDocs(collectionGroup(karim(), 'public')));
-await doit("L'équipe aussi", getDocs(collectionGroup(equipe(), 'public')));
-await refuse('Un anonyme ne les lit pas', getDocs(collectionGroup(env.unauthenticatedContext().firestore(), 'public')));
-await refuse('Camille n écrit pas un profil public', setDoc(doc(camille(), `testeurs/${KARIM}/public/profil`), { fonction: 'Inventé' }));
-await refuse('Karim ne réécrit pas le sien', setDoc(doc(karim(), `testeurs/${KARIM}/public/profil`), { fonction: 'Inventé' }));
+console.log('\n== Les profils, lus en groupe : l équipe seule');
+/* Lus en groupe, les profils de TOUS les projets : c'est une vue d'équipe.
+   L'ancien comportement (tout connecté lisait le groupe « public ») est la
+   fuite fermée par la Release Gate 1 : un client y lisait les testeurs et
+   les identifiants de projets des autres clients. */
+await doit("L'équipe lit les profils en groupe", getDocs(collectionGroup(equipe(), 'profilsTesteurs')));
+await refuse('Camille ne lit pas les profils en groupe', getDocs(collectionGroup(camille(), 'profilsTesteurs')));
+await refuse('ni l ancien groupe « public »', getDocs(collectionGroup(camille(), 'public')));
+await refuse('Karim non plus', getDocs(collectionGroup(karim(), 'public')));
+await refuse('Un anonyme ne les lit pas', getDocs(collectionGroup(env.unauthenticatedContext().firestore(), 'profilsTesteurs')));
 
 console.log('\n== La plateforme de tests : les lectures en groupe');
 /* La console regarde tous les projets d'un coup. C'est un privilège
@@ -482,7 +484,8 @@ await refuse('Karim ne lit pas les devis et factures', getDocs(query(collection(
 await refuse('Karim ne lit pas les messages du projet', getDocs(collection(karim(), 'projets/atelier/messages')));
 await refuse('Karim ne lit pas les fichiers', getDocs(query(collection(karim(), 'fichiers'), where('projet', '==', 'atelier'))));
 await refuse('Karim ne lit pas les tâches', getDocs(query(collection(karim(), 'taches'), where('projet', '==', 'atelier'))));
-await refuse('Karim ne lit pas l équipe du projet', getDocs(collection(karim(), 'projets/atelier/jalons')));
+await refuse('Karim ne lit pas les étapes du projet', getDocs(collection(karim(), 'projets/atelier/jalons')));
+await refuse('Karim ne liste pas l équipe', getDocs(collection(karim(), 'equipe')));
 
 console.log('\n== La maintenance continue : le client demande, l équipe configure');
 /* Le contrat n'existe pas encore. Camille le fait naître avec sa seule
@@ -578,6 +581,49 @@ await refuse('Camille ne liste pas les idées', getDocs(collection(camille(), 'i
 await refuse("Camille n'écrit pas de note", setDoc(doc(camille(), 'idees/atelier'), { texte: 'x', par: CAMILLE, maj: serverTimestamp() }));
 await refuse('Karim, testeur, ne lit pas les idées', getDocs(collection(karim(), 'idees')));
 await refuse('Un visiteur ne lit pas les idées', getDoc(doc(anonyme(), 'idees/atelier')));
+
+console.log('\n== Release Gate 1 : les données internes hors des fiches lues par le client');
+/* Firestore sert un document ENTIER. Chacune de ces lectures était permise
+   avant la Release Gate 1, parce que la donnée vivait sur une fiche que le
+   client lit : notes internes de l'organisation, budget et santé du projet,
+   note d'un paiement, devis en brouillon, liste de l'équipe. */
+await env.withSecurityRulesDisabled(async (ctx) => {
+  const b = ctx.firestore();
+  await setDoc(doc(b, 'projetsInternes/atelier'), { budget: 12000, budgetNote: 'Négocié bas', sante: 'attention' });
+  await setDoc(doc(b, 'organisationsInternes/atelier-nord'), { notesInternes: 'Client difficile' });
+  await setDoc(doc(b, 'paiementsInternes/p1'), { note: 'Payé en retard, relancé deux fois' });
+  await setDoc(doc(b, 'documents/d-brouillon'), { projet: 'atelier', type: 'devis', numero: 'D-BR', montant: 9, statut: 'brouillon' });
+  await setDoc(doc(b, `annuaire/${AGENT}`), { nom: 'Alex Durand' });
+});
+const VISIBLES = ['envoye', 'consulte', 'accepte', 'refuse', 'expire', 'annule', 'envoyee', 'a-payer', 'partielle', 'payee', 'en-retard', 'annulee', 'avoir'];
+await refuse('Camille ne lit pas le budget, la note de budget ni la santé', getDoc(doc(camille(), 'projetsInternes/atelier')));
+await refuse('Camille ne liste pas les données internes des projets', getDocs(collection(camille(), 'projetsInternes')));
+await refuse('Camille ne lit pas les notes internes de son organisation', getDoc(doc(camille(), 'organisationsInternes/atelier-nord')));
+await refuse('Camille ne lit pas la note interne d un paiement', getDoc(doc(camille(), 'paiementsInternes/p1')));
+await doit("L'équipe lit le budget et la santé", getDoc(doc(equipe(), 'projetsInternes/atelier')));
+await doit("L'équipe lit les notes internes", getDoc(doc(equipe(), 'organisationsInternes/atelier-nord')));
+await doit("L'équipe lit la note d un paiement", getDoc(doc(equipe(), 'paiementsInternes/p1')));
+await doit("L'équipe règle la santé à part", setDoc(doc(equipe(), 'projetsInternes/atelier'), { sante: 'bloque' }, { merge: true }));
+await refuse('La santé ne prend qu une valeur connue', setDoc(doc(equipe(), 'projetsInternes/atelier'), { sante: 'excellente' }, { merge: true }));
+await refuse('Rien d autre ne se glisse dans les données internes', setDoc(doc(equipe(), 'projetsInternes/atelier'), { client: 'x' }, { merge: true }));
+await refuse('Camille n écrit pas les données internes', setDoc(doc(camille(), 'projetsInternes/atelier'), { sante: 'ok' }, { merge: true }));
+await refuse('Le navigateur n écrit pas les notes internes (serveur seul)', setDoc(doc(equipe(), 'organisationsInternes/atelier-nord'), { notesInternes: 'x' }));
+await refuse("L'équipe ne remet pas le budget sur la fiche projet lue par le client", updateDoc(doc(equipe(), 'projets/atelier'), { budget: 1 }));
+await refuse('ni la note de budget', updateDoc(doc(equipe(), 'projets/atelier'), { budgetNote: 'x' }));
+await refuse('ni la santé', updateDoc(doc(equipe(), 'projets/atelier'), { sante: 'ok' }));
+await refuse('Camille ne lit pas un devis en brouillon', getDoc(doc(camille(), 'documents/d-brouillon')));
+await refuse('ni la liste des pièces de son projet sans filtre de statut', getDocs(query(collection(camille(), 'documents'), where('projet', '==', 'atelier'))));
+await doit('Camille lit les pièces visibles de son projet', getDocs(query(collection(camille(), 'documents'), where('projet', '==', 'atelier'), where('statut', 'in', VISIBLES))));
+await refuse('une liste qui inclurait le brouillon est refusée', getDocs(query(collection(camille(), 'documents'), where('projet', '==', 'atelier'), where('statut', 'in', ['envoye', 'brouillon']))));
+await doit("L'équipe lit le brouillon", getDoc(doc(equipe(), 'documents/d-brouillon')));
+await refuse('Camille ne liste pas l équipe', getDocs(collection(camille(), 'equipe')));
+await refuse('ni la fiche d un membre (adresse, rôle)', getDoc(doc(camille(), `equipe/${AGENT}`)));
+await doit('Camille lit sa propre fiche d équipe (elle n existe pas : c est ainsi que la session sait qu elle est cliente)', getDoc(doc(camille(), `equipe/${CAMILLE}`)));
+await doit('Camille lit l annuaire (le seul nom)', getDocs(collection(camille(), 'annuaire')));
+await refuse('Un visiteur ne lit pas l annuaire', getDocs(collection(anonyme(), 'annuaire')));
+await refuse('Personne n écrit l annuaire depuis le navigateur', setDoc(doc(equipe(), `annuaire/${AGENT}`), { nom: 'x' }));
+await doit("L'équipe liste l équipe", getDocs(collection(equipe(), 'equipe')));
+await doit('Camille lit toujours son organisation (sans les notes)', getDoc(doc(camille(), 'organisations/atelier-nord')));
 
 console.log(`\n${ok} contrôle(s) conforme(s)${ecarts.length ? `, ${ecarts.length} ÉCART(S) :\n  - ${ecarts.join('\n  - ')}` : ''}`);
 await env.cleanup();

@@ -358,7 +358,7 @@ export const brancherPieces = (racine) => {
  * Un dépôt de fichiers : glisser-déposer, sélection, envoi avec progression,
  * retrait. `chemin` est le dossier de stockage. Renvoie l'état des pièces.
  */
-export const depot = (zone, { chemin, max = 10, texte = 'Déposez vos fichiers ici, ou <strong>choisissez-les</strong>.', aide = 'Images, PDF, vidéos courtes. 10 Mo par fichier.', compact = false, cible = null } = {}) => {
+export const depot = (zone, { chemin, metadonnees = null, max = 10, texte = 'Déposez vos fichiers ici, ou <strong>choisissez-les</strong>.', aide = 'Images, PDF, vidéos courtes. 10 Mo par fichier.', compact = false, cible = null } = {}) => {
   const etat = { pieces: [], enCours: 0 };
   zone.innerHTML = `
     <label class="depot${compact ? ' depot--compact' : ''}">
@@ -385,7 +385,13 @@ export const depot = (zone, { chemin, max = 10, texte = 'Déposez vos fichiers i
       etat.enCours += 1;
       rendre();
       try {
-        const fiche = await envoyerPiece(f, chemin, (p) => { provisoire.progres = p; rendre(); });
+        /* `chemin` peut être une fonction : un fichier de projet se range
+           sous l'identifiant de sa future fiche, tiré pour lui seul. Les
+           métadonnées aussi : la marque « interne » se lit au moment de
+           l'envoi (note interne ou réponse au client). */
+        const dossier = typeof chemin === 'function' ? chemin(f) : chemin;
+        const marques = typeof metadonnees === 'function' ? metadonnees(f) : metadonnees;
+        const fiche = await envoyerPiece(f, dossier, (p) => { provisoire.progres = p; rendre(); }, marques);
         Object.assign(provisoire, fiche, { envoi: false });
       } catch (e) {
         etat.pieces = etat.pieces.filter((p) => p !== provisoire);

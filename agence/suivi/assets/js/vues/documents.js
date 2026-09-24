@@ -6,7 +6,7 @@
 import { echapper, parDateDesc, CATEGORIES_FICHIER, CATEGORIES_CLIENT } from '../noyau.js';
 import { icone, vide, squelette, titrePage, sur, fichierHtml, brancherPieces, modale, depot, lireForme, toast, agir, optionsDe, menu, confirmer } from '../ui.js';
 import * as magasin from '../magasin.js';
-import { K, G, agreger, ecrire } from '../donnees.js';
+import { K, G, agreger, ecrire, nouvelId } from '../donnees.js';
 import { filAriane } from '../coquille.js';
 import { editer } from './editeurs.js';
 
@@ -86,7 +86,7 @@ const depotClient = (pid, env) => {
       <div id="zone-depot"></div></form>`,
     pied: `<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button><button class="btn btn-principal" type="submit" form="forme-depot">Envoyer</button>`,
   });
-  const boite = depot(m.el.querySelector('#zone-depot'), { chemin: `projets/${pid}/documents/client`, max: 20 });
+  const boite = depot(m.el.querySelector('#zone-depot'), { chemin: () => `projets/${pid}/fichiers/${nouvelId('fichiers')}`, max: 20 });
   m.el.querySelector('#forme-depot').addEventListener('submit', async (e) => {
     e.preventDefault();
     if (boite.occupe) { toast('Attendez la fin des envois.', 'erreur'); return; }

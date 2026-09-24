@@ -1,5 +1,8 @@
-# Déploiement automatique du site vers Hostinger (capmedia.app).
-# Chaque poussée sur main envoie les fichiers publics dans public_html par FTP.
+# Déploiement de l'Academy vers public_html/academy/ (capmedia.app).
+# Seul le PAQUET construit par outils/paquet-academy.mjs part : une liste
+# blanche de pages et de dossiers du site, prise dans les fichiers suivis par
+# Git. Tout le reste du dépôt (fonctions, règles, outils, données) ne part
+# jamais, y compris un dossier ajouté plus tard à la racine.
 # Secrets requis (Settings > Secrets and variables > Actions) :
 #   FTP_SERVER, FTP_USERNAME, FTP_PASSWORD
 
@@ -21,11 +24,18 @@ jobs:
       - name: Récupération du dépôt
         uses: actions/checkout@v4
 
+      # Le filet : le paquet est construit et fouillé avant tout envoi. Si
+      # un chemin interdit y entrait, le déploiement s'arrête ici.
+      - name: Contrôle du paquet Academy
+        run: node outils/paquet-academy.test.mjs
+
+      - name: Construction du paquet Academy
+        run: node outils/paquet-academy.mjs paquet-academy
+
       # Le CDN d'Hostinger impose 7 jours de cache sur le JS et le CSS, et
       # ignore les en-têtes du .htaccess : une correction mettait une semaine
-      # à atteindre les visiteurs. On estampille donc chaque fichier avec le
-      # numéro du commit : nouvelle adresse à chaque déploiement, donc
-      # rechargement immédiat, sans dépendre de l'hébergeur.
+      # à atteindre les visiteurs. On estampille donc chaque fichier du
+      # paquet avec le numéro du commit.
       - name: Estampille de version sur le JS et le CSS
         run: |
           python3 - "$GITHUB_SHA" <<'PY'
@@ -33,8 +43,7 @@ jobs:
           v = sys.argv[1][:8]
           motif = re.compile(r'((?:src|href)="[^"]*?assets/(?:js|css)/[^"?]+\.(?:js|css))"')
           touches = 0
-          for racine, _, fichiers in os.walk('.'):
-              if '/.git' in racine: continue
+          for racine, _, fichiers in os.walk('paquet-academy'):
               for f in fichiers:
                   if not f.endswith('.html'): continue
                   chemin = os.path.join(racine, f)
@@ -46,7 +55,9 @@ jobs:
           print(f'{touches} références estampillées en v={v}')
           PY
 
-      - name: Envoi FTP vers public_html
+      # Le serveur garde l'état du dernier envoi : un fichier qui y figure
+      # et n'est plus dans le paquet est SUPPRIMÉ du serveur à cet envoi.
+      - name: Envoi FTP du paquet vers public_html/academy
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
@@ -54,18 +65,5 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftps
           timeout: 120000
+          local-dir: ./paquet-academy/
           server-dir: academy/
-          exclude: |
-            **/.git*
-            **/.git*/**
-            **/.DS_Store
-            agence/**
-            fonctions/**
-            outils/**
-            docs/**
-            promo/**
-            contenu/**
-            contenu-en/**
-            README.md
-            firebase.json
-            firestore.rules

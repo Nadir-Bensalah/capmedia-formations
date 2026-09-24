@@ -87,7 +87,7 @@ export const joindreFichier = (d) => {
     corps: '<div id="zone-pdf"></div>',
     pied: '<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button><button class="btn btn-principal" type="button" data-ok>Enregistrer</button>',
   });
-  const boite = depot(m.el.querySelector('#zone-pdf'), { chemin: `projets/${d.projet}/documents/${d.type}`, max: 1, texte: 'Déposez le <strong>PDF</strong>.', aide: '' });
+  const boite = depot(m.el.querySelector('#zone-pdf'), { chemin: `projets/${d.projet}/pieces/${d.id}`, max: 1, texte: 'Déposez le <strong>PDF</strong>.', aide: '' });
   m.el.querySelector('[data-ok]').addEventListener('click', async (e) => {
     if (boite.occupe) { toast("Attendez la fin de l'envoi.", 'erreur'); return; }
     const f = boite.pieces[0];

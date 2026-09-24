@@ -14,11 +14,11 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js';
 import {
   getFirestore, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc,
-  collection, collectionGroup, query, where, orderBy, limit, onSnapshot,
+  collection, collectionGroup, query, where, orderBy, limit, startAfter, onSnapshot,
   serverTimestamp, Timestamp, arrayUnion, arrayRemove, increment, writeBatch,
 } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js';
 import {
-  getStorage, ref as refStockage, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject,
+  getStorage, ref as refStockage, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject, updateMetadata,
 } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-storage.js';
 
 /* --- Le raccordement ---------------------------------------------------- */
@@ -58,8 +58,8 @@ if (surEmulateur) {
 
 export {
   doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, collection, collectionGroup, query,
-  where, orderBy, limit, onSnapshot, serverTimestamp, Timestamp, arrayUnion, arrayRemove, increment, writeBatch,
-  refStockage, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject, signOut,
+  where, orderBy, limit, startAfter, onSnapshot, serverTimestamp, Timestamp, arrayUnion, arrayRemove, increment, writeBatch,
+  refStockage, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject, updateMetadata, signOut,
   sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink,
 };
 
@@ -687,6 +687,10 @@ export const STATUTS_FACTURE = {
   'annulee':   { libelle: 'Annulée',             voile: 'gris' },
   'avoir':     { libelle: 'Avoir',               voile: 'gris' },
 };
+/* Les statuts qu'un client peut lire. Un brouillon ne lui est jamais servi :
+   les règles refusent sa lecture, et la requête du client porte donc ce
+   filtre (sans lui, elle serait refusée en bloc). */
+export const STATUTS_PIECE_VISIBLES = [...new Set([...Object.keys(STATUTS_DEVIS), ...Object.keys(STATUTS_FACTURE)])].filter((s) => s !== 'brouillon');
 /* Une facture envoyée est déjà due : la laisser hors de cette liste la
    rendait invisible du client, qui découvrait le retard un mois plus tard. */
 export const FACTURES_DUES = ['envoyee', 'a-payer', 'partielle', 'en-retard'];
@@ -789,7 +793,20 @@ export const exigerSession = async () => {
   return s;
 };
 
+/* Tout ce qu'une session laisse dans le navigateur et qui donne un
+   pouvoir : la clé d'administration du cockpit. MESURE TRANSITOIRE : la clé
+   partagée disparaîtra au profit de l'identité de l'équipe ; d'ici là, elle
+   ne survit plus à une déconnexion. */
+export const CLES_SENSIBLES = ['suivi:cle-admin'];
+export const effacerSecretsLocaux = () => {
+  for (const cle of CLES_SENSIBLES) {
+    try { localStorage.removeItem(cle); } catch (e) { /* stockage refusé */ }
+    try { sessionStorage.removeItem(cle); } catch (e) { /* stockage refusé */ }
+  }
+};
+
 export const quitter = async () => {
+  effacerSecretsLocaux();
   await signOut(auth);
   location.replace('./');
 };
@@ -1061,7 +1078,7 @@ const TYPES_ACCEPTES = /^(image\/|video\/(mp4|quicktime|webm)$|application\/pdf$
  * l'erreur à l'écran plutôt qu'un échec silencieux. `surProgres` reçoit un
  * pourcentage.
  */
-export const envoyerPiece = async (fichier, chemin, surProgres) => {
+export const envoyerPiece = async (fichier, chemin, surProgres, metadonnees = null) => {
   if (!TYPES_ACCEPTES.test(fichier.type)) {
     throw new Error(`« ${fichier.name} » : ce type de fichier n'est pas accepté.`);
   }
@@ -1072,7 +1089,9 @@ export const envoyerPiece = async (fichier, chemin, surProgres) => {
   const nom = `${Date.now()}-${fichier.name.replace(/[^\w.\-]/g, '_')}`;
   const cible = refStockage(stockage, `${chemin}/${nom}`);
   await new Promise((ok, ko) => {
-    const tache = uploadBytesResumable(cible, fichier, { contentType: fichier.type });
+    /* Une pièce de note interne porte la marque « interne » : les règles
+       Storage refusent alors de la servir au client. */
+    const tache = uploadBytesResumable(cible, fichier, { contentType: fichier.type, ...(metadonnees ? { customMetadata: metadonnees } : {}) });
     tache.on('state_changed',
       (s) => { if (surProgres) surProgres(Math.round((s.bytesTransferred / s.totalBytes) * 100)); },
       ko, ok);
@@ -1081,3 +1100,6 @@ export const envoyerPiece = async (fichier, chemin, surProgres) => {
 };
 
 export const lienPiece = (piece) => getDownloadURL(refStockage(stockage, piece.chemin));
+
+/** Change la visibilité d'une pièce déjà envoyée (équipe seule, par les règles). */
+export const marquerPiece = (piece, visibilite) => updateMetadata(refStockage(stockage, piece.chemin), { customMetadata: { visibilite } });

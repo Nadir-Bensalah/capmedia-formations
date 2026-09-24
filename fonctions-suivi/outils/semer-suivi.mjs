@@ -45,11 +45,13 @@ async function main() {
 
   await bdd.doc('organisations/atelier-nord').set({
     nom: 'Camille Martin', entreprise: 'Atelier Nord', email: 'camille.essai@exemple.test', telephone: '', adresse: 'Bruxelles',
-    notesInternes: 'Client fondateur de Atelier. Point hebdo le mardi.', contacts: [{ nom: 'Camille Martin', email: 'camille.essai@exemple.test', role: 'owner', uid: camille }],
+    contacts: [{ nom: 'Camille Martin', email: 'camille.essai@exemple.test', role: 'owner', uid: camille }],
     membres: [camille], roles: { [camille]: 'owner' }, cree: ilYA(200), maj: ilYA(1),
   });
+  /* Les notes internes vivent hors de la fiche que le client lit. */
+  await bdd.doc('organisationsInternes/atelier-nord').set({ notesInternes: 'Client fondateur de Atelier. Point hebdo le mardi.', maj: ilYA(1) });
   await bdd.doc('organisations/boutique-sud').set({
-    nom: 'Léa Bernard', entreprise: 'Boutique Sud', email: 'lea.essai@exemple.test', telephone: '', adresse: '', notesInternes: '',
+    nom: 'Léa Bernard', entreprise: 'Boutique Sud', email: 'lea.essai@exemple.test', telephone: '', adresse: '',
     contacts: [{ nom: 'Léa Bernard', email: 'lea.essai@exemple.test', role: 'owner', uid: lea }], membres: [lea], roles: { [lea]: 'owner' }, cree: ilYA(60), maj: ilYA(3),
   });
 
@@ -60,13 +62,16 @@ async function main() {
     plateformes: ['ios', 'android', 'web', 'admin'], membres: [camille], membresOrganisation: [camille], compteur: 5,
     progression: { mode: 'jalons', valeur: 0 }, debut: ilYA(180), cible: dans(45), responsable: agent,
     pulse: { enCours: 'Corrections des retours Android', derniereLivraison: 'iOS 1.1.2', prochaineEtape: 'Validation TestFlight 1.2', attenteClient: '' },
-    sante: 'ok', budget: 28000, budgetNote: 'Forfait par phases', archive: false, ouvert: true, ouvertLe: ilYA(180), cree: ilYA(180), maj: ilYA(0, 2),
+    archive: false, ouvert: true, ouvertLe: ilYA(180), cree: ilYA(180), maj: ilYA(0, 2),
   });
+  /* Budget, note de budget, santé : réservés à l'équipe, à part. */
+  await bdd.doc('projetsInternes/atelier').set({ sante: 'ok', budget: 28000, budgetNote: 'Forfait par phases', maj: ilYA(0, 2) });
   await bdd.doc('projets/boutique').set({
     nom: 'Boutique', ref: 'BOUTIQUE', description: 'Menus de restaurant en ligne.', type: 'site-vitrine', statut: 'cadrage', organisation: 'boutique-sud',
     client: { nom: 'Léa Bernard', email: 'lea.essai@exemple.test', entreprise: 'Boutique Sud' }, plateformes: ['web'], membres: [lea], membresOrganisation: [lea], compteur: 1,
-    progression: { mode: 'manuel', valeur: 15 }, responsable: agent, pulse: {}, sante: 'attention', archive: false, ouvert: true, ouvertLe: ilYA(60), cree: ilYA(60), maj: ilYA(3),
+    progression: { mode: 'manuel', valeur: 15 }, responsable: agent, pulse: {}, archive: false, ouvert: true, ouvertLe: ilYA(60), cree: ilYA(60), maj: ilYA(3),
   });
+  await bdd.doc('projetsInternes/boutique').set({ sante: 'attention', maj: ilYA(3) });
   /* Un projet en preparation, rideau baisse : personne n'est dans
      « membres », donc les regles le refusent au client. C'est le cas qui
      doit tenir : on garnit un espace avant de le montrer. */
@@ -76,7 +81,7 @@ async function main() {
     client: { nom: 'Camille Martin', email: 'camille.essai@exemple.test', entreprise: 'Atelier Nord' },
     contacts: [{ nom: 'Camille Martin', email: 'camille.essai@exemple.test' }],
     plateformes: ['ios', 'android'], membres: [], membresOrganisation: [], compteur: 0,
-    progression: { mode: 'manuel', valeur: 0 }, responsable: agent, pulse: {}, sante: 'ok',
+    progression: { mode: 'manuel', valeur: 0 }, responsable: agent, pulse: {},
     archive: false, ouvert: false, ouvertLe: null, cree: ilYA(4), maj: ilYA(1),
   });
   await bdd.doc('projets/prepa/jalons/cadrage').set({ projet: 'prepa', titre: 'Cadrage de la refonte', phase: 'Cadrage', statut: 'a-venir', progression: 0, ordre: 1, debut: dans(7), fin: dans(30), composants: [], reports: [], cree: ilYA(4), maj: ilYA(4) });
@@ -167,12 +172,13 @@ async function main() {
 
   /* --- Les fichiers ---------------------------------------------------------- */
   const fichiers = [
-    { categorie: 'design', nom: 'maquettes-profil-v3.pdf', chemin: 'projets/atelier/documents/fichiers/maquettes.pdf', taille: 2400000, type: 'application/pdf', par: { uid: agent, nom: 'Alex Durand', cote: 'equipe' }, visibilite: 'client', version: 'v3' },
-    { categorie: 'contrats', nom: 'contrat-atelier-signe.pdf', chemin: 'projets/atelier/documents/fichiers/contrat.pdf', taille: 900000, type: 'application/pdf', par: { uid: agent, nom: 'Alex Durand', cote: 'equipe' }, visibilite: 'client', version: '' },
-    { categorie: 'captures', nom: 'capture-anniversaires.png', chemin: 'projets/atelier/documents/client/capture.png', taille: 350000, type: 'image/png', par: { uid: camille, nom: 'Camille Martin', cote: 'client' }, visibilite: 'client', version: '' },
-    { categorie: 'technique', nom: 'notes-architecture.md', chemin: 'projets/atelier/documents/fichiers/archi.md', taille: 12000, type: 'text/plain', par: { uid: agent, nom: 'Alex Durand', cote: 'equipe' }, visibilite: 'interne', version: '' },
+    { id: 'fic-maquettes', categorie: 'design', nom: 'maquettes-profil-v3.pdf', chemin: 'projets/atelier/fichiers/fic-maquettes/maquettes.pdf', taille: 2400000, type: 'application/pdf', par: { uid: agent, nom: 'Alex Durand', cote: 'equipe' }, visibilite: 'client', version: 'v3' },
+    { id: 'fic-contrat', categorie: 'contrats', nom: 'contrat-atelier-signe.pdf', chemin: 'projets/atelier/fichiers/fic-contrat/contrat.pdf', taille: 900000, type: 'application/pdf', par: { uid: agent, nom: 'Alex Durand', cote: 'equipe' }, visibilite: 'client', version: '' },
+    { id: 'fic-capture', categorie: 'captures', nom: 'capture-anniversaires.png', chemin: 'projets/atelier/fichiers/fic-capture/capture.png', taille: 350000, type: 'image/png', par: { uid: camille, nom: 'Camille Martin', cote: 'client' }, visibilite: 'client', version: '' },
+    { id: 'fic-archi', categorie: 'technique', nom: 'notes-architecture.md', chemin: 'projets/atelier/fichiers/fic-archi/archi.md', taille: 12000, type: 'text/plain', par: { uid: agent, nom: 'Alex Durand', cote: 'equipe' }, visibilite: 'interne', version: '' },
   ];
-  for (const f of fichiers) await bdd.collection('fichiers').add({ projet: 'atelier', composant: '', description: '', tags: [], archive: false, ...f, cree: ilYA(5) });
+  /* Chaque fichier est rangé sous l'identifiant de sa fiche (règles Storage). */
+  for (const { id, ...f } of fichiers) await bdd.doc(`fichiers/${id}`).set({ projet: 'atelier', composant: '', description: '', tags: [], archive: false, ...f, cree: ilYA(5) });
 
   /* --- Les versions ---------------------------------------------------------- */
   await bdd.collection('releases').add({ projet: 'atelier', composant: 'ios', plateforme: 'ios', version: '1.1.2', titre: 'Corrections et profil', statut: 'disponible', date: ilYA(6), notes: [{ type: 'correction', texte: 'Connexion Apple' }, { type: 'nouveau', texte: 'Nouveau profil' }, { type: 'amelioration', texte: 'Performance de la liste des tâches' }], liens: { store: 'https://apps.apple.com/app/atelier' }, visibilite: 'client', par: parAgent, cree: ilYA(6), maj: ilYA(6) });

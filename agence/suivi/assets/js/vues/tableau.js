@@ -30,7 +30,7 @@ import {
 } from '../noyau.js';
 import { icone, pastille, vide, sur, modale, agir, brancherPieces, copier } from '../ui.js';
 import * as magasin from '../magasin.js';
-import { K } from '../donnees.js';
+import { K, profilsTesteurs } from '../donnees.js';
 import { editer } from './editeurs.js';
 import { nommeur } from './tests.js';
 import { appelServeur, URL_SUIVI } from '../serveur.js';
@@ -127,7 +127,7 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
       parcours: rass(K.parcoursTous, K.parcours),
       regles: rass(K.reglesToutes, K.regles),
       testeurs: magasin.lire(K.testeurs) || [],
-      profils: (magasin.lire(K.profils) || []).filter((x) => x.id === 'profil').map((x) => ({ ...x, id: x._parent })),
+      profils: profilsTesteurs(env.session),
       presences: magasin.lire(K.presences) || [],
     };
   };
@@ -163,7 +163,7 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
   let empreinte = '';
   const cles = () => [K.projets, K.presences, K.robots, ...(equipe
     ? [K.scenariosTous, K.campagnesToutes, K.anomaliesToutes, K.parcoursTous, K.reglesToutes, K.testeurs]
-    : [...(magasin.lire(K.projets) || []).flatMap((p) => [K.scenarios(p.id), K.campagnes(p.id), K.anomalies(p.id), K.parcours(p.id), K.regles(p.id)]), K.profils]),
+    : [...(magasin.lire(K.projets) || []).flatMap((p) => [K.scenarios(p.id), K.campagnes(p.id), K.anomalies(p.id), K.parcours(p.id), K.regles(p.id), K.profilsTesteurs(p.id)])]),
   ...suivis];
 
   const rendre = (force = false) => {

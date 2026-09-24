@@ -3,7 +3,7 @@
 
    Tous les projets d'un coup, ou un seul. C'est la différence avec un
    onglet enfermé dans un projet : quand six testeurs déroulent une
-   campagne, la question n'est pas « où en est ForgeMe » mais « qu'est-ce
+   campagne, la question n'est pas « où en est tel projet » mais « qu'est-ce
    qui ne va pas, quelque part ».
 
    L'ordre des sections n'est pas décoratif. Ce qui ne va pas vient en
@@ -27,7 +27,7 @@ import {
   brancherPieces, lisible, menu,
 } from '../ui.js';
 import * as magasin from '../magasin.js';
-import { K, ecrire, repartir } from '../donnees.js';
+import { K, ecrire, repartir, profilsTesteurs } from '../donnees.js';
 import { bdd, collection } from '../noyau.js';
 import { editer } from './editeurs.js';
 import { appelServeur } from '../serveur.js';
@@ -35,7 +35,7 @@ import { filAriane } from '../coquille.js';
 import { monter as monterTableau } from './tableau.js';
 
 /* La mémoire des filtres tient dans l'adresse, pas dans le stockage : un
-   lien vers « les anomalies Android de ForgeMe » doit pouvoir se coller
+   lien vers « les anomalies Android de tel projet » doit pouvoir se coller
    dans un message. */
 const lire = (ctx, cle, defaut) => (ctx.requete && ctx.requete[cle]) || defaut;
 
@@ -72,10 +72,9 @@ const lireTout = (env) => {
     documents: rassembler(K.documentsTous, K.documents),
     jalons: rassembler(K.jalonsTous, K.jalons),
     testeurs: magasin.lire(K.testeurs) || [],
-    /* Le client ne lit pas le vivier, il lit les profils publics : le
-       même testeur, sans le nom ni l'adresse. Le magasin garde le parent
-       du document, qui est l'identifiant du testeur. */
-    profils: (magasin.lire(K.profils) || []).filter((x) => x.id === 'profil').map((x) => ({ ...x, id: x._parent })),
+    /* Le client ne lit pas le vivier, il lit le profil sans nom des
+       testeurs de SES projets, recopié projet par projet. */
+    profils: profilsTesteurs(env.session),
   };
 };
 
@@ -787,7 +786,7 @@ const ouvrirTesteur = (fiche, { env, projets }) => {
         <div class="groupe"><label class="etiquette-champ" for="t-prenom">Prénom</label>
           <input class="champ" id="t-prenom" value="${echapper(f.prenom || '')}" placeholder="Karim"></div>
         <div class="groupe"><label class="etiquette-champ" for="t-email">Adresse</label>
-          <input class="champ" id="t-email" type="email" value="${echapper(f.email || '')}" ${neuf ? '' : 'readonly'} placeholder="karim@exemple.fr">
+          <input class="champ" id="t-email" type="email" value="${echapper(f.email || '')}" ${neuf ? '' : 'readonly'} placeholder="karim@exemple.test">
           ${neuf ? '' : '<p class="aide">L\'adresse ne se change pas : elle est la clé de son compte.</p>'}</div>
       </div>
 
@@ -1192,9 +1191,9 @@ export const vue = async (ctx, env) => {
   const campagnesSuivies = new Set();
   const clesSuivies = () => [
     ...(env.role === 'equipe'
-      ? [K.projets, K.scenariosTous, K.campagnesToutes, K.anomaliesToutes, K.parcoursTous, K.reglesToutes, K.documentsTous, K.jalonsTous, K.testeurs]
+      ? [K.projets, K.scenariosTous, K.campagnesToutes, K.anomaliesToutes, K.parcoursTous, K.reglesToutes, K.documentsTous, K.jalonsTous, K.testeurs, K.profils]
       : [K.projets, ...(magasin.lire(K.projets) || (env.session || {}).projets || [])
-          .flatMap((p) => [K.scenarios(p.id), K.campagnes(p.id), K.anomalies(p.id), K.parcours(p.id), K.regles(p.id), K.documents(p.id), K.jalons(p.id)]), K.profils]),
+          .flatMap((p) => [K.scenarios(p.id), K.campagnes(p.id), K.anomalies(p.id), K.parcours(p.id), K.regles(p.id), K.documents(p.id), K.jalons(p.id), K.profilsTesteurs(p.id)])]),
     ...[...campagnesSuivies].flatMap((cid) => [K.appreciations(cid), K.passages(cid)]),
   ];
 

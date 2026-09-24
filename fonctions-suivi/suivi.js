@@ -589,32 +589,41 @@ exports.suiviDocumentCree = onDocumentCreated(
 exports.suiviProfilTesteur = onDocumentWritten(
   { region: REGION, document: 'testeurs/{testeurId}' },
   async (evenement) => {
+    const id = evenement.params.testeurId;
+    const avant = evenement.data.before.exists ? evenement.data.before.data() : null;
     const apres = evenement.data.after.exists ? evenement.data.after.data() : null;
-    const cible = bdd.doc(`testeurs/${evenement.params.testeurId}/public/profil`);
 
-    /* Un testeur qui n'est plus au vivier voit son profil public disparaître :
-       le laisser derrière serait une trace que plus rien ne justifie, et le
-       client continuerait de le compter parmi ceux qui testent pour lui.
+    /* Le profil sans nom vit désormais SOUS CHAQUE PROJET où le testeur est
+       inscrit (projets/<p>/profilsTesteurs/<uid>) : le client d'un projet
+       ne lit que les testeurs de son projet, et le document ne dit rien des
+       autres projets du testeur. L'ancien profil commun, lisible par tout
+       compte connecté avec la liste des projets de tous les clients, est
+       effacé à chaque passage. */
+    try { await bdd.doc(`testeurs/${id}/public/profil`).delete(); } catch (err) { /* déjà parti */ }
 
-       Deux cas, et il faut les deux : la fiche supprimée, et la fiche qui
-       reste mais devient inactive. Le retrait garde désormais la fiche pour
-       que le rapport d'une campagne sache de qui il parle, donc regarder la
-       seule disparition ne suffit plus. */
-    if (!apres || apres.actif === false) { try { await cible.delete(); } catch (err) { /* déjà parti */ } return; }
+    /* Un testeur retiré (fiche inactive) ou supprimé n'a plus de profil
+       nulle part : le client ne le compte plus parmi ceux qui testent. */
+    const actif = Boolean(apres) && apres.actif !== false;
+    const projetsApres = actif ? (Array.isArray(apres.projets) ? apres.projets.filter(Boolean).map(String) : []) : [];
+    const projetsAvant = avant && Array.isArray(avant.projets) ? avant.projets.filter(Boolean).map(String) : [];
+    const aRetirer = [...new Set(projetsAvant)].filter((p) => !projetsApres.includes(p));
 
-    const p = apres.profil || {};
-    try {
-      await cible.set({
-        sexe: p.sexe || '', age: p.age || '', fonction: p.fonction || '',
-        aisance: p.aisance || '', langue: p.langue || '',
-        mobile: apres.mobile || '',
-        plateformes: apres.plateformes || [],
-        /* Les projets servis, pour que le client retrouve les testeurs de
-           SON projet : un identifiant de projet n'identifie personne. */
-        projets: apres.projets || [],
-        maj: FieldValue.serverTimestamp(),
-      });
-    } catch (err) { console.error('Profil public non recopié', err); }
+    for (const p of aRetirer) {
+      try { await bdd.doc(`projets/${p}/profilsTesteurs/${id}`).delete(); } catch (err) { /* déjà parti */ }
+    }
+    if (!actif) return;
+    const profil = apres.profil || {};
+    for (const p of [...new Set(projetsApres)]) {
+      try {
+        await bdd.doc(`projets/${p}/profilsTesteurs/${id}`).set({
+          sexe: profil.sexe || '', age: profil.age || '', fonction: profil.fonction || '',
+          aisance: profil.aisance || '', langue: profil.langue || '',
+          mobile: apres.mobile || '',
+          plateformes: apres.plateformes || [],
+          maj: FieldValue.serverTimestamp(),
+        });
+      } catch (err) { console.error(`Profil du testeur ${id} non recopié sur ${p}`, err); }
+    }
   },
 );
 
@@ -1076,6 +1085,13 @@ async function synchroniserMembres(orgId) {
   return membres;
 }
 
+/** Les notes internes d'une organisation : hors de la fiche que ses membres
+    lisent en entier, dans organisationsInternes (équipe seule). */
+async function ecrireNotesInternes(orgId, notes) {
+  if (notes === undefined || notes === null) return;
+  await bdd.doc(`organisationsInternes/${orgId}`).set({ notesInternes: String(notes).slice(0, 8000), maj: FieldValue.serverTimestamp() }, { merge: true });
+}
+
 /** Des liens de piece : un nom, une adresse, rien d autre, dix au plus. */
 function nettoyerLiens(liste) {
   if (!Array.isArray(liste)) return [];
@@ -1138,16 +1154,17 @@ exports.suiviAdmin = onRequest(
              existe, l'invitation partira quand l'adresse sera renseignee. */
           const orgRef = await bdd.collection('organisations').add({
             nom: String(ficheClient.nom || '').trim(), entreprise: String(ficheClient.entreprise || '').trim(),
-            email: '', telephone: '', adresse: '', notesInternes: String(ficheClient.notesInternes || ''),
+            email: '', telephone: '', adresse: '',
             contacts: [], membres: [], roles: {},
             cree: FieldValue.serverTimestamp(), maj: FieldValue.serverTimestamp(),
           });
           orgId = orgRef.id;
+          await ecrireNotesInternes(orgId, ficheClient.notesInternes);
         } else {
           if (!emailPlausible(ficheClient.email)) return res.status(400).send('email du client requis');
           const orgRef = await bdd.collection('organisations').add({
             nom: String(ficheClient.nom || '').trim(), entreprise: String(ficheClient.entreprise || '').trim(),
-            email: normaliserEmail(ficheClient.email), telephone: '', adresse: '', notesInternes: '',
+            email: normaliserEmail(ficheClient.email), telephone: '', adresse: '',
             contacts: [{ nom: String(ficheClient.nom || '').trim(), email: normaliserEmail(ficheClient.email), role: 'owner', uid: null }],
             membres: [], roles: {}, cree: FieldValue.serverTimestamp(), maj: FieldValue.serverTimestamp(),
           });
@@ -1176,10 +1193,16 @@ exports.suiviAdmin = onRequest(
           membres: [], membresOrganisation: [], compteur: 0,
           progression: { mode: 'manuel', valeur: 0 },
           debut: enDate(debut), cible: enDate(cible), responsable: String(responsable || ''),
-          budget: Number.isFinite(Number(budget)) && budget !== null && budget !== '' ? Number(budget) : null, budgetNote: String(budgetNote || ''),
-          pulse: { enCours: '', derniereLivraison: '', prochaineEtape: '', attenteClient: '' }, sante: 'ok',
+          pulse: { enCours: '', derniereLivraison: '', prochaineEtape: '', attenteClient: '' },
           archive: false, cree: FieldValue.serverTimestamp(), maj: FieldValue.serverTimestamp(),
         }));
+
+        /* Le budget, sa note et la santé : réservés à Capmedia, donc hors de
+           la fiche projet que le client lit en entier. */
+        await bdd.doc(`projetsInternes/${nouveau.id}`).set({
+          budget: Number.isFinite(Number(budget)) && budget !== null && budget !== '' ? Number(budget) : null,
+          budgetNote: String(budgetNote || ''), sante: 'ok', maj: FieldValue.serverTimestamp(),
+        });
 
         /* La note d'une idée vit hors du projet, là où seule l'équipe lit :
            un client membre lit toute la fiche de son projet. */
@@ -1314,7 +1337,19 @@ exports.suiviAdmin = onRequest(
           liens: nettoyerLiens(liens),
           reponse: null, archive: false,
         });
-        const nouveau = await bdd.collection('documents').add(fiche);
+        /* L'identifiant de la pièce peut être tiré d'avance par l'interface :
+           le PDF est alors déjà rangé sous « projets/<p>/pieces/<id>/ », où
+           les règles Storage relisent le statut de CETTE pièce. */
+        let nouveau;
+        const idTire = String(req.body.idDocument || '').trim();
+        if (idTire) {
+          if (!/^[A-Za-z0-9]{15,40}$/.test(idTire)) return res.status(400).send('idDocument illisible');
+          nouveau = bdd.doc(`documents/${idTire}`);
+          if ((await nouveau.get()).exists) return res.status(409).send('cette piece existe deja');
+          await nouveau.set(fiche);
+        } else {
+          nouveau = await bdd.collection('documents').add(fiche);
+        }
 
         /* Un devis fondateur pose le projet en attente de signature, s'il
            n'a pas encore commence. Un avenant ne touche a rien. */
@@ -1409,9 +1444,14 @@ exports.suiviAdmin = onRequest(
         const paiement = await bdd.collection('paiements').add(sansIndefini({
           projet: f.projet, facture: String(facture), montant: Math.round(somme * 100) / 100,
           date: enDate(date) || FieldValue.serverTimestamp(), moyen: MOYENS.includes(moyen) ? moyen : 'autre',
-          reference: String(reference || '').slice(0, 80), note: String(note || '').slice(0, 200), statut: 'valide',
+          reference: String(reference || '').slice(0, 80), statut: 'valide',
           cree: FieldValue.serverTimestamp(),
         }));
+        /* La note d'un paiement est interne : le client lit la fiche du
+           paiement en entier, la note vit donc à part. */
+        if (String(note || '').trim()) {
+          await bdd.doc(`paiementsInternes/${paiement.id}`).set({ note: String(note).slice(0, 200), maj: FieldValue.serverTimestamp() });
+        }
         /* Le statut de la facture suit le total paye. */
         const tous = await bdd.collection('paiements').where('facture', '==', String(facture)).get();
         const paye = tous.docs.reduce((t, d) => t + (d.data().statut !== 'annule' ? Number(d.data().montant) || 0 : 0), 0);
@@ -1429,10 +1469,11 @@ exports.suiviAdmin = onRequest(
         await exigerRole(email, 'client');
         const orgRef = await bdd.collection('organisations').add(sansIndefini({
           nom: String(nom || '').trim(), entreprise: String(entreprise || '').trim(), email: normaliserEmail(email),
-          telephone: String(telephone || '').trim(), adresse: String(adresse || '').trim(), notesInternes: String(notesInternes || ''),
+          telephone: String(telephone || '').trim(), adresse: String(adresse || '').trim(),
           contacts: [{ nom: String(nom || '').trim(), email: normaliserEmail(email), role: 'owner', uid: null }],
           membres: [], roles: {}, cree: FieldValue.serverTimestamp(), maj: FieldValue.serverTimestamp(),
         }));
+        await ecrireNotesInternes(orgRef.id, notesInternes);
         await bdd.collection('audit').add({ action: 'organisation-creee', organisation: orgRef.id, date: FieldValue.serverTimestamp() });
         return res.status(200).json({ ok: true, id: orgRef.id });
       }
@@ -1450,9 +1491,10 @@ exports.suiviAdmin = onRequest(
         await orgRef.update(sansIndefini({
           nom: nom !== undefined ? String(nom).trim() : undefined, entreprise: entreprise !== undefined ? String(entreprise).trim() : undefined,
           email: email !== undefined ? normaliserEmail(email) : undefined, telephone: telephone !== undefined ? String(telephone).trim() : undefined,
-          adresse: adresse !== undefined ? String(adresse).trim() : undefined, notesInternes: notesInternes !== undefined ? String(notesInternes) : undefined,
+          adresse: adresse !== undefined ? String(adresse).trim() : undefined,
           maj: FieldValue.serverTimestamp(),
         }));
+        if (notesInternes !== undefined) await ecrireNotesInternes(String(id), notesInternes);
         return res.status(200).json({ ok: true });
       }
 
@@ -1556,7 +1598,6 @@ exports.suiviAdmin = onRequest(
           if (!p.progression || typeof p.progression !== 'object') changements.progression = { mode: 'manuel', valeur: 0 };
           if (!p.pulse || typeof p.pulse !== 'object') changements.pulse = { enCours: '', derniereLivraison: '', prochaineEtape: '', attenteClient: '' };
           if (!p.type) changements.type = 'application-mobile';
-          if (!p.sante) changements.sante = 'ok';
           if (!Array.isArray(p.membresOrganisation)) changements.membresOrganisation = [];
           if (typeof p.description !== 'string') changements.description = '';
           if (p.archive === undefined) changements.archive = false;
@@ -2108,12 +2149,15 @@ exports.suiviAdmin = onRequest(
             nom: p.nom, description: p.description, type: p.type, statut: p.statut,
             plateformes: Array.isArray(p.plateformes) ? p.plateformes.filter((x) => PLATEFORMES_CONNUES.includes(x)) : undefined,
             debut: enDate(p.debut), cible: enDate(p.cible), progression: p.progression, pulse: p.pulse,
-            sante: p.sante, budget: p.budget, budgetNote: p.budgetNote, silence: p.silence,
+            silence: p.silence,
             interne: p.interne, contacts: Array.isArray(p.contacts) ? p.contacts : undefined,
             client: p.client, organisation: p.organisation, ref: p.ref, logo: p.logo,
             maj: FieldValue.serverTimestamp(),
           }));
           compte.projet = 1;
+          /* Santé et budget : dans projetsInternes, jamais dans la fiche lue par le client. */
+          const interne = sansIndefini({ sante: p.sante, budget: p.budget, budgetNote: p.budgetNote });
+          if (Object.keys(interne).length) await bdd.doc(`projetsInternes/${String(id)}`).set({ ...interne, maj: FieldValue.serverTimestamp() }, { merge: true });
         }
 
         /* Chaque collection est reecrite a l identique si l element porte un

@@ -730,6 +730,20 @@ function relanceRetenue(projet, maintenant = Date.now()) {
 exports._relanceRetenue = relanceRetenue;
 exports._pointsEnAttente = pointsEnAttente;
 
+/* ==========================================================================
+   L'annuaire : le seul NOM d'un membre de l'équipe, lisible par un client
+   pour mettre un nom sur le responsable de son projet. La fiche d'équipe
+   (adresse, rôle) n'est plus lisible hors de l'équipe. Un membre retiré ou
+   inactif disparaît de l'annuaire.
+   ========================================================================== */
+
+exports.hubEquipeAnnuaire = onDocumentWritten({ region: REGION, document: 'equipe/{uid}' }, async (evenement) => {
+  const apres = evenement.data.after.exists ? evenement.data.after.data() : null;
+  const cible = bdd.doc(`annuaire/${evenement.params.uid}`);
+  if (!apres || apres.actif === false) { try { await cible.delete(); } catch (err) { /* déjà parti */ } return; }
+  await cible.set({ nom: String(apres.nom || '').slice(0, 120), maj: FieldValue.serverTimestamp() });
+});
+
 exports.hubRelanceHebdo = onSchedule(
   { region: REGION, schedule: 'every monday 09:00', timeZone: 'Europe/Paris' },
   async () => {

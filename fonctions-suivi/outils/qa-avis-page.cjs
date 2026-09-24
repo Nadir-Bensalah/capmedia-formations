@@ -51,8 +51,8 @@ const nombre=(page,sel)=>page.evaluate((s)=>document.querySelectorAll(s).length,
   await passage('uid-karim','DI-07','web','ok','',[],'Chrome');
   await poser(`projets/atelier/campagnes/${cid}/appreciations/uid-karim`,{'impression.sert-a-quoi':S('À gérer mes tâches et mes récurrences'),'impression.compris':N(5),'esthetique.belle':N(4),'facilite.recommande':N(8),'argent.paierait':S('Oui'),'argent.suspect':N(2),'argent.cher':N(9),'utilite.vraie-vie':S('Oui, tous les jours'),'libre.garder':S('Les récurrences, le calendrier, les objectifs')});
   await poser(`projets/atelier/campagnes/${cid}/appreciations/uid-sonia`,{'impression.sert-a-quoi':S('Un agenda avec des objectifs'),'impression.compris':N(4),'esthetique.belle':N(3),'facilite.recommande':N(7),'argent.paierait':S('Peut-être'),'argent.suspect':N(3),'argent.cher':N(12),'utilite.vraie-vie':S('Oui, de temps en temps'),'libre.garder':S('Le calendrier, la simplicité, les couleurs')});
-  /* Le profil public, recopié par le serveur : c'est lui que le client lit. */
-  for(let i=0;i<30;i++){const p=await lire('testeurs/uid-sonia/public/profil');if(p&&p.fields&&p.fields.projets)break;await pause(700);}
+  /* Le profil sans nom, recopié par le serveur sous le projet : c'est lui que le client lit. */
+  for(let i=0;i<30;i++){const p=await lire('projets/atelier/profilsTesteurs/uid-sonia');if(p&&p.fields)break;await pause(700);}
 
   const nav=await chromium.launch();
   const page=await (await nav.newContext({viewport:{width:1500,height:1100}})).newPage();

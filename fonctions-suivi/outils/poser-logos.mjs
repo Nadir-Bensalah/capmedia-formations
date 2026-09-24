@@ -7,7 +7,7 @@
    pose à la création d'un projet, est écartée : la même image sur cinq
    projets ne dit rien et trompe l'œil.
 
-     ADMIN_CLE=... node fonctions-suivi/outils/poser-logos.mjs <table.tsv>
+     ADMIN_CLE=... node fonctions-suivi/outils/poser-logos.mjs fonctions-suivi/outils/donnees-locales/icones-projets.tsv
    La table associe une référence de projet à un chemin d'image.
    ========================================================================== */
 
@@ -21,7 +21,7 @@ const PORTE = process.env.PORTE_SUIVI
 const TABLE = process.argv[2];
 
 if (!CLE || !TABLE) {
-  console.error('Usage : ADMIN_CLE=... node fonctions-suivi/outils/poser-logos.mjs <table.tsv>');
+  console.error('Usage : ADMIN_CLE=... node fonctions-suivi/outils/poser-logos.mjs fonctions-suivi/outils/donnees-locales/icones-projets.tsv');
   process.exit(1);
 }
 

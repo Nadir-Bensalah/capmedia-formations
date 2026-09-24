@@ -4,10 +4,10 @@
    la fiche de la demande.
    ========================================================================== */
 
-import { echapper, depuis, dateHeure, parDateDesc, bdd, collection, query, orderBy, limit } from '../noyau.js';
+import { echapper, depuis, dateHeure, parDateDesc } from '../noyau.js';
 import { icone, avatarProjet, vide, squelette, titrePage, toast, depot, agir, messageHtml, brancherPieces, sur } from '../ui.js';
 import * as magasin from '../magasin.js';
-import { K, ecrire, nonLusProjet } from '../donnees.js';
+import { K, ecrire, nonLusProjet, requeteMessages, messagesDuProjet, lireMessagesAnterieurs, FENETRE_MESSAGES } from '../donnees.js';
 import { filAriane } from '../coquille.js';
 import { naviguer } from '../routeur.js';
 
@@ -26,12 +26,19 @@ export const vue = async (ctx, env) => {
   const abonnerMessages = (id) => {
     if (abonnes.has(id)) return;
     abonnes.add(id);
-    lot.abonner(K.messages(id), () => query(collection(bdd, 'projets', id, 'messages'), orderBy('date', 'asc'), limit(300)));
+    lot.abonner(K.messages(id), () => requeteMessages(id));
     lot.sur(K.messages(id), planifier);
   };
   let composeur = null;
   let boite = null;
   let dernierRendu = '';
+  /* L'historique plus ancien que la fenêtre en direct, chargé à la demande :
+     par projet, les messages déjà lus (dans l'ordre) et si le début de la
+     conversation est atteint. */
+  const anciens = new Map();
+  const PAGE = 50;
+  let enChargement = false;
+  let garderDefilement = null;
 
   const rendre = () => {
     const liste = projets();
@@ -46,10 +53,16 @@ export const vue = async (ctx, env) => {
     if (pid && !liste.some((p) => p.id === pid) && liste[0]) pid = liste[0].id;
     const profil = magasin.lire(K.profil);
     const courant = liste.find((p) => p.id === pid);
-    const messages = courant ? (magasin.lire(K.messages(pid)) || []) : [];
+    const recents = courant ? messagesDuProjet(pid) : [];
+    const historique = anciens.get(pid) || { messages: [], debutAtteint: false };
+    const vus = new Set(recents.map((m) => m.id));
+    const messages = [...historique.messages.filter((m) => !vus.has(m.id)), ...recents];
+    /* Il reste plus ancien tant que la fenêtre en direct est pleine et que
+       le début de la conversation n'a pas été atteint. */
+    const resteAvant = !historique.debutAtteint && (historique.messages.length > 0 || recents.length >= FENETRE_MESSAGES);
     const brouillon = composeur ? composeur.value : '';
 
-    const empreinte = `${pid}|${liste.length}|${messages.length}|${messages[messages.length - 1] ? messages[messages.length - 1].id : ''}`;
+    const empreinte = `${pid}|${liste.length}|${messages.length}|${messages[messages.length - 1] ? messages[messages.length - 1].id : ''}|${resteAvant}`;
     if (empreinte === dernierRendu) { return; }
     dernierRendu = empreinte;
 
@@ -59,7 +72,7 @@ export const vue = async (ctx, env) => {
     sortie.innerHTML = `<div class="page">
       <div class="page-tete"><div><h1>Messages</h1><p class="chapo">${equipe ? 'Une conversation par projet, avec le client.' : 'Une conversation par projet, directement avec Capmedia. Pour une anomalie ou une demande précise, préférez une demande : elle est suivie jusqu\'au bout.'}</p></div></div>
       ${liste.length ? `<div class="grille" style="grid-template-columns:${liste.length > 1 ? 'minmax(0,280px) minmax(0,1fr)' : 'minmax(0,1fr)'}">
-        ${liste.length > 1 ? `<div class="liste" style="align-self:start">${liste.map((p) => { const nb = nonLusProjet(magasin.lire(K.messages(p.id)) || [], profil, p.id, uid); const dernier = (magasin.lire(K.messages(p.id)) || []).slice(-1)[0]; return `
+        ${liste.length > 1 ? `<div class="liste" style="align-self:start">${liste.map((p) => { const nb = nonLusProjet(messagesDuProjet(p.id), profil, p.id, uid); const dernier = messagesDuProjet(p.id).slice(-1)[0]; return `
           <a class="ligne${p.id === pid ? ' actif' : ''}${nb ? ' non-lu' : ''}" href="#/messages/${echapper(p.id)}" style="${p.id === pid ? 'background:var(--fond-2)' : ''}">
             ${avatarProjet(p)}
             <span class="ligne-corps"><span class="ligne-titre">${echapper(p.nom)}</span><span class="ligne-sous tronque" style="display:block">${dernier ? echapper(`${dernier.de && dernier.de.cote === 'equipe' ? 'Capmedia' : (dernier.de || {}).nom || ''} : ${dernier.texte || ''}`) : 'Aucun message'}</span></span>
@@ -68,6 +81,7 @@ export const vue = async (ctx, env) => {
         <section class="carte" style="display:flex;flex-direction:column;min-height:60vh">
           <div class="rang-espace" style="padding-bottom:12px;border-bottom:1px solid var(--trait)"><div class="rang">${avatarProjet(courant, 'petit')}<p class="t-titre-3">${echapper(courant.nom)}</p></div><a class="t-petit" href="#/projets/${echapper(pid)}">Ouvrir le projet</a></div>
           <div class="fil" id="fil" style="flex:1;padding:16px 0;overflow-y:auto;max-height:60vh">
+            ${resteAvant ? `<p class="fil-plus-anciens"><button class="btn btn-fantome btn-petit" type="button" data-plus-anciens>Voir les messages plus anciens</button></p>` : ''}
             ${messages.length ? messages.map((m) => messageHtml(m, { moi: uid })).join('') : `<div class="vide vide--compact"><span class="vide-icone">${icone('messages')}</span><p class="vide-titre">Commencez la conversation</p><p class="vide-texte">${equipe ? 'Le client reçoit un e-mail à chaque message.' : 'Capmedia reçoit un e-mail à chaque message et vous répond ici.'}</p></div>`}
           </div>
           <form class="composer" id="forme-message" novalidate>
@@ -95,8 +109,30 @@ export const vue = async (ctx, env) => {
       });
     }
     const fil = sortie.querySelector('#fil');
-    if (fil) fil.scrollTop = fil.scrollHeight;
+    /* Après un chargement d'historique, on garde sous les yeux le message
+       qu'on lisait ; sinon on descend au plus récent. */
+    if (fil && garderDefilement !== null) { fil.scrollTop = fil.scrollHeight - garderDefilement; garderDefilement = null; } else if (fil) fil.scrollTop = fil.scrollHeight;
   };
+
+  const chargerPlusAnciens = async () => {
+    if (enChargement || !pid) return;
+    const historique = anciens.get(pid) || { messages: [], debutAtteint: false };
+    const recents = messagesDuProjet(pid);
+    const plusAncien = historique.messages[0] || recents[0];
+    if (!plusAncien || !plusAncien.date) return;
+    enChargement = true;
+    try {
+      const page = await lireMessagesAnterieurs(pid, plusAncien.date, PAGE);
+      anciens.set(pid, { messages: [...page, ...historique.messages], debutAtteint: page.length < PAGE });
+      const fil = sortie.querySelector('#fil');
+      garderDefilement = fil ? fil.scrollHeight - fil.scrollTop : null;
+      dernierRendu = '';
+      rendre();
+    } catch (e) {
+      toast("L'historique n'a pas pu être chargé.", 'erreur');
+    } finally { enChargement = false; }
+  };
+  const gestesHistorique = sur(sortie, 'click', '[data-plus-anciens]', () => chargerPlusAnciens());
 
   let minuteur = null;
   const planifier = () => { clearTimeout(minuteur); minuteur = setTimeout(rendre, 40); };
@@ -104,7 +140,7 @@ export const vue = async (ctx, env) => {
   lot.sur(K.profil, planifier);
   brancherPieces(sortie);
   planifier();
-  return () => { clearTimeout(minuteur); lot.fin(); };
+  return () => { clearTimeout(minuteur); gestesHistorique(); lot.fin(); };
 };
 
-void dateHeure; void parDateDesc; void naviguer; void sur;
+void dateHeure; void parDateDesc; void naviguer;

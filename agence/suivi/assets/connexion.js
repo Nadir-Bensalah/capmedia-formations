@@ -19,6 +19,7 @@ import {
   auth, session, $, echapper, quitter, surEmulateur,
   isSignInWithEmailLink, signInWithEmailLink, sendSignInLinkToEmail,
 } from './js/noyau.js';
+import { traduireRetour } from './js/retour.js';
 
 const PORTE = surEmulateur
   ? 'http://127.0.0.1:5001/capmedia-1f90d/europe-west1/suiviConnexion'
@@ -75,14 +76,12 @@ const orienter = async () => {
      refusait alors l'accès et redirigeait ailleurs, ce qui donnait
      l'impression que la porte se trompait. Une destination d'un autre
      espace est ignorée en silence, et le compte va chez lui. */
-  const demande = new URLSearchParams(location.search).get('retour');
-  if (sien && demande && /^\/suivi\/[\w./?=&#%-]*$/.test(demande)) {
-    const page = (demande.split('?')[0].split('#')[0].replace(/^\/suivi\//, '').replace(/\/$/, '') || 'hub');
-    const espace = { cockpit: './cockpit', testeur: './testeur', hub: './hub' };
-    /* Une page de partage (projet, ticket) n'est pas un espace : elle sait
-       elle-même où renvoyer, on la laisse passer. */
-    if (!espace[page] || espace[page] === sien) { location.replace(demande); return; }
-  }
+  /* Une destination d'un autre espace (le lien « hub#/demande/X » reçu
+     par un membre de l'équipe) est ramenée dans l'espace de ce compte, avec
+     sa route : c'est ce qui fait qu'un lien d'e-mail ouvre la bonne fiche
+     même après un passage par la porte. */
+  const destination = traduireRetour(new URLSearchParams(location.search).get('retour'), sien);
+  if (destination) { location.replace(destination); return; }
 
   if (sien) { location.replace(sien); return; }
 
