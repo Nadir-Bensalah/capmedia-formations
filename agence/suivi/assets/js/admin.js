@@ -27,6 +27,7 @@ import * as documents from './vues/documents.js';
 import * as maintenance from './vues/maintenance.js';
 import * as adminActivite from './vues/admin-activite.js';
 import * as adminArchives from './vues/admin-archives.js';
+import * as adminAFaire from './vues/admin-a-faire.js';
 import * as adminParametres from './vues/admin-parametres.js';
 import * as nouveauProjet from './vues/nouveau-projet.js';
 import * as parametres from './vues/parametres.js';
@@ -93,6 +94,9 @@ const construireNavigation = () => {
       items: [
         { chemin: '/clients', libelle: 'Clients', icone: 'entreprise', compte: { total: organisations.length } },
         { chemin: '/projets', libelle: 'Projets', icone: 'projets', compte: { total: projets.filter((p) => projetEstActif(p) && !p.interne && p.ouvert !== false).length } },
+        /* Les idées et les projets mis de côté : rangés à part, jamais comptés
+           dans le portefeuille en cours. */
+        { chemin: '/a-faire', libelle: 'Projets à faire', icone: 'ampoule', compte: { total: projets.filter((p) => p.aFaire && !p.archive).length } },
         { chemin: '/nouveaux-projets', libelle: 'Nouveaux projets', icone: 'sparkle', compte: { total: preprojets, neuf: nouveauxPreprojets } },
       ],
     },
@@ -158,11 +162,14 @@ enregistrerRecherche((terme) => {
   if (!terme) {
     items.push({ groupe: 'Créer', libelle: 'Nouveau projet', icone: 'plus', chemin: '/projets/nouveau' });
     items.push({ groupe: 'Créer', libelle: 'Nouveau client', icone: 'entreprise', chemin: '/clients/nouveau' });
+    items.push({ groupe: 'Créer', libelle: 'Noter une idée', icone: 'ampoule', chemin: '/a-faire?noter=1' });
     items.push({ groupe: 'Aller à', libelle: 'Demandes à traiter', icone: 'inbox', chemin: '/demandes' });
     items.push({ groupe: 'Aller à', libelle: 'Validations attendues', icone: 'valider', chemin: '/validations' });
   }
   (magasin.lire(K.organisations) || []).forEach((o) => items.push({ groupe: 'Clients', libelle: o.nom, sous: o.entreprise, icone: 'entreprise', chemin: `/clients/${o.id}` }));
-  projets.forEach((p) => items.push({ groupe: 'Projets', libelle: p.nom, sous: p.ref, icone: 'projets', chemin: `/projets/${p.id}` }));
+  projets.forEach((p) => items.push(p.aFaire && !p.archive
+    ? { groupe: 'Projets à faire', libelle: p.nom, sous: p.description || p.ref, icone: 'ampoule', chemin: `/a-faire/${p.id}` }
+    : { groupe: 'Projets', libelle: p.nom, sous: p.ref, icone: 'projets', chemin: `/projets/${p.id}` }));
   (magasin.lire(K.ticketsTous) || []).forEach((t) => items.push({ groupe: 'Demandes', libelle: t.titre, sous: `${t.numero || ''} ${nomProjet(t.projet)}`.trim(), icone: 'demandes', chemin: `/projets/${t.projet}/demandes/${t.id}` }));
   (magasin.lire(K.tachesToutes) || []).forEach((t) => items.push({ groupe: 'Tâches', libelle: t.titre, sous: nomProjet(t.projet), icone: 'taches', chemin: `/projets/${t.projet}/taches/${t.id}` }));
   (magasin.lire(K.documentsTous) || []).forEach((d) => items.push({ groupe: 'Devis et factures', libelle: `${d.numero || ''} ${d.libelle || ''}`.trim(), sous: nomProjet(d.projet), icone: 'receipt', chemin: `/finances/${d.id}` }));
@@ -178,6 +185,8 @@ definir([
   { chemin: '/clients/:id', vue: (ctx) => adminClients.detail(ctx, env) },
   { chemin: '/projets', vue: (ctx) => adminProjets.liste(ctx, env) },
   { chemin: '/projets/nouveau', vue: (ctx) => adminProjets.nouveau(ctx, env) },
+  { chemin: '/a-faire', vue: (ctx) => adminAFaire.liste(ctx, env) },
+  { chemin: '/a-faire/:id', vue: (ctx) => adminAFaire.detail(ctx, env) },
   { chemin: '/projets/:id', cle: (c) => `projet:${c.params.id}`, vue: (ctx) => projet.vue({ ...ctx, onglet: 'apercu' }, env) },
   { chemin: '/projets/:id/nouvelle-demande', vue: (ctx) => demande.nouvelle(ctx, env) },
   { chemin: '/projets/:id/demandes/:tid', vue: (ctx) => demande.detail(ctx, env) },

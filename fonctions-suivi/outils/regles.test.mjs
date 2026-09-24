@@ -562,6 +562,23 @@ await doit("L'équipe voit les jetons de robot (leur empreinte)", getDocs(collec
 await refuse('Camille ne voit pas les jetons', getDocs(collection(camille(), 'robots')));
 await refuse("Personne ne pose un jeton depuis le navigateur", setDoc(doc(equipe(), 'robots/x'), { projet: 'atelier' }));
 
+console.log('\n== Les projets à faire : le drapeau, et la note hors du projet');
+await doit("L'équipe range un projet dans les projets à faire", updateDoc(doc(equipe(), 'projets/atelier'), { aFaire: true }));
+await doit("L'équipe le remet dans les projets actuels", updateDoc(doc(equipe(), 'projets/atelier'), { aFaire: false }));
+await refuse("Le drapeau n'est qu'un oui ou un non", updateDoc(doc(equipe(), 'projets/atelier'), { aFaire: 'oui' }));
+await refuse('Camille ne range pas son projet dans les projets à faire', updateDoc(doc(camille(), 'projets/atelier'), { aFaire: true }));
+await doit("L'équipe note une idée", setDoc(doc(equipe(), 'idees/atelier'), { texte: '## Vision\nUne fortune virtuelle.', par: AGENT, maj: serverTimestamp() }));
+await doit("L'équipe la relit", getDoc(doc(equipe(), 'idees/atelier')));
+await doit("L'équipe liste toutes ses idées", getDocs(collection(equipe(), 'idees')));
+await doit("Une note longue de 60 000 signes passe", setDoc(doc(equipe(), 'idees/atelier'), { texte: 'x'.repeat(60000), par: AGENT, maj: serverTimestamp() }));
+await refuse('Une note sans fin ne passe pas', setDoc(doc(equipe(), 'idees/atelier'), { texte: 'x'.repeat(60001), par: AGENT, maj: serverTimestamp() }));
+await refuse('Une note ne porte pas de champ en plus', setDoc(doc(equipe(), 'idees/atelier'), { texte: 'x', par: AGENT, maj: serverTimestamp(), client: 'camille' }));
+await refuse('Camille ne lit pas la note, même sur son propre projet', getDoc(doc(camille(), 'idees/atelier')));
+await refuse('Camille ne liste pas les idées', getDocs(collection(camille(), 'idees')));
+await refuse("Camille n'écrit pas de note", setDoc(doc(camille(), 'idees/atelier'), { texte: 'x', par: CAMILLE, maj: serverTimestamp() }));
+await refuse('Karim, testeur, ne lit pas les idées', getDocs(collection(karim(), 'idees')));
+await refuse('Un visiteur ne lit pas les idées', getDoc(doc(anonyme(), 'idees/atelier')));
+
 console.log(`\n${ok} contrôle(s) conforme(s)${ecarts.length ? `, ${ecarts.length} ÉCART(S) :\n  - ${ecarts.join('\n  - ')}` : ''}`);
 await env.cleanup();
 process.exit(ecarts.length ? 1 : 0);

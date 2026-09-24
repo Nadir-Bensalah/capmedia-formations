@@ -39,19 +39,23 @@ export const liste = async (ctx, env) => {
     const nomOrg = (id) => ((organisations.find((o) => o.id === id) || {}).entreprise || (organisations.find((o) => o.id === id) || {}).nom || '');
     /* Mes propres projets se rangent à part : ce ne sont pas des affaires
        clientes, et les mêler fausserait la lecture du portefeuille. */
+    /* Les projets à faire ont leur page : ils ne se mêlent pas aux projets
+       en cours, sinon une idée notée un soir gonflerait le portefeuille. */
+    const aFaire = projets.filter((p) => p.aFaire && !p.archive).length;
+    const courants = projets.filter((p) => !p.aFaire);
     const groupes = {
       /* Ce qui se prépare encore, rideau baissé : c'est là qu'on garnit un
          espace avant de le montrer, et c'est le premier écran à regarder. */
-      prepa: projets.filter((p) => !p.interne && !p.archive && p.ouvert === false),
-      actifs: projets.filter((p) => projetEstActif(p) && !p.interne && p.ouvert !== false),
-      maison: projets.filter((p) => p.interne && !p.archive),
-      tous: projets.filter((p) => !p.archive),
-      termines: projets.filter((p) => !p.archive && statutProjet(p) === 'termine'),
+      prepa: courants.filter((p) => !p.interne && !p.archive && p.ouvert === false),
+      actifs: courants.filter((p) => projetEstActif(p) && !p.interne && p.ouvert !== false),
+      maison: courants.filter((p) => p.interne && !p.archive),
+      tous: courants.filter((p) => !p.archive),
+      termines: courants.filter((p) => !p.archive && statutProjet(p) === 'termine'),
       archives: projets.filter((p) => p.archive),
     };
     const liste = groupes[etat.filtre] || groupes.actifs;
     sortie.innerHTML = `<div class="page">
-      <div class="page-tete"><div><h1>Projets</h1><p class="chapo">${pluriel(groupes.actifs.length, 'projet client actif', 'projets clients actifs')} et ${pluriel(groupes.maison.length, 'projet à moi', 'projets à moi')}, sur ${projets.length} au total.</p></div><div class="actions"><a class="btn btn-principal" href="#/projets/nouveau">${icone('plus')} Nouveau projet</a></div></div>
+      <div class="page-tete"><div><h1>Projets</h1><p class="chapo">${pluriel(groupes.actifs.length, 'projet client actif', 'projets clients actifs')} et ${pluriel(groupes.maison.length, 'projet à moi', 'projets à moi')}, sur ${projets.length} au total${aFaire ? `, dont <a href="#/a-faire">${pluriel(aFaire, 'projet à faire', 'projets à faire')}</a> ${aFaire > 1 ? 'rangés' : 'rangé'} à part` : ''}.</p></div><div class="actions"><a class="btn btn-principal" href="#/projets/nouveau">${icone('plus')} Nouveau projet</a></div></div>
       <div class="filtres" style="margin-bottom:16px">${[['prepa', 'En préparation'], ['actifs', 'Clients'], ['maison', 'Mes projets'], ['tous', 'Tous'], ['termines', 'Terminés'], ['archives', 'Archivés']].map(([cle, lib]) => `<button class="filtre${etat.filtre === cle ? ' actif' : ''}" type="button" data-filtre="${cle}">${lib}<span class="compte">${groupes[cle].length}</span></button>`).join('')}</div>
       ${liste.length ? `<div class="liste">${liste.map((p) => { const prog = progressionProjet(p, jalons.filter((j) => j.projet === p.id), { taches: taches.filter((t) => t.projet === p.id) }); const ouverts = tickets.filter((t) => t.projet === p.id && !['resolu', 'ferme', 'refuse', 'annulee'].includes(t.statut)).length; return ligne({ href: `#/projets/${echapper(p.id)}`, titre: `<span class="rang" style="gap:10px">${avatarProjet(p, 'petit')} ${echapper(p.nom)} <span class="t-3 t-petit" style="font-weight:400">${echapper(p.ref || '')}</span></span>`, sous: echapper([p.interne ? 'Mon projet' : (nomOrg(p.organisation) || (p.client || {}).entreprise || (p.client || {}).nom), p.cible ? `cible ${dateCourte(p.cible)}` : '', ouverts ? pluriel(ouverts, 'demande ouverte', 'demandes ouvertes') : ''].filter(Boolean).join(' · ')), fin: `${!p.interne && p.ouvert === false ? '<span class="puce" data-astuce="Le client n a pas encore acces"><i></i>Fermé</span>' : ''}${jetonsPlateformes(p.plateformes)}<span style="width:90px">${progressionOuPas(prog)}</span>${pastille(STATUTS_PROJET, statutProjet(p))}${verdictHtml(verdictDelai(p.cible, { clos: statutProjet(p) === 'termine', risques: risquesProjet({ jalons: jalons.filter((j) => j.projet === p.id), taches: taches.filter((t) => t.projet === p.id) }) }), { vide: false, detail: false })}` }); }).join('')}</div>` : vide({ icone: 'projets', titre: 'Aucun projet ici', compact: true })}
     </div>`;

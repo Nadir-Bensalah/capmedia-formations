@@ -141,13 +141,18 @@ service cloud.firestore {
              'contacts', 'interne',
              // L'histoire de la date cible : chaque report, son motif, sa
              // date et son auteur. Le client la lit, c'est tout l'objet.
-             'reports'
+             'reports',
+             // Rangé dans « Projets à faire » : une idée, ou un projet mis
+             // de côté. Un simple drapeau, qui ne touche ni au statut ni à
+             // l'accès du client.
+             'aFaire'
              // « ouvert », « membres » et « membresOrganisation » restent
              // absents de cette liste : lever le rideau rattache des comptes
              // et recalcule des jetons, cela n'appartient qu'au serveur.
            ])
         && (!('reports' in request.resource.data)
             || (request.resource.data.reports is list && request.resource.data.reports.size() <= 20))
+        && (!('aFaire' in request.resource.data) || request.resource.data.aFaire is bool)
         && texteRequis(request.resource.data.nom, 120)
         && request.resource.data.statut in ['brouillon', 'prospect', 'devis-envoye', 'devis-signe',
                                             'cadrage', 'planifie', 'en-cours', 'attente-client',
@@ -803,6 +808,18 @@ service cloud.firestore {
           allow write:  if false;
         }
       }
+    }
+
+    // La note d'un projet à faire : l'idée telle qu'on l'a en tête. Elle
+    // vit hors du projet, parce qu'un client membre lit toute la fiche de
+    // son projet : une note posée là lui serait lisible, même sans écran
+    // pour la montrer. Ici, seule l'équipe lit et écrit.
+    match /idees/{projetId} {
+      allow read:   if estEquipe();
+      allow create, update: if estEquipe()
+        && request.resource.data.keys().hasOnly(['texte', 'par', 'maj'])
+        && texteBorne(request.resource.data.texte, 60000);
+      allow delete: if estEquipe();
     }
 
     // Les jetons des robots de tests. Seule leur empreinte est ici : le

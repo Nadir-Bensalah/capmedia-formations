@@ -613,6 +613,9 @@ exports.hubProjetModifie = onDocumentUpdated({ region: REGION, document: 'projet
   if (pb.prochaineEtape && pa.prochaineEtape !== pb.prochaineEtape) await activite({ projet: projetId, type: 'projet', texte: `a fixé la prochaine étape : ${pb.prochaineEtape}`, lien });
   if (pb.derniereLivraison && pa.derniereLivraison !== pb.derniereLivraison) await activite({ projet: projetId, type: 'projet', texte: `a livré : ${pb.derniereLivraison}`, lien });
   if (avant.archive !== apres.archive) await activite({ projet: projetId, type: 'projet', texte: apres.archive ? 'a archivé le projet' : 'a restauré le projet', lien, visibilite: 'interne' });
+  /* Ranger un projet dans les projets à faire, ou l'en sortir : une affaire
+     interne, que le client n'a pas à lire dans son fil. */
+  if (Boolean(avant.aFaire) !== Boolean(apres.aFaire)) await activite({ projet: projetId, type: 'projet', texte: apres.aFaire ? 'a rangé le projet dans les projets à faire' : 'a sorti le projet des projets à faire', lien, visibilite: 'interne' });
 
   /* Une date de livraison qui bouge est l'événement que le client cherchait
      en nous écrivant. Elle laisse une trace datée, avec son motif, et une

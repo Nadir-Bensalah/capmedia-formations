@@ -86,6 +86,8 @@ export const K = {
   sessions: (uid) => `sessions:${uid}`,
   executions: (p) => `executions:${p}`,
   robots: 'robots',
+  /* Les notes des projets à faire, hors des projets : équipe seule. */
+  idees: 'idees',
   audit: 'audit',
   envois: 'envois',
 };
@@ -386,6 +388,8 @@ export const ecrire = {
 
   /* --- Ce que l'équipe écrit directement ------------------------------ */
   majProjet: (pid, changements) => updateDoc(doc(bdd, 'projets', pid), nettoyer({ ...changements, maj: serverTimestamp() })),
+  /* La note d'un projet à faire, réécrite entière à chaque fois. */
+  noterIdee: (pid, texte, uid) => setDoc(doc(bdd, 'idees', pid), { texte: String(texte || ''), par: uid, maj: serverTimestamp() }),
 
   creerComposant: (pid, d) => addDoc(col('projets', pid, 'composants'), nettoyer({
     lien: d.lien || '',

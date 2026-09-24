@@ -269,7 +269,9 @@ export const statutProjet = (p) => {
   if (STATUTS_PROJET[brut]) return brut;
   return ALIAS_STATUT_PROJET[brut] || 'en-cours';
 };
-export const projetEstActif = (p) => Boolean(p) && !p.archive && !PROJETS_CLOS.includes(statutProjet(p));
+/* Un projet rangé dans les projets à faire n'est pas en cours, quel que
+   soit son statut : il attend qu'on le démarre. */
+export const projetEstActif = (p) => Boolean(p) && !p.archive && !p.aFaire && !PROJETS_CLOS.includes(statutProjet(p));
 
 export const TYPES_PROJET = {
   'application-mobile': 'Application mobile',

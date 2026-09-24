@@ -26,6 +26,7 @@ import { monterBulle } from '../bulle.js';
 import { editer, supprimer } from './editeurs.js';
 import { appelServeur } from '../serveur.js';
 import { activiteHtml } from './accueil.js';
+import { basculerAFaire } from './admin-a-faire.js';
 
 const ONGLETS = [
   { cle: 'apercu', libelle: 'Aperçu', icone: 'accueil' },
@@ -131,6 +132,7 @@ export const vue = async (ctx, env) => {
             <div class="rang tete-suivi">
               ${pastille(STATUTS_PROJET, statutProjet(projet))}
               ${projet.interne ? '<span class="etiquette">Mon projet</span>' : ''}
+              ${equipe && projet.aFaire && !projet.archive ? `<a class="etiquette etiquette--lien" href="#/a-faire/${echapper(pid)}">${icone('ampoule')} Projet à faire</a>` : ''}
               ${equipe && !projet.interne && nomsContacts(projet) ? `<span class="puce">${icone('utilisateurs')} ${echapper(nomsContacts(projet))}</span>` : ''}
               ${equipe && projet.sante && projet.sante !== 'ok' ? pastille(SANTES, projet.sante) : ''}
               ${projet.cible ? `<span class="puce">${icone('cible')} Livraison visée ${echapper(dateCourte(projet.cible))}</span>${verdictHtml(delai)}` : ''}
@@ -205,6 +207,11 @@ export const vue = async (ctx, env) => {
           const ok = await confirmer({ titre: d.projet.archive ? 'Restaurer ce projet ?' : 'Archiver ce projet ?', texte: d.projet.archive ? 'Il redevient visible pour le client.' : "Il disparaît de l'accueil du client, rien n'est supprimé.", ok: d.projet.archive ? 'Restaurer' : 'Archiver' });
           if (ok) await agir(null, () => ecrire.majProjet(pid, { archive: !d.projet.archive, statut: d.projet.archive ? 'en-cours' : 'archive' }), d.projet.archive ? 'Projet restauré.' : 'Projet archivé.');
         } },
+        /* Ranger le projet à part, ou l'en sortir : un drapeau, rien d'autre. */
+        ...(!d.projet.archive ? [d.projet.aFaire
+          ? { libelle: 'Passer en projet actuel', icone: 'fleche', action: () => basculerAFaire(d.projet, false) }
+          : { libelle: 'Ranger dans les projets à faire', icone: 'ampoule', action: () => basculerAFaire(d.projet, true) }] : []),
+        { libelle: 'La note du projet', icone: 'note', action: () => naviguer(`/a-faire/${pid}`) },
         ...(d.projet.ouvert === true && !d.projet.interne ? [{ libelle: 'Refermer au client', icone: 'oeilFerme', danger: true, action: () => refermer(pid) }] : []),
         { libelle: "Créer un lien d'invitation", icone: 'utilisateurs', action: () => ouvrirInvitation(d.projet, env) },
         { libelle: 'Signaler un point bloquant', icone: 'alerte', action: () => editer('blocage', env, { pid }) },

@@ -1164,6 +1164,9 @@ exports.suiviAdmin = onRequest(
           organisation: orgId, client: ficheClient, plateformes: plateformesValides,
           interne: estInterne, contacts: Array.isArray(req.body.contacts) ? req.body.contacts : [],
           silence: req.body.silence === true,
+          /* Une idée notée pour plus tard : le projet existe, mais se range
+             dans les projets à faire, hors du portefeuille en cours. */
+          aFaire: req.body.aFaire === true,
           /* Le rideau. Un projet se prepare, se garnit, se chiffre, et
              seulement ensuite s'ouvre au client. Tant qu'il est ferme,
              personne n'est dans « membres » : ce n'est pas un masque a
@@ -1177,6 +1180,12 @@ exports.suiviAdmin = onRequest(
           pulse: { enCours: '', derniereLivraison: '', prochaineEtape: '', attenteClient: '' }, sante: 'ok',
           archive: false, cree: FieldValue.serverTimestamp(), maj: FieldValue.serverTimestamp(),
         }));
+
+        /* La note d'une idée vit hors du projet, là où seule l'équipe lit :
+           un client membre lit toute la fiche de son projet. */
+        if (req.body.aFaire === true && typeof req.body.idee === 'string' && req.body.idee.trim()) {
+          await bdd.doc(`idees/${nouveau.id}`).set({ texte: req.body.idee.slice(0, 60000), par: String(responsable || ''), maj: FieldValue.serverTimestamp() });
+        }
 
         /* Les membres de l'organisation deviennent membres du projet. */
         if (orgId) await synchroniserMembres(orgId);
