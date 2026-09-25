@@ -13,7 +13,7 @@
 import { readFileSync, readdirSync, statSync, mkdtempSync, rmSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { tmpdir } from 'node:os';
-import { composerPaquet, construire, fichiersSuivis, INTERDITS, DOSSIERS, FICHIERS_RACINE } from './paquet-academy.mjs';
+import { composerPaquet, construire, fichiersSuivis, INTERDITS, DOSSIERS, FICHIERS_RACINE, FICHIERS_VIDES } from './paquet-academy.mjs';
 
 let echecs = 0;
 const ok = (m) => console.log(`  ok     ${m}`);
@@ -29,7 +29,10 @@ parcourir(sortie);
 verifier(surDisque.length === paquet.length && surDisque.every((c) => paquet.includes(c)), 'le dossier construit contient exactement la liste calculée', `${surDisque.length} contre ${paquet.length}`);
 const fautifs = surDisque.filter((c) => INTERDITS.some((r) => r.test(c)));
 verifier(!fautifs.length, 'aucun chemin interdit dans le dossier construit', fautifs.join(', '));
-verifier(surDisque.every((c) => FICHIERS_RACINE.includes(c) || DOSSIERS.some((d) => c.startsWith(d))), 'tout fichier vient de la liste blanche');
+verifier(surDisque.every((c) => FICHIERS_RACINE.includes(c) || FICHIERS_VIDES.includes(c) || DOSSIERS.some((d) => c.startsWith(d))), 'tout fichier vient de la liste blanche');
+verifier(surDisque.length === 76, `le paquet compte exactement 76 fichiers (${surDisque.length})`);
+verifier(FICHIERS_VIDES.every((c) => surDisque.includes(c) && statSync(join(sortie, c)).size === 0), 'le .gitkeep du dossier des cours est dans le paquet, et vide');
+verifier(surDisque.filter((c) => /(^|\/)\.git/.test(c)).join() === 'assets/img/cours/.gitkeep', 'aucun autre fichier .git* n entre dans le paquet');
 for (const attendu of ['index.html', '.htaccess', 'assets/js/app.js', 'formations/index.html']) verifier(surDisque.includes(attendu), `le site est complet : ${attendu}`);
 for (const interdit of ['fonctions-suivi/suivi.js', 'suivi/firestore.rules', 'firebase.suivi.json', 'package.json', 'storage.rules', 'firestore.indexes.json', 'README.md']) {
   verifier(!surDisque.includes(interdit), `absent du paquet : ${interdit}`);

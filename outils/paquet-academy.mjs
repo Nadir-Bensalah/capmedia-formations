@@ -27,6 +27,12 @@ export const FICHIERS_RACINE = [
   'confidentialite.html', 'cookies.html', 'mentions.html', 'merci.html', 'robots.txt', 'sitemap.xml',
 ];
 
+/* Un dossier vide du site, tenu par un .gitkeep (vide). Le déploiement FTP garde
+   l'état du dernier envoi : sans ce fichier, il cherchait à supprimer le dossier
+   « assets/img/cours », absent du serveur, échouait (550) et s'arrêtait avant
+   de retirer les anciens fichiers. Nommé un par un, jamais par extension. */
+export const FICHIERS_VIDES = ['assets/img/cours/.gitkeep'];
+
 /* Les dossiers du site, publiés avec leur contenu (filtré par extension). */
 export const DOSSIERS = ['app/', 'assets/', 'en/', 'formations/'];
 
@@ -52,7 +58,7 @@ export const fichiersSuivis = (racine = racineDepot()) => execFileSync('git', ['
 
 /** Le contenu du paquet, calculé à partir d'une liste de chemins. Lève si un interdit y entre.
     `liste` ne sert qu'aux tests, pour éprouver le filet avec une liste blanche fautive. */
-export const composerPaquet = (chemins, liste = { fichiers: FICHIERS_RACINE, dossiers: DOSSIERS }) => {
+export const composerPaquet = (chemins, liste = { fichiers: [...FICHIERS_RACINE, ...FICHIERS_VIDES], dossiers: DOSSIERS }) => {
   const dansListeBlanche = (c) => liste.fichiers.includes(c) || liste.dossiers.some((d) => c.startsWith(d));
   const extensionPermise = (c) => liste.fichiers.includes(c) || EXTENSIONS.some((e) => c.toLowerCase().endsWith(e));
   const paquet = chemins.filter((c) => dansListeBlanche(c) && extensionPermise(c)).sort();
