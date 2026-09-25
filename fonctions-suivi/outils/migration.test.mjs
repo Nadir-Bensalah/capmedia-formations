@@ -62,7 +62,7 @@ for (const [c, type] of [[ANCIEN_FICHIER, 'image/png'], [ANCIEN_PDF, 'applicatio
 
 console.log('\n== L essai à blanc n écrit rien');
 const blanc = migrer();
-verifier('le bilan annonce un essai à blanc', /Essai à blanc/.test(blanc));
+verifier('le bilan annonce un essai à blanc', /Migration à blanc/.test(blanc));
 verifier('le budget reste sur la fiche du projet', (await lire(`projets/${P}`)).budget === 4800);
 verifier('aucune fiche interne n est créée', (await lire(`projetsInternes/${P}`)) === null);
 verifier('le fichier reste à l ancien chemin', (await lire('fichiers/mig-fichier')).chemin === ANCIEN_FICHIER);

@@ -1,0 +1,179 @@
+rules_version = '2';
+
+/*
+  CAPMEDIA CLIENT HUB · Règles Storage DE TRANSITION (Release Gate 1)
+  Projet Firebase : capmedia-1f90d.
+
+  À déployer AVANT la migration, et à remplacer par storage.rules au
+  moment où le nouveau front et les nouvelles règles Firestore partent.
+  Seule différence avec storage.rules : l'ancien rangement
+  projets/{p}/documents/** garde ses droits d'avant (voir plus bas).
+  storage.test.mjs vérifie qu'il n'y en a pas d'autre.
+
+  Deux sources d'autorité :
+  - le jeton : « equipe: true » pour l'équipe, « projets: [...] » pour un
+    client, « testeur: true » pour un testeur (posés par l'Admin SDK) ;
+  - Firestore, lu par « firestore.get » quand un fichier dépend d'une fiche :
+    la visibilité d'un fichier, le statut d'une pièce comptable, la liste
+    des testeurs d'une campagne. La fiche est la seule vérité : changer la
+    visibilité d'un fichier ou passer un devis en brouillon change aussitôt
+    qui peut lire le PDF, sans déplacer d'objet.
+
+  Trois principes :
+  - « read » est découpé : « get » (télécharger un fichier connu) peut être
+    ouvert au client, « list » (parcourir un dossier) ne l'est jamais. Un
+    client ne découvre donc pas un fichier qu'on ne lui montre pas.
+  - un client ou un testeur CRÉE, il ne réécrit jamais : « update » est
+    réservé à l'équipe. Personne n'écrase la pièce d'un autre. En
+    production, écrire sur un objet qui existe est un « update », pas un
+    « create ». (L'émulateur confond les deux : storage.test.mjs le détecte
+    et classe ces essais « non vérifiables au banc ».)
+  - ce qui n'est pas prévu ici est refusé (dernière règle).
+
+  Organisation :
+    projets/{p}/fichiers/{fichierId}/...   fichiers du projet, lisibles selon la fiche fichiers/{fichierId}
+    projets/{p}/pieces/{documentId}/...    PDF d'un devis ou d'une facture, jamais en brouillon
+    projets/{p}/tickets/{t}/...            pièces des demandes (une pièce de note interne est marquée « interne »)
+    projets/{p}/messages/...               pièces de la conversation du projet
+    projets/{p}/validations/...            pièces d'une demande de validation
+    campagnes/{p}/{c}/{uid}/...            preuves d'un testeur de la campagne
+    preprojets/{uid}/...                   pièces d'une demande de nouveau projet
+    projets/{p}/documents/...              ANCIEN rangement, en attente de migration
+*/
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function estEquipe() {
+      return request.auth != null && request.auth.token.equipe == true;
+    }
+
+    function surSonProjet(projetId) {
+      return request.auth != null
+          && request.auth.token.projets != null
+          && projetId in request.auth.token.projets;
+    }
+
+    function fiche(chemin) {
+      return firestore.get(chemin).data;
+    }
+
+    function fichierAccepte() {
+      return (request.resource.size < 10 * 1024 * 1024
+              && (request.resource.contentType.matches('image/.*')
+                  || request.resource.contentType == 'application/pdf'
+                  || request.resource.contentType == 'text/plain'
+                  || request.resource.contentType == 'application/zip'
+                  || request.resource.contentType.matches('application/(msword|vnd\\.openxmlformats-officedocument\\..*)')))
+          || (request.resource.size < 100 * 1024 * 1024
+              && request.resource.contentType.matches('video/(mp4|quicktime|webm)'));
+    }
+
+    // Une pièce marquée « interne » (métadonnée posée par l'équipe) n'est
+    // jamais servie au client. Une pièce sans marque est publique pour les
+    // membres du projet.
+    function pieceInterne() {
+      return resource.metadata != null && resource.metadata.get('visibilite', '') == 'interne';
+    }
+
+    // Les fichiers d'un projet. Le client ne télécharge que ce que la
+    // fiche Firestore lui montre : visibilité « client », non archivé, et
+    // rangé sous CE projet. Il dépose ses propres fichiers, sans jamais
+    // remplacer un objet existant.
+    match /projets/{projetId}/fichiers/{fichierId}/{nom} {
+      allow get: if estEquipe()
+        || (surSonProjet(projetId)
+            && fiche(/databases/(default)/documents/fichiers/$(fichierId)).projet == projetId
+            && fiche(/databases/(default)/documents/fichiers/$(fichierId)).visibilite == 'client'
+            && fiche(/databases/(default)/documents/fichiers/$(fichierId)).get('archive', false) != true);
+      allow list:   if estEquipe();
+      allow create: if (estEquipe() || surSonProjet(projetId)) && fichierAccepte();
+      allow update, delete: if estEquipe();
+    }
+
+    // Le PDF d'une pièce comptable. Le chemin porte l'identifiant de la
+    // pièce : un brouillon ou une pièce archivée ne se télécharge pas.
+    match /projets/{projetId}/pieces/{documentId}/{nom} {
+      allow get: if estEquipe()
+        || (surSonProjet(projetId)
+            && fiche(/databases/(default)/documents/documents/$(documentId)).projet == projetId
+            && fiche(/databases/(default)/documents/documents/$(documentId)).statut != 'brouillon'
+            && fiche(/databases/(default)/documents/documents/$(documentId)).get('archive', false) != true);
+      allow list:   if estEquipe();
+      allow create, update: if estEquipe() && fichierAccepte();
+      allow delete: if estEquipe();
+    }
+
+    // Les pièces jointes des demandes : l'équipe et le client du projet,
+    // sauf une pièce de note interne. Le client dépose, sans réécrire.
+    match /projets/{projetId}/tickets/{ticketId}/{fichier=**} {
+      allow get:    if estEquipe() || (surSonProjet(projetId) && !pieceInterne());
+      allow list:   if estEquipe();
+      allow create: if (estEquipe() || surSonProjet(projetId)) && fichierAccepte();
+      allow update, delete: if estEquipe();
+    }
+
+    // La conversation du projet : tout y est public entre l'équipe et le client.
+    match /projets/{projetId}/messages/{fichier=**} {
+      allow get:    if estEquipe() || surSonProjet(projetId);
+      allow list:   if estEquipe();
+      allow create: if (estEquipe() || surSonProjet(projetId)) && fichierAccepte();
+      allow update, delete: if estEquipe();
+    }
+
+    // Les pièces d'une demande de validation : déposées par l'équipe, lues par le client.
+    match /projets/{projetId}/validations/{fichier=**} {
+      allow get:    if estEquipe() || surSonProjet(projetId);
+      allow list:   if estEquipe();
+      allow create, update: if estEquipe() && fichierAccepte();
+      allow delete: if estEquipe();
+    }
+
+    // TRANSITION : l'ANCIEN rangement garde, le temps de la migration, les
+    // droits exacts qu'il avait avant la Gate 1 (lecture et dépôt), pour
+    // qu'aucun fichier ne devienne illisible entre le moment où la fiche
+    // est repointée et la bascule du front. Aucune exposition nouvelle :
+    // c'est l'état de production d'avant, sur ce seul dossier.
+    match /projets/{projetId}/documents/client/{fichier=**} {
+      allow get, list: if estEquipe() || surSonProjet(projetId);
+      allow create, update: if (estEquipe() || surSonProjet(projetId)) && fichierAccepte();
+      allow delete: if estEquipe();
+    }
+    match /projets/{projetId}/documents/{dossier}/{fichier=**} {
+      allow get, list: if estEquipe() || surSonProjet(projetId);
+      allow create, update: if estEquipe() && fichierAccepte();
+      allow delete: if estEquipe();
+    }
+
+    // Les preuves d'un testeur : une capture, une vidéo courte. Il écrit
+    // dans SON dossier, et seulement pour une campagne EN COURS où il
+    // figure réellement. L'équipe et le client du projet les lisent.
+    match /campagnes/{projetId}/{campagneId}/{uid}/{fichier=**} {
+      allow get:  if estEquipe() || surSonProjet(projetId);
+      allow list: if estEquipe();
+      allow create: if request.auth != null
+        && request.auth.uid == uid
+        && request.auth.token.testeur == true
+        && fiche(/databases/(default)/documents/projets/$(projetId)/campagnes/$(campagneId)).statut == 'en-cours'
+        && uid in fiche(/databases/(default)/documents/projets/$(projetId)/campagnes/$(campagneId)).testeurs
+        && fichierAccepte();
+      allow update, delete: if estEquipe();
+    }
+
+    // Une demande de nouveau projet : le demandeur dépose dans son dossier,
+    // l'équipe y dépose aussi ses réponses, pour qu'il puisse les lire.
+    match /preprojets/{uid}/{fichier=**} {
+      allow get:    if estEquipe() || (request.auth != null && request.auth.uid == uid);
+      allow list:   if estEquipe();
+      allow create: if (estEquipe() || (request.auth != null && request.auth.uid == uid)) && fichierAccepte();
+      allow update, delete: if estEquipe();
+    }
+
+    // Le reste est fermé. L'équipe peut parcourir n'importe quel dossier
+    // (« list »), sans rien lire ni écrire de plus que ce qui précède.
+    match /{tout=**} {
+      allow list: if estEquipe();
+      allow get, write: if false;
+    }
+  }
+}

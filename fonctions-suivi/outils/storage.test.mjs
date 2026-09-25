@@ -173,6 +173,31 @@ for (const [, cond] of texteRegles.matchAll(/allow [a-z, ]*\bwrite\b[a-z, ]*:\s*
   else { ecarts.push(`allow write : ${cond.trim()}`); console.log(`  ÉCART  allow write ouvert : ${cond.trim()}`); }
 }
 
+console.log('\n== Les règles de transition ne diffèrent que par l ancien rangement');
+/* suivi/storage.transition.rules part AVANT la migration : il doit être
+   storage.rules à l'identique, sauf les droits d'avant sur
+   projets/{p}/documents/**. Une autre différence serait une règle que
+   personne n'a relue. */
+const sansCommentaires = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map((l) => l.replace(/\/\/.*$/, '').trimEnd()).filter((l) => l.trim()).join('\n');
+/* Les blocs « match /projets/{projetId}/documents/... { ... } », accolades comptées. */
+const blocsAncien = (t) => {
+  const lignes = sansCommentaires(t).split('\n'); const dedans = []; const dehors = [];
+  for (let i = 0; i < lignes.length; i += 1) {
+    if (!/match \/projets\/\{projetId\}\/documents\//.test(lignes[i])) { dehors.push(lignes[i]); continue; }
+    let prof = 0;
+    for (; i < lignes.length; i += 1) { dedans.push(lignes[i]); prof += (lignes[i].match(/\{/g) || []).length - (lignes[i].match(/\}/g) || []).length; if (prof <= 0 && /\}\s*$/.test(lignes[i])) break; }
+  }
+  return { dedans: dedans.join('\n'), dehors: dehors.join('\n') };
+};
+const sansAncien = (t) => blocsAncien(t).dehors;
+const transition = readFileSync(new URL('../../suivi/storage.transition.rules', import.meta.url), 'utf8');
+if (sansAncien(transition) === sansAncien(texteRegles)) { ok += 1; console.log('  ok     hors de l ancien rangement, transition et règles finales sont identiques'); }
+else { ecarts.push('storage.transition.rules diffère de storage.rules ailleurs que sur l ancien rangement'); console.log('  ÉCART  storage.transition.rules diffère de storage.rules ailleurs que sur l ancien rangement'); }
+const blocs = (t) => blocsAncien(t).dedans;
+const ecritureClient = /documents\/client[\s\S]*?allow create, update: if \(estEquipe\(\) \|\| surSonProjet\(projetId\)\)/.test(blocs(transition));
+if (ecritureClient && /allow get, list: if estEquipe\(\) \|\| surSonProjet\(projetId\);/.test(blocs(transition))) { ok += 1; console.log('  ok     la transition rend à l ancien rangement ses droits d avant (lecture des membres, dépôt client)'); }
+else { ecarts.push('la transition ne rend pas les droits d avant'); console.log('  ÉCART  la transition ne rend pas les droits d avant'); }
+
 if (nonVerifiables.length) console.log(`\n${nonVerifiables.length} essai(s) d écrasement non vérifiable(s) au banc (l émulateur confond écrasement et création) : gardés par le texte des règles ci-dessus.`);
 console.log(`\n${ok} contrôle(s) conforme(s)${ecarts.length ? `, ${ecarts.length} ÉCART(S) :\n  - ${ecarts.join('\n  - ')}` : ''}`);
 await env.cleanup();
