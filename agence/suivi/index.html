@@ -29,8 +29,10 @@
     <h1 style="margin-top:4px">Bienvenue</h1>
     <p class="t-corps t-2" style="margin-top:8px" id="chapo-porte">Vos projets, vos tests, vos échanges avec Capmedia. Au même endroit.</p>
 
-    <!-- Étape 1 : l'adresse -->
-    <form id="forme" class="forme" style="margin-top:28px" novalidate>
+    <!-- Étape 1 : l'adresse. Masquée jusqu'à ce que le script de la porte
+         soit prêt : visible trop tôt, un clic envoyait le formulaire par le
+         navigateur (page rechargée, adresse dans l'URL, saisie perdue). -->
+    <form id="forme" class="forme masque" style="margin-top:28px" novalidate>
       <div class="groupe">
         <label class="etiquette-champ" for="email">Votre adresse e-mail</label>
         <input class="champ" type="email" id="email" name="email" autocomplete="email" inputmode="email" placeholder="vous@exemple.test" required>

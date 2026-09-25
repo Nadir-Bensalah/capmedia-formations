@@ -909,7 +909,16 @@ exports.suiviFacteur = onDocumentCreated(
     /* Verrou absolu : sur le banc d'essai, aucun e-mail ne part jamais, quelle
        que soit la cle disponible. Les envois sont marques « simule ». */
     if (process.env.FUNCTIONS_EMULATOR === 'true' || process.env.FIRESTORE_EMULATOR_HOST) {
-      await ref.update({ etat: 'simule', envoye: FieldValue.serverTimestamp(), erreur: null });
+      /* Une lettre effacée entre sa création et ce marquage (un ménage, un
+         retrait) n'a plus rien à marquer. Laisser l'erreur remonter tuait
+         le processus des fonctions, et les déclencheurs livrés au même
+         moment étaient perdus. */
+      try {
+        await ref.update({ etat: 'simule', envoye: FieldValue.serverTimestamp(), erreur: null });
+      } catch (err) {
+        if (err && err.code === 5) { console.warn(`Envoi ${ref.id} effacé avant d'être marqué : rien à faire`); return; }
+        throw err;
+      }
       console.log(`E-mail « ${envoi.modele} » simule sur le banc d essai (aucun envoi)`);
       return;
     }
@@ -924,17 +933,9 @@ exports.suiviFacteur = onDocumentCreated(
 
     while (essais < ESSAIS_MAX) {
       essais += 1;
+      let identifiant;
       try {
-        const identifiant = await envoyerParBrevo(cle, courriel, destinataires);
-        await ref.update({
-          etat: 'envoye',
-          erreur: null,
-          essais,
-          brevo: identifiant,
-          envoye: FieldValue.serverTimestamp(),
-        });
-        console.log(`E-mail « ${envoi.modele} » envoyé à ${destinataires.map((d) => d.email).join(', ')}`);
-        return;
+        identifiant = await envoyerParBrevo(cle, courriel, destinataires);
       } catch (err) {
         derniere = err;
         console.error(`Envoi « ${envoi.modele} » en échec (essai ${essais} sur ${ESSAIS_MAX})`, err);
@@ -946,7 +947,19 @@ exports.suiviFacteur = onDocumentCreated(
         /* Une attente courte et croissante : le temps qu'une coupure réseau
            ou une limitation de débit passe, sans immobiliser la fonction. */
         if (essais < ESSAIS_MAX) await patienter(essais * 2000);
+        continue;
       }
+      /* Le courriel EST parti. Le marquer peut échouer (lettre effacée,
+         Firestore indisponible un instant) : ce n'est jamais une raison de
+         le renvoyer. Avant, l'échec du marquage relançait la boucle, et le
+         destinataire recevait le même e-mail jusqu'à ESSAIS_MAX fois. */
+      try {
+        await ref.update({ etat: 'envoye', erreur: null, essais, brevo: identifiant, envoye: FieldValue.serverTimestamp() });
+      } catch (err) {
+        console.error(`E-mail « ${envoi.modele} » envoyé, mais non marqué comme tel (${ref.id})`, err);
+      }
+      console.log(`E-mail « ${envoi.modele} » envoyé à ${destinataires.map((d) => d.email).join(', ')}`);
+      return;
     }
 
     await marquerEchec(ref, essais, derniere);
@@ -1494,7 +1507,17 @@ exports.suiviAdmin = onRequest(
           adresse: adresse !== undefined ? String(adresse).trim() : undefined,
           maj: FieldValue.serverTimestamp(),
         }));
-        if (notesInternes !== undefined) await ecrireNotesInternes(String(id), notesInternes);
+        /* Les notes internes ne viennent que du nouveau cockpit
+           (versionInterne 2), qui les lit dans organisationsInternes. Un
+           ONGLET RESTÉ OUVERT sur l'ancien cockpit envoie ce qu'il lit sur
+           la fiche : après la migration, une chaîne vide, qui effacerait la
+           vraie note. Avant la migration, la fiche porte encore la note :
+           on l'y écrit, comme avant, et la migration la déplacera. */
+        if (notesInternes !== undefined) {
+          if (req.body.versionInterne === 2) await ecrireNotesInternes(String(id), notesInternes);
+          else if ('notesInternes' in ((await orgRef.get()).data() || {})) await orgRef.update({ notesInternes: String(notesInternes).slice(0, 8000) });
+          else console.warn(`majOrganisation ${id} : notes d'un ancien cockpit ignorées (déjà migrées)`);
+        }
         return res.status(200).json({ ok: true });
       }
 
@@ -1612,7 +1635,7 @@ exports.suiviAdmin = onRequest(
               const orgRef = await bdd.collection('organisations').add({
                 nom: String((p.client || {}).nom || '').trim(),
                 entreprise: String((p.client || {}).entreprise || '').trim(),
-                email, telephone: '', adresse: '', notesInternes: '',
+                email, telephone: '', adresse: '',
                 contacts: [{ nom: String((p.client || {}).nom || '').trim(), email, role: 'owner', uid: null }],
                 membres: [], roles: {}, cree: FieldValue.serverTimestamp(), maj: FieldValue.serverTimestamp(),
               });

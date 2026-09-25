@@ -58,10 +58,16 @@ verifier(`l organisation est créée (${org.code})`, org.code === 200);
 const oid = org.json && org.json.id;
 verifier('la fiche de l organisation ne porte pas de notes internes', oid && !('notesInternes' in ((await lire(`organisations/${oid}`)) || {})));
 verifier('organisationsInternes les porte', oid && (await lire(`organisationsInternes/${oid}`))?.notesInternes === 'négocie tout');
-const maj = await appeler({ action: 'majOrganisation', id: oid, notesInternes: 'paie à 60 jours' });
+const maj = await appeler({ action: 'majOrganisation', id: oid, notesInternes: 'paie à 60 jours', versionInterne: 2 });
 verifier(`la mise à jour passe (${maj.code})`, maj.code === 200);
 verifier('la note mise à jour reste hors de la fiche', !('notesInternes' in ((await lire(`organisations/${oid}`)) || {})));
 verifier('et remplace la précédente dans organisationsInternes', (await lire(`organisationsInternes/${oid}`))?.notesInternes === 'paie à 60 jours');
+/* Un onglet resté ouvert sur l'ancien cockpit renvoie la note qu'il lit sur
+   la fiche : vide, une fois la note déplacée. Elle ne doit rien effacer. */
+const ancienOnglet = await appeler({ action: 'majOrganisation', id: oid, nom: 'Contact fictif', notesInternes: '' });
+verifier(`un ancien cockpit peut toujours enregistrer la fiche (${ancienOnglet.code})`, ancienOnglet.code === 200);
+verifier('mais sa note vide n efface pas la vraie note', (await lire(`organisationsInternes/${oid}`))?.notesInternes === 'paie à 60 jours');
+verifier('et ne réécrit rien d interne sur la fiche', !('notesInternes' in ((await lire(`organisations/${oid}`)) || {})));
 
 console.log('\n== enregistrerPaiement');
 const facture = await appeler({ action: 'deposerDocument', projet: pid, type: 'facture', numero: `F-${suffixe}`, libelle: 'Facture fictive', montant: 100,
