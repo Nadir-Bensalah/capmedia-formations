@@ -57,8 +57,7 @@ Menu **Authentication** → Get started → onglet **Sign-in method** :
 Puis onglet **Settings → Authorized domains**, ajoute :
 
 ```
-nadir-bensalah.github.io
-capmedia.tn                 (quand le domaine sera branché)
+academy.capmedia.app
 ```
 
 > Sans cette étape, l'envoi du lien échoue avec `auth/unauthorized-continue-uri`.
@@ -167,7 +166,7 @@ Catalogue de produits → **+ Ajouter un produit**, deux fois :
 Pour chaque produit → **Créer un lien de paiement**. Réglages qui comptent :
 
 - **Après le paiement** → « Rediriger les clients vers votre site web »
-  → `https://nadir-bensalah.github.io/capmedia-formations/merci.html`
+  → `https://academy.capmedia.app/merci`
 - **Collecter l'adresse e-mail** → activé (c'est elle qui ouvre l'accès)
 - **Autoriser les codes promo** → à toi de voir
 - **3 fois sans frais** → active *Klarna* ou *Paiement en plusieurs fois* si tu le proposes
@@ -318,20 +317,9 @@ Le gabarit des pages légales est décrit dans la **passe 3** de
 
 ---
 
-## Branchement du domaine
+## Le domaine
 
-Quand `capmedia.tn` (ou un sous-domaine) sera prêt :
-
-1. Crée un fichier `CNAME` à la racine du dépôt, contenant le domaine seul :
-   ```
-   academy.capmedia.tn
-   ```
-2. Chez ton registrar, ajoute un enregistrement **CNAME** :
-   `academy` → `nadir-bensalah.github.io`
-3. Dépôt GitHub → Settings → Pages → renseigne le domaine, coche **Enforce HTTPS**
-4. Mets à jour dans `config.js` : `urlAcces`
-5. Ajoute le domaine dans **Firebase → Authentication → Authorized domains**
-6. Mets à jour l'URL de redirection des deux Payment Links Stripe
+Le site est servi sur `https://academy.capmedia.app`, déployé par le workflow « Déploiement capmedia.app » (voir [`docs/deploiement.md`](deploiement.md)). GitHub Pages n'est plus utilisé.
 
 ---
 

@@ -3,13 +3,13 @@
 Plateforme de formations en ligne. Première formation :
 **De Zéro à l'App Store** : publier sa première application mobile en 30 jours.
 
-**En ligne** → https://nadir-bensalah.github.io/capmedia-formations/
+**En ligne** → https://academy.capmedia.app
 
 ---
 
 ## Ce que c'est
 
-Un site statique sur GitHub Pages, sans serveur à maintenir :
+Un site statique, sans serveur à maintenir :
 
 - une **page de vente** publique
 - un **paiement Stripe** par Payment Link
