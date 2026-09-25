@@ -35,6 +35,38 @@ for (const interdit of ['fonctions-suivi/suivi.js', 'suivi/firestore.rules', 'fi
   verifier(!surDisque.includes(interdit), `absent du paquet : ${interdit}`);
 }
 verifier(!surDisque.some((c) => c.startsWith('fonctions-suivi/') || c.startsWith('suivi/') || c.startsWith('outils/') || c.startsWith('docs/')), 'aucun dossier interne (fonctions-suivi, suivi, outils, docs)');
+
+console.log('\n== Chaque lien local du paquet mène à un fichier du paquet');
+/* Le serveur sert /page par page.html et /dossier/ par dossier/index.html
+   (.htaccess) : un lien se résout comme lui. Un lien qui ne mène à rien
+   dans le paquet est une page ou un fichier que le déploiement ne publie
+   pas, ou qu'il va SUPPRIMER du serveur. */
+const present = new Set(surDisque);
+const resoudre = (depuis, lien) => {
+  const net = lien.split('#')[0].split('?')[0];
+  if (!net) return true;
+  const base = net.startsWith('/') ? net.slice(1) : join(depuis.split('/').slice(0, -1).join('/'), net).replace(/\\/g, '/');
+  const c = base.replace(/^\.\//, '').replace(/\/$/, '/index.html').replace(/^$/, 'index.html');
+  return [c, `${c}.html`, `${c}/index.html`].some((x) => present.has(x.replace(/^\//, '')));
+};
+const casses = [];
+let liens = 0;
+for (const f of surDisque.filter((c) => /\.(html|css|js)$/.test(c))) {
+  const src = readFileSync(join(sortie, f), 'utf8');
+  const trouves = f.endsWith('.html')
+    ? [...src.matchAll(/\s(?:href|src)="([^"]+)"/g)].map((m) => m[1])
+    : f.endsWith('.css')
+      ? [...src.matchAll(/url\(\s*['"]?([^'")]+)['"]?\s*\)/g)].map((m) => m[1])
+      : [...src.matchAll(/(?:from\s+|import\s*\(\s*)['"](\.{1,2}\/[^'"]+)['"]/g)].map((m) => m[1]);
+  for (const l of trouves) {
+    if (/^(https?:|mailto:|tel:|data:|javascript:|#|\$\{|\{)/.test(l) || l.includes('${')) continue;
+    liens += 1;
+    if (!resoudre(f, l)) casses.push(`${f} -> ${l}`);
+  }
+}
+verifier(liens > 50, `les liens locaux sont lus (${liens})`);
+verifier(!resoudre('index.html', '/fonctions-suivi/suivi.js') && !resoudre('formations/index.html', '../page-absente') && resoudre('formations/index.html', '../assets/css/az.css') && resoudre('index.html', '/formations/'), 'la résolution distingue un lien mort d un lien vivant');
+verifier(!casses.length, 'aucun lien local cassé', casses.slice(0, 8).join(' | '));
 rmSync(sortie, { recursive: true, force: true });
 
 console.log('\n== La liste blanche éprouvée sur des chemins inventés');

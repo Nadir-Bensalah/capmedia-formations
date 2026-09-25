@@ -1,3 +1,5 @@
+require('./lib/garde-banc.cjs');
+const { lireRest } = require('./lib/rest-banc.cjs');
 /* ==========================================================================
    CAPMEDIA CLIENT HUB · Release Gate 1, dans un vrai navigateur
 
@@ -22,7 +24,7 @@ const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 const prop = { Authorization: 'Bearer owner' };
 const RACINE = `projects/${PROJET}/databases/(default)/documents`;
 const bdd = (c) => `http://127.0.0.1:8080/v1/${RACINE}/${c}`;
-const lire = async (c) => { const r = await fetch(bdd(c), { headers: prop }); return r.ok ? r.json() : null; };
+const lire = async (c) => lireRest(bdd(c), prop);
 const vider = async (col) => { const j = await lire(`${col}?pageSize=300`); for (const d of (j && j.documents) || []) await fetch(`http://127.0.0.1:8080/v1/${d.name}`, { method: 'DELETE', headers: prop }); };
 const str = (d, k) => ((((d || {}).fields || {})[k]) || {}).stringValue || '';
 const soucis = []; const ok = (m) => console.log('  ok     ' + m); const dire = (m) => { soucis.push(m); console.log('  ÉCART  ' + m); };
@@ -249,6 +251,20 @@ const verifierConversation = async (page, qui) => {
   await eq.page.waitForURL(/\/suivi\/(\?|$|index)/, { timeout: 20000 }).catch(() => {});
   const cle = await eq.page.evaluate(() => [localStorage.getItem('suivi:cle-admin'), sessionStorage.getItem('suivi:cle-admin')]);
   verifier(cle[0] === null && cle[1] === null, 'après « Se déconnecter », la clé n est plus dans le navigateur', JSON.stringify(cle));
+
+  /* ------------------------------------------------------------------ */
+  console.log('\n== 6. La porte ne s envoie pas avant d être prête');
+  /* Visible avant son script, le formulaire partait par le navigateur :
+     page rechargée, adresse dans l'URL, saisie perdue. */
+  const html = await (await fetch(`${SITE}/suivi/`)).text();
+  verifier(/<form id="forme" class="[^"]*\bmasque\b/.test(html), 'le formulaire d adresse est masqué tant que le script n a pas tourné');
+  const p6 = await contexte();
+  await p6.page.goto(`${SITE}/suivi/?emul`, { waitUntil: 'domcontentloaded' });
+  const pret = await p6.page.waitForSelector('#forme:not(.masque)', { timeout: 20000 }).then(() => true).catch(() => false);
+  await p6.page.fill('#email', 'camille.essai@exemple.test'); await p6.page.click('#envoyer');
+  const codeVisible = await p6.page.waitForSelector('#forme-code:not(.masque)', { timeout: 20000 }).then(() => true).catch(() => false);
+  verifier(pret && codeVisible && !/[?&]email=/.test(p6.page.url()), 'dès qu il paraît, il demande le code sans recharger la page', p6.page.url());
+  await p6.ctx.close();
 
   verifier(!erreurs.length, 'aucune erreur de script', erreurs.slice(0, 3).join(' | '));
   verifier(!fuites.length, 'aucune requête vers la production', fuites.slice(0, 3).join(' | '));

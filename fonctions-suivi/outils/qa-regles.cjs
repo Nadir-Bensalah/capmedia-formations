@@ -1,3 +1,5 @@
+require('./lib/garde-banc.cjs');
+const { lireRest } = require('./lib/rest-banc.cjs');
 /* ==========================================================================
    CAPMEDIA CLIENT HUB · les familles de règles à l'épreuve
 
@@ -22,7 +24,7 @@ const SITE = 'http://127.0.0.1:8787';
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 const prop = { Authorization: 'Bearer owner' };
 const bdd = (c) => `http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
-const lire = async (c) => { const r = await fetch(bdd(c), { headers: prop }); return r.ok ? r.json() : null; };
+const lire = async (c) => lireRest(bdd(c), prop);
 
 const soucis = []; const ok = (m) => console.log('  ok     ' + m);
 const dire = (m) => { soucis.push(m); console.log('  ÉCART  ' + m); };

@@ -1,3 +1,5 @@
+require('./lib/garde-banc.cjs');
+const { lireRest } = require('./lib/rest-banc.cjs');
 /* ==========================================================================
    CAPMEDIA CLIENT HUB · la restitution des avis
 
@@ -9,8 +11,12 @@
    Les réponses libres sont rendues mot pour mot, jamais résumées : c'est
    là qu'est la vraie information, et un résumé la tue.
 
-     (émulateurs, semis, campagne avec des avis déposés)
+     (émulateurs, semer-suivi.mjs, semer-campagne.mjs)
      node fonctions-suivi/outils/qa-restitution.cjs
+
+   La suite pose elle-même ses avis (deux testeurs de la campagne c-oct,
+   avec un profil et des réponses complètes, montants compris) : elle ne
+   dépend plus de ce qu'une autre suite a laissé dans la base.
    ========================================================================== */
 
 const { chromium } = require('@playwright/test');
@@ -18,7 +24,7 @@ const PROJET='capmedia-1f90d', SITE='http://127.0.0.1:8787';
 const pause=(ms)=>new Promise(r=>setTimeout(r,ms));
 const prop={Authorization:'Bearer owner'};
 const bdd=(c)=>`http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
-const lire=async(c)=>{const r=await fetch(bdd(c),{headers:prop});return r.ok?r.json():null;};
+const lire=async(c)=>lireRest(bdd(c),prop);
 const vider=async(col)=>{const j=await lire(`${col}?pageSize=300`);for(const d of (j&&j.documents)||[])await fetch(`http://127.0.0.1:8080/v1/${d.name}`,{method:'DELETE',headers:prop});};
 const dernierCode=async(e)=>{for(let i=0;i<40;i++){const j=await lire('envois?pageSize=100');const p=((j&&j.documents)||[]).filter(d=>{const a=((((d.fields||{}).a||{}).arrayValue)||{}).values||[];return a.some(x=>((((x.mapValue||{}).fields||{}).email)||{}).stringValue===e);});if(p.length){p.sort((x,y)=>new Date(((y.fields.cree||{}).timestampValue)||0)-new Date(((x.fields.cree||{}).timestampValue)||0));const v=(((p[0].fields.variables||{}).mapValue||{}).fields)||{};if(v.code&&v.code.stringValue)return v.code.stringValue;}await pause(300);}return'';};
 /* Les courriels de code ne sont jamais purgés par l'application, et la
@@ -55,7 +61,32 @@ const ouvrirLesAvis=async(page)=>{
   return true;
 };
 
+/* Le jeu d'avis : deux testeurs de c-oct, un profil chacun (c'est lui que
+   le client lit sous chaque citation), et un questionnaire complet. */
+const S=(v)=>({stringValue:String(v)}), N=(v)=>({integerValue:String(v)});
+const poser=(chemin,champs,masque)=>fetch(bdd(chemin)+(masque?`?${masque.map(m=>`updateMask.fieldPaths=${m}`).join('&')}`:''),{method:'PATCH',headers:{...prop,'Content-Type':'application/json'},body:JSON.stringify({fields:champs})});
+const PROFILS=[{age:'25-34',fonction:'Infirmier',sexe:'homme'},{age:'45-54',fonction:'Comptable',sexe:'femme'}];
+const REPONSES=[
+  {'impression.sert-a-quoi':S('À gérer mes tâches et mes récurrences'),'impression.compris':N(5),'impression.oeil':S('Le calendrier'),'esthetique.belle':N(4),'esthetique.moderne':N(4),'esthetique.couleurs':S('Oui'),'facilite.trouve':N(4),'facilite.recommande':N(8),'utilite.probleme':N(4),'utilite.vraie-vie':S('Oui, tous les jours'),'argent.paierait':S('Oui'),'argent.suspect':N(2),'argent.cher':N(9),'performance.rapide':N(5),'performance.plantages':S('Jamais'),'libre.garder':S('Les récurrences, le calendrier, les objectifs')},
+  {'impression.sert-a-quoi':S('Un agenda avec des objectifs'),'impression.compris':N(4),'esthetique.belle':N(3),'esthetique.lisible':N(4),'facilite.trouve':N(3),'facilite.recommande':N(7),'utilite.probleme':N(3),'utilite.vraie-vie':S('Oui, de temps en temps'),'argent.paierait':S('Peut-être'),'argent.suspect':N(3),'argent.cher':N(12),'performance.rapide':N(4),'libre.garder':S('Le calendrier, la simplicité, les couleurs')},
+];
+const poserLesAvis=async()=>{
+  const camp=await lire('projets/atelier/campagnes/c-oct');
+  const uids=((((camp||{}).fields||{}).testeurs||{}).arrayValue||{}).values?.map(v=>v.stringValue).slice(0,2)||[];
+  if(uids.length<2) throw new Error('la campagne c-oct du semis doit avoir deux testeurs (semer-campagne.mjs)');
+  await vider('projets/atelier/campagnes/c-oct/appreciations');
+  for(const [i,uid] of uids.entries()){
+    const p=PROFILS[i];
+    await poser(`testeurs/${uid}`,{profil:{mapValue:{fields:{age:S(p.age),fonction:S(p.fonction),sexe:S(p.sexe),aisance:S('Moyenne')}}}},['profil']);
+    await poser(`projets/atelier/campagnes/c-oct/appreciations/${uid}`,REPONSES[i]);
+  }
+  /* Le serveur recopie le profil sous le projet : on attend qu'il l'ait fait. */
+  for(let i=0;i<40;i++){const l=await Promise.all(uids.map(u=>lire(`projets/atelier/profilsTesteurs/${u}`)));if(l.every(x=>x&&x.fields&&x.fields.age&&PROFILS.some(p=>p.age===x.fields.age.stringValue)))return;await pause(500);}
+  throw new Error('les profils des testeurs ne sont pas recopiés sous le projet');
+};
+
 (async()=>{
+  await poserLesAvis();
   const nav=await chromium.launch();
   const page=await (await nav.newContext({viewport:{width:1500,height:1100}})).newPage();
   const err=[]; page.on('pageerror',e=>err.push('PAGE: '+e.message.slice(0,180)));

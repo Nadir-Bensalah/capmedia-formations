@@ -1,3 +1,5 @@
+require('./lib/garde-banc.cjs');
+const { lireRest } = require('./lib/rest-banc.cjs');
 /* ==========================================================================
    CAPMEDIA CLIENT HUB · les scénarios de recette
 
@@ -31,10 +33,7 @@ const scenario = (n, titre) => console.log(`\n== Scénario ${n} · ${titre}`);
 const bdd = (chemin) => `http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/documents/${chemin}`;
 const proprietaire = { Authorization: 'Bearer owner' };
 
-const lire = async (chemin) => {
-  const r = await fetch(bdd(chemin), { headers: proprietaire });
-  return r.ok ? r.json() : null;
-};
+const lire = async (chemin) => lireRest(bdd(chemin), proprietaire);
 const vider = async (collection) => {
   const j = await lire(`${collection}?pageSize=300`);
   for (const d of (j && j.documents) || []) await fetch(`http://127.0.0.1:8080/v1/${d.name}`, { method: 'DELETE', headers: proprietaire });
@@ -267,7 +266,11 @@ const attendre = async (page, motif, secondes = 12) => {
   await pause(3000);
   await fermerTout(client);
   verifier(champ(await lire('documents/d-refonte'), 'statut') === 'accepte', "le devis passe en accepté");
-  verifier(champ(await lire('projets/prepa'), 'statut') === 'devis-signe', "le projet passe en devis signé", champ(await lire('projets/prepa'), 'statut'));
+  /* C'est un déclencheur (suiviDocumentModifie) qui fait démarrer le projet :
+     on l'attend, au lieu de lire une seule fois après trois secondes. */
+  let statutProjet = '';
+  for (let i = 0; i < 40 && statutProjet !== 'devis-signe'; i += 1) { statutProjet = champ(await lire('projets/prepa'), 'statut'); if (statutProjet !== 'devis-signe') await pause(500); }
+  verifier(statutProjet === 'devis-signe', "le projet passe en devis signé", statutProjet);
 
   /* L'avenant, lui, ne doit rien déclencher. */
   await aller(client, '/finances/d-avenant');
