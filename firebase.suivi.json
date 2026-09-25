@@ -1,7 +1,10 @@
 {
   "firestore": {
     "rules": "suivi/firestore.rules",
-    "indexes": "suivi/firestore.indexes.json"
+    "indexes": "suivi/firestore.indexes.json",
+    "predeploy": [
+      "node \"$PROJECT_DIR/outils/garde-deploiement.mjs\" hub"
+    ]
   },
   "functions": [
     {
@@ -13,11 +16,17 @@
         ".git",
         "*.local",
         "outils"
+      ],
+      "predeploy": [
+        "node \"$PROJECT_DIR/outils/garde-deploiement.mjs\" hub"
       ]
     }
   ],
   "storage": {
-    "rules": "suivi/storage.rules"
+    "rules": "suivi/storage.rules",
+    "predeploy": [
+      "node \"$PROJECT_DIR/outils/garde-deploiement.mjs\" hub"
+    ]
   },
   "emulators": {
     "auth": {

@@ -1,5 +1,13 @@
 {
   "name": "capmedia-academy-site",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "scripts": {
+    "deploiement:verifier": "node outils/garde-deploiement.test.mjs",
+    "deploiement:hub:index": "firebase deploy --only firestore:indexes --config firebase.suivi.json --project hub",
+    "deploiement:hub:regles": "firebase deploy --only firestore:rules,storage --config firebase.suivi.json --project hub",
+    "deploiement:hub:fonctions": "firebase deploy --only functions:suivi --config firebase.suivi.json --project hub",
+    "deploiement:academy:regles": "firebase deploy --only firestore:rules,storage --config firebase.json --project academy",
+    "deploiement:academy:fonctions": "firebase deploy --only functions:default --config firebase.json --project academy"
+  }
 }

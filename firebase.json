@@ -1,7 +1,10 @@
 {
   "firestore": {
     "rules": "firestore.rules",
-    "indexes": "firestore.indexes.json"
+    "indexes": "firestore.indexes.json",
+    "predeploy": [
+      "node \"$PROJECT_DIR/outils/garde-deploiement.mjs\" academy"
+    ]
   },
   "functions": [
     {
@@ -13,10 +16,16 @@
         ".git",
         "*.local",
         "outils"
+      ],
+      "predeploy": [
+        "node \"$PROJECT_DIR/outils/garde-deploiement.mjs\" academy"
       ]
     }
   ],
   "storage": {
-    "rules": "storage.rules"
+    "rules": "storage.rules",
+    "predeploy": [
+      "node \"$PROJECT_DIR/outils/garde-deploiement.mjs\" academy"
+    ]
   }
 }
