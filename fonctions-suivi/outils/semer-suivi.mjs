@@ -12,6 +12,7 @@
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
+import crypto from 'node:crypto';
 
 if (!process.env.FIRESTORE_EMULATOR_HOST || !process.env.FIREBASE_AUTH_EMULATOR_HOST) {
   console.error('Ce script ne tourne que sur les émulateurs (FIRESTORE_EMULATOR_HOST et FIREBASE_AUTH_EMULATOR_HOST).');
@@ -25,6 +26,9 @@ const auth = getAuth();
 
 const ilYA = (jours, heures = 0) => Timestamp.fromDate(new Date(Date.now() - (jours * 24 + heures) * 3600 * 1000));
 const dans = (jours, heures = 0) => Timestamp.fromDate(new Date(Date.now() + (jours * 24 + heures) * 3600 * 1000));
+/* La clé d'un interlocuteur sous un projet : l'empreinte de son adresse,
+   comme le calcule le serveur (commun.js). */
+const cleEmail = (email) => crypto.createHash('sha256').update(String(email).trim().toLowerCase()).digest('hex').slice(0, 32);
 
 async function compte(email, nom, revendications) {
   let u;
@@ -62,14 +66,18 @@ async function main() {
     plateformes: ['ios', 'android', 'web', 'admin'], membres: [camille], membresOrganisation: [camille], compteur: 5,
     progression: { mode: 'jalons', valeur: 0 }, debut: ilYA(180), cible: dans(45), responsable: agent,
     pulse: { enCours: 'Corrections des retours Android', derniereLivraison: 'iOS 1.1.2', prochaineEtape: 'Validation TestFlight 1.2', attenteClient: '' },
-    archive: false, ouvert: true, ouvertLe: ilYA(180), cree: ilYA(180), maj: ilYA(0, 2),
+    archive: false, ouvert: true, ouvertLe: ilYA(180), premiereOuverture: ilYA(180), cree: ilYA(180), maj: ilYA(0, 2),
+    /* Le modèle de la Gate 2 : l'accès effectif (membres, rôles) calculé
+       depuis les interlocuteurs, posés plus bas. */
+    roles: { [camille]: 'responsable' }, personnes: [camille], emailsClient: 'actifs', accesVersion: 2,
   });
   /* Budget, note de budget, santé : réservés à l'équipe, à part. */
   await bdd.doc('projetsInternes/atelier').set({ sante: 'ok', budget: 28000, budgetNote: 'Forfait par phases', maj: ilYA(0, 2) });
   await bdd.doc('projets/boutique').set({
     nom: 'Boutique', ref: 'BOUTIQUE', description: 'Menus de restaurant en ligne.', type: 'site-vitrine', statut: 'cadrage', organisation: 'boutique-sud',
     client: { nom: 'Léa Bernard', email: 'lea.essai@exemple.test', entreprise: 'Boutique Sud' }, plateformes: ['web'], membres: [lea], membresOrganisation: [lea], compteur: 1,
-    progression: { mode: 'manuel', valeur: 15 }, responsable: agent, pulse: {}, archive: false, ouvert: true, ouvertLe: ilYA(60), cree: ilYA(60), maj: ilYA(3),
+    progression: { mode: 'manuel', valeur: 15 }, responsable: agent, pulse: {}, archive: false, ouvert: true, ouvertLe: ilYA(60), premiereOuverture: ilYA(60), cree: ilYA(60), maj: ilYA(3),
+    roles: { [lea]: 'responsable' }, personnes: [lea], emailsClient: 'actifs', accesVersion: 2,
   });
   await bdd.doc('projetsInternes/boutique').set({ sante: 'attention', maj: ilYA(3) });
   /* Un projet en preparation, rideau baisse : personne n'est dans
@@ -82,8 +90,18 @@ async function main() {
     contacts: [{ nom: 'Camille Martin', email: 'camille.essai@exemple.test' }],
     plateformes: ['ios', 'android'], membres: [], membresOrganisation: [], compteur: 0,
     progression: { mode: 'manuel', valeur: 0 }, responsable: agent, pulse: {},
-    archive: false, ouvert: false, ouvertLe: null, cree: ilYA(4), maj: ilYA(1),
+    archive: false, ouvert: false, ouvertLe: null, premiereOuverture: null, cree: ilYA(4), maj: ilYA(1),
+    roles: {}, personnes: [camille], emailsClient: 'actifs', accesVersion: 2,
   });
+  /* Les interlocuteurs : la source de l'accès, projet par projet. Camille
+     est responsable d'Atelier (elle y est entrée), et préparée comme
+     responsable de la refonte, encore fermée : elle n'y a pas accès. */
+  const interlocuteur = (pid, uid, nom, email, role, etat) => bdd.doc(`projets/${pid}/interlocuteurs/${cleEmail(email)}`).set({
+    email, nom, uid, role, statut: 'actif', invitation: { etat }, ajoute: ilYA(30), maj: ilYA(30),
+  });
+  await interlocuteur('atelier', camille, 'Camille Martin', 'camille.essai@exemple.test', 'responsable', 'acceptee');
+  await interlocuteur('boutique', lea, 'Léa Bernard', 'lea.essai@exemple.test', 'responsable', 'acceptee');
+  await interlocuteur('prepa', camille, 'Camille Martin', 'camille.essai@exemple.test', 'responsable', 'preparee');
   await bdd.doc('projets/prepa/jalons/cadrage').set({ projet: 'prepa', titre: 'Cadrage de la refonte', phase: 'Cadrage', statut: 'a-venir', progression: 0, ordre: 1, debut: dans(7), fin: dans(30), composants: [], reports: [], cree: ilYA(4), maj: ilYA(4) });
 
   /* Un projet tel que l'ancienne console les creait : statut « actif », sans

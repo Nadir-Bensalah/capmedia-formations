@@ -8,7 +8,8 @@
    suiviDocumentCree     devis ou facture déposé, e-mail au client
    suiviDocumentModifie  réponse du client à un devis, e-mail à l'équipe
    suiviFacteur          la file « envois » partie chez Brevo
-   suiviAdmin            ce que le navigateur n'a pas le droit de faire
+   suiviAdmin            ce que le navigateur n'a pas le droit de faire,
+                         sur l'identité Firebase de l'appelant (acces.js)
 
    Deux principes gouvernent ce fichier.
 
@@ -29,6 +30,10 @@ const { getAuth } = require('firebase-admin/auth');
 const { getStorage } = require('firebase-admin/storage');
 const courriels = require('./courriels');
 const robot = require('./robot');
+const acces = require('./acces');
+const communication = require('./communication');
+const invitations = require('./invitations');
+const { Refus, cleEmail } = require('./commun');
 
 /* index.js initialise déjà l'application ; la garde permet de charger ce
    module seul (script de vérification, émulateur, test unitaire). */
@@ -38,7 +43,6 @@ const bdd = getFirestore();
 const REGION = 'europe-west1';
 
 const BREVO_CLE = defineSecret('BREVO_CLE');
-const ADMIN_CLE = defineSecret('ADMIN_CLE');
 
 /* L'adresse qui reçoit toutes les alertes internes. */
 const EQUIPE_EMAIL = 'contact@capmedia.app';
@@ -108,36 +112,10 @@ async function audit(action, details) {
   } catch (err) { console.error('Audit non écrit', err); }
 }
 
-async function mettreEnFile(modele, destinataires, variables) {
-  const a = (destinataires || [])
-    .filter((d) => d && emailPlausible(d.email))
-    .map((d) => ({ email: normaliserEmail(d.email), nom: String(d.nom || '').trim() }))
-    /* Une même adresse deux fois enverrait deux e-mails identiques. */
-    .filter((d, i, liste) => liste.findIndex((x) => x.email === d.email) === i);
-
-  if (!a.length) {
-    console.warn(`Aucun destinataire valable pour « ${modele} », e-mail abandonné`,
-      JSON.stringify(destinataires || []));
-    return null;
-  }
-
-  try {
-    const ref = await bdd.collection('envois').add(sansIndefini({
-      modele,
-      a,
-      variables: variables || {},
-      etat: 'attente',
-      erreur: null,
-      essais: 0,
-      cree: FieldValue.serverTimestamp(),
-      envoye: null,
-    }));
-    return ref.id;
-  } catch (err) {
-    console.error(`Mise en file impossible pour « ${modele} »`, err);
-    return null;
-  }
-}
+/* La file d'envoi, et la décision de qui reçoit quoi, vivent dans
+   communication.js : un seul endroit répond à « doit-on écrire à cette
+   personne, pour cet événement ? ». */
+const mettreEnFile = (modele, destinataires, variables, trace) => communication.mettreEnFile(modele, destinataires, variables, trace);
 
 /** Le journal d'audit est la mémoire du ticket : son échec doit se voir. */
 async function journaliser(ticketId, evenement) {
@@ -184,58 +162,9 @@ async function lireTicket(ticketId) {
   }
 }
 
-/**
- * Qui prévenir côté client : le contact du projet, et l'auteur du ticket
- * s'il s'agit d'une autre personne (une équipe cliente à plusieurs mains).
- */
-function contactsClient(projet, auteur) {
-  /* Un projet en sourdine se prépare sans rien envoyer au client. Le
-     drapeau se lève depuis le cockpit quand l'espace est prêt. */
-  if (projet && projet.silence === true) return [];
-  /* Un projet interne n'a pas de client : rien ne sort. */
-  if (projet && projet.interne === true) return [];
-  const liste = [];
-  /* Un projet peut compter plusieurs interlocuteurs : ils reçoivent tous
-     le meme courrier. La liste prime, le contact unique reste compris. */
-  const contacts = Array.isArray(projet && projet.contacts) ? projet.contacts : [];
-  for (const c of contacts) {
-    if (c && c.email && !liste.some((d) => memeEmail(d.email, c.email))) {
-      liste.push({ email: c.email, nom: c.nom || '' });
-    }
-  }
-  const client = (projet && projet.client) || {};
-  if (client.email && !liste.some((d) => memeEmail(d.email, client.email))) {
-    liste.push({ email: client.email, nom: client.nom || client.entreprise || '' });
-  }
-  if (auteur && auteur.cote === 'client' && auteur.email
-      && !liste.some((d) => memeEmail(d.email, auteur.email))) {
-    liste.push({ email: auteur.email, nom: auteur.nom || '' });
-  }
-  return liste;
-}
-
-const contactsEquipe = () => [{ email: EQUIPE_EMAIL, nom: EQUIPE_NOM }];
-
-/** La fiche d'un membre de l'équipe, pour lui écrire nommément. */
-async function contactMembreEquipe(uid) {
-  if (!uid) return null;
-  try {
-    const doc = await bdd.doc(`equipe/${String(uid)}`).get();
-    if (!doc.exists) {
-      console.warn(`Assignation vers un uid hors équipe : ${uid}`);
-      return null;
-    }
-    const fiche = doc.data();
-    if (!fiche.email) {
-      console.warn(`Fiche équipe ${uid} sans adresse e-mail`);
-      return null;
-    }
-    return { email: fiche.email, nom: fiche.nom || '' };
-  } catch (err) {
-    console.error(`Lecture de la fiche équipe ${uid} impossible`, err);
-    return null;
-  }
-}
+/* L'adresse de l'équipe, pour ses alertes. Les clients, eux, ne se
+   lisent plus sur la fiche du projet : voir communication.js. */
+const contactsEquipe = () => communication.contactsEquipe();
 
 /** Le nom du client, pour l'en-tête d'un e-mail. */
 const nomClient = (projet) => ((projet && projet.client && projet.client.nom) || '');
@@ -324,7 +253,7 @@ exports.suiviTicketCree = onDocumentCreated(
        la lettre disait alors au client « Bonjour Équipe Capmedia, nous
        avons bien reçu votre demande ». On la lui adresse à son nom, et on
        dit ce qui s'est vraiment passé. */
-    await mettreEnFile('ticket-cree', contactsClient(projet, auteur), {
+    await communication.ecrireAuxClients(projet, 'ticket-cree', 'ticket-cree', {
       ...communes,
       parLEquipe: (auteur && auteur.cote) === 'equipe',
       cote: 'client',
@@ -336,7 +265,7 @@ exports.suiviTicketCree = onDocumentCreated(
       cote: 'equipe',
       auteurNom: auteur.nom || '',
       auteurEmail: auteur.email || '',
-    });
+    }, { projet: projet && projet.id, evenement: 'ticket-cree' });
 
     console.log(`Ticket ${numero || ticketId} créé sur ${nomProjet(projet) || ticket.projet}`);
   },
@@ -434,7 +363,9 @@ exports.suiviTicketModifie = onDocumentUpdated(
       if (changement.type === 'assignation') {
         /* Un désassignement ne s'annonce à personne : l'audit suffit. */
         if (!changement.apres) continue;
-        const assigne = await contactMembreEquipe(changement.apres);
+        /* Un membre désactivé, ou un agent hors de ce projet, ne reçoit
+           rien : l'assignation reste dans le journal, sans lettre. */
+        const assigne = await communication.contactEquipe(changement.apres, apres.projet);
         if (!assigne) continue;
         await mettreEnFile('assignation', [assigne], {
           ...communes,
@@ -466,10 +397,8 @@ async function notifierStatut(ticket, changement, contexte) {
     return;
   }
 
-  const destinataires = contactsClient(projet, ticket.auteur);
-
   if (changement.apres === 'resolu') {
-    await mettreEnFile('resolu', destinataires, {
+    await communication.ecrireAuxClients(projet, 'resolu', 'resolu', {
       ...communes,
       clientNom: nomClient(projet),
       date: ticket.resolu || null,
@@ -478,7 +407,7 @@ async function notifierStatut(ticket, changement, contexte) {
   }
 
   if (changement.apres === 'ferme') {
-    await mettreEnFile('ferme', destinataires, {
+    await communication.ecrireAuxClients(projet, 'ferme', 'ferme', {
       ...communes,
       clientNom: nomClient(projet),
       date: ticket.maj || null,
@@ -486,7 +415,7 @@ async function notifierStatut(ticket, changement, contexte) {
     return;
   }
 
-  await mettreEnFile('statut', destinataires, {
+  await communication.ecrireAuxClients(projet, 'statut', 'statut', {
     ...communes,
     cote: 'client',
     statutAvant: changement.avant,
@@ -520,11 +449,7 @@ exports.suiviMessageCree = onDocumentCreated(
 
     const de = message.de || {};
     const versEquipe = de.cote === 'client';
-    const destinataires = versEquipe
-      ? contactsEquipe()
-      : contactsClient(projet, ticket.auteur);
-
-    await mettreEnFile('message', destinataires, {
+    const variables = {
       numero: ticket.numero,
       titre: ticket.titre,
       statut: ticket.statut,
@@ -533,7 +458,9 @@ exports.suiviMessageCree = onDocumentCreated(
       cote: versEquipe ? 'equipe' : 'client',
       texte: message.texte,
       lien: courriels.lienTicket(ticketId),
-    });
+    };
+    if (versEquipe) await mettreEnFile('message', contactsEquipe(), variables, { projet: projet && projet.id, evenement: 'message' });
+    else await communication.ecrireAuxClients(projet, 'message', 'message', variables);
   },
 );
 
@@ -553,10 +480,10 @@ exports.suiviDocumentCree = onDocumentCreated(
       return;
     }
 
+    /* Une pièce comptable engage : elle ne part qu'aux responsables du
+       projet, jamais à un collaborateur (voir communication.js). */
     const projet = await lireProjet(document.projet);
-    const destinataires = contactsClient(projet, null);
-
-    await mettreEnFile(document.type, destinataires, {
+    await communication.ecrireAuxClients(projet, document.type, document.type, {
       numero: document.numero,
       libelle: document.libelle,
       montant: document.montant,
@@ -761,6 +688,23 @@ exports.suiviDocumentModifie = onDocumentUpdated(
     const projet = await lireProjet(apres.projet);
     const reponse = apres.reponse || {};
 
+    /* Accepter ou refuser un devis engage le client : seul un responsable
+       du projet le peut. L'écran ne propose pas le bouton aux autres, les
+       règles refusent l'écriture ; si une réponse arrive quand même (règles
+       anciennes, accès retiré entre-temps), le serveur la défait au lieu
+       d'en tirer les conséquences. */
+    /* L'équipe peut aussi le marquer signé hors du Hub (statutDevis) : la
+       signature est alors celle d'un membre actif qui gère la finance du
+       projet. La règle est une seule, dans acces.js. */
+    if (!(await acces.reponseDevisAcceptee(projet, reponse))) {
+      console.error(`Réponse au devis ${evenement.params.documentId} refusée : ${reponse.par || 'inconnu'} n'est pas responsable du projet`);
+      try {
+        await evenement.data.after.ref.update({ statut: avant.statut, reponse: avant.reponse || null });
+      } catch (err) { console.error('Réponse au devis non défaite', err); }
+      await audit('devis.reponse-refusee', { projet: apres.projet, document: evenement.params.documentId, par: reponse.par || null, statut: apres.statut });
+      return;
+    }
+
     /*
      * La signature du devis fondateur fait demarrer le projet. Un avenant
      * signe, lui, ne change rien a l'etat : le projet est deja lance, il
@@ -780,7 +724,7 @@ exports.suiviDocumentModifie = onDocumentUpdated(
             : `a signé l'avenant ${apres.numero || ''}`,
           par: { uid: reponse.par || null, nom: reponse.nom || nomClient(projet), cote: 'client' },
           cible: evenement.params.documentId, lien: `/finances/${evenement.params.documentId}`,
-          visibilite: 'client', date: FieldValue.serverTimestamp(),
+          visibilite: 'responsable', date: FieldValue.serverTimestamp(),
         });
       } catch (err) { console.error('Suite du devis non ecrite', err); }
     }
@@ -795,7 +739,7 @@ exports.suiviDocumentModifie = onDocumentUpdated(
       portee,
       date: reponse.date || reponse.le || apres.date || null,
       lien: courriels.lienProjet(apres.projet),
-    });
+    }, { projet: apres.projet, evenement: 'devis-reponse' });
 
     console.log(`Devis ${apres.numero || evenement.params.documentId} ${apres.statut} par le client`);
   },
@@ -969,40 +913,19 @@ exports.suiviFacteur = onDocumentCreated(
 /* ==========================================================================
    6. suiviAdmin
 
-   Calquée sur la fonction « admin » : POST { cle, action, ...params }, la
-   clé du secret ADMIN_CLE fait loi. On trouve ici tout ce que les règles
-   refusent au navigateur : créer un projet, toucher aux membres, déposer un
-   devis ou une facture, écrire une fiche d'équipe.
+   POST { action, ...params }, avec « Authorization: Bearer <jeton Firebase> ».
+   Plus aucune clé partagée : l'appelant est la personne connectée, et le
+   serveur vérifie, dans cet ordre, que son jeton est valide et non révoqué,
+   qu'il est membre ACTIF de l'équipe, que son rôle porte la permission de
+   l'action, et qu'il est autorisé sur le projet visé (acces.js). On trouve
+   ici tout ce que les règles refusent au navigateur : créer un projet,
+   donner ou retirer un accès, ouvrir un projet au client, déposer un devis
+   ou une facture, administrer l'équipe.
    ========================================================================== */
 
-/**
- * Recalcule les revendications du jeton depuis Firestore, jamais depuis les
- * paramètres de l'appel. Les règles de stockage lisent « equipe » et
- * « projets » dans le jeton, parce qu'elles ne savent pas interroger la
- * liste des membres. Les noms sont donc imposés par storage.rules.
- *
- * setCustomUserClaims remplace la totalité des revendications : les deux
- * champs sont toujours réécrits ensemble. Le jeton du navigateur ne les voit
- * qu'après un rafraîchissement (reconnexion, ou getIdToken(true)).
- */
-async function poserRevendications(uid) {
-  const [ficheEquipe, projetsDuClient] = await Promise.all([
-    bdd.doc(`equipe/${uid}`).get(),
-    bdd.collection('projets').where('membres', 'array-contains', uid).get(),
-  ]);
-
-  const revendications = {
-    equipe: ficheEquipe.exists && ficheEquipe.data().actif !== false,
-    projets: projetsDuClient.docs.map((d) => d.id),
-  };
-  /* La liste « projets » du jeton est bornee par la taille d un jeton :
-     au-dela de deux cents projets, on garde les plus recents. */
-  if (revendications.projets.length > 200) revendications.projets = revendications.projets.slice(-200);
-
-  await getAuth().setCustomUserClaims(uid, revendications);
-  console.log(`Revendications posées pour ${uid} :`, JSON.stringify(revendications));
-  return revendications;
-}
+/* Les revendications du jeton se recalculent dans acces.js, depuis la base,
+   jamais depuis les paramètres de l'appel. */
+const poserRevendications = (uid) => acces.poserRevendications(uid);
 
 /*
  * UNE ADRESSE, UN SEUL RÔLE.
@@ -1031,6 +954,9 @@ async function roleDeLAdresse(email) {
     if ((await bdd.doc(`equipe/${uid}`).get()).exists) return 'equipe';
     if ((await bdd.doc(`testeurs/${uid}`).get()).exists) return 'testeur';
     if (!(await bdd.collection('projets').where('membres', 'array-contains', uid).limit(1).get()).empty) return 'client';
+    /* Un interlocuteur préparé sur un projet encore fermé est déjà client :
+       il n'est pas membre, mais il figure parmi les personnes du projet. */
+    if (!(await bdd.collection('projets').where('personnes', 'array-contains', uid).limit(1).get()).empty) return 'client';
     if (!(await bdd.collection('organisations').where('membres', 'array-contains', uid).limit(1).get()).empty) return 'client';
   }
   const memeAdresse = (x) => normaliserEmail(x) === adresse;
@@ -1073,30 +999,12 @@ async function compteAuth(email, nom, role) {
 }
 
 
-/**
- * Un membre d'organisation est membre de chacun de ses projets. Cette
- * fonction realigne la liste « membres » des projets sur celle de
- * l'organisation, puis recalcule les jetons des personnes touchees.
- */
-async function synchroniserMembres(orgId) {
-  const org = await bdd.doc(`organisations/${orgId}`).get();
-  if (!org.exists) return [];
-  const membres = org.data().membres || [];
-  const projets = await bdd.collection('projets').where('organisation', '==', orgId).get();
-  const touches = new Set(membres);
-  for (const p of projets.docs) {
-    /* Un projet ferme ne recoit personne, meme si le client est deja
-       membre de l'organisation pour un autre projet : sinon un second
-       projet s'ouvrirait tout seul des sa creation. */
-    if (p.data().ouvert === false) continue;
-    const actuels = p.data().membres || [];
-    actuels.forEach((u) => touches.add(u));
-    const fusion = Array.from(new Set([...actuels.filter((u) => !(p.data().membresOrganisation || []).includes(u)), ...membres]));
-    await p.ref.update({ membres: fusion, membresOrganisation: membres, maj: FieldValue.serverTimestamp() });
-  }
-  for (const uid of touches) { try { await poserRevendications(uid); } catch (err) { console.error(`Jeton de ${uid} non recalcule`, err); } }
-  return membres;
-}
+/* Avant la Gate 2, un membre d'organisation devenait membre de TOUS ses
+   projets : l'appartenance à une société donnait l'accès. C'est fini.
+   L'accès se donne projet par projet (interlocuteurs), et les membres
+   d'une organisation se déduisent de ces accès : ils permettent seulement
+   de lire la fiche de sa société. */
+const synchroniserMembres = (orgId) => acces.recalculerOrganisation(orgId);
 
 /** Les notes internes d'une organisation : hors de la fiche que ses membres
     lisent en entier, dans organisationsInternes (équipe seule). */
@@ -1119,22 +1027,441 @@ const STATUTS_DEVIS = ['brouillon', 'envoye', 'consulte', 'accepte', 'refuse', '
 const MOYENS = ['virement', 'carte', 'stripe', 'cheque', 'especes', 'autre'];
 const PLATEFORMES_CONNUES = ['ios', 'android', 'web', 'admin', 'backend', 'landing'];
 
+/* ==========================================================================
+   6 bis. Les accès des clients, projet par projet
+
+   Un interlocuteur (projets/{p}/interlocuteurs/{cle}) est une personne,
+   un rôle (responsable ou collaborateur) et un statut. Il peut être
+   préparé sur un projet fermé : il n'a alors aucun accès et ne reçoit
+   rien. L'accès effectif (« membres », « roles ») est recalculé par
+   acces.recalculerAcces à chaque geste, jamais écrit à la main.
+   ========================================================================== */
+
+const LIBELLE_ROLE_CLIENT = acces.ROLES_CLIENT;
+
+/** La fiche d'un interlocuteur, par sa clé ou son adresse. */
+async function lireInterlocuteur(projetId, { cle, email }) {
+  const id = cle ? String(cle) : (email ? cleEmail(email) : '');
+  if (!id) throw new Refus(400, 'Interlocuteur requis : sa clé ou son adresse.');
+  const ref = bdd.doc(`projets/${projetId}/interlocuteurs/${id}`);
+  const doc = await ref.get();
+  return { ref, cle: id, fiche: doc.exists ? doc.data() : null };
+}
+
+/* Ce qui attend déjà le client dans son espace, au moment où il y entre.
+   Un résumé, pas l'historique : on ne rejoue pas la préparation. La partie
+   financière n'est comptée que pour un responsable. */
+async function resumeInitial(projetId) {
+  const compter = async (collection, filtre) => {
+    try {
+      const q = await bdd.collection(collection).where('projet', '==', projetId).get();
+      return q.docs.map((d) => d.data()).filter(filtre).length;
+    } catch (err) { return 0; }
+  };
+  const jalons = (await bdd.collection(`projets/${projetId}/jalons`).get()).docs.map((d) => d.data());
+  const enCours = jalons.find((j) => j.statut === 'en-cours') || jalons.find((j) => ['planifie', 'a-venir'].includes(j.statut));
+  const aValider = await compter('validations', (v) => v.statut === 'en-attente');
+  const taches = await compter('taches', (t) => !t.archive && t.visibilite === 'client' && t.statut !== 'terminee');
+  const fichiers = await compter('fichiers', (f) => !f.archive && f.visibilite === 'client');
+  const devis = await compter('documents', (d) => d.type === 'devis' && ['envoye', 'consulte'].includes(d.statut) && !d.archive);
+  const factures = await compter('documents', (d) => d.type === 'facture' && ['envoyee', 'a-payer', 'partielle', 'en-retard'].includes(d.statut) && !d.archive);
+  const reunions = (await bdd.collection('reunions').where('projet', '==', projetId).get()).docs.map((d) => d.data())
+    .filter((r) => r.visibilite === 'client' && r.date && r.date.toDate && r.date.toDate() > new Date())
+    .sort((a, b) => a.date.toMillis() - b.date.toMillis());
+  const commun = [];
+  if (jalons.length) commun.push({ quoi: 'Feuille de route', detail: `${jalons.length} étape${jalons.length > 1 ? 's' : ''}${enCours ? `, en cours : ${enCours.titre || ''}` : ''}` });
+  if (taches) commun.push({ quoi: 'Tâches visibles', detail: `${taches} en cours ou à venir` });
+  if (aValider) commun.push({ quoi: 'À valider', detail: `${aValider} demande${aValider > 1 ? 's' : ''} de validation` });
+  if (fichiers) commun.push({ quoi: 'Fichiers', detail: `${fichiers} disponible${fichiers > 1 ? 's' : ''}` });
+  if (reunions[0]) commun.push({ quoi: 'Prochaine réunion', detail: `${reunions[0].titre || ''} · ${reunions[0].date.toDate().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', timeZone: 'Europe/Paris' })}` });
+  const finance = [];
+  if (devis) finance.push({ quoi: 'Devis à décider', detail: `${devis}` });
+  if (factures) finance.push({ quoi: 'Factures à régler', detail: `${factures}` });
+  return { commun, finance };
+}
+
+/**
+ * Invite un interlocuteur d'un projet OUVERT : une invitation neuve (les
+ * précédentes sont révoquées), puis l'e-mail si la décision centrale le
+ * permet. Les e-mails coupés laissent l'invitation « en attente » : le
+ * lien existe, on le copie à la main.
+ */
+async function inviterInterlocuteur(projetId, cle, { par, modele = 'invitation', resume = null, prevenir = true } = {}) {
+  const projet = { id: projetId, ...(await bdd.doc(`projets/${projetId}`).get()).data() };
+  const ref = bdd.doc(`projets/${projetId}/interlocuteurs/${cle}`);
+  const i = (await ref.get()).data();
+  if (!i || i.statut !== 'actif') throw new Refus(409, "Cette personne n'a pas d'accès actif sur ce projet.");
+  if (projet.ouvert !== true) throw new Refus(409, "Le projet est fermé au client : rien ne part tant qu'il n'est pas ouvert.");
+  const evenement = modele === 'ouverture' ? 'ouverture' : 'invitation';
+  const decision = communication.decisionEmailClient({ projet, interlocuteur: i, evenement });
+  const envoyer = prevenir && decision.ok;
+  const inv = await invitations.creer({
+    type: 'client', email: i.email, nom: i.nom, uid: i.uid, role: i.role,
+    projet: projetId, projetNom: projet.nom || '', par, envoyee: envoyer,
+  });
+  if (envoyer) {
+    const points = resume ? [...resume.commun, ...(i.role === 'responsable' ? resume.finance : [])] : [];
+    await mettreEnFile(modele, [{ email: i.email, nom: i.nom }], {
+      projetNom: projet.nom || '', clientNom: i.nom || '', email: i.email, role: i.role, lien: inv.lien, points,
+    }, { projet: projetId, evenement });
+  }
+  await ref.update({
+    invitation: { id: inv.id, etat: envoyer ? 'envoyee' : 'en-attente', envoyee: envoyer ? FieldValue.serverTimestamp() : null, expire: inv.expire },
+    maj: FieldValue.serverTimestamp(),
+  });
+  return { lien: inv.lien, envoyee: envoyer, motif: envoyer ? '' : (prevenir ? decision.motif : 'envoi non demandé') };
+}
+
+/* Au moins un responsable doit rester sur un projet ouvert : sans lui,
+   personne ne peut plus accepter un devis ni une validation réservée. */
+async function controleDernierResponsable(projetId, cle, roleApres) {
+  const projet = (await bdd.doc(`projets/${projetId}`).get()).data() || {};
+  if (projet.ouvert !== true) return;
+  const inter = (await bdd.collection(`projets/${projetId}/interlocuteurs`).get()).docs.map((d) => ({ cle: d.id, ...d.data() }));
+  const restants = inter.filter((i) => i.statut === 'actif' && i.role === 'responsable' && i.cle !== cle);
+  if (roleApres !== 'responsable' && !restants.length) {
+    throw new Refus(409, "C'est le dernier responsable de ce projet ouvert : nommez-en un autre avant, ou refermez le projet.");
+  }
+}
+
+async function ajouterInterlocuteur(identite, { projet: projetId, email, nom, role }) {
+  const adresse = normaliserEmail(email);
+  if (!emailPlausible(adresse)) throw new Refus(400, "L'adresse de l'interlocuteur a l'air incomplète.");
+  if (!LIBELLE_ROLE_CLIENT[role]) throw new Refus(400, 'Rôle requis : responsable ou collaborateur.');
+  const projet = await acces.assurerModele(String(projetId));
+  if (projet.interne === true) throw new Refus(409, "Un projet interne n'a pas de client.");
+  const { utilisateur } = await compteAuth(adresse, nom, 'client');
+  const { ref, cle, fiche } = await lireInterlocuteur(projet.id, { email: adresse });
+  const reprise = !fiche || fiche.statut !== 'actif';
+  await ref.set(sansIndefini({
+    email: adresse, nom: String(nom || (fiche && fiche.nom) || '').trim().slice(0, 120), uid: utilisateur.uid, role, statut: 'actif',
+    ajoute: fiche && fiche.ajoute ? fiche.ajoute : FieldValue.serverTimestamp(), ajoutePar: identite.uid,
+    retireLe: null, retirePar: null,
+    invitation: reprise ? { etat: 'preparee' } : (fiche.invitation || { etat: 'preparee' }),
+    maj: FieldValue.serverTimestamp(),
+  }), { merge: true });
+  await acces.recalculerAcces(projet.id);
+  let invitation = { etat: reprise ? 'preparee' : ((fiche.invitation || {}).etat || 'preparee') };
+  if (projet.ouvert === true && reprise) {
+    const r = await inviterInterlocuteur(projet.id, cle, { par: identite.uid });
+    invitation = { etat: r.envoyee ? 'envoyee' : 'en-attente', lien: r.lien, motif: r.motif };
+  }
+  await audit('acces.interlocuteur-ajoute', { projet: projet.id, cle, uid: utilisateur.uid, role, par: identite.uid });
+  return { ok: true, cle, uid: utilisateur.uid, role, invitation };
+}
+
+async function modifierInterlocuteur(identite, { projet: projetId, cle, email, role, nom }) {
+  const projet = await acces.assurerModele(String(projetId));
+  const { ref, cle: id, fiche } = await lireInterlocuteur(projet.id, { cle, email });
+  if (!fiche || fiche.statut !== 'actif') throw new Refus(404, "Cet interlocuteur n'a pas d'accès actif sur ce projet.");
+  const changements = { maj: FieldValue.serverTimestamp() };
+  if (role !== undefined) {
+    if (!LIBELLE_ROLE_CLIENT[role]) throw new Refus(400, 'Rôle requis : responsable ou collaborateur.');
+    if (fiche.role === 'responsable' && role !== 'responsable') await controleDernierResponsable(projet.id, id, role);
+    changements.role = role;
+  }
+  if (nom !== undefined) changements.nom = String(nom).trim().slice(0, 120);
+  await ref.update(changements);
+  await acces.recalculerAcces(projet.id);
+  await audit('acces.interlocuteur-modifie', { projet: projet.id, cle: id, role: changements.role || fiche.role, par: identite.uid });
+  return { ok: true, cle: id, role: changements.role || fiche.role };
+}
+
+async function retirerInterlocuteur(identite, { projet: projetId, cle, email, uid }) {
+  const projet = await acces.assurerModele(String(projetId));
+  let cible = { cle, email };
+  if (!cle && !email && uid) {
+    const trouve = (await bdd.collection(`projets/${projet.id}/interlocuteurs`).where('uid', '==', String(uid)).limit(1).get()).docs[0];
+    if (trouve) cible = { cle: trouve.id };
+  }
+  const { ref, cle: id, fiche } = await lireInterlocuteur(projet.id, cible);
+  if (!fiche) throw new Refus(404, "Cet interlocuteur n'existe pas sur ce projet.");
+  if (fiche.statut === 'actif' && fiche.role === 'responsable') await controleDernierResponsable(projet.id, id, null);
+  await ref.update({ statut: 'retire', retireLe: FieldValue.serverTimestamp(), retirePar: identite.uid, 'invitation.etat': 'revoquee', maj: FieldValue.serverTimestamp() });
+  if (fiche.uid) await invitations.revoquerCelles({ type: 'client', uid: fiche.uid, projet: projet.id });
+  const r = await acces.recalculerAcces(projet.id);
+  await audit('acces.interlocuteur-retire', { projet: projet.id, cle: id, uid: fiche.uid || null, par: identite.uid });
+  return { ok: true, cle: id, uid: fiche.uid || null, retires: r.retires };
+}
+
+async function ouvrirAuClient(identite, { id, prevenir }) {
+  const projet = await acces.assurerModele(String(id));
+  if (projet.interne === true) throw new Refus(409, "Un projet interne n'a pas de client à qui ouvrir.");
+  const tous = (await bdd.collection(`projets/${projet.id}/interlocuteurs`).get()).docs.map((d) => ({ cle: d.id, ...d.data() }));
+  const actifs = tous.filter((i) => i.statut === 'actif');
+  if (!actifs.length) throw new Refus(409, "Aucun interlocuteur sur ce projet : ajoutez au moins un responsable avant d'ouvrir.");
+  const sansRole = actifs.filter((i) => !LIBELLE_ROLE_CLIENT[i.role]);
+  if (sansRole.length) throw new Refus(409, `Rôle à définir avant d'ouvrir : ${sansRole.map((i) => i.email).join(', ')}.`);
+  if (!actifs.some((i) => i.role === 'responsable')) throw new Refus(409, "Il faut au moins un responsable avant d'ouvrir le projet.");
+
+  /* Un interlocuteur repris d'avant la Gate 2 peut ne pas avoir de compte. */
+  for (const i of actifs.filter((x) => !x.uid)) {
+    const { utilisateur } = await compteAuth(i.email, i.nom, 'client');
+    await bdd.doc(`projets/${projet.id}/interlocuteurs/${i.cle}`).update({ uid: utilisateur.uid, maj: FieldValue.serverTimestamp() });
+    i.uid = utilisateur.uid;
+  }
+
+  /* La première ouverture est un événement : une lettre par personne, avec
+     ce qui l'attend. Les suivantes (après une fermeture) rendent l'accès
+     sans rien renvoyer à ceux qui sont déjà entrés. */
+  const premiere = !projet.premiereOuverture;
+  const deja = projet.ouvert === true;
+  await bdd.doc(`projets/${projet.id}`).update({
+    ouvert: true, ouvertLe: FieldValue.serverTimestamp(),
+    ...(premiere ? { premiereOuverture: FieldValue.serverTimestamp() } : {}),
+    maj: FieldValue.serverTimestamp(),
+  });
+  await acces.recalculerAcces(projet.id);
+
+  const resume = premiere ? await resumeInitial(projet.id) : null;
+  const bilan = [];
+  for (const i of actifs) {
+    if (deja || (i.invitation && i.invitation.etat === 'acceptee')) { bilan.push({ email: i.email, etat: 'acceptee' }); continue; }
+    const r = await inviterInterlocuteur(projet.id, i.cle, { par: identite.uid, modele: premiere ? 'ouverture' : 'invitation', resume, prevenir: prevenir !== false });
+    bilan.push({ email: i.email, etat: r.envoyee ? 'envoyee' : 'en-attente', motif: r.motif });
+  }
+  if (premiere) {
+    await communication.notifierClients(projet.id, 'ouverture', {
+      type: 'projet', titre: 'Votre espace projet est ouvert', texte: projet.nom || '', lien: `#/projets/${projet.id}`,
+    });
+  }
+  await audit('projet-ouvert', { projet: projet.id, premiere, par: identite.uid, invitations: bilan.map((b) => b.etat) });
+  return { ok: true, ouvert: true, premiere, invitations: bilan };
+}
+
+async function fermerAuClient(identite, { id }) {
+  const projet = await acces.assurerModele(String(id));
+  await bdd.doc(`projets/${projet.id}`).update({ ouvert: false, maj: FieldValue.serverTimestamp() });
+  const r = await acces.recalculerAcces(projet.id);
+  /* Les liens encore vivants sont coupés : on n'invite pas dans un espace fermé. */
+  const inter = (await bdd.collection(`projets/${projet.id}/interlocuteurs`).get()).docs;
+  for (const d of inter) {
+    const i = d.data();
+    if (!i.uid) continue;
+    const n = await invitations.revoquerCelles({ type: 'client', uid: i.uid, projet: projet.id });
+    if (n && i.invitation && i.invitation.etat !== 'acceptee') await d.ref.update({ 'invitation.etat': 'revoquee', maj: FieldValue.serverTimestamp() });
+  }
+  await audit('projet-referme', { projet: projet.id, retires: r.retires.length, par: identite.uid });
+  return { ok: true, ouvert: false, retires: r.retires.length };
+}
+
+async function reglerEmailsClient(identite, { id, emailsClient }) {
+  if (!['actifs', 'coupes'].includes(emailsClient)) throw new Refus(400, 'emailsClient : actifs ou coupes.');
+  const ref = bdd.doc(`projets/${String(id)}`);
+  if (!(await ref.get()).exists) throw new Refus(404, 'Projet inconnu.');
+  await ref.update({ emailsClient, maj: FieldValue.serverTimestamp() });
+  await audit('projet.emails-client', { projet: String(id), emailsClient, par: identite.uid });
+  return { ok: true, emailsClient };
+}
+
+/* ==========================================================================
+   6 ter. L'équipe
+
+   Ajouter, modifier (rôle, projets d'un agent, permissions déléguées),
+   désactiver, réactiver, retirer. La désactivation ferme TOUT, tout de
+   suite : fiche inactive (les règles la relisent à chaque lecture), jetons
+   révoqués (le serveur refuse l'ancienne session), compte suspendu (plus
+   de reconnexion). Le dernier administrateur actif est intouchable.
+   ========================================================================== */
+
+async function lireEquipe() {
+  return (await bdd.collection('equipe').get()).docs.map((d) => ({ uid: d.id, ...d.data() }));
+}
+
+const projetsValides = async (liste) => {
+  const ids = [...new Set((Array.isArray(liste) ? liste : []).map(String).filter(Boolean))].slice(0, 200);
+  const connus = [];
+  for (const id of ids) if ((await bdd.doc(`projets/${id}`).get()).exists) connus.push(id);
+  return connus;
+};
+
+async function ajouterMembreEquipe(identite, { email, nom, role, projets, permissions }) {
+  const adresse = normaliserEmail(email);
+  if (!emailPlausible(adresse)) throw new Refus(400, 'Adresse valide requise.');
+  if (!String(nom || '').trim()) throw new Refus(400, 'Nom requis.');
+  const fonction = role === 'admin' ? 'admin' : 'agent';
+  const { utilisateur, cree } = await compteAuth(adresse, nom, 'equipe');
+  const ref = bdd.doc(`equipe/${utilisateur.uid}`);
+  if ((await ref.get()).exists) throw new Refus(409, "Cette personne fait déjà partie de l'équipe : modifiez sa fiche.");
+  await ref.set({
+    nom: String(nom).trim().slice(0, 120), email: adresse, role: fonction, actif: true,
+    projets: fonction === 'agent' ? await projetsValides(projets) : [],
+    permissions: fonction === 'agent' ? (Array.isArray(permissions) ? permissions.filter((p) => acces.DELEGABLES.includes(p)) : []) : [],
+    cree: FieldValue.serverTimestamp(), maj: FieldValue.serverTimestamp(), par: identite.uid,
+  });
+  try { await getAuth().updateUser(utilisateur.uid, { disabled: false }); } catch (err) { /* compte déjà actif */ }
+  const revendications = await poserRevendications(utilisateur.uid);
+  const inv = await invitations.creer({ type: 'equipe', email: adresse, nom, uid: utilisateur.uid, role: fonction, par: identite.uid, envoyee: true });
+  await mettreEnFile('invitation-equipe', [{ email: adresse, nom }], { nom: String(nom).trim(), email: adresse, role: fonction, lien: inv.lien }, { evenement: 'invitation-equipe' });
+  await audit('equipe.ajoute', { uid: utilisateur.uid, role: fonction, par: identite.uid });
+  return { ok: true, uid: utilisateur.uid, compteCree: cree, revendications };
+}
+
+async function modifierMembreEquipe(identite, { uid, role, projets, permissions, nom }) {
+  const equipe = await lireEquipe();
+  const avant = equipe.find((f) => f.uid === String(uid));
+  if (!avant) throw new Refus(404, "Ce membre n'existe pas.");
+  const apres = { ...avant };
+  if (role !== undefined) { if (!acces.ROLES_EQUIPE[role]) throw new Refus(400, 'Rôle : admin ou agent.'); apres.role = role; }
+  if (projets !== undefined) apres.projets = await projetsValides(projets);
+  if (permissions !== undefined) apres.permissions = Array.isArray(permissions) ? permissions.filter((p) => acces.DELEGABLES.includes(p)) : [];
+  if (nom !== undefined) apres.nom = String(nom).trim().slice(0, 120);
+  if (apres.role === 'admin') { apres.projets = []; apres.permissions = []; }
+  const garde = acces.controleDernierAdmin(equipe, avant.uid, apres);
+  if (garde) throw new Refus(409, garde);
+  await bdd.doc(`equipe/${avant.uid}`).update(sansIndefini({
+    role: apres.role, projets: apres.projets || [], permissions: apres.permissions || [], nom: apres.nom, maj: FieldValue.serverTimestamp(),
+  }));
+  await poserRevendications(avant.uid);
+  await audit('equipe.modifie', { uid: avant.uid, role: apres.role, par: identite.uid });
+  return { ok: true, uid: avant.uid, role: apres.role };
+}
+
+async function desactiverMembreEquipe(identite, { uid }) {
+  const equipe = await lireEquipe();
+  const avant = equipe.find((f) => f.uid === String(uid));
+  if (!avant) throw new Refus(404, "Ce membre n'existe pas.");
+  const garde = acces.controleDernierAdmin(equipe, avant.uid, { ...avant, actif: false });
+  if (garde) throw new Refus(409, garde);
+  await bdd.doc(`equipe/${avant.uid}`).update({ actif: false, desactiveLe: FieldValue.serverTimestamp(), desactivePar: identite.uid, maj: FieldValue.serverTimestamp() });
+  await poserRevendications(avant.uid);
+  try { await getAuth().revokeRefreshTokens(avant.uid); } catch (err) { console.error('Jetons non révoqués', err); }
+  try { await getAuth().updateUser(avant.uid, { disabled: true }); } catch (err) { console.error('Compte non suspendu', err); }
+  await invitations.revoquerCelles({ type: 'equipe', uid: avant.uid });
+  await audit('equipe.desactive', { uid: avant.uid, par: identite.uid });
+  return { ok: true, uid: avant.uid, actif: false };
+}
+
+async function reactiverMembreEquipe(identite, { uid }) {
+  const ref = bdd.doc(`equipe/${String(uid)}`);
+  if (!(await ref.get()).exists) throw new Refus(404, "Ce membre n'existe pas.");
+  await ref.update({ actif: true, desactiveLe: null, maj: FieldValue.serverTimestamp() });
+  try { await getAuth().updateUser(String(uid), { disabled: false }); } catch (err) { console.error('Compte non rétabli', err); }
+  await poserRevendications(String(uid));
+  await audit('equipe.reactive', { uid: String(uid), par: identite.uid });
+  return { ok: true, uid: String(uid), actif: true };
+}
+
+async function retirerMembreEquipe(identite, { uid }) {
+  const equipe = await lireEquipe();
+  const avant = equipe.find((f) => f.uid === String(uid));
+  if (!avant) throw new Refus(404, "Ce membre n'existe pas.");
+  const garde = acces.controleDernierAdmin(equipe, avant.uid, null);
+  if (garde) throw new Refus(409, garde);
+  await bdd.doc(`equipe/${avant.uid}`).delete();
+  try { await getAuth().revokeRefreshTokens(avant.uid); } catch (err) { /* compte parti */ }
+  /* Le compte ne sert qu'à l'équipe (une adresse, un rôle) : il part avec
+     elle. L'adresse redevient libre pour un autre rôle. */
+  try { await getAuth().deleteUser(avant.uid); } catch (err) { /* déjà parti */ }
+  await invitations.revoquerCelles({ type: 'equipe', uid: avant.uid });
+  await audit('equipe.retire', { uid: avant.uid, par: identite.uid });
+  return { ok: true, uid: avant.uid, retire: true };
+}
+
+/* ==========================================================================
+   6 quater. Le registre des actions
+
+   Chaque action nomme la permission qu'elle exige et, s'il y a lieu, le
+   projet qu'elle touche : le contrôle se fait UNE fois, avant l'action,
+   et il est le même pour toutes. Une action retirée répond 410 en disant
+   ce qui la remplace, plutôt que de se taire.
+   ========================================================================== */
+
+const projetDuDocument = async (id) => {
+  if (!id) return null;
+  const d = await bdd.doc(`documents/${String(id)}`).get();
+  return d.exists ? d.data().projet || null : null;
+};
+
+const ACTIONS = {
+  moi: { permission: null },
+  creerProjet: { permission: 'projets.creer' },
+  ajouterInterlocuteur: { permission: 'acces.gerer', projet: (c) => c.projet },
+  modifierInterlocuteur: { permission: 'acces.gerer', projet: (c) => c.projet },
+  retirerInterlocuteur: { permission: 'acces.gerer', projet: (c) => c.projet },
+  renvoyerInvitation: { permission: 'acces.gerer', projet: (c) => c.projet },
+  inviterClient: { permission: 'acces.gerer', projet: (c) => c.projet },
+  retirerClient: { permission: 'acces.gerer', projet: (c) => c.projet },
+  creerInvitation: { permission: 'acces.gerer', projet: (c) => c.projet },
+  revoquerInvitation: { permission: 'acces.gerer' },
+  ouvrirAuClient: { permission: 'projets.ouvrir', projet: (c) => c.id },
+  fermerAuClient: { permission: 'projets.ouvrir', projet: (c) => c.id },
+  reglerEmailsClient: { permission: 'projets.ouvrir', projet: (c) => c.id },
+  deposerDocument: { permission: 'finance.gerer', projet: (c) => c.projet },
+  majDocument: { permission: 'finance.gerer', projet: (c) => projetDuDocument(c.id) },
+  statutDevis: { permission: 'finance.gerer', projet: (c) => projetDuDocument(c.id) },
+  archiverDocument: { permission: 'finance.gerer', projet: (c) => projetDuDocument(c.id) },
+  statutFacture: { permission: 'finance.gerer', projet: (c) => projetDuDocument(c.id) },
+  enregistrerPaiement: { permission: 'finance.gerer', projet: (c) => projetDuDocument(c.facture) },
+  poserLogo: { permission: 'contenu.gerer', projet: (c) => c.id },
+  creerDemande: { permission: 'demandes.gerer', projet: (c) => c.projet },
+  creerOrganisation: { permission: 'clients.gerer' },
+  majOrganisation: { permission: 'clients.gerer' },
+  inviterMembreOrganisation: { retiree: "L'accès ne se donne plus par organisation : ouvrez le projet, onglet « Accès client », et ajoutez la personne au projet voulu." },
+  retirerMembreOrganisation: { retiree: "L'accès ne se retire plus par organisation : ouvrez chaque projet, onglet « Accès client »." },
+  ajouterEquipe: { permission: 'equipe.gerer' },
+  modifierEquipe: { permission: 'equipe.gerer' },
+  desactiverEquipe: { permission: 'equipe.gerer' },
+  reactiverEquipe: { permission: 'equipe.gerer' },
+  retirerEquipe: { permission: 'equipe.gerer' },
+  inscrireTesteur: { permission: 'qa.gerer' },
+  majTesteur: { permission: 'qa.gerer' },
+  inviterTesteur: { permission: 'qa.gerer' },
+  retirerTesteur: { permission: 'qa.gerer' },
+  creerJetonRobot: { permission: 'qa.gerer', projet: (c) => c.projet },
+  revoquerJetonRobot: { permission: 'qa.gerer' },
+  migrerProjets: { permission: 'systeme' },
+  verifierSignature: { permission: 'systeme' },
+  diagnostic: { permission: 'systeme' },
+  remplirProjet: { permission: 'systeme', projet: (c) => c.id },
+};
+
+/* Exposé pour l'épreuve : le registre, sans rien exécuter. */
+exports._actions = ACTIONS;
+
 exports.suiviAdmin = onRequest(
-  { region: REGION, secrets: [ADMIN_CLE], cors: true },
+  { region: REGION, cors: true },
   async (req, res) => {
     if (req.method === 'OPTIONS') return res.status(204).send('');
     if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
 
-    const { cle, action, projet, email, nom, uid, ref, client, plateformes,
+    const { action, projet, email, nom, uid, ref, client, plateformes,
       type, numero, libelle, montant, echeance, fichier, liens, id, statut, role,
       entreprise, telephone, adresse, notesInternes, organisation, description, responsable,
       debut, cible, budget, budgetNote, inviter, demandeProjet, tva, date, facture, moyen, reference, note, archive,
       prenom, mobile, profil, testeur } = req.body || {};
 
-    const attendu = String(ADMIN_CLE.value() || '').trim();
-    if (!attendu || String(cle || '').trim() !== attendu) return res.status(403).send('interdit');
+    /* Qui appelle, et a-t-il le droit ? Une seule porte, avant toute action. */
+    let identite;
+    try {
+      identite = await acces.identifier(req);
+      const definition = ACTIONS[action];
+      if (!definition) return res.status(400).send('action inconnue');
+      if (definition.retiree) return res.status(410).send(definition.retiree);
+      const projetVise = definition.projet ? await definition.projet(req.body || {}) : null;
+      if (definition.projet && !projetVise && definition.permission !== 'systeme') {
+        /* Une action sur un projet sans projet désigné : l'action dira
+           elle-même ce qui manque, mais un agent ne passe pas sans projet. */
+        acces.exiger(identite, definition.permission, identite.fiche && identite.fiche.role === 'admin' ? null : '__aucun__');
+      } else {
+        acces.exiger(identite, definition.permission, projetVise);
+      }
+    } catch (err) {
+      if (err && err.refus) {
+        await audit('admin.refus', { action: String(action || ''), uid: identite ? identite.uid : null, code: err.code, motif: err.message });
+        return res.status(err.code).send(err.message);
+      }
+      console.error('suiviAdmin, contrôle d accès', err);
+      return res.status(500).send('erreur interne');
+    }
 
     try {
+      /* --- Qui suis-je : ce que l'écran doit proposer, et rien de plus. */
+      if (action === 'moi') {
+        const f = identite.fiche;
+        return res.json({ ok: true, uid: identite.uid, email: identite.email, role: f.role, actif: f.actif === true, projets: f.projets || [], permissions: [...acces.permissionsDe(f)] });
+      }
+
       /* --- Créer un projet ------------------------------------------------
          La référence sert de préfixe à tous les numéros de ticket : elle est
          en majuscules, et unique, sinon deux projets produiraient des
@@ -1193,7 +1520,9 @@ exports.suiviAdmin = onRequest(
           type: String(type || 'application-mobile'), statut: String(statut || (estInterne ? 'en-cours' : 'brouillon')),
           organisation: orgId, client: ficheClient, plateformes: plateformesValides,
           interne: estInterne, contacts: Array.isArray(req.body.contacts) ? req.body.contacts : [],
-          silence: req.body.silence === true,
+          /* Les e-mails au client : actifs par défaut. Les couper laisse le
+             Hub vivre, sans rien envoyer par e-mail (l'ancienne sourdine). */
+          emailsClient: req.body.emailsClient === 'coupes' || req.body.silence === true ? 'coupes' : 'actifs',
           /* Une idée notée pour plus tard : le projet existe, mais se range
              dans les projets à faire, hors du portefeuille en cours. */
           aFaire: req.body.aFaire === true,
@@ -1201,9 +1530,8 @@ exports.suiviAdmin = onRequest(
              seulement ensuite s'ouvre au client. Tant qu'il est ferme,
              personne n'est dans « membres » : ce n'est pas un masque a
              l'ecran, c'est l'absence d'acces, refusee par les regles. */
-          ouvert: req.body.inviter === true,
-          ouvertLe: req.body.inviter === true ? FieldValue.serverTimestamp() : null,
-          membres: [], membresOrganisation: [], compteur: 0,
+          ouvert: false, ouvertLe: null, premiereOuverture: null,
+          membres: [], roles: {}, personnes: [], membresOrganisation: [], accesVersion: 2, compteur: 0,
           progression: { mode: 'manuel', valeur: 0 },
           debut: enDate(debut), cible: enDate(cible), responsable: String(responsable || ''),
           pulse: { enCours: '', derniereLivraison: '', prochaineEtape: '', attenteClient: '' },
@@ -1223,86 +1551,74 @@ exports.suiviAdmin = onRequest(
           await bdd.doc(`idees/${nouveau.id}`).set({ texte: req.body.idee.slice(0, 60000), par: String(responsable || ''), maj: FieldValue.serverTimestamp() });
         }
 
-        /* Les membres de l'organisation deviennent membres du projet. */
-        if (orgId) await synchroniserMembres(orgId);
-
-        /* L'invitation du contact principal, seulement si elle est demandee
-           explicitement. Par defaut le projet reste ferme : on ne garnit
-           pas un espace sous les yeux du client. */
-        if (inviter === true && emailPlausible(ficheClient.email)) {
-          const { utilisateur } = await compteAuth(ficheClient.email, ficheClient.nom, 'client');
-          await bdd.doc(`organisations/${orgId}`).update({ membres: FieldValue.arrayUnion(utilisateur.uid), [`roles.${utilisateur.uid}`]: 'owner', maj: FieldValue.serverTimestamp() });
-          const org = await bdd.doc(`organisations/${orgId}`).get();
-          const contacts = (org.data().contacts || []).map((c) => (memeEmail(c.email, ficheClient.email) ? { ...c, uid: utilisateur.uid } : c));
-          await org.ref.update({ contacts });
-          await synchroniserMembres(orgId);
-          await mettreEnFile('invitation', [{ email: ficheClient.email, nom: ficheClient.nom || '' }], {
-            projetNom: String(nom).trim(), clientNom: ficheClient.nom || '', email: normaliserEmail(ficheClient.email), lien: `${courriels.BASE}hub#/projets/${nouveau.id}`,
-          });
+        /* Les interlocuteurs du projet, préparés : ils n'ont aucun accès et
+           ne reçoivent rien tant que le projet n'est pas ouvert. L'ancien
+           appel « inviter » vaut un responsable (le contact de la fiche)
+           suivi de l'ouverture. */
+        const aPreparer = Array.isArray(req.body.interlocuteurs) ? req.body.interlocuteurs.slice(0, 20) : [];
+        if (inviter === true && emailPlausible(ficheClient.email) && !aPreparer.some((i) => memeEmail(i.email, ficheClient.email))) {
+          aPreparer.unshift({ email: ficheClient.email, nom: ficheClient.nom || '', role: 'responsable' });
         }
+        const prepares = [];
+        for (const i of aPreparer) {
+          if (!i || !emailPlausible(i.email)) continue;
+          prepares.push(await ajouterInterlocuteur(identite, { projet: nouveau.id, email: i.email, nom: i.nom, role: acces.ROLES_CLIENT[i.role] ? i.role : 'collaborateur' }));
+        }
+        let ouverture = null;
+        if ((inviter === true || req.body.ouvrir === true) && prepares.length) {
+          ouverture = await ouvrirAuClient(identite, { id: nouveau.id, prevenir: req.body.prevenir !== false });
+        }
+        if (orgId) await synchroniserMembres(orgId);
 
         /* Une demande de nouveau projet transformee garde son fil. */
         if (demandeProjet) {
           try { await bdd.doc(`demandesProjet/${String(demandeProjet)}`).update({ statut: 'projet', projet: nouveau.id, maj: FieldValue.serverTimestamp() }); } catch (err) { console.warn('Demande de projet non liee', err); }
         }
 
-        await bdd.collection('audit').add({ action: 'projet-cree', projet: nouveau.id, ref: reference, organisation: orgId, date: FieldValue.serverTimestamp() });
+        await audit('projet-cree', { projet: nouveau.id, ref: reference, organisation: orgId, par: identite.uid });
         console.log(`Projet ${reference} cree : ${nouveau.id}`);
-        return res.status(200).json({ ok: true, id: nouveau.id, organisation: orgId });
+        return res.status(200).json({ ok: true, id: nouveau.id, organisation: orgId, interlocuteurs: prepares.length, ouvert: Boolean(ouverture) });
       }
 
-      /* --- Inviter un client sur un projet -------------------------------- */
-      if (action === 'inviterClient') {
-        if (!projet || !emailPlausible(email)) {
-          return res.status(400).send('projet et email valides requis');
+      /* --- Les accès des clients, projet par projet ----------------------
+         « inviterClient » et « retirerClient » sont les anciens noms : ils
+         passent par le même chemin. Un ancien appel sans rôle ajoute un
+         collaborateur (le moindre droit) ou garde le rôle déjà donné. */
+      if (action === 'ajouterInterlocuteur' || action === 'inviterClient') {
+        if (!projet || !emailPlausible(email)) return res.status(400).send('projet et email valides requis');
+        let roleVoulu = role;
+        if (!acces.ROLES_CLIENT[roleVoulu]) {
+          const existant = await bdd.doc(`projets/${String(projet)}/interlocuteurs/${cleEmail(email)}`).get();
+          roleVoulu = existant.exists && acces.ROLES_CLIENT[existant.data().role] ? existant.data().role : 'collaborateur';
         }
-        const refProjet = bdd.doc(`projets/${String(projet)}`);
-        const docProjet = await refProjet.get();
-        if (!docProjet.exists) return res.status(404).send('projet inconnu');
-        const ficheProjet = { id: docProjet.id, ...docProjet.data() };
-
-        const { utilisateur, cree } = await compteAuth(email, nom, 'client');
-
-        await refProjet.update({
-          membres: FieldValue.arrayUnion(utilisateur.uid),
-          maj: FieldValue.serverTimestamp(),
-        });
-        const revendications = await poserRevendications(utilisateur.uid);
-
-        await mettreEnFile('invitation', [{ email, nom: String(nom || '').trim() || nomClient(ficheProjet) }], {
-          projetNom: ficheProjet.nom || '',
-          clientNom: String(nom || '').trim() || nomClient(ficheProjet),
-          email: normaliserEmail(email),
-          lien: courriels.lienEspace(),
-        });
-
-        console.log(`${normaliserEmail(email)} invité sur ${ficheProjet.nom || projet}`);
-        return res.status(200).json({ ok: true, uid: utilisateur.uid, compteCree: cree, revendications });
+        return res.json(await ajouterInterlocuteur(identite, { projet, email, nom, role: roleVoulu }));
       }
-
-      /* --- Retirer un client d'un projet ---------------------------------- */
-      if (action === 'retirerClient') {
+      if (action === 'modifierInterlocuteur') {
         if (!projet) return res.status(400).send('projet requis');
-        let identifiant = String(uid || '').trim();
-        if (!identifiant) {
-          if (!emailPlausible(email)) return res.status(400).send('uid ou email requis');
-          const { utilisateur } = await compteAuth(email, null);
-          identifiant = utilisateur.uid;
-        }
-
-        const refProjet = bdd.doc(`projets/${String(projet)}`);
-        if (!(await refProjet.get()).exists) return res.status(404).send('projet inconnu');
-
-        await refProjet.update({
-          membres: FieldValue.arrayRemove(identifiant),
-          maj: FieldValue.serverTimestamp(),
-        });
-        /* Le retrait doit fermer l'accès aux fichiers, donc le jeton se
-           recalcule tout de suite. */
-        const revendications = await poserRevendications(identifiant);
-        console.log(`${identifiant} retiré du projet ${projet}`);
-        return res.status(200).json({ ok: true, uid: identifiant, revendications });
+        return res.json(await modifierInterlocuteur(identite, { projet, cle: req.body.cle, email, role, nom }));
       }
+      if (action === 'retirerInterlocuteur' || action === 'retirerClient') {
+        if (!projet) return res.status(400).send('projet requis');
+        return res.json(await retirerInterlocuteur(identite, { projet, cle: req.body.cle, email, uid }));
+      }
+      if (action === 'renvoyerInvitation') {
+        if (!projet) return res.status(400).send('projet requis');
+        const { cle: cleI, fiche } = await lireInterlocuteur(String(projet), { cle: req.body.cle, email });
+        if (!fiche || fiche.statut !== 'actif') return res.status(404).send("Cet interlocuteur n'a pas d'accès actif sur ce projet.");
+        const r = await inviterInterlocuteur(String(projet), cleI, { par: identite.uid, prevenir: req.body.envoyer !== false });
+        await audit('acces.invitation-renvoyee', { projet: String(projet), cle: cleI, envoyee: r.envoyee, par: identite.uid });
+        return res.json({ ok: true, ...r });
+      }
+      if (action === 'reglerEmailsClient') {
+        return res.json(await reglerEmailsClient(identite, { id, emailsClient: req.body.emailsClient }));
+      }
+
+      /* --- L'équipe -------------------------------------------------------- */
+      if (action === 'ajouterEquipe') return res.json(await ajouterMembreEquipe(identite, { email, nom, role, projets: req.body.projets, permissions: req.body.permissions }));
+      if (action === 'modifierEquipe') return res.json(await modifierMembreEquipe(identite, { uid, role, projets: req.body.projets, permissions: req.body.permissions, nom }));
+      if (action === 'desactiverEquipe') return res.json(await desactiverMembreEquipe(identite, { uid }));
+      if (action === 'reactiverEquipe') return res.json(await reactiverMembreEquipe(identite, { uid }));
+      if (action === 'retirerEquipe') return res.json(await retirerMembreEquipe(identite, { uid }));
 
       /* --- Déposer un devis ou une facture --------------------------------
          Le fichier est déjà dans le stockage (règles : écriture réservée à
@@ -1431,7 +1747,13 @@ exports.suiviAdmin = onRequest(
         const doc = await refDocument.get();
         if (!doc.exists) return res.status(404).send('document inconnu');
         if (doc.data().type !== 'devis') return res.status(400).send('ce document n est pas un devis');
-        await refDocument.update({ statut });
+        /* Un devis signé hors du Hub (papier, e-mail) se marque ici : la
+           réponse porte alors la signature de la personne de l'équipe, que
+           le déclencheur vérifie comme il vérifie celle d'un client. */
+        const repondu = statut === 'accepte' || statut === 'refuse';
+        await refDocument.update(repondu
+          ? { statut, reponse: { par: identite.uid, nom: (identite.fiche && identite.fiche.nom) || '', cote: 'equipe', date: FieldValue.serverTimestamp(), commentaire: '' } }
+          : { statut });
         return res.status(200).json({ ok: true, statut });
       }
 
@@ -1521,47 +1843,6 @@ exports.suiviAdmin = onRequest(
         return res.status(200).json({ ok: true });
       }
 
-      if (action === 'inviterMembreOrganisation') {
-        if (!id || !emailPlausible(email)) return res.status(400).send('organisation et email valides requis');
-        const orgRef = bdd.doc(`organisations/${String(id)}`);
-        const org = await orgRef.get();
-        if (!org.exists) return res.status(404).send('organisation inconnue');
-        const { utilisateur, cree } = await compteAuth(email, nom, 'client');
-        const fonction = role === 'owner' ? 'owner' : 'member';
-        const contacts = (org.data().contacts || []).filter((c) => !memeEmail(c.email, email));
-        contacts.push({ nom: String(nom || '').trim(), email: normaliserEmail(email), role: fonction, uid: utilisateur.uid });
-        await orgRef.update({ membres: FieldValue.arrayUnion(utilisateur.uid), [`roles.${utilisateur.uid}`]: fonction, contacts, maj: FieldValue.serverTimestamp() });
-        await synchroniserMembres(String(id));
-        const premierProjet = await bdd.collection('projets').where('organisation', '==', String(id)).limit(1).get();
-        const projetNom = premierProjet.empty ? '' : premierProjet.docs[0].data().nom;
-        await mettreEnFile('invitation', [{ email, nom: String(nom || '').trim() }], {
-          projetNom, clientNom: String(nom || '').trim(), email: normaliserEmail(email), lien: `${courriels.BASE}hub`,
-        });
-        await bdd.collection('audit').add({ action: 'membre-invite', organisation: String(id), uid: utilisateur.uid, email: normaliserEmail(email), date: FieldValue.serverTimestamp() });
-        return res.status(200).json({ ok: true, uid: utilisateur.uid, compteCree: cree });
-      }
-
-      if (action === 'retirerMembreOrganisation') {
-        if (!id) return res.status(400).send('organisation requise');
-        let identifiant = String(uid || '').trim();
-        if (!identifiant) {
-          if (!emailPlausible(email)) return res.status(400).send('uid ou email requis');
-          const { utilisateur } = await compteAuth(email, null);
-          identifiant = utilisateur.uid;
-        }
-        const orgRef = bdd.doc(`organisations/${String(id)}`);
-        const org = await orgRef.get();
-        if (!org.exists) return res.status(404).send('organisation inconnue');
-        const contacts = (org.data().contacts || []).filter((c) => c.uid !== identifiant && !(email && memeEmail(c.email, email)));
-        await orgRef.update({ membres: FieldValue.arrayRemove(identifiant), [`roles.${identifiant}`]: FieldValue.delete(), contacts, maj: FieldValue.serverTimestamp() });
-        /* Retire aussi des projets, puis recalcule le jeton : l'acces aux fichiers se ferme tout de suite. */
-        const projets = await bdd.collection('projets').where('organisation', '==', String(id)).get();
-        for (const p of projets.docs) await p.ref.update({ membres: FieldValue.arrayRemove(identifiant), membresOrganisation: FieldValue.arrayRemove(identifiant), maj: FieldValue.serverTimestamp() });
-        await poserRevendications(identifiant);
-        await bdd.collection('audit').add({ action: 'membre-retire', organisation: String(id), uid: identifiant, date: FieldValue.serverTimestamp() });
-        return res.status(200).json({ ok: true, uid: identifiant });
-      }
-
       /* --- Changer le statut d'une facture -------------------------------- */
       if (action === 'statutFacture') {
         if (!id) return res.status(400).send('id requis');
@@ -1576,27 +1857,6 @@ exports.suiviAdmin = onRequest(
         await refDocument.update({ statut });
         console.log(`Facture ${doc.data().numero || id} passée à ${statut}`);
         return res.status(200).json({ ok: true, statut });
-      }
-
-      /* --- Ajouter un membre d'équipe -------------------------------------
-         La fiche « equipe » ouvre l'accès à tous les projets côté Firestore,
-         la revendication « equipe » fait de même côté stockage. */
-      if (action === 'ajouterEquipe') {
-        if (!emailPlausible(email)) return res.status(400).send('email valide requis');
-        if (!String(nom || '').trim()) return res.status(400).send('nom requis');
-        const fonction = role === 'admin' ? 'admin' : 'agent';
-
-        const { utilisateur, cree } = await compteAuth(email, nom, 'equipe');
-        await bdd.doc(`equipe/${utilisateur.uid}`).set({
-          nom: String(nom).trim(),
-          email: normaliserEmail(email),
-          role: fonction,
-          actif: true,
-        }, { merge: true });
-        const revendications = await poserRevendications(utilisateur.uid);
-
-        console.log(`Membre d'équipe ${normaliserEmail(email)} (${fonction}) : ${utilisateur.uid}`);
-        return res.status(200).json({ ok: true, uid: utilisateur.uid, compteCree: cree, revendications });
       }
 
       /* --- Remettre d aplomb les projets d avant le hub ---------------------
@@ -1717,72 +1977,17 @@ exports.suiviAdmin = onRequest(
         return res.json({ ok: true, id: nouveau.id });
       }
 
-      /* --- Ouvrir le projet au client -------------------------------------
-         Le geste qui leve le rideau : le client entre, voit tout ce qui a
-         ete prepare, et recoit son invitation. Il refuse tant que l'espace
-         n'est pas presentable : sans interlocuteur, on ouvrirait a
-         personne. */
+      /* --- Ouvrir le projet au client, le refermer --------------------------
+         Voir ouvrirAuClient et fermerAuClient plus haut : la première
+         ouverture est un événement (une lettre et un résumé par personne),
+         jamais une avalanche de ce qui s'est accumulé pendant la préparation. */
       if (action === 'ouvrirAuClient') {
         if (!id) return res.status(400).send('id du projet requis');
-        const ref = bdd.doc(`projets/${String(id)}`);
-        const doc = await ref.get();
-        if (!doc.exists) return res.status(404).send('projet inconnu');
-        const p = doc.data();
-        if (p.interne === true) return res.status(409).send('un projet a moi n a pas de client a qui ouvrir');
-
-        /* Les adresses a qui ouvrir : les interlocuteurs, puis le contact
-           historique. Sans aucune, il n'y a personne a faire entrer. */
-        const adresses = [];
-        for (const c of (p.contacts || [])) if (emailPlausible(c.email)) adresses.push({ email: normaliserEmail(c.email), nom: c.nom || '' });
-        if (p.client && emailPlausible(p.client.email) && !adresses.some((a) => a.email === normaliserEmail(p.client.email))) {
-          adresses.push({ email: normaliserEmail(p.client.email), nom: p.client.nom || '' });
-        }
-        if (!adresses.length) {
-          return res.status(409).json({ ok: false, message: "Aucune adresse d'interlocuteur sur ce projet. Renseignez-la avant d'ouvrir." });
-        }
-
-        const uids = [];
-        for (const a of adresses) {
-          const { utilisateur } = await compteAuth(a.email, a.nom, 'client');
-          uids.push(utilisateur.uid);
-        }
-
-        await ref.update({
-          ouvert: true, ouvertLe: FieldValue.serverTimestamp(),
-          membres: FieldValue.arrayUnion(...uids),
-          /* Ouvrir, c'est accepter d'etre entendu : la sourdine tombe. */
-          silence: false,
-          maj: FieldValue.serverTimestamp(),
-        });
-        if (p.organisation) {
-          await bdd.doc(`organisations/${p.organisation}`).update({ membres: FieldValue.arrayUnion(...uids), maj: FieldValue.serverTimestamp() });
-          await synchroniserMembres(p.organisation);
-        }
-        for (const uid of uids) { try { await poserRevendications(uid); } catch (err) { console.error(`Jeton de ${uid} non recalcule`, err); } }
-
-        if (req.body.prevenir !== false) {
-          for (const a of adresses) {
-            await mettreEnFile('invitation', [a], {
-              projetNom: p.nom || '', clientNom: a.nom || '', email: a.email, lien: `${courriels.BASE}hub#/projets/${id}`,
-            });
-          }
-        }
-        await audit('projet-ouvert', { projet: String(id), adresses: adresses.map((a) => a.email) });
-        return res.json({ ok: true, ouvert: true, adresses: adresses.map((a) => a.email) });
+        return res.json(await ouvrirAuClient(identite, { id, prevenir: req.body.prevenir }));
       }
-
-      /* Refermer : le client perd l'acces, rien n'est supprime. Utile si un
-         projet a ete ouvert trop tot. */
       if (action === 'fermerAuClient') {
         if (!id) return res.status(400).send('id du projet requis');
-        const ref = bdd.doc(`projets/${String(id)}`);
-        const doc = await ref.get();
-        if (!doc.exists) return res.status(404).send('projet inconnu');
-        const anciens = doc.data().membres || [];
-        await ref.update({ ouvert: false, membres: [], membresOrganisation: [], maj: FieldValue.serverTimestamp() });
-        for (const uid of anciens) { try { await poserRevendications(uid); } catch (err) { console.error(`Jeton de ${uid} non recalcule`, err); } }
-        await audit('projet-referme', { projet: String(id), retires: anciens.length });
-        return res.json({ ok: true, ouvert: false, retires: anciens.length });
+        return res.json(await fermerAuClient(identite, { id }));
       }
 
       /* --- Un lien d'invitation -------------------------------------------
@@ -1842,13 +2047,14 @@ exports.suiviAdmin = onRequest(
         try {
           const premier = projets[0] || '';
           const fiche = premier ? await lireProjet(premier) : null;
+          const inv = await invitations.creer({ type: 'testeur', email: adresse, nom: String(prenom).trim(), uid: compte.uid, role: 'testeur', projets, projetNom: fiche ? (fiche.nom || '') : '', par: identite.uid, envoyee: true });
           await mettreEnFile('invitation-testeur', [{ email: adresse, nom: String(prenom).trim() }], {
             prenom: String(prenom).trim(),
             email: adresse,
             projetNom: fiche ? (fiche.nom || '') : '',
             plateformes: surQuoi,
-            lien: `${courriels.BASE}`,
-          });
+            lien: inv.lien,
+          }, { projet: premier || null, evenement: 'invitation-testeur' });
           invite = true;
         } catch (err) {
           console.error(`Invitation du testeur ${adresse} non mise en file`, err);
@@ -1895,13 +2101,14 @@ exports.suiviAdmin = onRequest(
 
         const premier = (t.projets || [])[0] || '';
         const p = premier ? await lireProjet(premier) : null;
+        const inv = await invitations.creer({ type: 'testeur', email: t.email, nom: t.prenom || '', uid: tid, role: 'testeur', projets: t.projets || [], projetNom: p ? (p.nom || '') : '', par: identite.uid, envoyee: true });
         const envoi = await mettreEnFile('invitation-testeur', [{ email: t.email, nom: t.prenom || '' }], {
           prenom: t.prenom || '',
           email: t.email,
           projetNom: p ? (p.nom || '') : '',
           plateformes: t.plateformes || (t.mobile ? [t.mobile, 'web'] : []),
-          lien: `${courriels.BASE}`,
-        });
+          lien: inv.lien,
+        }, { projet: premier || null, evenement: 'invitation-testeur' });
         if (!envoi) return res.status(502).send('invitation non mise en file');
         await audit('testeur.invite', { uid: tid, email: t.email });
         return res.json({ ok: true });
@@ -2038,52 +2245,35 @@ exports.suiviAdmin = onRequest(
         return res.json({ ok: true, supprime: false });
       }
 
+      /* Le lien d'invitation d'un interlocuteur, à copier dans un message.
+         Il ne donne aucun accès par lui-même : il pré-remplit l'adresse,
+         c'est le code reçu dans la boîte qui ouvre la session. Il n'existe
+         que pour une personne qui a déjà un accès actif sur un projet
+         ouvert : on n'invite pas dans un espace fermé. */
       if (action === 'creerInvitation') {
         const adresse = normaliserEmail(email);
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(adresse)) return res.status(400).send('adresse invalide');
-
-        let ficheProjet = null;
-        if (projet) {
-          const d = await bdd.doc(`projets/${String(projet)}`).get();
-          if (!d.exists) return res.status(404).send('projet inconnu');
-          ficheProjet = { id: d.id, ...d.data() };
+        if (!projet) return res.status(400).send("Projet requis : un lien d'invitation mène à un projet.");
+        if (!emailPlausible(adresse)) return res.status(400).send('adresse invalide');
+        /* Le conflit de rôle d'abord : c'est le motif le plus utile à lire. */
+        await exigerRole(adresse, 'client');
+        const { cle: cleI, fiche } = await lireInterlocuteur(String(projet), { email: adresse });
+        if (!fiche || fiche.statut !== 'actif') {
+          return res.status(409).send("Ajoutez d'abord cette personne aux accès du projet (onglet Accès client), avec son rôle.");
         }
-
-        /* Le compte existe, ou nait ici : sans lui, le code n'aurait
-           personne a qui ouvrir. Le rattachement au projet reste le geste
-           separe d'« inviterClient », qui donne l'acces. */
-        const { utilisateur } = await compteAuth(adresse, nom, 'client');
-
-        const jeton = require('node:crypto').randomBytes(24).toString('base64url');
-        await bdd.doc(`invitations/${jeton}`).set({
-          email: adresse, nom: String(nom || '').trim() || '',
-          projet: ficheProjet ? ficheProjet.id : null,
-          projetNom: ficheProjet ? (ficheProjet.nom || '') : '',
-          uid: utilisateur.uid,
-          expire: new Date(Date.now() + 14 * 24 * 3600 * 1000),
-          revoquee: false,
-          cree: FieldValue.serverTimestamp(),
-        });
-
-        const lien = `${courriels.BASE}?i=${jeton}`;
-        await audit('invitation.creee', { email: adresse, projet: ficheProjet ? ficheProjet.id : null, uid: utilisateur.uid });
-
-        /* Envoi facultatif : l'admin peut vouloir coller le lien lui-meme
-           dans un message, plutot que de declencher un courriel. */
-        if (req.body.envoyer === true) {
-          await mettreEnFile('invitation', [{ email: adresse, nom: String(nom || '').trim() }], {
-            clientNom: String(nom || '').trim(), projetNom: ficheProjet ? (ficheProjet.nom || '') : '', email: adresse, lien,
-          });
-        }
-        return res.json({ ok: true, lien, jeton, expire: '14 jours' });
+        const r = await inviterInterlocuteur(String(projet), cleI, { par: identite.uid, prevenir: req.body.envoyer === true });
+        await audit('invitation.creee', { projet: String(projet), cle: cleI, envoyee: r.envoyee, par: identite.uid });
+        return res.json({ ok: true, lien: r.lien, envoyee: r.envoyee, motif: r.motif, expire: '14 jours' });
       }
 
-      /* Couper un lien qui a fuite, sans toucher au compte. */
+      /* Couper un lien qui a fuité, sans toucher à l'accès. Le jeton, ou
+         l'identifiant de l'invitation (son empreinte). */
       if (action === 'revoquerInvitation') {
         const jeton = String(req.body.jeton || '').trim();
-        if (!jeton) return res.status(400).send('jeton requis');
-        await bdd.doc(`invitations/${jeton}`).set({ revoquee: true, maj: FieldValue.serverTimestamp() }, { merge: true });
-        await audit('invitation.revoquee', { jeton });
+        const idInv = String(req.body.invitation || '').trim() || (jeton ? invitations.idDe(jeton) : '');
+        if (!idInv) return res.status(400).send('jeton ou invitation requis');
+        const fait = await invitations.revoquer(idInv) || (jeton ? await invitations.revoquer(jeton) : false);
+        if (!fait) return res.status(404).send('invitation inconnue');
+        await audit('invitation.revoquee', { invitation: idInv, par: identite.uid });
         return res.json({ ok: true });
       }
 
@@ -2125,7 +2315,7 @@ exports.suiviAdmin = onRequest(
         ]);
         return res.status(200).json({
           ok: true,
-          projets: projets.docs.map((d) => { const p = d.data(); return { id: d.id, nom: p.nom, ref: p.ref, statut: p.statut, archive: Boolean(p.archive), organisation: p.organisation || null, membres: (p.membres || []).length, client: (p.client || {}).email || null, progression: p.progression || null, silence: p.silence === true, plateformes: p.plateformes || [], interne: p.interne === true, contacts: (p.contacts || []).length }; }),
+          projets: projets.docs.map((d) => { const p = d.data(); return { id: d.id, nom: p.nom, ref: p.ref, statut: p.statut, archive: Boolean(p.archive), organisation: p.organisation || null, membres: (p.membres || []).length, client: (p.client || {}).email || null, progression: p.progression || null, ouvert: p.ouvert === true, emailsClient: p.emailsClient || null, plateformes: p.plateformes || [], interne: p.interne === true, contacts: (p.contacts || []).length }; }),
           organisations: organisations.docs.map((d) => ({ id: d.id, nom: d.data().entreprise || d.data().nom, email: d.data().email, membres: (d.data().membres || []).length })),
           equipe: equipe.docs.map((d) => ({ uid: d.id, email: d.data().email, role: d.data().role })),
           documents: (await bdd.collection('documents').get()).docs.map((d) => { const x = d.data(); return { id: d.id, projet: x.projet, type: x.type, numero: x.numero, montant: x.montant, statut: x.statut, pdf: Boolean(x.fichier && x.fichier.chemin), liens: (x.liens || []).length }; }),
@@ -2153,6 +2343,7 @@ exports.suiviAdmin = onRequest(
         const presentes = [];
         if (projet.client && projet.client.email) presentes.push(normaliserEmail(projet.client.email));
         for (const c of (projet.contacts || [])) if (c && c.email) presentes.push(normaliserEmail(c.email));
+        for (const i of (await refProjet.collection('interlocuteurs').get()).docs) if (i.data().statut === 'actif') presentes.push(normaliserEmail(i.data().email));
         for (const uid of (projet.membres || [])) {
           try { const u = await getAuth().getUser(uid); if (u.email) presentes.push(normaliserEmail(u.email)); }
           catch (err) { return res.status(409).send(`membre ${uid} illisible, remplissage refuse`); }
@@ -2172,7 +2363,7 @@ exports.suiviAdmin = onRequest(
             nom: p.nom, description: p.description, type: p.type, statut: p.statut,
             plateformes: Array.isArray(p.plateformes) ? p.plateformes.filter((x) => PLATEFORMES_CONNUES.includes(x)) : undefined,
             debut: enDate(p.debut), cible: enDate(p.cible), progression: p.progression, pulse: p.pulse,
-            silence: p.silence,
+            emailsClient: p.emailsClient || (p.silence === true ? 'coupes' : undefined),
             interne: p.interne, contacts: Array.isArray(p.contacts) ? p.contacts : undefined,
             client: p.client, organisation: p.organisation, ref: p.ref, logo: p.logo,
             maj: FieldValue.serverTimestamp(),
@@ -2276,6 +2467,7 @@ exports.suiviAdmin = onRequest(
       /* Un conflit de rôle n'est pas une panne : c'est une réponse, et elle
          dit quoi faire. Elle part telle quelle vers l'écran. */
       if (err && err.conflitDeRole) return res.status(409).send(err.message);
+      if (err && err.refus) return res.status(err.code).send(err.message);
       console.error(`suiviAdmin, action « ${action} »`, err);
       return res.status(500).send('erreur interne');
     }

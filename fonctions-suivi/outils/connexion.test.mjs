@@ -10,6 +10,7 @@
      node fonctions-suivi/outils/connexion.test.mjs
    ========================================================================== */
 
+import { createRequire } from 'node:module';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
@@ -153,13 +154,18 @@ verifier((apresOuverture.customClaims || {}).testeur === true,
   'et son compte porte la revendication « testeur »', JSON.stringify(apresOuverture.customClaims || {}));
 
 /* Sorti du vivier, il garderait sinon son accès jusqu'à sa prochaine
-   connexion : la revendication se retire aussi. */
+   connexion : le retrait lui ôte la revendication sur-le-champ. Et une
+   adresse qui n'a plus aucun accès ne reçoit plus de code : la porte ne
+   rouvre rien, pas même pour recalculer. */
+const { appelAdmin } = createRequire(import.meta.url)('./lib/session-banc.cjs');
+const retrait = await appelAdmin('retirerTesteur', { testeur: uidTesteur });
+verifier(retrait.code === 200, 'l équipe le retire du vivier', retrait.texte);
+const apresSortie = (await auth.getUser(uidTesteur)).customClaims || {};
+verifier(apresSortie.testeur !== true, 'sorti du vivier, la revendication lui est retirée', JSON.stringify(apresSortie));
 await bdd.doc(`testeurs/${uidTesteur}`).delete();
 await rouvrirLesVannes(); await viderBoite();
 await appeler('demanderCode', { email: TESTEUR });
-await appeler('verifierCode', { email: TESTEUR, code: await dernierCode(TESTEUR) });
-const apresSortie = (await auth.getUser(uidTesteur)).customClaims || {};
-verifier(apresSortie.testeur !== true, 'sorti du vivier, la revendication lui est retirée', JSON.stringify(apresSortie));
+verifier(!(await dernierCode(TESTEUR)), 'hors du vivier, aucun code ne lui part plus');
 
 console.log('\n== Les entrées malformées');
 verifier((await appeler('demanderCode', { email: 'pas-une-adresse' })).code === 400, 'une adresse invalide est refusée');

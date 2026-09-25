@@ -30,6 +30,8 @@ const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getAuth } = require('firebase-admin/auth');
 const crypto = require('node:crypto');
 const courriels = require('./courriels');
+const invitations = require('./invitations');
+const acces = require('./acces');
 
 const bdd = getFirestore();
 const REGION = 'europe-west1';
@@ -88,8 +90,39 @@ async function compteDe(email) {
 }
 
 async function estEquipe(uid) {
-  try { const d = await bdd.doc(`equipe/${uid}`).get(); return d.exists && d.data().actif !== false; }
+  try { const d = await bdd.doc(`equipe/${uid}`).get(); return d.exists && d.data().actif === true; }
   catch (err) { return false; }
+}
+
+/**
+ * Ce que ce compte peut faire AUJOURD'HUI, lu dans la base au moment de la
+ * demande, jamais dans le navigateur. C'est lui qui décide si un code part,
+ * et vers quel espace la session mène.
+ *
+ *   { acces: true, espace: 'cockpit' | 'testeur' | 'hub' | 'attente' }
+ *   { acces: false, motif: 'desactive' | 'retire' | 'sans-acces' }
+ */
+async function etatDuCompte(compte) {
+  if (!compte) return { acces: false, motif: 'sans-acces' };
+  const uid = compte.uid;
+  const fiche = await bdd.doc(`equipe/${uid}`).get();
+  if (fiche.exists) {
+    return fiche.data().actif === true && !compte.disabled
+      ? { acces: true, espace: 'cockpit', equipe: true }
+      : { acces: false, motif: 'desactive' };
+  }
+  if (compte.disabled) return { acces: false, motif: 'desactive' };
+  const testeur = await bdd.doc(`testeurs/${uid}`).get();
+  if (testeur.exists && testeur.data().actif !== false) return { acces: true, espace: 'testeur', testeur: true };
+  const membre = await bdd.collection('projets').where('membres', 'array-contains', uid).limit(1).get();
+  if (!membre.empty) return { acces: true, espace: 'hub' };
+  const demande = await bdd.collection('demandesProjet').where('par.uid', '==', uid).limit(1).get();
+  if (!demande.empty) return { acces: true, espace: 'hub' };
+  /* Préparé sur un projet encore fermé : il entre, et l'espace lui dit
+     qu'il n'est pas encore ouvert. */
+  const prepare = await bdd.collection('projets').where('personnes', 'array-contains', uid).limit(1).get();
+  if (!prepare.empty) return { acces: true, espace: 'attente' };
+  return { acces: false, motif: testeur.exists ? 'retire' : 'sans-acces' };
 }
 
 /* Un testeur vit dans le vivier, à la racine : il sert sur plusieurs
@@ -151,14 +184,9 @@ exports.suiviConnexion = onRequest(
  * plus qu'un jeton valide sur une adresse inconnue.
  */
 async function lireInvitation(req, res) {
-  const jeton = String((req.body || {}).jeton || '').trim();
-  if (!/^[A-Za-z0-9_-]{20,64}$/.test(jeton)) return res.json({ ok: false });
-  const d = await bdd.doc(`invitations/${jeton}`).get();
-  if (!d.exists) return res.json({ ok: false });
-  const inv = d.data();
-  const expire = inv.expire && inv.expire.toMillis ? inv.expire.toMillis() : 0;
-  if (inv.revoquee === true || (expire && Date.now() > expire)) return res.json({ ok: false });
-  return res.json({ ok: true, email: inv.email || '', nom: inv.nom || '', projet: inv.projetNom || '' });
+  const inv = await invitations.lire(String((req.body || {}).jeton || '').trim());
+  if (!inv) return res.json({ ok: false });
+  return res.json({ ok: true, email: inv.email || '', nom: inv.nom || '', projet: inv.projet || '' });
 }
 
 /* --- 2. La demande de code ----------------------------------------------- */
@@ -180,10 +208,14 @@ async function demanderCode(req, res) {
   const compte = await compteDe(email);
   if (!compte) { await audit('connexion.inconnue', { email, ip: adresseIp }); return muet(); }
 
-  const equipe = await estEquipe(compte.uid);
-  /* L'équipe prime : quelqu'un peut être les deux, et c'est alors la règle
-     la plus stricte qui doit s'appliquer. */
-  const testeur = !equipe && await estTesteur(compte.uid);
+  /* Un compte désactivé, retiré ou sans aucun accès ne reçoit pas de code,
+     et la réponse ne le dit pas : elle est la même que pour une adresse
+     inconnue. Le motif reste dans l'audit. */
+  const etat = await etatDuCompte(compte);
+  if (!etat.acces) { await audit('connexion.refusee', { email, uid: compte.uid, motif: etat.motif, ip: adresseIp }); return muet(); }
+
+  const equipe = etat.equipe === true;
+  const testeur = etat.testeur === true;
   const regles = equipe ? REGLES.equipe : (testeur ? REGLES.testeur : REGLES.client);
 
   const ref = bdd.doc(`connexions/${clePour(email)}`);
@@ -262,6 +294,21 @@ async function verifierCode(req, res) {
     return refus(verdict.restants ? `Code incorrect. Il vous reste ${verdict.restants} essai${verdict.restants > 1 ? 's' : ''}.` : 'Code incorrect.');
   }
 
+  /* Le code est bon, mais l'accès se relit MAINTENANT : entre la demande
+     et la saisie, le compte a pu être désactivé ou retiré. Le code ne
+     rouvre pas une porte qu'on vient de fermer. */
+  let compte = null;
+  try { compte = await getAuth().getUser(verdict.uid); } catch (err) { compte = null; }
+  const etat = await etatDuCompte(compte);
+  if (!etat.acces) {
+    await audit('connexion.refusee', { email, uid: verdict.uid, motif: etat.motif, ip: adresseIp, apresCode: true });
+    return res.status(403).json({ ok: false, message: etat.motif === 'desactive'
+      ? 'Cet accès a été désactivé. Contactez Capmedia si vous pensez que c\'est une erreur.'
+      : "Aucun accès n'est ouvert pour cette adresse. Contactez Capmedia." });
+  }
+  verdict.equipe = etat.equipe === true;
+  verdict.testeur = etat.testeur === true;
+
   /* L'adresse est prouvée : on le dit à Firebase, ce qui vaut aussi pour
      les règles de sécurité, qui exigent une adresse vérifiée. */
   try { await getAuth().updateUser(verdict.uid, { emailVerified: true }); } catch (err) { console.error('Adresse non marquée vérifiée', err); }
@@ -292,10 +339,11 @@ async function verifierCode(req, res) {
      sans le moindre message. On relit donc ce qui existe, et on ne touche
      qu'à « testeur ». */
   try {
-    const compte = await getAuth().getUser(verdict.uid);
-    const gardees = { ...(compte.customClaims || {}) };
+    const gardees = { ...((compte && compte.customClaims) || {}) };
     delete gardees.testeur;
     await getAuth().setCustomUserClaims(verdict.uid, verdict.testeur ? { ...gardees, testeur: true } : gardees);
+    /* Puis l'équipe et les projets, relus dans la base (testeur gardé). */
+    await acces.poserRevendications(verdict.uid);
   } catch (err) {
     console.error('Revendication non posée', err);
     await audit('connexion.revendication-impossible', { email, uid: verdict.uid });
@@ -309,7 +357,11 @@ async function verifierCode(req, res) {
     await audit('connexion.session-impossible', { email, uid: verdict.uid, motif: String(err && err.message || err).slice(0, 200) });
     return res.status(500).json({ ok: false, message: "Le code était bon, mais la session n'a pas pu s'ouvrir. Prévenez-nous." });
   }
-  await audit('connexion.ouverte', { email, uid: verdict.uid, equipe: verdict.equipe, ip: adresseIp });
+  await audit('connexion.ouverte', { email, uid: verdict.uid, equipe: verdict.equipe, espace: etat.espace, ip: adresseIp });
+
+  /* Une première connexion consomme les invitations de ce compte : le
+     cockpit les voit « acceptées », et leur lien ne pré-remplit plus. */
+  try { await invitations.accepter(verdict.uid); } catch (err) { console.error('Invitations non marquées acceptées', err); }
 
   /* Une session d'équipe ouvre le cockpit de tous les projets : elle
      s'annonce, pour qu'une ouverture qu'on n'a pas faite se remarque. */
@@ -322,8 +374,8 @@ async function verifierCode(req, res) {
     });
   }
 
-  return res.json({ ok: true, lien });
+  return res.json({ ok: true, lien, espace: etat.espace });
 }
 
 /* --- Exposé pour l'épreuve ----------------------------------------------- */
-exports._outils = { clePour, empreinte, tirerCode, memeEmpreinte, emailPlausible, REGLES, VIE_INVITATION, estTesteur };
+exports._outils = { clePour, empreinte, tirerCode, memeEmpreinte, emailPlausible, REGLES, VIE_INVITATION, estTesteur, etatDuCompte };

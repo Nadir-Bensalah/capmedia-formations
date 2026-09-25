@@ -11,32 +11,28 @@
    si une autre y figure, le serveur refuse d'écrire. Posez le projet en
    sourdine avant de le remplir : aucun e-mail ne part.
 
-     ADMIN_CLE=... PROJET=<id> ADRESSES=a@x,b@y node fonctions-suivi/outils/remplir-projet.mjs <nom>
+     ADMIN_EMAIL=... PROJET=<id> ADRESSES=a@x,b@y node fonctions-suivi/outils/remplir-projet.mjs <nom>
    ========================================================================== */
 
 import { chargerDonnees, exiger } from './lib/donnees-locales.mjs';
 
-const CLE = process.env.ADMIN_CLE;
+/* Plus de clé partagée : l'outil agit au nom d'une personne de l'équipe,
+   qui s'identifie avec son code à six chiffres (lib/session-admin.mjs). */
+import { appelerAdmin } from './lib/session-admin.mjs';
 const PROJET = process.env.PROJET;
 const NOM = process.argv[2];
 const PORTE = process.env.PORTE_SUIVI
   || `https://europe-west1-${process.env.PROJET_FIREBASE || 'capmedia-1f90d'}.cloudfunctions.net/suiviAdmin`;
 
-if (!CLE || !PROJET || !NOM) {
-  console.error('Usage : ADMIN_CLE=... PROJET=<identifiant> ADRESSES=... node fonctions-suivi/outils/remplir-projet.mjs <nom>');
+if (!PROJET || !NOM) {
+  console.error('Usage : ADMIN_EMAIL=... PROJET=<identifiant> ADRESSES=... node fonctions-suivi/outils/remplir-projet.mjs <nom>');
   process.exit(1);
 }
 const ADRESSES_ATTENDUES = exiger('ADRESSES', 'Les adresses attendues sur le projet, séparées par des virgules.')
   .split(',').map((e) => e.trim()).filter(Boolean);
 const { contenu } = await chargerDonnees(`remplissage-${NOM}`, { exemple: 'remplissage' });
 
-const appeler = async (corps) => {
-  const r = await fetch(PORTE, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cle: CLE, ...corps }) });
-  const texte = await r.text();
-  let json = null;
-  try { json = JSON.parse(texte); } catch (e) { /* réponse en texte */ }
-  return { code: r.status, texte, json };
-};
+const appeler = (corps) => appelerAdmin(corps);
 
 const r = await appeler({ action: 'remplirProjet', id: PROJET, adressesAttendues: ADRESSES_ATTENDUES, contenu });
 if (r.code !== 200) { console.error('Remplissage refusé :', r.code, r.texte); process.exit(1); }

@@ -1,10 +1,14 @@
 /* ==========================================================================
-   Ouvre les premiers comptes de l'espace de suivi, une fois les fonctions
-   déployées. Tout passe par suiviAdmin : aucune clé de compte de service
-   n'est nécessaire, seule la clé d'administration.
+   Ouvre les comptes de l'espace de suivi. Tout passe par suiviAdmin, au
+   nom d'un administrateur de l'équipe qui s'identifie avec son code à six
+   chiffres (lib/session-admin.mjs) : aucune clé partagée.
+
+   Le tout premier administrateur, lui, ne peut pas s'ajouter lui-même :
+   sa fiche equipe/{uid} ({ role: 'admin', actif: true }) se pose une fois
+   par l'Admin SDK, depuis la console Firebase.
 
    Usage :
-     ADMIN_CLE=... node fonctions-suivi/outils/ouvrir-comptes.mjs
+     ADMIN_EMAIL=... node fonctions-suivi/outils/ouvrir-comptes.mjs
 
    Le script est idempotent : relancé, il ne crée pas de doublon.
    ========================================================================== */
@@ -14,12 +18,10 @@ import { exiger } from './lib/donnees-locales.mjs';
 const PROJET = process.env.PROJET_FIREBASE || 'capmedia-1f90d';
 const PORTE = process.env.PORTE_SUIVI
   || `https://europe-west1-${PROJET}.cloudfunctions.net/suiviAdmin`;
-const CLE = process.env.ADMIN_CLE;
+/* Plus de clé partagée : l'outil agit au nom d'une personne de l'équipe,
+   qui s'identifie avec son code à six chiffres (lib/session-admin.mjs). */
+import { appelerAdmin } from './lib/session-admin.mjs';
 
-if (!CLE) {
-  console.error('ADMIN_CLE manquante. Relancez avec ADMIN_CLE=... devant la commande.');
-  process.exit(1);
-}
 
 /* Les comptes à ouvrir. Modifiez les adresses ici, rien ailleurs.
    Chaque compte d'équipe en rôle « admin » voit tous les projets. */
@@ -39,17 +41,7 @@ const DEMO = {
   plateformes: ['ios', 'android', 'web'],
 };
 
-const appeler = async (corps) => {
-  const reponse = await fetch(PORTE, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cle: CLE, ...corps }),
-  });
-  const texte = await reponse.text();
-  let json = null;
-  try { json = JSON.parse(texte); } catch (e) { /* réponse en texte brut */ }
-  return { code: reponse.status, texte, json };
-};
+const appeler = (corps) => appelerAdmin(corps);
 
 (async () => {
   console.log('Porte :', PORTE, '\n');

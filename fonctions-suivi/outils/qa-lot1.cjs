@@ -107,12 +107,13 @@ const attendre=async(fn,n=25)=>{for(let i=0;i<n;i++){const v=await fn();if(v)ret
        de stockage accepte le chemin, et qu'elle refuse celui d'un autre. */
     const regles=require('fs').readFileSync(`${__dirname}/../../suivi/storage.rules`,'utf8');
     verifier(/match \/campagnes\/\{projetId\}\/\{campagneId\}\/\{uid\}/.test(regles),'le dossier des preuves existe dans les règles');
-    verifier(/request\.auth\.uid == uid[\s\S]{0,120}token\.testeur == true/.test(regles),'et seul le testeur lui-même y écrit');
+    verifier(/request\.auth\.uid == uid[\s\S]{0,120}token\.get\('testeur', false\) == true/.test(regles),'et seul le testeur lui-même y écrit');
     /* Depuis la Release Gate 1, « read » est découpé : « get » pour l'équipe
-       et le client du projet, « list » pour l'équipe seule. Le droit
-       lui-même est éprouvé dans storage.test.mjs. */
-    verifier(/match \/campagnes[\s\S]{0,400}allow get:\s+if estEquipe\(\) \|\| surSonProjet\(projetId\)/.test(regles),"l'équipe et le client du projet les lisent");
-    verifier(/match \/campagnes[\s\S]{0,400}allow list:\s+if estEquipe\(\);/.test(regles),"seule l'équipe parcourt le dossier");
+       et le client du projet, « list » pour l'équipe seule. Depuis la
+       Gate 2, l'équipe est celle du projet (un agent n'a que les siens). Le
+       droit lui-même est éprouvé dans storage.test.mjs et storage-gate2. */
+    verifier(/match \/campagnes[\s\S]{0,400}allow get:\s+if jetonEquipe\(\) \? equipeSurProjet\(projetId\) : surSonProjet\(projetId\)/.test(regles),"l'équipe et le client du projet les lisent");
+    verifier(/match \/campagnes[\s\S]{0,400}allow list:\s+if equipeSurProjet\(projetId\);/.test(regles),"seule l'équipe parcourt le dossier");
   }
 
   console.log('\n== 4 · Les quatre défauts d\'écran');
@@ -121,7 +122,6 @@ const attendre=async(fn,n=25)=>{for(let i=0;i<n;i++){const v=await fn();if(v)ret
     eq.on('pageerror',e=>err.push('EQUIPE: '+e.message.slice(0,160)));
     eq.on('console',m=>{if(m.type()==='error')err.push('equipe: '+m.text().slice(0,160));});
     await connecter(eq,'agent.essai@exemple.test');
-    await eq.evaluate(()=>{try{localStorage.setItem('suivi:cle-admin','cle-essai-locale');}catch(e){}});
 
     /* Le statut d'un ancien projet : « actif » n'existe plus dans la liste. */
     await poser('projets/ancien',{nom:S('ANCIEN'),ref:S('ANCIEN'),statut:S('actif'),membres:L([]),compteur:{integerValue:'1'},archive:B(false)});

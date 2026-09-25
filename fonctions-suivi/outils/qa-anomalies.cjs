@@ -55,7 +55,6 @@ const str=(d,k)=>champ(d,k).stringValue||'';
   const err=[]; page.on('pageerror',e=>err.push('PAGE: '+e.message.slice(0,160)));
   page.on('console',m=>{if(m.type()==='error')err.push(m.text().slice(0,160));});
   await connecter(page,'agent.essai@exemple.test');
-  await page.evaluate(()=>{try{localStorage.setItem('suivi:cle-admin','cle-essai-locale');}catch(e){}});
   await page.reload({waitUntil:'domcontentloaded'}); await page.waitForSelector('.lat a',{timeout:60000}).catch(()=>{}); await pause(1200);
 
   console.log('\n== À la main');

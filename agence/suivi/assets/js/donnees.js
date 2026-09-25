@@ -40,6 +40,9 @@ export const K = {
   messages: (p) => `messages:${p}`,
   lectures: (p) => `lectures:${p}`,
   technique: (p) => `technique:${p}`,
+  /* Les personnes qui ont accès au projet (ou l'auront), leur rôle, leur
+     invitation : l'équipe seule les lit. */
+  interlocuteurs: (p) => `interlocuteurs:${p}`,
   taches: (p) => `taches:${p}`,
   tickets: (p) => `tickets:${p}`,
   validations: (p) => `validations:${p}`,
@@ -133,9 +136,23 @@ export const enOrdreChronologique = (messages) => (messages || []).slice().sort(
   return ta - tb;
 });
 
+/* La session de cette page : elle dit, pour un client, son rôle sur
+   chaque projet (le responsable lit la finance, le collaborateur non). */
+let sessionCourante = null;
+const responsableDe = (pid) => {
+  if (!sessionCourante || !sessionCourante.utilisateur) return false;
+  const projets = magasin.lire(K.projets) || sessionCourante.projets || [];
+  const p = projets.find((x) => x.id === pid) || (sessionCourante.projets || []).find((x) => x.id === pid);
+  return Boolean(p) && (p.roles || {})[sessionCourante.utilisateur.uid] === 'responsable';
+};
+
 /** Les collections d'un projet. Un client ne voit que ce qui lui est destiné. */
 export const abonnerProjet = (lot, pid, role) => {
   const client = role !== 'equipe';
+  /* La finance et ce qui engage sont au responsable : un collaborateur ne
+     s'y abonne pas (les règles le lui refuseraient), et son fil
+     d'activité ne demande que ce qui est public pour le projet. */
+  const responsable = client && responsableDe(pid);
   const visible = (c) => (client ? query(c, where('visibilite', '==', 'client')) : c);
   const surProjet = (nom) => query(col(nom), where('projet', '==', pid));
   const surProjetVisible = (nom) => (client
@@ -151,6 +168,7 @@ export const abonnerProjet = (lot, pid, role) => {
   /* La fiche technique ne se lit que côté équipe : les règles refuseraient
      la requête à un client, et elle ne lui sert à rien. */
   if (!client) lot.abonner(K.technique(pid), () => col('projets', pid, 'technique'));
+  if (!client) lot.abonner(K.interlocuteurs(pid), () => col('projets', pid, 'interlocuteurs'));
   /* La plateforme de tests. Les scénarios et les campagnes se lisent des
      deux côtés ; les anomalies aussi, puisque le client doit savoir ce qui
      a été trouvé. Seuls les passages restent cloisonnés, et ils se lisent
@@ -174,18 +192,25 @@ export const abonnerProjet = (lot, pid, role) => {
   lot.abonner(K.blocages(pid), () => surProjetVisible('blocages'));
   /* Un brouillon n'est lu que par l'équipe : la requête du client ne
      demande que les statuts visibles, sans quoi les règles la refusent. */
-  lot.abonner(K.documents(pid), () => (client
-    ? query(col('documents'), where('projet', '==', pid), where('statut', 'in', STATUTS_PIECE_VISIBLES))
-    : surProjet('documents')));
-  lot.abonner(K.paiements(pid), () => surProjet('paiements'));
-  lot.abonner(K.activite(pid), () => surProjetVisible('activite'));
+  if (!client || responsable) {
+    lot.abonner(K.documents(pid), () => (client
+      ? query(col('documents'), where('projet', '==', pid), where('statut', 'in', STATUTS_PIECE_VISIBLES))
+      : surProjet('documents')));
+    lot.abonner(K.paiements(pid), () => surProjet('paiements'));
+  }
+  lot.abonner(K.activite(pid), () => (client
+    ? query(col('activite'), where('projet', '==', pid), where('visibilite', 'in', responsable ? ['client', 'responsable'] : ['client']))
+    : surProjet('activite')));
 };
 
 /** Les collections globales : tout pour l'équipe, projet par projet pour un client. */
 export const abonnerGlobal = (lot, session) => {
+  sessionCourante = session;
   const equipe = Boolean(session.equipe);
   lot.abonner(K.profil, () => doc(bdd, 'profils', session.utilisateur.uid));
-  if (equipe) {
+  if (equipe && session.equipe.role !== 'admin') {
+    abonnerAgent(lot, session);
+  } else if (equipe) {
     lot.abonner(K.projets, () => query(col('projets'), orderBy('nom')));
     lot.abonner(K.organisations, () => query(col('organisations'), orderBy('nom')));
     lot.abonner(K.equipe, () => col('equipe'));
@@ -254,6 +279,52 @@ export const abonnerGlobal = (lot, session) => {
     suivre(session.projets);
     lot.sur(K.projets, suivre);
   }
+};
+
+/**
+ * Le cockpit d'un agent : ses projets, et rien d'autre. Les règles lui
+ * refusent les lectures « tout d'un coup » ; il lit donc projet par projet,
+ * et les clés globales que lisent les écrans (« tickets:* », « jalons:* »)
+ * sont l'assemblage de ses projets. Les données commerciales (clients en
+ * interne, demandes de nouveaux projets, notes de paiement) ne le
+ * concernent pas.
+ */
+const abonnerAgent = (lot, session) => {
+  const pids = [...new Set((session.equipe.projets || []).map(String))];
+  for (const pid of pids) {
+    abonnerProjet(lot, pid, 'equipe');
+    lot.abonner(`projet-interne:${pid}`, () => doc(bdd, 'projetsInternes', pid));
+  }
+  const assembler = (fab, tri = null) => () => {
+    const tout = pids.flatMap((pid) => magasin.lire(fab(pid)) || []);
+    return tri ? tri(tout) : tout;
+  };
+  const deriver = (cle, fab, tri) => lot.ajouter(magasin.deriver(cle, pids.map(fab), assembler(fab, tri)));
+  lot.ajouter(magasin.deriver(K.projets, pids.map(K.projet), () => pids.map((pid) => magasin.lire(K.projet(pid))).filter(Boolean)
+    .sort((a, b) => String(a.nom || '').localeCompare(String(b.nom || '')))));
+  deriver(K.ticketsTous, K.tickets);
+  deriver(K.tachesToutes, K.taches);
+  deriver(K.validationsToutes, K.validations);
+  deriver(K.documentsTous, K.documents);
+  deriver(K.paiementsTous, K.paiements);
+  deriver(K.reunionsToutes, K.reunions);
+  deriver(K.releasesToutes, K.releases);
+  deriver(K.blocagesTous, K.blocages);
+  deriver(K.fichiersTous, K.fichiers);
+  deriver(K.activiteToute, K.activite, (liste) => liste.slice().sort(parDateDesc('date')).slice(0, 200));
+  deriver(K.jalonsTous, K.jalons);
+  deriver(K.campagnesToutes, K.campagnes);
+  deriver(K.anomaliesToutes, K.anomalies);
+  deriver(K.parcoursTous, K.parcours);
+  deriver(K.reglesToutes, K.regles);
+  deriver(K.maintenanceToute, K.maintenance);
+  deriver(K.scenariosTous, K.scenarios);
+  deriver(K.profils, K.profilsTesteurs);
+  lot.ajouter(magasin.deriver(K.projetsInternes, pids.map((pid) => `projet-interne:${pid}`),
+    () => pids.map((pid) => magasin.lire(`projet-interne:${pid}`)).filter(Boolean)));
+  lot.abonner(K.organisations, () => query(col('organisations'), orderBy('nom')));
+  lot.abonner(K.equipe, () => col('equipe'));
+  lot.abonner(K.testeurs, () => col('testeurs'));
 };
 
 /**
@@ -406,6 +477,7 @@ export const ecrire = {
     const ref = await addDoc(col('validations'), nettoyer({
       projet: pid, titre: d.titre, type: d.type || 'autre', description: d.description || '',
       cible: d.cible || null, pieces, statut: 'en-attente', echeance: dateOuNull(d.echeance),
+      reserveeResponsable: Boolean(d.reserveeResponsable),
       demandeur: { uid: par.uid, nom: par.nom }, reponse: null, cree: serverTimestamp(), maj: serverTimestamp(),
     }));
     return ref.id;
@@ -845,7 +917,11 @@ const trierParUrgence = (items) => items.slice().sort((a, b) => {
 export const enAttenteDeVous = ({ projets = [], tickets = [], validations = [], documents = [], taches = [], blocages = [] }) => {
   const nomProjet = (pid) => ((projets.find((p) => p.id === pid) || {}).nom || '');
   const items = [];
-  validations.filter((v) => v.statut === 'en-attente').forEach((v) => items.push({
+  /* Une validation réservée au responsable n'attend pas un collaborateur :
+     elle n'est pas « à lui », il ne peut pas y répondre. */
+  const moi = sessionCourante && !sessionCourante.equipe && sessionCourante.utilisateur ? sessionCourante.utilisateur.uid : null;
+  const peutRepondre = (v) => v.reserveeResponsable !== true || !moi || responsableDe(v.projet);
+  validations.filter((v) => v.statut === 'en-attente' && peutRepondre(v)).forEach((v) => items.push({
     genre: 'validation', projet: v.projet, icone: 'valider', ton: 'violet', titre: v.titre, sous: `À valider depuis ${age(v.cree)} · ${nomProjet(v.projet)}`, chemin: `/valider/${v.id}`, date: v.cree,
   }));
   tickets.filter((t) => ATTEND_CLIENT.includes(t.statut) && !t.archive).forEach((t) => items.push({

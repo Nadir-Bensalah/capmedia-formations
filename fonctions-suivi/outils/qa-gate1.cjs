@@ -19,7 +19,6 @@ const { lireRest } = require('./lib/rest-banc.cjs');
    ========================================================================== */
 const { chromium } = require('@playwright/test');
 const PROJET = 'capmedia-1f90d', SITE = 'http://127.0.0.1:8787';
-const CLE = process.env.ADMIN_CLE_ESSAI || 'cle-essai-locale';
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 const prop = { Authorization: 'Bearer owner' };
 const RACINE = `projects/${PROJET}/databases/(default)/documents`;
@@ -244,8 +243,11 @@ const verifierConversation = async (page, qui) => {
 
   /* ------------------------------------------------------------------ */
   console.log('\n== 5. La déconnexion efface la clé d administration');
-  await eq.page.evaluate((k) => { localStorage.setItem('suivi:cle-admin', k); sessionStorage.setItem('suivi:cle-admin', k); }, CLE);
   await aller(eq.page, '#/', null);
+  /* La clé partagée n'existe plus depuis la Gate 2 ; une ancienne version
+     du cockpit a pu en laisser une dans le navigateur. On en pose une, et
+     la déconnexion doit l'effacer. */
+  await eq.page.evaluate(() => { localStorage.setItem('suivi:cle-admin', 'ancienne-cle'); sessionStorage.setItem('suivi:cle-admin', 'ancienne-cle'); });
   await eq.page.click('#bouton-compte');
   await eq.page.getByText('Se déconnecter').click();
   await eq.page.waitForURL(/\/suivi\/(\?|$|index)/, { timeout: 20000 }).catch(() => {});

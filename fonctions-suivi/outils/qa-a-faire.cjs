@@ -18,7 +18,6 @@ const { lireRest } = require('./lib/rest-banc.cjs');
    ========================================================================== */
 const { chromium } = require('@playwright/test');
 const PROJET='capmedia-1f90d', SITE='http://127.0.0.1:8787';
-const CLE=process.env.ADMIN_CLE_ESSAI||'cle-essai-locale';
 const pause=(ms)=>new Promise(r=>setTimeout(r,ms));
 const prop={Authorization:'Bearer owner'};
 const bdd=(c)=>`http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
@@ -77,7 +76,6 @@ const NOTE=[
 
   console.log('\n== L onglet, vide au départ');
   await connecter(page,'agent.essai@exemple.test');
-  await page.evaluate(k=>{try{localStorage.setItem('suivi:cle-admin',k);}catch(e){}},CLE);
   await page.reload({waitUntil:'domcontentloaded'}); await pause(2500);
   const entrees=await page.$$eval('#lat-corps .lat-lien',as=>as.map(a=>a.dataset.chemin));
   verifier(entrees.includes('/a-faire'),'la barre porte « Projets à faire »');
@@ -110,7 +108,7 @@ const NOTE=[
   verifier(bool(p,'interne'),'c est un projet à moi, sans client');
   verifier(str(p,'ref')==='WEALTH','sa référence vient du nom',str(p,'ref'));
   verifier(str(p,'statut')==='brouillon','il reste en préparation',str(p,'statut'));
-  verifier(bool(p,'silence'),'en sourdine : aucun e-mail ne partira');
+  verifier(!bool(p,'ouvert'),'fermé au client : aucun e-mail ne partira');
   verifier(JSON.stringify((((champ(p,'plateformes').arrayValue)||{}).values||[]).map(v=>v.stringValue))==='["ios","android"]','les plateformes cochées sont posées');
   verifier(!('idee' in ((p||{}).fields||{})) && !('texte' in ((p||{}).fields||{})),'la note n est PAS dans la fiche du projet, qu un client membre lirait');
   const idee=await lire(`idees/${pid}`);

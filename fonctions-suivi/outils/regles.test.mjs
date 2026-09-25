@@ -47,8 +47,10 @@ await env.withSecurityRulesDisabled(async (ctx) => {
   await setDoc(doc(b, 'equipe', AGENT), { nom: 'Alex Durand', email: 'agent.essai@exemple.test', role: 'admin', actif: true });
   await setDoc(doc(b, 'organisations/atelier-nord'), { nom: 'Camille', membres: [CAMILLE], contacts: [] });
   await setDoc(doc(b, 'organisations/boutique'), { nom: 'Léa', membres: [LEA], contacts: [] });
-  await setDoc(doc(b, 'projets/atelier'), { nom: 'Atelier', ref: 'ATELIER', membres: [CAMILLE], organisation: 'atelier-nord', statut: 'en-cours', compteur: 0 });
-  await setDoc(doc(b, 'projets/boutique'), { nom: 'Boutique', ref: 'BOUTIQUE', membres: [LEA], organisation: 'boutique', statut: 'cadrage', compteur: 0 });
+  /* Depuis la Gate 2, le rôle du client est posé par le serveur à côté des
+     membres : Camille et Léa sont responsables de leur projet. */
+  await setDoc(doc(b, 'projets/atelier'), { nom: 'Atelier', ref: 'ATELIER', membres: [CAMILLE], roles: { [CAMILLE]: 'responsable' }, organisation: 'atelier-nord', statut: 'en-cours', compteur: 0, ouvert: true });
+  await setDoc(doc(b, 'projets/boutique'), { nom: 'Boutique', ref: 'BOUTIQUE', membres: [LEA], roles: { [LEA]: 'responsable' }, organisation: 'boutique', statut: 'cadrage', compteur: 0, ouvert: true });
   /* Un projet rideau baissé : préparé, chiffré, mais sans personne dedans. */
   await setDoc(doc(b, 'projets/ferme'), { nom: 'En préparation', ref: 'FERME', membres: [], organisation: 'atelier-nord', statut: 'brouillon', ouvert: false, compteur: 0 });
   await setDoc(doc(b, 'projets/atelier/composants/ios'), { nom: 'iOS' });

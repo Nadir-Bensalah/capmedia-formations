@@ -35,6 +35,11 @@ Deux publics, une seule porte :
 
 Un compte sans document `equipe` et sans projet voit un écran d'attente.
 
+> Depuis la Gate 2 (septembre 2026), ce paragraphe est dépassé : la porte
+> est un code à six chiffres (section 11), l'équipe a deux rôles et des
+> permissions, et l'accès client se donne projet par projet. Le contrat en
+> vigueur est la section 13.
+
 ## 3. Le modèle de données
 
 Toutes les dates sont des `timestamp` Firestore. Tous les identifiants de
@@ -367,9 +372,10 @@ synchroniserMembres saute les projets fermés : un second projet d'un client
                    déjà connu ne s'ouvre plus tout seul à sa création
 ```
 
-Un `ouvert` absent vaut ouvert : les projets nés avant cette notion
-restent en l'état, on n'allait pas fermer d'un coup cinquante espaces
-déjà partagés.
+Un `ouvert` absent valait ouvert. Depuis la Gate 2, la migration
+(`outils/migrer-gate2.mjs`) rend `ouvert` explicite sur chaque projet, et
+un projet non converti refuse les gestes d'accès (409) tant qu'un
+arbitrage humain n'a pas tranché.
 
 **Le cycle commercial.** Trois états s'ajoutent avant le travail :
 `brouillon` (en préparation), `devis-envoye` (devis à signer),
@@ -406,3 +412,107 @@ ou « a signé l'avenant ».
 espaces, 48 contrôles, de la préparation rideau baissé à la validation
 d'une demande, en passant par le cloisonnement entre deux clients et ce
 que le client ne doit jamais voir.
+
+## 13. Identité, accès et communication (Gate 2, septembre 2026)
+
+Un seul chemin décide de tout : **compte Firebase → rôle → permissions →
+projets autorisés → actions autorisées → destinataires**. Aucun droit ne
+vient d'une clé partagée, d'une adresse, ni de l'appartenance à une
+société. Le navigateur, les fonctions et les règles lisent les mêmes
+fiches ; le serveur et les règles refusent, l'écran se contente de ne pas
+proposer.
+
+### L'équipe : `equipe/{uid}`
+
+```
+role         'admin' | 'agent'
+actif        bool            false : plus rien, même une session ouverte
+projets      list<string>    ceux d'un agent (un admin les a tous)
+permissions  list<string>    en plus du socle, jamais equipe.gerer ni systeme
+desactiveLe  timestamp
+```
+
+Le socle d'un agent : `projet.voir`, `demandes.gerer`, `contenu.gerer`,
+`qa.participer`. Un administrateur a toutes les permissions. La liste vit
+dans `fonctions-suivi/acces.js` (`PERMISSIONS`, `SOCLE`), et son miroir
+dans `noyau.js` ; `acces.test.mjs` vérifie qu'ils disent la même chose.
+Le dernier administrateur actif ne peut être ni retiré, ni désactivé, ni
+rétrogradé. Désactiver révoque les jetons et désactive le compte : les
+règles refusent la session encore ouverte (elles relisent `actif`), le
+serveur aussi (`verifyIdToken(jeton, true)`).
+
+### Le client : `projets/{p}/interlocuteurs/{cle}`
+
+`cle` = les 32 premiers caractères hexadécimaux du sha256 de l'adresse
+normalisée.
+
+```
+email, nom, uid
+role         'responsable' | 'collaborateur' | 'a-definir'
+statut       'actif' | 'retire'
+invitation   { etat, envoyee, id }
+```
+
+Le **responsable** engage le client : il accepte les devis, voit la
+finance (devis, factures, paiements, activité financière) et répond aux
+validations réservées. Le **collaborateur** suit le projet, échange, pose
+des demandes et répond aux validations ordinaires. Une même personne peut
+être sur plusieurs projets, avec un rôle différent sur chacun.
+
+Les champs `membres`, `roles` et `personnes` du projet sont **dérivés**
+de ces fiches par `acces.recalculerAcces`, seul chemin qui les écrit
+(`accesVersion: 2`). Fermé, un projet n'a aucun membre.
+
+### Ouvert au client, e-mails au client
+
+```
+ouvert             bool       false : le client n'a AUCUN accès et ne reçoit RIEN
+premiereOuverture  timestamp  posée une fois : la lettre d'ouverture ne repart jamais
+emailsClient       'actifs' | 'coupes'
+```
+
+La première ouverture envoie une lettre `ouverture` par personne, avec
+un résumé de ce qui l'attend (le devis n'y figure que pour un
+responsable), et jamais l'historique. Couper les e-mails garde le Hub
+vivant (notifications, activité) : seul le code de connexion part encore.
+`silence` n'est plus lu ; la migration le traduit en `emailsClient`.
+
+### Les invitations : `invitations/{sha256(jeton)}`
+
+Un seul modèle pour les clients, l'équipe et les testeurs. États :
+`preparee`, `en-attente`, `envoyee`, `acceptee`, `expiree` (14 jours),
+`revoquee`. Le jeton n'est jamais stocké en clair ; une nouvelle
+invitation révoque la précédente pour la même personne et le même
+projet ; la première connexion la consomme.
+
+### Qui reçoit quoi : `communication.js`
+
+Toute décision d'envoi passe par trois fonctions pures :
+`decisionEmailClient`, `decisionNotificationClient`, `decisionEquipe`.
+Elles regardent : projet ouvert, interlocuteur actif, membre effectif,
+rôle (les événements `devis`, `facture`, `paiement` ne vont qu'aux
+responsables), `emailsClient`, préférences (sauf événements essentiels),
+fiche d'équipe active et autorisée sur le projet. Les destinataires sont
+dédoublonnés et relus au moment de l'envoi, jamais recopiés.
+
+### Le serveur : `suiviAdmin`
+
+Chaque action est déclarée dans le registre `ACTIONS` de `suivi.js` avec
+sa permission et la façon de trouver son projet. La tête de la fonction
+vérifie le jeton (`acces.identifier`), puis la permission
+(`acces.exiger`) ; un refus est tracé (`admin.refus`). `acces.test.mjs`
+refuse une action du code absente du registre. Les outils d'exploitation
+ouvrent une session au nom d'une personne (`outils/lib/session-admin.mjs`,
+par code), jamais avec une clé.
+
+### Les épreuves
+
+```
+acces.test.mjs            décisions pures (rôles, permissions, dernier admin, envois)
+regles-gate2.test.mjs     règles Firestore, rôle par rôle
+storage-gate2.test.mjs    règles de stockage
+serveur-gate2.test.mjs    le serveur de bout en bout, sur émulateurs
+migration-gate2.test.mjs  la migration : à blanc, réelle, silencieuse, rejouable, réversible
+qa-gate2.cjs              l'histoire complète dans de vrais navigateurs (21 étapes)
+```
+

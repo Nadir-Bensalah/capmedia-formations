@@ -16,9 +16,11 @@
    ========================================================================== */
 
 import {
-  auth, session, $, echapper, quitter, surEmulateur,
+  auth, session, $, echapper, quitter, surEmulateur, signOut, effacerSecretsLocaux,
   isSignInWithEmailLink, signInWithEmailLink, sendSignInLinkToEmail,
 } from './js/noyau.js';
+
+const quitterSansRecharger = async () => { effacerSecretsLocaux(); try { await signOut(auth); } catch (e) { /* déjà sorti */ } };
 import { traduireRetour } from './js/retour.js';
 
 const PORTE = surEmulateur
@@ -60,8 +62,17 @@ const envoyerLien = async (email) => {
 /* --- Où va-t-on, une fois la session ouverte ---------------------------- */
 
 const orienter = async () => {
-  const { utilisateur, equipe, testeur, erreur: refus } = await session();
+  const { utilisateur, equipe, testeur, erreur: refus, desactive } = await session();
   if (!utilisateur) { montrer('#forme'); return; }
+
+  /* Un compte désactivé n'entre nulle part, même avec une session encore
+     ouverte dans ce navigateur : on la ferme, et on le dit. */
+  if (desactive) {
+    await quitterSansRecharger();
+    montrer('#forme');
+    erreur("Cet accès a été désactivé. Contactez Capmedia si vous pensez que c'est une erreur.");
+    return;
+  }
 
   /* L'espace de CE compte, décidé par ce qu'il est et rien d'autre.
 

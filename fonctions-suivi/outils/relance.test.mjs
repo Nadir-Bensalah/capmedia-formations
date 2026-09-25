@@ -30,11 +30,13 @@ const verifier = (condition, quoi, detail = '') => {
 };
 
 const ilYA = (jours) => Timestamp.fromDate(new Date(Date.now() - jours * 86400000));
-const vivant = { nom: 'Atelier', statut: 'en-cours', membres: ['uid-camille'], contacts: [{ nom: 'Camille', email: 'camille@exemple.test' }] };
+const vivant = { nom: 'Atelier', statut: 'en-cours', ouvert: true, emailsClient: 'actifs', membres: ['uid-camille'], contacts: [{ nom: 'Camille', email: 'camille@exemple.test' }] };
 
 console.log('== Quand la lettre ne part pas');
 verifier(!retenue({ ...vivant, interne: true }).retenu, "un projet à moi n'est jamais relancé");
-verifier(!retenue({ ...vivant, silence: true }).retenu, 'un projet en sourdine reste muet');
+verifier(!retenue({ ...vivant, emailsClient: 'coupes' }).retenu, 'un projet aux e-mails coupés reste muet (Gate 2, ex-sourdine)');
+verifier(!retenue({ ...vivant, ouvert: false }).retenu, 'un projet fermé au client ne lui écrit pas');
+verifier(!retenue({ ...vivant, ouvert: undefined }).retenu, 'un projet sans « ouvert : vrai » est fermé');
 verifier(!retenue({ ...vivant, archive: true }).retenu, "un projet archivé n'écrit plus");
 verifier(!retenue({ ...vivant, statut: 'termine' }).retenu, 'un projet terminé non plus');
 verifier(!retenue({ ...vivant, statut: 'suspendu' }).retenu, 'un projet suspendu non plus');

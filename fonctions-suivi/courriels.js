@@ -332,10 +332,11 @@ function invitation(v) {
       intro: `${prenom ? `Bonjour ${prenom},` : 'Bonjour,'}\n\n`
         + `Votre espace de suivi${projet ? ` pour ${projet}` : ''} est en ligne. Vous y déclarez une anomalie ou une demande, `
         + 'vous suivez son avancement, vous échangez avec nous et vous retrouvez vos devis et vos factures.\n\n'
-        + "La connexion se fait sans mot de passe : saisissez votre adresse e-mail, un code à six chiffres vous est envoyé, et il ouvre la session. Il est valable quinze minutes et ne sert qu'une fois.",
+        + "La connexion se fait sans mot de passe : saisissez votre adresse e-mail, un code à six chiffres vous est envoyé, et il ouvre la session. Il est valable dix minutes et ne sert qu'une fois.",
       faits: [
         ['Projet', projet],
         ['Votre adresse', valeurTexte(v.email)],
+        ['Votre rôle', valeurTexte(v.role) === 'responsable' ? 'Responsable du projet' : (valeurTexte(v.role) === 'collaborateur' ? 'Collaborateur' : '')],
       ],
       bouton: { libelle: 'Ouvrir mon espace', url: valeurTexte(v.lien) || lienEspace() },
       note: "Utilisez bien l'adresse à laquelle vous avez reçu cet e-mail : c'est elle qui donne accès au projet.",
@@ -373,6 +374,55 @@ function invitationTesteur(v) {
       ],
       bouton: { libelle: 'Ouvrir mon espace de test', url: valeurTexte(v.lien) || lienEspace() },
       note: "Utilisez bien l'adresse à laquelle vous avez reçu cet e-mail : c'est elle qui ouvre votre espace. Vous ne voyez que les scénarios qui vous sont confiés, et vous n'avez accès à rien d'autre du projet.",
+    }),
+  };
+}
+
+/* 1 ter. L'ouverture d'un projet.
+
+   La première fois qu'un projet s'ouvre au client, une seule lettre part à
+   chaque interlocuteur : l'invitation, et ce qui l'attend déjà dans son
+   espace. Pas une lettre par événement accumulé pendant la préparation :
+   un résumé, puis l'espace. */
+function ouverture(v) {
+  const projet = valeurTexte(v.projetNom).trim();
+  const prenom = valeurTexte(v.clientNom).trim().split(/\s+/)[0] || '';
+  const points = (Array.isArray(v.points) ? v.points : []).slice(0, 8)
+    .map((p) => [valeurTexte(p && p.quoi), valeurTexte(p && p.detail)]);
+  return {
+    objet: projet ? `${projet} : votre espace de suivi est ouvert` : 'Votre espace de suivi est ouvert',
+    ...rendreGabarit({
+      titre: 'Votre espace de suivi est ouvert',
+      intro: `${prenom ? `Bonjour ${prenom},` : 'Bonjour,'}\n\n`
+        + `Votre espace de suivi${projet ? ` pour ${projet}` : ''} est prêt. Vous y suivez l'avancement, vous posez vos demandes, `
+        + "vous échangez avec nous et vous retrouvez ce qui attend votre avis.\n\n"
+        + (points.length ? 'Voici ce qui vous y attend déjà.' : "La connexion se fait sans mot de passe : saisissez votre adresse, un code à six chiffres vous est envoyé, il ouvre la session."),
+      faits: [
+        ['Votre rôle', valeurTexte(v.role) === 'responsable' ? 'Responsable du projet' : 'Collaborateur'],
+        ...points,
+        ['Votre adresse', valeurTexte(v.email)],
+      ],
+      bouton: { libelle: 'Ouvrir mon espace', url: valeurTexte(v.lien) || lienEspace() },
+      note: "La connexion se fait sans mot de passe : un code à six chiffres, valable dix minutes, arrive à l'adresse qui a reçu cet e-mail.",
+    }),
+  };
+}
+
+/* 1 quater. L'arrivée dans l'équipe. */
+function invitationEquipe(v) {
+  const prenom = valeurTexte(v.nom).trim().split(/\s+/)[0] || '';
+  const admin = valeurTexte(v.role) === 'admin';
+  return {
+    objet: "Votre accès au cockpit Capmedia",
+    ...rendreGabarit({
+      titre: "Bienvenue dans l'équipe",
+      intro: `${prenom ? `Bonjour ${prenom},` : 'Bonjour,'}\n\n`
+        + `Un accès au cockpit Capmedia vient de vous être ouvert, avec le rôle ${admin ? 'administrateur' : 'agent'}. `
+        + (admin ? "Vous voyez tous les projets et vous administrez l'équipe." : 'Vous voyez les projets sur lesquels vous travaillez.')
+        + "\n\nLa connexion se fait sans mot de passe : saisissez votre adresse, un code à six chiffres, valable cinq minutes, vous est envoyé.",
+      faits: [['Votre adresse', valeurTexte(v.email)], ['Rôle', admin ? 'Administrateur' : 'Agent']],
+      bouton: { libelle: 'Ouvrir le cockpit', url: valeurTexte(v.lien) || lienEspace() },
+      note: "Si vous n'attendiez pas cet accès, ignorez ce message et prévenez-nous.",
     }),
   };
 }
@@ -883,6 +933,8 @@ function connexionEquipe(v) {
 const MODELES = {
   'invitation': invitation,
   'invitation-testeur': invitationTesteur,
+  'invitation-equipe': invitationEquipe,
+  'ouverture': ouverture,
   'ticket-cree': ticketCree,
   'statut': statut,
   'assignation': assignation,

@@ -20,7 +20,6 @@ const { chromium } = require('@playwright/test');
 const PROJET = process.env.GCLOUD_PROJECT || 'capmedia-1f90d';
 const SITE = 'http://127.0.0.1:8787';
 const ADMIN = 'http://127.0.0.1:5001/capmedia-1f90d/europe-west1/suiviAdmin';
-const CLE = process.env.ADMIN_CLE_ESSAI || 'cle-essai-locale';
 const SHOTS = process.argv[2] || './qa';
 
 const soucis = [];
@@ -43,11 +42,12 @@ const champ = (doc, nom) => {
   return f.stringValue ?? f.booleanValue ?? f.integerValue ?? f.doubleValue ?? f.timestampValue ?? f.nullValue ?? null;
 };
 
+/* Depuis la Gate 2, plus de clé : l'administrateur du banc appelle avec
+   son jeton Firebase, comme le cockpit. */
+const { appelAdmin } = require('./lib/session-banc.cjs');
 const serveur = async (action, corps) => {
-  const r = await fetch(ADMIN, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cle: CLE, action, ...corps }) });
-  const t = await r.text();
-  let j = null; try { j = JSON.parse(t); } catch (e) { /* texte */ }
-  return { code: r.status, texte: t, ...(j || {}) };
+  const r = await appelAdmin(action, corps);
+  return { code: r.code, texte: r.texte, ...(r.json || {}) };
 };
 
 const dernierCode = async (email) => {
@@ -229,12 +229,14 @@ const attendre = async (page, motif, secondes = 12) => {
   verifier(ouverture.ok && ouverture.ouvert === true, "le projet s'ouvre", JSON.stringify(ouverture).slice(0, 140));
   const ouvert = await lire('projets/prepa');
   verifier(champ(ouvert, 'ouvert') === true, "le rideau est levé dans la fiche");
-  verifier(champ(ouvert, 'silence') === false, "la sourdine tombe à l'ouverture");
+  /* Gate 2 : ouvrir ne touche pas aux e-mails du client, réglés à part. */
+  verifier(champ(ouvert, 'emailsClient') !== 'coupes', "les e-mails du client sont actifs à l'ouverture");
   const membres = ((ouvert.fields.membres || {}).arrayValue || {}).values || [];
   verifier(membres.length >= 1, "le client est désormais membre du projet", `${membres.length} membre(s)`);
 
   const invit = await lire('envois?pageSize=300');
-  verifier(((invit && invit.documents) || []).some((d) => ((d.fields.modele || {}).stringValue) === 'invitation'), "l'invitation part à l'ouverture");
+  /* La première ouverture envoie la lettre d'ouverture : l'invitation et ce qui attend. */
+  verifier(((invit && invit.documents) || []).some((d) => ['ouverture', 'invitation'].includes((d.fields.modele || {}).stringValue)), "l'invitation part à l'ouverture");
 
   await aller(client, '/');
   await pause(2500);

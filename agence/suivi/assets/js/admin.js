@@ -2,12 +2,11 @@
    CAPMEDIA CLIENT HUB · l'entrée du cockpit d'équipe
    ========================================================================== */
 
-import { exigerSession, $, OUVERTS, ATTEND_EQUIPE, FACTURES_DUES, joursAvant, projetEstActif, bdd, collection, query, orderBy, limit } from './noyau.js';
+import { exigerSession, $, OUVERTS, ATTEND_EQUIPE, FACTURES_DUES, joursAvant, projetEstActif, bdd, collection, query, orderBy, limit, peut, estAdmin } from './noyau.js';
 import { monterCoquille, definirNavigation, enregistrerRecherche } from './coquille.js';
 import { definir, demarrer } from './routeur.js';
 import * as magasin from './magasin.js';
 import { abonnerGlobal, K, nonLusProjet, requeteMessages, messagesDuProjet } from './donnees.js';
-import { surCle } from './serveur.js';
 
 import * as adminAccueil from './vues/admin-accueil.js';
 import * as adminClients from './vues/admin-clients.js';
@@ -30,6 +29,7 @@ import * as adminActivite from './vues/admin-activite.js';
 import * as adminArchives from './vues/admin-archives.js';
 import * as adminAFaire from './vues/admin-a-faire.js';
 import * as adminParametres from './vues/admin-parametres.js';
+import * as adminEquipe from './vues/admin-equipe.js';
 import * as nouveauProjet from './vues/nouveau-projet.js';
 import * as parametres from './vues/parametres.js';
 
@@ -41,7 +41,7 @@ if (!session.equipe) {
   throw new Error('redirection');
 }
 
-const env = { session, role: 'equipe' };
+const env = { session, role: 'equipe', admin: estAdmin(session) };
 const lotGlobal = magasin.lot();
 abonnerGlobal(lotGlobal, session);
 
@@ -88,17 +88,22 @@ const construireNavigation = () => {
   const forfaitsActifs = contrats.filter((x) => x.statut === 'actif').length;
   const forfaitsDemandes = contrats.filter((x) => x.statut === 'demande').length;
 
+  /* Ce que le rôle ne permet pas n'apparaît pas : un agent n'administre ni
+     les clients, ni la finance, ni l'équipe. Le serveur et les règles
+     refusent de toute façon ; l'écran ne propose pas l'impossible. */
+  const admin = estAdmin(session);
+  const garder = (groupe) => ({ ...groupe, items: groupe.items.filter((i) => i.si === undefined || i.si) });
   definirNavigation([
     { items: [{ chemin: '/', libelle: 'Accueil', icone: 'accueil', exact: true }] },
     {
       titre: 'Portefeuille',
       items: [
-        { chemin: '/clients', libelle: 'Clients', icone: 'entreprise', compte: { total: organisations.length } },
+        { chemin: '/clients', libelle: 'Clients', icone: 'entreprise', compte: { total: organisations.length }, si: peut(session, 'clients.gerer') },
         { chemin: '/projets', libelle: 'Projets', icone: 'projets', compte: { total: projets.filter((p) => projetEstActif(p) && !p.interne && p.ouvert !== false).length } },
         /* Les idées et les projets mis de côté : rangés à part, jamais comptés
            dans le portefeuille en cours. */
-        { chemin: '/a-faire', libelle: 'Projets à faire', icone: 'ampoule', compte: { total: projets.filter((p) => p.aFaire && !p.archive).length } },
-        { chemin: '/nouveaux-projets', libelle: 'Nouveaux projets', icone: 'sparkle', compte: { total: preprojets, neuf: nouveauxPreprojets } },
+        { chemin: '/a-faire', libelle: 'Projets à faire', icone: 'ampoule', compte: { total: projets.filter((p) => p.aFaire && !p.archive).length }, si: admin },
+        { chemin: '/nouveaux-projets', libelle: 'Nouveaux projets', icone: 'sparkle', compte: { total: preprojets, neuf: nouveauxPreprojets }, si: admin },
       ],
     },
     {
@@ -118,14 +123,15 @@ const construireNavigation = () => {
       items: [
         /* Le libellé ne tenait pas dans la barre : le titre de la page dit
            « Finances », la barre disait autre chose et se faisait couper. */
-        { chemin: '/finances', libelle: 'Finances', icone: 'finances', compte: { total: piecesDues, neuf: piecesDues } },
+        { chemin: '/finances', libelle: 'Finances', icone: 'finances', compte: { total: piecesDues, neuf: piecesDues }, si: peut(session, 'finance.gerer') },
         { chemin: '/maintenance', libelle: 'Maintenance', icone: 'sante', compte: { total: forfaitsActifs, neuf: forfaitsDemandes } },
         { chemin: '/activite', libelle: 'Activité', icone: 'activite' },
-        { chemin: '/archives', libelle: 'Archives', icone: 'archive' },
+        { chemin: '/archives', libelle: 'Archives', icone: 'archive', si: admin },
+        { chemin: '/equipe', libelle: 'Équipe', icone: 'utilisateurs' },
         { chemin: '/parametres', libelle: 'Paramètres', icone: 'parametres' },
       ],
     },
-  ]);
+  ].map(garder));
 };
 
 /* Le cockpit écoute aussi la conversation de chaque projet ouvert : sans
@@ -150,7 +156,6 @@ const suivreConversations = () => {
 let minuteurNav = null;
 const planifierNav = () => { clearTimeout(minuteurNav); minuteurNav = setTimeout(() => { suivreConversations(); construireNavigation(); }, 80); };
 [K.ticketsTous, K.tachesToutes, K.validationsToutes, K.documentsTous, K.demandesProjet, K.projets, K.organisations, K.reunionsToutes, K.fichiersTous, K.profil, K.maintenanceToute, K.campagnesToutes, K.anomaliesToutes].forEach((cle) => magasin.sur(cle, planifierNav));
-surCle(planifierNav);
 construireNavigation();
 
 enregistrerRecherche((terme) => {
@@ -161,9 +166,9 @@ enregistrerRecherche((terme) => {
   const nomProjet = (pid) => nomsProjets.get(pid) || '';
   const items = [];
   if (!terme) {
-    items.push({ groupe: 'Créer', libelle: 'Nouveau projet', icone: 'plus', chemin: '/projets/nouveau' });
-    items.push({ groupe: 'Créer', libelle: 'Nouveau client', icone: 'entreprise', chemin: '/clients/nouveau' });
-    items.push({ groupe: 'Créer', libelle: 'Noter une idée', icone: 'ampoule', chemin: '/a-faire?noter=1' });
+    if (peut(session, 'projets.creer')) items.push({ groupe: 'Créer', libelle: 'Nouveau projet', icone: 'plus', chemin: '/projets/nouveau' });
+    if (peut(session, 'clients.gerer')) items.push({ groupe: 'Créer', libelle: 'Nouveau client', icone: 'entreprise', chemin: '/clients/nouveau' });
+    if (estAdmin(session)) items.push({ groupe: 'Créer', libelle: 'Noter une idée', icone: 'ampoule', chemin: '/a-faire?noter=1' });
     items.push({ groupe: 'Aller à', libelle: 'Demandes à traiter', icone: 'inbox', chemin: '/demandes' });
     items.push({ groupe: 'Aller à', libelle: 'Validations attendues', icone: 'valider', chemin: '/validations' });
   }
@@ -217,6 +222,7 @@ definir([
   { chemin: '/activite', vue: (ctx) => adminActivite.vue(ctx, env) },
   { chemin: '/archives', vue: (ctx) => adminArchives.vue(ctx, env) },
   { chemin: '/parametres', vue: (ctx) => adminParametres.vue(ctx, env) },
+  { chemin: '/equipe', vue: (ctx) => adminEquipe.vue(ctx, env) },
   { chemin: '/moi', vue: (ctx) => parametres.vue(ctx, env) },
 ], { defaut: '/', cible: vue });
 

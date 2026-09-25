@@ -10,7 +10,7 @@
    Les alertes ne sortent que de faits vérifiables : une échéance publique
    de magasin comparée à ce que le dépôt déclare vraiment.
 
-     ADMIN_CLE=... node fonctions-suivi/outils/relever-technique.mjs <ref> <dossier> [briques]
+     ADMIN_EMAIL=... node fonctions-suivi/outils/relever-technique.mjs <ref> <dossier> [briques]
 
    `briques` : les identifiants de composants séparés par des virgules. Sans
    lui, la fiche se pose sur toutes les briques du projet.
@@ -21,13 +21,15 @@ import { join, extname } from 'node:path';
 import { execSync } from 'node:child_process';
 import { exiger } from './lib/donnees-locales.mjs';
 
-const CLE = process.env.ADMIN_CLE;
+/* Plus de clé partagée : l'outil agit au nom d'une personne de l'équipe,
+   qui s'identifie avec son code à six chiffres (lib/session-admin.mjs). */
+import { appelerAdmin } from './lib/session-admin.mjs';
 const PORTE = process.env.PORTE_SUIVI
   || `https://europe-west1-${process.env.PROJET_FIREBASE || 'capmedia-1f90d'}.cloudfunctions.net/suiviAdmin`;
 
 const [REF, DOSSIER, COMPOSANT] = process.argv.slice(2);
-if (!CLE || !REF || !DOSSIER) {
-  console.error('Usage : ADMIN_CLE=... node fonctions-suivi/outils/relever-technique.mjs <ref> <dossier> [idComposant]');
+if (!REF || !DOSSIER) {
+  console.error('Usage : ADMIN_EMAIL=... node fonctions-suivi/outils/relever-technique.mjs <ref> <dossier> [idComposant]');
   process.exit(1);
 }
 
@@ -161,12 +163,7 @@ const technique = {
 };
 
 /* --- L'écriture ---------------------------------------------------------- */
-const appeler = async (corps) => {
-  const r = await fetch(PORTE, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cle: CLE, ...corps }) });
-  const t = await r.text();
-  let j = null; try { j = JSON.parse(t); } catch (e) { /* texte */ }
-  return { code: r.status, texte: t, json: j };
-};
+const appeler = (corps) => appelerAdmin(corps);
 
 const diag = await appeler({ action: 'diagnostic' });
 if (diag.code !== 200) { console.error('Diagnostic refusé :', diag.texte); process.exit(1); }

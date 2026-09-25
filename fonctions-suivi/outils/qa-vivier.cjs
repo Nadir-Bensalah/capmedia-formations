@@ -60,7 +60,6 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   await connecter(page,'agent.essai@exemple.test');
   /* La clé d'administration, que l'interface demande dans une feuille : on
      la pose comme un humain qui l'a déjà saisie une fois. */
-  await page.evaluate(()=>{ try { localStorage.setItem('suivi:cle-admin','cle-essai-locale'); } catch(e){} });
   await page.reload({waitUntil:'domcontentloaded'}); await pause(3500);
   await aller(page,'/tests',null,'Tests');
   await pause(1600);

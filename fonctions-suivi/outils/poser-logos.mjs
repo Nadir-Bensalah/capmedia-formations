@@ -7,7 +7,7 @@
    pose à la création d'un projet, est écartée : la même image sur cinq
    projets ne dit rien et trompe l'œil.
 
-     ADMIN_CLE=... node fonctions-suivi/outils/poser-logos.mjs fonctions-suivi/outils/donnees-locales/icones-projets.tsv
+     ADMIN_EMAIL=... node fonctions-suivi/outils/poser-logos.mjs fonctions-suivi/outils/donnees-locales/icones-projets.tsv
    La table associe une référence de projet à un chemin d'image.
    ========================================================================== */
 
@@ -15,28 +15,21 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { basename, extname } from 'node:path';
 
-const CLE = process.env.ADMIN_CLE;
+/* Plus de clé partagée : l'outil agit au nom d'une personne de l'équipe,
+   qui s'identifie avec son code à six chiffres (lib/session-admin.mjs). */
+import { appelerAdmin } from './lib/session-admin.mjs';
 const PORTE = process.env.PORTE_SUIVI
   || `https://europe-west1-${process.env.PROJET_FIREBASE || 'capmedia-1f90d'}.cloudfunctions.net/suiviAdmin`;
 const TABLE = process.argv[2];
 
-if (!CLE || !TABLE) {
-  console.error('Usage : ADMIN_CLE=... node fonctions-suivi/outils/poser-logos.mjs fonctions-suivi/outils/donnees-locales/icones-projets.tsv');
+if (!TABLE) {
+  console.error('Usage : ADMIN_EMAIL=... node fonctions-suivi/outils/poser-logos.mjs fonctions-suivi/outils/donnees-locales/icones-projets.tsv');
   process.exit(1);
 }
 
 const TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml' };
 
-const appeler = async (corps) => {
-  const r = await fetch(PORTE, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cle: CLE, ...corps }),
-  });
-  const texte = await r.text();
-  let json = null;
-  try { json = JSON.parse(texte); } catch (e) { /* réponse en texte */ }
-  return { code: r.status, texte, json };
-};
+const appeler = (corps) => appelerAdmin(corps);
 
 const lignes = readFileSync(TABLE, 'utf8').split('\n')
   .map((l) => l.split('\t'))

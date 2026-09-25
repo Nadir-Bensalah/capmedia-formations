@@ -741,8 +741,10 @@ export const lisible = (e) => {
   if (code === 'storage/unauthorized') return "Ce fichier n'est pas accessible.";
   if (code === 'storage/canceled') return 'Envoi annulé.';
   const m = (e && e.message) || '';
-  if (/injoignable|Clé refusée|demande la clé/.test(m)) return m;
-  if (m && m.length < 140 && !/^Firebase/.test(m)) return m;
+  if (/injoignable/.test(m)) return m;
+  /* Les refus du serveur sont écrits pour être lus : on les montre tels
+     quels (« C'est le dernier administrateur actif... »). */
+  if (m && m.length < 260 && !/^Firebase/.test(m)) return m;
   return "Quelque chose n'a pas fonctionné. Réessayez, et prévenez-nous si cela continue.";
 };
 

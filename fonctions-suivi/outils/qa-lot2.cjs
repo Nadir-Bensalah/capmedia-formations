@@ -161,7 +161,6 @@ const MONTANT_NU=/\d[\d   ]*€(?![^\n]*(HT|TTC))/;
     const eq=await (await nav.newContext({viewport:{width:1500,height:1100}})).newPage();
     eq.on('pageerror',e=>err.push('EQUIPE: '+e.message.slice(0,160)));
     await connecter(eq,'agent.essai@exemple.test');
-    await eq.evaluate(()=>{try{localStorage.setItem('suivi:cle-admin','cle-essai-locale');}catch(e){}});
     await aller(eq,'/activite','.page');
     const liensEquipe=await eq.evaluate(()=>[...document.querySelectorAll('.chrono-texte a')].map(a=>a.getAttribute('href')));
     verifier(liensEquipe.length>0,`le cockpit affiche des liens d'activité (${liensEquipe.length})`);

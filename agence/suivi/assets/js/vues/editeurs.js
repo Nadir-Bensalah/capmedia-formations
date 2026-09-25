@@ -9,7 +9,7 @@ import {
   TYPES_COMPOSANT, STATUTS_COMPOSANT, STATUTS_ETAPE, STATUTS_TACHE, PRIORITES, CATEGORIES_LIEN,
   STATUTS_RELEASE, TYPES_CHANGEMENT, TYPES_NOTE, TYPES_VALIDATION, CATEGORIES_FICHIER,
   STATUTS_PROJET, TYPES_PROJET, SANTES, STATUTS, URGENCES, QUALIFICATIONS, PLATEFORMES_CHOIX, contactsProjet, statutProjet,
-  MOTIFS_REPORT, nomAffiche, dateCourte,
+  MOTIFS_REPORT, nomAffiche, dateCourte, estAdmin,
   NIVEAUX_SCENARIO, BLOCS_SCENARIO, STATUTS_CAMPAGNE, PLATEFORMES_TEST, REF_SCENARIO,
   ETATS_PARCOURS, OUTILS_PARCOURS, FAMILLES_REGLE, ETATS_REGLE,
   GRAVITES_ANOMALIE, STATUTS_ANOMALIE,
@@ -116,7 +116,6 @@ const reportsMaj = (fiche, champDate, valeur, d, session) => {
   return reports.slice(-20);
 };
 
-const contactsDe = (fiche) => contactsProjet(fiche);
 const composantsDe = (pid) => (magasin.lire(K.composants(pid)) || []).reduce((c, x) => ({ ...c, [x.id]: x.nom }), {});
 const jalonsDe = (pid) => (magasin.lire(K.jalons(pid)) || []).reduce((c, x) => ({ ...c, [x.id]: x.titre }), {});
 const equipeCarte = () => (magasin.lire(K.equipe) || []).reduce((c, x) => ({ ...c, [x.id]: x.nom || x.email }), {});
@@ -290,41 +289,29 @@ const editeurs = {
       ${champ('pulseDerniereLivraison', 'Dernière livraison', (fiche.pulse || {}).derniereLivraison, { facultatif: true, placeholder: 'ex. iOS 2.4.1' })}
       ${champ('pulseProchaineEtape', 'Prochaine étape', (fiche.pulse || {}).prochaineEtape, { facultatif: true, placeholder: 'ex. Validation TestFlight' })}
       ${champ('pulseAttenteClient', 'Attente client', (fiche.pulse || {}).attenteClient, { facultatif: true, placeholder: 'Laissez vide si rien' })}
-      <p class="surtitre" style="margin-top:8px">Les interlocuteurs</p>
-      <p class="aide" style="margin-top:-4px">Un projet peut en compter deux : ils reçoivent les mêmes e-mails et voient le même espace.</p>
-      <div class="forme-rang">
-        ${champ('contact1Nom', 'Interlocuteur principal', (contactsDe(fiche)[0] || {}).nom, { facultatif: true, placeholder: 'Prénom et nom' })}
-        ${champ('contact1Email', 'Son e-mail', (contactsDe(fiche)[0] || {}).email, { type: 'email', facultatif: true })}
-      </div>
-      <div class="forme-rang">
-        ${champ('contact2Nom', 'Second interlocuteur', (contactsDe(fiche)[1] || {}).nom, { facultatif: true, placeholder: 'Laissez vide s\'il n\'y en a qu\'un' })}
-        ${champ('contact2Email', 'Son e-mail', (contactsDe(fiche)[1] || {}).email, { type: 'email', facultatif: true })}
-      </div>
-      <label class="interrupteur" style="margin-top:8px"><input type="checkbox" name="interne" ${fiche.interne ? 'checked' : ''}><i></i> C'est un projet à moi</label>
-      <p class="aide">Aucun client, aucun e-mail, visible de vous seul dans le cockpit.</p>
-      <label class="interrupteur" style="margin-top:8px"><input type="checkbox" name="silence" ${fiche.silence ? 'checked' : ''}><i></i> Préparer sans prévenir le client</label>
-      <p class="aide">En sourdine, le client garde l'accès mais ne reçoit aucun e-mail. À lever quand l'espace est prêt.</p>`,
+      <p class="surtitre" style="margin-top:8px">Le client</p>
+      <p class="aide" style="margin-top:-4px">Les personnes qui accèdent au projet, leur rôle, l'ouverture au client et ses e-mails se règlent dans l'onglet « Accès client » du projet.</p>
+      ${estAdmin(env.session) ? `<label class="interrupteur" style="margin-top:8px"><input type="checkbox" name="interne" ${fiche.interne ? 'checked' : ''}><i></i> C'est un projet à moi</label>
+      <p class="aide">Aucun client, aucun e-mail, visible de l'équipe seule dans le cockpit.</p>` : ''}`,
     surMontage: (racine) => { brancherLogo(racine, pid); brancherReport(racine); },
     regles: {
       nom: obligatoire(),
       progressionValeur: (v) => (v !== null && (v < 0 || v > 100) ? 'Entre 0 et 100.' : ''),
-      contact1Email: emailValide(), contact2Email: emailValide(),
     },
+    /* Un agent tient l'avancement ; l'identité du projet (nom, type,
+       plateformes, responsable, projet à moi) reste à l'administrateur.
+       Les règles refusent le reste : on n'envoie que ce qui est permis. */
     enregistrer: (d) => ecrire.majProjet(pid, {
-      nom: d.nom, statut: d.statut, type: d.type, description: d.description,
-      plateformes: Array.isArray(d.plateformes) ? d.plateformes : (d.plateformes ? [d.plateformes] : []),
+      statut: d.statut, description: d.description,
       debut: d.debut ? new Date(d.debut) : null, cible: d.cible ? new Date(d.cible) : null,
       reports: reportsMaj(fiche, 'cible', d.cible, d, env.session),
       progression: { mode: d.progressionMode, valeur: borner(d.progressionValeur) },
-      responsable: d.responsable, silence: Boolean(d.silence), interne: Boolean(d.interne),
-      contacts: [
-        { nom: d.contact1Nom || '', email: (d.contact1Email || '').trim().toLowerCase() },
-        { nom: d.contact2Nom || '', email: (d.contact2Email || '').trim().toLowerCase() },
-      ].filter((c) => c.email || c.nom),
-      client: (d.contact1Email || d.contact1Nom)
-        ? { ...(fiche.client || {}), nom: d.contact1Nom || '', email: (d.contact1Email || '').trim().toLowerCase() }
-        : (fiche.client || null),
       pulse: { enCours: d.pulseEnCours, derniereLivraison: d.pulseDerniereLivraison, prochaineEtape: d.pulseProchaineEtape, attenteClient: d.pulseAttenteClient },
+      ...(estAdmin(env.session) ? {
+        nom: d.nom, type: d.type,
+        plateformes: Array.isArray(d.plateformes) ? d.plateformes : (d.plateformes ? [d.plateformes] : []),
+        responsable: d.responsable, interne: Boolean(d.interne),
+      } : {}),
     })
       /* La santé est interne : elle vit à part, dans projetsInternes. */
       .then(() => (d.sante !== (interneDuProjet(pid).sante || 'ok') ? ecrire.majProjetInterne(pid, { sante: d.sante }) : null))
@@ -1142,7 +1129,9 @@ const editeurs = {
       ${champ('titre', 'Titre', defaut.titre || '', { placeholder: 'Valider la maquette du profil' })}
       ${select('type', 'Nature', TYPES_VALIDATION, defaut.type || 'autre')}
       ${zone('description', 'Ce que le client doit regarder', defaut.description || '', { lignes: 4 })}
-      ${champ('echeance', 'Réponse souhaitée avant le', '', { type: 'date', facultatif: true })}`,
+      ${champ('echeance', 'Réponse souhaitée avant le', '', { type: 'date', facultatif: true })}
+      <label class="interrupteur" style="margin-top:8px"><input type="checkbox" name="reserveeResponsable"><i></i> Réservée au responsable du projet</label>
+      <p class="aide">Pour une décision qui engage le client (périmètre, livraison, budget) : les collaborateurs la voient, seul le responsable y répond.</p>`,
     regles: { titre: obligatoire(), description: obligatoire() },
     avecDepot: { chemin: `projets/${pid}/validations`, texte: 'Ajoutez une maquette, une capture, un document.' },
     libelle: 'Envoyer la demande',

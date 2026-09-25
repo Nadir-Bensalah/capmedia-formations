@@ -15,7 +15,6 @@ const { lireRest } = require('./lib/rest-banc.cjs');
    ========================================================================== */
 const { chromium } = require('@playwright/test');
 const PROJET='capmedia-1f90d', SITE='http://127.0.0.1:8787';
-const CLE=process.env.ADMIN_CLE_ESSAI||'cle-essai-locale';
 const pause=(ms)=>new Promise(r=>setTimeout(r,ms));
 const prop={Authorization:'Bearer owner'};
 const bdd=(c)=>`http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
@@ -26,14 +25,10 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
 const champ=(d,k)=>(((d||{}).fields||{})[k]||{});
 const str=(d,k)=>champ(d,k).stringValue||'';
 const attendre=async(fn,n=25)=>{for(let i=0;i<n;i++){const v=await fn();if(v)return v;await pause(700);}return null;};
-const serveur=async(action,corps)=>{
-  const r=await fetch(`http://127.0.0.1:5001/${PROJET}/europe-west1/suiviAdmin`,{
-    /* La clé voyage dans le corps, pas dans un en-tête : c'est ce que
-       « suiviAdmin » lit, et le navigateur fait pareil. */
-    method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({cle:CLE,action,...corps})});
-  return { code:r.status, texte:await r.text() };
-};
+/* Depuis la Gate 2, plus de clé : on appelle au nom de l'administrateur
+   du banc, avec son jeton Firebase, comme le cockpit. */
+const { appelAdmin } = require('./lib/session-banc.cjs');
+const serveur=async(action,corps)=>{ const r=await appelAdmin(action,corps); return { code:r.code, texte:r.texte }; };
 /* La lettre destinée à cette adresse, quel que soit son rang dans la file. */
 const lettrePour=(email,modele)=>attendre(async()=>{
   const j=await lire('envois?pageSize=200');
@@ -212,7 +207,6 @@ const poserPassage=async(uid)=>{
     });
     await page.fill('#code',code||'');
     await page.waitForSelector('.lat a',{timeout:60000}).catch(()=>{});
-    await page.evaluate(()=>{try{localStorage.setItem('suivi:cle-admin','cle-essai-locale');}catch(e){}});
     for(let i=0;i<8;i++){
       await page.evaluate(()=>{location.hash='/tests?projet=atelier';window.dispatchEvent(new HashChangeEvent('hashchange'));});
       await pause(1800); if(await page.evaluate(()=>!!document.querySelector('#testeurs'))) break;

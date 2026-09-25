@@ -38,7 +38,6 @@ const verifier=(c,b,m)=>c?ok(b):dire(m?`${b} · ${m}`:b);
   await page.waitForSelector('#forme-code:not(.masque)',{timeout:25000});
   await page.fill('#code',await dernierCode('agent.essai@exemple.test'));
   await pause(2500);
-  await page.evaluate(()=>{try{localStorage.setItem('suivi:cle-admin','cle-essai-locale');}catch(e){}});
   await page.reload({waitUntil:'domcontentloaded'}); await pause(3500);
   /* Poser l'adresse une fois et attendre trois secondes ne suffit pas :
      sous charge, la page n'a pas fini de se monter et la suite accuse

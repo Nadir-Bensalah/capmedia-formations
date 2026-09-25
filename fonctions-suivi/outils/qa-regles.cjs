@@ -85,7 +85,6 @@ const aller = async (page, hash, sel, titre) => {
   await fetch(bdd('projets/atelier/regles/ZZ-99'), { method: 'DELETE', headers: prop }).catch(() => {});
 
   await connecter(page, 'agent.essai@exemple.test');
-  await page.evaluate(() => { try { localStorage.setItem('suivi:cle-admin', 'cle-essai-locale'); } catch (e) {} });
   await page.reload({ waitUntil: 'domcontentloaded' }); await page.waitForSelector('.lat a', { timeout: 60000 }).catch(() => {}); await pause(1200);
 
   /* Le compte réel, lu en base. Rien en dur. */

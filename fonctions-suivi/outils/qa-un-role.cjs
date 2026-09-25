@@ -16,7 +16,6 @@ const { lireRest } = require('./lib/rest-banc.cjs');
 const { chromium } = require('@playwright/test');
 const fs = require('fs');
 const PROJET='capmedia-1f90d', SITE='http://127.0.0.1:8787';
-const CLE=process.env.ADMIN_CLE_ESSAI||'cle-essai-locale';
 const pause=(ms)=>new Promise(r=>setTimeout(r,ms));
 const prop={Authorization:'Bearer owner'};
 const bdd=(c)=>`http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
@@ -27,11 +26,10 @@ const str=(d,k)=>champ(d,k).stringValue||'';
 const soucis=[];const ok=m=>console.log('  ok     '+m);const dire=m=>{soucis.push(m);console.log('  ÉCART  '+m);};
 const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
 const attendre=async(fn,n=30)=>{for(let i=0;i<n;i++){const v=await fn();if(v)return v;await pause(600);}return null;};
-const serveur=async(action,corps)=>{
-  const r=await fetch(`http://127.0.0.1:5001/${PROJET}/europe-west1/suiviAdmin`,{
-    method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cle:CLE,action,...corps})});
-  return { code:r.status, texte:await r.text() };
-};
+/* Depuis la Gate 2, plus de clé : on appelle au nom de l'administrateur
+   du banc, avec son jeton Firebase, comme le cockpit. */
+const { appelAdmin } = require('./lib/session-banc.cjs');
+const serveur=async(action,corps)=>{ const r=await appelAdmin(action,corps); return { code:r.code, texte:r.texte }; };
 /* Les comptes de l'émulateur d'authentification, lus directement. */
 const compte=async(email)=>{
   const r=await fetch(`http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/projects/${PROJET}/accounts:lookup`,{

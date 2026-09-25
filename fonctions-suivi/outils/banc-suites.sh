@@ -21,7 +21,7 @@ RACINE="$(cd "$ICI/.." && pwd)"
 SORTIE="${1:?Usage : banc-suites.sh <dossier-de-sortie> [suite ...]}"; shift
 : "${PLAN_DE_TESTS:?PLAN_DE_TESTS doit désigner le plan de tests à importer}"
 export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIREBASE_STORAGE_EMULATOR_HOST=127.0.0.1:9199
-export GCLOUD_PROJECT="${GCLOUD_PROJECT:-capmedia-1f90d}" ADMIN_CLE_ESSAI="${ADMIN_CLE_ESSAI:-cle-essai-locale}"
+export GCLOUD_PROJECT="${GCLOUD_PROJECT:-capmedia-1f90d}"
 mkdir -p "$SORTIE"
 cd "$RACINE" || exit 2
 

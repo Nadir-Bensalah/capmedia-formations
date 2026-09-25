@@ -3,7 +3,7 @@
    formelles ont leur fiche : approuver, ou demander des modifications.
    ========================================================================== */
 
-import { echapper, dateHeure, dateCourte, depuis, avecLiens, parDateDesc, joursAvant, STATUTS_VALIDATION, TYPES_VALIDATION } from '../noyau.js';
+import { echapper, dateHeure, dateCourte, depuis, avecLiens, parDateDesc, joursAvant, STATUTS_VALIDATION, TYPES_VALIDATION, estResponsable } from '../noyau.js';
 import { icone, pastille, ligne, vide, squelette, titrePage, modale, toast, sur, agir, pieceHtml, brancherPieces, echeanceHtml, encart } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K, G, agreger, ecrire, enAttenteDeVous } from '../donnees.js';
@@ -14,6 +14,10 @@ import { echeance } from '../noyau.js';
 export const ouvrirValidation = (v, env, projets) => {
   const equipe = env.role === 'equipe';
   const projet = projets.find((p) => p.id === v.projet) || {};
+  /* Une validation réservée au responsable : le collaborateur la lit, il
+     ne peut pas y répondre (les règles le lui refusent aussi). */
+  const reservee = v.reserveeResponsable === true;
+  const peutRepondre = !equipe && v.statut === 'en-attente' && (!reservee || estResponsable(env.session, projet.id ? projet : v.projet));
   const m = modale({
     titre: v.titre, sousTitre: `${TYPES_VALIDATION[v.type] || 'Validation'} · ${projet.nom || ''}${v.demandeur ? ` · demandée par ${v.demandeur.nom}` : ''}`, feuille: true,
     corps: `
@@ -22,11 +26,12 @@ export const ouvrirValidation = (v, env, projets) => {
       ${(v.pieces || []).length ? `<div class="pieces">${v.pieces.map(pieceHtml).join('')}</div>` : ''}
       ${v.cible && v.cible.libelle ? `<p class="t-petit t-2" style="margin-top:14px">Concerne : <a href="#${echapper(v.cible.chemin || '')}">${echapper(v.cible.libelle)}</a></p>` : ''}
       ${v.reponse ? `<div style="margin-top:20px">${encart(`<strong>${v.statut === 'approuvee' ? 'Approuvée' : 'Modifications demandées'}</strong> par ${echapper(v.reponse.nom || '')} le ${echapper(dateHeure(v.reponse.date))}${v.reponse.commentaire ? `<div class="prose" style="margin-top:6px">${avecLiens(v.reponse.commentaire)}</div>` : ''}`, v.statut === 'approuvee' ? 'ok' : 'attention', v.statut === 'approuvee' ? 'check' : 'edit')}</div>` : ''}
-      ${!equipe && v.statut === 'en-attente' ? `
+      ${reservee ? `<div style="margin-top:16px">${encart(equipe ? 'Réservée au responsable du projet côté client.' : (peutRepondre ? '<strong>Cette décision vous revient</strong> en tant que responsable du projet.' : '<strong>Réservée au responsable du projet.</strong> Vous pouvez la lire ; la réponse revient au responsable de votre société.'), 'info', 'cadenas')}</div>` : ''}
+      ${peutRepondre ? `
         <form id="forme-validation" class="forme" style="margin-top:24px" novalidate>
           <div class="groupe"><label class="etiquette-champ" for="commentaire">Votre commentaire <span class="facultatif">(obligatoire si vous demandez des modifications)</span></label><textarea class="zone" id="commentaire" name="commentaire" rows="4" maxlength="4000" placeholder="Ce qui vous convient, ce qui doit changer."></textarea></div>
         </form>` : ''}`,
-    pied: !equipe && v.statut === 'en-attente'
+    pied: peutRepondre
       ? `<button class="btn btn-secondaire" type="button" data-modifs>Demander des modifications</button><span class="pousse"></span><button class="btn btn-ok" type="button" data-approuver>${icone('check')} Approuver</button>`
       : equipe && v.statut === 'en-attente' ? `<button class="btn btn-danger" type="button" data-annuler>Annuler la demande</button><span class="pousse"></span><button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>`
       : `<button class="btn btn-principal" type="button" data-fermer>Fermer</button>`,

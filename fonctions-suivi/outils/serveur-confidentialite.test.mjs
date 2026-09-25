@@ -22,18 +22,14 @@ if (!process.env.FIRESTORE_EMULATOR_HOST) { console.error('Émulateurs requis (F
 const PROJET = process.env.GCLOUD_PROJECT || 'capmedia-1f90d';
 initializeApp({ projectId: PROJET });
 const bdd = getFirestore();
-const PORTE = `http://127.0.0.1:5001/${PROJET}/europe-west1/suiviAdmin`;
-const CLE = process.env.ADMIN_CLE_ESSAI || 'cle-essai-locale';
+/* Au nom de l'administrateur du banc, avec son jeton (Gate 2). */
+import { createRequire } from 'node:module';
+const { appelAdmin } = createRequire(import.meta.url)('./lib/session-banc.cjs');
 
 let ok = 0; const ecarts = [];
 const verifier = (l, vrai) => { if (vrai) { ok += 1; console.log('  ok     ' + l); } else { ecarts.push(l); console.log('  ÉCART  ' + l); } };
 const lire = async (chemin) => { const d = await bdd.doc(chemin).get(); return d.exists ? d.data() : null; };
-const appeler = async (corps) => {
-  const r = await fetch(PORTE, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cle: CLE, ...corps }) });
-  const texte = await r.text();
-  let json = null; try { json = JSON.parse(texte); } catch { /* texte */ }
-  return { code: r.status, texte, json };
-};
+const appeler = async ({ action, ...corps }) => appelAdmin(action, corps);
 /* Un déclencheur tourne après l'écriture : on attend qu'il ait fini. */
 const attendre = async (fn, secondes = 20) => {
   for (let i = 0; i < secondes * 4; i += 1) { const v = await fn(); if (v) return v; await new Promise((r) => setTimeout(r, 250)); }

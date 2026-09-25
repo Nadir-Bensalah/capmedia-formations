@@ -4,7 +4,7 @@
    navigation vivante et la recherche.
    ========================================================================== */
 
-import { exigerSession, $, echapper, prenom, nomAffiche, OUVERTS, ATTEND_CLIENT, FACTURES_DUES, joursAvant, effacerSecretsLocaux } from './noyau.js';
+import { exigerSession, $, echapper, prenom, nomAffiche, OUVERTS, ATTEND_CLIENT, FACTURES_DUES, joursAvant, effacerSecretsLocaux, estResponsable } from './noyau.js';
 import { monterCoquille, definirNavigation, enregistrerRecherche } from './coquille.js';
 import { definir, demarrer, courant, surChangement } from './routeur.js';
 import * as magasin from './magasin.js';
@@ -141,7 +141,8 @@ const construireNavigation = () => {
         { chemin: '/calendrier', libelle: 'Calendrier', icone: 'calendrier', compte: { total: reunionsAVenir.length } },
         ...(scenariosDuClient || parcoursDuClient ? [{ chemin: '/tests', libelle: 'Tests', icone: 'bug', compte: { total: scenariosDuClient } }] : []),
         { chemin: '/maintenance', libelle: 'Maintenance', icone: 'sante', compte: { total: forfaits } },
-        { chemin: '/finances', libelle: 'Devis et factures', icone: 'finances', compte: { total: dues, neuf: dues } },
+        /* La finance est au responsable : un collaborateur ne voit pas l'entrée. */
+        ...(projets.some((p) => estResponsable(session, p)) ? [{ chemin: '/finances', libelle: 'Devis et factures', icone: 'finances', compte: { total: dues, neuf: dues } }] : []),
         { chemin: '/documents', libelle: 'Documents', icone: 'documents', compte: { total: fichiers.length } },
       ],
     },

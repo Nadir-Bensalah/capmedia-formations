@@ -4,7 +4,7 @@
    ========================================================================== */
 
 import { echapper, dateCourte, montant, pluriel, parDateDesc, STATUTS_PROJET, STATUTS_FACTURE, STATUTS_DEVIS, statutProjet, projetEstActif} from '../noyau.js';
-import { icone, pastille, avatar, avatarEmpile, avatarProjet, pileProjets, ligne, vide, squelette, titrePage, modale, confirmer, toast, sur, agir, lireForme, valider, obligatoire, emailValide, fait, metrique, menu } from '../ui.js';
+import { icone, pastille, pastilleTexte, avatar, avatarEmpile, avatarProjet, pileProjets, ligne, vide, squelette, titrePage, modale, confirmer, toast, sur, agir, lireForme, valider, obligatoire, emailValide, fait, metrique, menu } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K, resteAPayer, interneDeLOrganisation } from '../donnees.js';
 import { filAriane } from '../coquille.js';
@@ -56,7 +56,7 @@ export const nouveau = async (ctx, env) => {
   titrePage('Nouveau client');
   filAriane([{ libelle: 'Clients', chemin: '/clients' }, { libelle: 'Nouveau client' }]);
   sortie.innerHTML = `<div class="page" style="max-width:760px">
-    <div class="page-tete"><div><h1>Nouveau client</h1><p class="chapo">Une organisation, un contact principal. Le compte du contact est créé tout de suite, l'invitation part quand vous rattachez un projet.</p></div></div>
+    <div class="page-tete"><div><h1>Nouveau client</h1><p class="chapo">Une société et son contact commercial. Elle ne donne accès à rien : l'accès se donne ensuite, projet par projet, dans l'onglet « Accès client ».</p></div></div>
     <form class="forme carte" id="forme-org" novalidate>${formulaireOrganisation()}<div class="forme-pied"><a class="btn btn-secondaire" href="#/clients">Annuler</a><button class="btn btn-principal" type="submit">Créer le client</button></div></form></div>`;
   const forme = sortie.querySelector('#forme-org');
   forme.addEventListener('submit', async (e) => {
@@ -94,9 +94,12 @@ export const detail = async (ctx, env) => {
       <div class="grille grille-tiers section">
         <div class="pile" style="gap:var(--e-7)">
           <section><div class="section-tete"><h2>Projets</h2></div>${projets.length ? `<div class="liste">${projets.map((p) => ligne({ href: `#/projets/${echapper(p.id)}`, titre: `<span class="rang" style="gap:10px">${avatarProjet(p, 'petit')} ${echapper(p.nom)}</span>`, sous: echapper(p.ref || ''), fin: pastille(STATUTS_PROJET, statutProjet(p)) })).join('')}</div>` : vide({ icone: 'projets', titre: 'Aucun projet', compact: true, action: `<a class="btn btn-secondaire" href="#/projets/nouveau?organisation=${echapper(id)}">Créer un projet</a>` })}</section>
-          <section><div class="section-tete"><h2>Contacts et accès</h2><button class="btn btn-secondaire btn-petit" type="button" data-action="inviter">${icone('plus')} Ajouter un contact</button></div>
-            ${contacts.length ? `<div class="liste">${contacts.map((c) => ligne({ titre: `<span class="rang" style="gap:10px">${avatar(c.nom || c.email)} ${echapper(c.nom || c.email)}</span>`, sous: `${echapper(c.email)}${c.role ? ` · ${echapper(c.role === 'owner' ? 'Responsable' : 'Collaborateur')}` : ''}${c.uid ? ' · compte ouvert' : ''}`, fin: `<button class="btn-icone" type="button" data-action="menu-contact" data-email="${echapper(c.email)}" aria-label="Actions">${icone('points')}</button>`, attrs: 'style="cursor:default"' })).join('')}</div>` : vide({ icone: 'utilisateurs', titre: 'Aucun contact', texte: 'Ajoutez les personnes qui doivent accéder aux projets.', compact: true })}
-            <p class="t-micro t-3" style="margin-top:8px">Un contact ajouté est membre de tous les projets de ce client. Retirez-le pour fermer l'accès.</p></section>
+          <section><div class="section-tete"><h2>Accès aux projets</h2></div>
+            ${projets.filter((p) => !p.interne).length ? `<div class="liste">${projets.filter((p) => !p.interne).map((p) => ligne({ href: `#/projets/${echapper(p.id)}/acces`, titre: `<span class="rang" style="gap:10px">${avatarProjet(p, 'petit')} ${echapper(p.nom)} ${p.ouvert === true ? pastilleTexte('Ouvert au client', 'vert') : pastilleTexte('Fermé au client', 'gris')}${p.emailsClient === 'coupes' ? ` ${pastilleTexte('E-mails coupés', 'ambre')}` : ''}</span>`, sous: echapper(`${(p.personnes || []).length} personne${(p.personnes || []).length > 1 ? 's' : ''} ${p.ouvert === true ? 'avec accès' : 'préparée(s)'}`) })).join('')}</div>` : vide({ icone: 'projets', titre: 'Aucun projet client', compact: true })}
+            <p class="t-micro t-3" style="margin-top:8px">L'accès se donne projet par projet, dans l'onglet « Accès client » de chaque projet. Appartenir à cette société ne donne accès à aucun projet.</p></section>
+          <section><div class="section-tete"><h2>Contacts de la société</h2></div>
+            ${contacts.length ? `<div class="liste">${contacts.map((c) => ligne({ titre: `<span class="rang" style="gap:10px">${avatar(c.nom || c.email)} ${echapper(c.nom || c.email)}</span>`, sous: echapper(c.email || ''), attrs: 'style="cursor:default"' })).join('')}</div>` : vide({ icone: 'utilisateurs', titre: 'Aucun contact', compact: true })}
+            <p class="t-micro t-3" style="margin-top:8px">Les coordonnées commerciales de la société. Elles ne donnent aucun accès et ne reçoivent aucun e-mail de suivi.</p></section>
           <section><div class="section-tete"><h2>Devis et factures</h2><a class="lien" href="#/finances">Finances</a></div>${documents.length ? `<div class="liste">${documents.slice(0, 12).map((d) => ligne({ href: `#/finances/${echapper(d.id)}`, icone: d.type === 'devis' ? 'receipt' : 'euro', titre: `${echapper(d.numero || '')} ${echapper(d.libelle || '')}`, sous: echapper(dateCourte(d.date)), fin: `<span class="nb t-fort">${echapper(montant(d.montant))}</span>${pastille(d.type === 'devis' ? STATUTS_DEVIS : STATUTS_FACTURE, d.statut, { equipe: true })}` })).join('')}</div>` : vide({ icone: 'receipt', titre: 'Aucune pièce', compact: true })}</section>
         </div>
         <aside class="pile" style="gap:var(--e-5)">
@@ -111,15 +114,6 @@ export const detail = async (ctx, env) => {
     if (el.dataset.action === 'modifier') {
       const m = modale({ titre: 'Le client', feuille: true, corps: `<form class="forme" id="f-org" novalidate>${formulaireOrganisation({ ...o, notesInternes: interneDeLOrganisation(o.id).notesInternes || '' })}</form>`, pied: '<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button><button class="btn btn-principal" type="submit" form="f-org">Enregistrer</button>' });
       m.el.querySelector('#f-org').addEventListener('submit', async (e) => { e.preventDefault(); if (!valider(e.target, { entreprise: obligatoire(), nom: obligatoire(), email: emailValide() })) return; if (await agir(m.pied.querySelector('[type="submit"]'), () => appelServeur('majOrganisation', { id, ...lireForme(e.target), versionInterne: 2 }), 'Client mis à jour.')) m.fermer(true); });
-    }
-    if (el.dataset.action === 'inviter') {
-      const m = modale({ titre: 'Ajouter un contact', sousTitre: 'Il reçoit une invitation et accède aux projets de ce client.', corps: `<form class="forme" id="f-inv" novalidate><div class="groupe"><label class="etiquette-champ" for="inv-nom">Nom</label><input class="champ" id="inv-nom" name="nom" maxlength="120"></div><div class="groupe"><label class="etiquette-champ" for="inv-email">E-mail</label><input class="champ" id="inv-email" name="email" type="email"></div><div class="groupe"><label class="etiquette-champ" for="inv-role">Rôle</label><select class="select" id="inv-role" name="role"><option value="member">Collaborateur</option><option value="owner">Responsable</option></select></div></form>`, pied: '<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button><button class="btn btn-principal" type="submit" form="f-inv">Inviter</button>' });
-      m.el.querySelector('#f-inv').addEventListener('submit', async (e) => { e.preventDefault(); if (!valider(e.target, { nom: obligatoire(), email: (v) => obligatoire()(v) || emailValide()(v) })) return; if (await agir(m.pied.querySelector('[type="submit"]'), () => appelServeur('inviterMembreOrganisation', { id, ...lireForme(e.target) }), 'Invitation envoyée.')) m.fermer(true); });
-    }
-    if (el.dataset.action === 'menu-contact') {
-      const email = el.dataset.email;
-      menu(el, [{ libelle: 'Renvoyer l\'invitation', icone: 'mail', action: () => agir(null, () => appelServeur('inviterMembreOrganisation', { id, email, nom: ((o.contacts || []).find((c) => c.email === email) || {}).nom || '' }), 'Invitation renvoyée.') },
-        '-', { libelle: 'Retirer l\'accès', icone: 'corbeille', danger: true, action: async () => { if (await confirmer({ titre: `Retirer ${email} ?`, texte: 'Cette personne perd l\'accès à tous les projets de ce client.', ok: 'Retirer', danger: true })) agir(null, () => appelServeur('retirerMembreOrganisation', { id, email }), 'Accès retiré.'); } }]);
     }
   });
   [K.organisations, K.projets, K.documentsTous, K.paiementsTous, K.organisationsInternes].forEach((c) => lot.sur(c, rendre));

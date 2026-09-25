@@ -9,7 +9,7 @@
    invitation n'est envoyée. La sourdine se lève projet par projet depuis
    le cockpit, quand l'espace est prêt à être montré.
 
-     ADMIN_CLE=... node fonctions-suivi/outils/remplir-portefeuille.mjs [--essai]
+     ADMIN_EMAIL=... node fonctions-suivi/outils/remplir-portefeuille.mjs [--essai]
    ========================================================================== */
 
 import { chargerDonnees, exiger } from './lib/donnees-locales.mjs';
@@ -19,7 +19,9 @@ import { chargerDonnees, exiger } from './lib/donnees-locales.mjs';
 const { CLIENTS } = await chargerDonnees('portefeuille');
 const { INTERNES } = await chargerDonnees('portefeuille-interne');
 
-const CLE = process.env.ADMIN_CLE;
+/* Plus de clé partagée : l'outil agit au nom d'une personne de l'équipe,
+   qui s'identifie avec son code à six chiffres (lib/session-admin.mjs). */
+import { appelerAdmin } from './lib/session-admin.mjs';
 const PORTE = process.env.PORTE_SUIVI
   || `https://europe-west1-${process.env.PROJET_FIREBASE || 'capmedia-1f90d'}.cloudfunctions.net/suiviAdmin`;
 const ESSAI = process.argv.includes('--essai');
@@ -29,21 +31,8 @@ const ESSAI = process.argv.includes('--essai');
 const ADRESSES = exiger('ADRESSES', 'Les seules adresses autorisées sur ces projets, séparées par des virgules.')
   .split(',').map((e) => e.trim()).filter(Boolean);
 
-if (!CLE) {
-  console.error('ADMIN_CLE manquante.');
-  process.exit(1);
-}
 
-const appeler = async (corps) => {
-  const r = await fetch(PORTE, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cle: CLE, ...corps }),
-  });
-  const texte = await r.text();
-  let json = null;
-  try { json = JSON.parse(texte); } catch (e) { /* réponse en texte */ }
-  return { code: r.status, texte, json };
-};
+const appeler = (corps) => appelerAdmin(corps);
 
 const TOUT = [...CLIENTS, ...INTERNES];
 
@@ -87,7 +76,7 @@ for (const p of TOUT) {
       client: p.interne ? undefined : { ...(p.client || {}), notesInternes: '' },
       contacts: p.contacts || [],
       inviter: false,
-      silence: true,
+      emailsClient: 'coupes',
     });
     if (creation.code !== 200) { soucis.push(`${p.ref} création : ${creation.code} ${creation.texte.slice(0, 120)}`); continue; }
     id = creation.json.id;
@@ -101,7 +90,7 @@ for (const p of TOUT) {
       plateformes: p.plateformes || [], sante: p.sante || 'ok',
       progression: { mode: 'jalons', valeur: 0 },
       pulse: p.pulse || {},
-      silence: true,
+      emailsClient: 'coupes',
       interne: p.interne === true,
       contacts: p.contacts || [],
     },

@@ -66,7 +66,14 @@ await env.clearStorage();
 await env.withSecurityRulesDisabled(async (ctx) => {
   const b = ctx.firestore();
   const s = ctx.storage();
-  /* Les fiches que les règles Storage relisent. */
+  /* Les fiches que les règles Storage relisent. Depuis la Gate 2, le jeton
+     ne suffit plus : la fiche d'équipe (active), les membres et les rôles
+     du projet, la fiche du testeur sont relus à chaque requête. */
+  await setDoc(doc(b, 'equipe/st-agent'), { nom: 'Agent', role: 'admin', actif: true });
+  await setDoc(doc(b, `projets/${P}`), { nom: 'St', membres: ['st-client'], roles: { 'st-client': 'responsable' }, ouvert: true });
+  await setDoc(doc(b, `projets/${Q}`), { nom: 'Autre', membres: ['st-autre-client'], roles: { 'st-autre-client': 'responsable' }, ouvert: true });
+  await setDoc(doc(b, 'testeurs/st-testeur'), { prenom: 'Testeur', actif: true, projets: [P] });
+  await setDoc(doc(b, 'testeurs/st-intrus'), { prenom: 'Intrus', actif: true, projets: [P] });
   await setDoc(doc(b, 'fichiers/st-visible'), { projet: P, visibilite: 'client', archive: false });
   await setDoc(doc(b, 'fichiers/st-interne'), { projet: P, visibilite: 'interne', archive: false });
   await setDoc(doc(b, 'fichiers/st-archive'), { projet: P, visibilite: 'client', archive: true });
@@ -163,7 +170,9 @@ const clausesUpdate = [...texteRegles.matchAll(/allow ([a-z, ]*\bupdate\b[a-z, ]
 if (!clausesUpdate.length) { ecarts.push('aucune clause update trouvée'); console.log('  ÉCART  aucune clause update trouvée : la lecture des règles est à revoir'); }
 for (const [, ops, cond] of clausesUpdate) {
   const c = cond.replace(/\s+/g, ' ').trim();
-  const reserve = c === 'false' || c === 'estEquipe()' || /^estEquipe\(\) && fichierAccepte\(\)$/.test(c);
+  /* Réservé à l'équipe : l'équipe entière, un administrateur, ou l'équipe
+     autorisée sur le projet (Gate 2), avec ou sans contrôle du fichier. */
+  const reserve = c === 'false' || /^(estEquipe\(\)|estAdmin\(\)|equipeSurProjet\(projetId\))( && fichierAccepte\(\))?$/.test(c);
   if (reserve) { ok += 1; console.log(`  ok     allow ${ops.trim()} : ${c}`); }
   else { ecarts.push(`allow ${ops.trim()} : ${c}`); console.log(`  ÉCART  allow ${ops.trim()} ouvert au-delà de l équipe : ${c}`); }
 }

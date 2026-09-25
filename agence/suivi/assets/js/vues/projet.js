@@ -11,7 +11,7 @@ import {
   STATUTS_PROJET, STATUTS_COMPOSANT, TYPES_COMPOSANT, STATUTS_ETAPE, STATUTS_TACHE, PRIORITES, STATUTS, TYPES, URGENCES, OUVERTS, ATTEND_CLIENT,
   CATEGORIES_FICHIER, CATEGORIES_LIEN, STATUTS_RELEASE, TYPES_CHANGEMENT, TYPES_NOTE, SANTES, STATUTS_VALIDATION, QUALIFICATIONS, statutProjet, PLATEFORMES, nomsContacts, contactsProjet, PORTEES_DEVIS, age,
   verdictDelai, reportsDe, dateOrigine, MOTIFS_REPORT, dateLongue, enDate,
-  STATUTS_CAMPAGNE, STATUTS_ANOMALIE
+  STATUTS_CAMPAGNE, STATUTS_ANOMALIE, peut
 } from '../noyau.js';
 import {
   icone, pastille, pastilleTexte, puce, pucePlateforme, iconePlateforme, tonPlateforme, avatarProjet, avatar, progression, anneau, ligne, vide, fait, chronoItem, parJour, squelette, titrePage,
@@ -27,6 +27,7 @@ import { editer, supprimer } from './editeurs.js';
 import { appelServeur } from '../serveur.js';
 import { activiteHtml } from './accueil.js';
 import { basculerAFaire } from './admin-a-faire.js';
+import { accesHtml, gesteAcces } from './acces-client.js';
 
 const ONGLETS = [
   { cle: 'apercu', libelle: 'Aperçu', icone: 'accueil' },
@@ -62,6 +63,7 @@ const lireTout = (pid) => ({
   paiements: magasin.lire(K.paiements(pid)) || [],
   activite: (magasin.lire(K.activite(pid)) || []).slice().sort(parDateDesc('date')),
   equipe: magasin.lire(K.equipe) || [],
+  interlocuteurs: magasin.lire(K.interlocuteurs(pid)) || [],
 });
 
 const nomEquipe = (equipe, uid) => ((equipe.find((e) => e.id === uid) || {}).nom || '');
@@ -76,7 +78,10 @@ export const vue = async (ctx, env) => {
      e-mail il y a six mois doit toujours y mener. */
   const ongletDe = (voulu) => {
     const v = voulu === 'roadmap' ? 'etapes' : voulu;
-    return ONGLETS.some((o) => o.cle === v) ? v : (v === 'composants' ? 'composants' : 'apercu');
+    if (ONGLETS.some((o) => o.cle === v)) return v;
+    /* Deux onglets de l'équipe seule : les parties, et l'accès du client. */
+    if (env.role === 'equipe' && (v === 'composants' || v === 'acces')) return v;
+    return 'apercu';
   };
   let onglet = ongletDe(ctx.onglet);
   const equipe = env.role === 'equipe';
@@ -88,7 +93,7 @@ export const vue = async (ctx, env) => {
      qu'elle n'a pas fini, un redessin la rejoue au lieu de la couper. */
   let ongletAnime = '';
   const cles = [K.projet(pid), K.composants(pid), K.jalons(pid), K.liens(pid), K.taches(pid), K.tickets(pid), K.validations(pid), K.fichiers(pid), K.releases(pid), K.reunions(pid), K.notes(pid), K.blocages(pid), K.documents(pid), K.paiements(pid), K.activite(pid), K.equipe,
-    K.scenarios(pid), K.campagnes(pid), K.anomalies(pid), ...(env.role === 'equipe' ? [K.projetsInternes] : [])];
+    K.scenarios(pid), K.campagnes(pid), K.anomalies(pid), ...(env.role === 'equipe' ? [K.projetsInternes, K.interlocuteurs(pid)] : [])];
   abonnerProjet(lot, pid, env.role);
 
   let detailOuvert = ctx.params.tid && onglet === 'taches' ? ctx.params.tid : null;
@@ -104,7 +109,7 @@ export const vue = async (ctx, env) => {
       return;
     }
     titrePage(projet.nom);
-    filAriane([{ libelle: equipe ? 'Projets' : 'Accueil', chemin: equipe ? '/projets' : '/' }, { libelle: projet.nom, chemin: `/projets/${pid}` }, ...(onglet !== 'apercu' ? [{ libelle: (ONGLETS.find((o) => o.cle === onglet) || { libelle: 'Les parties' }).libelle }] : [])]);
+    filAriane([{ libelle: equipe ? 'Projets' : 'Accueil', chemin: equipe ? '/projets' : '/' }, { libelle: projet.nom, chemin: `/projets/${pid}` }, ...(onglet !== 'apercu' ? [{ libelle: (ONGLETS.find((o) => o.cle === onglet) || { libelle: onglet === 'acces' ? 'Accès client' : 'Les parties' }).libelle }] : [])]);
 
     const prog = progressionProjet(projet, d.jalons, { composants: d.composants, taches: d.taches });
     const risques = risquesProjet({ jalons: d.jalons, blocages: d.blocages, taches: d.taches, tickets: d.tickets });
@@ -153,6 +158,7 @@ export const vue = async (ctx, env) => {
       <div class="onglets-enveloppe"><nav class="onglets" id="onglets-projet" aria-label="Sections du projet">
         ${ONGLETS.map((o) => `<a class="onglet${o.cle === onglet ? ' actif' : ''}" href="#/projets/${echapper(pid)}${o.cle === 'apercu' ? '' : `/${o.cle}`}">${o.libelle}${comptes[o.cle] ? `<span class="badge">${comptes[o.cle]}</span>` : ''}</a>`).join('')}
         ${equipe ? `<a class="onglet${onglet === 'composants' ? ' actif' : ''}" href="#/projets/${echapper(pid)}/composants">Les parties</a>` : ''}
+        ${equipe && !projet.interne ? `<a class="onglet${onglet === 'acces' ? ' actif' : ''}" href="#/projets/${echapper(pid)}/acces">Accès client${projet.ouvert === true ? '' : ' <span class="badge">fermé</span>'}</a>` : ''}
       </nav></div>
 
       <div id="onglet-corps"${onglet !== ongletAnime ? ' class="corps-anime"' : ''}>${rendreOnglet(onglet, d, { pid, env, prog, attente, ouverts, delai, risques })}</div>
@@ -187,18 +193,24 @@ export const vue = async (ctx, env) => {
     const action = el.dataset.action;
     const id = el.dataset.id;
     if (action === 'editer-projet') return editer('projet', env, { pid, fiche: d.projet });
+    if (await gesteAcces(el, d, { pid, env })) return null;
     if (action === 'ouvrir-au-client') {
-      const qui = nomsContacts(d.projet) || 'le client';
+      const personnes = (d.interlocuteurs || []).filter((i) => i.statut === 'actif');
+      const qui = personnes.map((i) => i.nom || i.email).join(', ') || 'le client';
+      const coupes = d.projet.emailsClient === 'coupes';
       const ok = await confirmer({
         titre: 'Ouvrir ce projet au client ?',
-        texte: `${qui} recevra son invitation et verra tout ce qui est ici : étapes, tâches visibles, fichiers, devis, factures. La sourdine sera levée.`,
+        texte: `${qui} ${personnes.length > 1 ? 'auront' : 'aura'} accès à ce qui est visible ici : étapes, tâches visibles, fichiers, demandes ; la finance pour les responsables. ${coupes ? "Les e-mails de ce projet sont coupés : aucune invitation ne partira, vous copierez les liens." : "Chacun reçoit une seule lettre : son invitation et ce qui l'attend, pas l'historique de la préparation."}`,
         ok: 'Ouvrir',
       });
       if (!ok) return null;
-      return agir(el, async () => {
-        const r = await appelServeur('ouvrirAuClient', { id: pid });
-        return r;
-      }, 'Projet ouvert. L\'invitation est partie.');
+      let r = null;
+      const fait = await agir(el, async () => { r = await appelServeur('ouvrirAuClient', { id: pid }); });
+      if (fait && r) {
+        const parties = (r.invitations || []).filter((x) => x.etat === 'envoyee').length;
+        toast(parties ? `Projet ouvert. ${parties} invitation${parties > 1 ? 's' : ''} envoyée${parties > 1 ? 's' : ''}.` : 'Projet ouvert. Aucune invitation n\'est partie : copiez les liens depuis l\'onglet Accès client.');
+      }
+      return null;
     }
 
     if (action === 'menu-projet') {
@@ -212,8 +224,8 @@ export const vue = async (ctx, env) => {
           ? { libelle: 'Passer en projet actuel', icone: 'fleche', action: () => basculerAFaire(d.projet, false) }
           : { libelle: 'Ranger dans les projets à faire', icone: 'ampoule', action: () => basculerAFaire(d.projet, true) }] : []),
         { libelle: 'La note du projet', icone: 'note', action: () => naviguer(`/a-faire/${pid}`) },
+        ...(!d.projet.interne ? [{ libelle: 'Accès du client', icone: 'utilisateurs', action: () => naviguer(`/projets/${pid}/acces`) }] : []),
         ...(d.projet.ouvert === true && !d.projet.interne ? [{ libelle: 'Refermer au client', icone: 'oeilFerme', danger: true, action: () => refermer(pid) }] : []),
-        { libelle: "Créer un lien d'invitation", icone: 'utilisateurs', action: () => ouvrirInvitation(d.projet, env) },
         { libelle: 'Signaler un point bloquant', icone: 'alerte', action: () => editer('blocage', env, { pid }) },
         { libelle: 'Demander une validation', icone: 'valider', action: () => editer('validation', env, { pid }) },
         { libelle: 'Nouvelle note ou décision', icone: 'note', action: () => editer('note', env, { pid }) },
@@ -290,52 +302,6 @@ export const vue = async (ctx, env) => {
       window.scrollTo({ top: 0, behavior: 'instant' });
     },
   };
-};
-
-/*
- * Le lien d'invitation. Le client clique, son adresse est déjà posée, il
- * demande son code et entre. Le lien ne donne aucun accès par lui-même :
- * il ne fait que remplir l'adresse, c'est le code reçu dans la boîte qui
- * ouvre la session. On peut donc le coller dans un message sans risque.
- */
-const ouvrirInvitation = (projet, env) => {
-  const contacts = contactsProjet(projet);
-  const m = modale({
-    titre: "Créer un lien d'invitation",
-    sousTitre: projet.nom,
-    corps: `<form class="forme" id="forme-invitation" novalidate>
-      <div class="groupe">
-        <label class="etiquette-champ" for="inv-email">Adresse du destinataire</label>
-        <input class="champ" id="inv-email" name="email" type="email" value="${echapper((contacts[0] || {}).email || '')}" placeholder="prenom@entreprise.test">
-        ${contacts.length > 1 ? `<p class="aide">Second interlocuteur : ${echapper(contacts[1].email || contacts[1].nom || '')}. Créez-lui son propre lien.</p>` : ''}
-      </div>
-      <div class="groupe">
-        <label class="etiquette-champ" for="inv-nom">Son nom <span class="facultatif">(facultatif)</span></label>
-        <input class="champ" id="inv-nom" name="nom" value="${echapper((contacts[0] || {}).nom || '')}">
-      </div>
-      <label class="interrupteur"><input type="checkbox" name="envoyer"><i></i> Lui envoyer aussi l'invitation par e-mail</label>
-      <p class="aide">Sans cette case, rien ne part : le lien s'affiche ici et vous le collez où vous voulez.</p>
-      <div id="inv-resultat"></div>
-    </form>`,
-    pied: `<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button><button class="btn btn-principal" type="submit" form="forme-invitation">Créer le lien</button>`,
-  });
-  m.el.querySelector('#forme-invitation').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const d = lireForme(e.target);
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(d.email || '').trim())) { toast("Cette adresse a l'air incomplète.", 'erreur'); return; }
-    await agir(m.pied.querySelector('[type="submit"]'), async () => {
-      const r = await appelServeur('creerInvitation', { email: d.email, nom: d.nom, projet: projet.id, envoyer: Boolean(d.envoyer) });
-      const zone = m.el.querySelector('#inv-resultat');
-      zone.innerHTML = `<div class="groupe" style="margin-top:8px">
-        <span class="etiquette-champ">Le lien, valable quatorze jours</span>
-        <input class="champ" id="inv-lien" value="${echapper(r.lien)}" readonly>
-        <p class="aide">Il ne donne aucun accès seul : il pose l'adresse, le code reçu par e-mail ouvre la session.</p>
-      </div>`;
-      const entree = zone.querySelector('#inv-lien');
-      entree.focus(); entree.select();
-      try { await navigator.clipboard.writeText(r.lien); } catch (err) { /* refus du presse-papiers */ }
-    }, d.envoyer ? 'Lien créé, invitation envoyée.' : 'Lien créé et copié.');
-  });
 };
 
 /* La barre d'onglets : l'onglet actif se ramène dans le champ de vision, et
@@ -471,6 +437,7 @@ const rendreOnglet = (onglet, d, c) => {
   switch (onglet) {
     case 'apercu': return apercu(d, c);
     case 'composants': return composants(d, c);
+    case 'acces': return accesHtml(d, c);
     case 'etapes': return etapes(d, c);
     case 'taches': return taches(d, c);
     case 'demandes': return demandes(d, c);
@@ -597,16 +564,16 @@ const rideauHtml = (d, { pid, env }) => {
   if (env.role !== 'equipe') return '';
   const projet = d.projet;
   if (projet.interne) return '';
-  /* Seul un « ouvert : faux » explicite baisse le rideau. Les projets nés
-     avant cette notion n'en portent pas et restent ouverts : on ne va pas
-     fermer d'un coup cinquante espaces déjà partagés. */
-  if (projet.ouvert !== false) return '';
+  /* Ouvert, c'est « ouvert : vrai », et rien d'autre : un projet sans ce
+     drapeau est fermé au client (la migration de la Gate 2 a posé le
+     drapeau sur les projets déjà partagés). */
+  if (projet.ouvert === true) return '';
 
-  const contacts = contactsProjet(projet);
-  const avecAdresse = contacts.filter((c) => c.email);
+  const personnes = (d.interlocuteurs || []).filter((i) => i.statut === 'actif');
+  const avecAdresse = personnes.map((i) => ({ nom: i.nom, email: i.email }));
   const devis = d.documents.filter((x) => x.type === 'devis' && !x.archive);
   const manque = [];
-  if (!avecAdresse.length) manque.push("l'adresse d'au moins un interlocuteur");
+  if (!personnes.some((i) => i.role === 'responsable')) manque.push('un responsable côté client (onglet Accès client)');
   if (!d.jalons.length) manque.push('au moins une étape');
 
   return `<section class="section" style="margin-top:0">
@@ -616,10 +583,11 @@ const rideauHtml = (d, { pid, env }) => {
         <div style="min-width:0;flex:1">
           <p class="t-titre-3">Ce projet n'est pas encore ouvert au client</p>
           <p class="t-petit t-2" style="margin-top:2px">${echapper(avecAdresse.length
-            ? `Personne n'y a accès. ${nomsContacts(projet)} n'y entrera qu'à votre geste.`
-            : "Personne n'y a accès, et aucun interlocuteur n'est encore renseigné.")}</p>
+            ? `Personne n'y a accès et rien ne part. ${avecAdresse.map((c) => c.nom || c.email).join(', ')} n'y entrera qu'à votre geste.`
+            : "Personne n'y a accès, rien ne part, et aucun interlocuteur n'est encore préparé.")}</p>
         </div>
-        <button class="btn btn-principal" type="button" data-action="ouvrir-au-client"${manque.length ? ' disabled' : ''}>${icone('utilisateurs')} Ouvrir au client</button>
+        <a class="btn btn-secondaire" href="#/projets/${echapper(pid)}/acces">${icone('utilisateurs')} Accès client</a>
+        ${peut(env.session, 'projets.ouvrir', pid) ? `<button class="btn btn-principal" type="button" data-action="ouvrir-au-client"${manque.length ? ' disabled' : ''}>Ouvrir au client</button>` : ''}
       </div>
       ${manque.length ? `<p class="rideau-manque">${icone('alerte')} Avant d'ouvrir, il manque ${echapper(manque.join(' et '))}.</p>` : ''}
       <dl class="rideau-etat">

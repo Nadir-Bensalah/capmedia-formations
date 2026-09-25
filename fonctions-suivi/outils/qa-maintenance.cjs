@@ -83,7 +83,6 @@ const dossier=async()=>(((await lire('projets/atelier/maintenance?pageSize=50'))
   eq.on('pageerror',e=>err.push('EQUIPE: '+e.message.slice(0,160)));
   eq.on('console',m=>{if(m.type()==='error')err.push('equipe: '+m.text().slice(0,160));});
   await connecter(eq,'agent.essai@exemple.test');
-  await eq.evaluate(()=>{try{localStorage.setItem('suivi:cle-admin','cle-essai-locale');}catch(e){}});
   verifier(await eq.evaluate(()=>[...document.querySelectorAll('.lat a')].some(a=>/Maintenance/.test(a.innerText))),'l entrée Maintenance est dans le cockpit');
   await aller(eq,'/maintenance','.section'); await pause(1500);
   verifier(/Demandes à traiter/.test(await texte(eq,'.page'))&&/Atelier/.test(await texte(eq,'.section--alerte')),'la demande est en tête de la page de tous les projets');

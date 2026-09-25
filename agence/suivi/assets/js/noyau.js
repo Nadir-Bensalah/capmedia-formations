@@ -710,6 +710,84 @@ export const STATUTS_PREPROJET = {
 };
 
 /* ==========================================================================
+   Qui peut quoi
+
+   Le miroir, côté écran, de fonctions-suivi/acces.js. Il ne protège rien :
+   le serveur et les règles décident. Il sert à ne pas proposer un bouton
+   qui serait refusé. Une épreuve (acces.test.mjs) vérifie que les deux
+   tables disent la même chose.
+   ========================================================================== */
+
+export const ROLES_EQUIPE = { admin: 'Administrateur', agent: 'Agent' };
+export const ROLES_CLIENT = { responsable: 'Responsable', collaborateur: 'Collaborateur' };
+
+export const PERMISSIONS = {
+  'projet.voir': 'Consulter ses projets',
+  'demandes.gerer': 'Répondre aux demandes et échanger avec le client',
+  'contenu.gerer': 'Tenir tâches, étapes, fichiers, réunions et validations',
+  'qa.participer': 'Participer à la recette',
+  'qa.gerer': 'Piloter la recette : testeurs, campagnes, robots',
+  'finance.gerer': 'Devis, factures et paiements',
+  'acces.gerer': 'Donner et retirer les accès des clients',
+  'projets.creer': 'Créer des projets',
+  'projets.ouvrir': 'Ouvrir un projet au client, couper ses e-mails',
+  'clients.gerer': 'Créer et modifier les fiches clients',
+  'equipe.gerer': "Administrer l'équipe",
+  systeme: 'Opérations système',
+};
+export const SOCLE_EQUIPE = {
+  admin: Object.keys(PERMISSIONS),
+  agent: ['projet.voir', 'demandes.gerer', 'contenu.gerer', 'qa.participer'],
+};
+export const PERMISSIONS_DELEGABLES = Object.keys(PERMISSIONS).filter((p) => !['equipe.gerer', 'systeme'].includes(p));
+
+/** Les permissions de la personne connectée (équipe active), ou un ensemble vide. */
+export const permissionsDe = (fiche) => {
+  if (!fiche || fiche.actif !== true || !ROLES_EQUIPE[fiche.role]) return new Set();
+  const deleguees = fiche.role === 'agent' && Array.isArray(fiche.permissions) ? fiche.permissions.filter((p) => PERMISSIONS_DELEGABLES.includes(p)) : [];
+  return new Set([...(SOCLE_EQUIPE[fiche.role] || []), ...deleguees]);
+};
+
+/** Cette session peut-elle ce geste, sur ce projet ? L'écran seulement. */
+export const peut = (session, permission, projetId = null) => {
+  const fiche = session && session.equipe;
+  if (!fiche) return false;
+  if (permission && !permissionsDe(fiche).has(permission)) return false;
+  if (projetId && fiche.role !== 'admin' && !(fiche.projets || []).includes(projetId)) return false;
+  return true;
+};
+
+export const estAdmin = (session) => Boolean(session && session.equipe && session.equipe.role === 'admin');
+
+/** Le rôle du client connecté sur un projet : « responsable », « collaborateur » ou null. */
+export const roleSur = (session, projetOuId) => {
+  if (!session || !session.utilisateur || session.equipe) return null;
+  const projet = typeof projetOuId === 'object' ? projetOuId : (session.projets || []).find((p) => p.id === projetOuId);
+  if (!projet) return null;
+  const r = (projet.roles || {})[session.utilisateur.uid];
+  return ROLES_CLIENT[r] ? r : null;
+};
+export const estResponsable = (session, projetOuId) => roleSur(session, projetOuId) === 'responsable';
+
+/* L'invitation d'un interlocuteur, dite pour quelqu'un qui n'a pas conçu la
+   base : ce qui s'est passé, et ce qu'il peut encore faire. */
+export const ETATS_INVITATION = {
+  'preparee':   { libelle: 'Préparé, rien envoyé',        voile: 'gris',  aide: "Le projet est fermé : cette personne n'a pas encore accès et ne reçoit rien." },
+  'en-attente': { libelle: 'Invitation prête, non partie', voile: 'ambre', aide: "Le lien existe, mais l'e-mail n'est pas parti (e-mails coupés, ou envoi non demandé). Copiez le lien, ou renvoyez l'invitation." },
+  'envoyee':    { libelle: 'Invitation envoyée',          voile: 'bleu',  aide: "L'e-mail est parti. Elle n'est pas encore venue." },
+  'acceptee':   { libelle: "A rejoint l'espace",          voile: 'vert',  aide: "Elle s'est connectée au moins une fois." },
+  'expiree':    { libelle: 'Invitation expirée',          voile: 'rouge', aide: 'Quatorze jours sont passés sans connexion : renvoyez-la.' },
+  'revoquee':   { libelle: 'Invitation annulée',          voile: 'gris',  aide: 'Le lien a été coupé.' },
+};
+export const etatInvitation = (i) => {
+  const inv = (i && i.invitation) || {};
+  const etat = ETATS_INVITATION[inv.etat] ? inv.etat : 'preparee';
+  const expire = enDate(inv.expire);
+  if ((etat === 'envoyee' || etat === 'en-attente') && expire && expire.getTime() < Date.now()) return 'expiree';
+  return etat;
+};
+
+/* ==========================================================================
    La session
    ========================================================================== */
 
@@ -726,19 +804,28 @@ export const session = () => new Promise((resolve) => {
     if (!utilisateur) return resolve({ utilisateur: null, equipe: null, testeur: null, projets: [], organisations: [], profil: null });
 
     // Le rôle vient de Firestore, jamais du navigateur : un document
-    // equipe/{uid} n'est écrit que par l'Admin SDK.
+    // equipe/{uid} n'est écrit que par l'Admin SDK. Il est relu à CHAQUE
+    // ouverture de page : un membre désactivé depuis sa dernière visite
+    // n'est plus traité comme membre, quoi que garde le navigateur.
     let equipe = null;
+    let desactive = false;
     try {
       const fiche = await getDoc(doc(bdd, 'equipe', utilisateur.uid));
-      if (fiche.exists()) equipe = { uid: utilisateur.uid, ...fiche.data() };
-    } catch (e) { /* pas de fiche : c'est un client */ }
+      if (fiche.exists()) {
+        if (fiche.data().actif === true) equipe = { uid: utilisateur.uid, ...fiche.data() };
+        else desactive = true;
+      }
+    } catch (e) { /* pas de fiche lisible : ce n'est pas un membre actif */ }
+    /* Le jeton d'un membre de l'équipe doit porter sa revendication à jour :
+       les règles de stockage s'en servent pour choisir quoi vérifier. */
+    if (equipe) { try { await utilisateur.getIdToken(true); } catch (e) { /* hors ligne */ } }
 
     /* Un testeur se reconnaît à la revendication de son jeton, celle-là
        même que lisent les règles Firestore : la fiche du vivier ne lui est
        pas lisible autrement, et se fier à elle ferait boucler le contrôle
        sur lui-même. Le serveur pose la revendication à la connexion. */
     let testeur = null;
-    if (!equipe) {
+    if (!equipe && !desactive) {
       try {
         /* Le VRAI jeton, pas celui en cache. Sans ce « true », le
            navigateur garde jusqu'à une heure les revendications d'avant :
@@ -763,10 +850,20 @@ export const session = () => new Promise((resolve) => {
     const organisations = [];
     let erreur = null;
     try {
-      const requete = equipe
-        ? query(collection(bdd, 'projets'), orderBy('nom'))
-        : query(collection(bdd, 'projets'), where('membres', 'array-contains', utilisateur.uid));
-      (await getDocs(requete)).forEach((d) => projets.push({ id: d.id, ...d.data() }));
+      if (desactive) throw Object.assign(new Error('desactive'), { code: 'desactive' });
+      if (equipe && equipe.role !== 'admin') {
+        /* Un agent ne lit que ses projets, un par un : les règles lui
+           refusent la liste complète. */
+        for (const pid of equipe.projets || []) {
+          try { const d = await getDoc(doc(bdd, 'projets', pid)); if (d.exists()) projets.push({ id: d.id, ...d.data() }); } catch (e) { /* projet retiré */ }
+        }
+        projets.sort((a, b) => String(a.nom || '').localeCompare(String(b.nom || '')));
+      } else {
+        const requete = equipe
+          ? query(collection(bdd, 'projets'), orderBy('nom'))
+          : query(collection(bdd, 'projets'), where('membres', 'array-contains', utilisateur.uid));
+        (await getDocs(requete)).forEach((d) => projets.push({ id: d.id, ...d.data() }));
+      }
       const requeteOrg = equipe
         ? query(collection(bdd, 'organisations'), orderBy('nom'))
         : query(collection(bdd, 'organisations'), where('membres', 'array-contains', utilisateur.uid));
@@ -778,7 +875,7 @@ export const session = () => new Promise((resolve) => {
       console.error('[suivi] lecture des projets impossible :', erreur);
     }
 
-    resolve({ utilisateur, equipe, testeur, projets, organisations, profil, erreur });
+    resolve({ utilisateur, equipe, testeur, projets, organisations, profil, erreur, desactive });
   });
 });
 
@@ -790,13 +887,19 @@ export const exigerSession = async () => {
     location.replace(`./?retour=${retour}`);
     return null;
   }
+  /* Désactivé depuis la dernière visite : la porte ferme la session et le
+     dit. Aucun espace ne s'ouvre sur une fiche inactive. */
+  if (s.desactive) {
+    location.replace('./');
+    return null;
+  }
   return s;
 };
 
-/* Tout ce qu'une session laisse dans le navigateur et qui donne un
-   pouvoir : la clé d'administration du cockpit. MESURE TRANSITOIRE : la clé
-   partagée disparaîtra au profit de l'identité de l'équipe ; d'ici là, elle
-   ne survit plus à une déconnexion. */
+/* Ce qu'une ancienne version du cockpit a pu laisser dans le navigateur :
+   la clé d'administration partagée, qui ne sert plus à rien depuis la
+   Gate 2 (le serveur lit l'identité Firebase). On l'efface à chaque
+   départ, pour qu'il n'en reste aucune trace. */
 export const CLES_SENSIBLES = ['suivi:cle-admin'];
 export const effacerSecretsLocaux = () => {
   for (const cle of CLES_SENSIBLES) {

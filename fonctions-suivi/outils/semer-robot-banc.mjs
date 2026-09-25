@@ -20,7 +20,10 @@ const PROJET = process.env.GCLOUD_PROJECT || 'capmedia-1f90d';
 const projet = process.argv[2];
 if (!projet) { console.error('Usage : node semer-robot-banc.mjs <projet>'); process.exit(2); }
 const FONCTIONS = `http://127.0.0.1:5001/${PROJET}/europe-west1`;
-const CLE = process.env.ADMIN_CLE_ESSAI || 'cle-essai-locale';
+/* Le jeton du robot se crée au nom de l'administrateur du banc (Gate 2 :
+   plus de clé partagée). */
+import { createRequire } from 'node:module';
+const { appelAdmin } = createRequire(import.meta.url)('./lib/session-banc.cjs');
 
 const appeler = async (url, corps, entetes = {}) => {
   const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...entetes }, body: JSON.stringify(corps) });
@@ -35,7 +38,9 @@ for (const ref of ['R-04', 'C-02']) {
   if (!(await bdd.doc(`projets/${projet}/parcours/${ref}`).get()).exists) { console.error(`Le parcours ${ref} manque : lancez semer-parcours.mjs ${projet} --vrai avant.`); process.exit(2); }
 }
 
-const { jeton } = await appeler(`${FONCTIONS}/suiviAdmin`, { cle: CLE, action: 'creerJetonRobot', projet, nom: 'Robot du banc' });
+const cree = await appelAdmin('creerJetonRobot', { projet, nom: 'Robot du banc' });
+if (cree.code !== 200) throw new Error(`creerJetonRobot : ${cree.code} ${cree.texte.slice(0, 160)}`);
+const { jeton } = cree.json;
 const robot = { Authorization: `Bearer ${jeton}` };
 const execution = `banc-${Date.now()}`;
 await appeler(`${FONCTIONS}/suiviRobot`, { evenement: 'debut', execution, outil: 'maestro', plateforme: 'android', branche: 'banc', commit: 'banc', parcours: ['R-04', 'C-02'] }, robot);

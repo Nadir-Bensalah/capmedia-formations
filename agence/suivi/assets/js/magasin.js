@@ -157,6 +157,36 @@ export const attendre = (cle) => {
 
 export const pret = (cles) => Promise.all(cles.map(attendre));
 
+/**
+ * Une clé calculée à partir d'autres : sa valeur est refaite à chaque
+ * changement de l'une de ses sources. Sert au cockpit d'un agent, qui ne
+ * lit pas « toutes les demandes » d'un coup (les règles le lui refusent)
+ * mais celles de chacun de ses projets : la clé globale que lisent les
+ * écrans est alors l'assemblage des clés par projet.
+ * Renvoie une fonction qui retire la dérivation.
+ */
+export const deriver = (cle, sources, calcul) => {
+  const e = obtenir(cle);
+  e.compte += 1;
+  const recalculer = () => {
+    if (!sources.every((s) => chargee(s))) return;
+    try { e.valeur = calcul(); e.erreur = null; } catch (err) { e.erreur = err; }
+    e.chargee = true;
+    diffuser(cle);
+  };
+  const retraits = sources.map((s) => sur(s, recalculer));
+  if (!sources.length) { e.valeur = calcul(); e.chargee = true; diffuser(cle); }
+  else recalculer();
+  let retire = false;
+  return () => {
+    if (retire) return;
+    retire = true;
+    retraits.forEach((r) => r());
+    e.compte -= 1;
+    if (e.compte <= 0) entrees.delete(cle);
+  };
+};
+
 /** Ferme tout. Utile au changement de session. */
 export const fermerTout = () => {
   entrees.forEach((e) => { if (e.arreter) e.arreter(); });

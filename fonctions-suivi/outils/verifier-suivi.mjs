@@ -1,6 +1,7 @@
 /* Vérifie la couche serveur : numérotation, historique, mise en file des e-mails. */
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
 
 if (!process.env.FIRESTORE_EMULATOR_HOST) { console.error('émulateurs requis'); process.exit(1); }
 initializeApp({ projectId: process.env.GCLOUD_PROJECT || 'capmedia-1f90d' });
@@ -170,7 +171,10 @@ const photographier = async () => {
   else ok('e-mail « devis » en file');
 
   /* 6. Le client accepte le devis ---------------------------------------- */
-  await dref.update({ statut: 'accepte', maj: FieldValue.serverTimestamp() });
+  /* La réponse porte la signature du responsable du projet : une réponse
+     anonyme, ou d'un collaborateur, serait défaite par le serveur. */
+  const responsableAtelier = (await getAuth().getUserByEmail('camille.essai@exemple.test')).uid;
+  await dref.update({ statut: 'accepte', reponse: { par: responsableAtelier, nom: 'Camille Martin', date: FieldValue.serverTimestamp(), commentaire: '' }, maj: FieldValue.serverTimestamp() });
   const filAccepte = await attendre(async () => {
     const l = await envoisDepuis(0, 'devis-reponse');
     return l.length ? l : null;
@@ -191,33 +195,28 @@ const photographier = async () => {
 
   /* 8. La porte d administration ----------------------------------------- */
   console.log('\n== La console écrit par la fonction serveur');
-  const PORTE = `http://127.0.0.1:5001/${process.env.GCLOUD_PROJECT || 'capmedia-1f90d'}/europe-west1/suiviAdmin`;
-  const CLE = process.env.ADMIN_CLE_ESSAI || 'cle-essai-locale';
-  const appeler = async (corps) => {
-    const r = await fetch(PORTE, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(corps),
-    });
-    const texte = await r.text();
-    let json = null;
-    try { json = JSON.parse(texte); } catch (e) { /* réponse en texte */ }
-    return { code: r.status, texte, json };
-  };
+  /* Gate 2 : la porte lit le jeton Firebase de l'appelant, plus aucune clé. */
+  const { appelAdmin } = (await import('node:module')).createRequire(import.meta.url)('./lib/session-banc.cjs');
+  const appeler = async ({ action, cle, ...corps }, options) => appelAdmin(action, corps, options);
 
-  const sansCle = await appeler({ action: 'creerProjet', ref: 'PIRATE', nom: 'Pirate' });
-  if (sansCle.code !== 403) dire(`sans clé, la porte répond ${sansCle.code} au lieu de 403`);
-  else ok('sans clé, la porte refuse');
+  const sansJeton = await appeler({ action: 'creerProjet', ref: 'PIRATE', nom: 'Pirate' }, { email: null });
+  if (sansJeton.code !== 401) dire(`sans jeton, la porte répond ${sansJeton.code} au lieu de 401`);
+  else ok('sans jeton, la porte refuse');
 
-  const mauvaiseCle = await appeler({ cle: 'au-hasard', action: 'creerProjet', ref: 'PIRATE', nom: 'Pirate' });
-  if (mauvaiseCle.code !== 403) dire(`avec une fausse clé, la porte répond ${mauvaiseCle.code}`);
-  else ok('avec une fausse clé, la porte refuse');
+  const ancienneCle = await appeler({ cle: 'cle-essai-locale', action: 'creerProjet', ref: 'PIRATE', nom: 'Pirate' }, { email: null });
+  if (ancienneCle.code !== 401) dire(`l ancienne clé ouvre encore la porte (${ancienneCle.code})`);
+  else ok('l ancienne clé d administration n ouvre plus rien');
 
-  const refMauvaise = await appeler({ cle: CLE, action: 'creerProjet', ref: 'a b', nom: 'Essai' });
+  const parUnClient = await appeler({ action: 'creerProjet', ref: 'PIRATE', nom: 'Pirate' }, { email: 'camille.essai@exemple.test' });
+  if (parUnClient.code !== 403) dire(`un client crée un projet (${parUnClient.code})`);
+  else ok('un client est refusé');
+
+  const refMauvaise = await appeler({ action: 'creerProjet', ref: 'a b', nom: 'Essai' });
   if (refMauvaise.code !== 400) dire(`une référence illisible passe (${refMauvaise.code})`);
   else ok('une référence illisible est refusée');
 
   const creation = await appeler({
-    cle: CLE, action: 'creerProjet', ref: 'ESSAI', nom: 'Projet d essai',
+    action: 'creerProjet', ref: 'ESSAI', nom: 'Projet d essai',
     client: { nom: 'Client Essai', email: 'client.essai@exemple.test', entreprise: 'Essai SARL' },
     plateformes: ['web'],
   });
@@ -226,36 +225,42 @@ const photographier = async () => {
   const projetNeuf = creation.json && (creation.json.id || creation.json.projet);
 
   const doublon = await appeler({
-    cle: CLE, action: 'creerProjet', ref: 'ESSAI', nom: 'Doublon',
+    action: 'creerProjet', ref: 'ESSAI', nom: 'Doublon',
     client: { nom: 'x', email: 'x@exemple.test' },
   });
   if (doublon.code === 200) dire('deux projets peuvent porter la même référence');
   else ok('une référence déjà prise est refusée');
 
   if (projetNeuf) {
+    /* Un projet naît fermé : l'interlocuteur est préparé, puis l'ouverture
+       le fait membre et lui écrit. */
     const invit = await appeler({
-      cle: CLE, action: 'inviterClient', projet: projetNeuf,
-      email: 'client.essai@exemple.test', nom: 'Client Essai',
+      action: 'ajouterInterlocuteur', projet: projetNeuf,
+      email: 'client.essai@exemple.test', nom: 'Client Essai', role: 'responsable',
     });
-    if (invit.code !== 200) dire(`invitation refusée : ${invit.code} ${invit.texte.slice(0, 80)}`);
+    if (invit.code !== 200) dire(`ajout de l interlocuteur refusé : ${invit.code} ${invit.texte.slice(0, 80)}`);
+    else if (((await bdd.doc(`projets/${projetNeuf}`).get()).data().membres || []).length) dire('un interlocuteur est membre d un projet encore fermé');
+    else ok('un interlocuteur préparé n a pas accès au projet fermé');
+    const ouverture = await appeler({ action: 'ouvrirAuClient', id: projetNeuf });
+    if (ouverture.code !== 200) dire(`ouverture refusée : ${ouverture.code} ${ouverture.texte.slice(0, 80)}`);
     else {
       const fiche = (await bdd.doc(`projets/${projetNeuf}`).get()).data();
-      if (!fiche.membres || !fiche.membres.includes(invit.json.uid)) dire("l invité n est pas membre du projet");
-      else ok('le client invité devient membre du projet');
-      const jeton = invit.json.revendications || {};
+      if (!fiche.membres || !fiche.membres.includes(invit.json && invit.json.uid)) dire("l interlocuteur n est pas membre du projet ouvert");
+      else ok('à l ouverture, l interlocuteur devient membre du projet');
+      const jeton = (await getAuth().getUser(invit.json.uid)).customClaims || {};
       if (!jeton.projets || !jeton.projets.includes(projetNeuf)) dire('les revendications du jeton ne suivent pas');
       else ok('le jeton du client porte bien son projet');
     }
 
     const filInvit = await attendre(async () => {
-      const l = await envoisDepuis(0, 'invitation');
+      const l = await envoisDepuis(0, 'ouverture');
       return l.length ? l : null;
     }, 20);
-    if (!filInvit) dire("l invitation ne part pas par e-mail");
-    else ok("l invitation est mise en file");
+    if (!filInvit) dire("la lettre d ouverture ne part pas par e-mail");
+    else ok("la lettre d ouverture est mise en file");
 
     const depot = await appeler({
-      cle: CLE, action: 'deposerDocument', projet: projetNeuf, type: 'facture',
+      action: 'deposerDocument', projet: projetNeuf, type: 'facture',
       numero: 'F-ESSAI-1', libelle: 'Facture d essai', montant: 500,
       fichier: { chemin: 'documents/essai.pdf', nom: 'essai.pdf', taille: 10 },
     });
@@ -263,41 +268,44 @@ const photographier = async () => {
     else ok('une facture est déposée depuis la console');
 
     const montantFaux = await appeler({
-      cle: CLE, action: 'deposerDocument', projet: projetNeuf, type: 'facture',
+      action: 'deposerDocument', projet: projetNeuf, type: 'facture',
       numero: 'F-ESSAI-2', libelle: 'Montant absurde', montant: -10,
     });
     if (montantFaux.code !== 400) dire('un montant négatif est accepté');
     else ok('un montant négatif est refusé');
 
     if (depot.json && depot.json.id) {
-      const paye = await appeler({ cle: CLE, action: 'statutFacture', id: depot.json.id, statut: 'payee' });
+      const paye = await appeler({ action: 'statutFacture', id: depot.json.id, statut: 'payee' });
       if (paye.code !== 200) dire(`le passage à payée échoue : ${paye.code} ${paye.texte.slice(0, 80)}`);
       else {
         const apresPaiement = (await bdd.doc(`documents/${depot.json.id}`).get()).data();
         if (apresPaiement.statut !== 'payee') dire('le statut de la facture ne change pas');
         else ok('une facture passe à payée');
       }
-      const statutFaux = await appeler({ cle: CLE, action: 'statutFacture', id: depot.json.id, statut: 'inventé' });
+      const statutFaux = await appeler({ action: 'statutFacture', id: depot.json.id, statut: 'inventé' });
       if (statutFaux.code !== 400) dire('un statut de facture inconnu est accepté');
       else ok('un statut de facture inconnu est refusé');
     }
 
+    /* Le seul responsable d'un projet ouvert ne se retire pas : on ajoute
+       d'abord un second responsable, puis on retire le premier. */
+    await appeler({ action: 'ajouterInterlocuteur', projet: projetNeuf, email: 'second.essai@exemple.test', nom: 'Second', role: 'responsable' });
     const retrait = await appeler({
-      cle: CLE, action: 'retirerClient', projet: projetNeuf, email: 'client.essai@exemple.test',
+      action: 'retirerClient', projet: projetNeuf, email: 'client.essai@exemple.test',
     });
-    if (retrait.code !== 200) dire(`retrait refusé : ${retrait.code}`);
+    if (retrait.code !== 200) dire(`retrait refusé : ${retrait.code} ${retrait.texte.slice(0, 80)}`);
     else {
       const fiche = (await bdd.doc(`projets/${projetNeuf}`).get()).data();
       if ((fiche.membres || []).includes(retrait.json.uid)) dire('le client retiré reste membre');
       else ok('le client retiré perd son accès');
-      const jeton = retrait.json.revendications || {};
+      const jeton = (await getAuth().getUser(retrait.json.uid)).customClaims || {};
       if ((jeton.projets || []).includes(projetNeuf)) dire('le jeton garde le projet après retrait');
       else ok('le jeton est recalculé après retrait');
     }
   }
 
   const equipeNeuve = await appeler({
-    cle: CLE, action: 'ajouterEquipe', email: 'agent.essai@capmedia.app', nom: 'Agent Essai', role: 'agent',
+    action: 'ajouterEquipe', email: 'agent2.essai@exemple.test', nom: 'Agent Essai', role: 'agent',
   });
   if (equipeNeuve.code !== 200) dire(`ajout d un membre d équipe refusé : ${equipeNeuve.code} ${equipeNeuve.texte.slice(0, 80)}`);
   else {
@@ -306,7 +314,7 @@ const photographier = async () => {
     else ok("un membre d équipe est ajouté avec sa fiche");
   }
 
-  const actionInconnue = await appeler({ cle: CLE, action: 'toutEffacer' });
+  const actionInconnue = await appeler({ action: 'toutEffacer' });
   if (actionInconnue.code === 200) dire('une action inconnue est exécutée');
   else ok('une action inconnue est rejetée');
 

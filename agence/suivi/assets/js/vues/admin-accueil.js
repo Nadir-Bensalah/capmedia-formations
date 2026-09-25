@@ -2,7 +2,7 @@
    L'accueil du cockpit : que dois-je traiter aujourd'hui ?
    ========================================================================== */
 
-import { echapper, prenom, nomAffiche, dateCourte, dateHeure, montant, pluriel, joursAvant, parDateDesc, parDateAsc, OUVERTS, ATTEND_EQUIPE, ATTEND_CLIENT, FACTURES_DUES, STATUTS_PROJET, URGENCES, statutProjet, verdictDelai} from '../noyau.js';
+import { echapper, prenom, nomAffiche, dateCourte, dateHeure, montant, pluriel, joursAvant, parDateDesc, parDateAsc, OUVERTS, ATTEND_EQUIPE, ATTEND_CLIENT, FACTURES_DUES, STATUTS_PROJET, URGENCES, statutProjet, verdictDelai, peut } from '../noyau.js';
 import { icone, pastille, puce, avatarProjet, ligne, vide, squelette, titrePage, metrique, progression, progressionOuPas, verdictHtml } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K, enAttenteDeNous, enAttenteDuClient, projetsActifs, prochaineReunion, progressionProjet, resteAPayer, risquesProjet } from '../donnees.js';
@@ -45,6 +45,9 @@ export const vue = async (ctx, env) => {
     const attendNous = enAttenteDeNous({ projets, tickets, validations, taches, blocages, demandesProjet });
     const attendClient = enAttenteDuClient({ projets, tickets, validations, documents, taches, blocages });
     const prochaines = reunions.filter((r) => joursAvant(r.date) >= 0).sort(parDateAsc('date')).slice(0, 4);
+    /* La finance reste à qui la gère : un agent ne voit ni l'impayé, ni les
+       devis en attente, ni les paiements, même sur ses projets. */
+    const finance = peut(env.session, 'finance.gerer');
     const devisAttente = documents.filter((d) => d.type === 'devis' && ['envoye', 'consulte'].includes(d.statut));
     const { total: impaye, factures: impayees } = resteAPayer(documents, paiements);
     const debutAnnee = new Date(new Date().getFullYear(), 0, 1);
@@ -64,7 +67,7 @@ export const vue = async (ctx, env) => {
         ${metrique(tachesRetard.length, 'Tâches en retard', { ton: tachesRetard.length ? 'rouge' : '', nuance: `${aFaire.length} à faire` })}
         ${metrique(attendClient.length, 'Attendent le client', { ton: attendClient.length ? 'ambre' : '' })}
         ${metrique(attendues.length, 'Validations attendues')}
-        ${metrique(montant(impaye), 'Impayé', { ton: impaye > 0 ? 'ambre' : 'vert', nuance: `${montant(facture)} facturé en ${new Date().getFullYear()}` })}
+        ${finance ? metrique(montant(impaye), 'Impayé', { ton: impaye > 0 ? 'ambre' : 'vert', nuance: `${montant(facture)} facturé en ${new Date().getFullYear()}` }) : ''}
       </div>
 
       <div class="grille grille-tiers section">
@@ -86,8 +89,8 @@ export const vue = async (ctx, env) => {
         <aside class="pile" style="gap:var(--e-5)">
           <div class="carte carte--creuse"><p class="surtitre">Attendent le client</p>${attendClient.length ? `<div class="pile" style="margin-top:10px;gap:8px">${attendClient.slice(0, 6).map((a) => `<a class="rang" style="gap:10px;color:inherit;align-items:flex-start;flex-wrap:nowrap" href="#${echapper(a.chemin)}"><span class="ligne-icone ligne-icone--${a.ton || 'ambre'}" style="width:28px;height:28px;border-radius:8px">${icone(a.icone)}</span><span style="min-width:0"><span class="t-petit t-fort tronque" style="display:block">${echapper(a.titre)}</span><span class="t-micro t-3">${echapper(a.sous)}</span></span></a>`).join('')}</div>` : '<p class="t-petit t-2" style="margin-top:8px">Rien en attente côté client.</p>'}</div>
           <div class="carte carte--creuse"><p class="surtitre">Prochaines réunions</p>${prochaines.length ? `<div class="pile" style="margin-top:10px;gap:10px">${prochaines.map((r) => `<a class="rang" style="gap:10px;color:inherit;align-items:flex-start;flex-wrap:nowrap" href="#/projets/${echapper(r.projet)}/reunions"><span class="ligne-icone ligne-icone--bleu" style="width:28px;height:28px;border-radius:8px">${icone('reunions')}</span><span style="min-width:0"><span class="t-petit t-fort tronque" style="display:block">${echapper(r.titre)}</span><span class="t-micro t-3">${echapper(dateHeure(r.date))} · ${echapper(nomProjet(r.projet))}</span></span></a>`).join('')}</div>` : '<p class="t-petit t-2" style="margin-top:8px">Aucune réunion programmée.</p>'}<p style="margin-top:10px"><a class="t-petit" href="#/planning">Planning</a></p></div>
-          <div class="carte carte--creuse"><p class="surtitre">Devis en attente</p>${devisAttente.length ? `<div class="pile" style="margin-top:10px;gap:8px">${devisAttente.map((d) => `<a class="rang-espace" style="color:inherit" href="#/finances/${echapper(d.id)}"><span class="t-petit tronque">${echapper(d.numero || '')} ${echapper(nomProjet(d.projet))}</span><span class="t-petit t-fort nb">${echapper(montant(d.montant))}</span></a>`).join('')}</div>` : '<p class="t-petit t-2" style="margin-top:8px">Aucun devis en attente.</p>'}</div>
-          <div class="carte carte--creuse"><p class="surtitre">Paiements récents</p>${recents.length ? `<div class="pile" style="margin-top:10px;gap:8px">${recents.map((p) => `<div class="rang-espace"><span class="t-petit">${echapper(dateCourte(p.date))} · ${echapper(nomProjet(p.projet))}</span><span class="t-petit t-fort nb" style="color:var(--ok)">${echapper(montant(p.montant))}</span></div>`).join('')}</div>` : '<p class="t-petit t-2" style="margin-top:8px">Aucun paiement enregistré.</p>'}<p style="margin-top:10px"><a class="t-petit" href="#/finances">Finances</a></p></div>
+          ${finance ? `<div class="carte carte--creuse"><p class="surtitre">Devis en attente</p>${devisAttente.length ? `<div class="pile" style="margin-top:10px;gap:8px">${devisAttente.map((d) => `<a class="rang-espace" style="color:inherit" href="#/finances/${echapper(d.id)}"><span class="t-petit tronque">${echapper(d.numero || '')} ${echapper(nomProjet(d.projet))}</span><span class="t-petit t-fort nb">${echapper(montant(d.montant))}</span></a>`).join('')}</div>` : '<p class="t-petit t-2" style="margin-top:8px">Aucun devis en attente.</p>'}</div>` : ''}
+          ${finance ? `<div class="carte carte--creuse"><p class="surtitre">Paiements récents</p>${recents.length ? `<div class="pile" style="margin-top:10px;gap:8px">${recents.map((p) => `<div class="rang-espace"><span class="t-petit">${echapper(dateCourte(p.date))} · ${echapper(nomProjet(p.projet))}</span><span class="t-petit t-fort nb" style="color:var(--ok)">${echapper(montant(p.montant))}</span></div>`).join('')}</div>` : '<p class="t-petit t-2" style="margin-top:8px">Aucun paiement enregistré.</p>'}<p style="margin-top:10px"><a class="t-petit" href="#/finances">Finances</a></p></div>` : ''}
         </aside>
       </div>
     </div>`;

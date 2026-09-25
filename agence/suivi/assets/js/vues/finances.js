@@ -3,7 +3,7 @@
    accepte ou refuse un devis, pose une question, voit ce qui reste à payer.
    ========================================================================== */
 
-import { echapper, dateCourte, dateHeure, montant, montantHT, montantTTC, montantPiece, ttcDe, parDateDesc, joursAvant, avecLiens, STATUTS_DEVIS, STATUTS_FACTURE, FACTURES_DUES, MOYENS_PAIEMENT, PORTEES_DEVIS } from '../noyau.js';
+import { echapper, dateCourte, dateHeure, montant, montantHT, montantTTC, montantPiece, ttcDe, parDateDesc, joursAvant, avecLiens, STATUTS_DEVIS, STATUTS_FACTURE, FACTURES_DUES, MOYENS_PAIEMENT, PORTEES_DEVIS, estResponsable } from '../noyau.js';
 import { icone, pastille, ligne, vide, squelette, titrePage, modale, confirmer, toast, sur, agir, metrique, fait, encart, brancherPieces, depot } from '../ui.js';
 import { appelServeur } from '../serveur.js';
 import * as magasin from '../magasin.js';
@@ -21,8 +21,12 @@ export const ouvrirDocument = (d, env, { projets, paiements }) => {
   const payes = paiements.filter((p) => p.facture === d.id && p.statut !== 'annule');
   const totalPaye = payes.reduce((s, p) => s + (Number(p.montant) || 0), 0);
   const reste = Math.max(0, ttcDe(d) - totalPaye);
-  const decidable = !equipe && devis && ['envoye', 'consulte'].includes(d.statut);
-  if (!equipe && devis && d.statut === 'envoye') ecrire.consulterDevis(d.id).catch(() => {});
+  /* Accepter un devis engage le client : seul le responsable du projet le
+     peut. Les règles et le serveur le refusent aux autres ; l'écran ne
+     leur propose donc pas le bouton. */
+  const responsable = !equipe && estResponsable(env.session, projet.id ? projet : d.projet);
+  const decidable = !equipe && responsable && devis && ['envoye', 'consulte'].includes(d.statut);
+  if (!equipe && responsable && devis && d.statut === 'envoye') ecrire.consulterDevis(d.id).catch(() => {});
 
   const m = modale({
     titre: `${devis ? 'Devis' : 'Facture'} ${d.numero || ''}`, sousTitre: `${d.libelle || ''} · ${projet.nom || ''}`, feuille: true,
@@ -140,6 +144,16 @@ export const vue = async (ctx, env) => {
 
   const rendre = () => {
     const projets = magasin.lire(K.projets) || session.projets;
+    /* La partie financière est au responsable du projet. Un collaborateur
+       ne la lit pas (les règles la lui refusent) : on le lui dit plutôt
+       que de lui montrer une page vide. */
+    if (!projets.some((p) => estResponsable(session, p))) {
+      sortie.innerHTML = `<div class="page" style="max-width:720px">
+        <div class="page-tete"><div><h1>Devis et factures</h1></div></div>
+        ${encart("<strong>Réservé au responsable du projet.</strong> Les devis, les factures et les paiements sont suivis par la personne qui engage votre société auprès de Capmedia. Vous voyez tout le reste du projet.", 'info', 'cadenas')}
+      </div>`;
+      return;
+    }
     /* Un brouillon est une réflexion de l'agence : il ne s'affiche pas. */
     const documents = agreger(session, G.documents).filter((d) => !d.archive && d.statut !== 'brouillon');
     const paiements = agreger(session, G.paiements);
