@@ -153,6 +153,10 @@ console.log('\n== 2 · L équipe');
   verifier(((await bdd.doc(`equipe/${uidA2}`).get()).data() || {}).actif === false, 'sa fiche dit « inactif » (les règles la relisent)');
   const rea = await appelAdmin('reactiverEquipe', { uid: uidA2 });
   verifier(rea.code === 200 && (await appelAdmin('moi', {}, { email: ADMIN2 })).code === 200, 'réactivé, il se reconnecte');
+  /* Fiche active, compte rétabli : seule la révocation des jetons distingue
+     encore l'ancienne session. Elle reste refusée. */
+  const vieille = await appelAdmin('moi', {}, { jeton: ancienJeton });
+  verifier(vieille.code === 401, `mais son ANCIENNE session, révoquée à la désactivation, reste refusée : 401 (${vieille.code})`, vieille.texte);
 
   /* Changer de rôle. */
   const promu = await appelAdmin('modifierEquipe', { uid: uidAgent, role: 'admin' });

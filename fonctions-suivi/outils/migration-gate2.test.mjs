@@ -233,6 +233,14 @@ verifier(unitesDe(migrer('--vrai').sortie) === 0, 'rejoué ensuite, il n écrit 
 
 /* ---- 5. Réversible ----------------------------------------------------- */
 console.log('\n== 5 · Réversible');
+/* Un accès changé depuis la migration (le client retiré de son projet) :
+   défaire l'écraserait. Le retour arrière refuse, et ne touche à rien. */
+const avantDerive = await photo();
+await bdd.doc('projets/mg-ouvert-sourdine').update({ membres: [] });
+const derive = migrer('--annuler', '--tout');
+verifier(derive.code === 5 && /REFUSÉ/.test(derive.sortie), `un accès changé depuis : le retour arrière refuse (code ${derive.code})`, derive.sortie.slice(0, 200));
+await bdd.doc('projets/mg-ouvert-sourdine').update({ membres: [proprio] });
+verifier(await photo() === avantDerive, 'et n a rien défait');
 migrer('--annuler', '--tout');
 await calme();
 const d5 = differences(await photo(), avantTout);

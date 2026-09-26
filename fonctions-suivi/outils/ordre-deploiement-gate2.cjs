@@ -154,7 +154,7 @@ async function sonder(etape, site, front) {
       const cree = await dansLaPage(a.page, async (n, d, serveur, x) => {
         /* L'ancien cockpit porte la clé partagée ; le nouveau, le jeton. */
         if (x.front === 'ancien' && serveur.poserCle) serveur.poserCle(x.cle);
-        return serveur.appelServeur('creerProjet', { ref: `ORD${Date.now() % 100000}`, nom: 'Projet de la sonde' });
+        return serveur.appelServeur('creerProjet', { ref: `ORD${Date.now() % 100000}`, nom: 'Projet de la sonde', client: { nom: 'Sonde', email: 'sonde.client@exemple.test', entreprise: 'Société sonde' } });
       }, { front, cle: cle.trim() });
       r['admin crée un projet (serveur)'] = cree.ok ? true : `non (${cree.m})`;
       const etape2 = await dansLaPage(a.page, async (n, d, s, x) => {
