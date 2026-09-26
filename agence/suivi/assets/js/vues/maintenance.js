@@ -22,7 +22,7 @@ import {
   icone, pastille, ligne, vide, squelette, titrePage, sur, modale, toast, agir, menu, fait,
 } from '../ui.js';
 import * as magasin from '../magasin.js';
-import { K, ecrire } from '../donnees.js';
+import { K, ecrire, montantDe } from '../donnees.js';
 import { editer } from './editeurs.js';
 import { filAriane } from '../coquille.js';
 import { friseDevis, brancherFrise } from './frise.js';
@@ -176,7 +176,7 @@ const carteForfait = (contrat, { equipe, pid, sequences, journees, evolutions })
       </div>
     </div>
     <div class="forfait-chiffres">
-      <div class="forfait-chiffre"><b>${Number(contrat.montant) ? echapper(montant(Number(contrat.montant))) : '…'}</b><span>HT par ${echapper(periode)}</span></div>
+      ${montantDe(pid, 'maintenance') !== null ? `<div class="forfait-chiffre"><b>${echapper(montant(montantDe(pid, 'maintenance')))}</b><span>HT par ${echapper(periode)}</span></div>` : ''}
       <div class="forfait-chiffre"><b>${Number(contrat.jours) ? enClair(contrat.jours) : '…'}</b><span>${Number(contrat.jours) > 1 ? 'jours de travail' : 'jour de travail'} par ${echapper(periode)}</span></div>
       <div class="forfait-chiffre"><b>${enClair(faits)}${prevus ? ` / ${enClair(prevus)}` : ''}</b><span>${enCours ? `${faits > 1 ? 'jours travaillés' : 'jour travaillé'} dans « ${echapper(enCours.titre || 'la séquence en cours')} »` : `${faits > 1 ? 'jours travaillés' : 'jour travaillé'} en tout`}</span></div>
       <div class="forfait-chiffre"><b>${livrees}</b><span>${livrees > 1 ? 'évolutions livrées' : 'évolution livrée'} sur ${evolutions.length}</span></div>
@@ -312,7 +312,7 @@ const unProjet = (d, { pid, equipe }) => {
   const livrees = evolutions.filter((e) => e.statut === 'livree').length;
   const aTrancher = evolutions.filter((e) => e.statut === 'proposee').length;
 
-  const resumeForfait = `<b>${echapper(contrat.formule || 'Forfait de maintenance')}</b>, ${echapper(statut.libelle.toLowerCase())}${Number(contrat.jours) ? ` : <b>${enClair(contrat.jours)}</b> ${Number(contrat.jours) > 1 ? 'jours' : 'jour'} par ${echapper(periode)}` : ''}${Number(contrat.montant) ? ` pour <b>${echapper(montant(Number(contrat.montant)))}</b> HT` : ''}.`;
+  const resumeForfait = `<b>${echapper(contrat.formule || 'Forfait de maintenance')}</b>, ${echapper(statut.libelle.toLowerCase())}${Number(contrat.jours) ? ` : <b>${enClair(contrat.jours)}</b> ${Number(contrat.jours) > 1 ? 'jours' : 'jour'} par ${echapper(periode)}` : ''}${montantDe(pid, 'maintenance') !== null ? ` pour <b>${echapper(montant(montantDe(pid, 'maintenance')))}</b> HT` : ''}.`;
   const resumeSequences = sequences.length
     ? `<b>${sequences.length}</b> ${sequences.length > 1 ? 'séquences' : 'séquence'}${enCours ? `, <b>${enCours}</b> en cours` : ''}, <b>${enClair(totalFaits)}</b> ${totalFaits > 1 ? 'jours travaillés' : 'jour travaillé'} en tout.`
     : `Aucune séquence pour l'instant. ${equipe ? 'Ouvrez la première : une période, un nombre de jours.' : 'Elles arriveront avec le forfait.'}`;
@@ -510,8 +510,8 @@ export const vue = async (ctx, env) => {
   let empreinte = '';
 
   const clesSuivies = () => (equipe
-    ? [K.projets, K.maintenanceToute, K.documentsTous, K.jalonsTous]
-    : [K.projets, ...(magasin.lire(K.projets) || (env.session || {}).projets || []).flatMap((p) => [K.maintenance(p.id), K.documents(p.id), K.jalons(p.id)])]);
+    ? [K.projets, K.maintenanceToute, K.documentsTous, K.jalonsTous, K.montantsTous]
+    : [K.projets, ...(magasin.lire(K.projets) || (env.session || {}).projets || []).flatMap((p) => [K.maintenance(p.id), K.documents(p.id), K.jalons(p.id), K.montants(p.id)])]);
 
   const projetCourant = () => {
     if (etat.projet) return etat.projet;

@@ -9,7 +9,7 @@ import {
   TYPES_COMPOSANT, STATUTS_COMPOSANT, STATUTS_ETAPE, STATUTS_TACHE, PRIORITES, CATEGORIES_LIEN,
   STATUTS_RELEASE, TYPES_CHANGEMENT, TYPES_NOTE, TYPES_VALIDATION, CATEGORIES_FICHIER,
   STATUTS_PROJET, TYPES_PROJET, SANTES, STATUTS, URGENCES, QUALIFICATIONS, PLATEFORMES_CHOIX, contactsProjet, statutProjet,
-  MOTIFS_REPORT, nomAffiche, dateCourte, estAdmin,
+  MOTIFS_REPORT, nomAffiche, dateCourte, estAdmin, peut,
   NIVEAUX_SCENARIO, BLOCS_SCENARIO, STATUTS_CAMPAGNE, PLATEFORMES_TEST, REF_SCENARIO,
   ETATS_PARCOURS, OUTILS_PARCOURS, FAMILLES_REGLE, ETATS_REGLE,
   GRAVITES_ANOMALIE, STATUTS_ANOMALIE,
@@ -18,7 +18,7 @@ import {
 import { icone, modale, confirmer, toast, lireForme, valider, obligatoire, longueurMax, urlValide, emailValide, optionsDe, depot, agir, lisible, choixPlateformes } from '../ui.js';
 import { appelServeur } from '../serveur.js';
 import * as magasin from '../magasin.js';
-import { K, ecrire, nouvelId, interneDuProjet } from '../donnees.js';
+import { K, ecrire, nouvelId, interneDuProjet, montantDe } from '../donnees.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 
@@ -806,7 +806,7 @@ const editeurs = {
           ${select('statut', 'Statut', STATUTS_MAINTENANCE, f.statut || 'proposition', { aide: 'En « proposition envoyée », le client reçoit un e-mail et lit les modalités. En « en cours », le forfait tourne.' })}
         </div>
         <div class="forme-rang">
-          ${champ('montant', 'Montant HT par période (€)', f.montant ?? '', { type: 'number', attrs: 'min="0" step="1"' })}
+          ${peut(env.session, 'finance.gerer', pid) ? champ('montant', 'Montant HT par période (€)', montantDe(pid, 'maintenance') ?? '', { type: 'number', attrs: 'min="0" step="1"' }) : ''}
           ${champ('jours', 'Jours de travail par période', f.jours ?? '', { type: 'number', attrs: 'min="0" step="0.5"', aide: 'Ce qui est compris dans le forfait, à chaque période.' })}
         </div>
         <div class="forme-rang">
@@ -842,13 +842,16 @@ const editeurs = {
       enregistrer: async (d) => {
         const donnees = {
           formule: d.formule, statut: d.statut,
-          montant: d.montant === '' || d.montant === undefined ? null : Number(d.montant),
           jours: d.jours === '' || d.jours === undefined ? null : Number(d.jours),
           reconduction: d.reconduction, devis: d.devis || '',
           debut: d.debut ? new Date(d.debut) : null, fin: d.fin ? new Date(d.fin) : null,
           horaires: d.horaires || '', delaiReponse: d.delaiReponse || '', delaiCorrection: d.delaiCorrection || '',
           inclus: lignes(d.inclus), exclus: lignes(d.exclus), modalites: d.modalites || '',
         };
+        /* Le prix vit à part (montants/maintenance), lu par la finance et le
+           responsable seuls. Posé avant le contrat : l'e-mail que déclenche
+           un changement d'état le trouve déjà. */
+        if (peut(env.session, 'finance.gerer', pid)) await ecrire.poserMontant(pid, 'maintenance', d.montant);
         await ecrire.poserContratMaintenance(pid, donnees, { neuf: !fiche });
         toast(fiche ? 'Forfait enregistré.' : 'Forfait configuré. Le client le lit dans son espace.');
         return true;
@@ -950,7 +953,7 @@ const editeurs = {
       </div>
       <div class="forme-rang">
         ${select('devis', 'Ligne du devis', Object.fromEntries((magasin.lire(K.documents(pid)) || []).concat(magasin.lire(K.documentsTous) || []).filter((x, i, l) => x.type === 'devis' && x.projet === pid && l.findIndex((y) => y.id === x.id) === i).map((x) => [x.id, { libelle: `${x.numero || 'Devis'} · ${x.libelle || ''}` }])), fiche ? fiche.devis : (defaut.devis || ''), { vide: 'Aucun', aide: "Rattachée à un devis, l'étape apparaît sur sa frise et se coche comme une ligne livrée." })}
-        ${champ('montant', 'Montant HT (€)', fiche ? (fiche.montant || '') : (defaut.montant || ''), { type: 'number', facultatif: true, attrs: 'min="0" step="1"' })}
+        ${peut(env.session, 'finance.gerer', pid) ? champ('montant', 'Montant HT (€)', fiche ? (montantDe(pid, `jalon-${fiche.id}`) ?? '') : (defaut.montant || ''), { type: 'number', facultatif: true, attrs: 'min="0" step="1"' }) : ''}
       </div>
       <div class="groupe"><label class="etiquette-champ" for="ed-composants">Parties concernées</label>
         <select class="select" id="ed-composants" name="composants" multiple size="4">${optionsMultiples(composantsDe(pid), (fiche && fiche.composants) || [])}</select>
@@ -963,10 +966,15 @@ const editeurs = {
         ...d, progression: borner(d.progression),
         debut: d.debut ? new Date(d.debut) : null, fin: d.fin ? new Date(d.fin) : null,
         reports: reportsMaj(fiche, 'fin', d.fin, d, env.session),
-        devis: d.devis || '', montant: d.montant === '' || d.montant === undefined ? null : Number(d.montant),
+        devis: d.devis || '',
       };
-      delete donnees.reportMotif; delete donnees.reportNote;
-      if (fiche) await ecrire.majJalon(pid, fiche.id, donnees); else await ecrire.creerJalon(pid, donnees);
+      /* Le montant ne vit pas sur l'étape : à part, pour la finance seule. */
+      const finance = peut(env.session, 'finance.gerer', pid);
+      const somme = d.montant === '' || d.montant === undefined ? null : Number(d.montant);
+      delete donnees.reportMotif; delete donnees.reportNote; delete donnees.montant;
+      let jid = fiche ? fiche.id : null;
+      if (fiche) await ecrire.majJalon(pid, fiche.id, donnees); else jid = (await ecrire.creerJalon(pid, donnees)).id;
+      if (finance && jid) await ecrire.poserMontant(pid, `jalon-${jid}`, somme);
       toast(fiche ? 'Étape mise à jour.' : 'Étape créée.');
     },
   }),

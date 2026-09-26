@@ -92,7 +92,7 @@ export const vue = async (ctx, env) => {
   /* L'onglet dont l'animation d'entrée est allée jusqu'au bout : tant
      qu'elle n'a pas fini, un redessin la rejoue au lieu de la couper. */
   let ongletAnime = '';
-  const cles = [K.projet(pid), K.composants(pid), K.jalons(pid), K.liens(pid), K.taches(pid), K.tickets(pid), K.validations(pid), K.fichiers(pid), K.releases(pid), K.reunions(pid), K.notes(pid), K.blocages(pid), K.documents(pid), K.paiements(pid), K.activite(pid), K.equipe,
+  const cles = [K.projet(pid), K.composants(pid), K.jalons(pid), K.liens(pid), K.taches(pid), K.tickets(pid), K.validations(pid), K.fichiers(pid), K.releases(pid), K.reunions(pid), K.notes(pid), K.blocages(pid), K.documents(pid), K.paiements(pid), K.montants(pid), K.activite(pid), K.equipe,
     K.scenarios(pid), K.campagnes(pid), K.anomalies(pid), ...(env.role === 'equipe' ? [K.projetsInternes, K.interlocuteurs(pid)] : [])];
   abonnerProjet(lot, pid, env.role);
 

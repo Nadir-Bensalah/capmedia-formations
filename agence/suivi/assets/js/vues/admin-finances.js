@@ -82,10 +82,15 @@ Mise en ligne · 600"></textarea><p class="aide">Chaque ligne devient une étape
     if (await agir(m.pied.querySelector('[type="submit"]'), async () => { reponse = await appelServeur('deposerDocument', { idDocument, projet: d.projet, type, numero: d.numero, libelle: d.libelle, montant: d.montant, tva: d.tva || 0, echeance: d.echeance || null, date: d.date || null, description: d.description, portee: d.portee, fichier, liens }); return reponse; }, `${type === 'devis' ? 'Devis' : 'Facture'} déposé.`)) {
       if (type === 'devis' && lignes.length && reponse && reponse.id) {
         const deja = (magasin.lire(K.jalonsTous) || []).filter((x) => (x.projet || x._parent) === d.projet).length;
-        await Promise.all(lignes.map((l, k) => ecrire.creerJalon(d.projet, {
-          titre: l.titre, montant: l.montant, devis: reponse.id, ordre: deja + k + 1,
-          statut: 'a-venir', progression: 0, phase: d.libelle || 'Devis',
-        })));
+        /* L'étape se voit de toute l'équipe du projet et du client ; son
+           montant, posé à part, de la seule finance. */
+        await Promise.all(lignes.map(async (l, k) => {
+          const ref = await ecrire.creerJalon(d.projet, {
+            titre: l.titre, devis: reponse.id, ordre: deja + k + 1,
+            statut: 'a-venir', progression: 0, phase: d.libelle || 'Devis',
+          });
+          if (l.montant !== null) await ecrire.poserMontant(d.projet, `jalon-${ref.id}`, l.montant);
+        }));
         toast(`${lignes.length} étape${lignes.length > 1 ? 's' : ''} posée${lignes.length > 1 ? 's' : ''} sur la feuille de route.`);
       }
       m.fermer(true);

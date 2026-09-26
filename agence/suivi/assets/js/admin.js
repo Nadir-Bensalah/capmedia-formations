@@ -123,7 +123,7 @@ const construireNavigation = () => {
       items: [
         /* Le libellé ne tenait pas dans la barre : le titre de la page dit
            « Finances », la barre disait autre chose et se faisait couper. */
-        { chemin: '/finances', libelle: 'Finances', icone: 'finances', compte: { total: piecesDues, neuf: piecesDues }, si: peut(session, 'finance.gerer') },
+        { chemin: '/finances', libelle: 'Finances', icone: 'finances', compte: { total: piecesDues, neuf: piecesDues }, si: peut(session, 'finance.lecture') },
         { chemin: '/maintenance', libelle: 'Maintenance', icone: 'sante', compte: { total: forfaitsActifs, neuf: forfaitsDemandes } },
         { chemin: '/activite', libelle: 'Activité', icone: 'activite' },
         { chemin: '/archives', libelle: 'Archives', icone: 'archive', si: admin },

@@ -505,6 +505,46 @@ refuse une action du code absente du registre. Les outils d'exploitation
 ouvrent une session au nom d'une personne (`outils/lib/session-admin.mjs`,
 par code), jamais avec une clé.
 
+### La finance (préflight Gate 2)
+
+La finance d'un projet se lit par un administrateur, par un agent du
+projet à qui `finance.lecture` (ou `finance.gerer`) a été donnée, et par
+le responsable côté client. Être affecté au projet ne suffit pas. Elle
+comprend :
+
+```
+documents, paiements                  devis, factures, paiements
+projets/{p}/montants/{cle}            « jalon-<id> » (étape de devis), « maintenance » (forfait)
+budgets/{p}                           budget et note (équipe seule, jamais le client)
+activite (visibilite « responsable ») les lignes devis, facture, paiement
+projets/{p}/pieces/** (Storage)       les PDF comptables
+```
+
+Une étape et un contrat de maintenance ne portent plus de montant (les
+règles le refusent) : l'agent et le collaborateur voient l'étape, jamais
+ce qu'elle vaut. `acces.financeEquipe` et la fonction `financeEquipe` des
+règles disent la même chose ; `matrice-gate2.test.mjs` et
+`matrice-stockage-gate2.test.mjs` passent chaque catégorie de personne
+devant chaque donnée, en lecture et en écriture.
+
+### Ce qu'un agent lit hors de ses projets
+
+Rien de ses clients : une société se lit par un agent qui travaille sur
+l'un de ses projets (`organisations/{o}.projets`, tenu par le serveur),
+un testeur par un agent d'un projet où il est inscrit, sauf délégation
+(`clients.gerer`, `qa.gerer`). Le profil d'un client ne se lit que par
+lui-même et un administrateur. L'équipe ne répond jamais à une
+validation à la place du client.
+
+### Les arbitrages d'accès
+
+Un contact préparé sans rôle (`a-definir`) n'a aucun accès, même projet
+ouvert. `projetsInternes/{p}` porte `rolesADefinir` (recalculé à chaque
+geste) et `arbitragesAcces` (laissés par la migration : ancien membre
+sans compte, adresse qui porte un autre rôle). Le cockpit les liste
+(accueil, « Accès à arbitrer » ; onglet « Accès client », « À arbitrer ») ;
+`classerArbitrageAcces` retire un point sans rien donner ni retirer.
+
 ### Les épreuves
 
 ```
@@ -513,6 +553,13 @@ regles-gate2.test.mjs     règles Firestore, rôle par rôle
 storage-gate2.test.mjs    règles de stockage
 serveur-gate2.test.mjs    le serveur de bout en bout, sur émulateurs
 migration-gate2.test.mjs  la migration : à blanc, réelle, silencieuse, rejouable, réversible
-qa-gate2.cjs              l'histoire complète dans de vrais navigateurs (21 étapes)
+qa-gate2.cjs              l'histoire complète dans de vrais navigateurs (22 étapes)
+matrice-gate2.test.mjs    12 catégories de personnes x 48 opérations Firestore
+matrice-stockage-gate2    12 catégories x 16 opérations Storage
+invitations-gate2         les quatre familles d'invitation, de bout en bout
+envois-gate2              qui reçoit quoi, compté (fermé, ouverture, coupure, impossibles)
+sessions-gate2            une session déjà ouverte, puis l'accès retiré : plus rien ne passe
+copie-prod-gate2.mjs      la migration sur une copie pseudonymisée de la production
+ordre-deploiement.sh      un ordre de déploiement rejoué pièce par pièce
 ```
 

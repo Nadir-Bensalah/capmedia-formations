@@ -22,7 +22,9 @@ import { fileURLToPath } from 'node:url';
 const ici = dirname(fileURLToPath(import.meta.url));
 const racine = resolve(ici, '..', '..');
 const PERIMETRE = ['fonctions-suivi', 'agence/suivi', 'suivi', 'firebase.suivi.json', 'outils/paquet-academy.mjs', 'outils/paquet-academy.test.mjs', '.github'];
-const DOMAINES_PERMIS = /@[A-Za-z0-9.-]+\.test\b|@capmedia\.app\b/i;
+/* Et l'identité technique de l'émulateur d'authentification (un jeton de
+   banc non signé la porte) : ce n'est pas une personne. */
+const DOMAINES_PERMIS = /@[A-Za-z0-9.-]+\.test\b|@capmedia\.app\b|^firebase-auth-emulator@example\.com$/i;
 const MOTIFS = [
   { nom: 'chemin personnel du disque', re: /\/Users\/[A-Za-z]|\/home\/[a-z]+\/|C:\\Users\\/ },
   { nom: 'lien vers un dépôt privé', re: /github\.com\/Nadir-Bensalah\/|nadir-bensalah\.github\.io/i },

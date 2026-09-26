@@ -22,6 +22,7 @@
    ========================================================================== */
 
 import { Timestamp } from 'firebase-admin/firestore';
+import { verrouSemis } from './barriere.mjs';
 
 export const PREFIXE = 'pf-';
 const T = (iso) => Timestamp.fromDate(new Date(iso));
@@ -71,6 +72,7 @@ const OBJETS = [
 
 export const semerAvantGate1 = async ({ bdd, seau, auth = null }) => {
   await declencheurs(false);
+  await verrouSemis(bdd, true);
   try {
     const lot = [];
     const poser = (chemin, donnees) => lot.push([chemin, donnees]);
@@ -170,6 +172,10 @@ export const semerAvantGate1 = async ({ bdd, seau, auth = null }) => {
     }
     return { documents: lot.length, objets: OBJETS.length };
   } finally {
+    /* Le verrou levé date la fin de la pose : tout événement né avant est
+       ignoré par les déclencheurs, même servi après la remise en route. */
+    await verrouSemis(bdd, false);
+    await declencheurs(false);
     await declencheurs(true);
   }
 };
@@ -181,7 +187,9 @@ export const viderEmulateur = async ({ bdd, seau, projet }) => {
   try {
     const r = await fetch(`http://${process.env.FIRESTORE_EMULATOR_HOST}/emulator/v1/projects/${projet}/databases/(default)/documents`, { method: 'DELETE' });
     if (!r.ok) throw new Error(`vidage Firestore refusé (${r.status})`);
+    /* Le vidage a effacé le verrou : on le repose aussitôt, les événements
+       de l'effacement ne font rien. */
+    await verrouSemis(bdd, true);
     await seau.deleteFiles({ force: true });
   } finally { await declencheurs(true); }
-  void bdd;
 };

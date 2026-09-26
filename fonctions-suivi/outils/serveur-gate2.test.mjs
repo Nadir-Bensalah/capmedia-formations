@@ -22,6 +22,7 @@
      node fonctions-suivi/outils/serveur-gate2.test.mjs
    ========================================================================== */
 
+import { barriere } from './lib/barriere.mjs';
 import { createRequire } from 'node:module';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
@@ -50,15 +51,9 @@ const compteurs = async () => {
   ]);
   return `${e.data().count}/${a.data().count}/${n.data().count}`;
 };
-const calme = async (max = 60) => {
-  let avant = ''; let pareil = 0;
-  for (let i = 0; i < max; i += 1) {
-    const m = await compteurs();
-    pareil = m === avant ? pareil + 1 : 0;
-    if (pareil >= 3) return;
-    avant = m; await pause(700);
-  }
-};
+/* Attendre que les déclencheurs aient TOUT servi : une barrière (état
+   observable), pas une durée au jugé (voir lib/barriere.mjs). */
+const calme = () => barriere({ bdd });
 const envoisVers = async (email, apres = 0) => (await bdd.collection('envois').get()).docs
   .map((d) => ({ id: d.id, ...d.data() }))
   .filter((d) => (d.a || []).some((x) => x.email === email) && (!apres || (d.cree && d.cree.toMillis() > apres)));

@@ -14,7 +14,7 @@ import {
   serverTimestamp, arrayUnion, arrayRemove, Timestamp,
   nomAffiche, enDate, parDateDesc, parDateAsc, joursAvant, borner, age, retard, dateCourte,
   OUVERTS, ATTEND_CLIENT, ATTEND_EQUIPE, FACTURES_DUES, PROJETS_ACTIFS, CATEGORIES_CLIENT, projetEstActif,
-  statutProjet, pluriel, verdictDelai, NIVEAUX_SCENARIO, STATUTS_PIECE_VISIBLES, startAfter,
+  statutProjet, pluriel, verdictDelai, NIVEAUX_SCENARIO, STATUTS_PIECE_VISIBLES, startAfter, peut,
 } from './noyau.js';
 import * as magasin from './magasin.js';
 
@@ -92,6 +92,10 @@ export const K = {
   /* Ce qui est réservé à Capmedia vit hors des documents que le client lit
      (voir les règles) : l'équipe seule s'y abonne. */
   projetsInternes: 'projets-internes',
+  /* Les montants liés à un projet (étape de devis, forfait) : la finance
+     de l'équipe et le responsable. */
+  montants: (p) => `montants:${p}`,
+  montantsTous: 'montants',
   organisationsInternes: 'organisations-internes',
   paiementsInternes: 'paiements-internes',
   /* Le profil sans nom des testeurs d'un projet. */
@@ -139,6 +143,22 @@ export const enOrdreChronologique = (messages) => (messages || []).slice().sort(
 /* La session de cette page : elle dit, pour un client, son rôle sur
    chaque projet (le responsable lit la finance, le collaborateur non). */
 let sessionCourante = null;
+/* La finance d'un projet, pour la session : côté équipe, « finance.lecture »
+   sur ce projet ; côté client, le responsable. Les règles disent pareil. */
+const financeDe = (pid) => {
+  if (!sessionCourante) return false;
+  if (sessionCourante.equipe) return peut(sessionCourante, 'finance.lecture', pid);
+  return responsableDe(pid);
+};
+
+/** Le montant d'une étape de devis (« jalon-<id> ») ou du forfait
+ *  (« maintenance ») d'un projet, s'il est lisible par la session. */
+export const montantDe = (pid, cle) => {
+  const tous = (magasin.lire(K.montants(pid)) || []).concat(magasin.lire(K.montantsTous) || []);
+  const m = tous.find((x) => x.id === cle && (x.projet || pid) === pid);
+  return m && typeof m.montant === 'number' ? m.montant : null;
+};
+
 const responsableDe = (pid) => {
   if (!sessionCourante || !sessionCourante.utilisateur) return false;
   const projets = magasin.lire(K.projets) || sessionCourante.projets || [];
@@ -190,17 +210,22 @@ export const abonnerProjet = (lot, pid, role) => {
   lot.abonner(K.reunions(pid), () => surProjetVisible('reunions'));
   lot.abonner(K.notes(pid), () => surProjetVisible('notes'));
   lot.abonner(K.blocages(pid), () => surProjetVisible('blocages'));
-  /* Un brouillon n'est lu que par l'équipe : la requête du client ne
-     demande que les statuts visibles, sans quoi les règles la refusent. */
-  if (!client || responsable) {
+  /* La finance : le responsable côté client, « finance.lecture » côté
+     équipe. Un agent affecté au projet sans elle ne s'y abonne pas, et
+     son fil d'activité ne demande pas les lignes financières (les règles
+     refuseraient la requête entière). Un brouillon n'est lu que par
+     l'équipe : la requête du client ne demande que les statuts visibles. */
+  const finance = client ? responsable : financeDe(pid);
+  if (finance) {
     lot.abonner(K.documents(pid), () => (client
       ? query(col('documents'), where('projet', '==', pid), where('statut', 'in', STATUTS_PIECE_VISIBLES))
       : surProjet('documents')));
     lot.abonner(K.paiements(pid), () => surProjet('paiements'));
+    lot.abonner(K.montants(pid), () => col('projets', pid, 'montants'));
   }
   lot.abonner(K.activite(pid), () => (client
     ? query(col('activite'), where('projet', '==', pid), where('visibilite', 'in', responsable ? ['client', 'responsable'] : ['client']))
-    : surProjet('activite')));
+    : (finance ? surProjet('activite') : query(col('activite'), where('projet', '==', pid), where('visibilite', 'in', ['client', 'interne'])))));
 };
 
 /** Les collections globales : tout pour l'équipe, projet par projet pour un client. */
@@ -237,6 +262,7 @@ export const abonnerGlobal = (lot, session) => {
     lot.abonner(K.scenariosTous, () => collectionGroup(bdd, 'scenarios'));
     lot.abonner(K.testeurs, () => col('testeurs'));
     lot.abonner(K.projetsInternes, () => col('projetsInternes'));
+    lot.abonner(K.montantsTous, () => collectionGroup(bdd, 'montants'));
     lot.abonner(K.organisationsInternes, () => col('organisationsInternes'));
     lot.abonner(K.paiementsInternes, () => col('paiementsInternes'));
   } else {
@@ -307,6 +333,7 @@ const abonnerAgent = (lot, session) => {
   deriver(K.validationsToutes, K.validations);
   deriver(K.documentsTous, K.documents);
   deriver(K.paiementsTous, K.paiements);
+  deriver(K.montantsTous, K.montants);
   deriver(K.reunionsToutes, K.reunions);
   deriver(K.releasesToutes, K.releases);
   deriver(K.blocagesTous, K.blocages);
@@ -322,9 +349,24 @@ const abonnerAgent = (lot, session) => {
   deriver(K.profils, K.profilsTesteurs);
   lot.ajouter(magasin.deriver(K.projetsInternes, pids.map((pid) => `projet-interne:${pid}`),
     () => pids.map((pid) => magasin.lire(`projet-interne:${pid}`)).filter(Boolean)));
-  lot.abonner(K.organisations, () => query(col('organisations'), orderBy('nom')));
+  /* Les sociétés et les testeurs de SES projets : les règles refusent à un
+     agent la liste entière (clients et vivier des autres). Au plus trente
+     projets par requête « array-contains-any ». */
+  const parLots = (nom, cle) => {
+    const lots = [];
+    for (let i = 0; i < pids.length; i += 30) lots.push(pids.slice(i, i + 30));
+    lots.forEach((l, n) => lot.abonner(`${cle}:${n}`, () => query(col(nom), where('projets', 'array-contains-any', l))));
+    lot.ajouter(magasin.deriver(cle, lots.map((l, n) => `${cle}:${n}`), () => {
+      const vus = new Map();
+      lots.forEach((l, n) => (magasin.lire(`${cle}:${n}`) || []).forEach((x) => vus.set(x.id, x)));
+      return [...vus.values()].sort((a, b) => String(a.nom || a.prenom || '').localeCompare(String(b.nom || b.prenom || '')));
+    }));
+  };
+  if (peut(session, 'clients.gerer')) lot.abonner(K.organisations, () => query(col('organisations'), orderBy('nom')));
+  else parLots('organisations', K.organisations);
   lot.abonner(K.equipe, () => col('equipe'));
-  lot.abonner(K.testeurs, () => col('testeurs'));
+  if (peut(session, 'qa.gerer')) lot.abonner(K.testeurs, () => col('testeurs'));
+  else parLots('testeurs', K.testeurs);
 };
 
 /**
@@ -660,10 +702,16 @@ export const ecrire = {
     projet: pid, titre: d.titre, description: d.description || '', phase: d.phase || '', statut: d.statut || 'a-venir',
     progression: borner(d.progression), debut: dateOuNull(d.debut), fin: dateOuNull(d.fin),
     composants: d.composants || [], responsable: d.responsable || '', dependances: d.dependances || [], ordre: Number(d.ordre) || 0,
-    reports: [],
+    devis: d.devis || '', reports: [],
     cree: serverTimestamp(), maj: serverTimestamp(),
   })),
   majJalon: (pid, jid, d) => updateDoc(doc(bdd, 'projets', pid, 'jalons', jid), nettoyer({ ...d, maj: serverTimestamp() })),
+  /* Un montant (étape de devis « jalon-<id> », forfait « maintenance ») :
+     à part de la fiche que lisent l'équipe et le client, réservé à la
+     finance. Vide, il s'efface. */
+  poserMontant: (pid, cle, montant) => (montant === null || montant === undefined || montant === '' || !Number.isFinite(Number(montant))
+    ? deleteDoc(doc(bdd, 'projets', pid, 'montants', cle))
+    : setDoc(doc(bdd, 'projets', pid, 'montants', cle), { projet: pid, montant: Number(montant), maj: serverTimestamp() })),
   supprimerJalon: (pid, jid) => deleteDoc(doc(bdd, 'projets', pid, 'jalons', jid)),
 
   creerLien: (pid, d) => addDoc(col('projets', pid, 'liens'), nettoyer({

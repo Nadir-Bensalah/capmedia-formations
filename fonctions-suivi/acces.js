@@ -43,6 +43,7 @@ const PERMISSIONS = {
   'contenu.gerer': 'tenir les tâches, étapes, fichiers, réunions et validations',
   'qa.participer': 'participer à la recette',
   'qa.gerer': 'piloter la recette (testeurs, campagnes, robots)',
+  'finance.lecture': 'consulter les devis, factures, paiements, montants et budgets',
   'finance.gerer': 'déposer des devis et des factures, enregistrer des paiements',
   'acces.gerer': 'donner et retirer les accès des clients',
   'projets.creer': 'créer un projet',
@@ -68,7 +69,20 @@ function permissionsDe(fiche) {
   const socle = SOCLE[fiche.role] || [];
   const deleguees = fiche.role === 'agent' && Array.isArray(fiche.permissions)
     ? fiche.permissions.filter((p) => DELEGABLES.includes(p)) : [];
-  return new Set([...socle, ...deleguees]);
+  const toutes = new Set([...socle, ...deleguees]);
+  /* Qui gère la finance la lit. */
+  if (toutes.has('finance.gerer')) toutes.add('finance.lecture');
+  return toutes;
+}
+
+/**
+ * La finance d'un projet, côté équipe : un administrateur, ou un agent du
+ * projet à qui « finance.lecture » (ou « finance.gerer ») a été donnée.
+ * Être affecté au projet ne suffit pas. Les règles disent la même chose
+ * (financeEquipe).
+ */
+function financeEquipe(fiche, projetId) {
+  return equipeSurProjet(fiche, projetId) && permissionsDe(fiche).has('finance.lecture');
 }
 
 /** Un membre d'équipe travaille-t-il sur ce projet ? */
@@ -211,6 +225,10 @@ async function recalculerAcces(projetId) {
     membres: plan.membres, roles: plan.roles, personnes: plan.personnes,
     membresOrganisation: [], accesVersion: 2, maj: FieldValue.serverTimestamp(),
   });
+  /* Ce qui attend un choix dans le cockpit : les interlocuteurs actifs
+     sans rôle. Écrit là où seule l'équipe lit. */
+  const aDefinir = interlocuteurs.filter((i) => i.statut === 'actif' && !ROLES_CLIENT[i.role]).length;
+  await bdd.doc(`projetsInternes/${projetId}`).set({ rolesADefinir: aDefinir, maj: FieldValue.serverTimestamp() }, { merge: true });
   const touches = new Set([...avant, ...plan.membres]);
   for (const uid of touches) {
     try { await poserRevendications(uid); } catch (err) { console.error(`Jeton de ${uid} non recalculé`, err); }
@@ -221,16 +239,18 @@ async function recalculerAcces(projetId) {
 
 /* Les membres d'une organisation : ceux qui ont accès à au moins un de ses
    projets. Ils ne donnent aucun accès ; ils permettent seulement à chacun
-   de lire la fiche de sa propre société. */
+   de lire la fiche de sa propre société. Et ses projets : un agent lit la
+   fiche d'une société sur l'un des projets de laquelle il travaille. */
+const memesListes = (a, b) => a.length === b.length && a.every((x) => b.includes(x));
 async function recalculerOrganisation(orgId) {
   const ref = bdd.doc(`organisations/${orgId}`);
   const org = await ref.get();
   if (!org.exists) return [];
   const projets = await bdd.collection('projets').where('organisation', '==', orgId).get();
-  const membres = [...new Set(projets.docs.flatMap((p) => p.data().membres || []))];
-  const actuels = org.data().membres || [];
-  if (actuels.length !== membres.length || actuels.some((u) => !membres.includes(u))) {
-    await ref.update({ membres, maj: FieldValue.serverTimestamp() });
+  const membres = [...new Set(projets.docs.flatMap((p) => p.data().membres || []))].sort();
+  const ids = projets.docs.map((p) => p.id).sort();
+  if (!memesListes(org.data().membres || [], membres) || !memesListes(org.data().projets || [], ids)) {
+    await ref.update({ membres, projets: ids, maj: FieldValue.serverTimestamp() });
   }
   return membres;
 }
@@ -246,16 +266,37 @@ async function recalculerOrganisation(orgId) {
 /**
  * @param projet    la fiche du projet
  * @param org       la fiche de son organisation, ou null
- * @param comptes   { uid: email } des comptes membres
- * @param maintenant une date, pour l'épreuve
- * @returns { champs, interlocuteurs: [{ cle, fiche }], arbitrages: [texte], deja }
+ * @param comptes   { uid: email } des comptes membres ; '' pour un compte
+ *                  qui n'existe plus
+ * @param autresRoles { email: 'equipe' | 'testeur' } : les adresses qui
+ *                  portent déjà un autre rôle principal
+ * @returns { champs, interlocuteurs: [{ cle, fiche }], arbitrages: [texte],
+ *            apres: [{ type, detail }], orphelins: [uid], deja, bloquant }
+ *
+ * Décisions du préflight Gate 2 (25/09/2026) :
+ * - un projet s'ouvre si et seulement si un membre d'avant a encore un
+ *   compte : l'accès d'une personne réelle ne se perd pas. Sans membre
+ *   joignable, il est FERMÉ, qu'il ait été en sourdine ou non, prospect
+ *   compris : aucune ouverture, aucune invitation, aucun e-mail ;
+ * - un membre dont le compte n'existe plus ne reçoit aucun compte ni
+ *   aucun accès : il est écarté, et laissé en arbitrage APRÈS migration ;
+ * - un membre joignable garde son accès : responsable si sa société le
+ *   dit propriétaire (il avait déjà tout, finance comprise), sinon le
+ *   projet n'est pas converti (arbitrage bloquant) ;
+ * - une adresse de contact qui n'est pas membre est préparée SANS rôle
+ *   (« a-definir ») : aucun accès tant qu'on n'a pas choisi, et
+ *   l'appartenance à une société ne vaut pas un rôle sur un projet ;
+ * - une adresse qui porte déjà un autre rôle (équipe, testeur) n'est pas
+ *   préparée : une adresse, un rôle.
  */
-function planMigrationProjet(projet, org, comptes = {}) {
+function planMigrationProjet(projet, org, comptes = {}, autresRoles = {}) {
   const champs = {};
   const interlocuteurs = [];
   const arbitrages = [];
-  if (!projet) return { champs, interlocuteurs, arbitrages, deja: false };
-  if (projet.accesVersion === 2) return { champs, interlocuteurs, arbitrages, deja: true };
+  const apres = [];
+  const orphelins = [];
+  if (!projet) return { champs, interlocuteurs, arbitrages, apres, orphelins, deja: false, bloquant: false };
+  if (projet.accesVersion === 2) return { champs, interlocuteurs, arbitrages, apres, orphelins, deja: true, bloquant: false };
 
   const membres = Array.isArray(projet.membres) ? projet.membres : [];
   const roleOrg = (uid, email) => {
@@ -271,29 +312,24 @@ function planMigrationProjet(projet, org, comptes = {}) {
     if (projet.ouvert === undefined) champs.ouvert = false;
     if (projet.emailsClient === undefined) champs.emailsClient = 'actifs';
     champs.accesVersion = 2;
-    return { champs, interlocuteurs, arbitrages, deja: false };
+    return { champs, interlocuteurs, arbitrages, apres, orphelins, deja: false, bloquant: false };
   }
 
-  /* L'état d'ouverture : un projet où quelqu'un est déjà membre est ouvert
-     de fait. Un projet sans membre est fermé de fait. Mais un projet sans
-     membre, qui n'était pas en sourdine et porte une adresse, envoyait
-     encore des e-mails à cette adresse : le fermer change ce qu'il envoie,
-     et ce changement est une décision, pas un calcul. */
   const adresses = [
     ...((projet.contacts || []).map((c) => ({ email: normaliserEmail(c.email), nom: c.nom || '' }))),
     ...(projet.client && projet.client.email ? [{ email: normaliserEmail(projet.client.email), nom: projet.client.nom || '' }] : []),
   ].filter((a) => a.email);
+  const joignables = membres.filter((uid) => normaliserEmail(comptes[uid]));
+
   if (projet.ouvert === undefined) {
-    if (membres.length) {
+    if (joignables.length) {
       champs.ouvert = true;
       /* Déjà ouvert de fait : sa première ouverture est passée. Sans date
          connue, celle de la migration. Une réouverture future ne renverra
          donc pas de lettre d'ouverture à qui est déjà entré. */
       champs.premiereOuverture = projet.ouvertLe || projet.cree || FieldValue.serverTimestamp();
-    } else if (projet.silence === true || !adresses.length) {
-      champs.ouvert = false;
     } else {
-      arbitrages.push('projet sans membre, hors sourdine, avec une adresse de contact : le fermer (plus aucun e-mail) ou l\'ouvrir (invitations) ?');
+      champs.ouvert = false;
     }
   } else if (projet.ouvert === true && !projet.premiereOuverture) {
     champs.premiereOuverture = projet.ouvertLe || projet.cree || FieldValue.serverTimestamp();
@@ -301,7 +337,7 @@ function planMigrationProjet(projet, org, comptes = {}) {
 
   /* La sourdine d'un projet ouvert devient « e-mails coupés » : le client
      garde son espace, rien ne part par e-mail, exactement comme avant. Sur
-     un projet fermé, la sourdine n'a plus d'objet. */
+     un projet fermé, rien ne part de toute façon. */
   if (projet.emailsClient === undefined) {
     const ouvertApres = champs.ouvert !== undefined ? champs.ouvert : projet.ouvert === true;
     champs.emailsClient = ouvertApres && projet.silence === true ? 'coupes' : 'actifs';
@@ -316,28 +352,36 @@ function planMigrationProjet(projet, org, comptes = {}) {
   const vus = new Set();
   for (const uid of membres) {
     const email = normaliserEmail(comptes[uid]);
-    if (!email) { arbitrages.push(`membre ${uid} sans compte lisible : à retirer ou à rattacher`); continue; }
+    if (!email) {
+      orphelins.push(uid);
+      apres.push({ type: 'membre-sans-compte', detail: `un ancien membre (compte ${uid}) n'a plus de compte de connexion : aucun accès recréé ; à retirer, ou à réinviter à la main avec un rôle` });
+      continue;
+    }
+    if (autresRoles[email]) {
+      apres.push({ type: 'adresse-autre-role', detail: `le membre ${email} porte aussi le rôle ${autresRoles[email]} : une adresse, un rôle ; son accès client est gardé en l'état` });
+    }
     const role = roleOrg(uid, email);
     if (!role) { arbitrages.push(`membre ${email} : rôle responsable ou collaborateur à décider`); continue; }
     vus.add(email);
     interlocuteurs.push({ cle: cleEmail(email), fiche: { email, nom: nomDe(email), uid, role, statut: 'actif', origine: 'migration-membre', invitation: { etat: 'acceptee' } } });
   }
-  /* Les adresses de contact qui ne sont pas encore membres : préparées,
-     jamais invitées ici. Elles ne recevront rien tant qu'on n'aura pas
-     ouvert le projet ou renvoyé leur invitation. */
+  /* Les adresses de contact qui ne sont pas membres : préparées, sans
+     rôle, jamais invitées ici. */
   for (const a of adresses) {
     if (vus.has(a.email)) continue;
     vus.add(a.email);
-    const role = roleOrg(null, a.email) || 'a-definir';
-    if (role === 'a-definir') arbitrages.push(`contact ${a.email} : rôle à décider avant l'ouverture`);
-    interlocuteurs.push({ cle: cleEmail(a.email), fiche: { email: a.email, nom: a.nom, uid: null, role, statut: 'actif', origine: 'migration-contact', invitation: { etat: 'preparee' } } });
+    if (autresRoles[a.email]) {
+      apres.push({ type: 'adresse-autre-role', detail: `l'adresse de contact ${a.email} est déjà ${autresRoles[a.email] === 'testeur' ? 'celle d un testeur' : "celle de l'équipe"} : elle n'est pas préparée comme client` });
+      continue;
+    }
+    interlocuteurs.push({ cle: cleEmail(a.email), fiche: { email: a.email, nom: a.nom, uid: null, role: 'a-definir', statut: 'actif', origine: 'migration-contact', invitation: { etat: 'preparee' } } });
   }
 
-  /* Un membre sans rôle déductible garde son accès tant que l'arbitrage
-     n'est pas rendu : le projet n'est pas converti, rien n'est retiré. */
-  const bloquant = arbitrages.some((a) => a.startsWith('membre ') || a.startsWith('projet sans membre'));
+  /* Un membre joignable sans rôle déductible garde son accès tant que
+     l'arbitrage n'est pas rendu : le projet n'est pas converti. */
+  const bloquant = arbitrages.some((a) => a.startsWith('membre '));
   if (!bloquant) champs.accesVersion = 2;
-  return { champs, interlocuteurs, arbitrages, deja: false, bloquant };
+  return { champs, interlocuteurs, arbitrages, apres, orphelins, deja: false, bloquant };
 }
 
 /**
@@ -356,7 +400,7 @@ async function assurerModele(projetId) {
   for (const uid of projet.membres || []) {
     try { comptes[uid] = (await getAuth().getUser(uid)).email || ''; } catch (err) { comptes[uid] = ''; }
   }
-  const plan = planMigrationProjet(projet, org && org.exists ? org.data() : null, comptes);
+  const plan = planMigrationProjet(projet, org && org.exists ? org.data() : null, comptes, await rolesDesAdresses());
   if (plan.bloquant) throw new Refus(409, `Ce projet attend un arbitrage avant de changer ses accès : ${plan.arbitrages.join(' ; ')}`);
   for (const i of plan.interlocuteurs) {
     const cible = ref.collection('interlocuteurs').doc(i.cle);
@@ -365,8 +409,24 @@ async function assurerModele(projetId) {
     }
   }
   if (Object.keys(plan.champs).length) await ref.update({ ...plan.champs, maj: FieldValue.serverTimestamp() });
+  if (plan.apres.length) {
+    await bdd.doc(`projetsInternes/${projetId}`).set({ arbitragesAcces: plan.apres, maj: FieldValue.serverTimestamp() }, { merge: true });
+  }
   await recalculerAcces(projetId);
   return { id: doc.id, ...(await ref.get()).data() };
+}
+
+/** Les adresses qui portent déjà un rôle principal hors client :
+ *  { email: 'equipe' | 'testeur' }. */
+async function rolesDesAdresses() {
+  const roles = {};
+  for (const d of (await bdd.collection('testeurs').get()).docs) {
+    const e = normaliserEmail(d.data().email); if (e) roles[e] = 'testeur';
+  }
+  for (const d of (await bdd.collection('equipe').get()).docs) {
+    const e = normaliserEmail(d.data().email); if (e) roles[e] = 'equipe';
+  }
+  return roles;
 }
 
 /**
@@ -391,8 +451,8 @@ async function reponseDevisAcceptee(projet, reponse) {
 
 module.exports = {
   ROLES_EQUIPE, ROLES_CLIENT, PERMISSIONS, SOCLE, DELEGABLES,
-  permissionsDe, equipeSurProjet, decider, controleDernierAdmin,
+  permissionsDe, equipeSurProjet, financeEquipe, decider, controleDernierAdmin,
   identifier, exiger,
   planAcces, roleClient, reponseDevisLegitime, reponseDevisAcceptee, poserRevendications, recalculerAcces, recalculerOrganisation,
-  planMigrationProjet, assurerModele, cleEmail,
+  planMigrationProjet, assurerModele, rolesDesAdresses, cleEmail,
 };

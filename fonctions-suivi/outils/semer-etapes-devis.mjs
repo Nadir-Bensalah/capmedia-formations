@@ -37,10 +37,12 @@ async function main() {
   const lot = bdd.batch();
   LIGNES.forEach(([id, titre, montant, statut, progression, description], i) => {
     lot.set(bdd.doc(`projets/${projet}/jalons/${id}`), {
-      titre, montant, statut, progression, description,
+      titre, statut, progression, description,
       devis, ordre: 100 + i + 1, phase: 'Campagne de tests',
       maj: FieldValue.serverTimestamp(),
     }, { merge: true });
+    /* Le montant vit à part, lu par la seule finance (Gate 2). */
+    lot.set(bdd.doc(`projets/${projet}/montants/jalon-${id}`), { projet, montant, maj: FieldValue.serverTimestamp() });
   });
   await lot.commit();
   console.log(`\n  ${LIGNES.length} étapes posées dans projets/${projet}/jalons\n`);

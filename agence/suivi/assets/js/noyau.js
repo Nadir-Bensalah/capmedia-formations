@@ -727,7 +727,8 @@ export const PERMISSIONS = {
   'contenu.gerer': 'Tenir tâches, étapes, fichiers, réunions et validations',
   'qa.participer': 'Participer à la recette',
   'qa.gerer': 'Piloter la recette : testeurs, campagnes, robots',
-  'finance.gerer': 'Devis, factures et paiements',
+  'finance.lecture': 'Consulter devis, factures, paiements, montants et budgets',
+  'finance.gerer': 'Déposer devis et factures, enregistrer les paiements',
   'acces.gerer': 'Donner et retirer les accès des clients',
   'projets.creer': 'Créer des projets',
   'projets.ouvrir': 'Ouvrir un projet au client, couper ses e-mails',
@@ -745,7 +746,10 @@ export const PERMISSIONS_DELEGABLES = Object.keys(PERMISSIONS).filter((p) => !['
 export const permissionsDe = (fiche) => {
   if (!fiche || fiche.actif !== true || !ROLES_EQUIPE[fiche.role]) return new Set();
   const deleguees = fiche.role === 'agent' && Array.isArray(fiche.permissions) ? fiche.permissions.filter((p) => PERMISSIONS_DELEGABLES.includes(p)) : [];
-  return new Set([...(SOCLE_EQUIPE[fiche.role] || []), ...deleguees]);
+  const toutes = new Set([...(SOCLE_EQUIPE[fiche.role] || []), ...deleguees]);
+  /* Qui gère la finance la lit. */
+  if (toutes.has('finance.gerer')) toutes.add('finance.lecture');
+  return toutes;
 };
 
 /** Cette session peut-elle ce geste, sur ce projet ? L'écran seulement. */

@@ -107,7 +107,10 @@ const dossier=async()=>(((await lire('projets/atelier/maintenance?pageSize=50'))
   await eq.fill('#ed-modalites','Les jours non consommés se reportent sur la période suivante, dans la limite d\'une période.');
   await soumettre(eq);
   const c2=await lire('projets/atelier/maintenance/contrat');
-  verifier(str(c2,'statut')==='proposition'&&str(c2,'formule')==='Sérénité'&&num(c2,'montant')===900&&num(c2,'jours')===2,'le contrat porte la proposition',`${str(c2,'statut')} ${str(c2,'formule')} ${num(c2,'montant')} ${num(c2,'jours')}`);
+  /* Le prix vit à part depuis la Gate 2 (montants/maintenance), lu par la
+     seule finance : le contrat, que lit tout le projet, ne le porte plus. */
+  const prix=await lire('projets/atelier/montants/maintenance');
+  verifier(str(c2,'statut')==='proposition'&&str(c2,'formule')==='Sérénité'&&num(prix,'montant')===900&&num(c2,'jours')===2&&!('montant' in ((c2||{}).fields||{})),'le contrat porte la proposition, son prix est rangé à part',`${str(c2,'statut')} ${str(c2,'formule')} ${num(prix,'montant')} ${num(c2,'jours')} ${'montant' in ((c2||{}).fields||{})}`);
   verifier(((champ(c2,'inclus').arrayValue||{}).values||[]).length===2,'deux points compris');
   verifier(/reste à jour/.test(((((champ(c2,'demande').mapValue||{}).fields||{}).message)||{}).stringValue||''),'la demande du client est restée intacte');
   await pause(1200);

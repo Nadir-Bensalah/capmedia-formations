@@ -30,6 +30,13 @@ export const vue = async (ctx, env) => {
     const demandesProjet = magasin.lire(K.demandesProjet) || [];
     const jalons = magasin.lire(K.jalonsTous) || [];
     const nomProjet = (pid) => ((projets.find((p) => p.id === pid) || {}).nom || '');
+    /* Les accès qui attendent un choix humain : un contact préparé sans
+       rôle (il n'a aucun accès), ou un point laissé par la migration (un
+       ancien membre sans compte, une adresse qui porte un autre rôle). */
+    const aArbitrer = peut(env.session, 'acces.gerer') ? (magasin.lire(K.projetsInternes) || [])
+      .map((i) => ({ pid: i.id, roles: Number(i.rolesADefinir) || 0, points: (i.arbitragesAcces || []).length }))
+      .filter((x) => (x.roles || x.points) && projets.some((p) => p.id === x.pid))
+      .sort((a, b) => nomProjet(a.pid).localeCompare(nomProjet(b.pid))) : [];
 
     const actifs = projetsActifs(projets).filter((p) => !p.interne);
     /* Mes propres projets se comptent à part : ils n'ont pas de client et
@@ -47,7 +54,7 @@ export const vue = async (ctx, env) => {
     const prochaines = reunions.filter((r) => joursAvant(r.date) >= 0).sort(parDateAsc('date')).slice(0, 4);
     /* La finance reste à qui la gère : un agent ne voit ni l'impayé, ni les
        devis en attente, ni les paiements, même sur ses projets. */
-    const finance = peut(env.session, 'finance.gerer');
+    const finance = peut(env.session, 'finance.lecture');
     const devisAttente = documents.filter((d) => d.type === 'devis' && ['envoye', 'consulte'].includes(d.statut));
     const { total: impaye, factures: impayees } = resteAPayer(documents, paiements);
     const debutAnnee = new Date(new Date().getFullYear(), 0, 1);
@@ -87,6 +94,7 @@ export const vue = async (ctx, env) => {
           </section>
         </div>
         <aside class="pile" style="gap:var(--e-5)">
+          ${aArbitrer.length ? `<div class="carte carte--creuse" id="acces-a-arbitrer"><p class="surtitre">Accès à arbitrer</p><div class="pile" style="margin-top:10px;gap:8px">${aArbitrer.map((x) => `<a class="rang-espace" style="color:inherit" href="#/projets/${echapper(x.pid)}/acces"><span class="t-petit tronque">${echapper(nomProjet(x.pid))}</span><span class="t-micro t-2">${[x.roles ? pluriel(x.roles, 'rôle à choisir', 'rôles à choisir') : '', x.points ? pluriel(x.points, 'point', 'points') : ''].filter(Boolean).join(' · ')}</span></a>`).join('')}</div></div>` : ''}
           <div class="carte carte--creuse"><p class="surtitre">Attendent le client</p>${attendClient.length ? `<div class="pile" style="margin-top:10px;gap:8px">${attendClient.slice(0, 6).map((a) => `<a class="rang" style="gap:10px;color:inherit;align-items:flex-start;flex-wrap:nowrap" href="#${echapper(a.chemin)}"><span class="ligne-icone ligne-icone--${a.ton || 'ambre'}" style="width:28px;height:28px;border-radius:8px">${icone(a.icone)}</span><span style="min-width:0"><span class="t-petit t-fort tronque" style="display:block">${echapper(a.titre)}</span><span class="t-micro t-3">${echapper(a.sous)}</span></span></a>`).join('')}</div>` : '<p class="t-petit t-2" style="margin-top:8px">Rien en attente côté client.</p>'}</div>
           <div class="carte carte--creuse"><p class="surtitre">Prochaines réunions</p>${prochaines.length ? `<div class="pile" style="margin-top:10px;gap:10px">${prochaines.map((r) => `<a class="rang" style="gap:10px;color:inherit;align-items:flex-start;flex-wrap:nowrap" href="#/projets/${echapper(r.projet)}/reunions"><span class="ligne-icone ligne-icone--bleu" style="width:28px;height:28px;border-radius:8px">${icone('reunions')}</span><span style="min-width:0"><span class="t-petit t-fort tronque" style="display:block">${echapper(r.titre)}</span><span class="t-micro t-3">${echapper(dateHeure(r.date))} · ${echapper(nomProjet(r.projet))}</span></span></a>`).join('')}</div>` : '<p class="t-petit t-2" style="margin-top:8px">Aucune réunion programmée.</p>'}<p style="margin-top:10px"><a class="t-petit" href="#/planning">Planning</a></p></div>
           ${finance ? `<div class="carte carte--creuse"><p class="surtitre">Devis en attente</p>${devisAttente.length ? `<div class="pile" style="margin-top:10px;gap:8px">${devisAttente.map((d) => `<a class="rang-espace" style="color:inherit" href="#/finances/${echapper(d.id)}"><span class="t-petit tronque">${echapper(d.numero || '')} ${echapper(nomProjet(d.projet))}</span><span class="t-petit t-fort nb">${echapper(montant(d.montant))}</span></a>`).join('')}</div>` : '<p class="t-petit t-2" style="margin-top:8px">Aucun devis en attente.</p>'}</div>` : ''}
@@ -98,7 +106,7 @@ export const vue = async (ctx, env) => {
 
   let minuteur = null;
   const planifier = () => { clearTimeout(minuteur); minuteur = setTimeout(rendre, 40); };
-  [K.projets, K.organisations, K.ticketsTous, K.tachesToutes, K.validationsToutes, K.documentsTous, K.paiementsTous, K.reunionsToutes, K.blocagesTous, K.activiteToute, K.demandesProjet, K.jalonsTous].forEach((c) => lot.sur(c, planifier));
+  [K.projets, K.organisations, K.ticketsTous, K.tachesToutes, K.validationsToutes, K.documentsTous, K.paiementsTous, K.reunionsToutes, K.blocagesTous, K.activiteToute, K.demandesProjet, K.jalonsTous, K.projetsInternes].forEach((c) => lot.sur(c, planifier));
   planifier();
   return () => { clearTimeout(minuteur); lot.fin(); };
 };

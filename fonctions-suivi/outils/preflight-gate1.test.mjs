@@ -32,6 +32,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { semerAvantGate1, viderEmulateur, declencheurs } from './lib/avant-gate1.mjs';
 import { photographier, pourDisque, ecartsBruts } from './lib/manifeste.mjs';
+import { barriere } from './lib/barriere.mjs';
 
 if (!process.env.FIRESTORE_EMULATOR_HOST || !process.env.FIREBASE_STORAGE_EMULATOR_HOST) {
   console.error('Émulateurs Firestore et Storage requis.'); process.exit(2);
@@ -53,9 +54,25 @@ const migrer = (...options) => {
   const unites = Number(((r.stdout || '').match(/\((\d+) unité\(s\) écrite\(s\)\)/) || [])[1] ?? -1);
   return { code: r.status, sortie: `${r.stdout || ''}${r.stderr || ''}`, unites };
 };
-const base = async () => { await viderEmulateur({ bdd, seau, projet: PROJET }); await semerAvantGate1({ bdd, seau }); };
-/* Les déclencheurs tournent après les écritures : on attend qu'ils se taisent. */
-const photoCalme = async () => { await pause(6000); return photographier({ bdd, seau }); };
+/* La base « avant Gate 1 », posée déclencheurs coupés. Avant : la barrière
+   sert tout ce qui reste en file (les écritures de l'essai précédent) ; après :
+   elle prouve que le semis n'a rien déclenché d'autre. Puis la base doit
+   être EXACTEMENT la première : un effet tardif ferait échouer ici, au banc,
+   et non sur le compte de la migration. */
+let REFERENCE = null;
+const base = async () => {
+  await barriere({ bdd });
+  await viderEmulateur({ bdd, seau, projet: PROJET });
+  await semerAvantGate1({ bdd, seau });
+  await barriere({ bdd });
+  if (REFERENCE) {
+    const e = ecartsBruts(REFERENCE, await photographier({ bdd, seau }));
+    if (e.length) throw new Error(`banc : la base posée diffère du semis (${e.slice(0, 3).join(' | ')})`);
+  }
+};
+/* Les déclencheurs tournent après les écritures : la barrière attend qu'ils
+   aient TOUS été servis (un état observable, pas une durée). */
+const photoCalme = async () => { await barriere({ bdd }); return photographier({ bdd, seau }); };
 const ecrire = (nom, photo) => writeFileSync(`${SORTIE}${nom}.json`, JSON.stringify(pourDisque(photo), null, 1));
 const doc = (photo, chemin) => photo.donnees[chemin];
 const sous = (photo, prefixe) => Object.keys(photo.donnees).filter((c) => c.startsWith(prefixe));
@@ -160,6 +177,7 @@ const voulu = (n) => !SECTIONS.length || SECTIONS.includes(n) || (n === 2 && SEC
 /* ------------------------------------------------------------------ */
 await base();
 const A = await photographier({ bdd, seau });
+REFERENCE = A;
 ecrire('1-avant', A);
 console.log(`\nBase « avant Gate 1 » : ${Object.keys(A.donnees).length} documents, ${Object.keys(A.objets).length} objets`);
 console.log('  ' + Object.entries(A.compte).map(([k, n]) => `${k} ${n}`).join(' · '));
@@ -208,7 +226,7 @@ for (const n of coupures) {
   await base();
   const coupe = migrer('--vrai', `--arret-apres=${n}`);
   const reprise = migrer('--vrai');
-  const C = await photographier({ bdd, seau });
+  const C = await photoCalme();
   const diff = ecartsBruts(B, C, { volatils: true });
   if (coupe.code === 3 && reprise.code === 0 && !diff.length) reprisesConformes += 1;
   else reprisesFautives.push(`coupée à ${n} (sortie ${coupe.code}/${reprise.code}) : ${diff.slice(0, 3).join(' | ')}`);
@@ -219,7 +237,7 @@ await base();
 const c1 = migrer('--vrai', `--arret-apres=${Math.floor(vraie.unites / 3)}`);
 const c2 = migrer('--vrai', `--arret-apres=${Math.floor(vraie.unites / 3)}`);
 const c3 = migrer('--vrai');
-const C3 = await photographier({ bdd, seau });
+const C3 = await photoCalme();
 verifier('coupée deux fois de suite, puis reprise : même état final', c1.code === 3 && c2.code === 3 && c3.code === 0 && ecartsBruts(B, C3, { volatils: true }).length === 0, ecartsBruts(B, C3, { volatils: true }).slice(0, 3).join(' | '));
 
 }
@@ -301,7 +319,7 @@ if (voulu(7)) {
 console.log('\n== 7. La suppression des anciens objets (--supprimer-anciens, plus tard)');
 await base();
 migrer('--vrai');
-const M = await photographier({ bdd, seau });
+const M = await photoCalme();
 const sup = migrer('--vrai', '--supprimer-anciens');
 const S7 = await photoCalme();
 ecrire('7-apres-suppression', S7);
@@ -317,7 +335,7 @@ verifier('aucun e-mail, aucune notification, aucune activité', !Object.keys(S7.
 const sup2 = migrer('--vrai', '--supprimer-anciens');
 verifier('rejouée, elle n écrit plus rien', sup2.unites === 0, sup2.sortie);
 const retourApres = migrer('--vrai', '--annuler');
-const R7 = await photographier({ bdd, seau });
+const R7 = await photoCalme();
 const ancienVisible = doc(R7, 'fichiers/pf-fic-visible');
 verifier('après la suppression, le retour arrière recopie encore vers l ancien rangement', retourApres.code === 0 && ancienVisible && /^projets\/pf-ouvert-1\/documents\/fichiers\/pf-fic-visible-/.test(ancienVisible.chemin) && R7.objets[ancienVisible.chemin] && R7.objets[ancienVisible.chemin].md5 === M.objets[doc(M, 'fichiers/pf-fic-visible').chemin].md5, ancienVisible && ancienVisible.chemin);
 }

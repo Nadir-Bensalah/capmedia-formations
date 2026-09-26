@@ -83,6 +83,21 @@ service firebase.storage {
               || projetId in ficheEquipe().get('projets', []));
     }
 
+    // La finance du projet, côté équipe (même lecture que ci-dessus) :
+    // un administrateur, ou un agent du projet qui a « finance.lecture »
+    // ou « finance.gerer ». Être affecté au projet ne suffit pas.
+    function financeEquipe(projetId) {
+      return equipeSurProjet(projetId)
+          && (ficheEquipe().get('role', '') == 'admin'
+              || ficheEquipe().get('permissions', []).hasAny(['finance.lecture', 'finance.gerer']));
+    }
+
+    function financeGerer(projetId) {
+      return equipeSurProjet(projetId)
+          && (ficheEquipe().get('role', '') == 'admin'
+              || ficheEquipe().get('permissions', []).hasAny(['finance.gerer']));
+    }
+
     function ficheProjet(projetId) {
       return fiche(/databases/(default)/documents/projets/$(projetId));
     }
@@ -136,14 +151,14 @@ service firebase.storage {
     // pièce : un brouillon ou une pièce archivée ne se télécharge pas, et
     // seul un responsable du projet le télécharge.
     match /projets/{projetId}/pieces/{documentId}/{nom} {
-      allow get: if jetonEquipe() ? equipeSurProjet(projetId)
+      allow get: if jetonEquipe() ? financeEquipe(projetId)
         : (responsableDuProjet(projetId)
             && fiche(/databases/(default)/documents/documents/$(documentId)).projet == projetId
             && fiche(/databases/(default)/documents/documents/$(documentId)).statut != 'brouillon'
             && fiche(/databases/(default)/documents/documents/$(documentId)).get('archive', false) != true);
-      allow list:   if equipeSurProjet(projetId);
-      allow create, update: if equipeSurProjet(projetId) && fichierAccepte();
-      allow delete: if equipeSurProjet(projetId);
+      allow list:   if financeEquipe(projetId);
+      allow create, update: if financeGerer(projetId) && fichierAccepte();
+      allow delete: if financeGerer(projetId);
     }
 
     // Les pièces jointes des demandes : l'équipe et le client du projet,
@@ -213,9 +228,12 @@ service firebase.storage {
       allow update, delete: if estAdmin();
     }
 
-    // Parcourir les dossiers d'un projet (« list ») : l'équipe de ce projet.
-    match /projets/{projetId}/{tout=**} {
-      allow list: if equipeSurProjet(projetId);
+    // Parcourir un dossier d'un projet (« list ») : l'équipe de ce projet,
+    // sauf les pièces comptables, à la finance seule. La racine d'un projet
+    // ne se parcourt que par un administrateur (règle suivante) : l'écran
+    // ne parcourt jamais, il lit les fiches.
+    match /projets/{projetId}/{dossier}/{tout=**} {
+      allow list: if dossier == 'pieces' ? financeEquipe(projetId) : equipeSurProjet(projetId);
     }
 
     // Le reste est fermé. Un administrateur peut parcourir n'importe quel

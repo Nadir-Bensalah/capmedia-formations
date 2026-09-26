@@ -14,10 +14,23 @@
    et le miroir des demandes dans l'activité.
    ========================================================================== */
 
-const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require('firebase-functions/v2/firestore');
+const v2firestore = require('firebase-functions/v2/firestore');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const courriels = require('./courriels');
 const communication = require('./communication');
+/* Chaque déclencheur décide « au moment » de son événement : un fait
+   survenu projet fermé, ou e-mails coupés, ne part pas plus tard parce que
+   l'état a changé entre-temps (voir communication.auMoment). */
+const { evenementDuSemis, instantEvenement } = require('./commun');
+const auMomentDe = (fn) => async (evenement) => {
+  /* Banc d'essai seulement : un événement né pendant la pose d'une base de
+     test n'a rien à faire (voir commun.evenementDuSemis). */
+  if (await evenementDuSemis(evenement)) return undefined;
+  return communication.auMoment(instantEvenement(evenement), () => fn(evenement));
+};
+const onDocumentCreated = (o, fn) => v2firestore.onDocumentCreated(o, auMomentDe(fn));
+const onDocumentUpdated = (o, fn) => v2firestore.onDocumentUpdated(o, auMomentDe(fn));
+const onDocumentWritten = (o, fn) => v2firestore.onDocumentWritten(o, auMomentDe(fn));
 const acces = require('./acces');
 
 const bdd = getFirestore();
@@ -195,7 +208,8 @@ exports.hubReleaseEcrite = onDocumentWritten({ region: REGION, document: 'releas
    ========================================================================== */
 
 exports.hubFichierCree = onDocumentCreated({ region: REGION, document: 'fichiers/{fichierId}' }, async (evenement) => {
-  const f = evenement.data.data();
+  const f = evenement.data && evenement.data.data();
+  if (!f) return;
   const projet = await lireProjet(f.projet);
   const lien = `/projets/${f.projet}/fichiers`;
   const par = f.par ? { uid: f.par.uid, nom: f.par.nom, cote: f.par.cote } : null;
@@ -244,7 +258,8 @@ exports.hubReunionEcrite = onDocumentWritten({ region: REGION, document: 'reunio
    ========================================================================== */
 
 exports.hubValidationCreee = onDocumentCreated({ region: REGION, document: 'validations/{validationId}' }, async (evenement) => {
-  const v = evenement.data.data();
+  const v = evenement.data && evenement.data.data();
+  if (!v) return;
   const projet = await lireProjet(v.projet);
   const lien = `/valider/${evenement.params.validationId}`;
   await activite({ projet: v.projet, type: 'validation', texte: `a demandé une validation : « ${v.titre} »`, par: v.demandeur ? { uid: v.demandeur.uid, nom: v.demandeur.nom, cote: 'equipe' } : null, lien });
@@ -275,7 +290,8 @@ exports.hubValidationModifiee = onDocumentUpdated({ region: REGION, document: 'v
    ========================================================================== */
 
 exports.hubNoteCreee = onDocumentCreated({ region: REGION, document: 'notes/{noteId}' }, async (evenement) => {
-  const n = evenement.data.data();
+  const n = evenement.data && evenement.data.data();
+  if (!n) return;
   const libelles = { decision: 'a consigné une décision', information: 'a noté une information', idee: 'a noté une idée', risque: 'a signalé un risque', reunion: 'a ajouté une note de réunion' };
   await activite({ projet: n.projet, type: 'note', texte: `${libelles[n.type] || 'a ajouté une note'} : « ${n.titre} »`, par: auteurDe(n), lien: `/projets/${n.projet}/notes`, visibilite: n.visibilite === 'interne' ? 'interne' : 'client' });
   if (n.type === 'decision' && n.visibilite !== 'interne') {
@@ -306,7 +322,8 @@ exports.hubBlocageEcrit = onDocumentWritten({ region: REGION, document: 'blocage
    ========================================================================== */
 
 exports.hubMessageProjet = onDocumentCreated({ region: REGION, document: 'projets/{projetId}/messages/{messageId}' }, async (evenement) => {
-  const m = evenement.data.data();
+  const m = evenement.data && evenement.data.data();
+  if (!m) return;
   const projetId = evenement.params.projetId;
   const projet = await lireProjet(projetId);
   const de = m.de || {};
@@ -327,7 +344,8 @@ exports.hubMessageProjet = onDocumentCreated({ region: REGION, document: 'projet
    ========================================================================== */
 
 exports.hubPaiementCree = onDocumentCreated({ region: REGION, document: 'paiements/{paiementId}' }, async (evenement) => {
-  const p = evenement.data.data();
+  const p = evenement.data && evenement.data.data();
+  if (!p) return;
   const projet = await lireProjet(p.projet);
   const montant = Number(p.montant) || 0;
   const texteMontant = montant.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
@@ -394,7 +412,8 @@ exports.hubTicketActivite = onDocumentWritten({ region: REGION, document: 'ticke
 });
 
 exports.hubMessageTicketBoite = onDocumentCreated({ region: REGION, document: 'tickets/{ticketId}/messages/{messageId}' }, async (evenement) => {
-  const m = evenement.data.data();
+  const m = evenement.data && evenement.data.data();
+  if (!m) return;
   if (m.interne) return;
   const ticket = await bdd.doc(`tickets/${evenement.params.ticketId}`).get();
   if (!ticket.exists) return;
@@ -412,7 +431,8 @@ exports.hubMessageTicketBoite = onDocumentCreated({ region: REGION, document: 't
    ========================================================================== */
 
 exports.hubDemandeProjetCreee = onDocumentCreated({ region: REGION, document: 'demandesProjet/{demandeId}' }, async (evenement) => {
-  const d = evenement.data.data();
+  const d = evenement.data && evenement.data.data();
+  if (!d) return;
   const lien = `/nouveaux-projets/${evenement.params.demandeId}`;
   await activite({ organisation: d.organisation || null, type: 'projet', texte: `a demandé un nouveau projet : « ${d.titre} »`, par: d.par ? { uid: d.par.uid, nom: d.par.nom, cote: 'client' } : null, lien, visibilite: 'interne' });
   await notifierEquipe(null, { type: 'projet', titre: 'Nouveau projet demandé', texte: `${d.titre} · ${(d.par || {}).nom || ''}`, lien: `#${lien}` });
@@ -432,7 +452,8 @@ exports.hubDemandeProjetModifiee = onDocumentUpdated({ region: REGION, document:
 });
 
 exports.hubMessageDemandeProjet = onDocumentCreated({ region: REGION, document: 'demandesProjet/{demandeId}/messages/{messageId}' }, async (evenement) => {
-  const m = evenement.data.data();
+  const m = evenement.data && evenement.data.data();
+  if (!m) return;
   const demande = await bdd.doc(`demandesProjet/${evenement.params.demandeId}`).get();
   if (!demande.exists) return;
   const d = demande.data();
@@ -493,7 +514,12 @@ exports.hubMaintenanceEcrite = onDocumentWritten({ region: REGION, document: 'pr
     const TITRES = { proposition: 'Une proposition de maintenance vous attend', actif: 'Votre forfait de maintenance est en cours', suspendu: 'Votre forfait de maintenance est suspendu', termine: 'Votre forfait de maintenance est terminé' };
     await activite({ projet: projetId, type: 'maintenance', texte: `a passé le forfait de maintenance en « ${LIBELLES[apres.statut]} »`, lien });
     await notifierClients(projet, 'maintenance', { type: 'maintenance', titre: TITRES[apres.statut], texte: apres.formule || nom, lien: `#${lien}`, projet: projetId });
-    await ecrireAuxClients(projet, 'maintenance', 'maintenance', { cote: 'client', evenement: apres.statut, projet: nom, formule: apres.formule, montant: apres.montant, jours: apres.jours, periode: apres.reconduction, lien: LIEN(lien) });
+    /* Le prix du forfait vit à part (montants/maintenance) : il ne part
+       qu'aux responsables. */
+    const tarif = await bdd.doc(`projets/${projetId}/montants/maintenance`).get();
+    const prix = tarif.exists ? tarif.data().montant : null;
+    await ecrireAuxClients(projet, 'maintenance', 'maintenance', { cote: 'client', evenement: apres.statut, projet: nom, formule: apres.formule, jours: apres.jours, periode: apres.reconduction, lien: LIEN(lien) },
+      { pourResponsable: prix != null ? { montant: prix } : null });
     return;
   }
 
@@ -542,6 +568,11 @@ exports.hubProjetModifie = onDocumentUpdated({ region: REGION, document: 'projet
   const apres = evenement.data.after.data();
   const projetId = evenement.params.projetId;
   const lien = `/projets/${projetId}`;
+  /* Un projet qui change de société : les deux fiches tiennent à jour leurs
+     projets et leurs membres (lecture d'un agent, d'un client). */
+  if (String(avant.organisation || '') !== String(apres.organisation || '')) {
+    for (const o of [avant.organisation, apres.organisation].filter(Boolean)) await acces.recalculerOrganisation(String(o));
+  }
   if (avant.statut !== apres.statut) {
     const libelles = { prospect: 'prospect', cadrage: 'en cadrage', planifie: 'planifié', 'en-cours': 'en cours', 'attente-client': 'en attente du client', 'en-revue': 'en revue', livraison: 'en livraison', maintenance: 'en maintenance', termine: 'terminé', suspendu: 'suspendu', archive: 'archivé' };
     await activite({ projet: projetId, type: 'projet', texte: `a passé le projet ${libelles[apres.statut] || apres.statut}`, lien });
@@ -584,9 +615,13 @@ exports.hubComposantEcrit = onDocumentWritten({ region: REGION, document: 'proje
 
 /* Un projet qui s'ouvre laisse une trace, comme tout le reste. */
 exports.hubProjetCree = onDocumentCreated({ region: REGION, document: 'projets/{projetId}' }, async (evenement) => {
-  const p = evenement.data.data();
+  /* Un projet créé puis effacé avant que l'événement soit servi n'a plus
+     de contenu : rien à tracer. */
+  const p = evenement.data && evenement.data.data();
+  if (!p) return;
   const projetId = evenement.params.projetId;
   await activite({ projet: projetId, organisation: p.organisation || null, type: 'projet', texte: `a ouvert le projet « ${p.nom} »`, lien: `/projets/${projetId}` });
+  if (p.organisation) await acces.recalculerOrganisation(String(p.organisation));
   /* L'annonce « votre espace est ouvert » part à l'ouverture, pas à la
      création : un projet naît fermé (voir ouvrirAuClient). */
 });

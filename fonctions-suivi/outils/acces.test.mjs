@@ -89,8 +89,22 @@ verifier(!legacyInconnu.champs.accesVersion, 'aucun accès n est recalculé sur 
 const legacyFermeSourdine = acces.planMigrationProjet({ membres: [], silence: true, contacts: [{ email: 'autre@exemple.test', nom: 'A' }] }, org, {});
 verifier(legacyFermeSourdine.champs.ouvert === false, 'sans membre et en sourdine : fermé, rien ne change pour lui');
 verifier(legacyFermeSourdine.interlocuteurs[0].fiche.role === 'a-definir' && legacyFermeSourdine.interlocuteurs[0].fiche.invitation.etat === 'preparee', 'son contact est préparé, rôle à décider, rien envoyé');
+/* Décisions du préflight : un projet sans membre joignable est fermé,
+   prospect compris ; un contact n'a jamais de rôle deviné ; un membre sans
+   compte n'en reçoit pas ; une adresse d'un autre rôle n'est pas préparée. */
 const legacyProspect = acces.planMigrationProjet({ membres: [], client: { email: 'prospect@exemple.test' } }, null, {});
-verifier(legacyProspect.bloquant && /le fermer/.test(legacyProspect.arbitrages.join(' ')), 'un prospect hors sourdine qui recevait des e-mails : arbitrage humain, pas de fermeture silencieuse');
+verifier(legacyProspect.champs.ouvert === false && !legacyProspect.bloquant && legacyProspect.champs.accesVersion === 2, 'un prospect hors sourdine, sans membre : fermé et converti, aucune ouverture');
+verifier(legacyProspect.interlocuteurs.length === 1 && legacyProspect.interlocuteurs[0].fiche.role === 'a-definir' && legacyProspect.interlocuteurs[0].fiche.invitation.etat === 'preparee', 'son adresse est préparée sans rôle, rien envoyé');
+const contactProprio = acces.planMigrationProjet({ membres: [], contacts: [{ email: 'patron@exemple.test' }] }, org, {});
+verifier(contactProprio.interlocuteurs[0].fiche.role === 'a-definir', 'un contact propriétaire de sa société n est PAS fait responsable : la société ne vaut pas un rôle sur un projet');
+const orphelin = acces.planMigrationProjet({ membres: ['u-parti'], client: { email: 'parti@exemple.test' }, organisation: 'o' }, org, { 'u-parti': '' });
+verifier(orphelin.champs.ouvert === false && orphelin.champs.accesVersion === 2 && !orphelin.bloquant, 'un projet dont le seul membre n a plus de compte : fermé, converti, rien de bloquant');
+verifier(orphelin.orphelins.length === 1 && orphelin.apres.some((x) => x.type === 'membre-sans-compte'), 'le membre sans compte est écarté et laissé en arbitrage d après migration');
+verifier(!orphelin.interlocuteurs.some((i) => i.fiche.uid === 'u-parti' || i.fiche.role !== 'a-definir'), 'aucun compte ni aucun rôle ne lui est inventé');
+const conflit = acces.planMigrationProjet({ membres: [], client: { email: 'testeur@exemple.test' } }, null, {}, { 'testeur@exemple.test': 'testeur' });
+verifier(!conflit.interlocuteurs.length && conflit.apres.some((x) => x.type === 'adresse-autre-role'), 'une adresse de testeur n est pas préparée comme client : arbitrage d après migration');
+const mixte = acces.planMigrationProjet({ membres: ['u1', 'u-parti'], organisation: 'o' }, org, { u1: 'patron@exemple.test', 'u-parti': '' });
+verifier(mixte.champs.ouvert === true && mixte.interlocuteurs.length === 1 && mixte.orphelins.length === 1, 'un membre joignable garde le projet ouvert ; l orphelin est seulement écarté');
 verifier(acces.planMigrationProjet({ interne: true }, null, {}).champs.ouvert === false, 'un projet interne : fermé, sans interlocuteur');
 verifier(acces.planMigrationProjet({ accesVersion: 2 }, null, {}).deja, 'un projet déjà converti n est pas retouché (relançable)');
 
@@ -118,6 +132,19 @@ verifier(!d(projet, resp, 'fichier', { fichiers: 'off' }).ok, 'une catégorie d�
 verifier(d(projet, resp, 'ouverture', { projet: 'off' }).ok, 'l ouverture de son espace part malgré les préférences (essentiel)');
 verifier(!d(projet, { ...resp, email: 'pas-une-adresse' }, 'message').ok, 'une adresse illisible ne part pas');
 
+/* Le moment d'un fait : un déclencheur servi en retard ne rejoue pas la
+   préparation après l'ouverture, ni la coupure après la reprise. */
+const T0 = Date.parse('2026-09-01T10:00:00Z');
+const ouvertApres = { ...projet, ouvertLe: new Date(T0) };
+verifier(d(ouvertApres, resp, 'message').ok, 'sans moment connu (hors déclencheur), l état actuel décide');
+verifier(!communication.decisionEmailClient({ projet: ouvertApres, interlocuteur: resp, evenement: 'devis', quand: T0 - 60000 }).ok, 'un fait antérieur à l ouverture ne part pas, même servi après');
+verifier(!communication.decisionNotificationClient({ projet: ouvertApres, uid: 'c1', evenement: 'message', quand: T0 - 1 }).ok, 'ni en notification');
+verifier(communication.decisionEmailClient({ projet: ouvertApres, interlocuteur: resp, evenement: 'message', quand: T0 + 1000 }).ok, 'un fait postérieur à l ouverture part');
+const reprise = { ...projet, emailsActifsLe: new Date(T0) };
+verifier(!communication.decisionEmailClient({ projet: reprise, interlocuteur: resp, evenement: 'message', quand: T0 - 60000 }).ok, 'un fait survenu pendant la coupure ne part pas après la reprise');
+verifier(communication.decisionNotificationClient({ projet: reprise, uid: 'c1', evenement: 'message', quand: T0 - 60000 }).ok, 'mais sa notification, elle, était due (le Hub ne se coupe pas)');
+verifier(communication.decisionEmailClient({ projet: reprise, interlocuteur: resp, evenement: 'message', quand: T0 + 1 }).ok, 'un fait postérieur à la reprise part');
+
 console.log('\n== Qui reçoit une notification dans le Hub');
 const n = (p, uid, e) => communication.decisionNotificationClient({ projet: p, uid, evenement: e });
 verifier(n({ ...projet, emailsClient: 'coupes' }, 'c1', 'message').ok, 'e-mails coupés : le Hub notifie toujours');
@@ -126,8 +153,20 @@ verifier(!n(projet, 'c2', 'paiement').ok, 'la notification d un paiement ne va q
 verifier(!n({ ...projet, ouvert: false }, 'c1', 'message').ok, 'projet fermé : aucune notification');
 verifier(!n(projet, 'c9', 'message').ok, 'un compte hors des membres : aucune');
 
+console.log('\n== La finance côté équipe');
+const lecteur = { uid: 'g3', role: 'agent', actif: true, projets: ['p-a'], permissions: ['finance.lecture'] };
+verifier(acces.financeEquipe(admin, 'p-z'), 'un administrateur lit la finance de tout projet');
+verifier(!acces.financeEquipe(agent, 'p-a'), 'un agent affecté au projet ne la lit PAS par défaut');
+verifier(!acces.financeEquipe(agent, 'p-b'), 'ni hors de ses projets');
+verifier(acces.financeEquipe(lecteur, 'p-a') && !acces.financeEquipe(lecteur, 'p-b'), 'avec « finance.lecture », sur ses projets seulement');
+verifier(!acces.decider({ fiche: lecteur, permission: 'finance.gerer', projet: 'p-a' }).ok, 'lire la finance ne permet pas de la gérer');
+verifier(acces.financeEquipe(agentDelegue, 'p-a'), 'qui gère la finance la lit');
+verifier(!acces.financeEquipe({ ...admin, actif: false }, 'p-a'), 'un administrateur désactivé ne la lit plus');
+verifier(acces.DELEGABLES.includes('finance.lecture'), '« finance.lecture » se délègue');
+
 console.log('\n== Qui reçoit côté équipe');
-const e = (f, p) => communication.decisionEquipe({ fiche: f, projetId: p }).ok;
+const e = (f, p, ev) => communication.decisionEquipe({ fiche: f, projetId: p, evenement: ev }).ok;
+verifier(!e(agent, 'p-a', 'facture') && e(lecteur, 'p-a', 'facture') && e(admin, 'p-a', 'paiement'), 'un événement financier ne va qu à qui lit la finance du projet');
 verifier(e(admin, 'p-z'), 'un administrateur actif reçoit pour tout projet');
 verifier(e(agent, 'p-a') && !e(agent, 'p-b'), 'un agent reçoit pour ses projets, pas les autres');
 verifier(!e(inactif, 'p-a'), 'un membre inactif ne reçoit rien');

@@ -16,6 +16,7 @@
 import { echapper, dateCourte, dateHeure, peut, ROLES_CLIENT, ETATS_INVITATION, etatInvitation } from '../noyau.js';
 import { icone, avatar, ligne, vide, modale, agir, lireForme, valider, obligatoire, emailValide, encart, confirmer, menu, pastilleTexte, copier, toast } from '../ui.js';
 import { appelServeur } from '../serveur.js';
+import { interneDuProjet } from '../donnees.js';
 
 const pastilleRole = (role) => (ROLES_CLIENT[role]
   ? pastilleTexte(ROLES_CLIENT[role], role === 'responsable' ? 'violet' : 'bleu')
@@ -76,9 +77,24 @@ export const accesHtml = (d, { pid, env }) => {
     attrs: `data-interlocuteur="${echapper(i.id)}"`,
   });
 
+  /* Ce qui attend un choix : les contacts sans rôle (aucun accès tant
+     qu'on n'a pas choisi), et les points laissés par la migration. */
+  const sansRole = actifs.filter((i) => !ROLES_CLIENT[i.role]);
+  const points = interneDuProjet(pid).arbitragesAcces || [];
+  const carteArbitrages = sansRole.length || points.length ? `<section class="section" id="arbitrages-acces">
+    <div class="section-tete"><h2>À arbitrer</h2></div>
+    ${sansRole.length ? encart(`${sansRole.length > 1 ? `${sansRole.length} personnes attendent` : 'Une personne attend'} un rôle : ${sansRole.map((i) => echapper(i.nom || i.email)).join(', ')}. Sans rôle, aucun accès et aucun e-mail, même projet ouvert. Choisissez « Passer responsable » ou « Passer collaborateur » dans son menu.`, 'attention') : ''}
+    ${points.length ? `<div class="liste" style="margin-top:8px">${points.map((x, n) => ligne({
+      titre: echapper(x.type === 'membre-sans-compte' ? 'Ancien membre sans compte' : x.type === 'adresse-autre-role' ? 'Adresse qui porte un autre rôle' : 'Point à trancher'),
+      sous: echapper(x.detail || ''),
+      fin: gererAcces ? `<button class="btn btn-secondaire btn-petit" type="button" data-action="acces-classer" data-index="${n}">Classer</button>` : '',
+    })).join('')}</div><p class="t-micro t-3" style="margin-top:8px">Laissés par la migration : aucun accès n'a été donné. Classer retire le point de la liste, sans rien changer d'autre.</p>` : ''}
+  </section>` : '';
+
   return `<section class="section" style="margin-top:0">
     <div class="grille grille-2" style="gap:var(--e-4)">${carteOuverture}${carteEmails}</div>
   </section>
+  ${carteArbitrages}
   <section class="section">
     <div class="section-tete"><h2>Qui a accès</h2>${gererAcces ? `<button class="btn btn-secondaire btn-petit" type="button" data-action="acces-ajouter">${icone('plus')} Ajouter une personne</button>` : ''}</div>
     ${actifs.length ? `<div class="liste">${actifs.map(lignePersonne).join('')}</div>` : vide({ icone: 'utilisateurs', titre: 'Personne pour l\'instant', texte: "Ajoutez le responsable du projet chez le client, puis ses collaborateurs.", compact: true })}
@@ -96,6 +112,13 @@ export const gesteAcces = async (el, d, { pid }) => {
   if (action === 'acces-fermer') {
     if (await confirmer({ titre: 'Refermer ce projet au client ?', texte: "Les interlocuteurs perdent l'accès immédiatement, même une session ouverte. Rien n'est supprimé, et vous pourrez rouvrir.", ok: 'Refermer', danger: true })) {
       await agir(null, () => appelServeur('fermerAuClient', { id: pid }), 'Projet refermé au client.');
+    }
+    return true;
+  }
+  if (action === 'acces-classer') {
+    const x = (interneDuProjet(pid).arbitragesAcces || [])[Number(el.dataset.index)];
+    if (x && await confirmer({ titre: 'Classer ce point ?', texte: "Il quitte la liste. Rien d'autre ne change : aucun accès n'est donné ni retiré.", ok: 'Classer' })) {
+      await agir(el, () => appelServeur('classerArbitrageAcces', { id: pid, type: x.type, detail: x.detail }), 'Point classé.');
     }
     return true;
   }
@@ -142,12 +165,17 @@ export const gesteAcces = async (el, d, { pid }) => {
     const nom = i.nom || i.email;
     const ouvert = d.projet.ouvert === true;
     if (i.statut !== 'actif') {
-      menu(el, [{ libelle: "Redonner l'accès", icone: 'utilisateurs', action: () => agir(null, () => appelServeur('ajouterInterlocuteur', { projet: pid, email: i.email, nom: i.nom, role: ROLES_CLIENT[i.role] ? i.role : 'collaborateur' }), 'Accès rendu.') }]);
+      /* Un rôle se choisit, il ne se devine pas : sans rôle connu, deux
+         gestes explicites. */
+      const redonner = (role, libelle) => ({ libelle, icone: 'utilisateurs', action: () => agir(null, () => appelServeur('ajouterInterlocuteur', { projet: pid, email: i.email, nom: i.nom, role }), 'Accès rendu.') });
+      menu(el, ROLES_CLIENT[i.role]
+        ? [redonner(i.role, "Redonner l'accès")]
+        : [redonner('responsable', "Redonner l'accès, comme responsable"), redonner('collaborateur', "Redonner l'accès, comme collaborateur")]);
       return true;
     }
-    const autreRole = i.role === 'responsable' ? 'collaborateur' : 'responsable';
+    const roles = ROLES_CLIENT[i.role] ? [i.role === 'responsable' ? 'collaborateur' : 'responsable'] : ['responsable', 'collaborateur'];
     menu(el, [
-      { libelle: `Passer ${ROLES_CLIENT[autreRole].toLowerCase()}`, icone: 'edit', action: () => agir(null, () => appelServeur('modifierInterlocuteur', { projet: pid, cle, role: autreRole }), 'Rôle modifié.') },
+      ...roles.map((autreRole) => ({ libelle: `Passer ${ROLES_CLIENT[autreRole].toLowerCase()}`, icone: 'edit', action: () => agir(null, () => appelServeur('modifierInterlocuteur', { projet: pid, cle, role: autreRole }), 'Rôle choisi.') })),
       ...(ouvert ? [
         { libelle: "Renvoyer l'invitation", icone: 'mail', action: () => agir(null, async () => {
           const r = await appelServeur('renvoyerInvitation', { projet: pid, cle });

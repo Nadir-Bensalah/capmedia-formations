@@ -86,6 +86,21 @@ service cloud.firestore {
 
     // Client autorisé sur ce projet : membre effectif, calculé par le
     // serveur depuis les interlocuteurs actifs d'un projet OUVERT.
+    // La finance d'un projet, côté équipe : un administrateur, ou un agent
+    // du projet à qui « finance.lecture » ou « finance.gerer » a été
+    // donnée. Être affecté au projet ne suffit pas (acces.financeEquipe).
+    function financeEquipe(projetId) {
+      return equipeSurProjet(projetId)
+          && (ficheEquipe().get('role', '') == 'admin'
+              || ficheEquipe().get('permissions', []).hasAny(['finance.lecture', 'finance.gerer']));
+    }
+
+    function financeGerer(projetId) {
+      return equipeSurProjet(projetId)
+          && (ficheEquipe().get('role', '') == 'admin'
+              || ficheEquipe().get('permissions', []).hasAny(['finance.gerer']));
+    }
+
     function membreDuProjet(projetId) {
       return connecte() && moi() in ficheProjet(projetId).get('membres', []);
     }
@@ -160,7 +175,9 @@ service cloud.firestore {
     // Le profil d'une personne : le sien, et rien d'autre. Les champs sont
     // bornés pour qu'un profil ne devienne pas un fourre-tout.
     match /profils/{uid} {
-      allow read: if connecte() && (moi() == uid || estEquipe());
+      // Le sien ; l'administrateur aussi. Un agent ne lit pas le profil des
+      // clients (le serveur lit les préférences d'envoi par l'Admin SDK).
+      allow read: if connecte() && (moi() == uid || estAdmin());
       allow write: if connecte() && moi() == uid
         && request.resource.data.keys().hasOnly([
              'nom', 'telephone', 'entreprise', 'langue', 'fuseau', 'notifications',
@@ -179,8 +196,15 @@ service cloud.firestore {
     // Une organisation regroupe des projets ; elle ne donne aucun accès.
     // Ses « membres » sont déduits des accès aux projets, par le serveur,
     // pour que chacun lise la fiche de sa propre société.
+    // Une société : l'administrateur, un agent qui travaille sur l'un de ses
+    // projets (« projets », tenu par le serveur) ou à qui la gestion des
+    // clients est déléguée, et les clients qui ont accès à l'un de ses
+    // projets. Un agent ne lit pas les clients des autres.
     match /organisations/{orgId} {
-      allow read:  if estEquipe() || (connecte() && moi() in resource.data.get('membres', []));
+      allow read:  if estAdmin()
+                   || (estEquipe() && (resource.data.get('projets', []).hasAny(ficheEquipe().get('projets', []))
+                                       || ficheEquipe().get('permissions', []).hasAny(['clients.gerer'])))
+                   || (connecte() && moi() in resource.data.get('membres', []));
       allow write: if false;
     }
 
@@ -200,18 +224,24 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Le budget, sa note et la santé d'un projet. Un agent du projet les
-    // lit et règle la santé ; le budget reste aux administrateurs.
+    // La santé d'un projet, et les arbitrages d'accès laissés par la
+    // migration (écrits par le serveur). L'équipe du projet la lit et règle
+    // la santé. Le budget n'y vit plus (budgets/) : une fiche d'avant la
+    // migration qui le porterait encore ne se lit qu'avec la finance.
     match /projetsInternes/{projetId} {
-      allow read:  if equipeSurProjet(projetId);
-      allow write: if (estAdmin()
-          || (equipeSurProjet(projetId)
-              && (resource == null ? request.resource.data.keys() : request.resource.data.diff(resource.data).affectedKeys())
-                   .hasOnly(['sante', 'maj'])))
-        && request.resource.data.keys().hasOnly(['budget', 'budgetNote', 'sante', 'maj'])
-        && (!('budget' in request.resource.data) || request.resource.data.budget == null || request.resource.data.budget is number)
-        && (!('budgetNote' in request.resource.data) || texteBorne(request.resource.data.budgetNote, 2000))
+      allow read:  if financeEquipe(projetId)
+                   || (equipeSurProjet(projetId) && !('budget' in resource.data) && !('budgetNote' in resource.data));
+      allow write: if equipeSurProjet(projetId)
+        && (resource == null ? request.resource.data.keys() : request.resource.data.diff(resource.data).affectedKeys())
+             .hasOnly(['sante', 'maj'])
         && (!('sante' in request.resource.data) || request.resource.data.sante in ['ok', 'attention', 'bloque']);
+    }
+
+    // Le budget d'un projet et sa note : de la finance interne. Écrits par
+    // le serveur, lus par qui a la finance du projet.
+    match /budgets/{projetId} {
+      allow read:  if financeEquipe(projetId);
+      allow write: if false;
     }
 
     // La note interne d'un paiement. Écrite par le serveur.
@@ -291,9 +321,29 @@ service cloud.firestore {
         allow write:  if equipeSurProjet(projetId);
       }
 
+      // Une étape ne porte pas de montant : celui d'une étape de devis vit
+      // dans montants/, lu par la seule finance. Personne n'en pose ni n'en
+      // change un sur l'étape. Un montant d'avant la migration, encore là
+      // (l'ancien écran l'a réécrit pendant la bascule), ne bloque pas la
+      // modification de l'étape : la migration de rattrapage le déplace.
       match /jalons/{jalonId} {
         allow read:   if accesProjet(projetId);
-        allow write:  if equipeSurProjet(projetId);
+        allow create: if equipeSurProjet(projetId) && !('montant' in request.resource.data);
+        allow update: if equipeSurProjet(projetId)
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['montant']);
+        allow delete: if equipeSurProjet(projetId);
+      }
+
+      // Les montants liés au projet : une étape de devis (« jalon-<id> »),
+      // le prix du forfait de maintenance (« maintenance »). La finance de
+      // l'équipe et le responsable les lisent ; la finance les écrit.
+      match /montants/{montantId} {
+        allow read:   if financeEquipe(projetId) || responsableDuProjet(projetId);
+        allow create, update: if financeGerer(projetId)
+          && request.resource.data.keys().hasOnly(['projet', 'montant', 'maj'])
+          && request.resource.data.projet == projetId
+          && (request.resource.data.montant == null || request.resource.data.montant is number);
+        allow delete: if financeGerer(projetId);
       }
 
       // La maintenance continue : le contrat (document « contrat »), puis
@@ -303,7 +353,12 @@ service cloud.firestore {
       // modalités, les jours, les statuts restent à l'équipe.
       match /maintenance/{docId} {
         allow read:  if accesProjet(projetId);
-        allow write: if equipeSurProjet(projetId);
+        // Le prix du forfait n'y figure pas : il vit dans montants/ (même
+        // règle que les étapes pour un prix d'avant la migration).
+        allow create: if equipeSurProjet(projetId) && !('montant' in request.resource.data);
+        allow update: if equipeSurProjet(projetId)
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['montant']);
+        allow delete: if equipeSurProjet(projetId);
 
         // Le client demande un forfait : il crée le contrat avec sa seule
         // demande, ou le remet en « demandé » quand le précédent s'est
@@ -372,6 +427,10 @@ service cloud.firestore {
     }
 
     // La maintenance de tous les projets d'un coup, pour le cockpit.
+    match /{chemin=**}/montants/{montantId} {
+      allow read: if estAdmin();
+    }
+
     match /{chemin=**}/maintenance/{docId} {
       allow read: if estAdmin();
     }
@@ -546,8 +605,13 @@ service cloud.firestore {
         && request.resource.data.statut == 'en-attente'
         && request.resource.data.projet is string
         && (!('reserveeResponsable' in request.resource.data) || request.resource.data.reserveeResponsable is bool);
+      // L'équipe tient la demande (titre, pièces, annulation) mais ne
+      // répond jamais à la place du client : ni « reponse », ni statut
+      // approuvé ou à modifier.
       allow update: if estEquipe()
-        ? (equipeSurProjet(resource.data.projet) && request.resource.data.projet == resource.data.projet)
+        ? (equipeSurProjet(resource.data.projet) && request.resource.data.projet == resource.data.projet
+           && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['reponse'])
+           && (request.resource.data.statut == resource.data.statut || request.resource.data.statut in ['en-attente', 'annulee']))
         : (membreDuProjet(resource.data.projet)
            && resource.data.statut == 'en-attente'
            && (resource.data.get('reserveeResponsable', false) != true || responsableDuProjet(resource.data.projet))
@@ -642,7 +706,7 @@ service cloud.firestore {
       // l'écran.
       // La finance est au responsable : un collaborateur ne lit ni devis,
       // ni facture, ni paiement, et n'accepte rien.
-      allow read: if equipeSurProjet(resource.data.projet)
+      allow read: if financeEquipe(resource.data.projet)
         || (responsableDuProjet(resource.data.projet) && resource.data.statut != 'brouillon');
 
       allow update: if !estEquipe()
@@ -665,7 +729,7 @@ service cloud.firestore {
     // Un paiement ne porte plus sa note interne : elle vit dans
     // paiementsInternes.
     match /paiements/{paiementId} {
-      allow read:  if equipeSurProjet(resource.data.projet) || responsableDuProjet(resource.data.projet);
+      allow read:  if financeEquipe(resource.data.projet) || responsableDuProjet(resource.data.projet);
       allow write: if false;
     }
 
@@ -714,8 +778,12 @@ service cloud.firestore {
 
     // L'activité vient des vrais événements : personne ne l'écrit à la main.
     match /activite/{activiteId} {
+      // Une ligne financière (« responsable ») ne se lit, côté équipe,
+      // qu'avec la finance du projet : la requête d'un agent sans elle
+      // demande « visibilite in ['client', 'interne'] ».
       allow read: if estAdmin()
-                  || equipeSurProjet(resource.data.projet)
+                  || (equipeSurProjet(resource.data.projet)
+                      && (resource.data.visibilite in ['client', 'interne'] || financeEquipe(resource.data.projet)))
                   || (membreDuProjet(resource.data.projet) && activiteVisible(resource.data.projet));
       allow write: if false;
     }
@@ -787,7 +855,12 @@ service cloud.firestore {
     // volontaire : le nom, l'âge et la fonction d'un testeur ne regardent
     // que l'équipe.
     match /testeurs/{testeurId} {
-      allow read:   if estEquipe() || (estTesteur() && testeurId == moi());
+      // Le vivier entier : l'administrateur, ou qui pilote la recette. Un
+      // agent lit les testeurs inscrits sur l'un de ses projets.
+      allow read:   if estAdmin()
+                    || (estEquipe() && (resource.data.get('projets', []).hasAny(ficheEquipe().get('projets', []))
+                                        || ficheEquipe().get('permissions', []).hasAny(['qa.gerer'])))
+                    || (estTesteur() && testeurId == moi());
       allow write:  if false;   // le serveur seul, via suiviAdmin
 
       // L'ancien profil public, commun à tous les projets. Il n'est plus

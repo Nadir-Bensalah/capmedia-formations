@@ -505,7 +505,9 @@ await refuse('Camille ne passe pas son forfait « en cours »', updateDoc(doc(ca
 await refuse('Camille ne se pose pas des jours', updateDoc(doc(camille(), 'projets/atelier/maintenance/contrat'), { jours: 10, maj: serverTimestamp() }));
 await refuse('Léa ne lit pas le contrat de Camille', getDoc(doc(lea(), 'projets/atelier/maintenance/contrat')));
 await refuse('Karim ne lit pas le contrat', getDoc(doc(karim(), 'projets/atelier/maintenance/contrat')));
-await doit("L'équipe configure le forfait", updateDoc(doc(equipe(), 'projets/atelier/maintenance/contrat'), { statut: 'proposition', formule: 'Sérénité', montant: 900, jours: 2, reconduction: 'mensuelle', maj: serverTimestamp() }));
+/* Depuis la Gate 2, le prix ne vit plus sur le contrat (montants/maintenance). */
+await doit("L'équipe configure le forfait", updateDoc(doc(equipe(), 'projets/atelier/maintenance/contrat'), { statut: 'proposition', formule: 'Sérénité', jours: 2, reconduction: 'mensuelle', maj: serverTimestamp() }));
+await refuse("mais n'y écrit pas de prix (réservé à la finance, à part)", updateDoc(doc(equipe(), 'projets/atelier/maintenance/contrat'), { montant: 900, maj: serverTimestamp() }));
 await refuse('Une fois proposé, Camille ne le remet plus en « demandé »', updateDoc(doc(camille(), 'projets/atelier/maintenance/contrat'), { statut: 'demande', demande, maj: serverTimestamp() }));
 await refuse('Camille ne supprime pas le contrat', deleteDoc(doc(camille(), 'projets/atelier/maintenance/contrat')));
 await doit("L'équipe ouvre une séquence", setDoc(doc(equipe(), 'projets/atelier/maintenance/seq-1'), { genre: 'sequence', titre: 'Octobre', statut: 'en-cours', jours: 2 }));

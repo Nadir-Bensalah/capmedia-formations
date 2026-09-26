@@ -21,7 +21,7 @@
       est refusé au navigateur par les règles, et ne s'écrit qu'ici.
    ========================================================================== */
 
-const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require('firebase-functions/v2/firestore');
+const v2firestore = require('firebase-functions/v2/firestore');
 const { onRequest }    = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const { getApps, initializeApp } = require('firebase-admin/app');
@@ -32,6 +32,19 @@ const courriels = require('./courriels');
 const robot = require('./robot');
 const acces = require('./acces');
 const communication = require('./communication');
+/* Chaque déclencheur décide « au moment » de son événement : un fait
+   survenu projet fermé, ou e-mails coupés, ne part pas plus tard parce que
+   l'état a changé entre-temps (voir communication.auMoment). */
+const { evenementDuSemis, instantEvenement } = require('./commun');
+const auMomentDe = (fn) => async (evenement) => {
+  /* Banc d'essai seulement : un événement né pendant la pose d'une base de
+     test n'a rien à faire (voir commun.evenementDuSemis). */
+  if (await evenementDuSemis(evenement)) return undefined;
+  return communication.auMoment(instantEvenement(evenement), () => fn(evenement));
+};
+const onDocumentCreated = (o, fn) => v2firestore.onDocumentCreated(o, auMomentDe(fn));
+const onDocumentUpdated = (o, fn) => v2firestore.onDocumentUpdated(o, auMomentDe(fn));
+const onDocumentWritten = (o, fn) => v2firestore.onDocumentWritten(o, auMomentDe(fn));
 const invitations = require('./invitations');
 const { Refus, cleEmail } = require('./commun');
 
@@ -211,6 +224,7 @@ exports.suiviTicketCree = onDocumentCreated(
 
     const ticketId = evenement.params.ticketId;
     const ticket = instantane.data();
+    if (!ticket) return;
     const auteur = ticket.auteur || {};
 
     /* Le numéro d'abord : c'est lui qui donne son identité au ticket, et il
@@ -435,6 +449,7 @@ exports.suiviMessageCree = onDocumentCreated(
     if (!instantane) return;
 
     const message = instantane.data();
+    if (!message) return;
     const ticketId = evenement.params.ticketId;
 
     /* Une note interne reste entre nous : aucun e-mail, dans aucun sens. */
@@ -475,6 +490,7 @@ exports.suiviDocumentCree = onDocumentCreated(
     if (!instantane) return;
 
     const document = instantane.data();
+    if (!document) return;
     if (document.type !== 'devis' && document.type !== 'facture') {
       console.error(`Document ${evenement.params.documentId} de type inattendu : ${document.type}`);
       return;
@@ -833,6 +849,7 @@ exports.suiviFacteur = onDocumentCreated(
 
     const ref = instantane.ref;
     const envoi = instantane.data();
+    if (!envoi) return;
     if (envoi.etat !== 'attente') return;
 
     let courriel;
@@ -1249,7 +1266,10 @@ async function reglerEmailsClient(identite, { id, emailsClient }) {
   if (!['actifs', 'coupes'].includes(emailsClient)) throw new Refus(400, 'emailsClient : actifs ou coupes.');
   const ref = bdd.doc(`projets/${String(id)}`);
   if (!(await ref.get()).exists) throw new Refus(404, 'Projet inconnu.');
-  await ref.update({ emailsClient, maj: FieldValue.serverTimestamp() });
+  /* La reprise est datée : ce qui s'est passé pendant la coupure ne part
+     pas après coup (voir communication.auMoment). */
+  const avant = (await ref.get()).data().emailsClient;
+  await ref.update({ emailsClient, ...(emailsClient === 'actifs' && avant === 'coupes' ? { emailsActifsLe: FieldValue.serverTimestamp() } : {}), maj: FieldValue.serverTimestamp() });
   await audit('projet.emails-client', { projet: String(id), emailsClient, par: identite.uid });
   return { ok: true, emailsClient };
 }
@@ -1387,6 +1407,7 @@ const ACTIONS = {
   ouvrirAuClient: { permission: 'projets.ouvrir', projet: (c) => c.id },
   fermerAuClient: { permission: 'projets.ouvrir', projet: (c) => c.id },
   reglerEmailsClient: { permission: 'projets.ouvrir', projet: (c) => c.id },
+  classerArbitrageAcces: { permission: 'acces.gerer', projet: (c) => c.id },
   deposerDocument: { permission: 'finance.gerer', projet: (c) => c.projet },
   majDocument: { permission: 'finance.gerer', projet: (c) => projetDuDocument(c.id) },
   statutDevis: { permission: 'finance.gerer', projet: (c) => projetDuDocument(c.id) },
@@ -1538,11 +1559,12 @@ exports.suiviAdmin = onRequest(
           archive: false, cree: FieldValue.serverTimestamp(), maj: FieldValue.serverTimestamp(),
         }));
 
-        /* Le budget, sa note et la santé : réservés à Capmedia, donc hors de
-           la fiche projet que le client lit en entier. */
-        await bdd.doc(`projetsInternes/${nouveau.id}`).set({
+        /* La santé : réservée à l'équipe, hors de la fiche projet que le
+           client lit en entier. Le budget et sa note : à la finance seule. */
+        await bdd.doc(`projetsInternes/${nouveau.id}`).set({ sante: 'ok', maj: FieldValue.serverTimestamp() });
+        await bdd.doc(`budgets/${nouveau.id}`).set({
           budget: Number.isFinite(Number(budget)) && budget !== null && budget !== '' ? Number(budget) : null,
-          budgetNote: String(budgetNote || ''), sante: 'ok', maj: FieldValue.serverTimestamp(),
+          budgetNote: String(budgetNote || ''), maj: FieldValue.serverTimestamp(),
         });
 
         /* La note d'une idée vit hors du projet, là où seule l'équipe lit :
@@ -1609,6 +1631,20 @@ exports.suiviAdmin = onRequest(
         await audit('acces.invitation-renvoyee', { projet: String(projet), cle: cleI, envoyee: r.envoyee, par: identite.uid });
         return res.json({ ok: true, ...r });
       }
+      /* Un point laissé par la migration (ancien membre sans compte,
+         adresse d'un autre rôle) : le classer le retire de la liste, sans
+         donner ni retirer aucun accès. */
+      if (action === 'classerArbitrageAcces') {
+        const ref = bdd.doc(`projetsInternes/${String(id || '')}`);
+        const d = await ref.get();
+        const points = d.exists ? (d.data().arbitragesAcces || []) : [];
+        const restants = points.filter((x) => !(x.type === req.body.type && x.detail === req.body.detail));
+        if (restants.length === points.length) return res.status(404).send('Ce point n est plus dans la liste.');
+        await ref.update({ arbitragesAcces: restants, maj: FieldValue.serverTimestamp() });
+        await audit('acces.arbitrage-classe', { projet: String(id), type: String(req.body.type || ''), par: identite.uid });
+        return res.json({ ok: true, restants: restants.length });
+      }
+
       if (action === 'reglerEmailsClient') {
         return res.json(await reglerEmailsClient(identite, { id, emailsClient: req.body.emailsClient }));
       }
@@ -2193,6 +2229,7 @@ exports.suiviAdmin = onRequest(
           } catch (err) { console.error('Preuves du testeur non effacées', err); }
 
           /* Sa fiche, son profil public, son compte, et sa file de connexion. */
+          await invitations.revoquerCelles({ type: 'testeur', uid: tid });
           await bdd.doc(`testeurs/${tid}/public/profil`).delete().catch(() => {});
           await bdd.doc(`testeurs/${tid}`).delete().catch(() => {});
 
@@ -2234,6 +2271,8 @@ exports.suiviAdmin = onRequest(
            aussi. La revendication part, et les jetons en cours sont
            révoqués, sinon l'accès survivrait jusqu'à leur expiration. */
         await bdd.doc(`testeurs/${tid}`).set({ actif: false, maj: FieldValue.serverTimestamp() }, { merge: true });
+        /* Ses liens d'invitation encore vivants ne pré-remplissent plus rien. */
+        await invitations.revoquerCelles({ type: 'testeur', uid: tid });
         try {
           const compte = await getAuth().getUser(tid);
           const gardees = { ...(compte.customClaims || {}) };
@@ -2369,9 +2408,12 @@ exports.suiviAdmin = onRequest(
             maj: FieldValue.serverTimestamp(),
           }));
           compte.projet = 1;
-          /* Santé et budget : dans projetsInternes, jamais dans la fiche lue par le client. */
-          const interne = sansIndefini({ sante: p.sante, budget: p.budget, budgetNote: p.budgetNote });
+          /* La santé dans projetsInternes, le budget dans budgets : jamais
+             dans la fiche lue par le client, et le budget à la finance seule. */
+          const interne = sansIndefini({ sante: p.sante });
           if (Object.keys(interne).length) await bdd.doc(`projetsInternes/${String(id)}`).set({ ...interne, maj: FieldValue.serverTimestamp() }, { merge: true });
+          const budget = sansIndefini({ budget: p.budget, budgetNote: p.budgetNote });
+          if (Object.keys(budget).length) await bdd.doc(`budgets/${String(id)}`).set({ ...budget, maj: FieldValue.serverTimestamp() }, { merge: true });
         }
 
         /* Chaque collection est reecrite a l identique si l element porte un

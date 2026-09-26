@@ -17,6 +17,7 @@
 
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { barriere } from './lib/barriere.mjs';
 
 if (!process.env.FIRESTORE_EMULATOR_HOST) { console.error('Émulateurs requis (FIRESTORE_EMULATOR_HOST).'); process.exit(2); }
 const PROJET = process.env.GCLOUD_PROJECT || 'capmedia-1f90d';
@@ -30,11 +31,10 @@ let ok = 0; const ecarts = [];
 const verifier = (l, vrai) => { if (vrai) { ok += 1; console.log('  ok     ' + l); } else { ecarts.push(l); console.log('  ÉCART  ' + l); } };
 const lire = async (chemin) => { const d = await bdd.doc(chemin).get(); return d.exists ? d.data() : null; };
 const appeler = async ({ action, ...corps }) => appelAdmin(action, corps);
-/* Un déclencheur tourne après l'écriture : on attend qu'il ait fini. */
-const attendre = async (fn, secondes = 20) => {
-  for (let i = 0; i < secondes * 4; i += 1) { const v = await fn(); if (v) return v; await new Promise((r) => setTimeout(r, 250)); }
-  return null;
-};
+/* Un déclencheur tourne après l'écriture : on attend qu'il ait fini (la
+   barrière, un état observable), puis on lit l'état FINAL. Lire le premier
+   état venu rendait l'épreuve instable (une version intermédiaire). */
+const attendre = async (fn) => { await barriere({ bdd }); return fn(); };
 const suffixe = Date.now().toString(36).toUpperCase();
 
 console.log('\n== creerProjet');
@@ -45,7 +45,11 @@ const pid = projet.json && (projet.json.id || projet.json.projet);
 const fiche = pid ? await lire(`projets/${pid}`) : {};
 verifier('la fiche du projet ne porte ni budget, ni note, ni santé', fiche && !('budget' in fiche) && !('budgetNote' in fiche) && !('sante' in fiche));
 const interne = pid ? await lire(`projetsInternes/${pid}`) : null;
-verifier('projetsInternes les porte', interne && interne.budget === 7200 && interne.budgetNote === 'forfait négocié' && interne.sante === 'ok');
+/* Depuis le préflight Gate 2 : la santé dans projetsInternes (équipe du
+   projet), le budget dans budgets (la finance seule). */
+const budget = pid ? await lire(`budgets/${pid}`) : null;
+verifier('projetsInternes porte la santé, sans le budget', interne && interne.sante === 'ok' && !('budget' in interne) && !('budgetNote' in interne));
+verifier('budgets porte le budget et sa note', budget && budget.budget === 7200 && budget.budgetNote === 'forfait négocié');
 
 console.log('\n== creerOrganisation, majOrganisation');
 const org = await appeler({ action: 'creerOrganisation', nom: 'Contact fictif', entreprise: 'Organisation confidentielle',

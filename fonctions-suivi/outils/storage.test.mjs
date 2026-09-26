@@ -172,7 +172,8 @@ for (const [, ops, cond] of clausesUpdate) {
   const c = cond.replace(/\s+/g, ' ').trim();
   /* Réservé à l'équipe : l'équipe entière, un administrateur, ou l'équipe
      autorisée sur le projet (Gate 2), avec ou sans contrôle du fichier. */
-  const reserve = c === 'false' || /^(estEquipe\(\)|estAdmin\(\)|equipeSurProjet\(projetId\))( && fichierAccepte\(\))?$/.test(c);
+  /* Et, pour les pièces comptables, la finance de l'équipe (Gate 2). */
+  const reserve = c === 'false' || /^(estEquipe\(\)|estAdmin\(\)|equipeSurProjet\(projetId\)|financeGerer\(projetId\))( && fichierAccepte\(\))?$/.test(c);
   if (reserve) { ok += 1; console.log(`  ok     allow ${ops.trim()} : ${c}`); }
   else { ecarts.push(`allow ${ops.trim()} : ${c}`); console.log(`  ÉCART  allow ${ops.trim()} ouvert au-delà de l équipe : ${c}`); }
 }

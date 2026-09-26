@@ -43,21 +43,58 @@ L'inventaire de ces dossiers est tenu hors du dépôt.
 
 ## Mettre en production la Gate 2 (identité et accès)
 
-L'ordre compte : les nouvelles règles lisent `ouvert`, `roles` et
-`actif`, que seule la migration écrit. Déployer les règles avant la
-migration fermerait l'accès aux clients des projets ouverts de fait.
+L'ordre a été rejoué pièce par pièce sur un banc qui reproduit l'état
+d'avant (copie pseudonymisée de la production, `ordre-deploiement.sh`) ;
+le rapport de préflight en donne le détail, étape par étape.
 
-1. Sauvegarde Firestore complète (export), et relevé des comptes Auth.
-2. Trancher les arbitrages listés par `node fonctions-suivi/outils/migrer-gate2.mjs`
-   (à blanc, par défaut) : tant qu'un projet en porte un, il n'est pas converti.
-3. Migration réelle : `node fonctions-suivi/outils/migrer-gate2.mjs --vrai --production`.
-   Elle n'envoie rien, se journalise dans `migrationGate2/{passage}` et
-   s'annule par `--annuler --passage=<id>`. La rejouer à blanc doit
+1. Sauvegarde : export Firestore complet, relevé des comptes Auth, et la
+   version déployée des fonctions et des règles (pour le retour arrière).
+2. À blanc : `node fonctions-suivi/outils/migrer-gate2.mjs`. Il doit sortir
+   en code 0 (aucun arbitrage bloquant). Les points « à traiter après
+   migration » se règlent ensuite dans le cockpit.
+3. `npm run deploiement:hub:fonctions`. Les nouvelles fonctions lisent
+   `ouvert` : tant que la migration n'est pas passée (quelques minutes),
+   aucun e-mail client ne part. C'est voulu : jamais d'e-mail vers un
+   projet dont l'ouverture n'est pas décidée.
+4. Migration réelle : `node fonctions-suivi/outils/migrer-gate2.mjs --vrai --production`.
+   Silencieuse, journalisée (`migrationGate2/{passage}`), reprenable si
+   elle est coupée (relancer la même commande). La rejouer à blanc doit
    annoncer zéro unité.
-4. `npm run deploiement:hub:fonctions`, puis `npm run deploiement:hub:regles`.
-5. Publier le site (`agence/suivi/`).
-6. Vérifier : un administrateur, un agent, un responsable, un collaborateur.
-7. Seulement ensuite, supprimer le secret `ADMIN_CLE` du projet
-   `capmedia-1f90d` (Secret Manager) : plus aucun code ne le lit. Celui de
+5. `npm run deploiement:hub:regles` (Firestore et Storage).
+6. Publier le site (`agence/suivi/`).
+7. Vérifier : un administrateur, un agent, un responsable, un
+   collaborateur (voir le préflight).
+8. Seulement après quelques jours sans retour arrière : supprimer le
+   secret `ADMIN_CLE` du projet `capmedia-1f90d` (Secret Manager). Tant
+   qu'il existe, les anciennes fonctions restent redéployables. Celui de
    `capmedia-academy` est un autre secret, d'un autre projet, et reste.
 
+Entre les étapes 3 et 6, le cockpit d'avant ne peut plus appeler le
+serveur (il porte la clé, le serveur attend l'identité) : aucune gestion
+d'accès pendant ces minutes. Les clients, eux, ne voient rien changer.
+
+## Revenir en arrière (Gate 2)
+
+Dans l'ordre inverse, et seulement ce qui est cassé :
+
+| Cassé | Geste | Ce qui reste |
+|---|---|---|
+| Le site | republier l'ancien `agence/suivi/` | tout le reste ; l'ancien cockpit ne peut plus appeler le serveur tant que les nouvelles fonctions sont là |
+| Les règles | redéployer les règles d'avant (Firestore et Storage) | l'ancien site marche avec elles |
+| Les fonctions | redéployer les fonctions d'avant (le secret `ADMIN_CLE` doit encore exister) | à faire avec le site et les règles d'avant |
+| La migration | `migrer-gate2.mjs --annuler --tout --production` | voir ci-dessous |
+
+Le retour arrière de la migration remet chaque champ qu'elle a écrit
+(accès, ouverture, e-mails, montants, budgets, activité, sociétés,
+équipe) et efface ce qu'elle a créé (interlocuteurs, montants, budgets).
+Il REFUSE (code 5) si un accès qu'elle a écrit a changé depuis : défaire
+écraserait le geste (un accès retiré reviendrait). Il faut alors trancher
+chaque cas, ou forcer (`--forcer`) en connaissance de cause. Ce que la
+Gate 2 a créé après la migration (nouveaux interlocuteurs, invitations,
+montants posés par le nouveau cockpit) n'est pas lu par l'ancien code et
+reste en base, inerte.
+
+Ordre complet : site, règles, fonctions, puis la migration. L'ancien
+modèle d'accès revient tel qu'il était : `membres` des projets et des
+sociétés, `silence`, montants sur les étapes, budget dans la fiche
+interne.

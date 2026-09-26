@@ -50,13 +50,13 @@ async function main() {
   await bdd.doc('organisations/atelier-nord').set({
     nom: 'Camille Martin', entreprise: 'Atelier Nord', email: 'camille.essai@exemple.test', telephone: '', adresse: 'Bruxelles',
     contacts: [{ nom: 'Camille Martin', email: 'camille.essai@exemple.test', role: 'owner', uid: camille }],
-    membres: [camille], roles: { [camille]: 'owner' }, cree: ilYA(200), maj: ilYA(1),
+    membres: [camille], roles: { [camille]: 'owner' }, projets: ['atelier', 'prepa'], cree: ilYA(200), maj: ilYA(1),
   });
   /* Les notes internes vivent hors de la fiche que le client lit. */
   await bdd.doc('organisationsInternes/atelier-nord').set({ notesInternes: 'Client fondateur de Atelier. Point hebdo le mardi.', maj: ilYA(1) });
   await bdd.doc('organisations/boutique-sud').set({
     nom: 'Léa Bernard', entreprise: 'Boutique Sud', email: 'lea.essai@exemple.test', telephone: '', adresse: '',
-    contacts: [{ nom: 'Léa Bernard', email: 'lea.essai@exemple.test', role: 'owner', uid: lea }], membres: [lea], roles: { [lea]: 'owner' }, cree: ilYA(60), maj: ilYA(3),
+    contacts: [{ nom: 'Léa Bernard', email: 'lea.essai@exemple.test', role: 'owner', uid: lea }], membres: [lea], roles: { [lea]: 'owner' }, projets: ['boutique'], cree: ilYA(60), maj: ilYA(3),
   });
 
   await bdd.doc('projets/atelier').set({

@@ -1191,9 +1191,9 @@ export const vue = async (ctx, env) => {
   const campagnesSuivies = new Set();
   const clesSuivies = () => [
     ...(env.role === 'equipe'
-      ? [K.projets, K.scenariosTous, K.campagnesToutes, K.anomaliesToutes, K.parcoursTous, K.reglesToutes, K.documentsTous, K.jalonsTous, K.testeurs, K.profils]
+      ? [K.projets, K.scenariosTous, K.campagnesToutes, K.anomaliesToutes, K.parcoursTous, K.reglesToutes, K.documentsTous, K.jalonsTous, K.montantsTous, K.testeurs, K.profils]
       : [K.projets, ...(magasin.lire(K.projets) || (env.session || {}).projets || [])
-          .flatMap((p) => [K.scenarios(p.id), K.campagnes(p.id), K.anomalies(p.id), K.parcours(p.id), K.regles(p.id), K.documents(p.id), K.jalons(p.id), K.profilsTesteurs(p.id)])]),
+          .flatMap((p) => [K.scenarios(p.id), K.campagnes(p.id), K.anomalies(p.id), K.parcours(p.id), K.regles(p.id), K.documents(p.id), K.jalons(p.id), K.montants(p.id), K.profilsTesteurs(p.id)])]),
     ...[...campagnesSuivies].flatMap((cid) => [K.appreciations(cid), K.passages(cid)]),
   ];
 

@@ -24,7 +24,9 @@
    ce qui touche ses projets.
    ========================================================================== */
 
-const { bdd, FieldValue, normaliserEmail, emailPlausible, sansIndefini, cleEmail } = require('./commun');
+const { AsyncLocalStorage } = require('node:async_hooks');
+const { bdd, FieldValue, normaliserEmail, emailPlausible, sansIndefini, cleEmail, enMillis } = require('./commun');
+const acces = require('./acces');
 
 const EQUIPE_EMAIL = 'contact@capmedia.app';
 const EQUIPE_NOM = 'Équipe Capmedia';
@@ -70,11 +72,26 @@ const oui = { ok: true, motif: '' };
    1. Les décisions, sans rien lire
    ========================================================================== */
 
+/* Le MOMENT d'un événement. Un déclencheur s'exécute après l'écriture qui
+   l'a fait naître, parfois longtemps après quand la file est chargée : un
+   fait survenu pendant la préparation (projet fermé) ou pendant la coupure
+   des e-mails ne doit pas partir parce que le projet s'est ouvert, ou que
+   les e-mails ont repris, entre-temps. Chaque déclencheur s'exécute donc
+   « au moment » de son événement (auMoment), et les décisions comparent ce
+   moment aux dates de l'ouverture (ouvertLe) et de la reprise des e-mails
+   (emailsActifsLe). Un envoi fait hors déclencheur (l'ouverture elle-même,
+   la relance) n'a pas de moment : seul l'état actuel compte. */
+const moments = new AsyncLocalStorage();
+const auMoment = (quand, fn) => moments.run({ quand: quand ? new Date(quand).getTime() : null }, fn);
+const momentCourant = () => (moments.getStore() || {}).quand || null;
+
 /** Le projet laisse-t-il sortir quoi que ce soit vers le client ? */
-function projetOuvertAuClient(projet) {
+function projetOuvertAuClient(projet, quand = null) {
   if (!projet) return non('projet absent');
   if (projet.interne === true) return non('projet interne');
   if (projet.ouvert !== true) return non('projet fermé au client');
+  const ouvertLe = enMillis(projet.ouvertLe);
+  if (quand && ouvertLe && quand < ouvertLe) return non('fait antérieur à l ouverture au client');
   return oui;
 }
 
@@ -83,8 +100,8 @@ function projetOuvertAuClient(projet) {
  * effectif, le rôle. Ni la coupure des e-mails ni les préférences : le Hub
  * reste complet quand les e-mails sont coupés.
  */
-function decisionNotificationClient({ projet, uid, evenement }) {
-  const p = projetOuvertAuClient(projet);
+function decisionNotificationClient({ projet, uid, evenement, quand = null }) {
+  const p = projetOuvertAuClient(projet, quand);
   if (!p.ok) return p;
   if (!uid || !Array.isArray(projet.membres) || !projet.membres.includes(uid)) return non('sans accès au projet');
   if (regle(evenement).responsable && (projet.roles || {})[uid] !== 'responsable') return non('réservé au responsable');
@@ -92,25 +109,30 @@ function decisionNotificationClient({ projet, uid, evenement }) {
 }
 
 /** Un e-mail pour cet interlocuteur ? Les cinq points, dans l'ordre. */
-function decisionEmailClient({ projet, interlocuteur, evenement, preferences = null }) {
-  const p = projetOuvertAuClient(projet);
+function decisionEmailClient({ projet, interlocuteur, evenement, preferences = null, quand = null }) {
+  const p = projetOuvertAuClient(projet, quand);
   if (!p.ok) return p;
   if (!interlocuteur || interlocuteur.statut !== 'actif') return non('accès retiré');
   if (!emailPlausible(interlocuteur.email)) return non('adresse absente');
-  const notif = decisionNotificationClient({ projet, uid: interlocuteur.uid, evenement });
+  const notif = decisionNotificationClient({ projet, uid: interlocuteur.uid, evenement, quand });
   if (!notif.ok) return notif;
   if (projet.emailsClient === 'coupes') return non('e-mails du projet coupés');
+  const reprisLe = enMillis(projet.emailsActifsLe);
+  if (quand && reprisLe && quand < reprisLe) return non('fait survenu pendant la coupure des e-mails');
   const r = regle(evenement);
   if (!r.essentiel && preferences && preferences[r.categorie] === 'off') return non('désactivé dans ses préférences');
   return oui;
 }
 
-/** Une notification pour ce membre de l'équipe, sur ce projet ? */
-function decisionEquipe({ fiche, projetId }) {
+/** Une notification pour ce membre de l'équipe, sur ce projet ? Un
+ *  événement financier ne va qu'à qui lit la finance du projet. */
+function decisionEquipe({ fiche, projetId, evenement = null }) {
   if (!fiche || fiche.actif !== true) return non('membre inactif');
-  if (fiche.role === 'admin') return oui;
-  if (fiche.role === 'agent' && projetId && Array.isArray(fiche.projets) && fiche.projets.includes(String(projetId))) return oui;
-  return non('hors de ses projets');
+  const surProjet = fiche.role === 'admin'
+    || (fiche.role === 'agent' && projetId && Array.isArray(fiche.projets) && fiche.projets.includes(String(projetId)));
+  if (!surProjet) return non('hors de ses projets');
+  if (evenement && regle(evenement).responsable && !acces.financeEquipe(fiche, projetId)) return non('finance non autorisée');
+  return oui;
 }
 
 /* ==========================================================================
@@ -143,11 +165,12 @@ async function destinatairesClients(projetOuId, evenement, { exclureUid = null }
   const projet = await lireProjet(projetOuId);
   const ecartes = [];
   const destinataires = [];
-  const p = projetOuvertAuClient(projet);
+  const quand = momentCourant();
+  const p = projetOuvertAuClient(projet, quand);
   if (!p.ok) return { destinataires, ecartes: [{ email: '*', motif: p.motif }] };
   for (const i of await lireInterlocuteurs(projet.id)) {
     if (exclureUid && i.uid === exclureUid) continue;
-    const d = decisionEmailClient({ projet, interlocuteur: i, evenement, preferences: await lirePreferences(i.uid) });
+    const d = decisionEmailClient({ projet, interlocuteur: i, evenement, preferences: await lirePreferences(i.uid), quand });
     if (!d.ok) { ecartes.push({ email: i.email, motif: d.motif }); continue; }
     const email = normaliserEmail(i.email);
     if (!destinataires.some((x) => x.email === email)) destinataires.push({ email, nom: i.nom || '', uid: i.uid || null });
@@ -160,16 +183,16 @@ async function uidsClients(projetOuId, evenement, { exclure = [] } = {}) {
   const projet = await lireProjet(projetOuId);
   if (!projet) return [];
   return [...new Set((projet.membres || []).filter((uid) => !exclure.includes(uid)
-    && decisionNotificationClient({ projet, uid, evenement }).ok))];
+    && decisionNotificationClient({ projet, uid, evenement, quand: momentCourant() }).ok))];
 }
 
 /** Les membres de l'équipe à notifier pour un projet (ou tous les admins si aucun). */
-async function uidsEquipe(projetId, { exclure = [] } = {}) {
+async function uidsEquipe(projetId, { exclure = [], evenement = null } = {}) {
   const q = await bdd.collection('equipe').get();
   return q.docs
     .map((d) => ({ uid: d.id, ...d.data() }))
     .filter((f) => !exclure.includes(f.uid))
-    .filter((f) => (projetId ? decisionEquipe({ fiche: f, projetId }).ok : f.actif === true && f.role === 'admin'))
+    .filter((f) => (projetId ? decisionEquipe({ fiche: f, projetId, evenement }).ok : f.actif === true && f.role === 'admin'))
     .map((f) => f.uid);
 }
 
@@ -218,6 +241,18 @@ async function ecrireAuxClients(projetOuId, evenement, modele, variables, option
   const projet = await lireProjet(projetOuId);
   const { destinataires } = await destinatairesClients(projet, evenement, options);
   if (!destinataires.length) return null;
+  /* Un montant qui accompagne un événement ordinaire (le prix d'un forfait)
+     ne part qu'aux responsables : les autres reçoivent la même lettre, sans
+     lui. */
+  const enPlus = options.pourResponsable;
+  if (enPlus && Object.keys(enPlus).length) {
+    const roles = (projet && projet.roles) || {};
+    const resp = destinataires.filter((d) => d.uid && roles[d.uid] === 'responsable');
+    const autres = destinataires.filter((d) => !resp.includes(d));
+    const a = resp.length ? await mettreEnFile(modele, resp, { ...variables, ...enPlus }, { projet: projet && projet.id, evenement }) : null;
+    const b = autres.length ? await mettreEnFile(modele, autres, variables, { projet: projet && projet.id, evenement }) : null;
+    return a || b;
+  }
   return mettreEnFile(modele, destinataires, variables, { projet: projet && projet.id, evenement });
 }
 
@@ -242,12 +277,12 @@ async function notifierClients(projetOuId, evenement, notification, { exclure = 
 }
 
 /** Notifie l'équipe concernée par un projet. */
-async function notifierEquipe(projetId, notification, { exclure = [] } = {}) {
-  return notifier(await uidsEquipe(projetId, { exclure }), notification);
+async function notifierEquipe(projetId, notification, { exclure = [], evenement = null } = {}) {
+  return notifier(await uidsEquipe(projetId, { exclure, evenement: evenement || notification.type || null }), notification);
 }
 
 module.exports = {
-  EQUIPE_EMAIL, EQUIPE_NOM, EVENEMENTS,
+  EQUIPE_EMAIL, EQUIPE_NOM, EVENEMENTS, auMoment, momentCourant,
   projetOuvertAuClient, decisionNotificationClient, decisionEmailClient, decisionEquipe,
   destinatairesClients, uidsClients, uidsEquipe, contactEquipe, contactsEquipe,
   mettreEnFile, ecrireAuxClients, notifier, notifierClients, notifierEquipe,

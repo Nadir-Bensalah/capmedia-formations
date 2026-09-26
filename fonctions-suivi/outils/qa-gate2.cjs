@@ -383,6 +383,38 @@ const TESTEUR = 'testeur.sim@exemple.test';
   verifier(!tAutre.ok || tAutre.valeur === false, 'ni une campagne d un autre projet');
   verifier((await envoisVers(TESTEUR)).every((e) => e.modele === 'invitation-testeur' || e.modele === 'code'), 'il n a reçu que son invitation et son code, rien des échanges du projet');
 
+  etape(22, 'Les accès à arbitrer, dans le cockpit');
+  /* Ce que la migration laisse : un contact sans rôle (aucun accès), un
+     ancien membre sans compte. Posés comme elle les pose. */
+  const cleSansRole = cle('sansrole.sim@exemple.test');
+  await fetch(`${DB}/projets/${pid}/interlocuteurs/${cleSansRole}`, { method: 'PATCH', headers: OWNER, body: JSON.stringify({ fields: {
+    email: { stringValue: 'sansrole.sim@exemple.test' }, nom: { stringValue: 'Sans Rôle' }, role: { stringValue: 'a-definir' }, statut: { stringValue: 'actif' }, uid: { nullValue: null },
+    invitation: { mapValue: { fields: { etat: { stringValue: 'preparee' } } } }, origine: { stringValue: 'migration-contact' } } }) });
+  await fetch(`${DB}/projetsInternes/${pid}?updateMask.fieldPaths=rolesADefinir&updateMask.fieldPaths=arbitragesAcces`, { method: 'PATCH', headers: OWNER, body: JSON.stringify({ fields: {
+    rolesADefinir: { integerValue: '1' },
+    arbitragesAcces: { arrayValue: { values: [{ mapValue: { fields: { type: { stringValue: 'membre-sans-compte' }, detail: { stringValue: 'un ancien membre n a plus de compte' } } } }] } } } }) });
+  await admin.page.reload({ waitUntil: 'domcontentloaded' }); await pause(3000);
+  await aller(admin.page, '#/', '.page-tete');
+  const carte = await admin.page.waitForSelector('#acces-a-arbitrer', { timeout: 15000 }).catch(() => null);
+  verifier(Boolean(carte) && /Simulation Gate/.test(await carte.innerText()), 'l accueil du cockpit liste le projet dans « Accès à arbitrer »');
+  await aller(admin.page, `#/projets/${pid}/acces`, '#arbitrages-acces');
+  const ta = await texte(admin.page);
+  verifier(/Sans Rôle/.test(ta) && /aucun accès et aucun e-mail/.test(ta), 'l onglet Accès dit qui attend un rôle, et qu il n a aucun accès');
+  verifier(/Ancien membre sans compte/.test(ta), 'et le point laissé par la migration');
+  const pAvant = await lire(`projets/${pid}`);
+  verifier(!(pAvant.personnes || []).includes('sansrole') && !(pAvant.membres || []).some((u) => /sansrole/.test(u)), 'le contact sans rôle n est pas membre');
+  await admin.page.click('[data-action="acces-classer"]');
+  await confirmer(admin.page);
+  const classe = await attendre(async () => { const i = await lire(`projetsInternes/${pid}`); return i && !(i.arbitragesAcces || []).length ? i : null; });
+  verifier(Boolean(classe), 'classer le point le retire de la liste, rien d autre');
+  await aller(admin.page, `#/projets/${pid}/acces`, `[data-action="acces-menu"][data-cle="${cleSansRole}"]`);
+  await admin.page.click(`[data-action="acces-menu"][data-cle="${cleSansRole}"]`);
+  const choix = await admin.page.$$eval('.menu button', (b) => b.map((x) => x.textContent.trim()));
+  verifier(choix.some((x) => /Passer responsable/.test(x)) && choix.some((x) => /Passer collaborateur/.test(x)), 'son menu propose les deux rôles, explicitement', choix.join(' | '));
+  await admin.page.click('.menu button:has-text("Passer collaborateur")'); await pause(2500);
+  const iRole = await lire(`projets/${pid}/interlocuteurs/${cleSansRole}`);
+  verifier(iRole && iRole.role === 'collaborateur', 'un rôle choisi, et seulement celui-là');
+
   /* « session absente » : l'arrêt voulu d'un espace après son renvoi vers
      la porte (admin.js, app.js), pas une panne. */
   const erreursJs = [admin, resp, collab, agent, testeur].flatMap((x) => x.erreurs).filter((e) => !/permission|Missing or insufficient|^session absente$/i.test(e));

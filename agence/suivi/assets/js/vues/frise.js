@@ -10,14 +10,15 @@
    le client le voit dans la minute, sans qu'on ait à le lui écrire.
 
    Une étape de devis n'est rien de plus qu'une étape ordinaire qui porte
-   l'identifiant de son devis et son montant : pas de collection à part,
-   pas de règle de sécurité en plus, et la progression du projet la
-   compte comme les autres.
+   l'identifiant de son devis : la progression du projet la compte comme
+   les autres. Son montant, lui, vit à part (projets/{p}/montants/jalon-<id>),
+   lu par la seule finance : un agent ou un collaborateur voit l'étape,
+   jamais ce qu'elle vaut.
    ========================================================================== */
 
 import { echapper, montant, montantHT, dateCourte, STATUTS_ETAPE } from '../noyau.js';
 import { icone, pastille, toast, menu } from '../ui.js';
-import { ecrire, K } from '../donnees.js';
+import { ecrire, K, montantDe } from '../donnees.js';
 import * as magasin from '../magasin.js';
 import { editer } from './editeurs.js';
 
@@ -32,7 +33,7 @@ export const devisAvecEtapes = (documents, jalons) => (documents || [])
   .sort((a, b) => String(a.numero || '').localeCompare(String(b.numero || '')));
 
 export const friseDevis = (devis, jalons, { equipe, pid }) => {
-  const etapes = etapesDuDevis(devis, jalons);
+  const etapes = etapesDuDevis(devis, jalons).map((j) => ({ ...j, montant: montantDe(devis.projet || pid, `jalon-${j.id}`) }));
   if (!etapes.length) return '';
   const faites = etapes.filter((j) => j.statut === 'termine');
   const total = etapes.reduce((n, j) => n + (Number(j.montant) || 0), 0);
