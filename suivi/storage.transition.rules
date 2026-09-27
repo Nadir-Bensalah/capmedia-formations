@@ -219,6 +219,27 @@ service firebase.storage {
       allow update, delete: if equipeSurProjet(projetId);
     }
 
+    // Les écrans d'une application en campagne : des captures déposées par
+    // l'équipe, que le testeur découvre dans ses premiers pas et que le
+    // client relit. Le testeur ne les lit que s'il figure à la campagne :
+    // une capture montre un écran qui n'est pas encore public.
+    match /projets/{projetId}/campagnes/{campagneId}/visuels/{fichier=**} {
+      // Le testeur d'abord (une lecture, la campagne), le client ensuite
+      // (une lecture, le projet) : jamais les deux pour la même personne.
+      function testeurDeLaCampagne() {
+        return request.auth != null
+          && request.auth.token.get('testeur', false) == true
+          && request.auth.uid in fiche(/databases/(default)/documents/projets/$(projetId)/campagnes/$(campagneId)).get('testeurs', []);
+      }
+      allow get: if jetonEquipe() ? equipeSurProjet(projetId)
+        : (request.auth != null && request.auth.token.get('testeur', false) == true
+           ? testeurDeLaCampagne()
+           : surSonProjet(projetId));
+      allow list: if equipeSurProjet(projetId);
+      allow create, update: if equipeSurProjet(projetId) && fichierAccepte();
+      allow delete: if equipeSurProjet(projetId);
+    }
+
     // Une demande de nouveau projet : le demandeur dépose dans son dossier,
     // l'équipe y dépose aussi ses réponses, pour qu'il puisse les lire.
     match /preprojets/{uid}/{fichier=**} {
