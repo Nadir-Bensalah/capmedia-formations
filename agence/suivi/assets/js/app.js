@@ -11,6 +11,7 @@ import * as magasin from './magasin.js';
 import { abonnerGlobal, K, G, agreger, enAttenteDeVous, nonLusProjet, ecrire, messagesDuProjet } from './donnees.js';
 import { icone } from './icones.js';
 import { avatarProjet } from './ui.js';
+import { ouvrirAccueil, accueilVu, marquerAccueilVu } from './accueil-client.js';
 
 import * as accueil from './vues/accueil.js';
 import * as projet from './vues/projet.js';
@@ -57,6 +58,32 @@ abonnerGlobal(lotGlobal, session);
 /* --- La coquille et la navigation --------------------------------------- */
 
 const { vue } = monterCoquille({ session, role: 'client', groupes: [], sortie: $('#racine') });
+
+/* --- L'accueil, la première fois ------------------------------------------
+   Devant tout, la première fois sur cet appareil, sauf si le profil dit
+   qu'il a déjà été parcouru ailleurs. Il se rejoue depuis le menu du
+   compte. Ce qui est fait est consigné dans le profil : l'administrateur
+   le lit sur la fiche du client. */
+let porte = null;
+const lancerAccueil = ({ demande = false } = {}) => {
+  if (porte) return;
+  porte = ouvrirAccueil({
+    session,
+    projets: () => (magasin.lire(K.projets) || session.projets || []),
+    surFin: () => {
+      porte = null;
+      marquerAccueilVu(session.utilisateur.uid);
+      const profil = magasin.lire(K.profil) || session.profil || {};
+      if (!profil.accueil) ecrire.majProfil(session.utilisateur.uid, { accueil: new Date() }).catch(() => {});
+    },
+  });
+  porte.demande = demande;
+};
+document.addEventListener('suivi:accueil-revoir', () => lancerAccueil({ demande: true }));
+const dejaParcouru = Boolean(session.profil && session.profil.accueil);
+if (!accueilVu(session.utilisateur.uid) && !dejaParcouru) lancerAccueil();
+else if (dejaParcouru) marquerAccueilVu(session.utilisateur.uid);
+magasin.sur(K.projets, () => { if (porte) porte.majProjets(); });
 
 const compter = () => {
   const projets = magasin.lire(K.projets) || session.projets;

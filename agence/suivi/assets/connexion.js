@@ -61,6 +61,28 @@ const envoyerLien = async (email) => {
 
 /* --- Où va-t-on, une fois la session ouverte ---------------------------- */
 
+/* Le départ : la porte s'efface, la marque (logo, mot, badge de l'espace)
+   glisse seule au centre de l'écran, puis l'espace s'ouvre et son écran de
+   lancement la reprend là où elle est (lancement.js, « suivi:arrivee »).
+   Rien de tout cela sous un robot, ni quand la porte est encore derrière
+   son écran de lancement (session déjà ouverte : on passe tout droit). */
+const partir = (cible, sien) => {
+  const service = { './cockpit': 'Cockpit', './testeur': 'Test', './hub': 'Hub' }[sien] || '';
+  try { sessionStorage.setItem('suivi:arrivee', service || 'Suite'); } catch (e) { /* stockage refusé */ }
+  const porte = document.querySelector('main.porte');
+  const marque = document.querySelector('.porte-marque');
+  const robot = Boolean(navigator.webdriver) || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!porte || !marque || robot || document.getElementById('lancement')) { location.replace(cible); return; }
+  const badge = document.getElementById('porte-service');
+  if (badge && service) badge.textContent = service;
+  const a = marque.getBoundingClientRect();
+  const dx = window.innerWidth / 2 - (a.left + a.width / 2);
+  const dy = window.innerHeight / 2 - (a.top + a.height / 2);
+  porte.classList.add('depart');
+  marque.style.transform = `translate(${dx}px, ${dy}px) scale(1.5)`;
+  setTimeout(() => location.replace(cible), 950);
+};
+
 const orienter = async () => {
   const { utilisateur, equipe, testeur, erreur: refus, desactive } = await session();
   if (!utilisateur) { montrer('#forme'); return; }
@@ -92,9 +114,9 @@ const orienter = async () => {
      sa route : c'est ce qui fait qu'un lien d'e-mail ouvre la bonne fiche
      même après un passage par la porte. */
   const destination = traduireRetour(new URLSearchParams(location.search).get('retour'), sien);
-  if (destination) { location.replace(destination); return; }
+  if (destination) { partir(destination, sien); return; }
 
-  if (sien) { location.replace(sien); return; }
+  if (sien) { partir(sien, sien); return; }
 
   const bloc = document.querySelector('#attente .encart p:last-child');
   if (bloc) bloc.textContent = "Vos projets n'ont pas pu être lus. Prévenez-nous, nous vérifions le rattachement de votre compte.";

@@ -200,10 +200,11 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; text-underline-offset: 3px; }
 input, select, textarea { font: inherit; color: inherit; }
+/* L'anneau suit la forme de ce qui a le focus : une pilule reste une
+   pilule. Forcer un rayon ici changeait la forme du bouton au clavier. */
 :focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--fond), 0 0 0 4px var(--accent);
-  border-radius: var(--r-champ);
 }
 ::selection { background: var(--accent-voile); }
 

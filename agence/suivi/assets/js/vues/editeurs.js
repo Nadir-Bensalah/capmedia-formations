@@ -521,6 +521,29 @@ const editeurs = {
         </div>
 
         <div class="groupe">
+          <span class="etiquette-champ">Pour les testeurs</span>
+          <p class="aide">Ils le lisent dans « L'application » de leur espace, avant de commencer.</p>
+          ${champ('application', "Nom de l'application", fiche ? (fiche.application || '') : '', { facultatif: true, placeholder: "Nom de l'application" })}
+          ${champ('accroche', 'En une phrase', fiche ? (fiche.accroche || '') : '', { facultatif: true, placeholder: "Ce que l'application promet, en une phrase.", aide: 'Sous le nom, dans les premiers pas du testeur.' })}
+          ${zone('presentation', 'À quoi elle sert', fiche ? (fiche.presentation || '') : '', { facultatif: true, lignes: 4, placeholder: "Ce que fait l'application, pour qui, et ce qui change dans cette version." })}
+          ${zone('atouts', 'Points forts', (fiche ? (fiche.atouts || []) : []).join('\n'), { facultatif: true, lignes: 3, placeholder: 'Un par ligne, quatre au plus.', aide: 'Ce que le testeur retient de l\'application avant de l\'ouvrir.' })}
+          ${zone('consignes', "Ce qu'on attend d'eux", fiche ? (fiche.consignes || '') : '', { facultatif: true, lignes: 3, placeholder: 'Consignes particulières de la campagne.' })}
+          <div class="groupe" id="ed-visuels">
+            <span class="etiquette-champ">Les écrans de l'application <span class="facultatif">(facultatif)</span></span>
+            <p class="aide">Des captures telles qu'elles s'affichent sur le téléphone : le testeur les découvre dans ses premiers pas, sur un téléphone dessiné.</p>
+            ${fiche
+              ? ((fiche.visuels || []).length ? `<div class="cases-blocs" style="margin-bottom:8px">${fiche.visuels.map((v, i) => `
+                <label class="case"><input type="checkbox" data-visuel="${i}" checked> ${echapper(v.nom || 'Écran')}</label>`).join('')}</div>` : '')
+              : '<p class="aide">Les captures se déposent une fois la campagne créée.</p>'}
+          </div>
+          <div class="forme-rang">
+            ${champ('lien_ios', 'Lien iPhone (TestFlight)', fiche ? ((fiche.installation || {}).ios || '') : '', { type: 'url', facultatif: true, placeholder: 'https://testflight.apple.com/join/…' })}
+            ${champ('lien_android', 'Lien Android', fiche ? ((fiche.installation || {}).android || '') : '', { type: 'url', facultatif: true, placeholder: 'https://play.google.com/apps/testing/…' })}
+          </div>
+          ${champ('lien_web', 'Lien web', fiche ? ((fiche.installation || {}).web || '') : '', { type: 'url', facultatif: true, placeholder: 'https://…' })}
+        </div>
+
+        <div class="groupe">
           <span class="etiquette-champ">Scénarios déroulés</span>
           <div class="rang" style="gap:8px;flex-wrap:wrap;margin-bottom:10px">
             <button class="btn btn-secondaire btn-petit" type="button" data-tout>Tous les blocs</button>
@@ -531,9 +554,20 @@ const editeurs = {
             <label class="case"><input type="checkbox" data-bloc="${echapper(b.cle)}" checked> ${echapper(b.libelle)} <span class="badge">${b.n}</span></label>`).join('')}</div>
           <p class="aide" id="compte-scenarios"></p>
         </div>`,
+      /* Les captures se déposent dans le dossier de la campagne : l'équipe
+         écrit, le testeur de la campagne et le client lisent (storage.rules). */
+      avecDepot: fiche ? {
+        chemin: `projets/${pid}/campagnes/${fiche.id}/visuels`, max: 6,
+        texte: 'Déposez les écrans de l\'application ici, ou <strong>choisissez-les</strong>.', aide: 'Images seulement, 10 Mo par fichier.',
+      } : null,
       surMontage: (racine) => {
         const cases = [...racine.querySelectorAll('[data-bloc]')];
         const compte = racine.querySelector('#compte-scenarios');
+
+        /* La zone de dépôt naît en bas de la feuille : on la range avec
+           les écrans, là où l'équipe la cherche. */
+        const depotZone = racine.querySelector('#ed-depot');
+        if (depotZone) racine.querySelector('#ed-visuels').appendChild(depotZone);
 
         /* Le nombre de passages, pas le nombre de scénarios : c'est lui qui
            dit ce que la campagne coûte en temps de testeur, puisqu'un
@@ -565,9 +599,16 @@ const editeurs = {
         majCompte();
       },
       regles: { titre: obligatoire() },
-      enregistrer: async (d, _pieces, racine) => {
+      enregistrer: async (d, pieces, racine) => {
         const boite = racine || document;
         const pris = new Set([...boite.querySelectorAll('[data-bloc]')].filter((c) => c.checked).map((c) => c.dataset.bloc));
+        /* Les écrans : ceux qu'on garde, puis ceux qu'on vient de déposer.
+           Une pièce qui n'est pas une image n'a rien à faire dans un
+           téléphone dessiné. */
+        const gardes = fiche ? (fiche.visuels || []).filter((v, i) => { const cb = boite.querySelector(`[data-visuel="${i}"]`); return !cb || cb.checked; }) : [];
+        const deposes = (pieces || []).filter((p) => /^image\//.test(p.type || ''));
+        if ((pieces || []).length !== deposes.length) { toast('Seules des images peuvent servir d\'écrans de l\'application.', 'erreur'); return false; }
+        const atouts = String(d.atouts || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 4).map((x) => x.slice(0, 90));
         const seulementSocle = Boolean((boite.querySelector('#ed-socle-seul') || {}).checked);
         const refs = tous
           .filter((x) => pris.has(x.bloc) && (!seulementSocle || (NIVEAUX_SCENARIO[x.niveau] || {}).double))
@@ -580,8 +621,22 @@ const editeurs = {
           toast('La fin prévue tombe avant le début. Corrigez l\'une des deux dates.', 'erreur');
           return false;
         }
+        /* Un lien d'installation est une adresse https, rien d'autre : il
+           finit dans un bouton de l'espace testeur. */
+        const liens = { ios: (d.lien_ios || '').trim(), android: (d.lien_android || '').trim(), web: (d.lien_web || '').trim() };
+        if (Object.values(liens).some((u) => u && !/^https:\/\/[^\s]+$/.test(u))) {
+          toast('Un lien d\'installation doit commencer par https://.', 'erreur');
+          return false;
+        }
         const donnees = {
           titre: d.titre, statut: d.statut,
+          application: (d.application || '').trim(),
+          accroche: (d.accroche || '').trim().slice(0, 140),
+          presentation: (d.presentation || '').trim(),
+          atouts,
+          consignes: (d.consignes || '').trim(),
+          installation: liens,
+          visuels: [...gardes, ...deposes].slice(0, 8),
           debut: d.debut ? new Date(d.debut) : null,
           fin: d.fin ? new Date(d.fin) : null,
           builds: { ios: d.build_ios || '', android: d.build_android || '', web: d.build_web || '' },

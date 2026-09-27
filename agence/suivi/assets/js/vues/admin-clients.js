@@ -3,7 +3,7 @@
    ses projets, ses pièces comptables, ses notes internes.
    ========================================================================== */
 
-import { echapper, dateCourte, montant, pluriel, parDateDesc, STATUTS_PROJET, STATUTS_FACTURE, STATUTS_DEVIS, statutProjet, projetEstActif} from '../noyau.js';
+import { echapper, dateCourte, montant, pluriel, parDateDesc, STATUTS_PROJET, STATUTS_FACTURE, STATUTS_DEVIS, statutProjet, projetEstActif, estAdmin, bdd, collection } from '../noyau.js';
 import { icone, pastille, pastilleTexte, avatar, avatarEmpile, avatarProjet, pileProjets, ligne, vide, squelette, titrePage, modale, confirmer, toast, sur, agir, lireForme, valider, obligatoire, emailValide, fait, metrique, menu } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K, resteAPayer, interneDeLOrganisation } from '../donnees.js';
@@ -73,6 +73,9 @@ export const nouveau = async (ctx, env) => {
 export const detail = async (ctx, env) => {
   const id = ctx.params.id;
   const lot = magasin.lot();
+  /* Les premiers pas des contacts (l'accueil du Hub) : dans leur profil,
+     que seul l'administrateur lit. */
+  if (estAdmin(env.session)) lot.abonner(K.profilsClients, () => collection(bdd, 'profils'));
   const sortie = ctx.sortie;
   sortie.innerHTML = `<div class="page">${squelette('page', 5)}</div>`;
   const rendre = () => {
@@ -85,6 +88,8 @@ export const detail = async (ctx, env) => {
     const { total, factures } = resteAPayer(documents, paiements);
     const totalPaye = paiements.reduce((s, p) => s + (Number(p.montant) || 0), 0);
     const contacts = o.contacts || [];
+    const profils = magasin.lire(K.profilsClients) || [];
+    const premiersPas = (c) => { const pr = c.uid ? profils.find((x) => x.id === c.uid) : null; return pr && pr.accueil ? `<span class="pastille pastille--vert">Premiers pas faits · ${echapper(dateCourte(pr.accueil))}</span>` : (estAdmin(env.session) && c.uid ? '<span class="t-micro t-3">premiers pas à faire</span>' : ''); };
     titrePage(o.entreprise || o.nom);
     filAriane([{ libelle: 'Clients', chemin: '/clients' }, { libelle: o.entreprise || o.nom }]);
     sortie.innerHTML = `<div class="page">
@@ -98,7 +103,7 @@ export const detail = async (ctx, env) => {
             ${projets.filter((p) => !p.interne).length ? `<div class="liste">${projets.filter((p) => !p.interne).map((p) => ligne({ href: `#/projets/${echapper(p.id)}/acces`, titre: `<span class="rang" style="gap:10px">${avatarProjet(p, 'petit')} ${echapper(p.nom)} ${p.ouvert === true ? pastilleTexte('Ouvert au client', 'vert') : pastilleTexte('Fermé au client', 'gris')}${p.emailsClient === 'coupes' ? ` ${pastilleTexte('E-mails coupés', 'ambre')}` : ''}</span>`, sous: echapper(`${(p.personnes || []).length} personne${(p.personnes || []).length > 1 ? 's' : ''} ${p.ouvert === true ? 'avec accès' : 'préparée(s)'}`) })).join('')}</div>` : vide({ icone: 'projets', titre: 'Aucun projet client', compact: true })}
             <p class="t-micro t-3" style="margin-top:8px">L'accès se donne projet par projet, dans l'onglet « Accès client » de chaque projet. Appartenir à cette société ne donne accès à aucun projet.</p></section>
           <section><div class="section-tete"><h2>Contacts de la société</h2></div>
-            ${contacts.length ? `<div class="liste">${contacts.map((c) => ligne({ titre: `<span class="rang" style="gap:10px">${avatar(c.nom || c.email)} ${echapper(c.nom || c.email)}</span>`, sous: echapper(c.email || ''), attrs: 'style="cursor:default"' })).join('')}</div>` : vide({ icone: 'utilisateurs', titre: 'Aucun contact', compact: true })}
+            ${contacts.length ? `<div class="liste">${contacts.map((c) => ligne({ titre: `<span class="rang" style="gap:10px">${avatar(c.nom || c.email)} ${echapper(c.nom || c.email)}</span>`, sous: echapper(c.email || ''), fin: premiersPas(c), attrs: 'style="cursor:default"' })).join('')}</div>` : vide({ icone: 'utilisateurs', titre: 'Aucun contact', compact: true })}
             <p class="t-micro t-3" style="margin-top:8px">Les coordonnées commerciales de la société. Elles ne donnent aucun accès et ne reçoivent aucun e-mail de suivi.</p></section>
           <section><div class="section-tete"><h2>Devis et factures</h2><a class="lien" href="#/finances">Finances</a></div>${documents.length ? `<div class="liste">${documents.slice(0, 12).map((d) => ligne({ href: `#/finances/${echapper(d.id)}`, icone: d.type === 'devis' ? 'receipt' : 'euro', titre: `${echapper(d.numero || '')} ${echapper(d.libelle || '')}`, sous: echapper(dateCourte(d.date)), fin: `<span class="nb t-fort">${echapper(montant(d.montant))}</span>${pastille(d.type === 'devis' ? STATUTS_DEVIS : STATUTS_FACTURE, d.statut, { equipe: true })}` })).join('')}</div>` : vide({ icone: 'receipt', titre: 'Aucune pièce', compact: true })}</section>
         </div>
@@ -116,7 +121,7 @@ export const detail = async (ctx, env) => {
       m.el.querySelector('#f-org').addEventListener('submit', async (e) => { e.preventDefault(); if (!valider(e.target, { entreprise: obligatoire(), nom: obligatoire(), email: emailValide() })) return; if (await agir(m.pied.querySelector('[type="submit"]'), () => appelServeur('majOrganisation', { id, ...lireForme(e.target), versionInterne: 2 }), 'Client mis à jour.')) m.fermer(true); });
     }
   });
-  [K.organisations, K.projets, K.documentsTous, K.paiementsTous, K.organisationsInternes].forEach((c) => lot.sur(c, rendre));
+  [K.organisations, K.projets, K.documentsTous, K.paiementsTous, K.organisationsInternes, K.profilsClients].forEach((c) => lot.sur(c, rendre));
   return () => { gestes(); lot.fin(); };
 };
 

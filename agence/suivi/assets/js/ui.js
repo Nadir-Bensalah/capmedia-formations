@@ -455,14 +455,17 @@ export const fermerFlottants = () => {
  * Une modale ou une feuille latérale. Renvoie { el, corps, fermer, fin }.
  * `fin` est une promesse résolue à la fermeture avec la valeur passée.
  */
-export const modale = ({ titre, sousTitre = '', corps = '', pied = '', large = false, feuille = false, fermable = true }) => {
+export const modale = ({ titre, sousTitre = '', corps = '', pied = '', large = false, feuille = false, scenario = false, fermable = true }) => {
   const voile = document.createElement('div');
-  voile.className = `voile${feuille ? ' voile--feuille' : ''}`;
+  /* « scenario » : la fiche d'un scénario de test, la même dans les trois
+     espaces. Une modale entière au centre, qui arrive et repart avec une
+     transition (suite.css, section 20), jamais une feuille latérale. */
+  voile.className = `voile${feuille ? ' voile--feuille' : ''}${scenario ? ' voile--scenario' : ''}`;
   voile.setAttribute('role', 'dialog');
   voile.setAttribute('aria-modal', 'true');
   voile.setAttribute('aria-label', titre);
   voile.innerHTML = `
-    <div class="${feuille ? 'feuille' : `modale${large ? ' modale--large' : ''}`}">
+    <div class="${feuille ? 'feuille' : `modale${large ? ' modale--large' : ''}${scenario ? ' modale--scenario' : ''}`}">
       <div class="modale-tete">
         <div><h2>${echapper(titre)}</h2>${sousTitre ? `<p>${echapper(sousTitre)}</p>` : ''}</div>
         ${fermable ? `<button class="btn-icone" type="button" data-fermer aria-label="Fermer">${icone('fermer')}</button>` : ''}
@@ -475,11 +478,17 @@ export const modale = ({ titre, sousTitre = '', corps = '', pied = '', large = f
 
   let resoudre;
   const fin = new Promise((r) => { resoudre = r; });
+  let fermee = false;
   const fermer = (valeur) => {
-    if (!voile.isConnected) return;
-    voile.remove();
+    if (!voile.isConnected || fermee) return;
+    fermee = true;
     piles = piles.filter((p) => p.voile !== voile);
     if (!piles.length) document.body.style.overflow = '';
+    /* La fiche d'un scénario repart comme elle est venue ; le temps de la
+       sortie, elle ne répond plus. */
+    const animee = scenario && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (animee) { voile.classList.add('sort'); voile.style.pointerEvents = 'none'; setTimeout(() => voile.remove(), 280); }
+    else voile.remove();
     resoudre(valeur);
   };
   const entree = { voile, fermer };

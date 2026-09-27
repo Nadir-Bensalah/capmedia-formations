@@ -63,6 +63,8 @@ export const K = {
   organisations: 'organisations',
   equipe: 'equipe',
   profil: 'profil',
+  /* Tous les profils (l'administrateur seul les lit) : les premiers pas des clients. */
+  profilsClients: 'profils-clients',
   demandesProjet: 'demandes-projet',
   ticketsTous: 'tickets:*',
   tachesToutes: 'taches:*',

@@ -6,7 +6,7 @@
    ========================================================================== */
 
 import {
-  $, $$, echapper, initiales, depuis, quitter, nomAffiche,
+  $, $$, echapper, initiales, depuis, quitter, nomAffiche, enDate,
   bdd, collection, query, orderBy, limit, doc, updateDoc, writeBatch,
 } from './noyau.js';
 import { icone } from './icones.js';
@@ -26,26 +26,49 @@ export const monterCoquille = ({ session, role, groupes, sortie }) => {
   const nom = nomAffiche(session);
   const sousNom = role === 'equipe'
     ? (session.equipe.role === 'admin' ? 'Administrateur' : 'Équipe Capmedia')
-    : ((session.organisations[0] && (session.organisations[0].entreprise || session.organisations[0].nom)) || 'Client');
+    : role === 'testeur' ? 'Testeur'
+      : (((session.organisations || [])[0] && (session.organisations[0].entreprise || session.organisations[0].nom)) || 'Client');
+
+  /* Le dessin de la suite Capmedia (suite.css), le même que Capmedia Desk :
+     la marque en toutes lettres avec son trait, la recherche dans le rail,
+     le choix de l'apparence en bas. Chaque page qui charge suite.css le
+     déclare par <html data-suite>. */
+  const suite = document.documentElement.hasAttribute('data-suite');
+  const service = role === 'equipe' ? 'Cockpit' : (role === 'testeur' ? 'Test' : 'Hub');
+  const enseigne = role === 'equipe' ? 'Capmedia Digital' : (role === 'testeur' ? 'Espace testeur' : sousNom);
+  const theme = (window.AZTheme && window.AZTheme.lire()) || 'auto';
+  const marque = suite
+    ? `<a class="lat-marque lat-marque--suite" href="#/" aria-label="Capmedia ${service}, accueil">
+            <span class="lat-mot"><img class="lat-logo" src="../assets/img/capmedia-digital.png" alt="" width="22" height="22">Capmedia<span class="service">${service}</span></span>
+            <svg class="lat-trait" viewBox="0 0 86 8" fill="none" aria-hidden="true"><path d="M1.5 5.2C14 3.1 30 2.4 44 3.3c12 .8 26 1.5 40.5-.6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+            <span class="lat-enseigne tronque">${echapper(enseigne)}</span>
+          </a>`
+    : `<a class="lat-marque" href="#/">
+            <img src="../assets/img/capmedia-digital.png" alt="" width="24" height="24">
+            Capmedia <span class="service">${service}</span>
+          </a>`;
+  const recherche = `<button class="${suite ? 'cherche' : 'btn-recherche'}" type="button" id="bouton-recherche">${icone('recherche')}<span>Rechercher</span><kbd>⌘K</kbd></button>`;
+  const apparence = suite
+    ? `<div class="theme-rail" role="group" aria-label="Apparence">${[['auto', 'Auto'], ['light', 'Clair'], ['dark', 'Sombre']].map(([v, l]) => `<button type="button" data-theme-val="${v}" aria-pressed="${theme === v}">${l}</button>`).join('')}</div>`
+    : '';
 
   sortie.innerHTML = `
     <a class="saut" href="#vue">Aller au contenu</a>
     <div class="coq">
       <aside class="lat" id="lat" aria-label="Navigation principale">
         <div class="lat-tete">
-          <a class="lat-marque" href="#/">
-            <img src="../assets/img/capmedia-digital.png" alt="" width="24" height="24">
-            Capmedia <span class="service">${role === 'equipe' ? 'Cockpit' : 'Hub'}</span>
-          </a>
+          ${marque}
           <button class="btn-plier" type="button" id="bouton-plier" aria-label="Replier la navigation" data-astuce="Replier">${icone('plier')}</button>
         </div>
+        ${suite ? recherche : ''}
         <div class="lat-corps" id="lat-corps"></div>
         <div class="lat-pied">
+          ${apparence}
           <button class="lat-compte" type="button" id="bouton-compte" aria-haspopup="menu">
             <span class="avatar${role === 'equipe' ? ' avatar--equipe' : ''}">${echapper(initiales(nom))}</span>
             <span style="min-width:0">
               <span class="nom tronque" style="display:block">${echapper(nom)}</span>
-              <span class="role tronque" style="display:block">${echapper(sousNom)}</span>
+              <span class="role tronque" style="display:block">${echapper(suite ? (session.utilisateur.email || sousNom) : sousNom)}</span>
             </span>
             <span class="pousse" style="color:var(--encre-3)">${icone('chevron')}</span>
           </button>
@@ -58,7 +81,7 @@ export const monterCoquille = ({ session, role, groupes, sortie }) => {
           <button class="btn-icone btn-deplier" type="button" id="bouton-deplier" aria-label="Déplier la navigation" data-astuce="Déplier">${icone('hub')}</button>
           <nav class="ariane" id="ariane" aria-label="Fil d'Ariane"></nav>
           <div class="fin">
-            <button class="btn-recherche" type="button" id="bouton-recherche">${icone('recherche')}<span>Rechercher</span><kbd>⌘K</kbd></button>
+            ${suite ? '' : recherche}
             <button class="btn-icone" type="button" id="bouton-recherche-mobile" aria-label="Rechercher" style="display:inline-grid">${icone('recherche')}</button>
             <button class="btn-icone" type="button" id="bouton-notifs" aria-label="Notifications" data-astuce="Notifications">${icone('notifications')}<span class="point masque" id="point-notifs"></span></button>
           </div>
@@ -104,10 +127,14 @@ const compteHtml = (valeur) => {
   return `<span class="comptes">${gris ? `<span class="compte">${echapper(total)}</span>` : ''}${neuf ? `<span class="compte vif" aria-label="${echapper(neuf)} à traiter">${echapper(neuf > 99 ? '99+' : neuf)}</span>` : ''}</span>`;
 };
 
+/* Le rail ne se réécrit que s'il change vraiment. Chaque page le
+   redemandait, et réécrire les mêmes lignes les faisait toutes rejouer
+   leur entrée : le rail entier tressautait à chaque clic. */
+let railRendu = '';
 export const rendreNavigation = () => {
   const corps = $('#lat-corps');
   if (!corps) return;
-  corps.innerHTML = contexte.groupes.map((g) => `
+  const html = contexte.groupes.map((g) => `
     <div class="lat-groupe">
       ${g.titre ? `<p class="lat-titre">${echapper(g.titre)}</p>` : ''}
       ${g.items.map((it) => `
@@ -115,6 +142,7 @@ export const rendreNavigation = () => {
           ${it.ecusson || (it.icone ? icone(it.icone) : '')}<span class="tronque">${echapper(it.libelle)}</span>${compteHtml(typeof it.compte === 'function' ? it.compte() : it.compte)}
         </a>`).join('')}
     </div>`).join('');
+  if (html !== railRendu) { corps.innerHTML = html; railRendu = html; }
   marquerActif();
 };
 
@@ -130,7 +158,13 @@ const marquerActif = () => {
     const correspond = a.hasAttribute('data-exact') ? c === chemin : (c === chemin || c.startsWith(`${chemin}/`));
     if (correspond && (!meilleur || chemin.length > meilleur.dataset.chemin.length)) meilleur = a;
   });
-  if (meilleur) { meilleur.classList.add('actif'); meilleur.setAttribute('aria-current', 'page'); }
+  if (meilleur) {
+    meilleur.classList.add('actif');
+    meilleur.setAttribute('aria-current', 'page');
+    /* La barre défile seule quand elle est plus haute que l'écran : l'entrée
+       active reste en vue, même la dernière. */
+    if (meilleur.scrollIntoView) meilleur.scrollIntoView({ block: 'nearest' });
+  }
 };
 
 /** Le fil d'Ariane : [{libelle, chemin?}]. Le dernier est la page courante. */
@@ -196,8 +230,21 @@ const brancherCompte = () => {
       { libelle: 'Thème', titre: true },
     ];
     const m = modaleTheme;
+    /* Un testeur n'a ni profil ni préférences à régler ici : son guide,
+       l'apparence, et la sortie. */
+    if (contexte.role === 'testeur') {
+      menu($('#bouton-compte'), [
+        { libelle: 'Guide du testeur', icone: 'ampoule', action: () => naviguer('/guide') },
+        { libelle: 'Revoir les premiers pas', icone: 'sparkle', action: revoirAccueil },
+        { libelle: 'Apparence', icone: 'soleil', action: modaleTheme },
+        '-',
+        { libelle: 'Se déconnecter', icone: 'dehors', action: quitter, danger: true },
+      ]);
+      return;
+    }
     menu($('#bouton-compte'), [
       { libelle: 'Mon profil et mes préférences', icone: 'utilisateur', action: () => naviguer('/parametres') },
+      ...(contexte.role === 'client' ? [{ libelle: 'Revoir les premiers pas', icone: 'sparkle', action: revoirAccueil }] : []),
       { libelle: 'Apparence', icone: 'soleil', action: m },
       '-',
       { libelle: 'Retour au site capmedia.app', icone: 'externe', action: () => { location.href = '../'; } },
@@ -206,6 +253,10 @@ const brancherCompte = () => {
     void items;
   });
 };
+
+/* L'accueil de la première fois (accueil.js) se rejoue à la demande :
+   l'espace qui l'a monté écoute cet événement. */
+const revoirAccueil = () => document.dispatchEvent(new CustomEvent('suivi:accueil-revoir'));
 
 const modaleTheme = () => {
   const m = modale({
@@ -231,9 +282,23 @@ let notifications = [];
 const brancherNotifications = () => {
   const uid = contexte.session.utilisateur.uid;
   magasin.abonner(CLE_NOTIFS, () => query(collection(bdd, 'boites', uid, 'notifications'), orderBy('date', 'desc'), limit(60)));
+  /* Dans les applications Mac et Windows (window.capmediaBureau) : chaque
+     notification qui arrive pendant que l'espace est ouvert devient une
+     notification du système, et le nombre de non lues se pose sur l'icône.
+     Celles qui étaient déjà là à l'ouverture ne sonnent pas : on ne réveille
+     personne avec l'historique. Dans un navigateur, rien ne change. */
+  const bureau = window.capmediaBureau;
+  const ouverture = Date.now();
+  const sonnees = new Set();
+  const quand = (n) => { const d = enDate(n.date); return d ? d.getTime() : 0; };
   magasin.sur(CLE_NOTIFS, (liste) => {
     notifications = Array.isArray(liste) ? liste : [];
     const nonLues = notifications.filter((n) => !n.lu).length;
+    if (bureau) {
+      notifications.filter((n) => !n.lu && !sonnees.has(n.id) && quand(n) > ouverture - 5000).slice(0, 3)
+        .forEach((n) => { sonnees.add(n.id); bureau.notifier({ titre: n.titre || '', texte: n.texte || '', lien: n.lien || '' }); });
+      bureau.compte(nonLues);
+    }
     const point = $('#point-notifs');
     if (point) point.classList.toggle('masque', nonLues === 0);
     document.title = document.title.replace(/^\(\d+\) /, '');

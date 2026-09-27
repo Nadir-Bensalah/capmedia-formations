@@ -1,31 +1,36 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" data-suite>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Capmedia Tests</title>
+<title>Capmedia Test</title>
 <meta name="robots" content="noindex, nofollow">
-<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#161617" media="(prefers-color-scheme: dark)">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<meta name="theme-color" content="#111113">
 <link rel="stylesheet" href="./assets/css/hub.css">
+<link rel="stylesheet" href="./assets/css/suite.css">
 <link rel="icon" type="image/png" sizes="32x32" href="../assets/img/favicon-agence-32.png">
 <link rel="apple-touch-icon" href="../assets/img/apple-touch-agence.png">
-<script>(function(){try{var t=localStorage.getItem('az:theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<!-- Sombre par défaut, avant le premier pixel (theme-espace.js reprend ensuite). -->
+<script>(function(){var r=document.documentElement,t='dark';try{var v=localStorage.getItem('suivi:testeur-theme');if(v==='light'||v==='dark'||v==='auto')t=v;}catch(e){}if(t==='auto')r.removeAttribute('data-theme');else r.setAttribute('data-theme',t);})();</script>
 </head>
 <body>
+<!-- L'écran de lancement : la marque s'assemble, puis rejoint sa place
+     (lancement.js). Le même sur le web et dans les applications. -->
+<div class="lancement" id="lancement" aria-hidden="true">
+  <div class="accueil-logo"><i class="feuille feuille--1"></i><i class="feuille feuille--2"></i><i class="feuille feuille--3"></i><i class="feuille feuille--4"></i><span class="halo"></span></div>
+  <p class="lancement-mot">Capmedia</p>
+</div>
 <div id="racine">
   <div class="porte">
     <div class="porte-boite" role="status" aria-live="polite">
-      <div class="marque"><img src="../assets/img/capmedia-digital.png" alt="" width="28" height="28">Capmedia</div>
+      <div class="marque">Capmedia</div>
       <div class="squelette"><div class="os os--titre"></div><div class="os os--texte"></div><div class="os os--court"></div></div>
     </div>
   </div>
 </div>
+<script src="./assets/js/lancement.js"></script>
 <script src="./assets/js/config-suivi.js"></script>
-<script src="../assets/js/theme.js"></script>
+<script src="./assets/js/theme-espace.js" data-cle="suivi:testeur-theme"></script>
 <script type="module" src="./assets/js/testeur.js"></script>
 </body>
 </html>

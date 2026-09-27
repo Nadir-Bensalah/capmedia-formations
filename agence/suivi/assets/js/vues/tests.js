@@ -751,16 +751,16 @@ const ouvrirAnomalie = (a, { equipe, pid, env, scenarios }) => {
 const ouvrirScenario = (s) => {
   const niveau = NIVEAUX_SCENARIO[s.niveau] || NIVEAUX_SCENARIO.reparti;
   return modale({
-    titre: s.titre, sousTitre: `${s.ref} · ${(BLOCS_SCENARIO[s.bloc] || {}).libelle || s.blocLibelle || ''}`, feuille: true,
+    titre: s.titre, sousTitre: `${s.ref} · ${(BLOCS_SCENARIO[s.bloc] || {}).libelle || s.blocLibelle || ''}`, scenario: true,
     corps: `
-      <div class="rang" style="gap:8px;flex-wrap:wrap;margin-bottom:16px">
+      <div class="fs-etat">
         ${pastille(NIVEAUX_SCENARIO, s.niveau || 'reparti')}
         ${(s.plateformes || []).map((p) => `<span class="puce">${echapper((PLATEFORMES_TEST[p] || {}).libelle || p)}</span>`).join('')}
       </div>
-      <p class="aide" style="margin-bottom:20px">${echapper(niveau.aide)}</p>
-      ${s.options ? `<div class="groupe"><span class="etiquette-champ">Options à poser</span><p class="t-corps">${gras(s.options)}</p></div>` : ''}
-      <div class="groupe"><span class="etiquette-champ">Résultat attendu</span><p class="t-corps">${gras(s.attendu)}</p></div>
-      <p class="aide" style="margin-top:18px">Un scénario où rien ne se passe est un échec, jamais une réussite.</p>`,
+      ${s.options ? `<section class="fs-bloc"><p class="fs-bloc-sur">Ce qu'il faut poser</p><p>${gras(s.options)}</p></section>` : ''}
+      <section class="fs-bloc fs-bloc--attendu"><p class="fs-bloc-sur">Ce qui doit se passer</p><p>${gras(s.attendu)}</p></section>
+      <p class="fs-note">${echapper(niveau.aide)}</p>
+      <p class="fs-note">Un scénario où rien ne se passe est un échec, jamais une réussite.</p>`,
     pied: '<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>',
   }).fin;
 };
@@ -1095,9 +1095,14 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, nommer }) => {
   /* Le nom passe par le nommeur : prénom pour l'équipe, « Testeur N » pour
      le client, le même numéro que partout ailleurs sur la page. Sans lui,
      le client lisait l'identifiant Firebase, vingt-huit caractères. */
+  /* Les premiers pas (l'accueil de l'espace Test) : consignés par le
+     testeur dans son appréciation. L'équipe voit qui les a faits, le client
+     aussi, sous le numéro. */
+  const avis = magasin.lire(K.appreciations(c.id)) || [];
   const charges = (c.testeurs || []).map((id) => {
     const t = vivier.find((x) => x.id === id) || { id };
-    return { id, nom: nommer(id).nom, mobile: t.mobile || '', n: (affectation[id] || []).length };
+    const a = avis.find((x) => x.id === id) || {};
+    return { id, nom: nommer(id).nom, mobile: t.mobile || '', n: (affectation[id] || []).length, accueil: Boolean(a.accueil) };
   });
 
   const m = modale({
@@ -1123,7 +1128,10 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, nommer }) => {
         ${charges.length ? `<div class="liste liste--serree">${charges.map((t) => `
           <div class="rang" style="justify-content:space-between;padding:8px 10px;border-radius:10px;background:var(--fond-2)">
             <span>${echapper(t.nom)}${t.mobile ? ` <span class="puce puce--mini">${echapper((PLATEFORMES_TEST[t.mobile] || {}).court || t.mobile)}</span>` : ''}</span>
-            <span class="t-micro">${t.n ? pluriel(t.n, 'passage', 'passages') : 'rien encore'}</span>
+            <span class="rang" style="gap:10px;align-items:center">
+              ${t.accueil ? '<span class="pastille pastille--vert" title="A parcouru l\'accueil de son espace">Premiers pas faits</span>' : '<span class="t-micro t-3">premiers pas à faire</span>'}
+              <span class="t-micro">${t.n ? pluriel(t.n, 'passage', 'passages') : 'rien encore'}</span>
+            </span>
           </div>`).join('')}</div>`
           : `<p class="aide">Aucun testeur pour l'instant. ${vivier.length ? 'Choisissez-les ci-dessous.' : 'Le vivier est vide : le serveur seul y inscrit quelqu\'un.'}</p>`}
       </div>

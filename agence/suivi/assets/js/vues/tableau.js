@@ -86,6 +86,8 @@ const pourquoi = (c) => {
 };
 
 const CLE_DEPLIE = 'suivi:tableau-deplie';
+/* Les énoncés portent leurs mots forts entre doubles astérisques. */
+const gras = (t) => echapper(t || '').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
 /* Changer un filtre de la page Tests la remonte entièrement : la campagne
    et la voie choisies survivent ici, le temps de la visite. */
 const memoire = { campagne: '', voie: 'humains' };
@@ -349,6 +351,8 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
     });
     const c = t.familles.flatMap((f) => f.cases).find((x) => x.ref === ref);
     if (!c) return;
+    /* L'énoncé, mot pour mot : ce que le testeur a lu. */
+    const sc = d.scenarios.find((x) => x.ref === ref && projetDe(x) === pid) || {};
     const nommer = nommeur(d, { equipe, pid });
     const affectes = Object.entries(campagne.affectation || {}).filter(([, refs]) => (refs || []).includes(ref)).map(([uid]) => uid);
     const uids = Array.from(new Set([...affectes, ...c.passages.map((p) => p.testeur)]));
@@ -356,12 +360,14 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
     const e = ETATS_CASE[c.etat] || {};
 
     const m = modale({
-      titre: `${c.ref} · ${c.titre}`, feuille: true,
-      sousTitre: `${(BLOCS_SCENARIO[c.bloc] || {}).libelle || ''}${c.niveau ? ` · ${(NIVEAUX_SCENARIO[c.niveau] || {}).libelle || c.niveau}` : ''}`,
+      titre: c.titre, scenario: true,
+      sousTitre: `${c.ref} · ${(BLOCS_SCENARIO[c.bloc] || {}).libelle || ''}${c.niveau ? ` · ${(NIVEAUX_SCENARIO[c.niveau] || {}).libelle || c.niveau}` : ''}`,
       corps: `
         <p class="tb-pourquoi"><strong>${echapper(e.libelle || c.etat)}.</strong> ${echapper(pourquoi(c))}</p>
-        ${c.revoir ? '<p class="aide">Une correction attend d\'être rejouée par le testeur qui avait trouvé le défaut.</p>' : ''}
-        <div class="groupe"><span class="etiquette-champ">Les passages</span>
+        ${c.revoir ? '<section class="fs-bloc fs-bloc--alerte"><p class="fs-bloc-sur">À rejouer</p><p>Une correction attend d\'être rejouée par le testeur qui avait trouvé le défaut.</p></section>' : ''}
+        ${sc.options ? `<section class="fs-bloc"><p class="fs-bloc-sur">Ce qu'il faut poser</p><p>${gras(sc.options)}</p></section>` : ''}
+        ${sc.attendu ? `<section class="fs-bloc fs-bloc--attendu"><p class="fs-bloc-sur">Ce qui doit se passer</p><p>${gras(sc.attendu)}</p></section>` : ''}
+        <div class="fs-bloc"><p class="fs-bloc-sur">Les passages</p>
           <div class="tb-sessions">${uids.length ? uids.map((uid) => {
             const p = c.passages.find((x) => x.testeur === uid);
             const qui = nommer(uid);
@@ -374,7 +380,7 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
             </div>`;
           }).join('') : '<p class="aide">Personne n\'a reçu ce scénario.</p>'}</div>
         </div>
-        ${c.anomalies.length ? `<div class="groupe"><span class="etiquette-champ">Anomalies</span><div class="tb-sessions">${c.anomalies.map((a) => `<div class="tb-passage">
+        ${c.anomalies.length ? `<div class="fs-bloc"><p class="fs-bloc-sur">Anomalies</p><div class="tb-sessions">${c.anomalies.map((a) => `<div class="tb-passage">
           <p>${echapper(a.titre || 'Anomalie')}${Number(a.retours) ? ' · <span class="tb-rouge">revenue</span>' : ''}</p>
           <div class="rang">${pastille(STATUTS_ANOMALIE, a.statut || 'nouvelle')}${pastille(GRAVITES_ANOMALIE, a.gravite || 'important')}${equipe ? `<button class="btn btn-secondaire btn-petit" type="button" data-qualifier="${echapper(a.id)}">Qualifier</button>` : ''}</div>
         </div>`).join('')}</div></div>` : ''}`,
@@ -402,14 +408,14 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
     const c = t.familles[0].cases[0];
     const e = ETATS_CASE[c.etat] || {};
     const m = modale({
-      titre: `${x.ref} · ${x.titre || ''}`, feuille: true,
-      sousTitre: regle ? 'Règle métier' : `${(OUTILS_PARCOURS[x.outil] || {}).libelle || x.outil || ''}${(x.plateformes || []).length ? ` · ${(x.plateformes || []).map((p) => (PLATEFORMES_TEST[p] || {}).court || p).join(', ')}` : ''}`,
+      titre: x.titre || x.ref, scenario: true,
+      sousTitre: `${x.ref} · ${regle ? 'Règle métier' : `${(OUTILS_PARCOURS[x.outil] || {}).libelle || x.outil || ''}${(x.plateformes || []).length ? ` · ${(x.plateformes || []).map((p) => (PLATEFORMES_TEST[p] || {}).court || p).join(', ')}` : ''}`}`,
       corps: `
         <p class="tb-pourquoi"><strong>${echapper(e.libelle || c.etat)}.</strong> ${der.le ? `Dernier résultat ${echapper(dateHeure(der.le))}${der.duree ? `, en ${echapper(String(der.duree))} s` : ''}.` : 'Jamais exécuté.'}${x.etat === 'instable' ? ' Passé au vert après un nouvel essai : un parcours instable n\'apprend rien, il faut le fiabiliser.' : ''}</p>
         ${(x.scenarios || []).length ? `<p class="aide">Couvre ${(x.scenarios || []).map((r) => `<span class="ref">${echapper(r)}</span>`).join(', ')}.</p>` : ''}
         ${!regle ? `<p class="aide">${x.mutation ? 'Éprouvé : on l\'a vu tomber en remettant le défaut exprès.' : 'Pas encore éprouvé par une mutation : tant qu\'on ne l\'a pas vu tomber, son vert ne prouve rien.'}</p>` : ''}
-        ${detail ? `<div class="groupe"><span class="etiquette-champ">Ce que la machine a dit</span>
-          <p class="t-corps">${detail.message ? echapper(detail.message) : 'Aucun message.'}</p>
+        ${detail ? `<div class="fs-bloc"><p class="fs-bloc-sur">Ce que la machine a dit</p>
+          <p>${detail.message ? echapper(detail.message) : 'Aucun message.'}</p>
           <p class="aide">${detail.essais > 1 ? `${detail.essais} essais · ` : ''}exécution ${echapper(der.execution)}${detail.lien ? ` · <a href="${echapper(detail.lien)}" target="_blank" rel="noopener">voir le rapport</a>` : ''}</p></div>` : ''}`,
       pied: `<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>${equipe && !regle ? '<button class="btn btn-principal" type="button" data-modifier>Modifier</button>' : ''}`,
     });

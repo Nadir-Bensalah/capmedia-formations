@@ -53,6 +53,32 @@ const trouver = (chemin) => {
   return null;
 };
 
+/* L'arrivée sur un écran, dans la suite Capmedia (le Cockpit) : la zone de
+   travail glisse d'un écran à l'autre (View Transitions) et ses cartes se
+   posent l'une après l'autre (la classe « arrivee », lue par suite.css).
+   Seulement au changement d'adresse : une donnée qui arrive en direct
+   redessine l'écran sans rien rejouer. Rien de tout cela sous un robot de
+   test (navigator.webdriver), ni quand le système demande moins de
+   mouvement. */
+let finArrivee = null;
+let dejaArrive = false;
+const arriver = (monter) => {
+  const racine = document.documentElement;
+  const anime = racine.hasAttribute('data-suite') && !navigator.webdriver
+    && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!anime) return monter();
+  sortie.classList.add('arrivee');
+  clearTimeout(finArrivee);
+  finArrivee = setTimeout(() => sortie.classList.remove('arrivee'), 900);
+  if (!document.startViewTransition || !dejaArrive || document.visibilityState !== 'visible') {
+    dejaArrive = true;
+    return monter();
+  }
+  let rendu;
+  const t = document.startViewTransition(() => { rendu = monter(); });
+  return t.updateCallbackDone.then(() => rendu, () => rendu);
+};
+
 const rendre = async () => {
   const { chemin, requete } = lireHash();
   const trouve = trouver(chemin);
@@ -81,9 +107,11 @@ const rendre = async () => {
   cleCourante = cle;
   routeCourante = { chemin, params: trouve.params, requete };
   ecouteurs.forEach((fn) => { try { fn(routeCourante); } catch (e) { console.error(e); } });
-  window.scrollTo({ top: 0 });
   try {
-    const rendu = await trouve.route.vue({ ...routeCourante, sortie });
+    const rendu = await arriver(() => {
+      window.scrollTo({ top: 0 });
+      return trouve.route.vue({ ...routeCourante, sortie });
+    });
     const objet = rendu && typeof rendu === 'object';
     const fin = objet && typeof rendu.fin === 'function' ? rendu.fin
       : (typeof rendu === 'function' ? rendu : null);
