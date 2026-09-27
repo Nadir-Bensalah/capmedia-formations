@@ -151,11 +151,29 @@ service firebase.storage {
     // pièce : un brouillon ou une pièce archivée ne se télécharge pas, et
     // seul un responsable du projet le télécharge.
     match /projets/{projetId}/pieces/{documentId}/{nom} {
-      allow get: if jetonEquipe() ? financeEquipe(projetId)
-        : (responsableDuProjet(projetId)
-            && fiche(/databases/(default)/documents/documents/$(documentId)).projet == projetId
-            && fiche(/databases/(default)/documents/documents/$(documentId)).statut != 'brouillon'
-            && fiche(/databases/(default)/documents/documents/$(documentId)).get('archive', false) != true);
+      // Deux lectures Firestore, et pas un appel de plus : le projet, la
+      // pièce, chacun lu UNE fois (« let »). La version d'avant relisait le
+      // projet deux fois et la pièce trois fois ; le banc laissait passer,
+      // la production refusait la lecture au client (403, 27/09/2026).
+      function responsableUneLecture(projetId) {
+        let p = ficheProjet(projetId);
+        return request.auth != null && !jetonEquipe()
+          && request.auth.uid in p.get('membres', [])
+          && p.get('roles', {}).get(request.auth.uid, '') == 'responsable';
+      }
+      function pieceLisible(projetId, documentId) {
+        let d = fiche(/databases/(default)/documents/documents/$(documentId));
+        return d.projet == projetId && d.statut != 'brouillon' && d.get('archive', false) != true;
+      }
+      function financeUneLecture(projetId) {
+        let f = ficheEquipe();
+        return jetonEquipe() && f.get('actif', false) == true
+          && (f.get('role', '') == 'admin'
+              || (f.get('role', '') == 'agent' && projetId in f.get('projets', [])
+                  && f.get('permissions', []).hasAny(['finance.lecture', 'finance.gerer'])));
+      }
+      allow get: if jetonEquipe() ? financeUneLecture(projetId)
+        : (responsableUneLecture(projetId) && pieceLisible(projetId, documentId));
       allow list:   if financeEquipe(projetId);
       allow create, update: if financeGerer(projetId) && fichierAccepte();
       allow delete: if financeGerer(projetId);

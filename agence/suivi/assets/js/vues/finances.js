@@ -172,7 +172,9 @@ export const vue = async (ctx, env) => {
       icone: d.type === 'devis' ? 'receipt' : 'euro', ton: d.type === 'devis' ? (['envoye', 'consulte'].includes(d.statut) ? 'ambre' : d.statut === 'accepte' ? 'vert' : '') : (d.statut === 'en-retard' ? 'rouge' : FACTURES_DUES.includes(d.statut) ? 'ambre' : d.statut === 'payee' ? 'vert' : ''),
       titre: `${d.numero ? `<span class="t-mono t-3" style="font-weight:400">${echapper(d.numero)}</span> ` : ''}${echapper(d.libelle || '')}`,
       sous: `${echapper(nomProjet(d.projet))} · ${echapper(dateCourte(d.date))}${d.type === 'facture' && d.echeance && FACTURES_DUES.includes(d.statut) ? ` · échéance ${echapper(dateCourte(d.echeance))}` : ''}`,
-      fin: `${(d.liens || []).length ? `<span class="puce puce--bleu"><i></i>${icone('externe')}</span>` : ''}${d.fichier && d.fichier.chemin ? `<button class="btn btn-fantome btn-petit" type="button" data-voir="${echapper(d.id)}">${icone('externe')} Voir</button>` : ''}<span class="nb t-fort">${echapper(montantPiece(d, 2))}</span>${pastille(d.type === 'devis' ? STATUTS_DEVIS : STATUTS_FACTURE, d.statut)}`,
+      /* Trois colonnes fixes, alignées d'une ligne à l'autre : le bouton
+         Voir (ou sa place vide), le montant, le statut. */
+      fin: `${(d.liens || []).length ? `<span class="puce puce--bleu"><i></i>${icone('externe')}</span>` : ''}<span class="piece-fin"><span class="piece-fin-voir">${d.fichier && d.fichier.chemin ? `<button class="btn btn-voir" type="button" data-voir="${echapper(d.id)}">Voir</button>` : ''}</span><span class="nb t-fort">${echapper(montantPiece(d, 2))}</span><span class="piece-fin-statut">${pastille(d.type === 'devis' ? STATUTS_DEVIS : STATUTS_FACTURE, d.statut)}</span></span>`,
       action: 'ouvrir', attrs: `data-id="${echapper(d.id)}"`,
     });
 

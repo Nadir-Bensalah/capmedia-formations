@@ -1424,3 +1424,13 @@ html.accueil-ouvert { overflow: hidden; }
 .apercu-pdf { flex: 1; width: 100%; border: 0; background: var(--fond-2); }
 .apercu-attente { margin: auto; text-align: center; }
 .feuille--apercu .modale-corps { display: flex; flex-direction: column; }
+
+/* Devis et factures : trois colonnes fixes en fin de ligne, le bouton Voir
+   toujours au même endroit, blanc, arrondi. */
+.piece-fin { display: grid; grid-template-columns: 72px 150px 104px; align-items: center; justify-items: end; gap: 14px; }
+.piece-fin-voir { justify-self: start; width: 100%; display: flex; justify-content: flex-start; }
+.piece-fin-statut { justify-self: start; }
+.btn-voir { height: 30px; padding: 0 14px; border: 0; border-radius: 10px; background: #FFFFFF; color: #111113; font: 500 13px var(--police); cursor: pointer; box-shadow: 0 0 0 1px rgba(0, 0, 0, .06), 0 1px 2px rgba(0, 0, 0, .12); transition: transform .12s var(--ressort), box-shadow .15s var(--courbe); }
+.btn-voir:hover { box-shadow: 0 0 0 1px rgba(0, 0, 0, .08), 0 3px 8px rgba(0, 0, 0, .18); }
+.btn-voir:active { transform: scale(.97); }
+@media (max-width: 720px) { .piece-fin { grid-template-columns: auto auto auto; gap: 8px; } }
