@@ -12,6 +12,7 @@ import { filAriane } from '../coquille.js';
 import { naviguer } from '../routeur.js';
 import { lienPiece } from '../noyau.js';
 import { friseDevis, brancherFrise } from './frise.js';
+import { ouvrirApercu } from '../apercu-piece.js';
 
 export const ouvrirDocument = (d, env, { projets, paiements }) => {
   const equipe = env.role === 'equipe';
@@ -59,7 +60,7 @@ export const ouvrirDocument = (d, env, { projets, paiements }) => {
         : "<strong>C'est un devis complémentaire.</strong> Il s'ajoute à un projet déjà lancé, sans en changer le déroulé.", 'info', 'receipt')}
       <form id="forme-devis" class="forme" style="margin-top:24px" novalidate><div class="groupe"><label class="etiquette-champ" for="commentaire-devis">Un mot pour nous <span class="facultatif">(facultatif)</span></label><textarea class="zone" id="commentaire-devis" rows="3" maxlength="2000"></textarea></div></form>` : ''}
       ${!equipe && !devis && FACTURES_DUES.includes(d.statut) ? encart('<strong>Pour régler :</strong> virement aux coordonnées indiquées sur la facture. Le paiement en ligne arrivera prochainement. Un souci sur cette facture ? Ouvrez une demande, nous regardons.', 'info', 'paiement') : ''}`,
-    pied: `${d.fichier && d.fichier.chemin ? `<button class="btn btn-secondaire" type="button" data-piece="${echapper(d.fichier.chemin)}">${icone('telecharger')} Télécharger le PDF</button>` : (equipe ? `<button class="btn btn-secondaire" type="button" data-joindre>${icone('trombone')} Joindre le PDF</button>` : '')}
+    pied: `${d.fichier && d.fichier.chemin ? `<button class="btn btn-secondaire" type="button" data-voir-piece>${icone('externe')} Voir le PDF</button><button class="btn btn-doux" type="button" data-piece="${echapper(d.fichier.chemin)}" aria-label="Télécharger le PDF" data-astuce="Télécharger">${icone('telecharger')}</button>${equipe ? `<button class="btn btn-doux" type="button" data-joindre aria-label="Remplacer le PDF" data-astuce="Remplacer le PDF">${icone('trombone')}</button>` : ''}` : (equipe ? `<button class="btn btn-secondaire" type="button" data-joindre>${icone('trombone')} Joindre le PDF</button>` : '')}
       ${equipe ? `<button class="btn btn-doux" type="button" data-liens>${icone('liens')} Liens</button>` : ''}
       ${decidable ? `<button class="btn btn-secondaire" type="button" data-refuser>Refuser</button><span class="pousse"></span><button class="btn btn-ok" type="button" data-accepter>${icone('check')} Accepter le devis</button>`
       : !equipe ? `<span class="pousse"></span><a class="btn btn-doux" href="#/projets/${echapper(d.projet)}/nouvelle-demande?type=question">Poser une question</a><button class="btn btn-principal" type="button" data-fermer>Fermer</button>`
@@ -68,6 +69,9 @@ export const ouvrirDocument = (d, env, { projets, paiements }) => {
   brancherPieces(m.el);
   brancherFrise(m.el, env);
   sur(m.el, 'click', '[data-joindre]', async () => { m.fermer(); await joindreFichier(d); });
+  /* L'aperçu s'ouvre par-dessus la fiche, sur le côté : on lit, on
+     télécharge, on imprime, puis on revient à la fiche. */
+  sur(m.el, 'click', '[data-voir-piece]', () => ouvrirApercu(d, { projet }));
   sur(m.el, 'click', '[data-liens]', async () => { m.fermer(); await editerLiens(d); });
   const commentaire = () => (m.el.querySelector('#commentaire-devis') || { value: '' }).value.trim();
   sur(m.el, 'click', '[data-accepter]', async (el) => {
@@ -168,7 +172,7 @@ export const vue = async (ctx, env) => {
       icone: d.type === 'devis' ? 'receipt' : 'euro', ton: d.type === 'devis' ? (['envoye', 'consulte'].includes(d.statut) ? 'ambre' : d.statut === 'accepte' ? 'vert' : '') : (d.statut === 'en-retard' ? 'rouge' : FACTURES_DUES.includes(d.statut) ? 'ambre' : d.statut === 'payee' ? 'vert' : ''),
       titre: `${d.numero ? `<span class="t-mono t-3" style="font-weight:400">${echapper(d.numero)}</span> ` : ''}${echapper(d.libelle || '')}`,
       sous: `${echapper(nomProjet(d.projet))} · ${echapper(dateCourte(d.date))}${d.type === 'facture' && d.echeance && FACTURES_DUES.includes(d.statut) ? ` · échéance ${echapper(dateCourte(d.echeance))}` : ''}`,
-      fin: `${(d.liens || []).length ? `<span class="puce puce--bleu"><i></i>${icone('externe')}</span>` : ''}${d.fichier && d.fichier.chemin ? `<span class="puce t-3">${icone('telecharger')}</span>` : ''}<span class="nb t-fort">${echapper(montantPiece(d, 2))}</span>${pastille(d.type === 'devis' ? STATUTS_DEVIS : STATUTS_FACTURE, d.statut)}`,
+      fin: `${(d.liens || []).length ? `<span class="puce puce--bleu"><i></i>${icone('externe')}</span>` : ''}${d.fichier && d.fichier.chemin ? `<button class="btn btn-fantome btn-petit" type="button" data-voir="${echapper(d.id)}">${icone('externe')} Voir</button>` : ''}<span class="nb t-fort">${echapper(montantPiece(d, 2))}</span>${pastille(d.type === 'devis' ? STATUTS_DEVIS : STATUTS_FACTURE, d.statut)}`,
       action: 'ouvrir', attrs: `data-id="${echapper(d.id)}"`,
     });
 
@@ -193,16 +197,24 @@ export const vue = async (ctx, env) => {
     }
   };
 
-  const gestes = sur(sortie, 'click', '[data-action="ouvrir"]', (el) => {
+  const gestes = sur(sortie, 'click', '[data-action="ouvrir"]', (el, ev) => {
+    if (ev && ev.target.closest('[data-voir]')) return;
     const projets = magasin.lire(K.projets) || session.projets;
     const d = agreger(session, G.documents).find((x) => x.id === el.dataset.id);
     if (d) ouvrirDocument(d, env, { projets, paiements: agreger(session, G.paiements) });
+  });
+  /* « Voir » dans la liste : l'aperçu du PDF, sans passer par la fiche. */
+  const gestesVoir = sur(sortie, 'click', '[data-voir]', (el, ev) => {
+    ev.stopPropagation();
+    const projets = magasin.lire(K.projets) || session.projets;
+    const d = agreger(session, G.documents).find((x) => x.id === el.dataset.voir);
+    if (d) ouvrirApercu(d, { projet: projets.find((p) => p.id === d.projet) || {} });
   });
   let minuteur = null;
   const planifier = () => { clearTimeout(minuteur); minuteur = setTimeout(rendre, 40); };
   [K.projets, ...session.projets.flatMap((p) => [K.documents(p.id), K.paiements(p.id)])].forEach((c) => lot.sur(c, planifier));
   planifier();
-  return () => { clearTimeout(minuteur); gestes(); lot.fin(); };
+  return () => { clearTimeout(minuteur); gestes(); gestesVoir(); lot.fin(); };
 };
 
 void toast; void lienPiece;

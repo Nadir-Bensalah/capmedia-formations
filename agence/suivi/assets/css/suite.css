@@ -1412,3 +1412,15 @@ html.accueil-ouvert { overflow: hidden; }
 .tm-repondre { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; padding: 12px 18px 16px; }
 .tm-vide { padding: 40px 18px; }
 @media (max-width: 800px) { .tm-deux { grid-template-columns: 1fr; } }
+
+/* L'aperçu d'une pièce : la feuille s'élargit, le PDF prend la hauteur. */
+.feuille--apercu { width: min(1040px, 96vw); }
+.apercu-tete { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; }
+.apercu-puce { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 980px; background: var(--fond-2); font: 500 12.5px/1.2 var(--police); color: var(--encre-2); }
+.apercu-puce b { color: var(--encre); font-size: 13.5px; }
+.apercu-puce sup { font-size: 9px; margin-left: 2px; }
+.apercu-puce svg { width: 13px; height: 13px; }
+.apercu-cadre { flex: 1; min-height: min(72vh, 900px); border-radius: 12px; background: var(--fond-2); overflow: hidden; display: flex; }
+.apercu-pdf { flex: 1; width: 100%; border: 0; background: var(--fond-2); }
+.apercu-attente { margin: auto; text-align: center; }
+.feuille--apercu .modale-corps { display: flex; flex-direction: column; }
