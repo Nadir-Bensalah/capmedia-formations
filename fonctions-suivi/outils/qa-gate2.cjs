@@ -84,6 +84,9 @@ const entrer = async (nav, email) => {
   await page.fill('#code', (await codeDe(email)) || '');
   await page.waitForURL(/\/suivi\/(hub|cockpit|testeur)/, { timeout: 40000 }).catch(() => {});
   await pause(2500);
+  /* Un compte neuf voit l'accueil de la première fois devant tout (qa-accueil-hub
+     le teste) : ici on va droit à l'espace. */
+  if (await page.$('.accueil')) { await page.click('.accueil [data-accueil="passer"]', { timeout: 3000 }).catch(() => null); await page.waitForSelector('.accueil', { state: 'detached', timeout: 5000 }).catch(() => null); }
   return { ctx, page, erreurs };
 };
 const aller = async (page, hash, sel) => {

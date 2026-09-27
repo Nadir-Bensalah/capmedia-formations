@@ -166,6 +166,8 @@ await doit('Camille marque une notification lue', updateDoc(doc(camille(), `boit
 await refuse('Camille ne se crée pas une notification', addDoc(collection(camille(), `boites/${CAMILLE}/notifications`), { titre: 'x', lu: false }));
 await doit('Camille écrit son profil', setDoc(doc(camille(), `profils/${CAMILLE}`), { nom: 'Camille', notifications: { messages: 'off' } }, { merge: true }));
 await refuse("Camille n'écrit pas le profil de Léa", setDoc(doc(camille(), `profils/${LEA}`), { nom: 'x' }));
+await doit('Camille consigne ses premiers pas dans son profil', setDoc(doc(camille(), `profils/${CAMILLE}`), { accueil: new Date() }, { merge: true }));
+await refuse('mais pas n importe quoi à la place d une date', setDoc(doc(camille(), `profils/${CAMILLE}`), { accueil: 'oui' }, { merge: true }));
 await doit('Léa décrit un nouveau projet', addDoc(collection(lea(), 'demandesProjet'), { organisation: 'boutique', par: { uid: LEA, nom: 'Léa', email: 'lea.essai@exemple.test' }, titre: 'Appli', idee: 'x', objectifs: '', type: 'autre', plateformes: [], budget: '', delai: '', description: '', fonctionnalites: '', exemples: '', liens: '', pieces: [], statut: 'nouvelle', projet: null, cree: serverTimestamp(), maj: serverTimestamp() }));
 await refuse("Camille ne lit pas la demande de projet de Léa", getDoc(doc(camille(), 'demandesProjet/dp1')));
 
@@ -559,6 +561,8 @@ await refuse('Camille ne lit pas la présence de Karim', getDoc(doc(camille(), `
 await refuse('Camille ne lit pas les sessions de Karim', getDocs(collection(camille(), `presences/${KARIM}/sessions`)));
 await refuse('Sonia ne lit pas la présence de Karim', getDoc(doc(sonia(), `presences/${KARIM}`)));
 await refuse('Karim ne relit pas même la sienne', getDoc(doc(karim(), `presences/${KARIM}`)));
+await doit('Karim relit ses sessions, pour son chronomètre', getDocs(collection(karim(), `presences/${KARIM}/sessions`)));
+await refuse('Sonia ne lit pas les sessions de Karim', getDocs(collection(sonia(), `presences/${KARIM}/sessions`)));
 await doit("L'équipe lit les exécutions des robots", getDocs(collection(equipe(), 'projets/atelier/executions')));
 await doit("L'équipe lit le message d erreur d un parcours", getDoc(doc(equipe(), 'projets/atelier/executions/ci-1/resultats/R-01')));
 await refuse('Camille ne lit pas la branche ni le commit', getDocs(collection(camille(), 'projets/atelier/executions')));

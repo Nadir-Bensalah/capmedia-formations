@@ -127,7 +127,7 @@ const entrer=async(nav,email)=>{
     const cas=[
       ['agent.essai@exemple.test','/suivi/cockpit','Cockpit',"l'équipe"],
       ['camille.essai@exemple.test','/suivi/hub','Hub','le client'],
-      [adresse,'/suivi/testeur','Capmedia Tests','le testeur'],
+      [adresse,'/suivi/testeur','Test','le testeur'],
     ];
     for (const [email,chemin,marque,qui] of cas) {
       const v=await entrer(nav,email);

@@ -233,7 +233,8 @@ async function main() {
   for (const a of activite) await bdd.collection('activite').add(a);
   await bdd.collection(`boites/${camille}/notifications`).add({ type: 'validation', titre: 'Votre validation est attendue', texte: 'Valider la maquette du nouveau profil', lien: '#/valider/v-maquette', projet: 'atelier', lu: false, date: ilYA(1) });
   await bdd.collection(`boites/${agent}/notifications`).add({ type: 'demande', titre: 'Nouvelle demande', texte: 'Les notifications arrivent deux fois le matin · Atelier', lien: '#/projets/atelier/demandes/t-nouveau', projet: 'atelier', lu: false, date: ilYA(0, 1) });
-  await bdd.doc(`profils/${camille}`).set({ nom: 'Camille Martin', email: 'camille.essai@exemple.test', derniereVisite: ilYA(2), notifications: {}, lus: {} });
+  /* Ses premiers pas sont faits : l'accueil du Hub ne passe pas devant les suites (qa-accueil-hub l'efface pour le rejouer). */
+await bdd.doc(`profils/${camille}`).set({ nom: 'Camille Martin', email: 'camille.essai@exemple.test', derniereVisite: ilYA(2), accueil: ilYA(2), notifications: {}, lus: {} });
 
   /* --- Les deux portees d'un devis --------------------------------------------------------- */
   /* Le devis fondateur du projet en preparation : sa signature fera

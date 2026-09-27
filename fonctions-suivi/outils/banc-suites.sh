@@ -37,6 +37,8 @@ prealables() {
       node outils/semer-robot-banc.mjs atelier ;;
     qa-devis-frise)
       node outils/semer-etapes-devis.mjs atelier d-qa --vrai ;;
+    qa-espace-testeur)
+      node outils/semer-campagne.mjs "$PLAN_DE_TESTS" ;;
   esac
 }
 

@@ -48,6 +48,9 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   page.on('console',m=>{if(m.type()==='error')err.push(m.text().slice(0,180));});
 
   await connecter(page,'karim.testeur@essai.test');
+  /* La première fois, l'accueil passe devant tout : cette suite ne le teste pas (qa-espace-testeur), elle va droit à la campagne. */
+  await page.waitForSelector('.accueil [data-accueil="passer"], .testeur-tete', { timeout: 20000 }).catch(() => null);
+  if (await page.$('.accueil')) { await page.click('.accueil [data-accueil="passer"]'); await page.waitForSelector('.accueil', { state: 'detached' }); }
 
   console.log('\n== Avant de commencer');
   const bandeau = await page.evaluate(()=>({

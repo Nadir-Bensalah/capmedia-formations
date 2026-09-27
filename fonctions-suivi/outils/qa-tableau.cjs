@@ -167,10 +167,10 @@ const SCENARIOS=[
   verifier(erreursPage.length===0,'aucune erreur dans la page',erreursPage.join(' | ').slice(0,200));
 
   await equipe.click('[data-case="TB-02"]'); await pause(600);
-  const feuille=await equipe.textContent('.feuille').catch(()=>'');
+  const feuille=await equipe.textContent('.feuille, .modale--scenario').catch(()=>'');
   verifier(/2 testeurs sur 2 en échec/.test(feuille),'la feuille dit pourquoi : 2 testeurs sur 2 en échec',feuille.slice(0,120));
   verifier(/Nina/.test(feuille)&&/Omar/.test(feuille),'et nomme les testeurs, côté équipe');
-  await equipe.keyboard.press('Escape'); await equipe.click('.feuille [data-fermer]').catch(()=>{}); await pause(300);
+  await equipe.keyboard.press('Escape'); await equipe.click('.feuille [data-fermer], .modale--scenario [data-fermer]').catch(()=>{}); await pause(300);
 
   console.log('\n== Le tableau vit DANS Tests, replié sous les quatre chiffres');
   {
@@ -214,7 +214,7 @@ const SCENARIOS=[
     verifier(refus,'des dates inversées sont refusées, avec la raison');
     const c=await lire(`projets/${PID}/campagnes/${CID}`);
     verifier(!/2026-10-01/.test(champ(c,'debut').timestampValue||''),'et rien n est enregistré',champ(c,'debut').timestampValue);
-    await equipe.click('.feuille [data-fermer]').catch(()=>{});
+    await equipe.click('.feuille [data-fermer], .modale--scenario [data-fermer]').catch(()=>{});
     await allerTableau(equipe,`projet=${PID}&campagne=${CID}`);
   }
 
@@ -232,6 +232,9 @@ const SCENARIOS=[
   const ctxT=await nav.newContext({viewport:{width:390,height:844}});
   const testeur=await ctxT.newPage();
   await connecter(testeur,'paul.tableau@exemple.test');
+  /* Un testeur neuf voit l'accueil devant tout (qa-espace-testeur le teste) : ici on va droit à sa campagne. */
+  await testeur.waitForSelector('.accueil [data-accueil="passer"], .testeur-tete', { timeout: 20000 }).catch(() => null);
+  if (await testeur.$('.accueil')) { await testeur.click('.accueil [data-accueil="passer"]'); await testeur.waitForSelector('.accueil', { state: 'detached' }); }
   verifier(/\/suivi\/testeur/.test(testeur.url()),'Paul arrive dans son espace',testeur.url());
   await testeur.waitForSelector('.tb-case',{timeout:30000}).catch(()=>{});
   const eT=await etats(testeur);
@@ -248,14 +251,14 @@ const SCENARIOS=[
   await poser(`projets/${PID}/campagnes/${CID}`,{statut:S('preparation')},['statut']);
   const eteinte=await attendre(async()=>/Aucune campagne en cours/.test(await testeur.textContent('body')),30,500);
   verifier(eteinte,'campagne repassée en préparation : sa page le dit sans recharger');
-  verifier(/Capmedia Tests/i.test(await testeur.textContent('body')),'et même vide, elle dit où il est');
+  verifier(/Capmedia\s*Test/i.test(await testeur.textContent('body')),'et même vide, elle dit où il est');
   await poser(`projets/${PID}/campagnes/${CID}`,{statut:S('en-cours')},['statut']);
   verifier(await attendreEtat(testeur,'TB-08','revoir'),'la campagne passe En cours : ses cases apparaissent toutes seules');
 
   console.log('\n== Présence : lui seul voit qui est là, sur quoi');
   await testeur.click('[data-sur="web"]'); await pause(500);
   await testeur.click('[data-case="TB-05"]');
-  await testeur.waitForSelector('.feuille',{timeout:10000}).catch(()=>{});
+  await testeur.waitForSelector('.feuille, .modale--scenario',{timeout:10000}).catch(()=>{});
   const vu=await attendre(async()=>{const t=await equipe.textContent('.tb-direct').catch(()=>'');return /Paul/.test(t)&&/TB-05/.test(t);},40,500);
   verifier(vu,'le cockpit voit Paul en ligne, sur TB-05');
   const pulse=await attendre(async()=>equipe.$eval('[data-case="TB-05"]',b=>b.classList.contains('tb-case--vivante')).catch(()=>false),20,500);
@@ -270,8 +273,8 @@ const SCENARIOS=[
   await testeur.click('[data-feuille-poser="ok"]');
   verifier(await attendreEtat(equipe,'TB-05','ok'),'Paul pose OK depuis sa feuille : le cockpit passe TB-05 au vert en direct');
   verifier(await attendreEtat(testeur,'TB-05','ok'),'et sa propre case aussi');
-  await testeur.click('[data-case="TB-08"]'); await testeur.waitForSelector('.feuille',{timeout:10000}).catch(()=>{});
-  const fT=await testeur.textContent('.feuille').catch(()=>'');
+  await testeur.click('[data-case="TB-08"]'); await testeur.waitForSelector('.feuille, .modale--scenario',{timeout:10000}).catch(()=>{});
+  const fT=await testeur.textContent('.feuille, .modale--scenario').catch(()=>'');
   verifier(/À rejouer/.test(fT),'la feuille de TB-08 lui dit de rejouer');
   await testeur.click('[data-feuille-poser="ok"]');
   verifier(await attendreEtat(equipe,'TB-08','ok'),'rejoué OK : TB-08 passe au vert chez l équipe');
@@ -294,9 +297,9 @@ const SCENARIOS=[
   verifier(sectionC.length>0,'le client a la section du tableau');
   verifier(!/en ligne|Les testeurs|Les robots|là depuis/.test(sectionC),'ni présence, ni cartes de testeurs, ni robots dans son tableau');
   await client.click('[data-case="TB-02"]'); await pause(600);
-  const fC=await client.textContent('.feuille').catch(()=>'');
+  const fC=await client.textContent('.feuille, .modale--scenario').catch(()=>'');
   verifier(/Testeur \d/.test(fC)&&!/Nina|Omar/.test(fC),'dans le détail, des testeurs numérotés',fC.slice(0,100));
-  await client.click('.feuille [data-fermer]').catch(()=>{});
+  await client.click('.feuille [data-fermer], .modale--scenario [data-fermer]').catch(()=>{});
   /* Le même passage qui change de résultat : même identifiant, rien
      d'autre que « le » et « resultat » ne bouge. Le client n'a pas
      d'horloge qui redessine : seul le temps réel peut le montrer. */
@@ -344,13 +347,13 @@ const SCENARIOS=[
   const texteCM=await client.textContent('body');
   verifier(!/branche-secrete|deadbeef|Trace interne/.test(texteCM),'le client ne lit ni la branche, ni le commit, ni le message d erreur');
   await client.click('[data-case="P-02"]'); await pause(800);
-  const fCM=await client.textContent('.feuille').catch(()=>'');
+  const fCM=await client.textContent('.feuille, .modale--scenario').catch(()=>'');
   verifier(!/Trace interne/.test(fCM),'même dans le détail du parcours');
-  await client.click('.feuille [data-fermer]').catch(()=>{});
+  await client.click('.feuille [data-fermer], .modale--scenario [data-fermer]').catch(()=>{});
   await equipe.click('[data-case="P-02"]'); await pause(1200);
-  const fEM=await equipe.textContent('.feuille').catch(()=>'');
+  const fEM=await equipe.textContent('.feuille, .modale--scenario').catch(()=>'');
   verifier(/Trace interne/.test(fEM),'l équipe, elle, lit ce que la machine a dit');
-  await equipe.click('.feuille [data-fermer]').catch(()=>{});
+  await equipe.click('.feuille [data-fermer], .modale--scenario [data-fermer]').catch(()=>{});
   verifier((await robot(jeton,{evenement:'resultat',execution:'ci-42',ref:'P-01',resultat:'vert'})).code===409,'une exécution finie ne reçoit plus rien');
 
   console.log('\n== Le rapporteur JUnit');

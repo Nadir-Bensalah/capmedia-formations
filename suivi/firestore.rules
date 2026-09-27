@@ -184,8 +184,12 @@ service cloud.firestore {
              'lus', 'epingles', 'derniereVisite', 'maj',
              // L'adresse, recopiée ici pour que le serveur retrouve les
              // préférences d'envoi. Elle ne peut être que la sienne.
-             'email'
+             'email',
+             // La date de ses premiers pas (l'accueil du Hub) : l'équipe
+             // sait qui a fait le tour de son espace.
+             'accueil'
            ])
+        && (!('accueil' in request.resource.data) || request.resource.data.accueil is timestamp)
         && (!('email' in request.resource.data) || request.resource.data.email == monEmail())
         && (!('nom' in request.resource.data) || texteBorne(request.resource.data.nom, 120))
         && (!('telephone' in request.resource.data) || texteBorne(request.resource.data.telephone, 40))
@@ -1081,7 +1085,10 @@ service cloud.firestore {
       allow delete: if false;
 
       match /sessions/{sessionId} {
-        allow read: if estEquipe();
+        // Le testeur relit SES sessions, et seulement elles : c'est son
+        // chronomètre (le temps donné à la campagne). La présence en cours,
+        // elle, reste à l'équipe.
+        allow read: if estEquipe() || (estTesteur() && uid == moi());
         allow create: if estTesteur() && uid == moi()
           && request.resource.data.keys().hasOnly(['debut', 'vu', 'campagne', 'projet', 'plateforme', 'agent'])
           && presenceBornee(request.resource.data)

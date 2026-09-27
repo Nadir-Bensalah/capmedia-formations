@@ -54,6 +54,9 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
 
   console.log('\n== Le testeur arrive sur son espace');
   await connecter(page,'karim.testeur@essai.test');
+  /* La première fois, l'accueil passe devant tout : cette suite ne le teste pas (qa-espace-testeur), elle va droit à la campagne. */
+  await page.waitForSelector('.accueil [data-accueil="passer"], .testeur-tete', { timeout: 20000 }).catch(() => null);
+  if (await page.$('.accueil')) { await page.click('.accueil [data-accueil="passer"]'); await page.waitForSelector('.accueil', { state: 'detached' }); }
   const ou = await page.evaluate(()=>({ url: location.pathname, titre: document.title, h1:(document.querySelector('h1')||{}).innerText||'' }));
   verifier(/\/suivi\/testeur/.test(ou.url),'il est redirigé vers son espace',ou.url);
   verifier(/Bonjour Karim/.test(ou.h1),'la page le nomme',ou.h1);
