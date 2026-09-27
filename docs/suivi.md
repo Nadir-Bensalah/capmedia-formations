@@ -352,6 +352,36 @@ dont les mauvais codes, les codes brûlés, le rejeu, le débit et les
 jetons révoqués), par huit contrôles de règles, et par le parcours
 navigateur complet dans la suite de bout en bout.
 
+**La clé d'accès (WebAuthn), en plus du code.** Touch ID sur Mac,
+Windows Hello, la clé du trousseau dans un navigateur : une paire de clés
+par appareil, la privée ne quitte jamais l'appareil, la publique vit dans
+`cles/{id}` (uid, adresse, clé publique, compteur, transports, nom de
+l'appareil, dates). Le module est `fonctions-suivi/cles.js`, branché sur
+`suiviConnexion` :
+
+- `cleOptionsEnregistrement` puis `cleEnregistrer` (session ouverte, jeton
+  vérifié par `acces.identifier`) : l'appareil s'ajoute depuis l'espace,
+  jamais depuis la porte ; dix clés au plus par compte ;
+- `clesLister`, `cleRetirer` (session ouverte) ;
+- `cleOptionsConnexion` (adresse) : les clés de cette adresse, ou « pas de
+  clé », et la page demande alors un code ; `cleVerifier` (adresse,
+  réponse signée) : la signature du défi, pour l'origine et le domaine
+  attendus (`capmedia.app` en production, `localhost` sur le banc), puis
+  la même ouverture de session que le code (`ouvrirSession` : l'accès du
+  compte relu à l'instant, revendications, lien à usage unique).
+
+Un défi (`defis/{cle}`) vit deux minutes et ne sert qu'une fois. Les deux
+collections sont fermées au navigateur. Côté page, `cles-acces.js` : sur
+la porte, `tenterConnexion(email)` essaie la clé avant de demander un code
+(pas de clé, geste annulé : le code part sans bruit) ; dans l'espace, la
+feuille « Clés d'accès » (menu du compte, pour les trois espaces, et
+Paramètres › Sécurité) liste, ajoute cet appareil, retire. Entré par un
+code sans aucune clé, l'espace propose la clé une fois (`proposerCle`).
+L'audit dit `mode: code` ou `mode: cle`.
+
+Épreuve : `qa-cle-acces.cjs` (22 contrôles, authentificateur virtuel de
+Chromium par CDP, site servi sur `http://localhost:8787`).
+
 ## 12. Le rideau et le cycle commercial (septembre 2026)
 
 Deux manques de fond, corrigés ensemble.
@@ -555,6 +585,7 @@ serveur-gate2.test.mjs    le serveur de bout en bout, sur émulateurs
 migration-gate2.test.mjs  la migration : à blanc, réelle, silencieuse, rejouable, réversible
 qa-gate2.cjs              l'histoire complète dans de vrais navigateurs (22 étapes)
 qa-fin-de-test.cjs        la fin de test : l'ordre, « J'ai terminé », le gel, les sept jours, la remarque, prolonger et clore
+qa-cle-acces.cjs          la clé d'accès : ajout, entrée sans code, refus, retrait
 matrice-gate2.test.mjs    12 catégories de personnes x 48 opérations Firestore
 matrice-stockage-gate2    12 catégories x 16 opérations Storage
 invitations-gate2         les quatre familles d'invitation, de bout en bout

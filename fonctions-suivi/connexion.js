@@ -32,6 +32,7 @@ const crypto = require('node:crypto');
 const courriels = require('./courriels');
 const invitations = require('./invitations');
 const acces = require('./acces');
+const cles = require('./cles');
 
 const bdd = getFirestore();
 const REGION = 'europe-west1';
@@ -163,12 +164,22 @@ exports.suiviConnexion = onRequest(
     if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
 
     const { action } = req.body || {};
+    /* Ce que les clés d'accès empruntent à la porte : le compte, l'accès
+       du moment, l'ouverture de session, l'audit. */
+    const outils = { compteDe, etatDuCompte, ouvrirSession, audit, ip, clePour, normaliserEmail, emailPlausible };
     try {
       if (action === 'invitation') return await lireInvitation(req, res);
       if (action === 'demanderCode') return await demanderCode(req, res);
       if (action === 'verifierCode') return await verifierCode(req, res);
+      if (action === 'cleOptionsConnexion') return await cles.optionsConnexion(req, res, outils);
+      if (action === 'cleVerifier') return await cles.verifier(req, res, outils);
+      if (action === 'cleOptionsEnregistrement') return await cles.optionsEnregistrement(req, res, outils);
+      if (action === 'cleEnregistrer') return await cles.enregistrer(req, res, outils);
+      if (action === 'clesLister') return await cles.lister(req, res, outils);
+      if (action === 'cleRetirer') return await cles.retirer(req, res, outils);
       return res.status(400).json({ ok: false, message: 'action inconnue' });
     } catch (err) {
+      if (err && err.refus) return res.status(err.code).json({ ok: false, message: err.message });
       console.error('Porte d entrée :', err);
       return res.status(500).json({ ok: false, message: 'Une erreur est survenue. Réessayez dans un instant.' });
     }
@@ -294,14 +305,24 @@ async function verifierCode(req, res) {
     return refus(verdict.restants ? `Code incorrect. Il vous reste ${verdict.restants} essai${verdict.restants > 1 ? 's' : ''}.` : 'Code incorrect.');
   }
 
-  /* Le code est bon, mais l'accès se relit MAINTENANT : entre la demande
-     et la saisie, le compte a pu être désactivé ou retiré. Le code ne
-     rouvre pas une porte qu'on vient de fermer. */
+  /* Le code est bon : la suite est la même que pour une clé d'accès. */
+  return ouvrirSession({ uid: verdict.uid, email, adresseIp, res, mode: 'code' });
+}
+
+/* --- 4. L'ouverture de session, commune au code et à la clé ------------- */
+
+/**
+ * L'identité est prouvée (code ou clé). L'accès, lui, se relit MAINTENANT :
+ * entre la demande et la preuve, le compte a pu être désactivé ou retiré.
+ * Ni un code ni une clé ne rouvrent une porte qu'on vient de fermer.
+ */
+async function ouvrirSession({ uid, email, adresseIp, res, mode }) {
+  const verdict = { uid };
   let compte = null;
   try { compte = await getAuth().getUser(verdict.uid); } catch (err) { compte = null; }
   const etat = await etatDuCompte(compte);
   if (!etat.acces) {
-    await audit('connexion.refusee', { email, uid: verdict.uid, motif: etat.motif, ip: adresseIp, apresCode: true });
+    await audit('connexion.refusee', { email, uid: verdict.uid, motif: etat.motif, ip: adresseIp, apresCode: true, mode });
     return res.status(403).json({ ok: false, message: etat.motif === 'desactive'
       ? 'Cet accès a été désactivé. Contactez Capmedia si vous pensez que c\'est une erreur.'
       : "Aucun accès n'est ouvert pour cette adresse. Contactez Capmedia." });
@@ -357,7 +378,7 @@ async function verifierCode(req, res) {
     await audit('connexion.session-impossible', { email, uid: verdict.uid, motif: String(err && err.message || err).slice(0, 200) });
     return res.status(500).json({ ok: false, message: "Le code était bon, mais la session n'a pas pu s'ouvrir. Prévenez-nous." });
   }
-  await audit('connexion.ouverte', { email, uid: verdict.uid, equipe: verdict.equipe, espace: etat.espace, ip: adresseIp });
+  await audit('connexion.ouverte', { email, uid: verdict.uid, equipe: verdict.equipe, espace: etat.espace, ip: adresseIp, mode });
 
   /* Une première connexion consomme les invitations de ce compte : le
      cockpit les voit « acceptées », et leur lien ne pré-remplit plus. */
@@ -374,7 +395,12 @@ async function verifierCode(req, res) {
     });
   }
 
-  return res.json({ ok: true, lien, espace: etat.espace });
+  /* Combien de clés d'accès ce compte a déjà : la page propose d'en
+     ajouter une après un code, pas après une clé, et pas deux fois. */
+  let nombreCles = 0;
+  try { nombreCles = (await cles.clesDe(verdict.uid)).length; } catch (err) { nombreCles = 0; }
+
+  return res.json({ ok: true, lien, espace: etat.espace, mode, cles: nombreCles });
 }
 
 /* --- Exposé pour l'épreuve ----------------------------------------------- */

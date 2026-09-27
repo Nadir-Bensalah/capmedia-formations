@@ -1189,6 +1189,9 @@ service cloud.firestore {
     match /connexions/{cle}      { allow read, write: if false; }
     match /connexionsIp/{cle}    { allow read, write: if false; }
     match /invitations/{jeton}   { allow read, write: if false; }
+    // Les clés d'accès et leurs défis : le serveur seul (cles.js).
+    match /cles/{cleId}          { allow read, write: if false; }
+    match /defis/{defiId}        { allow read, write: if false; }
 
     // ================================================================
     // FORMULAIRES PUBLICS DU SITE (déjà en service sur ce projet)

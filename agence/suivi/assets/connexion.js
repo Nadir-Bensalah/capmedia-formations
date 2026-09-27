@@ -22,6 +22,7 @@ import {
 
 const quitterSansRecharger = async () => { effacerSecretsLocaux(); try { await signOut(auth); } catch (e) { /* déjà sorti */ } };
 import { traduireRetour } from './js/retour.js';
+import { tenterConnexion } from './js/cles-acces.js';
 
 const PORTE = surEmulateur
   ? 'http://127.0.0.1:5001/capmedia-1f90d/europe-west1/suiviConnexion'
@@ -162,6 +163,28 @@ const demander = async (bouton, libelle) => {
   const avant = bouton.textContent;
   bouton.textContent = 'Envoi...';
   try {
+    /* La clé d'accès d'abord, si cette adresse en a une sur cet appareil :
+       Touch ID, Windows Hello, le trousseau. Pas de clé, geste annulé :
+       le code part, comme toujours. Une clé présentée et refusée, elle,
+       se dit. */
+    if (bouton.id === 'envoyer') {
+      let cle = null;
+      try { cle = await tenterConnexion(adresse); }
+      catch (refusCle) { erreur(refusCle.message || "La clé n'a pas pu être vérifiée. Un code va vous être envoyé."); cle = null; }
+      if (cle && cle.lien) {
+        montrer('#entree');
+        try {
+          await signInWithEmailLink(auth, adresse, cle.lien);
+          try { localStorage.removeItem(CLE_EMAIL); } catch (e) { /* rien */ }
+          await orienter();
+          return true;
+        } catch (e3) {
+          console.error('[suivi] session par clé impossible :', e3 && e3.code, e3 && e3.message);
+          montrer('#forme');
+        }
+      }
+    }
+
     let r;
     try { r = await appeler('demanderCode', { email: adresse }); }
     catch (reseau) { r = { code: 0 }; }
@@ -235,6 +258,9 @@ $('#forme-code').addEventListener('submit', async (e) => {
     montrer('#entree');
     await signInWithEmailLink(auth, adresse, r.lien);
     try { localStorage.removeItem(CLE_EMAIL); } catch (e2) { /* rien */ }
+    /* Entré par un code, sans aucune clé : l'espace proposera d'en ajouter
+       une, une fois. */
+    if (!r.cles) { try { sessionStorage.setItem('suivi:proposer-cle', '1'); } catch (e2) { /* rien */ } }
     await orienter();
   } catch (e3) {
     /* Le code était bon mais la session n'a pas pu s'ouvrir : c'est une

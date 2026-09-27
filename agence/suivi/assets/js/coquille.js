@@ -97,6 +97,8 @@ export const monterCoquille = ({ session, role, groupes, sortie }) => {
   brancherCompte();
   brancherNotifications();
   brancherPalette();
+  /* Entré par un code sans aucune clé : proposer la clé d'accès, une fois. */
+  import('./cles-acces.js').then((c) => c.proposerCle()).catch(() => {});
   surChangement(() => { marquerActif(); fermerTiroir(); });
 
   // Sur grand écran, le bouton loupe de la barre est redondant.
@@ -247,10 +249,14 @@ const brancherCompte = () => {
     const m = modaleTheme;
     /* Un testeur n'a ni profil ni préférences à régler ici : son guide,
        l'apparence, et la sortie. */
+    /* Les clés d'accès (Touch ID, Windows Hello) : pour tout le monde, le
+       testeur compris, qui n'a pas de page de paramètres. */
+    const clesAcces = async () => { const { ouvrirClesAcces } = await import('./cles-acces.js'); await ouvrirClesAcces(); };
     if (contexte.role === 'testeur') {
       menu($('#bouton-compte'), [
         { libelle: 'Guide du testeur', icone: 'ampoule', action: () => naviguer('/guide') },
         { libelle: 'Revoir les premiers pas', icone: 'sparkle', action: revoirAccueil },
+        { libelle: 'Clés d\'accès', icone: 'cle', action: clesAcces },
         { libelle: 'Apparence', icone: 'soleil', action: modaleTheme },
         '-',
         { libelle: 'Se déconnecter', icone: 'dehors', action: quitter, danger: true },
@@ -260,6 +266,7 @@ const brancherCompte = () => {
     menu($('#bouton-compte'), [
       { libelle: 'Mon profil et mes préférences', icone: 'utilisateur', action: () => naviguer('/parametres') },
       ...(contexte.role === 'client' ? [{ libelle: 'Revoir les premiers pas', icone: 'sparkle', action: revoirAccueil }] : []),
+      { libelle: 'Clés d\'accès', icone: 'cle', action: clesAcces },
       { libelle: 'Apparence', icone: 'soleil', action: m },
       '-',
       { libelle: 'Retour au site capmedia.app', icone: 'externe', action: () => { location.href = '../'; } },

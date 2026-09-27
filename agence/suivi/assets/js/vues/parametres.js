@@ -69,7 +69,8 @@ export const vue = async (ctx, env) => {
       <section class="section">
         <div class="section-tete"><h2>Sécurité</h2></div>
         <div class="carte pile">
-          ${encart('<strong>Connexion sans mot de passe.</strong> À chaque connexion, un lien à usage unique vous est envoyé par e-mail. Il expire au bout d\'une heure et ne sert qu\'une fois. Personne ne peut deviner un mot de passe qui n\'existe pas.', 'info', 'cadenas')}
+          ${encart('<strong>Connexion sans mot de passe.</strong> Votre adresse, puis un code à six chiffres reçu par e-mail, valable quelques minutes et une seule fois. Avec une clé d\'accès, votre empreinte remplace le code. Personne ne peut deviner un mot de passe qui n\'existe pas.', 'info', 'cadenas')}
+          <div class="rang-espace"><div><p class="t-corps-fort">Clés d'accès</p><p class="t-petit t-2">Touch ID, Windows Hello ou la clé de votre trousseau, un appareil à la fois.</p></div><button class="btn btn-secondaire" type="button" id="cles-acces">${icone('cle')} Gérer mes clés</button></div>
           <div class="rang-espace"><div><p class="t-corps-fort">Dernière connexion</p><p class="t-petit t-2">${echapper(session.utilisateur.metadata && session.utilisateur.metadata.lastSignInTime ? dateHeure(new Date(session.utilisateur.metadata.lastSignInTime)) : '')}</p></div><button class="btn btn-secondaire" type="button" id="deconnexion">${icone('dehors')} Se déconnecter</button></div>
         </div>
       </section>
@@ -85,6 +86,7 @@ export const vue = async (ctx, env) => {
       await agir(forme.querySelector('[type="submit"]'), () => ecrire.majProfil(session.utilisateur.uid, { ...lireForme(forme), email: String(session.utilisateur.email || '').toLowerCase() }), 'Profil enregistré.');
     });
     sortie.querySelector('#deconnexion').addEventListener('click', quitter);
+    sortie.querySelector('#cles-acces').addEventListener('click', async () => { const { ouvrirClesAcces } = await import('../cles-acces.js'); await ouvrirClesAcces(); });
   };
 
   const gestes = sur(sortie, 'change', '[data-pref]', async (el) => {
