@@ -34,3 +34,6 @@ exports.suiviRobot = require('./robot').suiviRobot;
 /* La porte d'entrée : lien d'invitation, code à six chiffres, session. */
 const connexion = require('./connexion');
 exports.suiviConnexion = connexion.suiviConnexion;
+
+/* Le téléchargement d'une pièce : le serveur vérifie qui demande, et remet le PDF. */
+exports.suiviPiece = require('./pieces').suiviPiece;

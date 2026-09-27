@@ -588,7 +588,7 @@ qa-fin-de-test.cjs        la fin de test : l'ordre, « J'ai terminé », le gel,
 qa-cle-acces.cjs          la clé d'accès : ajout, entrée sans code, refus, retrait
 qa-fiche-testeur.cjs      la fiche du testeur à sa première connexion, la note du test, identifiants et magasins
 qa-chat-testeur.cjs       la bulle du testeur et la page Testeurs du Cockpit, en direct
-qa-apercu-piece.cjs       l'aperçu d'un devis ou d'une facture sur le côté : lecture, téléchargement, impression
+qa-telecharger-piece.cjs  le téléchargement direct d'une pièce par le serveur : droits, nom, traces
 matrice-gate2.test.mjs    12 catégories de personnes x 48 opérations Firestore
 matrice-stockage-gate2    12 catégories x 16 opérations Storage
 invitations-gate2         les quatre familles d'invitation, de bout en bout
@@ -691,21 +691,27 @@ client ne lit rien de tout cela.
 Épreuves : `regles.test.mjs` (section « La fiche du testeur… », 28
 contrôles), `qa-fiche-testeur.cjs` (28), `qa-chat-testeur.cjs` (18).
 
-## 16. L'aperçu d'une pièce (septembre 2026)
+## 16. Le téléchargement d'une pièce (septembre 2026)
 
 Dans « Devis et factures », une pièce qui a son PDF (`documents/{id}.fichier`)
-porte un bouton **Voir**, dans la liste et dans sa fiche (« Voir le PDF »).
-Il ouvre une feuille large sur le côté (`apercu-piece.js`, classe
-`feuille--apercu`), comme le tiroir de Capmedia Desk : l'en-tête (montant
-HT et TTC, dates, statut), le PDF, et deux gestes, **Télécharger** et
-**Imprimer**. Rien ne s'y modifie.
+porte un bouton **Télécharger**, dans la liste (colonne fixe, blanc,
+arrondi) et dans sa fiche. Un clic, le PDF se pose dans les téléchargements
+sous son nom. Pas d'aperçu, pas de nouvel onglet.
 
-Le PDF est lu en mémoire (`contenuPiece`, `getBlob`) puis affiché depuis
-une adresse locale (`blob:`) : un cadre d'une autre origine refuse
-l'impression depuis la page. Le bucket répond aux lectures de toutes les
-origines (CORS), les règles Storage font le tri : les pièces
-(`projets/{p}/pieces/{documentId}/…`) se lisent par la finance de l'équipe
-et par le responsable du projet, jamais un brouillon ni une archive.
+Le PDF ne passe pas par les règles Storage : c'est la fonction `suiviPiece`
+(`fonctions-suivi/pieces.js`, GET `?document=<id>`, jeton en Bearer) qui le
+remet, après avoir vérifié qui demande, la même règle écrite une seule fois
+côté serveur : la finance de l'équipe (`acces.financeEquipe`) ou le
+responsable du projet (`membres` et `roles`), jamais un brouillon ni une
+archive. Le fichier est lu par l'Admin SDK et renvoyé en pièce jointe.
+Chaque téléchargement et chaque refus laissent une trace d'audit
+(`piece.telechargee`, `piece.refusee`). Côté page : `telecharger-piece.js`.
+
+Pourquoi par le serveur : en production, le compte de service des règles
+n'a pas le rôle qui lui permet de lire Firestore depuis les règles Storage
+(`roles/firebaserules.firestoreServiceAgent`) ; toute lecture Storage qui
+dépend d'une fiche Firestore répond 403, alors que le banc passe. Tant que
+ce rôle n'est pas accordé, seule la remise par le serveur fonctionne.
 
 Les six pièces de ForgeMe ont reçu leur PDF le 27/09/2026 (depuis
 ~/Downloads, dépôt par l'Admin SDK, audit `document.pdf-joint`) ; le devis
@@ -713,4 +719,4 @@ de la campagne de tests, semé sous D-2026-0030, porte désormais son vrai
 numéro D-2026-0028 et ses vraies dates. Les deux pièces de 2024 (audit,
 maquettage) n'ont pas de PDF.
 
-Épreuve : `qa-apercu-piece.cjs`.
+Épreuve : `qa-telecharger-piece.cjs` (serveur puis navigateurs, client et équipe).

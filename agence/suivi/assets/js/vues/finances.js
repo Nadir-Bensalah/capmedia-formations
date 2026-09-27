@@ -12,7 +12,7 @@ import { filAriane } from '../coquille.js';
 import { naviguer } from '../routeur.js';
 import { lienPiece } from '../noyau.js';
 import { friseDevis, brancherFrise } from './frise.js';
-import { ouvrirApercu } from '../apercu-piece.js';
+import { telechargerPiece } from '../telecharger-piece.js';
 
 export const ouvrirDocument = (d, env, { projets, paiements }) => {
   const equipe = env.role === 'equipe';
@@ -60,7 +60,7 @@ export const ouvrirDocument = (d, env, { projets, paiements }) => {
         : "<strong>C'est un devis complémentaire.</strong> Il s'ajoute à un projet déjà lancé, sans en changer le déroulé.", 'info', 'receipt')}
       <form id="forme-devis" class="forme" style="margin-top:24px" novalidate><div class="groupe"><label class="etiquette-champ" for="commentaire-devis">Un mot pour nous <span class="facultatif">(facultatif)</span></label><textarea class="zone" id="commentaire-devis" rows="3" maxlength="2000"></textarea></div></form>` : ''}
       ${!equipe && !devis && FACTURES_DUES.includes(d.statut) ? encart('<strong>Pour régler :</strong> virement aux coordonnées indiquées sur la facture. Le paiement en ligne arrivera prochainement. Un souci sur cette facture ? Ouvrez une demande, nous regardons.', 'info', 'paiement') : ''}`,
-    pied: `${d.fichier && d.fichier.chemin ? `<button class="btn btn-secondaire" type="button" data-voir-piece>${icone('externe')} Voir le PDF</button><button class="btn btn-doux" type="button" data-piece="${echapper(d.fichier.chemin)}" aria-label="Télécharger le PDF" data-astuce="Télécharger">${icone('telecharger')}</button>${equipe ? `<button class="btn btn-doux" type="button" data-joindre aria-label="Remplacer le PDF" data-astuce="Remplacer le PDF">${icone('trombone')}</button>` : ''}` : (equipe ? `<button class="btn btn-secondaire" type="button" data-joindre>${icone('trombone')} Joindre le PDF</button>` : '')}
+    pied: `${d.fichier && d.fichier.chemin ? `<button class="btn btn-secondaire" type="button" data-telecharger-piece>${icone('telecharger')} Télécharger le PDF</button>${equipe ? `<button class="btn btn-doux" type="button" data-joindre aria-label="Remplacer le PDF" data-astuce="Remplacer le PDF">${icone('trombone')}</button>` : ''}` : (equipe ? `<button class="btn btn-secondaire" type="button" data-joindre>${icone('trombone')} Joindre le PDF</button>` : '')}
       ${equipe ? `<button class="btn btn-doux" type="button" data-liens>${icone('liens')} Liens</button>` : ''}
       ${decidable ? `<button class="btn btn-secondaire" type="button" data-refuser>Refuser</button><span class="pousse"></span><button class="btn btn-ok" type="button" data-accepter>${icone('check')} Accepter le devis</button>`
       : !equipe ? `<span class="pousse"></span><a class="btn btn-doux" href="#/projets/${echapper(d.projet)}/nouvelle-demande?type=question">Poser une question</a><button class="btn btn-principal" type="button" data-fermer>Fermer</button>`
@@ -69,9 +69,9 @@ export const ouvrirDocument = (d, env, { projets, paiements }) => {
   brancherPieces(m.el);
   brancherFrise(m.el, env);
   sur(m.el, 'click', '[data-joindre]', async () => { m.fermer(); await joindreFichier(d); });
-  /* L'aperçu s'ouvre par-dessus la fiche, sur le côté : on lit, on
-     télécharge, on imprime, puis on revient à la fiche. */
-  sur(m.el, 'click', '[data-voir-piece]', () => ouvrirApercu(d, { projet }));
+  /* Le PDF arrive par le serveur, qui vérifie qui demande : pas de
+     nouvel onglet, pas de règle de stockage entre le client et sa pièce. */
+  sur(m.el, 'click', '[data-telecharger-piece]', (el) => agir(el, () => telechargerPiece(d)));
   sur(m.el, 'click', '[data-liens]', async () => { m.fermer(); await editerLiens(d); });
   const commentaire = () => (m.el.querySelector('#commentaire-devis') || { value: '' }).value.trim();
   sur(m.el, 'click', '[data-accepter]', async (el) => {
@@ -174,7 +174,7 @@ export const vue = async (ctx, env) => {
       sous: `${echapper(nomProjet(d.projet))} · ${echapper(dateCourte(d.date))}${d.type === 'facture' && d.echeance && FACTURES_DUES.includes(d.statut) ? ` · échéance ${echapper(dateCourte(d.echeance))}` : ''}`,
       /* Trois colonnes fixes, alignées d'une ligne à l'autre : le bouton
          Voir (ou sa place vide), le montant, le statut. */
-      fin: `${(d.liens || []).length ? `<span class="puce puce--bleu"><i></i>${icone('externe')}</span>` : ''}<span class="piece-fin"><span class="piece-fin-voir">${d.fichier && d.fichier.chemin ? `<button class="btn btn-voir" type="button" data-voir="${echapper(d.id)}">Voir</button>` : ''}</span><span class="nb t-fort">${echapper(montantPiece(d, 2))}</span><span class="piece-fin-statut">${pastille(d.type === 'devis' ? STATUTS_DEVIS : STATUTS_FACTURE, d.statut)}</span></span>`,
+      fin: `${(d.liens || []).length ? `<span class="puce puce--bleu"><i></i>${icone('externe')}</span>` : ''}<span class="piece-fin"><span class="piece-fin-voir">${d.fichier && d.fichier.chemin ? `<button class="btn btn-voir" type="button" data-telecharger="${echapper(d.id)}">${icone('telecharger')} Télécharger</button>` : ''}</span><span class="nb t-fort">${echapper(montantPiece(d, 2))}</span><span class="piece-fin-statut">${pastille(d.type === 'devis' ? STATUTS_DEVIS : STATUTS_FACTURE, d.statut)}</span></span>`,
       action: 'ouvrir', attrs: `data-id="${echapper(d.id)}"`,
     });
 
@@ -200,17 +200,16 @@ export const vue = async (ctx, env) => {
   };
 
   const gestes = sur(sortie, 'click', '[data-action="ouvrir"]', (el, ev) => {
-    if (ev && ev.target.closest('[data-voir]')) return;
+    if (ev && ev.target.closest('[data-telecharger]')) return;
     const projets = magasin.lire(K.projets) || session.projets;
     const d = agreger(session, G.documents).find((x) => x.id === el.dataset.id);
     if (d) ouvrirDocument(d, env, { projets, paiements: agreger(session, G.paiements) });
   });
-  /* « Voir » dans la liste : l'aperçu du PDF, sans passer par la fiche. */
-  const gestesVoir = sur(sortie, 'click', '[data-voir]', (el, ev) => {
+  /* « Télécharger » dans la liste : le PDF, direct, sans passer par la fiche. */
+  const gestesVoir = sur(sortie, 'click', '[data-telecharger]', (el, ev) => {
     ev.stopPropagation();
-    const projets = magasin.lire(K.projets) || session.projets;
-    const d = agreger(session, G.documents).find((x) => x.id === el.dataset.voir);
-    if (d) ouvrirApercu(d, { projet: projets.find((p) => p.id === d.projet) || {} });
+    const d = agreger(session, G.documents).find((x) => x.id === el.dataset.telecharger);
+    if (d) agir(el, () => telechargerPiece(d));
   });
   let minuteur = null;
   const planifier = () => { clearTimeout(minuteur); minuteur = setTimeout(rendre, 40); };

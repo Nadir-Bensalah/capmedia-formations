@@ -18,7 +18,7 @@ import {
   serverTimestamp, Timestamp, arrayUnion, arrayRemove, increment, writeBatch,
 } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js';
 import {
-  getStorage, ref as refStockage, uploadBytes, uploadBytesResumable, getDownloadURL, getBlob, deleteObject, updateMetadata,
+  getStorage, ref as refStockage, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject, updateMetadata,
 } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-storage.js';
 
 /* --- Le raccordement ---------------------------------------------------- */
@@ -59,7 +59,7 @@ if (surEmulateur) {
 export {
   doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, collection, collectionGroup, query,
   where, orderBy, limit, startAfter, onSnapshot, serverTimestamp, Timestamp, arrayUnion, arrayRemove, increment, writeBatch,
-  refStockage, uploadBytes, uploadBytesResumable, getDownloadURL, getBlob, deleteObject, updateMetadata, signOut,
+  refStockage, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject, updateMetadata, signOut,
   sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink,
 };
 
@@ -1207,9 +1207,6 @@ export const envoyerPiece = async (fichier, chemin, surProgres, metadonnees = nu
 };
 
 export const lienPiece = (piece) => getDownloadURL(refStockage(stockage, piece.chemin));
-
-/** Le contenu d'une pièce, en mémoire : pour l'afficher et l'imprimer sans quitter la page. */
-export const contenuPiece = (piece) => getBlob(refStockage(stockage, piece.chemin));
 
 /** Change la visibilité d'une pièce déjà envoyée (équipe seule, par les règles). */
 export const marquerPiece = (piece, visibilite) => updateMetadata(refStockage(stockage, piece.chemin), { customMetadata: { visibilite } });
