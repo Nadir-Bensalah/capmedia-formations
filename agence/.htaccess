@@ -43,3 +43,15 @@ DirectoryIndex index.html index.php
   RewriteRule ^(.+?)/?$ $1.html [L]
 </IfModule>
 
+
+# --- Pages HTML toujours revalidées ------------------------------------------
+# Les scripts et les feuilles portent une estampille de version (?v=…), pas
+# les pages. Sans cet en-tête, un navigateur ou une application de bureau
+# garde une page des heures sur la foi de sa date de modification, et montre
+# l'ancienne porte après une mise en ligne. « no-cache » = garder, mais
+# redemander au serveur à chaque fois (réponse 304 si rien n'a changé).
+<IfModule mod_headers.c>
+  <FilesMatch "\.html$">
+    Header set Cache-Control "no-cache, must-revalidate"
+  </FilesMatch>
+</IfModule>
