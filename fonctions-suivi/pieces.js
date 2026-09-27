@@ -30,7 +30,11 @@ async function peutLire(qui, document) {
     && (projet.roles || {})[qui.uid] === 'responsable';
 }
 
-exports.suiviPiece = onRequest({ region: REGION, cors: true, secrets: [] }, async (req, res) => {
+/* « invoker: public » : la porte est ouverte à tous au niveau du réseau,
+   comme la porte de connexion ; c'est le jeton, vérifié ici, qui décide.
+   Sans ce mot, le déploiement laisse la fonction fermée (401 avant même
+   d'arriver au code). */
+exports.suiviPiece = onRequest({ region: REGION, cors: true, secrets: [], invoker: 'public' }, async (req, res) => {
   if (req.method === 'OPTIONS') return res.status(204).send('');
   if (req.method !== 'GET') return res.status(405).send('Method Not Allowed');
   let qui;
