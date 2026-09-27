@@ -1,4 +1,5 @@
 require('./lib/garde-banc.cjs');
+const { remplirFiche } = require('./lib/fiche-banc.cjs');
 /* ==========================================================================
    CAPMEDIA CLIENT HUB · la Gate 2, de bout en bout, dans de vrais navigateurs
 
@@ -86,6 +87,8 @@ const entrer = async (nav, email) => {
   await pause(2500);
   /* Un compte neuf voit l'accueil de la première fois devant tout (qa-accueil-hub
      le teste) : ici on va droit à l'espace. */
+  /* Un testeur neuf remplit d'abord sa fiche : on la passe comme lui. */
+  if (/\/testeur/.test(page.url())) await remplirFiche(page);
   if (await page.$('.accueil')) { await page.click('.accueil [data-accueil="passer"]', { timeout: 3000 }).catch(() => null); await page.waitForSelector('.accueil', { state: 'detached', timeout: 5000 }).catch(() => null); }
   return { ctx, page, erreurs };
 };

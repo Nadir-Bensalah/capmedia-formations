@@ -586,6 +586,8 @@ migration-gate2.test.mjs  la migration : à blanc, réelle, silencieuse, rejouab
 qa-gate2.cjs              l'histoire complète dans de vrais navigateurs (22 étapes)
 qa-fin-de-test.cjs        la fin de test : l'ordre, « J'ai terminé », le gel, les sept jours, la remarque, prolonger et clore
 qa-cle-acces.cjs          la clé d'accès : ajout, entrée sans code, refus, retrait
+qa-fiche-testeur.cjs      la fiche du testeur à sa première connexion, la note du test, identifiants et magasins
+qa-chat-testeur.cjs       la bulle du testeur et la page Testeurs du Cockpit, en direct
 matrice-gate2.test.mjs    12 catégories de personnes x 48 opérations Firestore
 matrice-stockage-gate2    12 catégories x 16 opérations Storage
 invitations-gate2         les quatre familles d'invitation, de bout en bout
@@ -642,3 +644,48 @@ ligne d'état sous le numéro du testeur, sans nom, sans remarque, sans geste.
 Épreuves : `regles.test.mjs` (section « La fin de test », 17 contrôles) et
 `qa-fin-de-test.cjs` (33 contrôles dans trois navigateurs : testeur, équipe,
 client).
+
+## 15. Le testeur : sa fiche, sa bulle, ce qu'il trouve (septembre 2026)
+
+**Sa fiche, à sa première connexion.** Le Cockpit inscrit un testeur avec
+son adresse, son prénom et ce qu'il teste ; rien d'autre n'est requis. À sa
+première entrée dans Capmedia Test, sa fiche passe devant tout et ne se
+ferme pas (`fiche-testeur.js`) : nom et prénom, sexe, tranche d'âge, domaine,
+aisance, les plateformes qu'il a sous la main, et **l'appareil relevé par la
+machine** (`appareil.js` : système et version, navigateur, écran, densité,
+réseau quand le navigateur le dit) dont il précise le modèle exact, que le
+web ne dit pas. Il valide : `testeurs/{uid}` porte `nom`, `profil.expertise`,
+`plateformes`, `appareils[]` et `ficheValidee` (date du serveur, une fois).
+Les règles n'ouvrent au testeur que ces champs de SA fiche ; l'adresse, les
+projets et l'état restent au serveur. Ensuite, chaque connexion depuis un
+appareil nouveau l'ajoute à la liste sans rien demander (`consignerAppareil`).
+Le serveur recopie sous chaque projet (`profilsTesteurs`) le profil enrichi,
+domaine et appareils résumés, sans le nom : le client lit « Testeur 2 ·
+homme, 25-34 ans, pharmacien, MacBook Air M2 macOS 15 ». Le Cockpit lit la
+fiche validée, la date, les appareils.
+
+**La note du test.** En disant « j'ai terminé », le testeur note le TEST (pas
+l'application) sur cinq et dit ce qui l'aurait rendu plus facile :
+`appreciations/{uid}.noteTest`. La lettre du bilan la porte ; la fiche
+campagne du Cockpit la montre avec ses mots ; le client lit la note seule.
+
+**Ce qu'il trouve dans « L'application ».** La campagne porte `acces`
+(`instructions` : comment s'inscrire ; `identifiants` : des comptes de test,
+copiés d'un clic) et `magasins` (`ios`, `android` : les fiches App Store et
+Play Store). Les identifiants et les instructions s'affichent avant le test ;
+les magasins après « j'ai terminé », pour un vrai avis là où les autres
+découvrent l'application. Tout se remplit dans l'éditeur de campagne.
+
+**Sa bulle vers l'équipe.** En bas à droite de son espace
+(`bulle-testeur.js`), une conversation à part des messages de projet :
+`conversationsTesteurs/{uid}` (dernier message, `nonLusEquipe`,
+`nonLusTesteur`, tenus par le serveur) et `messages/{id}` (texte seul, 4 000
+caractères, `de.cote` testeur ou equipe). `hubMessageTesteur` prévient :
+notification et lettre `message-testeur` à l'équipe quand il écrit,
+notification, lettre `message-testeur-reponse` et pastille quand l'équipe
+répond. Le Cockpit a une page « Testeurs » (`/testeurs-messages`, rail
+« Travail », compte des non lus) avec la liste et le fil en direct. Un
+client ne lit rien de tout cela.
+
+Épreuves : `regles.test.mjs` (section « La fiche du testeur… », 28
+contrôles), `qa-fiche-testeur.cjs` (28), `qa-chat-testeur.cjs` (18).

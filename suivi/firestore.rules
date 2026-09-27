@@ -793,6 +793,33 @@ service cloud.firestore {
     }
 
     // Chacun lit sa boîte et ne fait qu'y marquer comme lu.
+    // La conversation d'un testeur avec l'équipe : une par testeur, à la
+    // racine, à part des messages de projet (un testeur n'est membre
+    // d'aucun projet). Le serveur crée le document et tient les compteurs
+    // (hubMessageTesteur) ; chacun ne remet que SON compteur à zéro.
+    match /conversationsTesteurs/{testeurId} {
+      allow read:   if estEquipe() || (estTesteur() && testeurId == moi());
+      allow update: if (estEquipe()
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nonLusEquipe'])
+                        && request.resource.data.nonLusEquipe == 0)
+                    || (estTesteur() && testeurId == moi()
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nonLusTesteur'])
+                        && request.resource.data.nonLusTesteur == 0);
+      allow create, delete: if false;
+
+      match /messages/{messageId} {
+        allow read:   if estEquipe() || (estTesteur() && testeurId == moi());
+        allow create: if request.resource.data.keys().hasOnly(['de', 'texte', 'pieces', 'date'])
+          && texteRequis(request.resource.data.texte, 4000)
+          && request.resource.data.pieces is list && request.resource.data.pieces.size() == 0
+          && request.resource.data.date == request.time
+          && request.resource.data.de.uid == moi()
+          && ((estTesteur() && testeurId == moi() && request.resource.data.de.cote == 'testeur')
+              || (estEquipe() && request.resource.data.de.cote == 'equipe'));
+        allow update, delete: if false;
+      }
+    }
+
     match /boites/{uid}/notifications/{notificationId} {
       allow read: if connecte() && moi() == uid;
       allow update: if connecte() && moi() == uid
@@ -879,7 +906,41 @@ service cloud.firestore {
                     || (estEquipe() && (resource.data.get('projets', []).hasAny(ficheEquipe().get('projets', []))
                                         || ficheEquipe().get('permissions', []).hasAny(['qa.gerer'])))
                     || (estTesteur() && testeurId == moi());
-      allow write:  if false;   // le serveur seul, via suiviAdmin
+      // Le serveur inscrit, retire, affecte (suiviAdmin). Le testeur, lui,
+      // complète SA fiche à sa première connexion, puis tient à jour la
+      // liste de ses appareils : son nom, son profil, ce qu'il teste, la
+      // date où il a validé. Jamais son adresse, ses projets, son état.
+      function profilTesteurBorne(p) {
+        return p is map
+          && p.keys().hasOnly(['sexe', 'age', 'fonction', 'expertise', 'aisance', 'langue', 'certifie'])
+          && texteBorne(p.get('sexe', ''), 20) && texteBorne(p.get('age', ''), 20)
+          && texteBorne(p.get('fonction', ''), 120) && texteBorne(p.get('expertise', ''), 200)
+          && texteBorne(p.get('aisance', ''), 40) && texteBorne(p.get('langue', ''), 12);
+      }
+      function appareilsBornes(l) {
+        return l is list && l.size() <= 10
+          && (l.size() == 0
+              || (l[l.size() - 1] is map
+                  && l[l.size() - 1].keys().hasOnly(['cle', 'plateforme', 'modele', 'os', 'navigateur', 'ecran', 'reseau', 'agent', 'vu', 'confirme'])
+                  && texteBorne(l[l.size() - 1].get('modele', ''), 80)
+                  && texteBorne(l[l.size() - 1].get('os', ''), 80)
+                  && texteBorne(l[l.size() - 1].get('navigateur', ''), 80)
+                  && texteBorne(l[l.size() - 1].get('agent', ''), 300)));
+      }
+      allow update:  if estTesteur() && testeurId == moi()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nom', 'prenom', 'profil', 'plateformes', 'mobile', 'appareils', 'ficheValidee', 'maj'])
+        && texteBorne(request.resource.data.get('nom', ''), 80)
+        && texteRequis(request.resource.data.get('prenom', ''), 60)
+        && profilTesteurBorne(request.resource.data.get('profil', {}))
+        && request.resource.data.get('plateformes', []) is list
+        && request.resource.data.get('plateformes', []).size() > 0
+        && request.resource.data.get('plateformes', []).hasOnly(['ios', 'android', 'web'])
+        && request.resource.data.get('mobile', '') in ['', 'ios', 'android']
+        && appareilsBornes(request.resource.data.get('appareils', []))
+        && ('ficheValidee' in resource.data
+              ? request.resource.data.ficheValidee == resource.data.ficheValidee
+              : (!('ficheValidee' in request.resource.data) || request.resource.data.ficheValidee == request.time));
+      allow create, delete: if false;   // le serveur seul, via suiviAdmin
 
       // L'ancien profil public, commun à tous les projets. Il n'est plus
       // écrit (voir projets/{p}/profilsTesteurs) et ne se lit plus que par
@@ -1003,9 +1064,17 @@ service cloud.firestore {
           // serveur, posée une fois, jamais reprise. « remarques » : ce qu'il
           // ajoute après coup, pendant les jours d'accès qui lui restent ;
           // une liste qui ne fait que grandir, vingt au plus, chacune bornée.
+          // « noteTest » : ce que le testeur pense du TEST lui-même (clair,
+          // faisable), une note sur cinq et quelques mots, posés en disant
+          // « j'ai terminé ».
           function appreciationBornee(d) {
             return d.size() <= 60
               && texteBorne(d.get('libre', ''), 8000)
+              && (!('noteTest' in d)
+                  || (d.noteTest is map
+                      && d.noteTest.keys().hasOnly(['note', 'commentaire', 'le'])
+                      && d.noteTest.note is int && d.noteTest.note >= 1 && d.noteTest.note <= 5
+                      && texteBorne(d.noteTest.get('commentaire', ''), 2000)))
               && (!('remarques' in d)
                   || (d.remarques is list && d.remarques.size() <= 20
                       && (d.remarques.size() == 0

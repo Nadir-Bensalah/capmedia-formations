@@ -663,6 +663,43 @@ await doit('Sonia, sans date de fin, écrit encore', setDoc(doc(sonia(), `projet
 await refuse('Karim ne déplace pas sa propre date de fin', updateDoc(doc(karim(), 'projets/atelier/campagnes/c-expiree'), { [`fins.${KARIM}`]: new Date(Date.now() + 86400000) }));
 await doit("L'équipe prolonge l accès d un testeur", updateDoc(doc(equipe(), 'projets/atelier/campagnes/c-expiree'), { [`fins.${KARIM}`]: new Date(Date.now() + 7 * 86400000) }));
 
+console.log('\n== La fiche du testeur, ses appareils, sa note du test, sa conversation');
+/* Le testeur complète SA fiche (nom, profil, plateformes, appareils, date
+   de validation), jamais son adresse ni ses projets. Sa conversation avec
+   l'équipe est à part : lui et l'équipe seulement. */
+await doit('Karim valide sa fiche', updateDoc(doc(karim(), 'testeurs', KARIM), { nom: 'Benali', prenom: 'Karim', profil: { sexe: 'homme', age: '25-34', fonction: 'QA', expertise: 'Santé', aisance: 'À l aise', langue: 'fr' }, plateformes: ['ios', 'web'], mobile: 'ios', appareils: [{ cle: 'a1', plateforme: 'ios', modele: 'iPhone 13', os: 'iOS 18', navigateur: 'Safari 18', ecran: '390×844', reseau: '4g', agent: 'x', vu: new Date(), confirme: true }], ficheValidee: serverTimestamp(), maj: serverTimestamp() }));
+await refuse('Karim ne redate pas sa validation', updateDoc(doc(karim(), 'testeurs', KARIM), { ficheValidee: serverTimestamp() }));
+await refuse('Karim ne change pas son adresse', updateDoc(doc(karim(), 'testeurs', KARIM), { email: 'autre@exemple.test' }));
+await refuse('Karim ne s ajoute pas un projet', updateDoc(doc(karim(), 'testeurs', KARIM), { projets: ['atelier', 'boutique'] }));
+await refuse('Karim ne se réactive pas', updateDoc(doc(karim(), 'testeurs', KARIM), { actif: true }));
+await refuse('Karim ne coche pas une plateforme inconnue', updateDoc(doc(karim(), 'testeurs', KARIM), { plateformes: ['ios', 'windows'] }));
+await refuse('Karim ne vide pas ses plateformes', updateDoc(doc(karim(), 'testeurs', KARIM), { plateformes: [] }));
+await refuse('Karim ne glisse pas un champ de profil inconnu', updateDoc(doc(karim(), 'testeurs', KARIM), { profil: { sexe: 'homme', note: 'admin' } }));
+await doit('Karim ajoute l appareil du jour', updateDoc(doc(karim(), 'testeurs', KARIM), { appareils: [{ cle: 'a1', plateforme: 'ios', modele: 'iPhone 13', os: 'iOS 18', navigateur: 'Safari 18', ecran: '390×844', reseau: '', agent: 'x', vu: new Date(), confirme: true }, { cle: 'a2', plateforme: 'web', modele: 'Mac', os: 'macOS 15', navigateur: 'Chrome 129', ecran: '1440×900', reseau: '', agent: 'y', vu: new Date(), confirme: true }], maj: serverTimestamp() }));
+await refuse('Sonia ne touche pas la fiche de Karim', updateDoc(doc(sonia(), 'testeurs', KARIM), { nom: 'X' }));
+await refuse("L'équipe n écrit pas une fiche depuis le navigateur", updateDoc(doc(equipe(), 'testeurs', KARIM), { nom: 'X' }));
+await doit('Karim note le test en terminant', setDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`), { noteTest: { note: 4, commentaire: 'Clair.', le: new Date() }, testeur: KARIM, maj: serverTimestamp() }, { merge: true }));
+await refuse('Une note hors de 1 à 5 ne passe pas', setDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`), { noteTest: { note: 9, commentaire: '', le: new Date() } }, { merge: true }));
+await env.withSecurityRulesDisabled(async (ctx) => {
+  await setDoc(doc(ctx.firestore(), `conversationsTesteurs/${KARIM}`), { testeur: KARIM, nonLusEquipe: 2, nonLusTesteur: 1, maj: new Date() });
+  await setDoc(doc(ctx.firestore(), `conversationsTesteurs/${SONIA}`), { testeur: SONIA, nonLusEquipe: 0, nonLusTesteur: 0, maj: new Date() });
+});
+await doit('Karim écrit à l équipe', addDoc(collection(karim(), `conversationsTesteurs/${KARIM}/messages`), { de: { uid: KARIM, nom: 'Karim', cote: 'testeur' }, texte: 'Le lien TestFlight ne marche pas.', pieces: [], date: serverTimestamp() }));
+await refuse('Karim n écrit pas dans la conversation de Sonia', addDoc(collection(karim(), `conversationsTesteurs/${SONIA}/messages`), { de: { uid: KARIM, nom: 'Karim', cote: 'testeur' }, texte: 'x', pieces: [], date: serverTimestamp() }));
+await refuse('Karim ne se fait pas passer pour l équipe', addDoc(collection(karim(), `conversationsTesteurs/${KARIM}/messages`), { de: { uid: KARIM, nom: 'Karim', cote: 'equipe' }, texte: 'x', pieces: [], date: serverTimestamp() }));
+await refuse('Karim ne joint pas de pièce dans la bulle', addDoc(collection(karim(), `conversationsTesteurs/${KARIM}/messages`), { de: { uid: KARIM, nom: 'Karim', cote: 'testeur' }, texte: 'x', pieces: ['p/1.png'], date: serverTimestamp() }));
+await doit('Karim lit sa conversation', getDoc(doc(karim(), `conversationsTesteurs/${KARIM}`)));
+await refuse('Karim ne lit pas celle de Sonia', getDoc(doc(karim(), `conversationsTesteurs/${SONIA}`)));
+await refuse('Karim ne liste pas les conversations', getDocs(collection(karim(), 'conversationsTesteurs')));
+await doit('Karim remet son compteur à zéro', updateDoc(doc(karim(), `conversationsTesteurs/${KARIM}`), { nonLusTesteur: 0 }));
+await refuse('mais pas celui de l équipe', updateDoc(doc(karim(), `conversationsTesteurs/${KARIM}`), { nonLusEquipe: 0 }));
+await doit("L'équipe liste les conversations", getDocs(collection(equipe(), 'conversationsTesteurs')));
+await doit("L'équipe répond à Karim", addDoc(collection(equipe(), `conversationsTesteurs/${KARIM}/messages`), { de: { uid: AGENT, nom: 'Agent', cote: 'equipe' }, texte: 'On regarde.', pieces: [], date: serverTimestamp() }));
+await doit("L'équipe remet son compteur à zéro", updateDoc(doc(equipe(), `conversationsTesteurs/${KARIM}`), { nonLusEquipe: 0 }));
+await refuse("L'équipe ne touche pas au compteur du testeur", updateDoc(doc(equipe(), `conversationsTesteurs/${KARIM}`), { nonLusTesteur: 5 }));
+await refuse('Camille ne lit pas les conversations des testeurs', getDocs(collection(camille(), 'conversationsTesteurs')));
+await refuse('Camille ne lit pas un fil de testeur', getDocs(collection(camille(), `conversationsTesteurs/${KARIM}/messages`)));
+
 console.log(`\n${ok} contrôle(s) conforme(s)${ecarts.length ? `, ${ecarts.length} ÉCART(S) :\n  - ${ecarts.join('\n  - ')}` : ''}`);
 await env.cleanup();
 process.exit(ecarts.length ? 1 : 0);

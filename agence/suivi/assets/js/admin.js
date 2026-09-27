@@ -30,6 +30,7 @@ import * as adminArchives from './vues/admin-archives.js';
 import * as adminAFaire from './vues/admin-a-faire.js';
 import * as adminParametres from './vues/admin-parametres.js';
 import * as adminEquipe from './vues/admin-equipe.js';
+import * as testeursMessages from './vues/admin-testeurs-messages.js';
 import * as nouveauProjet from './vues/nouveau-projet.js';
 import * as parametres from './vues/parametres.js';
 
@@ -73,6 +74,9 @@ const construireNavigation = () => {
   const profil = magasin.lire(K.profil);
   const uid = session.utilisateur.uid;
   const nonLus = projets.reduce((n, p) => n + nonLusProjet(messagesDuProjet(p.id), profil, p.id, uid), 0);
+  /* Les testeurs qui ont écrit, et ce qui attend une réponse. */
+  const conversationsTesteurs = magasin.lire(K.conversationsTesteurs) || [];
+  const nonLusTesteurs = conversationsTesteurs.reduce((n, c) => n + Number(c.nonLusEquipe || 0), 0);
   const ouvertes = tickets.filter((t) => OUVERTS.includes(t.statut)).length;
   const aFaire = taches.filter((t) => t.statut !== 'terminee').length;
   const nouveauxPreprojets = demandesProjet.filter((d) => d.statut === 'nouvelle').length;
@@ -114,6 +118,7 @@ const construireNavigation = () => {
         { chemin: '/tests', libelle: 'Tests', icone: 'bug', compte: { total: campagnesEnCours, neuf: anomaliesOuvertes } },
         { chemin: '/planning', libelle: 'Planning', icone: 'calendrier', compte: { total: reunions.length } },
         { chemin: '/messages', libelle: 'Messages', icone: 'messages', compte: { total: projets.filter((p) => !p.archive && !p.interne).length, neuf: nonLus } },
+        { chemin: '/testeurs-messages', libelle: 'Testeurs', icone: 'smartphone', compte: { total: conversationsTesteurs.length, neuf: nonLusTesteurs }, si: peut(session, 'qa.gerer') },
         { chemin: '/validations', libelle: 'Validations', icone: 'valider', compte: { total: attendues } },
         { chemin: '/documents', libelle: 'Documents', icone: 'documents', compte: { total: fichiers.length } },
       ],
@@ -155,7 +160,7 @@ const suivreConversations = () => {
 
 let minuteurNav = null;
 const planifierNav = () => { clearTimeout(minuteurNav); minuteurNav = setTimeout(() => { suivreConversations(); construireNavigation(); }, 80); };
-[K.ticketsTous, K.tachesToutes, K.validationsToutes, K.documentsTous, K.demandesProjet, K.projets, K.organisations, K.reunionsToutes, K.fichiersTous, K.profil, K.maintenanceToute, K.campagnesToutes, K.anomaliesToutes].forEach((cle) => magasin.sur(cle, planifierNav));
+[K.ticketsTous, K.tachesToutes, K.validationsToutes, K.documentsTous, K.demandesProjet, K.projets, K.organisations, K.reunionsToutes, K.fichiersTous, K.profil, K.maintenanceToute, K.campagnesToutes, K.anomaliesToutes, K.conversationsTesteurs].forEach((cle) => magasin.sur(cle, planifierNav));
 construireNavigation();
 
 enregistrerRecherche((terme) => {
@@ -212,6 +217,8 @@ definir([
   { chemin: '/tableau', vue: (ctx) => tableau.ancienne(ctx) },
   { chemin: '/planning', vue: (ctx) => adminPlanning.vue(ctx, env) },
   { chemin: '/messages', vue: (ctx) => messages.vue(ctx, env) },
+  { chemin: '/testeurs-messages', vue: (ctx) => testeursMessages.vue(ctx, env) },
+  { chemin: '/testeurs-messages/:uid', vue: (ctx) => testeursMessages.vue(ctx, env) },
   { chemin: '/messages/:pid', vue: (ctx) => messages.vue(ctx, env) },
   { chemin: '/validations', vue: (ctx) => adminValidations.vue(ctx, env) },
   { chemin: '/validations/:vid', vue: (ctx) => adminValidations.vue(ctx, env) },

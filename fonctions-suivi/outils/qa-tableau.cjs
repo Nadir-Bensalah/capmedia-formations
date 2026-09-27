@@ -38,6 +38,7 @@ const attendre=async(fn,n=30,ms=600)=>{for(let i=0;i<n;i++){const v=await fn();i
 /* Depuis la Gate 2, plus de clé : on appelle au nom de l'administrateur
    du banc, avec son jeton Firebase, comme le cockpit. */
 const { appelAdmin } = require('./lib/session-banc.cjs');
+const { remplirFiche } = require('./lib/fiche-banc.cjs');
 const serveur=async(action,corps)=>{ const r=await appelAdmin(action,corps); return { code:r.code, texte:r.texte }; };
 const robot=async(jeton,corps)=>{
   const r=await fetch(ROBOT,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${jeton}`},body:JSON.stringify(corps)});
@@ -232,6 +233,8 @@ const SCENARIOS=[
   const ctxT=await nav.newContext({viewport:{width:390,height:844}});
   const testeur=await ctxT.newPage();
   await connecter(testeur,'paul.tableau@exemple.test');
+  /* Un testeur neuf remplit sa fiche avant tout (qa-fiche-testeur la teste) : ici on la passe comme lui. */
+  await remplirFiche(testeur, { prenom: 'Paul', modele: 'PC du banc' });
   /* Un testeur neuf voit l'accueil devant tout (qa-espace-testeur le teste) : ici on va droit à sa campagne. */
   await testeur.waitForSelector('.accueil [data-accueil="passer"], .testeur-tete', { timeout: 20000 }).catch(() => null);
   if (await testeur.$('.accueil')) { await testeur.click('.accueil [data-accueil="passer"]'); await testeur.waitForSelector('.accueil', { state: 'detached' }); }

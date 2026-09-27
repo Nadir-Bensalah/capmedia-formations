@@ -28,6 +28,8 @@ import { definir, demarrer, courant, naviguer } from './routeur.js';
 import { tableauTesteur, ETATS_CASE } from './verdicts.js';
 import { barreHtml, famillesHtml } from './grille.js';
 import { ouvrirAccueil, accueilVu, marquerAccueilVu } from './accueil-testeur.js';
+import { ouvrirFiche, consignerAppareil } from './fiche-testeur.js';
+import { monterBulleTesteur } from './bulle-testeur.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 /* La zone où s'affiche la page courante : celle de la coquille, une fois
@@ -131,7 +133,8 @@ const finTestHtml = () => {
     return `<div class="fin-test fin-test--faite">
       <h2>Test terminé le ${echapper(dateCourte(enDate(etat.avis.termine) || new Date()))}</h2>
       <p>Vos résultats sont transmis à l'équipe Capmedia et figés. ${fin ? `Votre accès reste ouvert jusqu'au ${echapper(dateCourte(fin))} : le temps d'ajouter une remarque qui vous revient après coup.` : ''}</p>
-    </div>`;
+    </div>
+    ${magasinsHtml()}`;
   }
   if (faits === total) {
     return `<div class="fin-test">
@@ -160,21 +163,55 @@ const remarquesHtml = () => {
   </section>`;
 };
 
+/* Les fiches des magasins, pour un vrai avis une fois le test fini : un
+   testeur qui a passé des heures dans l'application est le mieux placé
+   pour en parler là où les autres la découvrent. Seulement si l'équipe a
+   posé les adresses sur la campagne. */
+const magasinsHtml = () => {
+  const c = etat.campagne || {};
+  const m = c.magasins || {};
+  const liens = [['ios', 'App Store', 'apple', m.ios], ['android', 'Play Store', 'android', m.android]].filter(([, , , u]) => /^https:\/\/[^\s"'<>]+$/.test(String(u || '')));
+  if (!liens.length) return '';
+  return `<div class="fin-test fin-test--magasins">
+    <h2>Un vrai avis, là où les autres la découvrent</h2>
+    <p>Vous connaissez ${echapper(c.application || 'l\'application')} mieux que personne maintenant. Une note et quelques mots sur le magasin de votre téléphone aident vraiment.</p>
+    <div class="actions">${liens.map(([cle, libelle, ic, url]) => `<a class="btn btn-secondaire" href="${echapper(url)}" target="_blank" rel="noopener" data-magasin="${cle}">${icone(ic)} Noter sur l'${libelle}</a>`).join('')}</div>
+  </div>`;
+};
+
 const terminer = async (moi) => {
   const total = etat.scenarios.length;
   if (!total || etat.scenarios.some((s) => !etat.passages.has(s.ref))) { toast('Il reste des scénarios à dérouler.', 'erreur'); return; }
+  /* Une note sur le TEST lui-même, pas sur l'application : c'est ce qui
+     dit à l'équipe si les scénarios étaient clairs et faisables. */
   const m = modale({
     titre: 'Terminer le test', sousTitre: 'Vos résultats seront transmis et figés.',
-    corps: `<p>L'équipe Capmedia reçoit votre bilan : ${compter().ok} réussi${compter().ok > 1 ? 's' : ''}, ${compter().ko} échec${compter().ko > 1 ? 's' : ''}, ${compter().na} sans objet. Vous ne pourrez plus modifier vos résultats, mais vous garderez sept jours pour ajouter une remarque.</p>`,
+    corps: `<p>L'équipe Capmedia reçoit votre bilan : ${compter().ok} réussi${compter().ok > 1 ? 's' : ''}, ${compter().ko} échec${compter().ko > 1 ? 's' : ''}, ${compter().na} sans objet. Vous ne pourrez plus modifier vos résultats, mais vous garderez sept jours pour ajouter une remarque.</p>
+      <div class="groupe" style="margin-top:16px"><span class="etiquette-champ">Ce test était-il clair et faisable&nbsp;?</span>
+        <div class="avis-echelle" role="group" aria-label="Note du test">${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="avis-cran" data-note-test="${n}" aria-pressed="false">${n}</button>`).join('')}</div>
+        <div class="rang avis-bornes"><span>Confus, pénible</span><span>Limpide, agréable</span></div></div>
+      <div class="groupe"><label class="etiquette-champ" for="note-test-texte">Ce qui aurait rendu ce test plus facile <span class="facultatif">(facultatif)</span></label>
+        <textarea class="champ" id="note-test-texte" rows="3" placeholder="Un scénario flou, une consigne manquante, un lien qui ne marchait pas…"></textarea></div>`,
     pied: '<button class="btn btn-secondaire" type="button" data-fermer>Pas encore</button><button class="btn btn-principal" type="button" data-valider>Oui, j\'ai terminé</button>',
   });
-  m.el.querySelector('[data-valider]').addEventListener('click', () => m.fermer(true));
-  if (!(await m.fin)) return;
+  let note = 0;
+  m.el.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-note-test]');
+    if (!b) return;
+    note = Number(b.dataset.noteTest);
+    m.el.querySelectorAll('[data-note-test]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  });
+  m.el.querySelector('[data-valider]').addEventListener('click', () => {
+    if (!note) { toast('Donnez une note au test, de 1 à 5.', 'erreur'); return; }
+    m.fermer({ note, commentaire: ($('#note-test-texte', m.el).value || '').trim().slice(0, 2000) });
+  });
+  const reponse = await m.fin;
+  if (!reponse) return;
   const uid = auth.currentUser.uid;
   const chemin = `projets/${etat.campagne.projet}/campagnes/${etat.campagne.id}/appreciations/${uid}`;
   try {
-    await setDoc(doc(bdd, chemin), { termine: serverTimestamp(), testeur: uid, maj: serverTimestamp() }, { merge: true });
-    etat.avis = { ...(etat.avis || {}), termine: new Date() };
+    await setDoc(doc(bdd, chemin), { termine: serverTimestamp(), noteTest: { note: reponse.note, commentaire: reponse.commentaire, le: new Date() }, testeur: uid, maj: serverTimestamp() }, { merge: true });
+    etat.avis = { ...(etat.avis || {}), termine: new Date(), noteTest: { note: reponse.note, commentaire: reponse.commentaire } };
     toast('Merci. Votre bilan est transmis à l\'équipe.');
     rendre(moi);
     /* Le plus utile arrive à la fin : son avis sur l'application, s'il ne
@@ -565,12 +602,28 @@ const pageApplication = () => {
         </div>`;
       }).join('')}</div>` : '<p class="t-2">Le lien d\'installation vous arrive par e-mail. Si rien n\'est arrivé, écrivez à l\'équipe.</p>'}
     </section>
+    ${(c.acces && (c.acces.instructions || c.acces.identifiants)) ? `<section>
+      <div class="section-tete"><h2>Pour entrer dans l'application</h2></div>
+      ${c.acces.instructions ? `<div class="prose">${echapper(c.acces.instructions).split(/\n{2,}/).map((x) => `<p>${x.replace(/\n/g, '<br>')}</p>`).join('')}</div>` : ''}
+      ${c.acces.identifiants ? `<div class="identifiants-test">
+        <p class="surtitre">Vos identifiants de test</p>
+        <pre class="identifiants-bloc" id="identifiants-bloc">${echapper(c.acces.identifiants)}</pre>
+        <div class="actions"><button class="btn btn-secondaire btn-petit" type="button" data-copier-identifiants>${icone('copier')} Copier</button></div>
+        <p class="aide">Ce sont des comptes de test : rien de réel n'y passe. Ne les partagez pas.</p>
+      </div>` : ''}
+    </section>` : ''}
     <section>
       <div class="section-tete"><h2>Ce qu'on attend de vous</h2></div>
       ${c.consignes ? `<div class="prose">${echapper(c.consignes).split(/\n{2,}/).map((x) => `<p>${x.replace(/\n/g, '<br>')}</p>`).join('')}</div>`
-        : `<ul class="liste-points"><li>Dérouler les scénarios qui vous sont confiés, dans l'ordre si possible.</li><li>Signaler chaque échec avec ce que vous avez vu et une capture.</li><li>Donner votre avis au début et à la fin : c'est lui qui dit si l'application plaît.</li></ul>`}
+        : `<ul class="liste-points"><li>Dérouler les scénarios qui vous sont confiés, dans l'ordre.</li><li>Signaler chaque échec avec ce que vous avez vu et une capture.</li><li>Donner votre avis au début et à la fin : c'est lui qui dit si l'application plaît.</li></ul>`}
     </section>
+    ${aTermine() ? magasinsHtml() : ''}
   </div>`;
+  const copier = $('[data-copier-identifiants]');
+  if (copier) copier.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(($('#identifiants-bloc') || {}).textContent || ''); toast('Identifiants copiés.'); }
+    catch (e) { toast('La copie a échoué : sélectionnez le texte.', 'erreur'); }
+  });
 };
 
 const pageSignalements = (moi) => {
@@ -702,12 +755,17 @@ const majNavigation = () => {
   definirEtat(etatAcces());
 };
 
+/* La bulle vers l'équipe, montée une fois l'espace prêt. L'adresse
+   « /messages » (celle des notifications et des e-mails) l'ouvre. */
+let bulle = null;
+
 const PAGES = {
   '/': (moi) => { filAriane([{ libelle: 'Ma campagne' }]); pageCampagne(moi); },
   '/application': pageApplication,
   '/signalements': pageSignalements,
   '/avis': pageAvis,
   '/guide': pageGuide,
+  '/messages': (moi) => { if (bulle) bulle.ouvrir(); naviguer('/'); void moi; },
 };
 
 const rendre = (moi) => {
@@ -1117,6 +1175,13 @@ const monter = async () => {
   const { vue } = monterCoquille({ session: sess, role: 'testeur', groupes: [], sortie: racine });
   racine = vue;
   racine.innerHTML = `<div class="page page--testeur"><p class="aide" style="text-align:center;margin-top:40px">Chargement de votre campagne…</p></div>`;
+  /* Sa fiche d'abord, tant qu'il ne l'a pas validée : qui teste, sur quoi,
+     depuis quel appareil. Ensuite, chaque connexion consigne l'appareil du
+     jour sans rien demander. */
+  if (!testeur.ficheValidee) await ouvrirFiche(testeur);
+  else consignerAppareil(testeur);
+  /* La bulle vers l'équipe, en bas à droite. */
+  try { bulle = monterBulleTesteur({ testeur }); } catch (e) { console.warn('[testeur] bulle non montée', e); }
   /* La première fois : l'accueil, devant tout. La campagne se dessine
      derrière pendant qu'il le lit, et l'attend à la sortie. */
   if (!accueilVu(testeur.uid)) lancerAccueil(testeur);

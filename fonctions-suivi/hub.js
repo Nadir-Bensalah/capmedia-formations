@@ -720,6 +720,8 @@ exports.hubAppreciationEcrite = onDocumentWritten({ region: REGION, document: 'p
       finAcces: fin.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }),
       echecs: bilan.echecs.map((e) => `${e.ref}${e.titre ? ` · ${e.titre}` : ''}${e.plateforme ? ` (${e.plateforme})` : ''}${e.commentaire ? ` : ${e.commentaire.slice(0, 200)}` : ''}`),
       avisDonne: Object.keys(apres).some((k) => k.startsWith('esthetique.')) ? 'oui' : 'pas encore',
+      noteTest: apres.noteTest && apres.noteTest.note ? `${apres.noteTest.note} sur 5` : '',
+      noteTestCommentaire: apres.noteTest ? String(apres.noteTest.commentaire || '').slice(0, 2000) : '',
       lien: LIEN_ADMIN(lienAdmin),
     }, { projet: pid, evenement: 'testeur-termine' });
     await audit('test.termine', { projet: pid, campagne: cid, testeur: uid, ok: bilan.compte.ok, ko: bilan.compte.ko, na: bilan.compte.na, finAcces: fin });
@@ -735,6 +737,50 @@ exports.hubAppreciationEcrite = onDocumentWritten({ region: REGION, document: 'p
       projetNom: nomProjet(projet), campagne: titreCampagne, testeur: nomTesteur, email: testeur.email || '',
       remarques: nouvelles, lien: LIEN_ADMIN(lienAdmin),
     }, { projet: pid, evenement: 'testeur-remarque' });
+  }
+});
+
+/* ==========================================================================
+   13 bis. La conversation d'un testeur avec l'équipe
+
+   Une bulle dans l'espace Test, une page dans le Cockpit. À part des
+   messages de projet : un testeur n'est membre d'aucun projet, et ce qu'il
+   dit ne regarde que l'équipe. Le serveur tient le document de la
+   conversation (dernier message, compteurs de non lus) et prévient : la
+   notification et la lettre à l'équipe quand le testeur écrit, la
+   notification et la lettre au testeur quand l'équipe répond.
+   ========================================================================== */
+
+exports.hubMessageTesteur = onDocumentCreated({ region: REGION, document: 'conversationsTesteurs/{testeurId}/messages/{messageId}' }, async (evenement) => {
+  const m = evenement.data && evenement.data.data();
+  if (!m) return;
+  const { testeurId: uid } = evenement.params;
+  const de = m.de || {};
+  const duTesteur = de.cote === 'testeur';
+  const extrait = String(m.texte || '').slice(0, 140);
+  let testeur = {};
+  try { const t = await bdd.doc(`testeurs/${uid}`).get(); testeur = t.exists ? t.data() : {}; } catch (err) { testeur = {}; }
+  const prenom = testeur.prenom || de.nom || 'Un testeur';
+
+  try {
+    await bdd.doc(`conversationsTesteurs/${uid}`).set(sansIndefini({
+      testeur: uid, prenom: testeur.prenom || '', email: testeur.email || '',
+      dernier: { texte: extrait, cote: de.cote || '', nom: de.nom || '', date: m.date || FieldValue.serverTimestamp() },
+      nonLusEquipe: duTesteur ? FieldValue.increment(1) : 0,
+      nonLusTesteur: duTesteur ? 0 : FieldValue.increment(1),
+      maj: FieldValue.serverTimestamp(),
+    }), { merge: true });
+  } catch (err) { console.error('Conversation du testeur non mise à jour', err); }
+
+  const lienAdmin = `/testeurs-messages/${uid}`;
+  if (duTesteur) {
+    await notifierEquipe(null, { type: 'message', titre: `Message de ${prenom} (testeur)`, texte: extrait, lien: `#${lienAdmin}` });
+    await mettreEnFile('message-testeur', contactsEquipe(), { testeur: prenom, email: testeur.email || '', texte: m.texte, lien: LIEN_ADMIN(lienAdmin) }, { evenement: 'message-testeur' });
+  } else {
+    await notifier([uid], { type: 'message', titre: `Réponse de ${de.nom || 'Capmedia'}`, texte: extrait, lien: '#/messages' });
+    if (testeur.email) {
+      await mettreEnFile('message-testeur-reponse', [{ email: testeur.email, nom: testeur.prenom || '' }], { prenom: testeur.prenom || '', auteur: de.nom || 'Capmedia', texte: m.texte, lien: `${courriels.BASE}testeur#/messages` }, { evenement: 'message-testeur-reponse' });
+    }
   }
 });
 

@@ -98,7 +98,9 @@ export const nommeur = (d, { equipe, pid }) => {
   return (uid) => {
     const t = (equipe ? (d.testeurs || []) : (d.profils || [])).find((x) => x.id === uid) || {};
     const p = equipe ? (t.profil || {}) : t;
-    const traits = [p.sexe, p.age ? `${p.age} ans` : '', p.fonction].filter(Boolean).join(', ');
+    const appareils = (Array.isArray(p.appareils) ? p.appareils : (Array.isArray(t.appareils) ? t.appareils.filter((a) => a && a.confirme !== false) : []))
+      .map((a) => [a.modele, a.os].filter(Boolean).join(' ')).filter(Boolean).slice(0, 3).join(' / ');
+    const traits = [p.sexe, p.age ? `${p.age} ans` : '', p.expertise || p.fonction, appareils].filter(Boolean).join(', ');
     const nom = equipe ? (t.prenom || t.email || 'Testeur') : `Testeur ${rang(uid)}`;
     return { nom, traits, libelle: traits ? `${nom} · ${traits}` : nom };
   };
@@ -808,12 +810,22 @@ const ouvrirTesteur = (fiche, { env, projets }) => {
           </select>
         </div>
         <input class="champ" id="t-fonction" value="${echapper(p.fonction || '')}" placeholder="Sa fonction : testeur QA, étudiante, développeur..." style="margin-top:10px">
+        <input class="champ" id="t-expertise" value="${echapper(p.expertise || '')}" placeholder="Son domaine d'expertise : santé, commerce, droit..." style="margin-top:10px">
         <select class="select" id="t-aisance" style="margin-top:10px">
           <option value="">Son aisance avec le numérique</option>
           ${AISANCE.map((x) => `<option value="${echapper(x)}"${p.aisance === x ? ' selected' : ''}>${echapper(x)}</option>`).join('')}
         </select>
         <p class="aide">Il faut pouvoir distinguer un blocage causé par l'application d'un blocage causé par l'habitude. Ce profil est visible du client, jamais son nom.</p>
       </div>
+
+      ${neuf ? '' : `<div class="groupe"><span class="etiquette-champ">Sa fiche, ses appareils</span>
+        ${f.ficheValidee ? `<p class="t-petit t-ok">Fiche validée par ${echapper(f.prenom || 'le testeur')}${f.nom ? ` ${echapper(f.nom)}` : ''} le ${echapper(enDate(f.ficheValidee) ? enDate(f.ficheValidee).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) : '')}.</p>` : '<p class="t-petit t-3">Fiche pas encore validée : il la remplit à sa première connexion.</p>'}
+        ${(f.appareils || []).length ? `<div class="liste liste--serree" style="margin-top:8px">${(f.appareils || []).map((a) => `
+          <div class="rang" style="justify-content:space-between;padding:6px 10px;border-radius:8px;background:var(--fond-2)">
+            <span class="t-petit"><b>${echapper(a.modele || 'Appareil')}</b> · ${echapper(a.os || '')} · ${echapper(a.navigateur || '')}${a.confirme === false ? ' <span class="t-3">(pas pour tester)</span>' : ''}</span>
+            <span class="t-micro t-3">${echapper(a.ecran || '')}${a.reseau ? ` · ${echapper(a.reseau)}` : ''}${enDate(a.vu) ? ` · vu le ${echapper(enDate(a.vu).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }))}` : ''}</span>
+          </div>`).join('')}</div>` : ''}
+      </div>`}
 
       <div class="groupe"><span class="etiquette-champ">Ses projets</span>
         <div class="cases-blocs">${projets.map((x) => `
@@ -904,6 +916,7 @@ const ouvrirTesteur = (fiche, { env, projets }) => {
         sexe: m.el.querySelector('#t-sexe').value,
         age: m.el.querySelector('#t-age').value,
         fonction: (m.el.querySelector('#t-fonction').value || '').trim(),
+        expertise: (m.el.querySelector('#t-expertise').value || '').trim(),
         aisance: m.el.querySelector('#t-aisance').value,
       },
     };
@@ -1108,6 +1121,7 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, nommer }) => {
     return {
       id, nom: nommer(id).nom, mobile: t.mobile || '', n: (affectation[id] || []).length, accueil: Boolean(a.accueil),
       termine: enDate(a.termine), fin: enDate((c.fins || {})[id]), remarques: Array.isArray(a.remarques) ? a.remarques : [],
+      noteTest: a.noteTest && a.noteTest.note ? a.noteTest : null,
     };
   });
   const jourCourt = (d) => (d ? d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '');
@@ -1156,6 +1170,7 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, nommer }) => {
                 ${t.fin && t.fin.getTime() > Date.now() ? `<button class="btn btn-fantome btn-petit" type="button" data-clore="${echapper(t.id)}">Clore l'accès</button>` : ''}
               </span>` : ''}
             </div>` : ''}
+            ${t.noteTest ? `<p class="t-petit" style="margin:6px 0 0">Note du test : <b>${echapper(String(t.noteTest.note))}/5</b>${equipe && t.noteTest.commentaire ? ` · « ${echapper(String(t.noteTest.commentaire))} »` : ''}</p>` : ''}
             ${equipe && t.remarques.length ? `<div style="margin-top:8px">${t.remarques.map((r) => `<p class="t-petit" style="margin:4px 0;padding:6px 8px;border-radius:8px;background:var(--fond-3)">${echapper(String(r.texte || ''))}${enDate(r.le) ? ` <span class="t-micro t-3">· ${echapper(jourCourt(enDate(r.le)))}</span>` : ''}</p>`).join('')}</div>` : ''}
           </div>`).join('')}</div>`
           : `<p class="aide">Aucun testeur pour l'instant. ${vivier.length ? 'Choisissez-les ci-dessous.' : 'Le vivier est vide : le serveur seul y inscrit quelqu\'un.'}</p>`}

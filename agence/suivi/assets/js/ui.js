@@ -430,9 +430,12 @@ export const depot = (zone, { chemin, metadonnees = null, max = 10, texte = 'Dé
 
 let piles = [];
 
+/* Échap ferme la dernière modale, sauf celle qui ne se ferme pas (la fiche
+   du testeur à sa première connexion) : le clavier ne contourne pas ce que
+   la souris ne peut pas faire. */
 const fermerDerniere = () => {
   const d = piles[piles.length - 1];
-  if (d) d.fermer();
+  if (d && d.fermable !== false) d.fermer();
 };
 
 document.addEventListener('keydown', (e) => {
@@ -491,7 +494,7 @@ export const modale = ({ titre, sousTitre = '', corps = '', pied = '', large = f
     else voile.remove();
     resoudre(valeur);
   };
-  const entree = { voile, fermer };
+  const entree = { voile, fermer, fermable };
   piles.push(entree);
 
   voile.addEventListener('click', (e) => {

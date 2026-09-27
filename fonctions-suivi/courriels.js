@@ -949,9 +949,10 @@ function testeurTermine(v) {
         ['Scénarios déroulés', valeurTexte(v.total)],
         ['Temps donné', valeurTexte(v.temps)],
         ['Avis sur l\'application', valeurTexte(v.avisDonne)],
+        ['Note du test', valeurTexte(v.noteTest)],
         ['Accès jusqu\'au', valeurTexte(v.finAcces)],
       ],
-      citation: echecs.length ? echecs.join('\n') : '',
+      citation: [v.noteTestCommentaire ? `Sur le test : ${valeurTexte(v.noteTestCommentaire)}` : '', ...echecs].filter(Boolean).join('\n'),
       bouton: { libelle: 'Ouvrir la campagne dans le Cockpit', url: valeurTexte(v.lien) },
       note: 'Le client lit qu\'un testeur a terminé, sans son nom. Ses réponses et ses échecs sont dans la campagne.',
     }),
@@ -974,10 +975,42 @@ function testeurRemarque(v) {
   };
 }
 
+/* Un message d'un testeur à l'équipe, repris tel quel. */
+function messageTesteur(v) {
+  const qui = valeurTexte(v.testeur) || 'Un testeur';
+  return {
+    objet: `${qui} (testeur) vous écrit`,
+    ...rendreGabarit({
+      titre: 'Un testeur vous écrit',
+      intro: `${qui}${v.email ? ` (${valeurTexte(v.email)})` : ''} a laissé ce message depuis son espace de test.`,
+      citation: valeurTexte(v.texte),
+      bouton: { libelle: 'Répondre dans le Cockpit', url: valeurTexte(v.lien) },
+      note: 'Votre réponse lui arrive dans sa bulle, en direct, et par e-mail.',
+    }),
+  };
+}
+
+/* La réponse de l'équipe au testeur. */
+function messageTesteurReponse(v) {
+  const prenom = valeurTexte(v.prenom).trim();
+  return {
+    objet: `${valeurTexte(v.auteur) || 'Capmedia'} vous a répondu`,
+    ...rendreGabarit({
+      titre: 'Une réponse de Capmedia',
+      intro: `${prenom ? `Bonjour ${prenom},` : 'Bonjour,'}\n\n${valeurTexte(v.auteur) || 'Capmedia'} vous a répondu dans votre espace de test.`,
+      citation: valeurTexte(v.texte),
+      bouton: { libelle: 'Ouvrir la conversation', url: valeurTexte(v.lien) || lienEspace() },
+      note: 'Vous pouvez répondre depuis la bulle en bas à droite de votre espace.',
+    }),
+  };
+}
+
 const MODELES = {
   'invitation': invitation,
   'testeur-termine': testeurTermine,
   'testeur-remarque': testeurRemarque,
+  'message-testeur': messageTesteur,
+  'message-testeur-reponse': messageTesteurReponse,
   'invitation-testeur': invitationTesteur,
   'invitation-equipe': invitationEquipe,
   'ouverture': ouverture,

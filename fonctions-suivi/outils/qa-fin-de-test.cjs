@@ -83,6 +83,8 @@ let page = null;
   verifier(await page.$('[data-terminer]'), 'tout déroulé, le bouton « J ai terminé » apparaît');
   await page.click('[data-terminer]'); await page.waitForSelector('[data-valider]', { timeout: 10000 });
   verifier(/figés/.test(await page.textContent('.modale, .feuille')), 'il prévient que les résultats seront figés');
+  /* La note du test est demandée en terminant (qa-fiche-testeur l'éprouve). */
+  await page.click('[data-note-test="5"]');
   await page.click('[data-valider]'); await pause(2000);
   if (await page.$('[data-envoyer]')) { await page.keyboard.press('Escape'); await pause(500); }
   verifier(/Test terminé le/.test(await page.textContent('.fin-test')), 'la page dit « Test terminé le … »');

@@ -60,7 +60,13 @@ for (const [email, prenom, mobile] of GENS) {
   let u;
   try { u = await auth.getUserByEmail(email); } catch (e) { u = await auth.createUser({ email, emailVerified: true, displayName: prenom }); }
   await auth.setCustomUserClaims(u.uid, { testeur: true });
-  await bdd.doc(`testeurs/${u.uid}`).set({ prenom, email, plateformes: [mobile, 'web'], mobile, projets: ['atelier'], actif: true, profil: {} });
+  /* La fiche est validée d'avance : les suites entrent directement dans la
+     campagne. Celle de la fiche (qa-fiche-testeur) la remet à blanc. */
+  await bdd.doc(`testeurs/${u.uid}`).set({
+    prenom, nom: `${prenom}ov`, email, plateformes: [mobile, 'web'], mobile, projets: ['atelier'], actif: true,
+    profil: { sexe: mobile === 'ios' ? 'homme' : 'femme', age: '25-34', fonction: 'Testeur', expertise: 'Commerce', aisance: 'À l\'aise', langue: 'fr' },
+    appareils: [], ficheValidee: new Date(Date.now() - 86400000),
+  });
   uids.push(u.uid);
 }
 

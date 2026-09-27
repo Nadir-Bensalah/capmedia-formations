@@ -558,11 +558,21 @@ exports.suiviProfilTesteur = onDocumentWritten(
     const profil = apres.profil || {};
     for (const p of [...new Set(projetsApres)]) {
       try {
+        /* Le profil que le client lit : ce que le testeur est, jamais qui il
+           est. Ses appareils, résumés (une plateforme, un modèle, un
+           système), disent sur quoi les résultats ont été obtenus. */
+        const appareils = (Array.isArray(apres.appareils) ? apres.appareils : [])
+          .filter((a) => a && a.confirme !== false)
+          .slice(0, 10)
+          .map((a) => ({ plateforme: String(a.plateforme || ''), modele: String(a.modele || '').slice(0, 80), os: String(a.os || '').slice(0, 80) }));
         await bdd.doc(`projets/${p}/profilsTesteurs/${id}`).set({
           sexe: profil.sexe || '', age: profil.age || '', fonction: profil.fonction || '',
+          expertise: profil.expertise || '',
           aisance: profil.aisance || '', langue: profil.langue || '',
           mobile: apres.mobile || '',
           plateformes: apres.plateformes || [],
+          appareils,
+          ficheValidee: apres.ficheValidee || null,
           maj: FieldValue.serverTimestamp(),
         });
       } catch (err) { console.error(`Profil du testeur ${id} non recopié sur ${p}`, err); }

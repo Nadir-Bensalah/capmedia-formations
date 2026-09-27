@@ -65,6 +65,8 @@ export const K = {
   profil: 'profil',
   /* Tous les profils (l'administrateur seul les lit) : les premiers pas des clients. */
   profilsClients: 'profils-clients',
+  /* Les conversations des testeurs avec l'équipe (le Cockpit seul). */
+  conversationsTesteurs: 'conversations-testeurs',
   demandesProjet: 'demandes-projet',
   ticketsTous: 'tickets:*',
   tachesToutes: 'taches:*',
@@ -263,6 +265,7 @@ export const abonnerGlobal = (lot, session) => {
     lot.abonner(K.profils, () => collectionGroup(bdd, 'profilsTesteurs'));
     lot.abonner(K.scenariosTous, () => collectionGroup(bdd, 'scenarios'));
     lot.abonner(K.testeurs, () => col('testeurs'));
+    lot.abonner(K.conversationsTesteurs, () => query(col('conversationsTesteurs'), orderBy('maj', 'desc'), limit(200)));
     lot.abonner(K.projetsInternes, () => col('projetsInternes'));
     lot.abonner(K.montantsTous, () => collectionGroup(bdd, 'montants'));
     lot.abonner(K.organisationsInternes, () => col('organisationsInternes'));
@@ -369,6 +372,7 @@ const abonnerAgent = (lot, session) => {
   lot.abonner(K.equipe, () => col('equipe'));
   if (peut(session, 'qa.gerer')) lot.abonner(K.testeurs, () => col('testeurs'));
   else parLots('testeurs', K.testeurs);
+  if (peut(session, 'qa.gerer')) lot.abonner(K.conversationsTesteurs, () => query(col('conversationsTesteurs'), orderBy('maj', 'desc'), limit(200)));
 };
 
 /**

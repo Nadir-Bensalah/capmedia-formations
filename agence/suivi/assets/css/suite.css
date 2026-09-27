@@ -1389,3 +1389,26 @@ html.accueil-ouvert { overflow: hidden; }
 .remarques-fin .remarque { padding: 10px 12px; border-radius: 10px; background: var(--fond-2); margin-bottom: 8px; }
 .remarques-fin .remarque small { display: block; color: var(--encre-3); margin-top: 4px; }
 .remarques-fin textarea { width: 100%; }
+
+/* La fiche du testeur, les identifiants de test, les magasins. */
+.fiche-bloc { margin-bottom: 22px; }
+.fiche-bloc .bloc-tete { margin-bottom: 10px; }
+.appareil-releve { padding: 12px 14px; border-radius: 10px; background: var(--fond-2); margin-bottom: 12px; }
+.appareil-releve p { margin: 0; }
+.identifiants-test { margin-top: 14px; }
+.identifiants-bloc { margin: 6px 0 10px; padding: 12px 14px; border-radius: 10px; background: var(--fond-2); font: 500 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; }
+.fin-test--magasins { background: var(--fond-2); }
+.fin-test--magasins .actions a { text-decoration: none; }
+.bulle--testeur .bulle-tete .avatar { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; font: 600 13px var(--titre); }
+
+/* Les conversations des testeurs, dans le Cockpit : la liste, le fil. */
+.tm-deux { display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); gap: 18px; align-items: start; }
+.tm-liste { display: flex; flex-direction: column; gap: 4px; }
+.tm-liste .ligne--active { background: var(--actif); }
+.tm-fil-cadre { display: flex; flex-direction: column; min-height: 480px; border-radius: 14px; background: var(--blanc); box-shadow: var(--ombre-sm), 0 0 0 1px var(--lisere-carte); }
+.tm-tete { padding: 16px 18px 12px; }
+.tm-tete h2 { margin: 0; font: 600 18px/1.3 var(--titre); }
+.tm-fil { flex: 1; overflow-y: auto; padding: 8px 18px 18px; display: flex; flex-direction: column; gap: 14px; max-height: 60vh; }
+.tm-repondre { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; padding: 12px 18px 16px; }
+.tm-vide { padding: 40px 18px; }
+@media (max-width: 800px) { .tm-deux { grid-template-columns: 1fr; } }

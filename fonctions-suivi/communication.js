@@ -65,6 +65,8 @@ const EVENEMENTS = {
   test: { categorie: 'projet' },
   'testeur-termine': { categorie: 'projet' },
   'testeur-remarque': { categorie: 'projet' },
+  'message-testeur': { categorie: 'messages' },
+  'message-testeur-reponse': { categorie: 'messages' },
 };
 
 const regle = (evenement) => EVENEMENTS[evenement] || { categorie: 'projet' };
