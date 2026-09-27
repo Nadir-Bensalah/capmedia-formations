@@ -1274,6 +1274,8 @@ export const vue = async (ctx, env) => {
     return env.role !== 'equipe' && p.length === 1 ? p[0].id : '';
   };
 
+  /* Une seule fonction pour toutes les clés : le lot groupe ses appels. */
+  const redessiner = () => rendre();
   const suivreCampagnes = () => {
     const pid = projetCourant();
     if (!pid) return;
@@ -1282,8 +1284,8 @@ export const vue = async (ctx, env) => {
       campagnesSuivies.add(c.id);
       lot.abonner(K.appreciations(c.id), () => collection(bdd, 'projets', pid, 'campagnes', c.id, 'appreciations'));
       lot.abonner(K.passages(c.id), () => collection(bdd, 'projets', pid, 'campagnes', c.id, 'passages'));
-      lot.sur(K.appreciations(c.id), () => rendre());
-      lot.sur(K.passages(c.id), () => rendre());
+      lot.sur(K.appreciations(c.id), redessiner);
+      lot.sur(K.passages(c.id), redessiner);
     });
   };
 
@@ -1465,9 +1467,10 @@ export const vue = async (ctx, env) => {
     clesSuivies().forEach((c) => {
       if (suivies.has(c)) return;
       suivies.add(c);
-      lot.sur(c, () => { suivre(); rendre(); });
+      lot.sur(c, surChangement);
     });
   };
+  const surChangement = () => { suivre(); rendre(); };
   suivre();
   rendre(true);
 

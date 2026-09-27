@@ -24,16 +24,60 @@ const parentDe = (ref) => {
   return p ? p.id : '';
 };
 
+/* Une date posée par le serveur (« maj: serverTimestamp() ») n'est pas
+   connue au moment où l'écriture part : par défaut, Firestore la livrait
+   nulle dans l'instantané local, puis vraie dans celui du serveur. Deux
+   instantanés différents, deux dessins, une date qui clignotait. On lit
+   l'estimation locale : la date est là dès le premier, et le second ne
+   diffère que de quelques millisecondes, ce que « memes » sait ignorer. */
+const OPTIONS_LECTURE = { serverTimestamps: 'estimate' };
 const normaliser = (instantane) => {
   if (typeof instantane.docs !== 'undefined') {
-    return instantane.docs.map((d) => ({ id: d.id, ...d.data(), _parent: parentDe(d.ref) }));
+    return instantane.docs.map((d) => ({ id: d.id, ...d.data(OPTIONS_LECTURE), _parent: parentDe(d.ref) }));
   }
-  return instantane.exists() ? { id: instantane.id, ...instantane.data(), _parent: parentDe(instantane.ref) } : null;
+  return instantane.exists() ? { id: instantane.id, ...instantane.data(OPTIONS_LECTURE), _parent: parentDe(instantane.ref) } : null;
+};
+
+/* Deux valeurs sont les mêmes quand rien ne les distingue une fois
+   déroulées : mêmes documents, mêmes champs, mêmes dates. Une valeur de
+   Firestore (Timestamp, GeoPoint, Bytes) se compare par « isEqual » ; une
+   référence, par son chemin ; ce qu'on ne sait pas comparer est tenu pour
+   différent, ce qui redessine plutôt que d'oublier. Avec « tolerant », deux
+   dates à moins d'une minute sont les mêmes : c'est l'estimation locale
+   d'une marque du serveur, contre sa valeur vraie. */
+const TOLERANCE_DATE_MS = 60000;
+const memes = (a, b, tolerant = false) => {
+  if (a === b) return true;
+  if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') return false;
+  if (typeof a.toMillis === 'function' && typeof b.toMillis === 'function') {
+    return (typeof a.isEqual === 'function' && a.isEqual(b)) || (tolerant && Math.abs(a.toMillis() - b.toMillis()) <= TOLERANCE_DATE_MS);
+  }
+  if (typeof a.isEqual === 'function') return typeof b.isEqual === 'function' && a.isEqual(b);
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((x, i) => memes(x, b[i], tolerant));
+  }
+  const proto = Object.getPrototypeOf(a);
+  if (proto !== Object.prototype && proto !== null) return typeof a.path === 'string' && a.path === b.path;
+  const ka = Object.keys(a); const kb = Object.keys(b);
+  return ka.length === kb.length && ka.every((k) => Object.prototype.hasOwnProperty.call(b, k) && memes(a[k], b[k], tolerant));
+};
+
+/* Pose une nouvelle valeur sur une clé, et ne réveille les écoutes que si
+   elle change quelque chose. Le serveur confirme chaque écriture locale par
+   un instantané qui, le plus souvent, ne dit rien de neuf : le magasin le
+   garde (c'est la valeur vraie) mais ne le rediffuse pas, et l'écran ne se
+   redessine pas pour rien. Ceux qui attendaient la première valeur sont
+   servis dans tous les cas. */
+const poser = (cle, e, valeur, { tolerant = false } = {}) => {
+  const pareil = e.chargee && !e.erreur && memes(e.valeur, valeur, tolerant);
+  e.valeur = valeur; e.chargee = true; e.erreur = null;
+  if (!pareil) { diffuser(cle); return; }
+  e.attentes.splice(0).forEach(({ ok }) => ok(e.valeur));
 };
 
 const obtenir = (cle) => {
   if (!entrees.has(cle)) {
-    entrees.set(cle, { compte: 0, arreter: null, valeur: undefined, chargee: false, erreur: null, ecouteurs: new Set(), attentes: [] });
+    entrees.set(cle, { compte: 0, arreter: null, valeur: undefined, chargee: false, erreur: null, enAttente: false, ecouteurs: new Set(), attentes: [] });
   }
   return entrees.get(cle);
 };
@@ -56,7 +100,15 @@ export const abonner = (cle, fabrique) => {
     try {
       e.arreter = onSnapshot(
         fabrique(),
-        (inst) => { e.valeur = normaliser(inst); e.chargee = true; e.erreur = null; diffuser(cle); },
+        (inst) => {
+          /* Si l'instantané d'avant portait une écriture locale encore en
+             route, celui-ci en est sans doute la confirmation : ses dates
+             du serveur ne diffèrent de l'estimation que de quelques
+             millisecondes, on les tient pour les mêmes. */
+          const tolerant = e.enAttente;
+          e.enAttente = Boolean(inst.metadata && inst.metadata.hasPendingWrites);
+          poser(cle, e, normaliser(inst), { tolerant });
+        },
         (err) => {
           // Un accès refusé est un cas prévu (adresse d'un projet qui n'est pas
           // le sien) : on le note sans crier. Le reste est une vraie panne.
@@ -170,9 +222,11 @@ export const deriver = (cle, sources, calcul) => {
   e.compte += 1;
   const recalculer = () => {
     if (!sources.every((s) => chargee(s))) return;
-    try { e.valeur = calcul(); e.erreur = null; } catch (err) { e.erreur = err; }
-    e.chargee = true;
-    diffuser(cle);
+    let valeur;
+    try { valeur = calcul(); } catch (err) { e.erreur = err; e.chargee = true; diffuser(cle); return; }
+    /* Une source qui bouge ne change pas toujours l'assemblage : on ne
+       réveille alors personne. */
+    poser(cle, e, valeur);
   };
   const retraits = sources.map((s) => sur(s, recalculer));
   if (!sources.length) { e.valeur = calcul(); e.chargee = true; diffuser(cle); }
@@ -196,13 +250,40 @@ export const fermerTout = () => {
 /**
  * Un lot d'abonnements et d'écoutes pour une vue : on les retire tous d'un
  * coup au départ. `lot.abonner(cle, fabrique)`, `lot.sur(cle, fn)`, `lot.fin()`.
+ *
+ * Une vue branche souvent la même fonction de dessin sur plusieurs clés.
+ * Au montage, chaque clé déjà chargée l'appelait aussitôt, l'une après
+ * l'autre : trois clés, trois reconstructions de la page à la suite, et
+ * l'impression qu'elle charge deux fois. Ici, la même fonction n'est
+ * appelée qu'une fois par tour, quel que soit le nombre de clés qui la
+ * réveillent d'un coup (une microtâche plus tard : avant tout affichage).
+ * Elle reçoit la dernière valeur venue. Une fois le lot fini, rien ne
+ * dessine plus dans une vue partie.
  */
 export const lot = () => {
   const retraits = [];
+  const groupes = new Map();
+  let vivant = true;
+  const grouper = (fn) => {
+    if (groupes.has(fn)) return groupes.get(fn);
+    let prevu = false; let derniers = [];
+    const groupe = (...args) => {
+      derniers = args;
+      if (prevu) return;
+      prevu = true;
+      queueMicrotask(() => {
+        prevu = false;
+        if (!vivant) return;
+        try { fn(...derniers); } catch (err) { console.error('[magasin] écouteur d\'un lot', err); }
+      });
+    };
+    groupes.set(fn, groupe);
+    return groupe;
+  };
   return {
     abonner(cle, fabrique) { retraits.push(abonner(cle, fabrique)); return this; },
-    sur(cle, fn) { retraits.push(sur(cle, fn)); return this; },
+    sur(cle, fn) { vivant = true; retraits.push(sur(cle, grouper(fn))); return this; },
     ajouter(fn) { retraits.push(fn); return this; },
-    fin() { retraits.splice(0).forEach((r) => { try { r(); } catch (e) { /* rien */ } }); },
+    fin() { vivant = false; retraits.splice(0).forEach((r) => { try { r(); } catch (e) { /* rien */ } }); },
   };
 };

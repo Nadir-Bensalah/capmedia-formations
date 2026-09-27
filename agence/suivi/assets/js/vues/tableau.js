@@ -158,8 +158,9 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
     if (suivis.has(cle)) return;
     suivis.add(cle);
     lot.abonner(cle, fabrique);
-    lot.sur(cle, () => rendre());
+    lot.sur(cle, redessiner);
   };
+  const redessiner = () => rendre();
 
   let dernier = null;
   let empreinte = '';
@@ -496,8 +497,9 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
   const ecouter = () => cles().forEach((c) => {
     if (ecoutees.has(c) || suivis.has(c)) return;
     ecoutees.add(c);
-    lot.sur(c, () => { ecouter(); rendre(); });
+    lot.sur(c, surChangement);
   });
+  const surChangement = () => { ecouter(); rendre(); };
   ecouter();
   const horloge = equipe ? setInterval(() => rendre(), 15000) : null;
   rendre(true);

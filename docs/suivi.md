@@ -720,3 +720,32 @@ numéro D-2026-0028 et ses vraies dates. Les deux pièces de 2024 (audit,
 maquettage) n'ont pas de PDF.
 
 Épreuve : `qa-telecharger-piece.cjs` (serveur puis navigateurs, client et équipe).
+
+## 17. Le rebond des pages (septembre 2026)
+
+Les pages du Cockpit se redessinaient plusieurs fois de suite : au
+montage, chaque clé du magasin déjà chargée appelait aussitôt la même
+fonction de dessin (trois clés, trois reconstructions après le squelette) ;
+après une écriture locale, l'instantané du serveur qui la confirmait
+(la date `maj` passant de nulle à vraie) redessinait une seconde fois.
+Mesuré le 27/09/2026 sur le banc : 4 dessins au montage de « Tâches »,
+8 sur « Planning », 2 après un changement de statut.
+
+Deux changements dans `magasin.js`, sans toucher aux pages :
+
+- **Un dessin par tour.** Dans un `lot`, la même fonction branchée sur
+  plusieurs clés n'est appelée qu'une fois par tour (une microtâche plus
+  tard, avant tout affichage), avec la dernière valeur venue ; rien ne
+  dessine plus dans une vue partie. Les trois vues qui branchaient une
+  fermeture anonyme par clé (`tests.js`, `tableau.js`, `maintenance.js`)
+  nomment leur fonction pour en profiter.
+- **Rien n'est rediffusé pour rien.** Le magasin lit les marques du serveur
+  en estimation locale (`serverTimestamps: 'estimate'`) : la date est là
+  dès l'écriture. Quand un instantané ne change rien (`memes`, comparaison
+  déroulée ; dates à moins d'une minute tenues pour égales seulement quand
+  l'instantané d'avant portait une écriture en route), la valeur est
+  gardée mais personne n'est réveillé. Même garde sur les clés dérivées.
+
+Après : 1 dessin après le squelette au montage, 1 après une écriture locale
+ou une suppression (`mesurer-rebond.cjs`, hors dépôt). La fiche de projet,
+qui regroupait déjà ses dessins à 60 ms, n'est pas concernée.

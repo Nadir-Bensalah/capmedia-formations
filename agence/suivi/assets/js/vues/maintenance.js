@@ -615,9 +615,10 @@ export const vue = async (ctx, env) => {
     clesSuivies().forEach((c) => {
       if (suivies.has(c)) return;
       suivies.add(c);
-      lot.sur(c, () => { suivre(); rendre(); });
+      lot.sur(c, surChangement);
     });
   };
+  const surChangement = () => { suivre(); rendre(); };
   suivre();
   rendre(true);
 
