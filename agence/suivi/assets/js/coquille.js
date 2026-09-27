@@ -63,6 +63,7 @@ export const monterCoquille = ({ session, role, groupes, sortie }) => {
         ${suite ? recherche : ''}
         <div class="lat-corps" id="lat-corps"></div>
         <div class="lat-pied">
+          <p class="lat-etat" id="lat-etat" hidden></p>
           ${apparence}
           <button class="lat-compte" type="button" id="bouton-compte" aria-haspopup="menu">
             <span class="avatar${role === 'equipe' ? ' avatar--equipe' : ''}">${echapper(initiales(nom))}</span>
@@ -147,6 +148,20 @@ export const rendreNavigation = () => {
 };
 
 export const definirNavigation = (groupes) => { contexte.groupes = groupes; rendreNavigation(); };
+
+/* L'état de son accès, en bas du rail : « Accès actif », « Terminé · accès
+   jusqu'au 4 octobre ». Un texte et un ton, jamais une pastille : la
+   couleur dit le ton, les mots disent le fait. Sans état, la ligne
+   disparaît. */
+export const definirEtat = (etat) => {
+  const el = document.getElementById('lat-etat');
+  if (!el) return;
+  if (!etat || !etat.texte) { el.hidden = true; el.textContent = ''; el.className = 'lat-etat'; return; }
+  el.hidden = false;
+  el.textContent = etat.texte;
+  el.className = `lat-etat${etat.ton ? ` lat-etat--${etat.ton}` : ''}`;
+  if (etat.titre) el.title = etat.titre; else el.removeAttribute('title');
+};
 
 const marquerActif = () => {
   const c = courant().chemin;

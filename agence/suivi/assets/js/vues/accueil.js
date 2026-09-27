@@ -16,7 +16,7 @@ import { echeance } from '../noyau.js';
 const iconeActivite = {
   'tache': 'taches', 'jalon': 'drapeau', 'release': 'releases', 'fichier': 'fichiers', 'reunion': 'reunions',
   'validation': 'valider', 'demande': 'demandes', 'message': 'messages', 'devis': 'receipt', 'facture': 'euro',
-  'paiement': 'paiement', 'note': 'note', 'blocage': 'alerte', 'projet': 'projets', 'maintenance': 'sante',
+  'paiement': 'paiement', 'note': 'note', 'blocage': 'alerte', 'projet': 'projets', 'maintenance': 'sante', 'test': 'bug',
 };
 const tonActivite = { 'validation': 'violet', 'facture': 'ambre', 'paiement': 'vert', 'release': 'vert', 'blocage': 'rouge', 'devis': 'bleu' };
 

@@ -1099,11 +1099,26 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, nommer }) => {
      testeur dans son appréciation. L'équipe voit qui les a faits, le client
      aussi, sous le numéro. */
   const avis = magasin.lire(K.appreciations(c.id)) || [];
+  /* La fin de test : « termine » sur l'appréciation, la date de fin
+     d'accès sur la campagne (fins), posée par le serveur et déplacée par
+     l'équipe. Les remarques d'après ne se lisent qu'ici. */
   const charges = (c.testeurs || []).map((id) => {
     const t = vivier.find((x) => x.id === id) || { id };
     const a = avis.find((x) => x.id === id) || {};
-    return { id, nom: nommer(id).nom, mobile: t.mobile || '', n: (affectation[id] || []).length, accueil: Boolean(a.accueil) };
+    return {
+      id, nom: nommer(id).nom, mobile: t.mobile || '', n: (affectation[id] || []).length, accueil: Boolean(a.accueil),
+      termine: enDate(a.termine), fin: enDate((c.fins || {})[id]), remarques: Array.isArray(a.remarques) ? a.remarques : [],
+    };
   });
+  const jourCourt = (d) => (d ? d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '');
+  const etatAccesHtml = (t) => {
+    if (!t.termine && !t.fin) return '';
+    const passe = t.fin && t.fin.getTime() <= Date.now();
+    const texte = t.termine
+      ? `Terminé le ${jourCourt(t.termine)}${t.fin ? ` · accès ${passe ? 'clos depuis le' : 'jusqu\'au'} ${jourCourt(t.fin)}` : ''}`
+      : `Accès ${passe ? 'clos depuis le' : 'jusqu\'au'} ${jourCourt(t.fin)}`;
+    return `<span class="t-micro ${passe ? 't-3' : 't-ok'}">${echapper(texte)}</span>`;
+  };
 
   const m = modale({
     titre: c.titre || 'Campagne', sousTitre: `${(STATUTS_CAMPAGNE[c.statut] || {}).libelle || ''} · ${pluriel(dedans.length, 'scénario', 'scénarios')}`,
@@ -1126,12 +1141,22 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, nommer }) => {
       <div class="groupe">
         <span class="etiquette-champ">Testeurs</span>
         ${charges.length ? `<div class="liste liste--serree">${charges.map((t) => `
-          <div class="rang" style="justify-content:space-between;padding:8px 10px;border-radius:10px;background:var(--fond-2)">
-            <span>${echapper(t.nom)}${t.mobile ? ` <span class="puce puce--mini">${echapper((PLATEFORMES_TEST[t.mobile] || {}).court || t.mobile)}</span>` : ''}</span>
-            <span class="rang" style="gap:10px;align-items:center">
-              ${t.accueil ? '<span class="pastille pastille--vert" title="A parcouru l\'accueil de son espace">Premiers pas faits</span>' : '<span class="t-micro t-3">premiers pas à faire</span>'}
-              <span class="t-micro">${t.n ? pluriel(t.n, 'passage', 'passages') : 'rien encore'}</span>
-            </span>
+          <div style="padding:8px 10px;border-radius:10px;background:var(--fond-2)">
+            <div class="rang" style="justify-content:space-between">
+              <span>${echapper(t.nom)}${t.mobile ? ` <span class="puce puce--mini">${echapper((PLATEFORMES_TEST[t.mobile] || {}).court || t.mobile)}</span>` : ''}</span>
+              <span class="rang" style="gap:10px;align-items:center">
+                ${t.accueil ? '<span class="pastille pastille--vert" title="A parcouru l\'accueil de son espace">Premiers pas faits</span>' : '<span class="t-micro t-3">premiers pas à faire</span>'}
+                <span class="t-micro">${t.n ? pluriel(t.n, 'passage', 'passages') : 'rien encore'}</span>
+              </span>
+            </div>
+            ${(t.termine || t.fin) ? `<div class="rang" style="justify-content:space-between;margin-top:6px;gap:10px;flex-wrap:wrap">
+              ${etatAccesHtml(t)}
+              ${equipe ? `<span class="rang" style="gap:6px">
+                <button class="btn btn-fantome btn-petit" type="button" data-prolonger="${echapper(t.id)}" title="Sept jours de plus">Prolonger de 7 jours</button>
+                ${t.fin && t.fin.getTime() > Date.now() ? `<button class="btn btn-fantome btn-petit" type="button" data-clore="${echapper(t.id)}">Clore l'accès</button>` : ''}
+              </span>` : ''}
+            </div>` : ''}
+            ${equipe && t.remarques.length ? `<div style="margin-top:8px">${t.remarques.map((r) => `<p class="t-petit" style="margin:4px 0;padding:6px 8px;border-radius:8px;background:var(--fond-3)">${echapper(String(r.texte || ''))}${enDate(r.le) ? ` <span class="t-micro t-3">· ${echapper(jourCourt(enDate(r.le)))}</span>` : ''}</p>`).join('')}</div>` : ''}
           </div>`).join('')}</div>`
           : `<p class="aide">Aucun testeur pour l'instant. ${vivier.length ? 'Choisissez-les ci-dessous.' : 'Le vivier est vide : le serveur seul y inscrit quelqu\'un.'}</p>`}
       </div>
@@ -1156,6 +1181,26 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, nommer }) => {
        page : la feuille les lit tels quels, sans requête de plus. */
     await ouvrirAvis({ ...c, _avis: avisDe([c]) }, { nommer });
   }));
+
+  /* L'accès d'un testeur après son test : prolonger de sept jours (depuis
+     la date posée, ou depuis aujourd'hui si elle est passée), ou clore
+     maintenant. La date vit sur la campagne, les règles la relisent. */
+  m.el.addEventListener('click', async (ev) => {
+    const b = ev.target.closest('[data-prolonger], [data-clore]');
+    if (!b || !equipe) return;
+    const uid = b.dataset.prolonger || b.dataset.clore;
+    const t = charges.find((x) => x.id === uid);
+    if (!t) return;
+    await agir(b, async () => {
+      const base = (b.dataset.prolonger && t.fin && t.fin.getTime() > Date.now()) ? t.fin.getTime() : Date.now();
+      const fin = new Date(b.dataset.prolonger ? base + 7 * 24 * 3600 * 1000 : Date.now());
+      try {
+        await ecrire.majCampagne(pid, c.id, { [`fins.${uid}`]: fin });
+        toast(b.dataset.prolonger ? `Accès de ${t.nom} prolongé jusqu'au ${jourCourt(fin)}.` : `Accès de ${t.nom} clos.`);
+        m.fermer(true);
+      } catch (e) { console.error(e); toast("La date n'a pas pu être changée.", 'erreur'); }
+    });
+  });
 
   const bouton = m.el.querySelector('[data-repartir]');
   if (bouton) bouton.addEventListener('click', () => agir(bouton, async () => {

@@ -930,8 +930,54 @@ function connexionEquipe(v) {
   };
 }
 
+/* La fin de test d'un testeur : son bilan à l'équipe, tout compté. La
+   lettre nomme le testeur, parce qu'elle ne va qu'à l'équipe. Les échecs
+   sont repris en citation, un par ligne, pour être relus d'un coup. */
+function testeurTermine(v) {
+  const echecs = (Array.isArray(v.echecs) ? v.echecs : []).map(valeurTexte).filter(Boolean);
+  const qui = valeurTexte(v.testeur) || 'Un testeur';
+  return {
+    objet: `${qui} a terminé le test : ${valeurTexte(v.campagne)}`,
+    ...rendreGabarit({
+      titre: 'Un testeur a terminé',
+      intro: `${qui} vient de dire « j'ai terminé » sur ${valeurTexte(v.campagne) || 'la campagne'}${v.projetNom ? ` (${valeurTexte(v.projetNom)})` : ''}. Ses résultats sont figés ; il garde sept jours pour ajouter une remarque.`,
+      faits: [
+        ['Testeur', `${qui}${v.email ? ` · ${valeurTexte(v.email)}` : ''}`],
+        ['Réussis', valeurTexte(v.ok)],
+        ['Échecs', valeurTexte(v.ko)],
+        ['Sans objet', valeurTexte(v.na)],
+        ['Scénarios déroulés', valeurTexte(v.total)],
+        ['Temps donné', valeurTexte(v.temps)],
+        ['Avis sur l\'application', valeurTexte(v.avisDonne)],
+        ['Accès jusqu\'au', valeurTexte(v.finAcces)],
+      ],
+      citation: echecs.length ? echecs.join('\n') : '',
+      bouton: { libelle: 'Ouvrir la campagne dans le Cockpit', url: valeurTexte(v.lien) },
+      note: 'Le client lit qu\'un testeur a terminé, sans son nom. Ses réponses et ses échecs sont dans la campagne.',
+    }),
+  };
+}
+
+/* Une remarque ajoutée après la fin du test, reprise telle quelle. */
+function testeurRemarque(v) {
+  const remarques = (Array.isArray(v.remarques) ? v.remarques : []).map(valeurTexte).filter(Boolean);
+  const qui = valeurTexte(v.testeur) || 'Un testeur';
+  return {
+    objet: `Remarque de ${qui} après son test : ${valeurTexte(v.campagne)}`,
+    ...rendreGabarit({
+      titre: 'Une remarque après le test',
+      intro: `${qui} a ajouté ce qui suit sur ${valeurTexte(v.campagne) || 'la campagne'}${v.projetNom ? ` (${valeurTexte(v.projetNom)})` : ''}, après avoir terminé.`,
+      faits: [['Testeur', `${qui}${v.email ? ` · ${valeurTexte(v.email)}` : ''}`]],
+      citation: remarques.join('\n\n'),
+      bouton: { libelle: 'Ouvrir la campagne dans le Cockpit', url: valeurTexte(v.lien) },
+    }),
+  };
+}
+
 const MODELES = {
   'invitation': invitation,
+  'testeur-termine': testeurTermine,
+  'testeur-remarque': testeurRemarque,
   'invitation-testeur': invitationTesteur,
   'invitation-equipe': invitationEquipe,
   'ouverture': ouverture,

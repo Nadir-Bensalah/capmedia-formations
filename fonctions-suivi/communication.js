@@ -62,6 +62,9 @@ const EVENEMENTS = {
   paiement: { categorie: 'finances', responsable: true },
   ouverture: { categorie: 'projet', essentiel: true },
   invitation: { categorie: 'projet', essentiel: true },
+  test: { categorie: 'projet' },
+  'testeur-termine': { categorie: 'projet' },
+  'testeur-remarque': { categorie: 'projet' },
 };
 
 const regle = (evenement) => EVENEMENTS[evenement] || { categorie: 'projet' };

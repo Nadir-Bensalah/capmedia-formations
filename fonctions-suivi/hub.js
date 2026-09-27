@@ -21,7 +21,7 @@ const communication = require('./communication');
 /* Chaque déclencheur décide « au moment » de son événement : un fait
    survenu projet fermé, ou e-mails coupés, ne part pas plus tard parce que
    l'état a changé entre-temps (voir communication.auMoment). */
-const { evenementDuSemis, instantEvenement } = require('./commun');
+const { evenementDuSemis, instantEvenement, enMillis } = require('./commun');
 const auMomentDe = (fn) => async (evenement) => {
   /* Banc d'essai seulement : un événement né pendant la pose d'une base de
      test n'a rien à faire (voir commun.evenementDuSemis). */
@@ -624,6 +624,118 @@ exports.hubProjetCree = onDocumentCreated({ region: REGION, document: 'projets/{
   if (p.organisation) await acces.recalculerOrganisation(String(p.organisation));
   /* L'annonce « votre espace est ouvert » part à l'ouverture, pas à la
      création : un projet naît fermé (voir ouvrirAuClient). */
+});
+
+/* ==========================================================================
+   13. La fin de test
+
+   Le testeur dit « j'ai terminé » en posant « termine » sur son
+   appréciation (le document qu'il écrit déjà). Ici, le serveur fait le
+   reste : il fige ses résultats (« termines » sur la campagne, que les
+   règles relisent), lui ouvre sept jours d'accès (« fins »), compose son
+   bilan pour l'équipe, et dit au client qu'un testeur a fini, sans le
+   nommer. Une remarque ajoutée pendant ces sept jours part à l'équipe
+   telle quelle.
+   ========================================================================== */
+
+const JOURS_APRES_TEST = 7;
+
+const dureeLisible = (ms) => {
+  const min = Math.round(ms / 60000);
+  if (min < 60) return `${min} min`;
+  return `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')}`;
+};
+
+/* Le bilan d'un testeur sur une campagne : ses résultats, ses échecs avec
+   le titre du scénario, le temps donné. Tout est compté, rien n'est deviné. */
+async function bilanTesteur(pid, cid, uid) {
+  const [passages, sessions] = await Promise.all([
+    bdd.collection(`projets/${pid}/campagnes/${cid}/passages`).where('testeur', '==', uid).get(),
+    bdd.collection(`presences/${uid}/sessions`).where('campagne', '==', cid).get().catch(() => ({ docs: [] })),
+  ]);
+  const compte = { ok: 0, ko: 0, na: 0 };
+  const echecs = [];
+  for (const d of passages.docs) {
+    const p = d.data();
+    if (compte[p.resultat] !== undefined) compte[p.resultat] += 1;
+    if (p.resultat === 'ko') echecs.push({ ref: p.scenario, commentaire: p.commentaire || '', plateforme: p.plateforme || '' });
+  }
+  const titres = new Map();
+  for (const e of echecs.slice(0, 20)) {
+    try { const s = await bdd.doc(`projets/${pid}/scenarios/${e.ref}`).get(); if (s.exists) titres.set(e.ref, s.data().titre || ''); } catch (err) { /* sans titre */ }
+  }
+  let temps = 0;
+  for (const d of sessions.docs) {
+    const s = d.data();
+    const debut = enMillis(s.debut); const vu = enMillis(s.vu);
+    if (debut && vu && vu > debut) temps += vu - debut;
+  }
+  return { compte, echecs: echecs.map((e) => ({ ...e, titre: titres.get(e.ref) || '' })), temps, total: passages.size };
+}
+
+exports.hubAppreciationEcrite = onDocumentWritten({ region: REGION, document: 'projets/{projetId}/campagnes/{campagneId}/appreciations/{uid}' }, async (evenement) => {
+  const avant = evenement.data.before.exists ? evenement.data.before.data() : null;
+  const apres = evenement.data.after.exists ? evenement.data.after.data() : null;
+  if (!apres) return;
+  const { projetId: pid, campagneId: cid, uid } = evenement.params;
+  const vientDeTerminer = Boolean(apres.termine) && !(avant && avant.termine);
+  const remarquesAvant = (avant && Array.isArray(avant.remarques)) ? avant.remarques.length : 0;
+  const remarquesApres = Array.isArray(apres.remarques) ? apres.remarques.length : 0;
+  if (!vientDeTerminer && remarquesApres <= remarquesAvant) return;
+
+  const [projet, campagneDoc, testeurDoc] = await Promise.all([
+    lireProjet(pid),
+    bdd.doc(`projets/${pid}/campagnes/${cid}`).get(),
+    bdd.doc(`testeurs/${uid}`).get(),
+  ]);
+  if (!campagneDoc.exists) return;
+  const campagne = campagneDoc.data();
+  const testeur = testeurDoc.exists ? testeurDoc.data() : {};
+  const nomTesteur = testeur.prenom || testeur.email || 'Un testeur';
+  const lienAdmin = `/tests?projet=${pid}`;
+  const lienClient = '/tests';
+
+  if (vientDeTerminer) {
+    const quand = enMillis(apres.termine) || Date.now();
+    const fin = new Date(quand + JOURS_APRES_TEST * 24 * 3600 * 1000);
+    /* Figer d'abord : entre l'écriture du testeur et ce déclencheur, il ne
+       doit rien pouvoir changer de plus. L'équipe garde la main sur la date
+       de fin : on ne la recule jamais si elle l'a déjà posée plus loin. */
+    const dejaFin = enMillis((campagne.fins || {})[uid]);
+    const maj = { [`termines.${uid}`]: new Date(quand), maj: FieldValue.serverTimestamp() };
+    if (!dejaFin || dejaFin < fin.getTime()) maj[`fins.${uid}`] = fin;
+    try { await bdd.doc(`projets/${pid}/campagnes/${cid}`).update(maj); } catch (err) { console.error('Fin de test : campagne non mise à jour', err); }
+
+    const bilan = await bilanTesteur(pid, cid, uid);
+    const termines = Object.keys(campagne.termines || {}).length + 1;
+    const total = (campagne.testeurs || []).length;
+    const titreCampagne = campagne.titre || 'la campagne';
+
+    await activite({ projet: pid, type: 'test', texte: `Un testeur a terminé la campagne « ${titreCampagne} » (${termines} sur ${total})`, par: { uid: null, nom: 'Capmedia Test', cote: 'equipe' }, lien: lienClient, visibilite: 'client' });
+    await notifierEquipe(pid, { type: 'test', titre: `${nomTesteur} a terminé le test`, texte: `${titreCampagne} · ${bilan.compte.ok} réussis, ${bilan.compte.ko} échecs, ${bilan.compte.na} sans objet`, lien: `#${lienAdmin}`, projet: pid });
+    await notifierClients(projet, 'test', { type: 'test', titre: 'Un testeur a terminé', texte: `${titreCampagne} · ${termines} sur ${total} testeurs ont fini`, lien: `#${lienClient}`, projet: pid });
+    await mettreEnFile('testeur-termine', contactsEquipe(), {
+      projetNom: nomProjet(projet), campagne: titreCampagne, testeur: nomTesteur, email: testeur.email || '',
+      ok: bilan.compte.ok, ko: bilan.compte.ko, na: bilan.compte.na, total: bilan.total, temps: dureeLisible(bilan.temps),
+      finAcces: fin.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }),
+      echecs: bilan.echecs.map((e) => `${e.ref}${e.titre ? ` · ${e.titre}` : ''}${e.plateforme ? ` (${e.plateforme})` : ''}${e.commentaire ? ` : ${e.commentaire.slice(0, 200)}` : ''}`),
+      avisDonne: Object.keys(apres).some((k) => k.startsWith('esthetique.')) ? 'oui' : 'pas encore',
+      lien: LIEN_ADMIN(lienAdmin),
+    }, { projet: pid, evenement: 'testeur-termine' });
+    await audit('test.termine', { projet: pid, campagne: cid, testeur: uid, ok: bilan.compte.ok, ko: bilan.compte.ko, na: bilan.compte.na, finAcces: fin });
+  }
+
+  if (remarquesApres > remarquesAvant) {
+    const nouvelles = apres.remarques.slice(remarquesAvant).map((r) => String((r && r.texte) || '').slice(0, 4000)).filter(Boolean);
+    if (!nouvelles.length) return;
+    const titreCampagne = campagne.titre || 'la campagne';
+    await activite({ projet: pid, type: 'test', texte: `${nomTesteur} a ajouté une remarque après son test sur « ${titreCampagne} »`, par: { uid: null, nom: 'Capmedia Test', cote: 'equipe' }, lien: lienAdmin, visibilite: 'interne' });
+    await notifierEquipe(pid, { type: 'test', titre: `Remarque de ${nomTesteur}`, texte: nouvelles[0].slice(0, 140), lien: `#${lienAdmin}`, projet: pid });
+    await mettreEnFile('testeur-remarque', contactsEquipe(), {
+      projetNom: nomProjet(projet), campagne: titreCampagne, testeur: nomTesteur, email: testeur.email || '',
+      remarques: nouvelles, lien: LIEN_ADMIN(lienAdmin),
+    }, { projet: pid, evenement: 'testeur-remarque' });
+  }
 });
 
 /* ==========================================================================

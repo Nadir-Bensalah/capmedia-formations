@@ -23,7 +23,7 @@ import {
   NIVEAUX_SCENARIO, BLOCS_SCENARIO, PLATEFORMES_TEST, RESULTATS_PASSAGE, FAMILLES_AVIS,
 } from './noyau.js';
 import { icone, pastille, toast, agir, modale, vide } from './ui.js';
-import { monterCoquille, definirNavigation, filAriane, enregistrerRecherche } from './coquille.js';
+import { monterCoquille, definirNavigation, definirEtat, filAriane, enregistrerRecherche } from './coquille.js';
 import { definir, demarrer, courant, naviguer } from './routeur.js';
 import { tableauTesteur, ETATS_CASE } from './verdicts.js';
 import { barreHtml, famillesHtml } from './grille.js';
@@ -74,6 +74,136 @@ const fait = (ref) => {
   return Boolean(p) && !(p.resultat === 'ko' && p.aRevoir === true);
 };
 
+/* --------------------------------------------------------------------------
+   La fin de test
+
+   Les scénarios se déroulent dans l'ordre : le suivant s'ouvre quand le
+   précédent a un résultat (réussi, échec ou sans objet). Quand tout est
+   déroulé, le testeur dit « j'ai terminé » : ses résultats se figent, le
+   serveur prévient l'équipe et le client, et lui laisse sept jours d'accès
+   pour ajouter ce qui lui revient après coup. Le verrou de l'ordre est
+   celui de l'écran ; le gel des résultats et la fin de l'accès sont ceux
+   des règles.
+   -------------------------------------------------------------------------- */
+
+const aTermine = () => Boolean(etat.avis && etat.avis.termine);
+
+const finAcces = () => {
+  const c = etat.campagne;
+  const uid = auth.currentUser && auth.currentUser.uid;
+  if (!c || !uid) return null;
+  return enDate((c.fins || {})[uid]) || null;
+};
+
+const dateCourte = (d) => (d ? d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) : '');
+
+/* Ouvrable : le premier de la liste, ou celui dont tous les précédents ont
+   un résultat. Un échec corrigé « à rejouer » compte comme déroulé : il ne
+   rebloque pas la suite. */
+const ouvrable = (ref) => {
+  const i = etat.scenarios.findIndex((s) => s.ref === ref);
+  if (i <= 0) return true;
+  return etat.scenarios.slice(0, i).every((s) => etat.passages.has(s.ref));
+};
+
+const prochain = () => etat.scenarios.find((s) => !etat.passages.has(s.ref)) || null;
+
+/* Ce que le rail dit de l'accès, en bas. */
+const etatAcces = () => {
+  const c = etat.campagne;
+  if (!c) return null;
+  const fin = finAcces();
+  if (aTermine()) {
+    return fin
+      ? { texte: `Test terminé · accès jusqu'au ${dateCourte(fin)}`, ton: 'ambre', titre: 'Vos résultats sont figés. Vous pouvez encore ajouter une remarque.' }
+      : { texte: 'Test terminé', ton: 'ambre' };
+  }
+  if (fin) return { texte: `Accès actif jusqu'au ${dateCourte(fin)}`, ton: 'vert' };
+  return { texte: 'Accès actif', ton: 'vert' };
+};
+
+const finTestHtml = () => {
+  const total = etat.scenarios.length;
+  const faits = etat.scenarios.filter((s) => etat.passages.has(s.ref)).length;
+  if (!total) return '';
+  if (aTermine()) {
+    const fin = finAcces();
+    return `<div class="fin-test fin-test--faite">
+      <h2>Test terminé le ${echapper(dateCourte(enDate(etat.avis.termine) || new Date()))}</h2>
+      <p>Vos résultats sont transmis à l'équipe Capmedia et figés. ${fin ? `Votre accès reste ouvert jusqu'au ${echapper(dateCourte(fin))} : le temps d'ajouter une remarque qui vous revient après coup.` : ''}</p>
+    </div>`;
+  }
+  if (faits === total) {
+    return `<div class="fin-test">
+      <h2>Tout est déroulé. Il reste à le dire.</h2>
+      <p>« J'ai terminé » transmet vos résultats à l'équipe et les fige. Relisez d'abord vos échecs si vous avez un doute : après, vous ne pourrez plus les changer.</p>
+      <div class="actions"><button class="btn btn-principal" type="button" data-terminer>J'ai terminé le test</button></div>
+    </div>`;
+  }
+  return '';
+};
+
+/* Après la fin : ce qui lui revient après coup. Une remarque part telle
+   quelle à l'équipe, sans passer par un scénario. */
+const remarquesHtml = () => {
+  if (!aTermine()) return '';
+  const liste = (etat.avis && Array.isArray(etat.avis.remarques)) ? etat.avis.remarques : [];
+  const fin = finAcces();
+  const encore = !fin || fin.getTime() > Date.now();
+  return `<section class="remarques-fin">
+    <div class="section-tete"><h2>Une remarque de plus&nbsp;?</h2></div>
+    ${liste.length ? liste.map((r) => `<div class="remarque">${echapper(String(r.texte || ''))}<small>${enDate(r.le) ? echapper(enDate(r.le).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })) : ''}</small></div>`).join('') : ''}
+    ${encore && liste.length < 20 ? `<div class="groupe">
+      <textarea class="champ" id="remarque-texte" rows="3" placeholder="Ce qui vous est revenu après coup : un écran, un détail, une idée."></textarea>
+      <div class="actions" style="margin-top:8px"><button class="btn btn-secondaire" type="button" data-remarque>Envoyer à l'équipe</button></div>
+    </div>` : `<p class="aide">${liste.length >= 20 ? 'Vingt remarques, merci : l\'équipe a de quoi lire.' : 'Votre accès est terminé.'}</p>`}
+  </section>`;
+};
+
+const terminer = async (moi) => {
+  const total = etat.scenarios.length;
+  if (!total || etat.scenarios.some((s) => !etat.passages.has(s.ref))) { toast('Il reste des scénarios à dérouler.', 'erreur'); return; }
+  const m = modale({
+    titre: 'Terminer le test', sousTitre: 'Vos résultats seront transmis et figés.',
+    corps: `<p>L'équipe Capmedia reçoit votre bilan : ${compter().ok} réussi${compter().ok > 1 ? 's' : ''}, ${compter().ko} échec${compter().ko > 1 ? 's' : ''}, ${compter().na} sans objet. Vous ne pourrez plus modifier vos résultats, mais vous garderez sept jours pour ajouter une remarque.</p>`,
+    pied: '<button class="btn btn-secondaire" type="button" data-fermer>Pas encore</button><button class="btn btn-principal" type="button" data-valider>Oui, j\'ai terminé</button>',
+  });
+  m.el.querySelector('[data-valider]').addEventListener('click', () => m.fermer(true));
+  if (!(await m.fin)) return;
+  const uid = auth.currentUser.uid;
+  const chemin = `projets/${etat.campagne.projet}/campagnes/${etat.campagne.id}/appreciations/${uid}`;
+  try {
+    await setDoc(doc(bdd, chemin), { termine: serverTimestamp(), testeur: uid, maj: serverTimestamp() }, { merge: true });
+    etat.avis = { ...(etat.avis || {}), termine: new Date() };
+    toast('Merci. Votre bilan est transmis à l\'équipe.');
+    rendre(moi);
+    /* Le plus utile arrive à la fin : son avis sur l'application, s'il ne
+       l'a pas encore donné. */
+    if (!Object.keys(etat.avis).some((k) => k.startsWith('esthetique.'))) { await ouvrirAvis(moi, 'apres'); rendre(moi); }
+  } catch (e) {
+    console.error(e);
+    toast("La fin du test n'a pas pu être enregistrée. Réessayez.", 'erreur');
+  }
+};
+
+const ajouterRemarque = async (moi, texte) => {
+  const t = String(texte || '').trim();
+  if (!t) { toast('Écrivez votre remarque d\'abord.', 'erreur'); return; }
+  if (t.length > 4000) { toast('Une remarque tient en 4 000 caractères.', 'erreur'); return; }
+  const uid = auth.currentUser.uid;
+  const chemin = `projets/${etat.campagne.projet}/campagnes/${etat.campagne.id}/appreciations/${uid}`;
+  const liste = [...((etat.avis && etat.avis.remarques) || []), { texte: t, le: new Date() }];
+  try {
+    await setDoc(doc(bdd, chemin), { remarques: liste, testeur: uid, maj: serverTimestamp() }, { merge: true });
+    etat.avis = { ...(etat.avis || {}), remarques: liste };
+    toast('Remarque envoyée à l\'équipe, merci.');
+    rendre(moi);
+  } catch (e) {
+    console.error(e);
+    toast("La remarque n'a pas pu être envoyée. Votre accès est peut-être terminé.", 'erreur');
+  }
+};
+
 const enTete = (moi, campagne) => {
   const total = etat.scenarios.length;
   const faits = etat.scenarios.filter((s) => fait(s.ref)).length;
@@ -105,15 +235,17 @@ const enTete = (moi, campagne) => {
 const ligneScenario = (s) => {
   const p = etat.passages.get(s.ref);
   const r = p ? p.resultat : '';
+  const verrou = !ouvrable(s.ref);
+  const fige = aTermine();
   return `
-  <div class="t-scenario${r ? ` t-scenario--${r}` : ''}" data-ref="${echapper(s.ref)}">
-    <button class="t-scenario-corps" type="button" data-ouvrir="${echapper(s.ref)}">
+  <div class="t-scenario${r ? ` t-scenario--${r}` : ''}${verrou ? ' t-scenario--verrou' : ''}${fige ? ' t-scenario--fige' : ''}" data-ref="${echapper(s.ref)}">
+    <button class="t-scenario-corps" type="button" data-ouvrir="${echapper(s.ref)}"${verrou ? ' aria-disabled="true" title="Déroulez d\'abord le scénario précédent"' : ''}>
       <span class="t-scenario-ref">${echapper(s.ref)}</span>
       <span class="t-scenario-titre">${echapper(s.titre)}</span>
       ${r ? pastille(RESULTATS_PASSAGE, r) : ''}
     </button>
     <div class="t-scenario-choix" role="group" aria-label="Résultat de ${echapper(s.ref)}">
-      ${Object.entries(RESULTATS_PASSAGE).map(([cle, f]) => `<button type="button" class="t-choix t-choix--${cle}" data-poser="${echapper(s.ref)}" data-resultat="${cle}" aria-pressed="${r === cle}">${echapper(f.libelle)}</button>`).join('')}
+      ${Object.entries(RESULTATS_PASSAGE).map(([cle, f]) => `<button type="button" class="t-choix t-choix--${cle}" data-poser="${echapper(s.ref)}" data-resultat="${cle}" aria-pressed="${r === cle}"${verrou || fige ? ' disabled' : ''}>${echapper(f.libelle)}</button>`).join('')}
     </div>
   </div>`;
 };
@@ -199,8 +331,10 @@ const pageCampagne = (moi) => {
     ${enTete(moi, campagne)}
 
     ${chiffresHtml()}
+    ${finTestHtml()}
+    ${remarquesHtml()}
     ${appelAvis()}
-    ${astuceHtml()}
+    ${aTermine() ? '' : astuceHtml()}
 
     <div class="segments" role="group" aria-label="Affichage" style="margin-bottom:16px">
       <button type="button" data-vue="grille" aria-pressed="${vueCourante === 'grille'}">Tableau</button>
@@ -231,6 +365,11 @@ const pageCampagne = (moi) => {
 
   const b = $('#f-bloc'); if (b) b.addEventListener('change', (e) => { etat.bloc = e.target.value; rendre(moi); });
   const r = $('#f-reste'); if (r) r.addEventListener('change', (e) => { etat.reste = e.target.checked; rendre(moi); });
+  /* Dans le tableau, une case verrouillée se voit : le suivant attend le
+     précédent. */
+  racine.querySelectorAll('.tb--testeur [data-case]').forEach((el) => {
+    if (!ouvrable(el.dataset.case)) el.setAttribute('data-verrou', '');
+  });
 };
 
 /* --------------------------------------------------------------------------
@@ -502,8 +641,9 @@ const pageGuide = () => {
         <li><b>Installez l'application.</b> La page <a href="#/application">L'application</a> donne le lien pour votre appareil.</li>
         <li><b>Dites sur quoi vous testez.</b> iPhone, Android ou web, en haut de votre campagne. Changez-le si vous changez d'appareil.</li>
         <li><b>Donnez votre première impression</b>, avant de toucher à quoi que ce soit.</li>
-        <li><b>Déroulez vos scénarios.</b> Chaque case du tableau en est un : touchez-la, lisez ce qui doit se passer, faites-le, et dites ce que vous avez obtenu.</li>
+        <li><b>Déroulez vos scénarios, dans l'ordre.</b> Chaque case du tableau en est un : touchez-la, lisez ce qui doit se passer, faites-le, et dites ce que vous avez obtenu. Le suivant s'ouvre quand le précédent a son résultat.</li>
         <li><b>Rejouez les cases orange.</b> L'équipe a corrigé ce que vous aviez signalé : votre OK ferme la boucle.</li>
+        <li><b>Dites que vous avez terminé.</b> Le bouton apparaît quand tout est déroulé : il transmet votre bilan à l'équipe et fige vos résultats. Vous gardez sept jours pour ajouter une remarque.</li>
         <li><b>Donnez votre avis</b> une fois tout déroulé.</li>
       </ol>
     </section>
@@ -559,6 +699,7 @@ const majNavigation = () => {
       ],
     },
   ]);
+  definirEtat(etatAcces());
 };
 
 const PAGES = {
@@ -621,6 +762,8 @@ const ouvrirEchec = (s) => {
 };
 
 const poser = async (s, resultat, moi) => {
+  if (aTermine()) { toast('Le test est terminé : vos résultats sont figés.', 'erreur'); return; }
+  if (!ouvrable(s.ref)) { toast('Déroulez d\'abord le scénario précédent.', 'erreur'); return; }
   if (!plateformeCourante) { toast('Dites d\'abord sur quoi vous testez.', 'erreur'); return; }
   let extra = { commentaire: '', preuves: [] };
   if (resultat === 'ko') {
@@ -851,8 +994,11 @@ const ouvrirFeuille = (s, moi) => {
       ${s.options ? `<section class="fs-bloc"><p class="fs-bloc-sur">Ce qu'il faut poser</p><p>${echapper(s.options).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')}</p></section>` : ''}
       <section class="fs-bloc fs-bloc--attendu"><p class="fs-bloc-sur">Ce qui doit se passer</p><p>${echapper(s.attendu || '')}</p></section>
       <p class="fs-note">Un scénario où rien ne se passe est un échec, jamais une réussite. ${echapper(niveau.aide)}</p>
-      ${!plateformeCourante ? '<p class="fs-note"><strong>Dites d\'abord sur quoi vous testez</strong>, en haut de la page.</p>' : ''}`,
-    pied: Object.keys(RESULTATS_PASSAGE).map((cle) => `<button type="button" class="fs-verdict fs-verdict--${cle}" data-feuille-poser="${cle}" aria-pressed="${p && p.resultat === cle}"><i aria-hidden="true"></i>${VERDICTS[cle]}</button>`).join(''),
+      ${!plateformeCourante ? '<p class="fs-note"><strong>Dites d\'abord sur quoi vous testez</strong>, en haut de la page.</p>' : ''}
+      ${aTermine() ? '<p class="fs-note"><strong>Le test est terminé</strong> : ce résultat est figé.</p>' : ''}`,
+    pied: aTermine()
+      ? '<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>'
+      : Object.keys(RESULTATS_PASSAGE).map((cle) => `<button type="button" class="fs-verdict fs-verdict--${cle}" data-feuille-poser="${cle}" aria-pressed="${p && p.resultat === cle}"><i aria-hidden="true"></i>${VERDICTS[cle]}</button>`).join(''),
   });
   m.el.addEventListener('click', async (ev) => {
     const b = ev.target.closest('[data-feuille-poser]');
@@ -913,7 +1059,10 @@ const ecouterCampagnes = (moi, redessiner) => {
   const parProjet = new Map();
   const choisir = () => {
     const toutes = [...parProjet.values()].flat();
-    const enCours = toutes.find((c) => c.statut === 'en-cours') || null;
+    /* Une campagne dont son accès est passé ne lui est plus servie : les
+       règles refusent ses gestes, l'écran n'a pas à la montrer. */
+    const accesPasse = (c) => { const f = enDate((c.fins || {})[moi.uid]); return Boolean(f) && f.getTime() <= Date.now(); };
+    const enCours = toutes.find((c) => c.statut === 'en-cours' && !accesPasse(c)) || null;
     /* Dans l'application Mac ou Windows : une campagne qui s'ouvre pendant
        que la fenêtre est là devient une notification du système. */
     if (window.capmediaBureau && etat.charge && enCours && (!etat.campagne || etat.campagne.id !== enCours.id)) {
@@ -989,10 +1138,12 @@ const monter = async () => {
   ecouterCampagnes(testeur, redessiner);
 
   document.addEventListener('click', async (e) => {
-    const el = e.target.closest('[data-sortir], [data-sur], [data-poser], [data-ouvrir], [data-avis], [data-vue], [data-case], [data-accueil="revoir"], [data-astuce-suivante], [data-avis-page]');
+    const el = e.target.closest('[data-sortir], [data-sur], [data-poser], [data-ouvrir], [data-avis], [data-vue], [data-case], [data-accueil="revoir"], [data-astuce-suivante], [data-avis-page], [data-terminer], [data-remarque]');
     if (!el) return;
 
     if (el.dataset.accueil === 'revoir') { lancerAccueil(testeur, { demande: true }); return; }
+    if (el.hasAttribute('data-terminer')) { await agir(el, () => terminer(testeur)); return; }
+    if (el.hasAttribute('data-remarque')) { const z = $('#remarque-texte'); await agir(el, () => ajouterRemarque(testeur, z ? z.value : '')); return; }
     if (el.hasAttribute('data-astuce-suivante')) {
       astuce = (astuce + 1) % ASTUCES.length;
       const p = el.closest('.astuce-testeur');
@@ -1032,15 +1183,18 @@ const monter = async () => {
       return;
     }
 
-    if (el.dataset.case) {
-      const s = etat.scenarios.find((x) => x.ref === el.dataset.case);
-      if (s) ouvrirFeuille(s, testeur);
-      return;
-    }
-
-    if (el.dataset.ouvrir) {
-      const s = etat.scenarios.find((x) => x.ref === el.dataset.ouvrir);
-      if (s) ouvrirFeuille(s, testeur);
+    if (el.dataset.case || el.dataset.ouvrir) {
+      const ref = el.dataset.case || el.dataset.ouvrir;
+      const s = etat.scenarios.find((x) => x.ref === ref);
+      if (!s) return;
+      /* Un scénario verrouillé se lit quand le test est terminé (tout est
+         déroulé) ; avant, il attend le précédent. */
+      if (!ouvrable(ref) && !aTermine()) {
+        const p = prochain();
+        toast(p ? `Déroulez d'abord ${p.ref} : les scénarios se suivent.` : 'Déroulez d\'abord le scénario précédent.', 'erreur');
+        return;
+      }
+      ouvrirFeuille(s, testeur);
       return;
     }
 

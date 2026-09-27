@@ -554,6 +554,7 @@ storage-gate2.test.mjs    règles de stockage
 serveur-gate2.test.mjs    le serveur de bout en bout, sur émulateurs
 migration-gate2.test.mjs  la migration : à blanc, réelle, silencieuse, rejouable, réversible
 qa-gate2.cjs              l'histoire complète dans de vrais navigateurs (22 étapes)
+qa-fin-de-test.cjs        la fin de test : l'ordre, « J'ai terminé », le gel, les sept jours, la remarque, prolonger et clore
 matrice-gate2.test.mjs    12 catégories de personnes x 48 opérations Firestore
 matrice-stockage-gate2    12 catégories x 16 opérations Storage
 invitations-gate2         les quatre familles d'invitation, de bout en bout
@@ -563,3 +564,50 @@ copie-prod-gate2.mjs      la migration sur une copie pseudonymisée de la produc
 ordre-deploiement.sh      un ordre de déploiement rejoué pièce par pièce
 ```
 
+## 14. La fin de test (septembre 2026)
+
+Un testeur déroule ses scénarios **dans l'ordre** : le suivant s'ouvre quand
+le précédent a un résultat (réussi, échec ou sans objet). Ce verrou est celui
+de l'écran (`testeur.js`, `ouvrable`) : il guide, il ne protège rien. Ce qui
+protège vient après.
+
+Quand tout est déroulé, le bouton « J'ai terminé le test » apparaît. Le
+testeur pose alors `termine: serverTimestamp()` sur son appréciation
+(`projets/{p}/campagnes/{c}/appreciations/{uid}`, le document qu'il écrit
+déjà). Les règles exigent la date du serveur, une seule fois, jamais reprise
+ni retirée.
+
+Le déclencheur `hubAppreciationEcrite` (`hub.js`, section 13) fait le reste :
+
+- sur la campagne, `termines.{uid}` (la date) et `fins.{uid}` (sept jours
+  plus tard, sauf si l'équipe a déjà posé plus loin) ;
+- le bilan du testeur, tout compté (réussis, échecs avec le titre du
+  scénario, sans objet, temps donné d'après ses sessions), en lettre
+  `testeur-termine` à l'équipe, plus une notification ;
+- une ligne d'activité visible du client, **sans le nom** : « Un testeur a
+  terminé la campagne « … » (2 sur 3) », et une notification client ;
+- une trace d'audit `test.termine`.
+
+Les règles relisent la campagne à chaque geste (`testeurATermine`,
+`accesTesteurEnCours`) :
+
+- test terminé : plus aucun passage, ni création ni correction ;
+- date de fin passée : plus aucune écriture, appréciation comprise ;
+- entre les deux : le testeur ajoute des `remarques` (liste qui ne fait que
+  grandir, vingt au plus, 4 000 caractères chacune) ; chaque ajout part à
+  l'équipe (`testeur-remarque`, notification, activité interne).
+
+Le rail de l'espace Test dit l'état en bas (`coquille.definirEtat`) :
+« Accès actif », puis « Test terminé · accès jusqu'au 4 octobre ». Passé
+la date, la campagne disparaît de l'écran du testeur ; les règles refusent
+déjà ses gestes.
+
+Dans le Cockpit, la fiche d'une campagne montre pour chaque testeur
+« Terminé le … · accès jusqu'au … », ses remarques, et deux gestes :
+**Prolonger de 7 jours** et **Clore l'accès**, qui déplacent `fins.{uid}`
+depuis le navigateur (l'équipe écrit la campagne). Le client lit la même
+ligne d'état sous le numéro du testeur, sans nom, sans remarque, sans geste.
+
+Épreuves : `regles.test.mjs` (section « La fin de test », 17 contrôles) et
+`qa-fin-de-test.cjs` (33 contrôles dans trois navigateurs : testeur, équipe,
+client).

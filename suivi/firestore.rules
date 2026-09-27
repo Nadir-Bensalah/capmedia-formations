@@ -854,6 +854,20 @@ service cloud.firestore {
       return ficheCampagne(projetId, campagneId).statut == 'en-cours';
     }
 
+    // La fin de test. Quand le testeur dit « j'ai terminé », le serveur
+    // pose la date dans « termines » et ouvre sept jours de plus dans
+    // « fins » : ses résultats se figent, ses remarques restent possibles,
+    // puis l'accès s'éteint à la date dite. L'équipe déplace la date
+    // (prolonger, clore) ; les règles la relisent à chaque geste.
+    function testeurATermine(projetId, campagneId) {
+      return moi() in ficheCampagne(projetId, campagneId).get('termines', {});
+    }
+
+    function accesTesteurEnCours(projetId, campagneId) {
+      return !(moi() in ficheCampagne(projetId, campagneId).get('fins', {}))
+          || ficheCampagne(projetId, campagneId).fins[moi()] > request.time;
+    }
+
     // Le vivier, à la racine : un testeur sert sur plusieurs projets sans
     // qu'on lui refasse un compte. Nul ne lit la liste des autres, et c'est
     // volontaire : le nom, l'âge et la fonction d'un testeur ne regardent
@@ -920,6 +934,7 @@ service cloud.firestore {
 
           allow create: if testeurDeLaCampagne(projetId, campagneId)
             && campagneOuverte(projetId, campagneId)
+            && !testeurATermine(projetId, campagneId)
             && passageId == moi() + '__' + request.resource.data.scenario
             && request.resource.data.testeur == moi()
             && request.resource.data.keys().hasOnly([
@@ -944,6 +959,7 @@ service cloud.firestore {
           // sans contrôle, ce qui est exactement le trou qu'on cherchait.
           allow update: if testeurDeLaCampagne(projetId, campagneId)
             && campagneOuverte(projetId, campagneId)
+            && !testeurATermine(projetId, campagneId)
             && resource.data.testeur == moi()
             && request.resource.data.scenario == resource.data.scenario
             && request.resource.data.testeur == resource.data.testeur
@@ -982,12 +998,39 @@ service cloud.firestore {
 
           // Bornée, comme tout ce qu'un testeur écrit : sans plafond, un
           // champ libre est une porte ouverte sur le stockage du projet.
-          allow create, update: if estTesteur()
+          //
+          // « termine » est la date où il a dit « j'ai terminé » : celle du
+          // serveur, posée une fois, jamais reprise. « remarques » : ce qu'il
+          // ajoute après coup, pendant les jours d'accès qui lui restent ;
+          // une liste qui ne fait que grandir, vingt au plus, chacune bornée.
+          function appreciationBornee(d) {
+            return d.size() <= 60
+              && texteBorne(d.get('libre', ''), 8000)
+              && (!('remarques' in d)
+                  || (d.remarques is list && d.remarques.size() <= 20
+                      && (d.remarques.size() == 0
+                          || (d.remarques[d.remarques.size() - 1] is map
+                              && texteRequis(d.remarques[d.remarques.size() - 1].get('texte', ''), 4000)))));
+          }
+
+          allow create: if estTesteur()
             && testeurId == moi()
             && testeurDeLaCampagne(projetId, campagneId)
             && campagneOuverte(projetId, campagneId)
-            && request.resource.data.size() <= 60
-            && texteBorne(request.resource.data.get('libre', ''), 8000);
+            && accesTesteurEnCours(projetId, campagneId)
+            && appreciationBornee(request.resource.data)
+            && (!('termine' in request.resource.data) || request.resource.data.termine == request.time);
+
+          allow update: if estTesteur()
+            && testeurId == moi()
+            && testeurDeLaCampagne(projetId, campagneId)
+            && campagneOuverte(projetId, campagneId)
+            && accesTesteurEnCours(projetId, campagneId)
+            && appreciationBornee(request.resource.data)
+            && request.resource.data.get('remarques', []).size() >= resource.data.get('remarques', []).size()
+            && ('termine' in resource.data
+                  ? request.resource.data.termine == resource.data.termine
+                  : (!('termine' in request.resource.data) || request.resource.data.termine == request.time));
 
           // Une appréciation ne s'efface pas plus qu'un passage : c'est la
           // mémoire de la campagne, et se raviser après coup la falsifie.

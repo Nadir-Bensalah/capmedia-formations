@@ -633,6 +633,36 @@ await refuse('Personne n écrit l annuaire depuis le navigateur', setDoc(doc(equ
 await doit("L'équipe liste l équipe", getDocs(collection(equipe(), 'equipe')));
 await doit('Camille lit toujours son organisation (sans les notes)', getDoc(doc(camille(), 'organisations/atelier-nord')));
 
+console.log('\n== La fin de test : terminer, figer, remarquer, expirer');
+/* Le testeur dit « j'ai terminé » en posant la date du serveur sur son
+   appréciation, une fois. Le serveur pose alors « termines » et « fins »
+   sur la campagne ; les règles les relisent : plus un passage après la
+   fin, plus rien du tout après la date de fin d'accès. */
+await env.withSecurityRulesDisabled(async (ctx) => {
+  const b = ctx.firestore();
+  await setDoc(doc(b, 'projets/atelier/campagnes/c-fin'), { titre: 'Passe finie', statut: 'en-cours', testeurs: [KARIM, SONIA], termines: { [KARIM]: new Date() }, fins: { [KARIM]: new Date(Date.now() + 5 * 86400000) } });
+  await setDoc(doc(b, 'projets/atelier/campagnes/c-expiree'), { titre: 'Passe expirée', statut: 'en-cours', testeurs: [KARIM, SONIA], termines: { [KARIM]: new Date(Date.now() - 9 * 86400000) }, fins: { [KARIM]: new Date(Date.now() - 2 * 86400000) } });
+  await setDoc(doc(b, `projets/atelier/campagnes/c-fin/passages/${KARIM}__DI-15`), { scenario: 'DI-15', testeur: KARIM, plateforme: 'ios', resultat: 'ok', commentaire: '', preuves: [], contexte: {} });
+  await setDoc(doc(b, `projets/atelier/campagnes/c-fin/appreciations/${KARIM}`), { termine: new Date(Date.now() - 3600000), remarques: [{ texte: 'première', le: new Date() }] });
+});
+await refuse('Karim ne date pas sa fin de test lui-même', setDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`), { termine: new Date(Date.now() - 86400000) }, { merge: true }));
+await doit('Karim dit « j ai terminé » avec la date du serveur', setDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`), { termine: serverTimestamp(), testeur: KARIM, maj: serverTimestamp() }, { merge: true }));
+await refuse('Karim ne redate pas sa fin de test', updateDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`), { termine: serverTimestamp() }));
+await refuse('Karim ne retire pas sa fin de test', setDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`), { beaute: 4, prix: 5, testeur: KARIM }));
+await doit('Karim ajoute une remarque après coup', updateDoc(doc(karim(), `projets/atelier/campagnes/c-fin/appreciations/${KARIM}`), { remarques: [{ texte: 'première', le: new Date() }, { texte: 'Le bouton Retour est trop petit.', le: new Date() }], maj: serverTimestamp() }));
+await refuse('Karim n efface pas une remarque', updateDoc(doc(karim(), `projets/atelier/campagnes/c-fin/appreciations/${KARIM}`), { remarques: [] }));
+await refuse('Une remarque tient en 4 000 caractères', updateDoc(doc(karim(), `projets/atelier/campagnes/c-fin/appreciations/${KARIM}`), { remarques: [{ texte: 'première', le: new Date() }, { texte: 'Le bouton Retour est trop petit.', le: new Date() }, { texte: 'x'.repeat(4001), le: new Date() }] }));
+await refuse('Une remarque vide ne passe pas', updateDoc(doc(karim(), `projets/atelier/campagnes/c-fin/appreciations/${KARIM}`), { remarques: [{ texte: 'première', le: new Date() }, { texte: 'Le bouton Retour est trop petit.', le: new Date() }, { texte: '', le: new Date() }] }));
+await refuse('Test terminé : Karim ne pose plus de passage', setDoc(doc(karim(), `projets/atelier/campagnes/c-fin/passages/${KARIM}__DI-16`), { scenario: 'DI-16', testeur: KARIM, plateforme: 'ios', resultat: 'ok', commentaire: '', preuves: [], contexte: {}, le: serverTimestamp() }));
+await refuse('ni ne corrige un passage', updateDoc(doc(karim(), `projets/atelier/campagnes/c-fin/passages/${KARIM}__DI-15`), { resultat: 'ko', preuves: ['p/2.png'], commentaire: 'finalement non', le: serverTimestamp() }));
+await doit('Sonia, elle, pose encore sur la même campagne', setDoc(doc(sonia(), `projets/atelier/campagnes/c-fin/passages/${SONIA}__DI-16`), { scenario: 'DI-16', testeur: SONIA, plateforme: 'android', resultat: 'ok', commentaire: '', preuves: [], contexte: {}, le: serverTimestamp() }));
+await doit('Karim lit encore la campagne pendant ses sept jours', getDoc(doc(karim(), 'projets/atelier/campagnes/c-fin')));
+await refuse('Accès expiré : Karim n écrit plus son appréciation', setDoc(doc(karim(), `projets/atelier/campagnes/c-expiree/appreciations/${KARIM}`), { remarques: [{ texte: 'trop tard', le: new Date() }], testeur: KARIM }, { merge: true }));
+await refuse('ni un passage', setDoc(doc(karim(), `projets/atelier/campagnes/c-expiree/passages/${KARIM}__DI-15`), { scenario: 'DI-15', testeur: KARIM, plateforme: 'ios', resultat: 'ok', commentaire: '', preuves: [], contexte: {}, le: serverTimestamp() }));
+await doit('Sonia, sans date de fin, écrit encore', setDoc(doc(sonia(), `projets/atelier/campagnes/c-expiree/appreciations/${SONIA}`), { 'libre.garder': 'tout', testeur: SONIA }, { merge: true }));
+await refuse('Karim ne déplace pas sa propre date de fin', updateDoc(doc(karim(), 'projets/atelier/campagnes/c-expiree'), { [`fins.${KARIM}`]: new Date(Date.now() + 86400000) }));
+await doit("L'équipe prolonge l accès d un testeur", updateDoc(doc(equipe(), 'projets/atelier/campagnes/c-expiree'), { [`fins.${KARIM}`]: new Date(Date.now() + 7 * 86400000) }));
+
 console.log(`\n${ok} contrôle(s) conforme(s)${ecarts.length ? `, ${ecarts.length} ÉCART(S) :\n  - ${ecarts.join('\n  - ')}` : ''}`);
 await env.cleanup();
 process.exit(ecarts.length ? 1 : 0);
