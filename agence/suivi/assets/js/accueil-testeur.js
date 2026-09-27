@@ -141,7 +141,10 @@ export const ouvrirAccueil = ({ moi, campagne = null, surFin = null }) => {
 
   /* Les captures : leur adresse se résout après coup, et l'écran la reçoit
      dès qu'elle arrive. */
-  const chargerLiens = async () => {
+  /* Une adresse qui n'arrive pas du premier coup (le Storage met parfois
+     quelques secondes à répondre à froid) se redemande, deux fois, avant
+     de laisser l'initiale tenir l'écran. */
+  const chargerLiens = async (essai = 0) => {
     const visuels = ((c && c.visuels) || []).filter((v) => v && v.chemin && !liens[v.chemin]);
     if (!visuels.length) return;
     await Promise.all(visuels.map(async (v) => {
@@ -151,6 +154,7 @@ export const ouvrirAccueil = ({ moi, campagne = null, surFin = null }) => {
       const url = liens[img.dataset.chemin];
       if (url && img.getAttribute('src') !== url) img.src = url;
     });
+    if (visuels.some((v) => !liens[v.chemin]) && essai < 2 && moteur.el.isConnected) setTimeout(() => chargerLiens(essai + 1), 2500 * (essai + 1));
   };
   chargerLiens();
 

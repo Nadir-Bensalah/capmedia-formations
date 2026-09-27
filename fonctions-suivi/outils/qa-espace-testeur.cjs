@@ -47,8 +47,10 @@ let page = null;
   verifier((await page.$$('.ecran.actif .atouts li')).length === 3, 'et ses trois points forts');
   /* Les adresses des écrans se résolvent après coup (Storage) : on leur
      laisse quelques secondes. */
-  await page.waitForSelector('.ecran.actif .telephone-ecran img[src^="http"]', { timeout: 20000 }).catch(() => null);
-  await pause(600);
+  /* Les trois, pas seulement la première : le Storage du banc résout
+     parfois la dernière plusieurs secondes après les autres. */
+  await page.waitForFunction(() => { const l = [...document.querySelectorAll('.ecran.actif .telephone-ecran img')]; return l.length && l.every((i) => /^http/.test(i.getAttribute('src') || '')); }, null, { timeout: 30000 }).catch(() => null);
+  await pause(300);
   const captures = await page.$$eval('.ecran.actif .telephone-ecran img', (l) => l.map((i) => i.getAttribute('src') || ''));
   verifier(captures.length === 3 && captures.every((s) => /^http/.test(s)), `dans un téléphone, ses trois écrans (${captures.filter((s) => /^http/.test(s)).length} adresse(s) résolue(s) sur ${captures.length}${stockage.length ? ` · Storage : ${stockage.slice(0, 3).join(' | ')}` : ''})`);
   let n = 2;
