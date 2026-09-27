@@ -577,7 +577,7 @@ function resolu(v) {
     ...rendreGabarit({
       titre: 'Votre demande est terminée',
       intro: `La demande${numero ? ` ${numero}` : ''}${valeurTexte(v.titre) ? `, « ${valeurTexte(v.titre)} »` : ''} est marquée comme terminée.\n\n`
-        + 'Si le problème revient, vous pouvez la rouvrir depuis votre espace pendant sept jours. Passé ce délai, ouvrez une nouvelle demande, qui gardera le lien avec celle-ci.',
+        + 'Si le problème revient, vous pouvez la rouvrir depuis votre espace pendant sept jours. Passé ce délai, ouvrez une nouvelle demande en citant son numéro.',
       faits: [
         ['Demande', numero],
         ['Titre', valeurTexte(v.titre)],
@@ -618,7 +618,7 @@ function devis(v) {
     ...rendreGabarit({
       titre: 'Votre devis est disponible',
       intro: `Bonjour${valeurTexte(v.clientNom).trim() ? ` ${valeurTexte(v.clientNom)}` : ''},\n\n`
-        + `Le devis${numero ? ` ${numero}` : ''} est déposé dans votre espace. Vous pouvez le télécharger, puis l'accepter ou le refuser en un clic depuis la page du projet.`,
+        + `Le devis${numero ? ` ${numero}` : ''} est déposé dans votre espace, dans « Devis et factures ». Vous pouvez le télécharger, puis l'accepter ou le refuser depuis sa fiche.`,
       faits: [
         ['Devis', numero],
         ['Objet', valeurTexte(v.libelle)],
@@ -665,7 +665,7 @@ function facture(v) {
     ...rendreGabarit({
       titre: 'Votre facture est disponible',
       intro: `Bonjour${valeurTexte(v.clientNom).trim() ? ` ${valeurTexte(v.clientNom)}` : ''},\n\n`
-        + `La facture${numero ? ` ${numero}` : ''} est déposée dans votre espace, avec son fichier PDF.`
+        + `La facture${numero ? ` ${numero}` : ''} est déposée dans votre espace${v.avecPdf ? ', avec son fichier PDF' : ''}.`
         + (echeance ? ` Son règlement est attendu au plus tard le ${echeance}.` : ''),
       faits: [
         ['Facture', numero],
@@ -694,7 +694,7 @@ function facture(v) {
    conversation, qualification, nouveaux projets
    ========================================================================== */
 
-const QUALIFS = { 'incluse': 'incluse au contrat', 'hors-périmètre': 'hors du périmètre prévu', 'a-chiffrer': 'à chiffrer', 'offerte': 'offerte' };
+const QUALIFS = { 'incluse': 'incluse au contrat', 'hors-perimetre': 'hors du périmètre prévu', 'a-chiffrer': 'à chiffrer', 'offerte': 'offerte' };
 const CHANGEMENTS = { nouveau: 'Nouveau', amelioration: 'Amélioration', correction: 'Correction', technique: 'Technique' };
 
 function tacheAttente(v) {

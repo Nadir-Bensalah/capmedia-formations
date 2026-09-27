@@ -1255,10 +1255,11 @@ const editeurs = {
         ${select('plateforme', 'Plateforme', PLATEFORMES_CHOIX, fiche.plateforme || '')}
       </div>
       ${select('release', 'Livrée dans la version', releasesDe(pid), fiche.release || '', { vide: 'Pas encore fixée', aide: "Le client lit le nom de la version qui porte la correction, au lieu de le demander." })}
+      ${select('devis', 'Devis lié', devisDe(pid), fiche.devis || '', { vide: 'Aucun', aide: 'Pour une demande à chiffrer : le client trouve le lien vers son devis dans la fiche de la demande.' })}
       ${champ('titre', 'Titre', fiche.titre)}`,
     regles: { titre: obligatoire(), plateforme: () => '' },
     enregistrer: async (d) => {
-      const changements = { statut: d.statut, urgence: d.urgence, assigne: d.assigne || null, composant: d.composant, qualification: d.qualification || null, plateforme: d.plateforme, titre: d.titre, release: d.release || null };
+      const changements = { statut: d.statut, urgence: d.urgence, assigne: d.assigne || null, composant: d.composant, qualification: d.qualification || null, plateforme: d.plateforme, titre: d.titre, release: d.release || null, devis: d.devis || null };
       if (d.statut === 'resolu' && fiche.statut !== 'resolu') changements.resolu = new Date();
       await ecrire.majDemande(fiche.id, changements);
       toast('Demande mise à jour.');

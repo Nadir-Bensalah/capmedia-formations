@@ -60,10 +60,14 @@ await bdd.doc('taches/ep-x').set({ projet: 'epreuve', titre: 'Captures', statut:
 await bdd.doc('taches/ep-i').set({ projet: 'epreuve', titre: 'Refacto', statut: 'attente-client', visibilite: 'interne', archive: false, maj: ilYA(6) });
 await bdd.doc('blocages/ep-b').set({ projet: 'epreuve', titre: 'Compte Google', responsable: 'client', visibilite: 'client', resolu: null, depuis: ilYA(10) });
 await bdd.doc('blocages/ep-b2').set({ projet: 'epreuve', titre: 'De notre côté', responsable: 'capmedia', visibilite: 'client', resolu: null, depuis: ilYA(10) });
+await bdd.doc('validations/ep-v2').set({ projet: 'epreuve', titre: 'Contrat', statut: 'en-attente', reserveeResponsable: true, cree: ilYA(2) });
+await bdd.doc('documents/ep-d2').set({ projet: 'epreuve', type: 'devis', numero: 'D-2', libelle: 'Périmé', statut: 'envoye', expiration: ilYA(3) });
 
 const liste = await points('epreuve');
 const quoi = liste.map((l) => l.quoi);
-verifier(liste.length === 6, 'chaque chose en attente donne une ligne, et une seule', `${liste.length} ligne(s) : ${quoi.join(', ')}`);
+verifier(liste.length === 7, 'chaque chose en attente donne une ligne, et une seule', `${liste.length} ligne(s) : ${quoi.join(', ')}`);
+verifier(liste.some((l) => /Contrat/.test(l.detail) && l.reserve === true) && liste.some((l) => /Maquette/.test(l.detail) && !l.reserve), 'une validation réservée au responsable est marquée comme telle, les autres non');
+verifier(!liste.some((l) => /Périmé/.test(l.detail)), "un devis dont la validité est passée n'est plus à décider");
 verifier(quoi.includes('À valider'), 'la validation attendue est listée');
 verifier(quoi.includes('Correction à vérifier'), 'la correction à vérifier est listée');
 verifier(quoi.includes('Devis à décider') && quoi.includes('Facture à régler'), 'le devis et la facture sont listés');

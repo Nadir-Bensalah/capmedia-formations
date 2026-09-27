@@ -165,8 +165,11 @@ nouveau ──▶ en-cours ──▶ a-valider ──▶ resolu ──▶ ferme
 - Le client crée : statut `nouveau`.
 - L'équipe prend la main : `en-cours`, avec un assigné.
 - Une question au client : `en-attente-client`. Le client répond, retour en
-  `en-cours`.
-- Correction livrée : `a-valider`. Le client valide, ce qui donne `resolu`.
+  `en-cours` : c'est le serveur qui le pose à la réception de son message
+  (`hubMessageTicketBoite`), l'écran le lui promet.
+- Correction livrée : `a-valider`. Le client valide, ce qui donne `resolu`,
+  ou dit « Pas tout à fait » : son message part et la demande repasse en
+  `en-cours` (règle `clientConteste`).
 - `ferme` clôt définitivement. `refuse` sert aux demandes hors périmètre,
   avec un motif obligatoire dans un message.
 
@@ -589,6 +592,7 @@ qa-cle-acces.cjs          la clé d'accès : ajout, entrée sans code, refus, re
 qa-fiche-testeur.cjs      la fiche du testeur à sa première connexion, la note du test, identifiants et magasins
 qa-chat-testeur.cjs       la bulle du testeur et la page Testeurs du Cockpit, en direct
 qa-telecharger-piece.cjs  le téléchargement direct d'une pièce par le serveur : droits, nom, traces
+qa-parcours-casses.cjs    les points cassés du relevé des parcours : réponse qui fait repartir, « Pas tout à fait », devis périmé, un seul « lu »
 matrice-gate2.test.mjs    12 catégories de personnes x 48 opérations Firestore
 matrice-stockage-gate2    12 catégories x 16 opérations Storage
 invitations-gate2         les quatre familles d'invitation, de bout en bout
@@ -749,3 +753,37 @@ Deux changements dans `magasin.js`, sans toucher aux pages :
 Après : 1 dessin après le squelette au montage, 1 après une écriture locale
 ou une suppression (`mesurer-rebond.cjs`, hors dépôt). La fiche de projet,
 qui regroupait déjà ses dessins à 60 ms, n'est pas concernée.
+
+## 18. Ce qui mentait au client, corrigé le 27/09/2026
+
+Relevé dans `docs/parcours-client-hub.md` (section 0). Seize points où le
+Hub promettait une chose que le code ne faisait pas :
+
+- La réponse du client à une demande en « Besoin d'information » fait
+  repartir la demande (serveur, à la réception du message). « Pas tout à
+  fait » sur une correction livrée demande un mot et renvoie la demande en
+  cours (règle `clientConteste`, `ecrire.clientContesteDemande`).
+- « Résumé quotidien » retiré des préférences (jamais implémenté) ; la
+  promesse d'un avis de facture « bientôt échue » retirée aussi.
+- Le pilotage d'une demande (Cockpit) porte un « Devis lié » : le client
+  trouve le lien vers son devis dans la fiche de la demande.
+- Courriels : clé `hors-perimetre` sans accent (l'objet lisait le code
+  brut), la nouvelle demande « en citant son numéro » plutôt qu'un lien qui
+  n'existait pas, le devis et la facture mènent à `#/finances/{id}`, la
+  mention « avec son fichier PDF » seulement s'il y en a un.
+- Le bouton Télécharger d'un fichier sur la page d'une brique fonctionne
+  (`brancherPieces`, qui ne se branche plus qu'une fois par zone) ; le
+  gestionnaire mort des versions est retiré (les cartes montrent tout).
+- Un devis dont la validité est passée s'affiche « Expiré », ne se propose
+  plus à l'acceptation (écran, règles, relance du lundi, « En attente de
+  vous ») : `devisExpire`, `devisADecider`, `statutPiece` dans noyau.js.
+- La relance du lundi ne compte les validations réservées au responsable
+  que pour lui ; un collaborateur sans point à lui ne reçoit rien.
+- Les textes internes de la page Tests (« Versez un plan de tests », « Le
+  vivier est vide ») ne s'affichent qu'à l'équipe.
+- Un seul « non lu » pour les messages : la page Messages pose aussi
+  l'accusé `lectures` (l'équipe voit « Lu »), la bulle pose aussi
+  `profil.lus` (le compteur du rail tombe).
+- Les validations réservées au responsable sont cachées au collaborateur
+  sur l'aperçu du projet et la page « En attente de vous »
+  (`peutRepondreValidation`, la même règle que le compteur).

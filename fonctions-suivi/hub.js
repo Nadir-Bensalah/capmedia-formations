@@ -396,10 +396,16 @@ exports.hubTicketActivite = onDocumentWritten({ region: REGION, document: 'ticke
   }
   if (avant.statut !== apres.statut) {
     const libelles = { nouveau: 'reçue', 'a-analyser': 'à analyser', 'en-attente-client': "en attente d'information", acceptee: 'acceptée', planifiee: 'planifiée', 'en-cours': 'en cours', 'en-revue': 'en revue', 'a-valider': 'à valider', resolu: 'terminée', refuse: 'refusée', annulee: 'annulée', ferme: 'fermée' };
-    const parClient = (avant.statut === 'a-valider' && apres.statut === 'resolu') || (avant.statut === 'resolu' && apres.statut === 'en-cours');
-    await activite({ projet: apres.projet, type: 'demande', texte: `a passé la demande ${nom} en ${libelles[apres.statut] || apres.statut}`, par: parClient && apres.auteur ? { uid: apres.auteur.uid, nom: apres.auteur.nom, cote: 'client' } : null, lien });
-    if (parClient) await notifierEquipe(apres.projet, { type: 'demande', titre: apres.statut === 'resolu' ? 'Correction validée par le client' : 'Demande rouverte par le client', texte: `${apres.titre} · ${nomProjet(projet)}`, lien: `#${lien}`, projet: apres.projet });
-    else await notifierClients(projet, 'demande', { type: 'demande', titre: `Demande ${libelles[apres.statut] || apres.statut}`, texte: apres.titre, lien: `#${lien}`, projet: apres.projet });
+    const conteste = avant.statut === 'a-valider' && apres.statut === 'en-cours';
+    /* La marque « repart » distingue la réponse du client (posée par le
+       serveur) du même passage fait à la main par l'équipe. */
+    const repondu = avant.statut === 'en-attente-client' && apres.statut === 'en-cours' && Boolean(apres.repart) && String(avant.repart || '') !== String(apres.repart);
+    const parClient = (avant.statut === 'a-valider' && apres.statut === 'resolu') || (avant.statut === 'resolu' && apres.statut === 'en-cours') || conteste || repondu;
+    await activite({ projet: apres.projet, type: 'demande', texte: repondu ? `a répondu : la demande ${nom} repart` : `a passé la demande ${nom} en ${libelles[apres.statut] || apres.statut}`, par: parClient && apres.auteur ? { uid: apres.auteur.uid, nom: apres.auteur.nom, cote: 'client' } : null, lien });
+    /* La réponse elle-même a déjà prévenu l'équipe (le message) : pas de
+       seconde notification pour la demande qui repart. */
+    if (!repondu && parClient) await notifierEquipe(apres.projet, { type: 'demande', titre: apres.statut === 'resolu' ? 'Correction validée par le client' : conteste ? 'Correction contestée par le client' : 'Demande rouverte par le client', texte: `${apres.titre} · ${nomProjet(projet)}`, lien: `#${lien}`, projet: apres.projet });
+    else if (!repondu) await notifierClients(projet, 'demande', { type: 'demande', titre: `Demande ${libelles[apres.statut] || apres.statut}`, texte: apres.titre, lien: `#${lien}`, projet: apres.projet });
   }
   if (avant.qualification !== apres.qualification && apres.qualification) {
     const libelles = { incluse: 'incluse au contrat', 'hors-perimetre': 'hors périmètre', 'a-chiffrer': 'à chiffrer', offerte: 'offerte' };
@@ -422,6 +428,12 @@ exports.hubMessageTicketBoite = onDocumentCreated({ region: REGION, document: 't
   const lien = `/projets/${t.projet}/demandes/${evenement.params.ticketId}`;
   const de = m.de || {};
   await activite({ projet: t.projet, type: 'message', texte: `a répondu sur ${t.numero || 'la demande'} « ${t.titre} »`, par: { uid: de.uid, nom: de.nom, cote: de.cote }, lien });
+  /* On lui avait demandé une précision : sa réponse fait repartir la
+     demande, comme l'écran le lui promet. Avant, elle restait « en
+     attente de vous » jusqu'à ce que l'équipe change le statut à la main. */
+  if (de.cote !== 'equipe' && t.statut === 'en-attente-client') {
+    try { await ticket.ref.update({ statut: 'en-cours', repart: FieldValue.serverTimestamp(), maj: FieldValue.serverTimestamp(), 'lu.client': FieldValue.serverTimestamp() }); } catch (err) { console.error('La demande n\'a pas pu repartir', err); }
+  }
   if (de.cote === 'equipe') await notifierClients(projet, 'message', { type: 'message', titre: `Réponse sur ${t.numero || 'votre demande'}`, texte: String(m.texte || '').slice(0, 140), lien: `#${lien}`, projet: t.projet }, { exclure: [de.uid] });
   else await notifierEquipe(t.projet, { type: 'message', titre: `${de.nom || 'Le client'} a répondu`, texte: `${t.numero || ''} ${t.titre}`.trim(), lien: `#${lien}`, projet: t.projet }, { exclure: [de.uid] });
 });
@@ -821,11 +833,15 @@ async function pointsEnAttente(projetId) {
     } catch (err) { console.error(`Relance : ${collection} illisible pour ${projetId}`, err); }
   };
 
+  /* Une validation réservée au responsable n'attend pas un collaborateur :
+     la lettre de chacun ne compte que ce qui est à lui. */
   await prendre('validations', (v) => v.statut === 'en-attente',
-    (v) => ({ quoi: 'À valider', detail: `${v.titre || ''} · en attente ${depuisJours(v.cree)}` }));
+    (v) => ({ quoi: 'À valider', detail: `${v.titre || ''} · en attente ${depuisJours(v.cree)}`, reserve: v.reserveeResponsable === true }));
   await prendre('tickets', (t) => !t.archive && ATTEND_LE_CLIENT.includes(t.statut),
     (t) => ({ quoi: t.statut === 'a-valider' ? 'Correction à vérifier' : 'Précision attendue', detail: `${t.numero ? `${t.numero} · ` : ''}${t.titre || ''} · ${depuisJours(t.maj)}` }));
-  await prendre('documents', (x) => x.type === 'devis' && ['envoye', 'consulte'].includes(x.statut),
+  /* Un devis dont la validité est passée n'est plus à décider. */
+  const expire = (x) => { const d = enDateFn(x.expiration); return Boolean(d) && d.getTime() < Date.now(); };
+  await prendre('documents', (x) => x.type === 'devis' && ['envoye', 'consulte'].includes(x.statut) && !expire(x),
     (x) => ({ quoi: 'Devis à décider', detail: `${x.numero || ''} ${x.libelle || ''}`.trim() }));
   await prendre('documents', (x) => x.type === 'facture' && FACTURES_DUES.includes(x.statut),
     (x) => ({ quoi: 'Facture à régler', detail: `${x.numero || ''} ${x.libelle || ''}`.trim() }));
@@ -900,11 +916,17 @@ exports.hubRelanceHebdo = onSchedule(
       const { destinataires } = await communication.destinatairesClients(projet, 'relance');
       if (!destinataires.length) { ignorees += 1; continue; }
 
+      const roles = projet.roles || {};
+      let quelquUn = false;
       for (const d of destinataires) {
+        const siens = points.filter((p) => !p.reserve || (d.uid && roles[d.uid] === 'responsable'));
+        if (!siens.length) continue;
+        quelquUn = true;
         await mettreEnFile('relance', [d], {
-          par: d.nom || '', projet: projet.nom || '', points, lien: LIEN('/valider'),
+          par: d.nom || '', projet: projet.nom || '', points: siens.map(({ quoi, detail }) => ({ quoi, detail })), lien: LIEN('/valider'),
         }, { projet: projet.id, evenement: 'relance' });
       }
+      if (!quelquUn) { ignorees += 1; continue; }
       try { await bdd.doc(`projets/${projet.id}`).update({ relance: FieldValue.serverTimestamp() }); } catch (err) { console.error('Relance non datée', err); }
       envoyees += 1;
     }

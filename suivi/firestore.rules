@@ -533,6 +533,15 @@ service cloud.firestore {
             && request.time < resource.data.resolu + duration.value(7, 'd');
       }
 
+      // « Pas tout à fait » : la correction livrée ne tient pas, la demande
+      // repasse en cours, chez nous. Avant, ce bouton ne faisait rien.
+      function clientConteste() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['statut', 'maj', 'lu'])
+            && resource.data.statut == 'a-valider'
+            && request.resource.data.statut == 'en-cours';
+      }
+
       function ajoutPieces() {
         return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pieces', 'maj'])
             && request.resource.data.pieces is list
@@ -547,7 +556,7 @@ service cloud.firestore {
       allow update: if estEquipe()
                       ? (equipeSurProjet(resource.data.projet) && majEquipe())
                       : (membreDuProjet(resource.data.projet)
-                         && (clientMarqueLu() || clientValide() || clientRouvre() || ajoutPieces()));
+                         && (clientMarqueLu() || clientValide() || clientRouvre() || clientConteste() || ajoutPieces()));
 
       allow delete: if false;
 
@@ -724,7 +733,11 @@ service cloud.firestore {
               && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statut', 'reponse'])
               && request.resource.data.statut in ['accepte', 'refuse']
               && request.resource.data.reponse.par == moi()
-              && texteBorne(request.resource.data.reponse.commentaire, 2000))
+              && texteBorne(request.resource.data.reponse.commentaire, 2000)
+              // Un devis dont la validité est passée ne s'accepte plus : il
+              // faut nous en demander un à jour.
+              && (!(resource.data.get('expiration', null) is timestamp)
+                  || request.time < resource.data.expiration))
         );
 
       allow create, delete: if false;

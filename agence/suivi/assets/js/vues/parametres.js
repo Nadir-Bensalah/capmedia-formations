@@ -15,7 +15,7 @@ const CATEGORIES = [
   ['demandes', 'Mouvements de mes demandes', 'Changement de statut, qualification, résolution.'],
   ['validations', 'Validations attendues', "Quand Capmedia attend votre accord."],
   ['fichiers', 'Nouveaux fichiers', 'Un livrable ou un document déposé.'],
-  ['finances', 'Devis et factures', "Un devis disponible, une facture émise ou bientôt échue."],
+  ['finances', 'Devis et factures', "Un devis déposé, une facture émise."],
   ['reunions', 'Réunions', 'Une réunion programmée ou modifiée.'],
   ['releases', 'Nouvelles versions', 'Une version publiée.'],
   ['relance', 'Rappel hebdomadaire', "Le lundi matin, et seulement s'il reste des points en attente de vous."],
@@ -56,7 +56,7 @@ export const vue = async (ctx, env) => {
         <div class="section-tete"><h2>Notifications par e-mail</h2></div>
         <div class="carte">
           <p class="t-petit t-2" style="margin-bottom:12px">Les notifications dans l'espace restent toujours actives. Ici, vous choisissez ce qui vous arrive aussi par e-mail.</p>
-          <div class="liste">${CATEGORIES.map(([cle, lib, aide]) => `<div class="ligne ligne--sans-icone" style="cursor:default"><span class="ligne-corps"><span class="ligne-titre">${echapper(lib)}</span><span class="ligne-sous">${echapper(aide)}</span></span><span class="ligne-fin"><select class="select" style="width:auto" data-pref="${cle}"><option value="immediat" ${(prefs[cle] || 'immediat') === 'immediat' ? 'selected' : ''}>Immédiat</option><option value="resume" ${prefs[cle] === 'resume' ? 'selected' : ''}>Résumé quotidien</option><option value="off" ${prefs[cle] === 'off' ? 'selected' : ''}>Désactivé</option></select></span></div>`).join('')}</div>
+          <div class="liste">${CATEGORIES.map(([cle, lib, aide]) => `<div class="ligne ligne--sans-icone" style="cursor:default"><span class="ligne-corps"><span class="ligne-titre">${echapper(lib)}</span><span class="ligne-sous">${echapper(aide)}</span></span><span class="ligne-fin"><select class="select" style="width:auto" data-pref="${cle}"><option value="immediat" ${prefs[cle] !== 'off' ? 'selected' : ''}>Immédiat</option><option value="off" ${prefs[cle] === 'off' ? 'selected' : ''}>Désactivé</option></select></span></div>`).join('')}</div>
         </div>
       </section>
 

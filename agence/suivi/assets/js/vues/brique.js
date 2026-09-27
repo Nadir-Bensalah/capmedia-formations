@@ -16,7 +16,7 @@ import {
 } from '../noyau.js';
 import {
   icone, pastille, puce, pucePlateforme, iconePlateforme, tonPlateforme, avatar, progression,
-  ligne, vide, squelette, titrePage, metrique, sur, fichierHtml, encart, chronoItem,
+  ligne, vide, squelette, titrePage, metrique, sur, fichierHtml, encart, chronoItem, brancherPieces,
 } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K, abonnerProjet, trierEtapes } from '../donnees.js';
@@ -62,6 +62,8 @@ export const vue = async (ctx, env) => {
   const lot = magasin.lot();
   const sortie = ctx.sortie;
   sortie.innerHTML = `<div class="page">${squelette('page', 5)}</div>`;
+  /* Les fichiers de la partie : le bouton Télécharger ne faisait rien ici. */
+  brancherPieces(sortie);
   abonnerProjet(lot, pid, env.role);
 
   const cles = [K.projet(pid), K.composants(pid), K.jalons(pid), K.liens(pid), K.taches(pid), K.tickets(pid),

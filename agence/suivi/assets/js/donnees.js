@@ -13,7 +13,7 @@ import {
   bdd, collection, collectionGroup, query, where, orderBy, limit, doc, getDoc, getDocs, addDoc, updateDoc, setDoc, deleteDoc,
   serverTimestamp, arrayUnion, arrayRemove, Timestamp,
   nomAffiche, enDate, parDateDesc, parDateAsc, joursAvant, borner, age, retard, dateCourte,
-  OUVERTS, ATTEND_CLIENT, ATTEND_EQUIPE, FACTURES_DUES, PROJETS_ACTIFS, CATEGORIES_CLIENT, projetEstActif,
+  OUVERTS, ATTEND_CLIENT, ATTEND_EQUIPE, FACTURES_DUES, PROJETS_ACTIFS, CATEGORIES_CLIENT, projetEstActif, devisADecider,
   statutProjet, pluriel, verdictDelai, NIVEAUX_SCENARIO, STATUTS_PIECE_VISIBLES, startAfter, peut,
 } from './noyau.js';
 import * as magasin from './magasin.js';
@@ -485,6 +485,9 @@ export const ecrire = {
 
   clientValideDemande: (tid) => updateDoc(doc(bdd, 'tickets', tid), { statut: 'resolu', resolu: serverTimestamp(), maj: serverTimestamp(), 'lu.client': serverTimestamp() }),
   clientRouvreDemande: (tid) => updateDoc(doc(bdd, 'tickets', tid), { statut: 'en-cours', maj: serverTimestamp(), 'lu.client': serverTimestamp() }),
+  /* « Pas tout à fait » : la correction livrée ne tient pas, la demande
+     repasse chez nous, avec le message qui dit pourquoi. */
+  clientContesteDemande: (tid) => updateDoc(doc(bdd, 'tickets', tid), { statut: 'en-cours', maj: serverTimestamp(), 'lu.client': serverTimestamp() }),
   ajouterPiecesDemande: (tid, pieces) => updateDoc(doc(bdd, 'tickets', tid), { pieces, maj: serverTimestamp() }),
 
   /* Pilotage par l'équipe. */
@@ -968,14 +971,18 @@ const trierParUrgence = (items) => items.slice().sort((a, b) => {
   return 0;
 });
 
+/* Une validation réservée au responsable n'attend pas un collaborateur :
+   elle n'est pas « à lui », il ne peut pas y répondre. Les écrans qui
+   listent les validations en attente passent par ici, comme le compteur. */
+export const peutRepondreValidation = (v) => {
+  const moi = sessionCourante && !sessionCourante.equipe && sessionCourante.utilisateur ? sessionCourante.utilisateur.uid : null;
+  return v.reserveeResponsable !== true || !moi || responsableDe(v.projet);
+};
+
 export const enAttenteDeVous = ({ projets = [], tickets = [], validations = [], documents = [], taches = [], blocages = [] }) => {
   const nomProjet = (pid) => ((projets.find((p) => p.id === pid) || {}).nom || '');
   const items = [];
-  /* Une validation réservée au responsable n'attend pas un collaborateur :
-     elle n'est pas « à lui », il ne peut pas y répondre. */
-  const moi = sessionCourante && !sessionCourante.equipe && sessionCourante.utilisateur ? sessionCourante.utilisateur.uid : null;
-  const peutRepondre = (v) => v.reserveeResponsable !== true || !moi || responsableDe(v.projet);
-  validations.filter((v) => v.statut === 'en-attente' && peutRepondre(v)).forEach((v) => items.push({
+  validations.filter((v) => v.statut === 'en-attente' && peutRepondreValidation(v)).forEach((v) => items.push({
     genre: 'validation', projet: v.projet, icone: 'valider', ton: 'violet', titre: v.titre, sous: `À valider depuis ${age(v.cree)} · ${nomProjet(v.projet)}`, chemin: `/valider/${v.id}`, date: v.cree,
   }));
   tickets.filter((t) => ATTEND_CLIENT.includes(t.statut) && !t.archive).forEach((t) => items.push({
@@ -983,7 +990,7 @@ export const enAttenteDeVous = ({ projets = [], tickets = [], validations = [], 
     titre: t.titre, sous: `${t.statut === 'a-valider' ? 'À valider' : 'Une réponse est attendue'} · ${nomProjet(t.projet)}`,
     chemin: `/projets/${t.projet}/demandes/${t.id}`, date: t.maj,
   }));
-  documents.filter((d) => d.type === 'devis' && ['envoye', 'consulte'].includes(d.statut) && !d.archive).forEach((d) => items.push({
+  documents.filter((d) => devisADecider(d) && !d.archive).forEach((d) => items.push({
     genre: 'devis', projet: d.projet, icone: 'receipt', ton: 'bleu', titre: d.libelle, sous: `Devis à décider, envoyé il y a ${age(d.date)} · ${nomProjet(d.projet)}`, chemin: `/finances/${d.id}`, date: d.date,
   }));
   documents.filter((d) => d.type === 'facture' && FACTURES_DUES.includes(d.statut) && !d.archive).forEach((d) => items.push({

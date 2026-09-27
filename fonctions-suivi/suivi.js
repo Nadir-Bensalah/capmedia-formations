@@ -295,9 +295,16 @@ exports.suiviTicketCree = onDocumentCreated(
  * permet au contraire de prévenir l'équipe.
  */
 const TRANSITIONS_CLIENT = [
-  ['a-valider', 'resolu'],  // le client valide la correction livrée
-  ['resolu', 'en-cours'],   // le client rouvre dans les sept jours
+  ['a-valider', 'resolu'],   // le client valide la correction livrée
+  ['a-valider', 'en-cours'], // « pas tout à fait » : elle ne tient pas
+  ['resolu', 'en-cours'],    // le client rouvre dans les sept jours
 ];
+
+/* La demande qui repart après la réponse du client : le serveur pose la
+   marque « repart » en même temps que le statut. L'équipe peut faire le
+   même passage à la main, sans la marque : ce n'est alors pas le client. */
+const repartParClient = (avant, apres) => avant.statut === 'en-attente-client' && apres.statut === 'en-cours'
+  && Boolean(apres.repart) && String(avant.repart || '') !== String(apres.repart);
 
 const changementDuClient = (avant, apres) =>
   TRANSITIONS_CLIENT.some(([de, vers]) => avant === de && apres === vers);
@@ -344,8 +351,9 @@ exports.suiviTicketModifie = onDocumentUpdated(
     if (!changements.length) return;
 
     const changeStatut = changements.find((c) => c.type === 'statut');
+    const repart = Boolean(changeStatut) && repartParClient(avant, apres);
     const parLeClient = Boolean(changeStatut)
-      && changementDuClient(changeStatut.avant, changeStatut.apres);
+      && (changementDuClient(changeStatut.avant, changeStatut.apres) || repart);
     const par = auteurChangement(apres, parLeClient);
 
     for (const changement of changements) {
@@ -370,7 +378,7 @@ exports.suiviTicketModifie = onDocumentUpdated(
       if (changement.type === 'urgence' || changement.type === 'archive') continue;
 
       if (changement.type === 'statut') {
-        await notifierStatut(apres, changement, { projet, communes, parLeClient });
+        await notifierStatut(apres, changement, { projet, communes, parLeClient, repart });
         continue;
       }
 
@@ -392,7 +400,7 @@ exports.suiviTicketModifie = onDocumentUpdated(
 
 /** Le bon modèle pour un changement de statut, vers le bon public. */
 async function notifierStatut(ticket, changement, contexte) {
-  const { projet, communes, parLeClient } = contexte;
+  const { projet, communes, parLeClient, repart } = contexte;
 
   if (!STATUTS_CONNUS.includes(String(changement.apres))) {
     console.error(`Statut inconnu sur le ticket ${ticket.numero || ''} : ${changement.apres}`);
@@ -401,6 +409,9 @@ async function notifierStatut(ticket, changement, contexte) {
 
   /* Le client vient d'agir lui-même : c'est l'équipe qu'il faut prévenir. */
   if (parLeClient) {
+    /* Sa réponse a déjà prévenu l'équipe (lettre du message) : la demande
+       qui repart ne mérite pas une seconde lettre. */
+    if (repart) return;
     await mettreEnFile('statut', contactsEquipe(), {
       ...communes,
       cote: 'equipe',
@@ -509,7 +520,10 @@ exports.suiviDocumentCree = onDocumentCreated(
       echeance: (document.type === 'devis' ? document.expiration : document.echeance) || null,
       projetNom: nomProjet(projet),
       clientNom: nomClient(projet),
-      lien: courriels.lienProjet(document.projet),
+      /* La lettre mène à la pièce elle-même, dans « Devis et factures » :
+         la page du projet n'a pas les boutons Accepter et Refuser. */
+      lien: `${courriels.BASE}hub#/finances/${encodeURIComponent(evenement.params.documentId)}`,
+      avecPdf: Boolean(document.fichier && document.fichier.chemin),
     });
 
     console.log(`${document.type === 'devis' ? 'Devis' : 'Facture'} ${document.numero || evenement.params.documentId} déposé`);

@@ -3,7 +3,7 @@
    accepte ou refuse un devis, pose une question, voit ce qui reste à payer.
    ========================================================================== */
 
-import { echapper, dateCourte, dateHeure, montant, montantHT, montantTTC, montantPiece, ttcDe, parDateDesc, joursAvant, avecLiens, STATUTS_DEVIS, STATUTS_FACTURE, FACTURES_DUES, MOYENS_PAIEMENT, PORTEES_DEVIS, estResponsable } from '../noyau.js';
+import { echapper, dateCourte, dateHeure, montant, montantHT, montantTTC, montantPiece, ttcDe, parDateDesc, joursAvant, avecLiens, STATUTS_DEVIS, STATUTS_FACTURE, FACTURES_DUES, MOYENS_PAIEMENT, PORTEES_DEVIS, estResponsable, devisADecider, devisExpire, statutPiece } from '../noyau.js';
 import { icone, pastille, ligne, vide, squelette, titrePage, modale, confirmer, toast, sur, agir, metrique, fait, encart, brancherPieces, depot } from '../ui.js';
 import { appelServeur } from '../serveur.js';
 import * as magasin from '../magasin.js';
@@ -26,13 +26,15 @@ export const ouvrirDocument = (d, env, { projets, paiements }) => {
      peut. Les règles et le serveur le refusent aux autres ; l'écran ne
      leur propose donc pas le bouton. */
   const responsable = !equipe && estResponsable(env.session, projet.id ? projet : d.projet);
-  const decidable = !equipe && responsable && devis && ['envoye', 'consulte'].includes(d.statut);
-  if (!equipe && responsable && devis && d.statut === 'envoye') ecrire.consulterDevis(d.id).catch(() => {});
+  const decidable = !equipe && responsable && devisADecider(d);
+  const perime = devisExpire(d);
+  if (decidable && d.statut === 'envoye') ecrire.consulterDevis(d.id).catch(() => {});
 
   const m = modale({
     titre: `${devis ? 'Devis' : 'Facture'} ${d.numero || ''}`, sousTitre: `${d.libelle || ''} · ${projet.nom || ''}`, feuille: true,
     corps: `
-      <div class="rang" style="margin-bottom:16px">${pastille(carte, d.statut, { equipe })}${devis ? `<span class="etiquette">${echapper((PORTEES_DEVIS[d.portee || 'initial'] || {}).libelle || '')}</span>` : ''}${d.echeance && !devis && FACTURES_DUES.includes(d.statut) ? `<span class="puce puce--${joursAvant(d.echeance) < 0 ? 'rouge' : 'ambre'}"><i></i>Échéance ${echapper(dateCourte(d.echeance))}</span>` : ''}${devis && d.expiration && decidable ? `<span class="puce"><i></i>Valable jusqu'au ${echapper(dateCourte(d.expiration))}</span>` : ''}</div>
+      <div class="rang" style="margin-bottom:16px">${pastille(carte, statutPiece(d), { equipe })}${devis ? `<span class="etiquette">${echapper((PORTEES_DEVIS[d.portee || 'initial'] || {}).libelle || '')}</span>` : ''}${d.echeance && !devis && FACTURES_DUES.includes(d.statut) ? `<span class="puce puce--${joursAvant(d.echeance) < 0 ? 'rouge' : 'ambre'}"><i></i>Échéance ${echapper(dateCourte(d.echeance))}</span>` : ''}${devis && d.expiration && decidable ? `<span class="puce"><i></i>Valable jusqu'au ${echapper(dateCourte(d.expiration))}</span>` : ''}${perime ? `<span class="puce puce--rouge"><i></i>Validité dépassée le ${echapper(dateCourte(d.expiration))}</span>` : ''}</div>
+      ${perime && !equipe ? encart("<strong>Ce devis n'est plus valable.</strong> Sa date de validité est passée : il ne peut plus être accepté tel quel. Demandez-nous un devis à jour, nous vous le déposons ici.", 'attention', 'info') : ''}
       <div class="carte carte--creuse">
         <dl class="faits" style="grid-template-columns:repeat(3,1fr)">
           ${fait('Hors taxes', echapper(montant(d.montant, 2)))}
@@ -165,16 +167,16 @@ export const vue = async (ctx, env) => {
     const devis = documents.filter((d) => d.type === 'devis').sort(parDateDesc('date'));
     const factures = documents.filter((d) => d.type === 'facture').sort(parDateDesc('date'));
     const { total: du, factures: dues } = resteAPayer(documents, paiements);
-    const aDecider = devis.filter((d) => ['envoye', 'consulte'].includes(d.statut));
+    const aDecider = devis.filter(devisADecider);
     const totalPaye = paiements.filter((p) => p.statut !== 'annule').reduce((s, p) => s + (Number(p.montant) || 0), 0);
 
     const ligneDoc = (d) => ligne({
-      icone: d.type === 'devis' ? 'receipt' : 'euro', ton: d.type === 'devis' ? (['envoye', 'consulte'].includes(d.statut) ? 'ambre' : d.statut === 'accepte' ? 'vert' : '') : (d.statut === 'en-retard' ? 'rouge' : FACTURES_DUES.includes(d.statut) ? 'ambre' : d.statut === 'payee' ? 'vert' : ''),
+      icone: d.type === 'devis' ? 'receipt' : 'euro', ton: d.type === 'devis' ? (devisADecider(d) ? 'ambre' : d.statut === 'accepte' ? 'vert' : '') : (d.statut === 'en-retard' ? 'rouge' : FACTURES_DUES.includes(d.statut) ? 'ambre' : d.statut === 'payee' ? 'vert' : ''),
       titre: `${d.numero ? `<span class="t-mono t-3" style="font-weight:400">${echapper(d.numero)}</span> ` : ''}${echapper(d.libelle || '')}`,
       sous: `${echapper(nomProjet(d.projet))} · ${echapper(dateCourte(d.date))}${d.type === 'facture' && d.echeance && FACTURES_DUES.includes(d.statut) ? ` · échéance ${echapper(dateCourte(d.echeance))}` : ''}`,
       /* Trois colonnes fixes, alignées d'une ligne à l'autre : le bouton
          Voir (ou sa place vide), le montant, le statut. */
-      fin: `${(d.liens || []).length ? `<span class="puce puce--bleu"><i></i>${icone('externe')}</span>` : ''}<span class="piece-fin"><span class="piece-fin-voir">${d.fichier && d.fichier.chemin ? `<button class="btn btn-voir" type="button" data-telecharger="${echapper(d.id)}">${icone('telecharger')} Télécharger</button>` : ''}</span><span class="nb t-fort">${echapper(montantPiece(d, 2))}</span><span class="piece-fin-statut">${pastille(d.type === 'devis' ? STATUTS_DEVIS : STATUTS_FACTURE, d.statut)}</span></span>`,
+      fin: `${(d.liens || []).length ? `<span class="puce puce--bleu"><i></i>${icone('externe')}</span>` : ''}<span class="piece-fin"><span class="piece-fin-voir">${d.fichier && d.fichier.chemin ? `<button class="btn btn-voir" type="button" data-telecharger="${echapper(d.id)}">${icone('telecharger')} Télécharger</button>` : ''}</span><span class="nb t-fort">${echapper(montantPiece(d, 2))}</span><span class="piece-fin-statut">${pastille(d.type === 'devis' ? STATUTS_DEVIS : STATUTS_FACTURE, statutPiece(d))}</span></span>`,
       action: 'ouvrir', attrs: `data-id="${echapper(d.id)}"`,
     });
 

@@ -9,7 +9,7 @@
 
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
-import { doc, getDoc, getDocs, setDoc, updateDoc, addDoc, deleteDoc, collection, collectionGroup, query, where, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, getDocs, setDoc, updateDoc, addDoc, deleteDoc, collection, collectionGroup, query, where, serverTimestamp, Timestamp } from 'firebase/firestore';
 
 const PROJET = process.env.GCLOUD_PROJECT || 'capmedia-1f90d';
 const env = await initializeTestEnvironment({
@@ -72,6 +72,9 @@ await env.withSecurityRulesDisabled(async (ctx) => {
   await setDoc(doc(b, 'notes/n-interne'), { projet: 'atelier', titre: 'Risque', visibilite: 'interne' });
   await setDoc(doc(b, 'blocages/b1'), { projet: 'atelier', titre: 'Bloque', visibilite: 'client', resolu: null });
   await setDoc(doc(b, 'documents/d1'), { projet: 'atelier', type: 'devis', numero: 'D-1', montant: 100, statut: 'envoye', reponse: null });
+  await setDoc(doc(b, 'documents/d-perime'), { projet: 'atelier', type: 'devis', numero: 'D-2', montant: 100, statut: 'envoye', reponse: null, expiration: Timestamp.fromDate(new Date(Date.now() - 86400000)) });
+  await setDoc(doc(b, 'documents/d-valide'), { projet: 'atelier', type: 'devis', numero: 'D-3', montant: 100, statut: 'consulte', reponse: null, expiration: Timestamp.fromDate(new Date(Date.now() + 30 * 86400000)) });
+  await setDoc(doc(b, 'tickets/t-livre'), { projet: 'atelier', numero: 'ATELIER-002', titre: 'y', statut: 'a-valider', urgence: 'important', auteur: { uid: CAMILLE }, resolu: null, lu: {} });
   await setDoc(doc(b, 'documents/f1'), { projet: 'atelier', type: 'facture', numero: 'F-1', montant: 100, statut: 'a-payer' });
   await setDoc(doc(b, 'paiements/p1'), { projet: 'atelier', facture: 'f1', montant: 100 });
   await setDoc(doc(b, 'activite/a-client'), { projet: 'atelier', type: 'tache', texte: 'x', visibilite: 'client' });
@@ -146,6 +149,8 @@ await doit('Camille crée une demande', addDoc(collection(camille(), 'tickets'),
 await refuse('Camille ne crée pas une demande sur le projet de Léa', addDoc(collection(camille(), 'tickets'), { numero: null, projet: 'boutique', composant: '', titre: 'Bug', description: 'x', type: 'bug', urgence: 'important', statut: 'nouveau', plateforme: 'ios', version: '', etapes: '', attendu: '', obtenu: '', contexte: '', appareil: '', liens: [], assigne: null, auteur: { uid: CAMILLE, nom: 'Camille', email: 'camille.essai@exemple.test', cote: 'client' }, pieces: [], archive: false, cree: serverTimestamp(), maj: serverTimestamp(), resolu: null, lu: { client: null, equipe: null }, qualification: null, devis: null }));
 await refuse('Camille ne se donne pas un numéro', addDoc(collection(camille(), 'tickets'), { numero: 'ATELIER-999', projet: 'atelier', composant: '', titre: 'Bug', description: 'x', type: 'bug', urgence: 'important', statut: 'nouveau', plateforme: 'ios', version: '', etapes: '', attendu: '', obtenu: '', contexte: '', appareil: '', liens: [], assigne: null, auteur: { uid: CAMILLE, nom: 'Camille', email: 'camille.essai@exemple.test', cote: 'client' }, pieces: [], archive: false, cree: serverTimestamp(), maj: serverTimestamp(), resolu: null, lu: { client: null, equipe: null }, qualification: null, devis: null }));
 await doit('Camille valide une correction livrée', updateDoc(doc(camille(), 'tickets/t1'), { statut: 'resolu', resolu: serverTimestamp(), maj: serverTimestamp(), 'lu.client': serverTimestamp() }));
+await doit('Camille renvoie une correction qui ne tient pas (« Pas tout à fait »)', updateDoc(doc(camille(), 'tickets/t-livre'), { statut: 'en-cours', maj: serverTimestamp(), 'lu.client': serverTimestamp() }));
+await refuse('Camille ne termine pas une demande qui est chez nous', updateDoc(doc(camille(), 'tickets/t-livre'), { statut: 'resolu', resolu: serverTimestamp(), maj: serverTimestamp(), 'lu.client': serverTimestamp() }));
 await refuse("Camille ne change pas l'urgence", updateDoc(doc(camille(), 'tickets/t1'), { urgence: 'bloquant' }));
 await refuse("Camille ne s'assigne pas la demande", updateDoc(doc(camille(), 'tickets/t1'), { assigne: CAMILLE }));
 await doit('Camille écrit dans la conversation', addDoc(collection(camille(), 'projets/atelier/messages'), { de: { uid: CAMILLE, nom: 'Camille', cote: 'client' }, texte: 'Bonjour', pieces: [], date: serverTimestamp() }));
@@ -161,6 +166,8 @@ await refuse("Une fiche ne pointe pas le fichier rangé sous une AUTRE fiche", s
 await refuse("L'ancien rangement (documents/client) n'est plus accepté", setDoc(doc(camille(), 'fichiers/fc-5'), { projet: 'atelier', composant: '', categorie: 'captures', nom: 'c.png', chemin: 'projets/atelier/documents/client/c.png', taille: 1, type: 'image/png', description: '', tags: [], par: { uid: CAMILLE, nom: 'Camille', cote: 'client' }, visibilite: 'client', version: '', archive: false, cree: serverTimestamp() }));
 await doit('Camille accepte un devis', updateDoc(doc(camille(), 'documents/d1'), { statut: 'accepte', reponse: { par: CAMILLE, nom: 'Camille', date: serverTimestamp(), commentaire: '' } }));
 await refuse('Camille ne touche pas au montant', updateDoc(doc(camille(), 'documents/d1'), { montant: 1 }));
+await refuse("Camille n'accepte pas un devis dont la validité est passée", updateDoc(doc(camille(), 'documents/d-perime'), { statut: 'accepte', reponse: { par: CAMILLE, nom: 'Camille', date: serverTimestamp(), commentaire: '' } }));
+await doit('Camille accepte un devis encore valable', updateDoc(doc(camille(), 'documents/d-valide'), { statut: 'accepte', reponse: { par: CAMILLE, nom: 'Camille', date: serverTimestamp(), commentaire: '' } }));
 await refuse('Camille ne marque pas une facture payée', updateDoc(doc(camille(), 'documents/f1'), { statut: 'payee' }));
 await doit('Camille marque une notification lue', updateDoc(doc(camille(), `boites/${CAMILLE}/notifications/n1`), { lu: true }));
 await refuse('Camille ne se crée pas une notification', addDoc(collection(camille(), `boites/${CAMILLE}/notifications`), { titre: 'x', lu: false }));

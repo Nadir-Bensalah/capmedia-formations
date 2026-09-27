@@ -694,6 +694,12 @@ export const STATUTS_PIECE_VISIBLES = [...new Set([...Object.keys(STATUTS_DEVIS)
 /* Une facture envoyée est déjà due : la laisser hors de cette liste la
    rendait invisible du client, qui découvrait le retard un mois plus tard. */
 export const FACTURES_DUES = ['envoyee', 'a-payer', 'partielle', 'en-retard'];
+/* Un devis dont la validité est passée n'est plus à décider : la pastille
+   dit « Expiré » sans attendre qu'on la pose à la main, l'écran ne propose
+   plus d'accepter, et rien ne le compte parmi ce qui attend le client. */
+export const devisExpire = (d) => Boolean(d) && d.type === 'devis' && ['envoye', 'consulte'].includes(d.statut) && Boolean(d.expiration) && joursAvant(d.expiration) < 0;
+export const devisADecider = (d) => Boolean(d) && d.type === 'devis' && ['envoye', 'consulte'].includes(d.statut) && !devisExpire(d);
+export const statutPiece = (d) => (devisExpire(d) ? 'expire' : d.statut);
 export const MOYENS_PAIEMENT = { 'virement': 'Virement', 'carte': 'Carte', 'stripe': 'Stripe', 'cheque': 'Chèque', 'especes': 'Espèces', 'autre': 'Autre' };
 
 /* --- Les demandes de nouveau projet ------------------------------------- */

@@ -284,7 +284,26 @@ export const detail = async (ctx, env) => {
       if (ok) await agir(el, () => ecrire.clientValideDemande(tid), 'Merci, la demande est terminée.');
       return null;
     }
-    if (action === 'pas-regle') { const c = sortie.querySelector('#texte-message'); if (c) { c.focus(); c.placeholder = 'Dites-nous ce qui ne va pas encore.'; } return null; }
+    if (action === 'pas-regle') {
+      /* La correction livrée ne tient pas : le client dit pourquoi, et la
+         demande repasse chez nous. Avant, ce bouton ne faisait que poser le
+         curseur dans le champ de message. */
+      const m = modale({
+        titre: 'Pas tout à fait ?', sousTitre: 'Dites-nous ce qui ne va pas encore : la demande repasse chez Capmedia.',
+        corps: `<form id="forme-conteste" class="forme" novalidate><div class="groupe"><label class="etiquette-champ" for="texte-conteste">Ce qui ne va pas encore</label><textarea class="zone" id="texte-conteste" name="texte" rows="4" maxlength="6000" placeholder="Ce que vous avez essayé, et ce qui se passe."></textarea></div></form>`,
+        pied: `<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button><span class="pousse"></span><button class="btn btn-principal" type="button" data-renvoyer>Renvoyer chez Capmedia</button>`,
+      });
+      m.el.querySelector('[data-renvoyer]').addEventListener('click', async (ev) => {
+        const texte = m.el.querySelector('#texte-conteste').value.trim();
+        if (!texte) { toast('Dites-nous ce qui ne va pas encore.', 'erreur'); return; }
+        const ok = await agir(ev.currentTarget, async () => {
+          await ecrire.messageDemande(env.session, tid, texte);
+          await ecrire.clientContesteDemande(tid);
+        }, 'Bien noté : la demande repasse chez nous.');
+        if (ok !== false) m.fermer();
+      });
+      return null;
+    }
     if (action === 'rouvrir') {
       const ok = await confirmer({ titre: 'Rouvrir cette demande ?', texte: 'Elle repasse en cours et nous sommes prévenus.', ok: 'Rouvrir' });
       if (ok) await agir(el, () => ecrire.clientRouvreDemande(tid), 'Demande rouverte.');

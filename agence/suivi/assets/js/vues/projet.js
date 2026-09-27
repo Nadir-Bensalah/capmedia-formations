@@ -19,7 +19,7 @@ import {
   verdictHtml, anneauOuPas, progressionOuPas,
 } from '../ui.js';
 import * as magasin from '../magasin.js';
-import { K, ecrire, nouvelId, interneDuProjet, abonnerProjet, progressionProjet, jalonCourant, jalonSuivant, prochaineReunion, enAttenteDeVous, parStatut, risquesProjet, MODES_PROGRESSION, trierEtapes, phasesTriees } from '../donnees.js';
+import { K, ecrire, nouvelId, interneDuProjet, abonnerProjet, progressionProjet, jalonCourant, jalonSuivant, prochaineReunion, enAttenteDeVous, peutRepondreValidation, parStatut, risquesProjet, MODES_PROGRESSION, trierEtapes, phasesTriees } from '../donnees.js';
 import { filAriane } from '../coquille.js';
 import { naviguer } from '../routeur.js';
 import { monterBulle } from '../bulle.js';
@@ -264,7 +264,6 @@ export const vue = async (ctx, env) => {
     if (action === 'ouvrir-etape') { const j = d.jalons.find((x) => x.id === id); if (j) ouvrirEtape(j, d, { pid, env }); return null; }
     if (action === 'ouvrir-reunion') { const r = d.reunions.find((x) => x.id === id); if (r) ouvrirReunion(r, { pid, env }); return null; }
     if (action === 'ouvrir-note') { const n = d.notes.find((x) => x.id === id); if (n) ouvrirNote(n, { pid, env }); return null; }
-    if (action === 'ouvrir-release') { const r = d.releases.find((x) => x.id === id); if (r) ouvrirRelease(r, { pid, env }); return null; }
     if (action === 'ouvrir-validation') return naviguer(equipe ? `/validations/${id}` : `/valider/${id}`);
     return null;
   });
@@ -465,7 +464,7 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
   const reunion = prochaineReunion(d.reunions);
   const blocagesOuverts = d.blocages.filter((b) => !b.resolu);
   const derniereRelease = d.releases.filter((r) => r.statut === 'disponible').sort(parDateDesc('date'))[0];
-  const validationsAttente = d.validations.filter((v) => v.statut === 'en-attente');
+  const validationsAttente = d.validations.filter((v) => v.statut === 'en-attente' && peutRepondreValidation(v));
   const echeances = [
     ...d.jalons.filter((j) => j.fin && j.statut !== 'termine').map((j) => ({ date: j.fin, titre: j.titre, genre: 'Étape', icone: 'drapeau', chemin: `/projets/${pid}/etapes` })),
     ...d.taches.filter((t) => t.echeance && t.statut !== 'terminee').map((t) => ({ date: t.echeance, titre: t.titre, genre: 'Tâche', icone: 'taches', chemin: `/projets/${pid}/taches/${t.id}` })),
@@ -960,7 +959,6 @@ const releases = (d, { env }) => {
     : vide({ icone: 'releases', titre: 'Aucune version publiée', texte: 'Chaque mise en ligne sera listée ici avec ce qui change.' })}
   </section>`;
 };
-const ouvrirRelease = () => {};
 
 /* --- Liens --------------------------------------------------------------------- */
 const liens = (d, { env }) => {

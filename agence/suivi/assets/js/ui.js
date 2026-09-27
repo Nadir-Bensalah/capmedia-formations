@@ -341,6 +341,10 @@ export const fichierHtml = (f, options = {}) => {
 
 /** Ouvre une pièce dans un nouvel onglet, depuis n'importe quel clic [data-piece]. */
 export const brancherPieces = (racine) => {
+  /* La zone des vues est la même d'une page à l'autre : brancher à chaque
+     montage empilait les écouteurs, et un clic ouvrait plusieurs onglets. */
+  if (racine.__piecesBranchees) return;
+  racine.__piecesBranchees = true;
   racine.addEventListener('click', async (ev) => {
     const cible = ev.target.closest('[data-piece]');
     if (!cible) return;

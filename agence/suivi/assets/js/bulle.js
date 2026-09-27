@@ -151,7 +151,12 @@ export const monterBulle = ({ pid, env }) => {
     return messages().filter((m) => m.de && m.de.uid !== uid && (!lu || (enDate(m.date) || 0) > lu)).length;
   };
 
-  const marquer = (frappe = false) => ecrire.marquerLecture(env.session, pid, { frappe }).catch(() => {});
+  /* Lire dans la bulle fait aussi tomber le compteur du rail (profil.lus),
+     que la page Messages tient : un seul « non lu », où qu'on lise. */
+  const marquer = (frappe = false) => {
+    ecrire.marquerLecture(env.session, pid, { frappe }).catch(() => {});
+    if (!frappe) ecrire.marquerVu(uid, `messages:${pid}`).catch(() => {});
+  };
 
   const rendreFil = () => {
     const liste = messages();

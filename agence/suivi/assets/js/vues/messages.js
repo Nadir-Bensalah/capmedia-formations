@@ -66,8 +66,12 @@ export const vue = async (ctx, env) => {
     if (empreinte === dernierRendu) { return; }
     dernierRendu = empreinte;
 
-    if (courant && messages.length && !equipe) ecrire.marquerVu(uid, `messages:${pid}`).catch(() => {});
-    if (courant && messages.length && equipe) ecrire.marquerVu(uid, `messages:${pid}`).catch(() => {});
+    /* Lire ici compte partout : le compteur du rail (profil.lus) et l'accusé
+       « Lu » de l'autre côté (lectures) tombent ensemble. */
+    if (courant && messages.length) {
+      ecrire.marquerVu(uid, `messages:${pid}`).catch(() => {});
+      ecrire.marquerLecture(env.session, pid).catch(() => {});
+    }
 
     sortie.innerHTML = `<div class="page">
       <div class="page-tete"><div><h1>Messages</h1><p class="chapo">${equipe ? 'Une conversation par projet, avec le client.' : 'Une conversation par projet, directement avec Capmedia. Pour une anomalie ou une demande précise, préférez une demande : elle est suivie jusqu\'au bout.'}</p></div></div>

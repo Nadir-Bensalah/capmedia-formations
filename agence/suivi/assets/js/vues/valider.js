@@ -6,7 +6,7 @@
 import { echapper, dateHeure, dateCourte, depuis, avecLiens, parDateDesc, joursAvant, STATUTS_VALIDATION, TYPES_VALIDATION, estResponsable } from '../noyau.js';
 import { icone, pastille, ligne, vide, squelette, titrePage, modale, toast, sur, agir, pieceHtml, brancherPieces, echeanceHtml, encart } from '../ui.js';
 import * as magasin from '../magasin.js';
-import { K, G, agreger, ecrire, enAttenteDeVous } from '../donnees.js';
+import { K, G, agreger, ecrire, enAttenteDeVous, peutRepondreValidation } from '../donnees.js';
 import { filAriane } from '../coquille.js';
 import { naviguer } from '../routeur.js';
 import { echeance } from '../noyau.js';
@@ -67,7 +67,9 @@ export const vue = async (ctx, env) => {
     const projets = magasin.lire(K.projets) || session.projets;
     const validations = agreger(session, G.validations);
     const attente = enAttenteDeVous({ projets, tickets: agreger(session, G.tickets), validations, documents: agreger(session, G.documents), taches: agreger(session, G.taches), blocages: agreger(session, G.blocages) });
-    const enAttente = validations.filter((v) => v.statut === 'en-attente').sort(parDateDesc('cree'));
+    /* Un collaborateur ne voit pas les validations réservées au responsable :
+       il ne pourrait pas y répondre, et le chapo ne les compte pas. */
+    const enAttente = validations.filter((v) => v.statut === 'en-attente' && peutRepondreValidation(v)).sort(parDateDesc('cree'));
     const passees = validations.filter((v) => v.statut !== 'en-attente').sort(parDateDesc('maj'));
     const autres = attente.filter((a) => a.genre !== 'validation');
     const nomProjet = (pid) => ((projets.find((p) => p.id === pid) || {}).nom || '');

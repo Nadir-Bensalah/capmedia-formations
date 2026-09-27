@@ -288,7 +288,7 @@ const alertes = (d, { nomProjet, plateforme }) => {
    Section 2 · L'avancement
    -------------------------------------------------------------------------- */
 
-const avancement = (d, { nomProjet, plateforme }) => {
+const avancement = (d, { nomProjet, plateforme, equipe }) => {
   const lignes = d.projets.map((p) => {
     const scen = d.scenarios.filter((s) => projetDe(s) === p.id && s.actif !== false && dansPlateforme(s, plateforme));
     const camp = d.campagnes.filter((c) => projetDe(c) === p.id);
@@ -300,7 +300,7 @@ const avancement = (d, { nomProjet, plateforme }) => {
   if (!lignes.length) {
     return `<section class="section">
       <div class="section-tete"><h2>Avancement ${infoBouton('avancement')}</h2></div>
-      ${vide({ icone: 'bug', titre: 'Aucun projet testé', texte: 'Versez un plan de tests sur un projet pour commencer.', compact: true })}
+      ${vide({ icone: 'bug', titre: 'Aucun projet testé', texte: equipe ? 'Versez un plan de tests sur un projet pour commencer.' : 'Les tests apparaîtront ici dès qu\'ils commenceront.', compact: true })}
     </section>`;
   }
 
@@ -685,7 +685,7 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
           </div>`).join('')}</div>
       </div>`).join('')}
     </div>`
-    : vide({ icone: 'bug', titre: plateforme ? 'Aucun scénario sur cette plateforme' : 'Aucun scénario', texte: plateforme ? 'Changez de filtre, ou élargissez les plateformes de vos scénarios.' : 'Versez un plan de tests sur ce projet.', compact: true })}
+    : vide({ icone: 'bug', titre: plateforme ? 'Aucun scénario sur cette plateforme' : 'Aucun scénario', texte: plateforme ? 'Changez de filtre, ou élargissez les plateformes de vos scénarios.' : equipe ? 'Versez un plan de tests sur ce projet.' : 'Les scénarios de test apparaîtront ici dès qu\'ils seront écrits.', compact: true })}
   </section>`;
 
   return `
@@ -1173,7 +1173,7 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, nommer }) => {
             ${t.noteTest ? `<p class="t-petit" style="margin:6px 0 0">Note du test : <b>${echapper(String(t.noteTest.note))}/5</b>${equipe && t.noteTest.commentaire ? ` · « ${echapper(String(t.noteTest.commentaire))} »` : ''}</p>` : ''}
             ${equipe && t.remarques.length ? `<div style="margin-top:8px">${t.remarques.map((r) => `<p class="t-petit" style="margin:4px 0;padding:6px 8px;border-radius:8px;background:var(--fond-3)">${echapper(String(r.texte || ''))}${enDate(r.le) ? ` <span class="t-micro t-3">· ${echapper(jourCourt(enDate(r.le)))}</span>` : ''}</p>`).join('')}</div>` : ''}
           </div>`).join('')}</div>`
-          : `<p class="aide">Aucun testeur pour l'instant. ${vivier.length ? 'Choisissez-les ci-dessous.' : 'Le vivier est vide : le serveur seul y inscrit quelqu\'un.'}</p>`}
+          : `<p class="aide">Aucun testeur pour l'instant. ${equipe ? (vivier.length ? 'Choisissez-les ci-dessous.' : 'Le vivier est vide : le serveur seul y inscrit quelqu\'un.') : 'Ils apparaîtront ici dès qu\'ils seront choisis.'}</p>`}
       </div>
 
       ${resultatsHtml(c, { dedans, nommer })}
@@ -1326,7 +1326,7 @@ export const vue = async (ctx, env) => {
         ? unProjet(d, { pid, nomProjet, plateforme: etat.plateforme, equipe: env.role === 'equipe' })
         : `<div id="tableau-ici"></div>
           ${alertes(d, { nomProjet, plateforme: etat.plateforme })}
-          ${etage('etage-projets', 'Projets', `<b>${d.projets.length}</b> ${d.projets.length > 1 ? 'projets' : 'projet'}, <b>${d.campagnes.filter((c) => c.statut === 'en-cours').length}</b> ${d.campagnes.filter((c) => c.statut === 'en-cours').length > 1 ? 'campagnes en cours' : 'campagne en cours'}.`, avancement(d, { nomProjet, plateforme: etat.plateforme }))}
+          ${etage('etage-projets', 'Projets', `<b>${d.projets.length}</b> ${d.projets.length > 1 ? 'projets' : 'projet'}, <b>${d.campagnes.filter((c) => c.statut === 'en-cours').length}</b> ${d.campagnes.filter((c) => c.statut === 'en-cours').length > 1 ? 'campagnes en cours' : 'campagne en cours'}.`, avancement(d, { nomProjet, plateforme: etat.plateforme, equipe: env.role === 'equipe' }))}
           ${etage('etage-machine', 'Tests automatisés', `<b>${(d.parcours || []).filter((x) => x.actif !== false).length}</b> parcours et <b>${(d.regles || []).reduce((n, x) => n + (x.actif !== false ? (Number(x.cas) || 0) : 0), 0)}</b> cas de règles, tous projets confondus.`, `${parcoursHtml(d, { pid: '', equipe: env.role === 'equipe' })}${reglesHtml(d, { pid: '', equipe: env.role === 'equipe' })}`)}
           ${env.role === 'equipe' ? etage('etage-gens', 'Testeurs', `<b>${(d.testeurs || []).length}</b> ${(d.testeurs || []).length > 1 ? 'personnes au vivier' : 'personne au vivier'}.`, vivierHtml(d, { equipe: true })) : ''}
           ${activite(d, { nomProjet, plateforme: etat.plateforme })}`}
