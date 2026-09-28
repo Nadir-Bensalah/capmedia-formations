@@ -122,7 +122,7 @@ const SECTIONS = [
   { cle: 'demandes', libelle: 'Demandes',   icone: 'demandes', compte: (pid) => (magasin.lire(K.tickets(pid)) || []).filter((t) => !t.archive && OUVERTS.includes(t.statut)).length },
   { cle: 'fichiers', libelle: 'Fichiers',   icone: 'fichiers', compte: (pid) => (magasin.lire(K.fichiers(pid)) || []).filter((f) => !f.archive).length },
   { cle: 'releases', libelle: 'Versions',   icone: 'releases', compte: (pid) => (magasin.lire(K.releases(pid)) || []).length },
-  { cle: 'liens',   libelle: 'Liens',       icone: 'liens' },
+  { cle: 'liens',   libelle: 'Ressources',  icone: 'liens' },
   { cle: 'reunions', libelle: 'Réunions',   icone: 'reunions' },
   { cle: 'notes',   libelle: 'Décisions',   icone: 'note' },
   /* Les tests n'ont d'entrée que s'il y a quelque chose à voir : la même
@@ -253,7 +253,7 @@ enregistrerRecherche((terme) => {
   des(G.taches).forEach((t) => items.push({ groupe: 'Tâches', libelle: t.titre, sous: nomProjet(t.projet), icone: 'taches', chemin: `/projets/${t.projet}/taches/${t.id}` }));
   des(G.fichiers).forEach((f) => items.push({ groupe: 'Fichiers', libelle: f.nom, sous: nomProjet(f.projet), icone: 'fichiers', chemin: `/projets/${f.projet}/fichiers?f=${encodeURIComponent(f.id)}` }));
   parProjet(K.notes).forEach((n) => items.push({ groupe: 'Décisions', libelle: n.titre || '', sous: nomProjet(n.projet), icone: 'note', chemin: `/projets/${n.projet}/notes` }));
-  parProjet(K.liens).forEach((l) => items.push({ groupe: 'Liens', libelle: l.nom || l.url || '', sous: `${nomProjet(l.projet)} · ${l.url || ''}`, icone: 'liens', action: () => { if (l.url) window.open(l.url, '_blank', 'noopener'); } }));
+  parProjet(K.liens).forEach((l) => items.push({ groupe: 'Ressources', libelle: l.nom || l.url || '', sous: `${nomProjet(l.projet)} · ${l.url || ''}`, icone: 'liens', action: () => { if (l.url) window.open(l.url, '_blank', 'noopener'); } }));
   des(G.documents).forEach((d) => items.push({ groupe: 'Devis et factures', libelle: `${d.numero || ''} ${d.libelle || ''}`.trim(), sous: nomProjet(d.projet), icone: 'receipt', chemin: `/finances/${d.id}` }));
   des(G.reunions).forEach((r) => items.push({ groupe: 'Réunions', libelle: r.titre, sous: nomProjet(r.projet), icone: 'reunions', chemin: `/projets/${r.projet}/reunions/${r.id}` }));
   des(G.releases).forEach((r) => items.push({ groupe: 'Versions', libelle: `${libellePlateforme(r.plateforme)} ${r.version || ''}`.trim(), sous: nomProjet(r.projet), icone: 'releases', chemin: `/projets/${r.projet}/releases/${r.id}` }));

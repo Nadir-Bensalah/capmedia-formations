@@ -41,7 +41,7 @@ const ONGLETS = [
   { cle: 'demandes', libelle: 'Demandes', icone: 'demandes' },
   { cle: 'fichiers', libelle: 'Fichiers', icone: 'fichiers' },
   { cle: 'releases', libelle: 'Versions', icone: 'releases' },
-  { cle: 'liens', libelle: 'Liens', icone: 'liens' },
+  { cle: 'liens', libelle: 'Ressources', icone: 'liens' },
   { cle: 'reunions', libelle: 'Réunions', icone: 'reunions' },
   { cle: 'notes', libelle: 'Décisions', icone: 'note' },
   { cle: 'tests', libelle: 'Tests', icone: 'check' },
@@ -1186,18 +1186,18 @@ const ouvrirRelease = (r, d, { pid, env }) => {
   sur(m.el, 'click', '[data-question]', () => { m.fermer(); ouvrirBulle(pid, `À propos de la version ${libellePlateforme(r.plateforme)} ${r.version || ''} : `); });
 };
 
-/* --- Liens --------------------------------------------------------------------- */
+/* --- Ressources (les liens du projet) ------------------------------------------ */
 const liens = (d, { env }) => {
   const groupes = Object.entries(CATEGORIES_LIEN).map(([cle, lib]) => ({ cle, lib, items: d.liens.filter((l) => l.categorie === cle) })).filter((g) => g.items.length);
   return `
   <section class="section" style="margin-top:0">
-    <div class="section-tete"><h2>Liens et environnements</h2>${boutonNouveau(env, 'lien', 'Ajouter un lien')}</div>
+    <div class="section-tete"><h2>Ressources</h2>${boutonNouveau(env, 'lien', 'Ajouter un lien')}</div>
     ${groupes.length ? groupes.map((g) => `<div style="margin-bottom:var(--e-5)" data-groupe-liens="${echapper(g.cle)}"><p class="surtitre" style="margin-bottom:8px">${echapper(g.lib)}</p><div class="grille grille-2">${g.items.map((l) => `<a class="lien-env" href="${echapper(l.url)}" target="_blank" rel="noopener">
       <span class="ligne-icone${tonPlateforme(l.composant) ? ` ligne-icone--${tonPlateforme(l.composant)}` : ''}">${icone(iconePlateforme(l.composant) || (l.categorie === 'code' ? 'code' : l.categorie === 'design' ? 'sparkle' : l.categorie === 'mobile' ? 'releases' : l.categorie === 'acces' ? 'cle' : 'externe'))}</span>
       <span style="min-width:0"><span class="t-corps-fort" style="display:block">${echapper(l.nom)}${l.environnement ? ` <span class="etiquette" style="vertical-align:middle">${echapper(l.environnement)}</span>` : ''}${l.visibilite === 'interne' ? ' <span class="etiquette">Interne</span>' : ''}</span><span class="url" style="display:block">${echapper(l.url.replace(/^https?:\/\//, ''))}</span>${l.description ? `<span class="t-micro t-3" style="display:block">${echapper(l.description)}</span>` : ''}${l.categorie === 'acces' && l.identifiants ? `<span class="t-micro" style="display:block;margin-top:4px"><span class="t-3">Identifiant ·</span> <span class="t-mono" data-identifiants>${echapper(l.identifiants)}</span></span>` : ''}</span>
       <span class="rang" style="gap:2px">${l.categorie === 'acces' && l.identifiants ? `<button class="btn btn-doux btn-petit" type="button" data-action="copier-identifiants" data-id="${echapper(l.id)}" onclick="event.preventDefault()">${icone('copier')} Copier</button>` : ''}${env.role === 'equipe' ? `<button class="btn-icone" type="button" data-action="editer" data-genre="lien" data-id="${echapper(l.id)}" aria-label="Modifier" onclick="event.preventDefault()">${icone('edit')}</button>` : ''}<span class="chevron" style="color:var(--encre-4)">${icone('externe')}</span></span>
     </a>`).join('')}</div>${g.cle === 'acces' ? '<p class="aide" style="margin-top:8px">Le mot de passe ne s\'écrit jamais ici : il vous est transmis à part.</p>' : ''}</div>`).join('')
-    : vide({ icone: 'liens', titre: 'Aucun lien', texte: 'Production, stores, environnements de test, maquettes : tout au même endroit.' })}
+    : vide({ icone: 'liens', titre: 'Aucune ressource', texte: 'Production, stores, code source, environnements de test, maquettes : tout au même endroit.' })}
   </section>`;
 };
 

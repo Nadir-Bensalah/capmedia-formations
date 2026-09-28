@@ -69,7 +69,7 @@ export const liste = async (ctx, env) => {
    L'assistant de création
    ========================================================================== */
 
-const ETAPES = ['Identité', 'Client', 'Type', 'Les parties', 'Équipe', 'Dates', 'Budget', 'Liens', 'Accès', 'Récapitulatif'];
+const ETAPES = ['Identité', 'Client', 'Type', 'Les parties', 'Équipe', 'Dates', 'Budget', 'Ressources', 'Accès', 'Récapitulatif'];
 
 export const nouveau = async (ctx, env) => {
   const sortie = ctx.sortie;
@@ -116,7 +116,7 @@ export const nouveau = async (ctx, env) => {
         <p class="aide" style="margin-top:8px">Préparé ne veut pas dire invité : il n'aura accès qu'à l'ouverture. Vous ajouterez ses collaborateurs dans l'onglet « Accès client ».</p>` : ''}
         <label class="interrupteur" style="margin-top:14px"><input type="checkbox" name="inviter" ${d.inviter ? 'checked' : ''}><i></i> Ouvrir tout de suite</label>
         <p class="aide" style="margin-top:8px">À ne cocher que si l'espace est déjà prêt. Le responsable reçoit son invitation dans la foulée (sauf e-mails coupés).</p>`; }
-      case 9: { const o = orgChoisie(); return `<dl class="faits" style="grid-template-columns:1fr 1fr">${[['Projet', `${d.nom} (${d.ref.toUpperCase()})`], ['Client', o ? (o.entreprise || o.nom) : `${d.clientEntreprise} · ${d.clientNom} · ${d.clientEmail}`], ['Type', TYPES_PROJET[d.type]], ['Statut', (STATUTS_PROJET[d.statut] || {}).libelle], ['Les parties', d.composants.map((c) => c.nom).join(', ') || 'Aucune'], ['Responsable', (equipe.find((e) => e.id === d.responsable) || {}).nom || ''], ['Dates', [d.debut, d.cible].filter(Boolean).join(' → ') || 'Non fixées'], ['Budget', d.budget ? `${d.budget} € HT` : 'Non renseigné'], ['Liens', d.liens.length ? pluriel(d.liens.length, 'lien') : 'Aucun'], ['Responsable côté client', d.preparer && contactPropose().email ? (contactPropose().nom || contactPropose().email) : 'À ajouter ensuite'], ['Ouverture au client', d.inviter ? 'Tout de suite' : 'Plus tard, projet fermé']].map(([l, v]) => `<div class="fait"><dt>${echapper(l)}</dt><dd>${echapper(v)}</dd></div>`).join('')}</dl>${depuis ? encart(`Ce projet reprend la demande « ${echapper(depuis.titre)} ». Sa discussion et ses fichiers restent accessibles depuis la fiche de la demande.`, 'info', 'sparkle') : ''}`; }
+      case 9: { const o = orgChoisie(); return `<dl class="faits" style="grid-template-columns:1fr 1fr">${[['Projet', `${d.nom} (${d.ref.toUpperCase()})`], ['Client', o ? (o.entreprise || o.nom) : `${d.clientEntreprise} · ${d.clientNom} · ${d.clientEmail}`], ['Type', TYPES_PROJET[d.type]], ['Statut', (STATUTS_PROJET[d.statut] || {}).libelle], ['Les parties', d.composants.map((c) => c.nom).join(', ') || 'Aucune'], ['Responsable', (equipe.find((e) => e.id === d.responsable) || {}).nom || ''], ['Dates', [d.debut, d.cible].filter(Boolean).join(' → ') || 'Non fixées'], ['Budget', d.budget ? `${d.budget} € HT` : 'Non renseigné'], ['Ressources', d.liens.length ? pluriel(d.liens.length, 'lien') : 'Aucune'], ['Responsable côté client', d.preparer && contactPropose().email ? (contactPropose().nom || contactPropose().email) : 'À ajouter ensuite'], ['Ouverture au client', d.inviter ? 'Tout de suite' : 'Plus tard, projet fermé']].map(([l, v]) => `<div class="fait"><dt>${echapper(l)}</dt><dd>${echapper(v)}</dd></div>`).join('')}</dl>${depuis ? encart(`Ce projet reprend la demande « ${echapper(depuis.titre)} ». Sa discussion et ses fichiers restent accessibles depuis la fiche de la demande.`, 'info', 'sparkle') : ''}`; }
       default: return '';
     }
   };
