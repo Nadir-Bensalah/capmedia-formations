@@ -109,7 +109,7 @@ const ecranProche = () => ({
   visuel: `<div class="apps-accueil" aria-hidden="true"><img src="./assets/img/app-hub.png" alt="" width="96" height="96"><span class="apps-accueil-os"><span>${icone('apple')} Mac</span><span>${icone('composants')} Windows</span><span>${icone('globe')} Web</span></span></div>`,
   texte: `<p class="surtitre">Restons proches</p>
     <h2>Sur votre ordinateur aussi</h2>
-    <p>Capmedia Hub s'installe sur Mac et sur Windows depuis la page de connexion : le même espace, avec les notifications de votre système. Et sur le web, à tout moment, depuis n'importe quel navigateur.</p>`,
+    <p>Capmedia Hub s'installe sur Mac et sur Windows en un clic, depuis le menu de votre compte ou depuis la page de connexion : le même espace, avec les notifications de votre système, et qui se met à jour tout seul. Et sur le web, à tout moment, depuis n'importe quel navigateur.</p>`,
 });
 
 const ecranFin = (session, projets) => ({

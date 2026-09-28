@@ -1314,3 +1314,33 @@ l'assemblage a corrigé :
 - Piège pour les épreuves : `<html data-suite>` existe, un sélecteur
   `[data-suite]` attrape la racine de la page ; avec un bouton en fin de
   ligne, c'est le titre qui porte `data-action`, on lit `closest('.ligne')`.
+
+## 25. Installer l'application de son espace (28/09/2026)
+
+Un seul bouton par espace, pour le système de la personne (Mac ou Windows,
+rien sur téléphone, rien dans l'application elle-même) :
+
+- connecté : menu du compte, « Installer Capmedia Hub sur Mac » (le Hub
+  pour un client, le Cockpit pour l'équipe, Test pour un testeur), qui
+  ouvre une fenêtre avec l'unique bouton de téléchargement
+  (`assets/js/installer.js`, `entreeMenuInstaller`) ;
+- pas connecté : la porte de connexion propose l'application de l'espace
+  d'où l'on vient (`?espace=hub|cockpit|test`, posé par `exigerSession` et
+  `quitter` via `espaceCourant()` ; le Hub par défaut), un seul bouton
+  (`assets/applications.js`).
+
+Les liens visent toujours « la dernière version publiée » sur le dépôt
+public `Nadir-Bensalah/capmedia-apps` : une release par application
+(`cockpit`, `hub`, `test`), dont les fichiers portent des noms fixes
+(`capmedia-<app>-mac.dmg`, `capmedia-<app>-windows.exe`) remplacés à chaque
+publication par `cockpit-bureau/construire/publier.sh`. Les fichiers
+`latest-mac.yml` et `latest.yml` publiés à côté servent à l'application
+installée, qui se met à jour toute seule (electron-updater, fournisseur
+« generic » sur la même adresse). Publier une nouvelle version : monter la
+version dans `cockpit-bureau/package.json`, `construire/tout.sh` (Mac et
+Windows se construisent depuis le Mac), puis `construire/publier.sh`.
+
+Première publication le 28/09/2026 (0.1.0) : Mac signée ad hoc seulement,
+donc bloquée par Gatekeeper tant que la signature Developer ID et la
+notarisation ne sont pas faites ; Windows sans signature (avertissement
+SmartScreen).

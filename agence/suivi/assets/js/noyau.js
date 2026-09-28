@@ -913,11 +913,15 @@ export const session = () => new Promise((resolve) => {
 });
 
 /** Renvoie vers la connexion si la session manque. */
+/* L'espace d'où l'on vient, pour que la porte propose la bonne application
+   à installer : hub, cockpit ou test. */
+export const espaceCourant = () => (/cockpit/.test(location.pathname) ? 'cockpit' : /testeur/.test(location.pathname) ? 'test' : 'hub');
+
 export const exigerSession = async () => {
   const s = await session();
   if (!s.utilisateur) {
     const retour = encodeURIComponent(location.pathname + location.search + location.hash);
-    location.replace(`./?retour=${retour}`);
+    location.replace(`./?retour=${retour}&espace=${espaceCourant()}`);
     return null;
   }
   /* Désactivé depuis la dernière visite : la porte ferme la session et le
@@ -944,7 +948,7 @@ export const effacerSecretsLocaux = () => {
 export const quitter = async () => {
   effacerSecretsLocaux();
   await signOut(auth);
-  location.replace('./');
+  location.replace(`./?espace=${espaceCourant()}`);
 };
 
 /** Le nom à afficher pour la personne connectée. */

@@ -13,6 +13,7 @@ import { icone } from './icones.js';
 import { modale, toast, sur } from './ui.js';
 import * as magasin from './magasin.js';
 import { naviguer, surChangement, courant, actif } from './routeur.js';
+import { entreeMenuInstaller } from './installer.js';
 
 let contexte = { session: null, role: 'client', groupes: [] };
 const fournisseurs = [];
@@ -264,10 +265,15 @@ const brancherCompte = () => {
     /* Les clés d'accès (Touch ID, Windows Hello) : pour tout le monde, le
        testeur compris, qui n'a pas de page de paramètres. */
     const clesAcces = async () => { const { ouvrirClesAcces } = await import('./cles-acces.js'); await ouvrirClesAcces(); };
+    /* Installer l'application de CET espace (une seule, pour ce système) :
+       sur le web seulement, jamais dans l'application elle-même. */
+    const appDe = { testeur: 'test', client: 'hub', equipe: 'cockpit' }[contexte.role] || 'hub';
+    const installer = entreeMenuInstaller(appDe);
     if (contexte.role === 'testeur') {
       menu($('#bouton-compte'), [
         { libelle: 'Guide du testeur', icone: 'ampoule', action: () => naviguer('/guide') },
         { libelle: 'Revoir les premiers pas', icone: 'sparkle', action: revoirAccueil },
+        ...installer,
         { libelle: 'Clés d\'accès', icone: 'cle', action: clesAcces },
         { libelle: 'Apparence', icone: 'soleil', action: modaleTheme },
         '-',
@@ -278,6 +284,7 @@ const brancherCompte = () => {
     menu($('#bouton-compte'), [
       { libelle: 'Mon profil et mes préférences', icone: 'utilisateur', action: () => naviguer('/parametres') },
       ...(contexte.role === 'client' ? [{ libelle: 'Revoir les premiers pas', icone: 'sparkle', action: revoirAccueil }] : []),
+      ...installer,
       { libelle: 'Clés d\'accès', icone: 'cle', action: clesAcces },
       { libelle: 'Apparence', icone: 'soleil', action: m },
       '-',

@@ -1,34 +1,34 @@
 /* ==========================================================================
-   CAPMEDIA · les applications de la suite, sur la page de connexion
-   Chaque lien vise la dernière version publiée sur le dépôt public des
-   installeurs. Le système de la personne passe en premier et en plein ;
-   l'autre reste à côté, pour qui prépare l'ordinateur de quelqu'un d'autre.
-   Dans l'application elle-même, le bloc disparaît.
+   CAPMEDIA · installer l'application de cet espace, depuis la page de
+   connexion. Un seul bouton : l'espace demandé (?espace=hub, cockpit ou
+   test, le Hub sinon), pour le système de la personne. Le lien vise « la
+   dernière version publiée » sur le dépôt public des installeurs : les noms
+   ne changent jamais, le contenu est remplacé à chaque publication. Dans
+   l'application elle-même et sur un téléphone, rien ne s'affiche.
    ========================================================================== */
 (function () {
   'use strict';
 
   var DEPOT = 'https://github.com/Nadir-Bensalah/capmedia-apps/releases/download';
+  var APPS = { hub: 'Capmedia Hub', cockpit: 'Capmedia Cockpit', test: 'Capmedia Test' };
   var FICHIERS = { mac: 'mac.dmg', windows: 'windows.exe' };
+  var LIBELLES = { mac: 'Mac', windows: 'Windows' };
 
   var bloc = document.getElementById('porte-apps');
   if (!bloc) return;
-  if (window.capmediaBureau) { bloc.hidden = true; return; }
+  if (window.capmediaBureau) return;
 
   var ua = navigator.userAgent || '';
-  var systeme = /Windows/i.test(ua) ? 'windows' : (/Macintosh|Mac OS X/i.test(ua) && !/iPhone|iPad/i.test(ua) ? 'mac' : '');
-  /* Sur un téléphone, une application d'ordinateur ne sert à rien. */
-  if (/iPhone|iPad|Android/i.test(ua)) { bloc.hidden = true; return; }
+  if (/iPhone|iPad|Android/i.test(ua)) return;
+  var systeme = /Windows/i.test(ua) ? 'windows' : (/Macintosh|Mac OS X/i.test(ua) ? 'mac' : '');
+  if (!systeme) return;
 
-  Array.prototype.forEach.call(bloc.querySelectorAll('[data-app]'), function (a) {
-    var app = a.getAttribute('data-app');
-    var os = a.getAttribute('data-os');
-    a.href = DEPOT + '/' + app + '/capmedia-' + app + '-' + FICHIERS[os];
-    a.setAttribute('download', '');
-    if (systeme && os === systeme) {
-      a.classList.remove('btn-secondaire');
-      a.classList.add('btn-principal');
-      a.parentNode.insertBefore(a, a.parentNode.firstChild);
-    }
-  });
+  var espace = (new URLSearchParams(location.search).get('espace') || '').toLowerCase();
+  if (!APPS[espace]) espace = 'hub';
+
+  var lien = document.getElementById('porte-app-lien');
+  lien.href = DEPOT + '/' + espace + '/capmedia-' + espace + '-' + FICHIERS[systeme];
+  lien.textContent = 'Télécharger ' + APPS[espace] + ' pour ' + LIBELLES[systeme];
+  document.getElementById('porte-apps-phrase').textContent = APPS[espace] + ' existe aussi en application : une fenêtre à lui, les notifications de votre ordinateur, et des mises à jour toutes seules.';
+  bloc.hidden = false;
 })();

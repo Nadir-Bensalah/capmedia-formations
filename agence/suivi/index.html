@@ -92,30 +92,15 @@
     </div>
   </div>
 
-  <!-- Les applications de la suite, pour qui préfère une fenêtre à lui.
-       Le lien vise toujours la dernière version publiée ; le système de la
-       personne est mis en avant (assets/applications.js). Cachées dans
-       l'application elle-même, qui n'a pas à se proposer. -->
-  <section class="porte-apps" id="porte-apps" aria-labelledby="titre-apps">
+  <!-- Installer l'application de cet espace : un seul bouton, pour le
+       système de la personne. L'espace vient de l'adresse (?espace=hub,
+       cockpit ou test), le Hub par défaut ; le lien vise toujours la
+       dernière version publiée (assets/applications.js). Caché dans
+       l'application elle-même et sur téléphone. -->
+  <section class="porte-apps" id="porte-apps" aria-labelledby="titre-apps" hidden>
     <p class="surtitre" id="titre-apps">Sur votre ordinateur</p>
-    <p class="porte-apps-phrase">Votre espace existe aussi en application pour Mac et Windows : une fenêtre à lui, et les notifications de votre ordinateur.</p>
-    <div class="porte-apps-liste">
-      <div class="porte-app">
-        <img src="./assets/img/app-hub.png" alt="" width="40" height="40">
-        <div class="porte-app-texte"><b>Capmedia Hub</b><span>Pour suivre vos projets</span></div>
-        <div class="porte-app-liens"><a class="btn btn-secondaire btn-petit" data-app="hub" data-os="mac" href="#">Mac</a><a class="btn btn-secondaire btn-petit" data-app="hub" data-os="windows" href="#">Windows</a></div>
-      </div>
-      <div class="porte-app">
-        <img src="./assets/img/app-test.png" alt="" width="40" height="40">
-        <div class="porte-app-texte"><b>Capmedia Test</b><span>Pour les testeurs</span></div>
-        <div class="porte-app-liens"><a class="btn btn-secondaire btn-petit" data-app="test" data-os="mac" href="#">Mac</a><a class="btn btn-secondaire btn-petit" data-app="test" data-os="windows" href="#">Windows</a></div>
-      </div>
-      <div class="porte-app">
-        <img src="./assets/img/app-cockpit.png" alt="" width="40" height="40">
-        <div class="porte-app-texte"><b>Capmedia Cockpit</b><span>Pour l'équipe Capmedia</span></div>
-        <div class="porte-app-liens"><a class="btn btn-secondaire btn-petit" data-app="cockpit" data-os="mac" href="#">Mac</a><a class="btn btn-secondaire btn-petit" data-app="cockpit" data-os="windows" href="#">Windows</a></div>
-      </div>
-    </div>
+    <p class="porte-apps-phrase" id="porte-apps-phrase">Cet espace existe aussi en application : une fenêtre à lui, les notifications de votre ordinateur, et des mises à jour toutes seules.</p>
+    <div class="porte-app-liens" style="justify-content:center"><a class="btn btn-principal" id="porte-app-lien" href="#" download>Télécharger</a></div>
   </section>
 </main>
 
