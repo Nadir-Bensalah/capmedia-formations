@@ -104,11 +104,12 @@ export const vue = async (ctx, env) => {
     </div>`;
   };
 
-  let minuteur = null;
-  const planifier = () => { clearTimeout(minuteur); minuteur = setTimeout(rendre, 40); };
+  /* Premier dessin avant l'affichage, les suivants regroupés : la page
+     n'apparaît qu'une fois, sans squelette quand la donnée est déjà là. */
+  const planifier = magasin.dessinateur(rendre, 40);
   [K.projets, K.organisations, K.ticketsTous, K.tachesToutes, K.validationsToutes, K.documentsTous, K.paiementsTous, K.reunionsToutes, K.blocagesTous, K.activiteToute, K.demandesProjet, K.jalonsTous, K.projetsInternes].forEach((c) => lot.sur(c, planifier));
   planifier();
-  return () => { clearTimeout(minuteur); lot.fin(); };
+  return () => { planifier.arreter(); lot.fin(); };
 };
 
 void ATTEND_EQUIPE; void ATTEND_CLIENT; void FACTURES_DUES; void prochaineReunion;

@@ -380,11 +380,12 @@ export const detail = async (ctx, env) => {
   });
   brancherPieces(sortie);
 
-  let minuteur = null;
-  const planifier = () => { clearTimeout(minuteur); minuteur = setTimeout(rendre, 40); };
+  /* Premier dessin avant l'affichage, les suivants regroupés : la page
+     n'apparaît qu'une fois, sans squelette quand la donnée est déjà là. */
+  const planifier = magasin.dessinateur(rendre, 40);
   cles.forEach((c) => lot.sur(c, planifier));
   planifier();
-  return () => { clearTimeout(minuteur); gestes(); lot.fin(); };
+  return () => { planifier.arreter(); gestes(); lot.fin(); };
 };
 
 /* La résolution d'un lien « /demande/:id » (ancienne adresse, liens

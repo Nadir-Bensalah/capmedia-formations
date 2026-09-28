@@ -331,8 +331,9 @@ export const vue = async (ctx, env) => {
   });
   brancherPieces(sortie);
 
-  let minuteur = null;
-  const planifier = () => { clearTimeout(minuteur); minuteur = setTimeout(() => rendre(false), 60); };
+  /* Premier dessin avant l'affichage, les suivants regroupés : la page
+     n'apparaît qu'une fois, sans squelette quand la donnée est déjà là. */
+  const planifier = magasin.dessinateur(() => rendre(false), 60);
   cles.forEach((c) => lot.sur(c, planifier));
   planifier();
 
@@ -341,7 +342,7 @@ export const vue = async (ctx, env) => {
      ici : changer d'onglet ou de page ne la referme pas. */
 
   return {
-    fin: () => { clearTimeout(minuteur); gestes(); gestesFichiers(); gestesFiltres(); lot.fin(); },
+    fin: () => { planifier.arreter(); gestes(); gestesFichiers(); gestesFiltres(); lot.fin(); },
     /* Changer d'onglet ne recharge pas la page : on redessine, les écoutes
        restent ouvertes et le défilement ne saute pas. */
     maj: (suite) => {

@@ -241,6 +241,50 @@ export const deriver = (cle, sources, calcul) => {
   };
 };
 
+/**
+ * Le dessin d'une vue au fil des données. Le premier dessin part en
+ * microtâche, avant le premier affichage : quand la donnée est déjà là au
+ * montage, le squelette n'est jamais peint et la page n'apparaît qu'une
+ * fois. Les appels qui suivent immédiatement (les clés du magasin qui se
+ * réveillent au montage, dans la même foulée) sont absorbés par ce premier
+ * dessin ; plus tard, les changements sont regroupés par un court délai.
+ *
+ *   const planifier = dessinateur(rendre, 40);
+ *   cles.forEach((c) => lot.sur(c, planifier)); planifier();
+ *   fin : planifier.arreter();
+ */
+export const dessinateur = (dessiner, delai = 40) => {
+  let minuteur = null;
+  let dessine = false;
+  let prevu = false;
+  let absorbe = false;
+  let enAttente = false;
+  let arrete = false;
+  const planifier = () => {
+    if (arrete) return;
+    if (!dessine) {
+      if (prevu) return;
+      prevu = true;
+      queueMicrotask(() => {
+        prevu = false;
+        if (arrete) return;
+        dessine = true;
+        /* Ce qui arrive dans la même foulée n'a pas besoin d'un second
+           dessin : la tâche suivante rouvre la porte. */
+        absorbe = true;
+        setTimeout(() => { absorbe = false; if (enAttente) { enAttente = false; planifier(); } }, 0);
+        try { dessiner(); } catch (err) { console.error('[magasin] dessin', err); }
+      });
+      return;
+    }
+    if (absorbe) { enAttente = true; return; }
+    clearTimeout(minuteur);
+    minuteur = setTimeout(() => { if (!arrete) { try { dessiner(); } catch (err) { console.error('[magasin] dessin', err); } } }, delai);
+  };
+  planifier.arreter = () => { arrete = true; clearTimeout(minuteur); };
+  return planifier;
+};
+
 /** Ferme tout. Utile au changement de session. */
 export const fermerTout = () => {
   entrees.forEach((e) => { if (e.arreter) e.arreter(); });

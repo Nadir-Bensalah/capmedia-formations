@@ -130,11 +130,12 @@ export const vue = async (ctx, env) => {
     if (v) ouvrirValidation(v, env, projets);
   });
 
-  let minuteur = null;
-  const planifier = () => { clearTimeout(minuteur); minuteur = setTimeout(rendre, 40); };
+  /* Premier dessin avant l'affichage, les suivants regroupés : la page
+     n'apparaît qu'une fois, sans squelette quand la donnée est déjà là. */
+  const planifier = magasin.dessinateur(rendre, 40);
   [K.projets, ...session.projets.flatMap((p) => [K.validations(p.id), K.tickets(p.id), K.documents(p.id), K.taches(p.id), K.blocages(p.id)])].forEach((c) => lot.sur(c, planifier));
   planifier();
-  return () => { clearTimeout(minuteur); gestes(); lot.fin(); };
+  return () => { planifier.arreter(); gestes(); lot.fin(); };
 };
 
 void joursAvant;

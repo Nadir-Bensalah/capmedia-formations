@@ -143,11 +143,12 @@ export const detail = async (ctx, env) => {
     if (selDevis) selDevis.addEventListener('change', () => agir(null, () => ecrire.majDemandeProjet(id, { devis: selDevis.value || null }), selDevis.value ? 'Devis rattaché : le client a le lien.' : 'Devis détaché.'));
   };
   brancherPieces(sortie);
-  let minuteur = null;
-  const planifier = () => { clearTimeout(minuteur); minuteur = setTimeout(rendre, 40); };
+  /* Premier dessin avant l'affichage, les suivants regroupés : la page
+     n'apparaît qu'une fois, sans squelette quand la donnée est déjà là. */
+  const planifier = magasin.dessinateur(rendre, 40);
   lot.sur(`preprojet:${id}`, planifier);
   lot.sur(K.messagesDemandeProjet(id), planifier);
-  return () => { clearTimeout(minuteur); lot.fin(); };
+  return () => { planifier.arreter(); lot.fin(); };
 };
 
 void dateHeure; void sur;

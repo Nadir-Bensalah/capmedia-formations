@@ -83,13 +83,14 @@ export const vue = async (ctx, env) => {
     if (pid) naviguer(`/projets/${pid}/nouvelle-demande`);
   });
 
-  let minuteur = null;
-  const planifier = () => { clearTimeout(minuteur); minuteur = setTimeout(rendre, 40); };
+  /* Premier dessin avant l'affichage, les suivants regroupés : la page
+     n'apparaît qu'une fois, sans squelette quand la donnée est déjà là. */
+  const planifier = magasin.dessinateur(rendre, 40);
   [K.projets, ...session.projets.map((p) => K.tickets(p.id))].forEach((c) => lot.sur(c, planifier));
   /* Un projet ouvert après le montage amène ses demandes sur une clé que la
      vue ne connaissait pas : on l'écoute dès qu'il apparaît. */
   const suivis = new Set(session.projets.map((p) => p.id));
   lot.sur(K.projets, (liste) => (liste || []).forEach((p) => { if (!suivis.has(p.id)) { suivis.add(p.id); lot.sur(K.tickets(p.id), planifier); } }));
   planifier();
-  return () => { clearTimeout(minuteur); gestes(); lot.fin(); };
+  return () => { planifier.arreter(); gestes(); lot.fin(); };
 };

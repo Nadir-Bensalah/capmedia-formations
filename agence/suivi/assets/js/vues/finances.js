@@ -319,11 +319,12 @@ export const vue = async (ctx, env) => {
     const d = agreger(session, G.documents).find((x) => x.id === el.dataset.telecharger);
     if (d) agir(el, () => telechargerPiece(d));
   });
-  let minuteur = null;
-  const planifier = () => { clearTimeout(minuteur); minuteur = setTimeout(rendre, 40); };
+  /* Premier dessin avant l'affichage, les suivants regroupés : la page
+     n'apparaît qu'une fois, sans squelette quand la donnée est déjà là. */
+  const planifier = magasin.dessinateur(rendre, 40);
   [K.projets, K.reglages, ...session.projets.flatMap((p) => [K.documents(p.id), K.paiements(p.id)])].forEach((c) => lot.sur(c, planifier));
   planifier();
-  return () => { clearTimeout(minuteur); gestes(); gestesVoir(); lot.fin(); };
+  return () => { planifier.arreter(); gestes(); gestesVoir(); lot.fin(); };
 };
 
 void toast; void lienPiece; void montantHT;

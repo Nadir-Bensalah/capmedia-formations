@@ -68,10 +68,11 @@ export const vue = async (ctx, env) => {
   });
   const gesteProjet = sur(sortie, 'change', '#filtre-projet', (el) => { projetFiltre = el.value; pages = 1; rendre(); });
 
-  let minuteur = null;
-  const planifier = () => { clearTimeout(minuteur); minuteur = setTimeout(rendre, 40); };
+  /* Premier dessin avant l'affichage, les suivants regroupés : la page
+     n'apparaît qu'une fois, sans squelette quand la donnée est déjà là. */
+  const planifier = magasin.dessinateur(rendre, 40);
   const cles = [K.projets, ...(session.projets || []).map((p) => K.activite(p.id))];
   cles.forEach((c) => lot.sur(c, planifier));
   planifier();
-  return () => { clearTimeout(minuteur); gestes(); gesteProjet(); lot.fin(); };
+  return () => { planifier.arreter(); gestes(); gesteProjet(); lot.fin(); };
 };

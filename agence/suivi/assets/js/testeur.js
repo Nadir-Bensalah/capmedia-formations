@@ -1092,18 +1092,25 @@ const suivreCampagne = (moi, c, redessiner) => {
      toute la campagne. Un testeur qui verrait les 173 ne saurait plus
      lesquels sont les siens. */
   const miens = () => new Set((c.affectation || {})[moi.uid] || c.scenarios || []);
+  /* Les scénarios et les passages arrivent chacun de leur côté : la page
+     ne se dessine qu'une fois les deux là, sinon elle apparaissait vide
+     puis pleine, comme chargée deux fois. */
+  const recu = { scenarios: false, passages: false };
+  const dessinerSiComplet = () => { if (recu.scenarios && recu.passages) redessiner(); };
   ecoutes.campagne.push(onSnapshot(collection(bdd, 'projets', pid, 'scenarios'), (inst) => {
     const m = miens();
     etat.scenarios = inst.docs.map((d) => ({ ref: d.id, ...d.data() }))
       .filter((x) => x.actif !== false && m.has(x.ref))
       .sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
-    redessiner();
-  }, (e) => console.warn('[testeur] scénarios', e)));
+    recu.scenarios = true;
+    dessinerSiComplet();
+  }, (e) => { console.warn('[testeur] scénarios', e); recu.scenarios = true; dessinerSiComplet(); }));
 
   ecoutes.campagne.push(onSnapshot(query(collection(bdd, 'projets', pid, 'campagnes', c.id, 'passages'), where('testeur', '==', moi.uid)), (inst) => {
     etat.passages = new Map(inst.docs.map((d) => { const x = d.data(); return [x.scenario, x]; }));
-    redessiner();
-  }, (e) => console.warn('[testeur] passages', e)));
+    recu.passages = true;
+    dessinerSiComplet();
+  }, (e) => { console.warn('[testeur] passages', e); recu.passages = true; dessinerSiComplet(); }));
 
   getDoc(doc(bdd, 'projets', pid, 'campagnes', c.id, 'appreciations', moi.uid))
     .then((a) => { if (a.exists()) { etat.avis = a.data(); redessiner(); } accorderAccueil(moi); })

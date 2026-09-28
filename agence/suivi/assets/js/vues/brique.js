@@ -328,13 +328,14 @@ export const vue = async (ctx, env) => {
     return undefined;
   });
 
-  let minuteur = null;
-  const planifier = () => { clearTimeout(minuteur); minuteur = setTimeout(() => rendre(false), 60); };
+  /* Premier dessin avant l'affichage, les suivants regroupés : la page
+     n'apparaît qu'une fois, sans squelette quand la donnée est déjà là. */
+  const planifier = magasin.dessinateur(() => rendre(false), 60);
   cles.forEach((c) => lot.sur(c, planifier));
   planifier();
 
   return {
-    fin: () => { clearTimeout(minuteur); gestes(); lot.fin(); },
+    fin: () => { planifier.arreter(); gestes(); lot.fin(); },
     maj: () => rendre(true),
   };
 };

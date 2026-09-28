@@ -281,10 +281,11 @@ export const vue = async (ctx, env) => {
     const projets = magasin.lire(K.projets) || session.projets || [];
     if (r) telechargerICS(r, { nomProjet: (pid) => ((projets.find((p) => p.id === pid) || {}).nom || '') });
   });
-  let minuteur = null;
-  const planifier = () => { clearTimeout(minuteur); minuteur = setTimeout(rendre, 40); };
+  /* Premier dessin avant l'affichage, les suivants regroupés : la page
+     n'apparaît qu'une fois, sans squelette quand la donnée est déjà là. */
+  const planifier = magasin.dessinateur(rendre, 40);
   cles.forEach((c) => lot.sur(c, planifier));
   planifier();
   void enDate; void echeanceHtml; void echeance; void depuis;
-  return () => { clearTimeout(garde); clearTimeout(minuteur); gestes(); gesteIcs(); lot.fin(); };
+  return () => { clearTimeout(garde); planifier.arreter(); gestes(); gesteIcs(); lot.fin(); };
 };

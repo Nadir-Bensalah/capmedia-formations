@@ -759,6 +759,17 @@ Après : 1 dessin après le squelette au montage, 1 après une écriture locale
 ou une suppression (`mesurer-rebond.cjs`, hors dépôt). La fiche de projet,
 qui regroupait déjà ses dessins à 60 ms, n'est pas concernée.
 
+**Le 28/09/2026, le même rebond dans le Hub.** Les pages du client
+dessinaient par une minuterie de 40 ou 60 ms : le squelette était peint,
+puis la page, une image plus tard (mesuré : squelette à 5 ms, page à 48 ms).
+`magasin.dessinateur(rendre, delai)` remplace ces minuteries dans les treize
+vues : le premier dessin part en microtâche, avant le premier affichage
+(le squelette n'est jamais peint quand la donnée est déjà là), les appels
+de la même foulée sont absorbés, les suivants regroupés par le délai ;
+`planifier.arreter()` à la fin de la vue. Après : squelette et page dans la
+même image (5 ms et 6 ms). L'espace testeur, qui dessinait déjà par image,
+attend désormais ses scénarios ET ses passages avant le premier dessin.
+
 ## 18. Ce qui mentait au client, corrigé le 27/09/2026
 
 Relevé dans `docs/parcours-client-hub.md` (section 0). Seize points où le

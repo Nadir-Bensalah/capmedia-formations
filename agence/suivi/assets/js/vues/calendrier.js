@@ -192,10 +192,11 @@ export const vue = async (ctx, env) => {
       });
     }
   });
-  let minuteur = null;
-  const planifier = () => { clearTimeout(minuteur); minuteur = setTimeout(rendre, 40); };
+  /* Premier dessin avant l'affichage, les suivants regroupés : la page
+     n'apparaît qu'une fois, sans squelette quand la donnée est déjà là. */
+  const planifier = magasin.dessinateur(rendre, 40);
   const cles = session.equipe ? [K.projets, K.reunionsToutes, K.jalonsTous, K.tachesToutes, K.documentsTous, K.releasesToutes, K.validationsToutes] : [K.projets, ...session.projets.flatMap((p) => [K.reunions(p.id), K.jalons(p.id), K.taches(p.id), K.documents(p.id), K.releases(p.id), K.validations(p.id)])];
   cles.forEach((c) => lot.sur(c, planifier));
   planifier();
-  return () => { clearTimeout(minuteur); gestes(); lot.fin(); };
+  return () => { planifier.arreter(); gestes(); lot.fin(); };
 };

@@ -197,8 +197,9 @@ export const vue = async (ctx, env) => {
     if (m) demandeDepuisMessage(el, m, pid);
   });
 
-  let minuteur = null;
-  const planifier = () => { clearTimeout(minuteur); minuteur = setTimeout(rendre, 40); };
+  /* Premier dessin avant l'affichage, les suivants regroupés : la page
+     n'apparaît qu'une fois, sans squelette quand la donnée est déjà là. */
+  const planifier = magasin.dessinateur(rendre, 40);
   lot.sur(K.projets, planifier);
   lot.sur(K.profil, planifier);
   brancherPieces(sortie);
@@ -206,5 +207,5 @@ export const vue = async (ctx, env) => {
   /* Le pouls de la frappe d'en face : la marque s'éteint seule au bout de
      quelques secondes, donc on repasse régulièrement. */
   const pouls = setInterval(rendreFrappe, 1500);
-  return () => { clearTimeout(minuteur); clearInterval(pouls); gestesHistorique(); gestesTransformer(); lot.fin(); };
+  return () => { planifier.arreter(); clearInterval(pouls); gestesHistorique(); gestesTransformer(); lot.fin(); };
 };

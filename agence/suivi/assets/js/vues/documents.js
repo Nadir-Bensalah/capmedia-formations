@@ -92,11 +92,12 @@ export const vue = async (ctx, env) => {
     }
   });
   brancherPieces(sortie);
-  let minuteur = null;
-  const planifier = () => { clearTimeout(minuteur); minuteur = setTimeout(rendre, 40); };
+  /* Premier dessin avant l'affichage, les suivants regroupés : la page
+     n'apparaît qu'une fois, sans squelette quand la donnée est déjà là. */
+  const planifier = magasin.dessinateur(rendre, 40);
   (session.equipe ? [K.projets, K.fichiersTous] : [K.projets, ...session.projets.map((p) => K.fichiers(p.id))]).forEach((c) => lot.sur(c, planifier));
   planifier();
-  return () => { clearTimeout(minuteur); gestes(); lot.fin(); };
+  return () => { planifier.arreter(); gestes(); lot.fin(); };
 };
 
 /* Le dépôt du client : les mêmes catégories et les mêmes libellés que
