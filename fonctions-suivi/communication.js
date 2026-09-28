@@ -44,25 +44,43 @@ const EVENEMENTS = {
   demande: { categorie: 'demandes' },
   message: { categorie: 'messages' },
   'message-projet': { categorie: 'messages' },
-  tache: { categorie: 'demandes' },
-  'tache-attente': { categorie: 'demandes' },
+  /* Une tâche est la vie du projet, pas une demande du client : la
+     catégorie « Vie du projet » des préférences la range avec les étapes. */
+  tache: { categorie: 'projet' },
+  'tache-attente': { categorie: 'projet' },
   jalon: { categorie: 'projet' },
   projet: { categorie: 'projet' },
   release: { categorie: 'releases' },
   fichier: { categorie: 'fichiers' },
   reunion: { categorie: 'reunions' },
+  'reunion-rappel': { categorie: 'reunions' },
   'validation-demandee': { categorie: 'validations' },
   validation: { categorie: 'validations' },
   note: { categorie: 'projet' },
   blocage: { categorie: 'projet' },
+  /* Un point bloquant de son côté : la lettre dit ce qu'on attend de lui. */
+  'blocage-client': { categorie: 'projet' },
+  /* La réponse du client sur une tâche : une lettre à l'équipe. */
+  'tache-reponse': { categorie: 'demandes' },
   maintenance: { categorie: 'projet' },
+  'evolution-statut': { categorie: 'projet' },
   relance: { categorie: 'relance' },
   devis: { categorie: 'finances', responsable: true },
   facture: { categorie: 'finances', responsable: true },
   paiement: { categorie: 'finances', responsable: true },
+  /* Une facture qui approche de son échéance, une facture passée en
+     retard, un règlement déclaré par le client : la finance, au
+     responsable seul. */
+  'facture-echeance': { categorie: 'finances', responsable: true },
+  'facture-retard': { categorie: 'finances', responsable: true },
+  'reglement-declare': { categorie: 'finances', responsable: true },
   ouverture: { categorie: 'projet', essentiel: true },
   invitation: { categorie: 'projet', essentiel: true },
   test: { categorie: 'projet' },
+  /* Les tests avant la sortie : une anomalie trouvée ou corrigée, une
+     campagne qui s'ouvre ou se ferme. */
+  anomalie: { categorie: 'projet' },
+  campagne: { categorie: 'projet' },
   'testeur-termine': { categorie: 'projet' },
   'testeur-remarque': { categorie: 'projet' },
   'message-testeur': { categorie: 'messages' },
@@ -246,6 +264,17 @@ async function ecrireAuxClients(projetOuId, evenement, modele, variables, option
   const projet = await lireProjet(projetOuId);
   const { destinataires } = await destinatairesClients(projet, evenement, options);
   if (!destinataires.length) return null;
+  /* « parDestinataire » : une lettre par personne, qui la salue par son
+     nom (« par »), comme la relance. Sans cela, l'accusé d'une demande
+     saluait l'auteur et partait tel quel à tous ses collègues. */
+  if (options.parDestinataire) {
+    let dernier = null;
+    for (const d of destinataires) {
+      const id = await mettreEnFile(modele, [d], { ...variables, par: d.nom }, { projet: projet && projet.id, evenement });
+      dernier = id || dernier;
+    }
+    return dernier;
+  }
   /* Un montant qui accompagne un événement ordinaire (le prix d'un forfait)
      ne part qu'aux responsables : les autres reçoivent la même lettre, sans
      lui. */

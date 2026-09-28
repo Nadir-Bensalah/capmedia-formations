@@ -112,6 +112,7 @@ export const vue = async (ctx, env) => {
 
     const publiees = versions.filter((v) => v.statut === 'disponible');
     const derniere = publiees[0] || versions[0] || null;
+    const enRoute = versions.find((v) => ['test', 'soumise', 'revue'].includes(v.statut)) || null;
 
     sortie.innerHTML = `<div class="page">
       <header class="page-tete page-tete--projet">
@@ -123,8 +124,11 @@ export const vue = async (ctx, env) => {
             <div class="rang tete-suivi">
               ${composant ? pastille(STATUTS_COMPOSANT, composant.statut || 'en-cours') : '<span class="etiquette">Pas encore suivie</span>'}
               ${fiche ? pucePlateforme(cle) : ''}
-              ${composant && composant.version ? `<span class="puce">${icone('releases')} Version ${echapper(composant.version)}</span>` : ''}
-              ${composant && composant.versionPrep ? `<span class="puce">${icone('sparkle')} ${echapper(composant.versionPrep)} en préparation</span>` : ''}
+              ${/* La version se lit sur les versions réelles, pas sur un
+                    champ de la partie : la dernière disponible, et la
+                    dernière en route. */ ''}
+              ${derniere && derniere.statut === 'disponible' ? `<span class="puce">${icone('releases')} ${echapper(derniere.version || '')} disponible${derniere.date ? ` depuis le ${echapper(dateCourte(derniere.date))}` : ''}</span>` : ''}
+              ${enRoute ? `<span class="puce">${icone('sparkle')} ${echapper(enRoute.version || '')} ${echapper(((STATUTS_RELEASE[enRoute.statut] || {}).libelle || 'en test').toLowerCase())}${enRoute.build ? ` · build ${echapper(enRoute.build)}` : ''}</span>` : ''}
               ${composant && composant.environnement ? `<span class="puce">${icone('serveur')} ${echapper(composant.environnement)}</span>` : ''}
               ${composant && composant.responsable && (d.equipe.find((m) => m.id === composant.responsable) || {}).nom ? `<span class="puce">${icone('utilisateur')} ${echapper((d.equipe.find((m) => m.id === composant.responsable) || {}).nom)}</span>` : ''}
             </div>
@@ -142,7 +146,7 @@ export const vue = async (ctx, env) => {
       ${composant && composant.description ? `<div class="carte carte--serree" style="margin-bottom:var(--e-5)"><div class="prose">${enParagraphes(composant.description)}</div></div>` : ''}
 
       <div class="metriques">
-        ${metrique(`${borner(composant ? composant.progression : 0)} %`, 'Avancement')}
+        ${composant ? metrique(`${borner(composant.progression)} %`, 'Avancement de la partie', { nuance: composant.maj ? `au ${dateCourte(composant.maj)}` : '' }) : metrique('Pas encore suivie', 'Avancement')}
         ${metrique(publiees.length, 'Versions publiées', { nuance: versions.length > publiees.length ? `${versions.length - publiees.length} en cours` : '' })}
         ${metrique(ouvertes.length, 'Tâches ouvertes', { nuance: `${taches.length} au total` })}
         ${metrique(demandesOuvertes.length, 'Demandes ouvertes', { ton: demandesOuvertes.length ? 'accent' : '' })}
@@ -253,7 +257,7 @@ export const vue = async (ctx, env) => {
           icone: t.statut === 'terminee' ? 'check' : 'taches', ton: t.statut === 'terminee' ? 'vert' : t.statut === 'bloquee' ? 'rouge' : '',
           titre: echapper(t.titre),
           sous: echapper([t.echeance ? `échéance ${dateCourte(t.echeance)}` : '', t.estimation].filter(Boolean).join(' · ')),
-          fin: `${puce(PRIORITES, t.priorite || 'normale')}${pastille(STATUTS_TACHE, t.statut || 'a-faire')}`,
+          fin: `${puce(PRIORITES, t.priorite || 'normale')}${pastille(STATUTS_TACHE, t.statut || 'a-faire', { client: !equipe })}`,
         })).join('')}</div>` : vide({ icone: 'taches', titre: 'Aucune tâche sur cette brique', compact: true })}
       </section>
 

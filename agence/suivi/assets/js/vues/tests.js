@@ -159,7 +159,7 @@ const EXPLICATIONS = {
     <p>Chacune teste sur son propre téléphone, iPhone ou Android, et sur le web. On s'arrange pour que les vérifications importantes soient faites par au moins deux personnes sur deux systèmes différents.</p>
     <p>Côté client, les testeurs apparaissent sans leur nom ni leur adresse : on voit l'âge, le métier, l'aisance avec un téléphone et les appareils. C'est ce qu'il faut pour lire un avis en sachant d'où il vient, et rien de plus.</p>` },
   'parcours': { titre: 'Les parcours automatisés', corps: `
-    <p>Un parcours automatisé, c'est une vérification qu'un robot rejoue tout seul, à chaque nouvelle version de l'application, sans qu'un humain touche à rien. Par exemple : « créer un rappel, puis vérifier qu'il apparaît bien dans la liste ».</p>
+    <p>Un parcours automatisé, c'est une vérification rejouée toute seule par un programme, à chaque nouvelle version de l'application, sans qu'un humain touche à rien. Par exemple : « créer un rappel, puis vérifier qu'il apparaît bien dans la liste ».</p>
     <p>L'intérêt : une fois écrit, il tourne à chaque fois, pour toujours. Un défaut corrigé ne peut plus revenir sans qu'on le voie.</p>
     <p>Les états, dans l'ordre :</p>
     <ul>
@@ -170,10 +170,10 @@ const EXPLICATIONS = {
       <li><b>Instable</b> : il réussit une fois, échoue la fois suivante, sans que rien n'ait changé. C'est pire que rouge, parce qu'on finit par ne plus le croire.</li>
     </ul>
     <p><b>Éprouvé par mutation</b>, ça veut dire qu'on a cassé l'application exprès pour vérifier que le parcours s'en apercevait. Un parcours vert qui n'a jamais été éprouvé ne prouve rien : peut-être qu'il ne regarde pas la bonne chose. C'est le chiffre le plus honnête de la page.</p>
-    <p>La jauge montre la part de chaque état. Aujourd'hui elle est presque entièrement grise : les parcours sont prévus, pas encore écrits.</p>` },
+    <p>La jauge montre la part de chaque état.</p>` },
   'regles': { titre: 'Les règles métier', corps: `
     <p>Une règle métier, c'est un calcul que l'application fait dans son coin, sans écran : par exemple « une tâche tous les mardis pendant deux mois, ça donne quelles dates ? ».</p>
-    <p>Ces calculs se vérifient sans téléphone et sans robot qui clique : on donne une question, on compare la réponse. Ça prend une fraction de seconde, donc on peut en essayer des centaines là où un testeur humain en essaie trois. C'est pour ça qu'on compte en <b>cas essayés</b> et pas en tests.</p>
+    <p>Ces calculs se vérifient sans téléphone et sans personne qui clique : on donne une question, on compare la réponse. Ça prend une fraction de seconde, donc on peut en essayer des centaines là où un testeur humain en essaie trois. C'est pour ça qu'on compte en <b>cas essayés</b> et pas en tests.</p>
     <p>Une <b>famille</b> regroupe les cas d'une même règle. Les barres montrent combien de cas chaque famille essaie : plus la barre est longue, plus la règle est fouillée.</p>
     <p>Les états sont les mêmes que pour les parcours : <b>à écrire</b> (prévu, pas encore programmé), <b>vert</b> (tout juste), <b>rouge</b> (une réponse fausse).</p>` },
   'scenarios': { titre: 'La bibliothèque de scénarios', corps: `
@@ -599,7 +599,7 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
   const machine = `<b>${parc.length}</b> parcours d'interface et <b>${casRegles}</b> cas de règles rejoués à chaque version${parc.length ? `, <b>${parcVerts}</b> ${parcVerts > 1 ? 'parcours au vert' : 'parcours au vert'}` : ''}.`;
   const bibli = `<b>${scen.length}</b> scénarios en <b>${parBloc.length}</b> blocs, soit <b>${passages}</b> passages mobiles par campagne complète.`;
 
-  const devisProjet = devisAvecEtapes((d.documents || []).filter((x) => x.projet === pid), (d.jalons || []).filter((j) => projetDe(j) === pid));
+  const devisProjet = devisAvecEtapes((d.documents || []).filter((x) => x.projet === pid), (d.jalons || []).filter((j) => projetDe(j) === pid), { equipe });
   const jalonsProjet = (d.jalons || []).filter((j) => projetDe(j) === pid);
   const etapesDevis = jalonsProjet.filter((j) => devisProjet.some((dv) => dv.id === j.devis));
   const etapesFaites = etapesDevis.filter((j) => j.statut === 'termine');
@@ -745,7 +745,10 @@ const ouvrirAnomalie = (a, { equipe, pid, env, scenarios }) => {
           fin: (t.preuves || []).map((c, i) => `<button class="btn btn-doux btn-petit" type="button" data-piece="${echapper(c)}">${icone('image')} Preuve ${i + 1}</button>`).join(''),
         })).join('')}</div>` : `<p class="aide">Posée à la main, sans échec de testeur derrière.</p>`}
       </div>`,
-    pied: `${equipe ? `<button class="btn btn-secondaire" type="button" data-qualifier>${icone('edit')} Qualifier</button>` : ''}<span class="pousse"></span><button class="btn btn-principal" type="button" data-fermer>Fermer</button>`,
+    /* Le client en fait une demande : elle est alors suivie comme
+       n'importe quel signalement, avec le lien vers l'anomalie. */
+    pied: `${equipe ? `<button class="btn btn-secondaire" type="button" data-qualifier>${icone('edit')} Qualifier</button>`
+      : `<a class="btn btn-secondaire" href="#/projets/${echapper(pid)}/nouvelle-demande?type=bug&titre=${encodeURIComponent(String(a.titre || a.scenario || 'Anomalie').slice(0, 120))}&anomalie=${encodeURIComponent(a.id || '')}" data-demande-anomalie>${icone('demandes')} En faire une demande</a>`}<span class="pousse"></span><button class="btn btn-principal" type="button" data-fermer>Fermer</button>`,
   });
 };
 
@@ -1473,6 +1476,21 @@ export const vue = async (ctx, env) => {
   const surChangement = () => { suivre(); rendre(); };
   suivre();
   rendre(true);
+
+  /* Une notification mène droit à sa fiche : « ?anomalie= » ou
+     « ?campagne= » dans l'adresse ouvre l'anomalie ou la campagne dès
+     qu'elle est là, une seule fois. */
+  const aOuvrir = { anomalie: lire(ctx, 'anomalie', ''), campagne: lire(ctx, 'campagne', '') };
+  let essais = 0;
+  const ouvrirDepuisAdresse = () => {
+    if (!aOuvrir.anomalie && !aOuvrir.campagne) return;
+    essais += 1;
+    const cible = aOuvrir.anomalie ? `[data-action="ouvrir-anomalie"][data-id="${aOuvrir.anomalie}"]` : `[data-action="ouvrir-campagne"][data-id="${aOuvrir.campagne}"]`;
+    const el = sortie.querySelector(cible);
+    if (el) { aOuvrir.anomalie = ''; aOuvrir.campagne = ''; el.click(); return; }
+    if (essais < 20) setTimeout(ouvrirDepuisAdresse, 500);
+  };
+  ouvrirDepuisAdresse();
 
   return () => { gestes(); lot.fin(); if (tableau) tableau.fin(); };
 };

@@ -18,7 +18,7 @@ import {
 import { icone, modale, confirmer, toast, lireForme, valider, obligatoire, longueurMax, urlValide, emailValide, optionsDe, depot, agir, lisible, choixPlateformes } from '../ui.js';
 import { appelServeur } from '../serveur.js';
 import * as magasin from '../magasin.js';
-import { K, ecrire, nouvelId, interneDuProjet, montantDe } from '../donnees.js';
+import { K, ecrire, nouvelId, interneDuProjet, montantDe, horodatage } from '../donnees.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 
@@ -301,12 +301,25 @@ const editeurs = {
     /* Un agent tient l'avancement ; l'identité du projet (nom, type,
        plateformes, responsable, projet à moi) reste à l'administrateur.
        Les règles refusent le reste : on n'envoie que ce qui est permis. */
-    enregistrer: (d) => ecrire.majProjet(pid, {
+    enregistrer: (d) => {
+      const pulse = { enCours: d.pulseEnCours, derniereLivraison: d.pulseDerniereLivraison, prochaineEtape: d.pulseProchaineEtape, attenteClient: d.pulseAttenteClient };
+      const avant = fiche.pulse || {};
+      /* Le pouls est daté et signé quand son texte change : le client lit
+         « mis à jour le … par … » et sait si la phrase est fraîche. Une
+         sauvegarde qui ne touche pas au pouls ne le rajeunit pas. */
+      const poulsChange = ['enCours', 'derniereLivraison', 'prochaineEtape', 'attenteClient'].some((c) => String(pulse[c] || '') !== String(avant[c] || ''));
+      /* Pareil pour l'estimation à la main : sa date dit depuis quand
+         Capmedia pense ça. */
+      const progression = { mode: d.progressionMode, valeur: borner(d.progressionValeur) };
+      const estimationChange = progression.mode === 'manuel' && progression.valeur !== borner((fiche.progression || {}).valeur);
+      progression.le = estimationChange ? new Date() : ((fiche.progression || {}).le || null);
+      return ecrire.majProjet(pid, {
       statut: d.statut, description: d.description,
       debut: d.debut ? new Date(d.debut) : null, cible: d.cible ? new Date(d.cible) : null,
       reports: reportsMaj(fiche, 'cible', d.cible, d, env.session),
-      progression: { mode: d.progressionMode, valeur: borner(d.progressionValeur) },
-      pulse: { enCours: d.pulseEnCours, derniereLivraison: d.pulseDerniereLivraison, prochaineEtape: d.pulseProchaineEtape, attenteClient: d.pulseAttenteClient },
+      progression,
+      pulse,
+      ...(poulsChange ? { pulseMaj: horodatage(), pulsePar: nomAffiche(env.session) } : {}),
       ...(estAdmin(env.session) ? {
         nom: d.nom, type: d.type,
         plateformes: Array.isArray(d.plateformes) ? d.plateformes : (d.plateformes ? [d.plateformes] : []),
@@ -315,7 +328,8 @@ const editeurs = {
     })
       /* La santé est interne : elle vit à part, dans projetsInternes. */
       .then(() => (d.sante !== (interneDuProjet(pid).sante || 'ok') ? ecrire.majProjetInterne(pid, { sante: d.sante }) : null))
-      .then(() => toast('Projet mis à jour.')),
+      .then(() => toast('Projet mis à jour.'));
+    },
   }),
 
   composant: (env, { pid, fiche, defaut = {} }) => feuille({
@@ -1091,10 +1105,27 @@ const editeurs = {
       ${champ('environnement', 'Environnement', fiche ? fiche.environnement : '', { facultatif: true, placeholder: 'Production, Staging, TestFlight' })}
       ${champ('description', 'Description', fiche ? fiche.description : '', { facultatif: true })}
       ${visibilite(fiche ? fiche.visibilite : 'client')}
+      <div id="ed-acces" hidden>${champ('identifiants', 'Identifiants', fiche ? fiche.identifiants : '', { facultatif: true, placeholder: 'compte-test@exemple.fr', aide: "L'identifiant que le client doit connaître pour ce compte (adresse, nom d'utilisateur). Le mot de passe se transmet autrement, jamais ici." })}</div>
       <p class="aide">Jamais de mot de passe, de jeton ni de clé dans un lien ou sa description.</p>`,
-    regles: { nom: obligatoire(), url: (v) => obligatoire()(v) || urlValide()(v) },
+    /* Le champ « Identifiants » n'a de sens que pour un accès partagé au
+       client : il apparaît quand la catégorie et la visibilité le disent,
+       et se vide sinon, pour ne pas laisser traîner un identifiant sur un
+       lien devenu interne. */
+    surMontage: (racine) => {
+      const cat = racine.querySelector('#ed-categorie');
+      const bloc = racine.querySelector('#ed-acces');
+      const montrer = () => {
+        const vis = racine.querySelector('input[name="visibilite"]:checked');
+        bloc.hidden = !(cat.value === 'acces' && (!vis || vis.value === 'client'));
+      };
+      cat.addEventListener('change', montrer);
+      racine.querySelectorAll('[name="visibilite"]').forEach((el) => el.addEventListener('change', montrer));
+      montrer();
+    },
+    regles: { nom: obligatoire(), url: (v) => obligatoire()(v) || urlValide()(v), identifiants: longueurMax(300) },
     enregistrer: async (d) => {
-      if (fiche) await ecrire.majLien(pid, fiche.id, d); else await ecrire.creerLien(pid, d);
+      const donnees = { ...d, identifiants: d.categorie === 'acces' && d.visibilite === 'client' ? String(d.identifiants || '').trim() : '' };
+      if (fiche) await ecrire.majLien(pid, fiche.id, donnees); else await ecrire.creerLien(pid, donnees);
       toast(fiche ? 'Lien mis à jour.' : 'Lien ajouté.');
     },
   }),
@@ -1111,20 +1142,23 @@ const editeurs = {
         ${select('statut', 'Statut', STATUTS_RELEASE, fiche ? fiche.statut : 'developpement')}
         ${champ('date', 'Date', fiche ? dateISO(fiche.date) : dateISO(new Date()), { type: 'date' })}
       </div>
-      ${select('composant', 'Partie du projet', composantsDe(pid), fiche ? fiche.composant : '', { vide: 'Aucune' })}
+      <div class="forme-rang">
+        ${select('composant', 'Partie du projet', composantsDe(pid), fiche ? fiche.composant : '', { vide: 'Aucune' })}
+        ${champ('build', 'Numéro de build', fiche ? fiche.build : '', { facultatif: true, placeholder: '87', aide: 'Celui de TestFlight ou de la console Play : le client le cite quand il signale quelque chose.' })}
+      </div>
       ${zone('notes', 'Changements', fiche ? (fiche.notes || []).map((n) => `${n.type}: ${n.texte}`).join('\n') : '', { aide: 'Une ligne par changement, précédée de nouveau:, amelioration:, correction: ou technique:.', lignes: 5, placeholder: 'correction: Connexion Apple\nnouveau: Profil' })}
       <div class="forme-rang">
-        ${champ('lienStore', 'Lien App Store / Play', fiche ? (fiche.liens || {}).store : '', { type: 'url', facultatif: true })}
-        ${champ('lienTest', 'Lien de test', fiche ? (fiche.liens || {}).test : '', { type: 'url', facultatif: true })}
+        ${champ('lienStore', 'Lien App Store ou Play Store', fiche ? (fiche.liens || {}).store : '', { type: 'url', facultatif: true })}
+        ${champ('lienTest', 'Lien TestFlight ou Play interne', fiche ? (fiche.liens || {}).test : '', { type: 'url', facultatif: true })}
       </div>
       ${visibilite(fiche ? fiche.visibilite : 'client')}`,
-    regles: { version: obligatoire(), lienStore: urlValide(), lienTest: urlValide() },
+    regles: { version: obligatoire(), lienStore: urlValide(), lienTest: urlValide(), build: longueurMax(40) },
     enregistrer: async (d) => {
       const notes = d.notes ? d.notes.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => {
         const m = l.match(/^(nouveau|amelioration|correction|technique)\s*:\s*(.+)$/i);
         return m ? { type: m[1].toLowerCase(), texte: m[2].trim() } : { type: 'amelioration', texte: l };
       }) : [];
-      const donnees = { version: d.version, plateforme: d.plateforme, titre: d.titre, statut: d.statut, date: d.date ? new Date(d.date) : null, composant: d.composant, notes, liens: { store: d.lienStore, test: d.lienTest }, visibilite: d.visibilite };
+      const donnees = { version: d.version, plateforme: d.plateforme, titre: d.titre, statut: d.statut, date: d.date ? new Date(d.date) : null, composant: d.composant, build: String(d.build || '').trim(), notes, liens: { store: d.lienStore, test: d.lienTest }, visibilite: d.visibilite };
       if (fiche) await ecrire.majRelease(fiche.id, donnees); else await ecrire.creerRelease(env.session, pid, donnees);
       toast(fiche ? 'Version mise à jour.' : 'Version créée.');
     },
@@ -1138,19 +1172,27 @@ const editeurs = {
         ${champ('date', 'Date et heure', fiche ? dateHeureISO(fiche.date) : '', { type: 'datetime-local' })}
         ${champ('duree', 'Durée (minutes)', fiche ? fiche.duree : 45, { type: 'number' })}
       </div>
-      ${champ('lien', 'Lien de visioconférence', fiche ? fiche.lien : '', { type: 'url', facultatif: true, placeholder: 'https://meet.google.com/...' })}
+      <div class="forme-rang">
+        ${champ('lien', 'Lien de visioconférence', fiche ? fiche.lien : '', { type: 'url', facultatif: true, placeholder: 'https://meet.google.com/...' })}
+        ${champ('lieu', 'Lieu', fiche ? fiche.lieu : '', { facultatif: true, placeholder: 'Dans vos locaux, 12 rue…', aide: "Repris dans le fichier d'agenda du client." })}
+      </div>
       ${champ('participants', 'Participants', fiche ? (fiche.participants || []).map((p) => p.nom || p.email).join(', ') : '', { facultatif: true, aide: 'Séparés par des virgules.' })}
       ${zone('ordreDuJour', "Ordre du jour", fiche ? fiche.ordreDuJour : '', { facultatif: true, lignes: 3 })}
-      ${zone('compteRendu', 'Compte rendu', fiche ? fiche.compteRendu : '', { facultatif: true, lignes: 4 })}
+      ${zone('compteRendu', 'Compte rendu', fiche ? fiche.compteRendu : '', { facultatif: true, lignes: 4, aide: 'Le client lit « publié le … » : la date se pose quand le texte change.' })}
       ${zone('decisions', 'Décisions prises', fiche ? fiche.decisions : '', { facultatif: true, lignes: 2 })}
-      ${zone('actions', 'Actions à réaliser', fiche ? (fiche.actions || []).map((a) => `${a.fait ? '[x] ' : ''}${a.texte}`).join('\n') : '', { facultatif: true, aide: 'Une ligne par action.', lignes: 2 })}
+      ${zone('actions', 'Actions à réaliser', fiche ? (fiche.actions || []).map((a) => `${a.fait ? '[x] ' : ''}${a.texte}`).join('\n') : '', { facultatif: true, aide: 'Une ligne par action. Le client peut cocher lui-même ce qui est fait.', lignes: 2 })}
       ${visibilite(fiche ? fiche.visibilite : 'client')}`,
-    regles: { titre: obligatoire(), date: obligatoire('Une réunion a une date.'), lien: urlValide() },
+    regles: { titre: obligatoire(), date: obligatoire('Une réunion a une date.'), lien: urlValide(), lieu: longueurMax(200) },
     enregistrer: async (d) => {
+      const compteRendu = String(d.compteRendu || '');
+      const ancien = String((fiche && fiche.compteRendu) || '');
       const donnees = {
         ...d, date: new Date(d.date), duree: Number(d.duree) || 45,
         participants: d.participants ? d.participants.split(',').map((p) => p.trim()).filter(Boolean).map((nom) => ({ nom })) : [],
         actions: d.actions ? d.actions.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => ({ fait: /^\[x\]/i.test(l), texte: l.replace(/^\[[ x]?\]\s*/i, '') })) : [],
+        /* Le compte rendu est daté au moment où son texte change : le
+           client lit « publié le … ». Un compte rendu effacé perd sa date. */
+        compteRenduLe: compteRendu !== ancien ? (compteRendu ? new Date() : null) : ((fiche && fiche.compteRenduLe) || null),
       };
       if (fiche) await ecrire.majReunion(fiche.id, donnees); else await ecrire.creerReunion(env.session, pid, donnees);
       toast(fiche ? 'Réunion mise à jour.' : 'Réunion programmée.');
@@ -1189,18 +1231,20 @@ const editeurs = {
         ${select('responsable', 'Responsable', { client: 'Le client', capmedia: 'Capmedia', tiers: 'Un tiers' }, fiche ? fiche.responsable : 'client')}
         ${champ('depuis', 'Depuis le', fiche ? dateISO(fiche.depuis) : dateISO(new Date()), { type: 'date' })}
       </div>
+      ${zone('attendu', 'Ce qu\'on attend du client', fiche ? fiche.attendu : '', { facultatif: true, lignes: 2, placeholder: 'Créer le compte développeur Google et nous y inviter.', aide: 'Le client lit cette phrase telle quelle dans sa fiche du point bloquant, avec un bouton « C\'est fait ».' })}
+      ${champ('echeance', 'Attendu pour le', fiche && fiche.echeance ? dateISO(fiche.echeance) : '', { type: 'date', facultatif: true })}
       ${champ('impact', 'Impact', fiche ? fiche.impact : '', { facultatif: true, placeholder: 'Publication Android retardée.' })}
       ${visibilite(fiche ? fiche.visibilite : 'client')}`,
     regles: { titre: obligatoire() },
     enregistrer: async (d) => {
-      const donnees = { ...d, depuis: d.depuis ? new Date(d.depuis) : new Date() };
+      const donnees = { ...d, depuis: d.depuis ? new Date(d.depuis) : new Date(), echeance: d.echeance ? new Date(d.echeance) : null };
       if (fiche) await ecrire.majBlocage(fiche.id, donnees); else await ecrire.creerBlocage(pid, donnees);
       toast(fiche ? 'Point bloquant mis à jour.' : 'Point bloquant signalé.');
     },
   }),
 
   validation: (env, { pid, fiche, defaut = {} }) => feuille({
-    titre: 'Demander une validation', sousTitre: 'Le client reçoit un e-mail et retrouve la demande dans « À valider ».',
+    titre: 'Demander une validation', sousTitre: 'Le client reçoit un e-mail et retrouve la demande dans « En attente de vous ».',
     corps: `
       ${champ('titre', 'Titre', defaut.titre || '', { placeholder: 'Valider la maquette du profil' })}
       ${select('type', 'Nature', TYPES_VALIDATION, defaut.type || 'autre')}
@@ -1256,10 +1300,12 @@ const editeurs = {
       </div>
       ${select('release', 'Livrée dans la version', releasesDe(pid), fiche.release || '', { vide: 'Pas encore fixée', aide: "Le client lit le nom de la version qui porte la correction, au lieu de le demander." })}
       ${select('devis', 'Devis lié', devisDe(pid), fiche.devis || '', { vide: 'Aucun', aide: 'Pour une demande à chiffrer : le client trouve le lien vers son devis dans la fiche de la demande.' })}
-      ${champ('titre', 'Titre', fiche.titre)}`,
-    regles: { titre: obligatoire(), plateforme: () => '' },
+      ${champ('titre', 'Titre', fiche.titre)}
+      ${zone('motifRefus', 'Pourquoi elle est refusée', fiche.motifRefus || '', { facultatif: true, lignes: 2, aide: 'Obligatoire pour un refus : le client lit ce motif dans le bandeau de sa demande.' })}`,
+    /* Un refus sans motif laissait le client devant « Refusée », sans un mot. */
+    regles: { titre: obligatoire(), plateforme: () => '', motifRefus: (v, d) => (d.statut === 'refuse' && !String(v || '').trim() ? 'Dites au client pourquoi cette demande est refusée.' : '') },
     enregistrer: async (d) => {
-      const changements = { statut: d.statut, urgence: d.urgence, assigne: d.assigne || null, composant: d.composant, qualification: d.qualification || null, plateforme: d.plateforme, titre: d.titre, release: d.release || null, devis: d.devis || null };
+      const changements = { statut: d.statut, urgence: d.urgence, assigne: d.assigne || null, composant: d.composant, qualification: d.qualification || null, plateforme: d.plateforme, titre: d.titre, release: d.release || null, devis: d.devis || null, motifRefus: String(d.motifRefus || '').trim() || null };
       if (d.statut === 'resolu' && fiche.statut !== 'resolu') changements.resolu = new Date();
       await ecrire.majDemande(fiche.id, changements);
       toast('Demande mise à jour.');

@@ -1,10 +1,11 @@
 /* ==========================================================================
    Devis, factures, paiements : la vue du client. Il consulte, télécharge,
-   accepte ou refuse un devis, pose une question, voit ce qui reste à payer.
+   accepte ou refuse un devis (avec un motif), pose une question, voit ce
+   qui reste à payer et comment le régler, déclare un règlement.
    ========================================================================== */
 
-import { echapper, dateCourte, dateHeure, montant, montantHT, montantTTC, montantPiece, ttcDe, parDateDesc, joursAvant, avecLiens, STATUTS_DEVIS, STATUTS_FACTURE, FACTURES_DUES, MOYENS_PAIEMENT, PORTEES_DEVIS, estResponsable, devisADecider, devisExpire, statutPiece } from '../noyau.js';
-import { icone, pastille, ligne, vide, squelette, titrePage, modale, confirmer, toast, sur, agir, metrique, fait, encart, brancherPieces, depot } from '../ui.js';
+import { echapper, dateCourte, dateHeure, dateISO, montant, montantHT, montantTTC, montantPiece, ttcDe, parDateDesc, joursAvant, avecLiens, STATUTS_DEVIS, STATUTS_FACTURE, FACTURES_DUES, MOYENS_PAIEMENT, PORTEES_DEVIS, estResponsable, devisADecider, devisExpire, statutPiece } from '../noyau.js';
+import { icone, pastille, ligne, vide, squelette, titrePage, modale, confirmer, toast, sur, agir, metrique, fait, encart, brancherPieces, depot, lireForme, valider, optionsDe } from '../ui.js';
 import { appelServeur } from '../serveur.js';
 import * as magasin from '../magasin.js';
 import { K, G, agreger, ecrire, resteAPayer } from '../donnees.js';
@@ -14,7 +15,57 @@ import { lienPiece } from '../noyau.js';
 import { friseDevis, brancherFrise } from './frise.js';
 import { telechargerPiece } from '../telecharger-piece.js';
 
-export const ouvrirDocument = (d, env, { projets, paiements }) => {
+/* Une case vide se lit avec un tiret, jamais avec rien. */
+const TIRET = '-';
+
+/* Les pièces d'un projet, telles que le magasin les a : le client sur sa
+   clé, l'équipe en groupe. Sert à retrouver le devis d'où découle une
+   facture. */
+const piecesDe = (pid, documents = []) => [...documents, ...(magasin.lire(K.documents(pid)) || []), ...(magasin.lire(K.documentsTous) || [])]
+  .filter((x, i, l) => x && l.findIndex((y) => y.id === x.id) === i);
+
+/* Le lien vers une question sur un devis : la fiche de demande lit le
+   type, le titre et le devis dans l'adresse. */
+const lienQuestion = (d) => `#/projets/${encodeURIComponent(d.projet)}/nouvelle-demande?type=question&devis=${encodeURIComponent(d.id)}&titre=${encodeURIComponent(`Question sur le devis ${d.numero || ''}`.trim())}`;
+
+/* « J'ai réglé cette facture » : date, moyen, référence, montant (le
+   reste à payer, modifiable). Le client déclare, l'équipe confirme. */
+const declarerReglement = (env, d, reste) => {
+  const m = modale({
+    titre: "J'ai réglé cette facture", sousTitre: `${d.numero || ''} · nous confirmons dès réception du règlement.`,
+    corps: `<form class="forme" id="f-regl" novalidate>
+      <div class="forme-rang"><div class="groupe"><label class="etiquette-champ" for="r-montant">Montant réglé (€ TTC)</label><input class="champ" id="r-montant" name="montant" type="number" min="0.01" step="0.01" value="${reste.toFixed(2)}"></div><div class="groupe"><label class="etiquette-champ" for="r-date">Réglé le</label><input class="champ" id="r-date" name="date" type="date" value="${dateISO(new Date())}" max="${dateISO(new Date())}"></div></div>
+      <div class="forme-rang"><div class="groupe"><label class="etiquette-champ" for="r-moyen">Moyen</label><select class="select" id="r-moyen" name="moyen">${optionsDe(MOYENS_PAIEMENT, 'virement', { exclure: ['stripe'] })}</select></div><div class="groupe"><label class="etiquette-champ" for="r-ref">Référence <span class="facultatif">(facultatif)</span></label><input class="champ" id="r-ref" name="reference" maxlength="80" placeholder="Libellé ou numéro du virement"></div></div>
+      <p class="aide">Cette déclaration nous prévient tout de suite. La facture reste « ${echapper((STATUTS_FACTURE[statutPiece(d)] || {}).libelle || '')} » jusqu'à ce que nous ayons enregistré le règlement.</p></form>`,
+    pied: `<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button><span class="pousse"></span><button class="btn btn-principal" type="submit" form="f-regl">Déclarer ce règlement</button>`,
+  });
+  m.el.querySelector('#f-regl').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!valider(e.target, { montant: (v) => (v === null || v <= 0 ? 'Un montant est attendu.' : ''), date: (v) => (!v ? 'Une date est attendue.' : '') })) return;
+    const r = lireForme(e.target);
+    if (await agir(m.pied.querySelector('[type="submit"]'), () => ecrire.declarerReglement(env.session, d.id, r), 'Merci. Nous confirmons dès réception.')) m.fermer(true);
+  });
+  return m.fin;
+};
+
+/* Le refus d'un devis demande son motif : sans lui, l'équipe ne sait pas
+   quoi ajuster, et le client a déjà cliqué une fois. */
+const refuserDevis = (env, d, motifPropose = '') => {
+  const m = modale({
+    titre: `Refuser le devis ${d.numero || ''}`.trim(), sousTitre: 'Dites-nous ce qui coince : on peut ajuster, et revenir vers vous.',
+    corps: `<form class="forme" id="f-refus" novalidate><div class="groupe"><label class="etiquette-champ" for="motif-refus">Le motif</label><textarea class="zone" id="motif-refus" name="motif" rows="4" maxlength="2000" placeholder="Trop cher, pas le bon périmètre, un délai qui ne convient pas…">${echapper(motifPropose)}</textarea></div></form>`,
+    pied: `<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button><span class="pousse"></span><button class="btn btn-danger" type="submit" form="f-refus">Refuser le devis</button>`,
+  });
+  m.el.querySelector('#f-refus').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!valider(e.target, { motif: (v) => (!v ? 'Un motif est attendu : il part avec votre refus.' : '') })) return;
+    const { motif } = lireForme(e.target);
+    if (await agir(m.pied.querySelector('[type="submit"]'), () => ecrire.repondreDevis(env.session, d.id, 'refuse', motif), 'Devis refusé. Nous revenons vers vous.')) m.fermer(true);
+  });
+  return m.fin;
+};
+
+export const ouvrirDocument = (d, env, { projets, paiements, documents = [] }) => {
   const equipe = env.role === 'equipe';
   const projet = projets.find((p) => p.id === d.projet) || {};
   const devis = d.type === 'devis';
@@ -28,21 +79,44 @@ export const ouvrirDocument = (d, env, { projets, paiements }) => {
   const responsable = !equipe && estResponsable(env.session, projet.id ? projet : d.projet);
   const decidable = !equipe && responsable && devisADecider(d);
   const perime = devisExpire(d);
+  const due = !devis && FACTURES_DUES.includes(d.statut);
+  const etat = statutPiece(d);
   if (decidable && d.statut === 'envoye') ecrire.consulterDevis(d.id).catch(() => {});
+
+  /* Le devis dont une facture découle, s'il est lisible d'ici. */
+  const origine = !devis && d.devis ? (piecesDe(d.projet, documents).find((x) => x.id === d.devis) || null) : null;
+  /* Le règlement déclaré par le client, confirmé ou en attente. */
+  const declare = !devis && d.reglementDeclare ? d.reglementDeclare : null;
+  const confirme = Boolean(declare && (declare.confirme || d.statut === 'payee'));
+  const coordonnees = magasin.lire(K.reglages) || null;
+  const avecIban = Boolean(coordonnees && coordonnees.iban);
+  const ibanLisible = avecIban ? String(coordonnees.iban).replace(/(.{4})/g, '$1 ').trim() : '';
+
+  const encartDeclaration = declare ? encart(confirme
+    ? `<strong>Confirmé.</strong> Vous avez déclaré un règlement de ${echapper(montantTTC(declare.montant, 2))} le ${echapper(dateCourte(declare.date))}${declare.moyen ? ` par ${echapper((MOYENS_PAIEMENT[declare.moyen] || declare.moyen).toLowerCase())}` : ''} : nous l'avons enregistré.`
+    : (equipe
+      ? `<strong>Règlement déclaré par ${echapper(declare.nom || 'le client')}</strong> le ${echapper(dateHeure(declare.le || declare.date))} : ${echapper(montantTTC(declare.montant, 2))} · ${echapper(MOYENS_PAIEMENT[declare.moyen] || declare.moyen || TIRET)} · réf. ${echapper(declare.reference || TIRET)} · réglé le ${echapper(dateCourte(declare.date))}. En attente de votre confirmation : enregistrez le paiement dès réception.`
+      : `<strong>Vous avez déclaré un règlement le ${echapper(dateCourte(declare.date))}</strong> · ${echapper(montantTTC(declare.montant, 2))}${declare.moyen ? ` par ${echapper((MOYENS_PAIEMENT[declare.moyen] || declare.moyen).toLowerCase())}` : ''}${declare.reference ? ` · réf. ${echapper(declare.reference)}` : ''} · en attente de confirmation. La facture reste « ${echapper((STATUTS_FACTURE[etat] || {}).libelle || '')} » jusqu'à ce que nous l'ayons enregistré.`),
+  confirme ? 'ok' : 'info', confirme ? 'check' : 'paiement') : '';
+
+  const encartReglement = !equipe && due ? (avecIban
+    ? encart(`<strong>Pour régler :</strong> virement à ${echapper(coordonnees.titulaire || 'Capmedia Digital')}${coordonnees.banque ? ` (${echapper(coordonnees.banque)})` : ''}.<div class="rang" style="margin-top:8px;gap:10px;flex-wrap:wrap"><span class="t-mono" id="iban-texte">IBAN ${echapper(ibanLisible)}</span><button class="btn btn-petit btn-doux" type="button" data-copier-iban="${echapper(coordonnees.iban)}">${icone('copier')} Copier l'IBAN</button></div>${coordonnees.bic ? `<div class="t-mono" style="margin-top:4px">BIC ${echapper(coordonnees.bic)}</div>` : ''}${coordonnees.mention ? `<div style="margin-top:6px">${avecLiens(coordonnees.mention)}</div>` : ''}<div style="margin-top:6px">Mettez le numéro ${echapper(d.numero || 'de la facture')} en libellé, puis dites-nous « J'ai réglé cette facture » : nous confirmons dès réception. Un souci sur cette facture ? Ouvrez une demande, nous regardons.</div>`, 'info', 'paiement')
+    : encart(`<strong>Pour régler :</strong> virement aux coordonnées indiquées sur la facture. Une fois le règlement parti, dites-le nous avec « J'ai réglé cette facture ». Un souci sur cette facture ? Ouvrez une demande, nous regardons.`, 'info', 'paiement')) : '';
 
   const m = modale({
     titre: `${devis ? 'Devis' : 'Facture'} ${d.numero || ''}`, sousTitre: `${d.libelle || ''} · ${projet.nom || ''}`, feuille: true,
     corps: `
-      <div class="rang" style="margin-bottom:16px">${pastille(carte, statutPiece(d), { equipe })}${devis ? `<span class="etiquette">${echapper((PORTEES_DEVIS[d.portee || 'initial'] || {}).libelle || '')}</span>` : ''}${d.echeance && !devis && FACTURES_DUES.includes(d.statut) ? `<span class="puce puce--${joursAvant(d.echeance) < 0 ? 'rouge' : 'ambre'}"><i></i>Échéance ${echapper(dateCourte(d.echeance))}</span>` : ''}${devis && d.expiration && decidable ? `<span class="puce"><i></i>Valable jusqu'au ${echapper(dateCourte(d.expiration))}</span>` : ''}${perime ? `<span class="puce puce--rouge"><i></i>Validité dépassée le ${echapper(dateCourte(d.expiration))}</span>` : ''}</div>
+      <div class="rang" style="margin-bottom:16px">${pastille(carte, etat, { equipe })}${devis ? `<span class="etiquette">${echapper((PORTEES_DEVIS[d.portee || 'initial'] || {}).libelle || '')}</span>` : ''}${d.echeance && due ? `<span class="puce puce--${joursAvant(d.echeance) < 0 ? 'rouge' : 'ambre'}"><i></i>Échéance ${echapper(dateCourte(d.echeance))}</span>` : ''}${devis && d.expiration && decidable ? `<span class="puce"><i></i>Valable jusqu'au ${echapper(dateCourte(d.expiration))}</span>` : ''}${perime ? `<span class="puce puce--rouge"><i></i>Validité dépassée le ${echapper(dateCourte(d.expiration))}</span>` : ''}${declare && !confirme ? '<span class="puce puce--bleu"><i></i>Règlement déclaré</span>' : ''}</div>
       ${perime && !equipe ? encart("<strong>Ce devis n'est plus valable.</strong> Sa date de validité est passée : il ne peut plus être accepté tel quel. Demandez-nous un devis à jour, nous vous le déposons ici.", 'attention', 'info') : ''}
       <div class="carte carte--creuse">
         <dl class="faits" style="grid-template-columns:repeat(3,1fr)">
-          ${fait('Hors taxes', echapper(montant(d.montant, 2)))}
-          ${fait(`TVA${typeof d.tva === 'number' ? ` ${d.tva} %` : ''}`, echapper(montant(ttcDe(d) - (Number(d.montant) || 0), 2)))}
-          ${fait('TTC', `<strong>${echapper(montant(ttcDe(d), 2))}</strong>`)}
+          ${fait('Hors taxes', echapper(montant(d.montant, 2) || TIRET))}
+          ${fait(`TVA${typeof d.tva === 'number' ? ` ${d.tva} %` : ''}`, echapper(montant(ttcDe(d) - (Number(d.montant) || 0), 2) || TIRET))}
+          ${fait('TTC', `<strong>${echapper(montant(ttcDe(d), 2) || TIRET)}</strong>`)}
         </dl>
-        ${!devis && (payes.length || FACTURES_DUES.includes(d.statut)) ? `<dl class="faits" style="grid-template-columns:repeat(2,1fr);margin-top:14px;padding-top:14px;border-top:1px solid var(--trait)">${fait('Payé', echapper(montantTTC(totalPaye, 2)))}${fait('Reste à payer', `<strong style="color:${reste > 0 ? 'var(--attention)' : 'var(--ok)'}">${echapper(montantTTC(reste, 2))}</strong>`)}</dl>` : ''}
+        ${!devis && (payes.length || due) ? `<dl class="faits" style="grid-template-columns:repeat(2,1fr);margin-top:14px;padding-top:14px;border-top:1px solid var(--trait)">${fait('Payé', echapper(montantTTC(totalPaye, 2) || `${montant(0, 2)} TTC`))}${fait('Reste à payer', `<strong style="color:${reste > 0 ? 'var(--attention)' : 'var(--ok)'}">${echapper(montantTTC(reste, 2) || `${montant(0, 2)} TTC`)}</strong>`)}</dl>` : ''}
       </div>
+      ${origine ? `<p class="t-petit" style="margin-top:12px">${icone('receipt')} Découle du devis <a href="#/finances/${echapper(origine.id)}">${echapper(origine.numero || 'accepté')}</a>${origine.libelle ? ` · ${echapper(origine.libelle)}` : ''}.</p>` : (!devis && d.devis ? `<p class="t-petit" style="margin-top:12px">${icone('receipt')} Découle du devis <a href="#/finances/${echapper(d.devis)}">lié</a>.</p>` : '')}
       ${devis ? (() => {
         /* Les lignes du devis, à cocher. Pour l'équipe la lecture en groupe
            porte toutes les étapes ; le client n'a que celles de son projet. */
@@ -51,21 +125,23 @@ export const ouvrirDocument = (d, env, { projets, paiements }) => {
         const frise = friseDevis(d, jalons, { equipe, pid: d.projet });
         return frise
           ? `<div style="margin-top:20px">${frise}${equipe ? `<p class="t-micro t-3" style="margin-top:8px"><a href="#/projets/${echapper(d.projet)}/etapes">Gérer les étapes</a></p>` : ''}</div>`
-          : (equipe ? `<p class="aide" style="margin-top:16px">Ce devis n'a pas encore ses lignes en étapes. <a href="#/projets/${echapper(d.projet)}/etapes">Posez-les dans la feuille de route</a>, avec ce devis en « ligne du devis » : le client les verra se cocher.</p>` : '');
+          : (equipe ? `<p class="aide" style="margin-top:16px">Ce devis n'a pas encore ses lignes en étapes. <a href="#/projets/${echapper(d.projet)}/etapes">Posez-les dans la feuille de route</a>, avec ce devis en « ligne du devis » : le client les verra se cocher.</p>`
+            : `<p class="aide" style="margin-top:16px">Le détail ligne par ligne est dans le PDF, qui fait foi. Ce qui est écrit ici en résume l'objet.</p>`);
       })() : ''}
-      <dl class="faits" style="margin-top:20px">${fait('Émis le', echapper(dateCourte(d.date)))}${fait(devis ? 'Expire le' : 'Échéance', echapper(dateCourte(devis ? d.expiration : d.echeance)))}${d.description ? fait('Détail', avecLiens(d.description)) : ''}</dl>
+      <dl class="faits" style="margin-top:20px">${fait('Émis le', echapper(dateCourte(d.date) || TIRET))}${fait(devis ? 'Expire le' : 'Échéance', echapper(dateCourte(devis ? d.expiration : d.echeance) || TIRET))}${devis || d.description ? fait('Détail', d.description ? avecLiens(d.description) : echapper(TIRET)) : ''}</dl>
       ${d.reponse ? `<div style="margin-top:20px">${encart(`<strong>${d.statut === 'accepte' ? 'Accepté' : 'Refusé'}</strong> par ${echapper(d.reponse.nom || '')} le ${echapper(dateHeure(d.reponse.date))}${d.reponse.commentaire ? `<div style="margin-top:6px">${avecLiens(d.reponse.commentaire)}</div>` : ''}`, d.statut === 'accepte' ? 'ok' : 'attention', d.statut === 'accepte' ? 'check' : 'info')}</div>` : ''}
       ${(d.liens || []).length ? `<div style="margin-top:20px"><p class="surtitre">À consulter</p><div class="pile" style="margin-top:8px;gap:8px">${d.liens.map((l) => `<a class="lien-env" href="${echapper(l.url)}" target="_blank" rel="noopener"><span class="ligne-icone ligne-icone--bleu">${icone('externe')}</span><span style="min-width:0"><span class="t-corps-fort" style="display:block">${echapper(l.nom)}</span><span class="url" style="display:block">${echapper(l.url.replace(/^https?:\/\//, ''))}</span></span><span class="chevron" style="color:var(--encre-4)">${icone('externe')}</span></a>`).join('')}</div></div>` : ''}
-      ${payes.length ? `<div style="margin-top:20px"><p class="surtitre">Paiements</p><div class="liste" style="margin-top:6px">${payes.map((p) => ligne({ icone: 'paiement', ton: 'vert', titre: echapper(montantTTC(p.montant, 2)), sous: `${echapper(dateCourte(p.date))} · ${echapper(MOYENS_PAIEMENT[p.moyen] || p.moyen || '')}${p.reference ? ` · ${echapper(p.reference)}` : ''}` })).join('')}</div></div>` : ''}
+      ${payes.length ? `<div style="margin-top:20px"><p class="surtitre">Paiements</p><div class="liste" style="margin-top:6px">${payes.map((p) => ligne({ icone: 'paiement', ton: 'vert', titre: echapper(montantTTC(p.montant, 2)), sous: `${echapper(dateCourte(p.date))} · ${echapper(MOYENS_PAIEMENT[p.moyen] || p.moyen || TIRET)}${p.reference ? ` · ${echapper(p.reference)}` : ''}` })).join('')}</div></div>` : ''}
+      ${encartDeclaration ? `<div style="margin-top:20px">${encartDeclaration}</div>` : ''}
       ${decidable ? `${encart((d.portee || 'initial') === 'initial'
         ? "<strong>C'est le devis qui lance le projet.</strong> En l'acceptant, vous donnez le départ : le travail commence et vous suivez tout ici."
         : "<strong>C'est un devis complémentaire.</strong> Il s'ajoute à un projet déjà lancé, sans en changer le déroulé.", 'info', 'receipt')}
       <form id="forme-devis" class="forme" style="margin-top:24px" novalidate><div class="groupe"><label class="etiquette-champ" for="commentaire-devis">Un mot pour nous <span class="facultatif">(facultatif)</span></label><textarea class="zone" id="commentaire-devis" rows="3" maxlength="2000"></textarea></div></form>` : ''}
-      ${!equipe && !devis && FACTURES_DUES.includes(d.statut) ? encart('<strong>Pour régler :</strong> virement aux coordonnées indiquées sur la facture. Le paiement en ligne arrivera prochainement. Un souci sur cette facture ? Ouvrez une demande, nous regardons.', 'info', 'paiement') : ''}`,
+      ${encartReglement ? `<div style="margin-top:20px">${encartReglement}</div>` : ''}`,
     pied: `${d.fichier && d.fichier.chemin ? `<button class="btn btn-secondaire" type="button" data-telecharger-piece>${icone('telecharger')} Télécharger le PDF</button>${equipe ? `<button class="btn btn-doux" type="button" data-joindre aria-label="Remplacer le PDF" data-astuce="Remplacer le PDF">${icone('trombone')}</button>` : ''}` : (equipe ? `<button class="btn btn-secondaire" type="button" data-joindre>${icone('trombone')} Joindre le PDF</button>` : '')}
       ${equipe ? `<button class="btn btn-doux" type="button" data-liens>${icone('liens')} Liens</button>` : ''}
-      ${decidable ? `<button class="btn btn-secondaire" type="button" data-refuser>Refuser</button><span class="pousse"></span><button class="btn btn-ok" type="button" data-accepter>${icone('check')} Accepter le devis</button>`
-      : !equipe ? `<span class="pousse"></span><a class="btn btn-doux" href="#/projets/${echapper(d.projet)}/nouvelle-demande?type=question">Poser une question</a><button class="btn btn-principal" type="button" data-fermer>Fermer</button>`
+      ${decidable ? `<button class="btn btn-secondaire" type="button" data-refuser>Refuser</button><a class="btn btn-doux" href="${lienQuestion(d)}">J'ai une question</a><span class="pousse"></span><button class="btn btn-doux" type="button" data-fermer>Fermer</button><button class="btn btn-ok" type="button" data-accepter>${icone('check')} Accepter le devis</button>`
+      : !equipe ? `<span class="pousse"></span><a class="btn btn-doux" href="#/projets/${echapper(d.projet)}/nouvelle-demande?type=question">Poser une question</a>${responsable && due && !(declare && !confirme) ? `<button class="btn btn-secondaire" type="button" data-declarer>${icone('paiement')} J'ai réglé cette facture</button>` : ''}<button class="btn btn-principal" type="button" data-fermer>Fermer</button>`
       : `<span class="pousse"></span><button class="btn btn-principal" type="button" data-fermer>Fermer</button>`}`,
   });
   brancherPieces(m.el);
@@ -75,17 +151,19 @@ export const ouvrirDocument = (d, env, { projets, paiements }) => {
      nouvel onglet, pas de règle de stockage entre le client et sa pièce. */
   sur(m.el, 'click', '[data-telecharger-piece]', (el) => agir(el, () => telechargerPiece(d)));
   sur(m.el, 'click', '[data-liens]', async () => { m.fermer(); await editerLiens(d); });
+  sur(m.el, 'click', '[data-copier-iban]', async (el) => {
+    try { await navigator.clipboard.writeText(el.dataset.copierIban); toast('IBAN copié.'); } catch (e) { toast("Le presse-papiers n'est pas accessible : recopiez l'IBAN à la main.", 'erreur'); }
+  });
+  sur(m.el, 'click', '[data-declarer]', async () => { if (await declarerReglement(env, d, reste)) m.fermer(true); });
   const commentaire = () => (m.el.querySelector('#commentaire-devis') || { value: '' }).value.trim();
   sur(m.el, 'click', '[data-accepter]', async (el) => {
     const ok = await confirmer({ titre: `Accepter le devis ${d.numero || ''} ?`, texte: `${montant(ttcDe(d), 2)} TTC. Votre acceptation vaut accord et est horodatée à votre nom.`, ok: "J'accepte" });
     if (!ok) return;
-    if (await agir(el, () => ecrire.repondreDevis(env.session, d.id, 'accepte', commentaire()), 'Devis accepté. Merci, on lance.')) m.fermer(true);
+    /* « On lance » ne vaut que pour le devis qui lance le projet. */
+    const merci = (d.portee || 'initial') === 'initial' ? 'Devis accepté. Merci, on lance.' : 'Devis accepté. Merci.';
+    if (await agir(el, () => ecrire.repondreDevis(env.session, d.id, 'accepte', commentaire()), merci)) m.fermer(true);
   });
-  sur(m.el, 'click', '[data-refuser]', async (el) => {
-    const ok = await confirmer({ titre: 'Refuser ce devis ?', texte: 'Dites-nous ce qui coince dans le commentaire, on peut ajuster.', ok: 'Refuser', danger: true });
-    if (!ok) return;
-    if (await agir(el, () => ecrire.repondreDevis(env.session, d.id, 'refuse', commentaire()), 'Devis refusé. Nous revenons vers vous.')) m.fermer(true);
-  });
+  sur(m.el, 'click', '[data-refuser]', async () => { if (await refuserDevis(env, d, commentaire())) m.fermer(true); });
   return m.fin;
 };
 
@@ -147,65 +225,93 @@ export const vue = async (ctx, env) => {
   filAriane([{ libelle: 'Devis et factures' }]);
   sortie.innerHTML = `<div class="page">${squelette('page', 5)}</div>`;
   let ouvert = ctx.params.did || null;
+  /* Le filtre par projet, quand le client en a plusieurs. */
+  const etat = { projet: '' };
 
   const rendre = () => {
     const projets = magasin.lire(K.projets) || session.projets;
     /* La partie financière est au responsable du projet. Un collaborateur
        ne la lit pas (les règles la lui refusent) : on le lui dit plutôt
        que de lui montrer une page vide. */
-    if (!projets.some((p) => estResponsable(session, p))) {
+    const miens = projets.filter((p) => estResponsable(session, p));
+    if (!miens.length) {
       sortie.innerHTML = `<div class="page" style="max-width:720px">
         <div class="page-tete"><div><h1>Devis et factures</h1></div></div>
         ${encart("<strong>Réservé au responsable du projet.</strong> Les devis, les factures et les paiements sont suivis par la personne qui engage votre société auprès de Capmedia. Vous voyez tout le reste du projet.", 'info', 'cadenas')}
       </div>`;
       return;
     }
+    if (etat.projet && !miens.some((p) => p.id === etat.projet)) etat.projet = '';
+    const duProjet = (x) => !etat.projet || x.projet === etat.projet;
     /* Un brouillon est une réflexion de l'agence : il ne s'affiche pas. */
-    const documents = agreger(session, G.documents).filter((d) => !d.archive && d.statut !== 'brouillon');
-    const paiements = agreger(session, G.paiements);
+    const tousDocuments = agreger(session, G.documents).filter((d) => !d.archive && d.statut !== 'brouillon');
+    const documents = tousDocuments.filter(duProjet);
+    /* Un paiement annulé n'en est pas un : il ne se montre pas. */
+    const paiements = agreger(session, G.paiements).filter((p) => p.statut !== 'annule').filter(duProjet);
     const nomProjet = (pid) => ((projets.find((p) => p.id === pid) || {}).nom || '');
     const devis = documents.filter((d) => d.type === 'devis').sort(parDateDesc('date'));
     const factures = documents.filter((d) => d.type === 'facture').sort(parDateDesc('date'));
     const { total: du, factures: dues } = resteAPayer(documents, paiements);
     const aDecider = devis.filter(devisADecider);
-    const totalPaye = paiements.filter((p) => p.statut !== 'annule').reduce((s, p) => s + (Number(p.montant) || 0), 0);
+    /* Une seule liste : ce qui attend une décision est dans le bloc du
+       haut, la section « Devis » garde les autres. */
+    const autresDevis = devis.filter((d) => !devisADecider(d));
+    /* Une annulée ou un avoir n'est pas une facture « émise ». */
+    const emises = factures.filter((f) => !['annulee', 'avoir'].includes(f.statut));
+    const totalPaye = paiements.reduce((s, p) => s + (Number(p.montant) || 0), 0);
 
-    const ligneDoc = (d) => ligne({
-      icone: d.type === 'devis' ? 'receipt' : 'euro', ton: d.type === 'devis' ? (devisADecider(d) ? 'ambre' : d.statut === 'accepte' ? 'vert' : '') : (d.statut === 'en-retard' ? 'rouge' : FACTURES_DUES.includes(d.statut) ? 'ambre' : d.statut === 'payee' ? 'vert' : ''),
-      titre: `${d.numero ? `<span class="t-mono t-3" style="font-weight:400">${echapper(d.numero)}</span> ` : ''}${echapper(d.libelle || '')}`,
-      sous: `${echapper(nomProjet(d.projet))} · ${echapper(dateCourte(d.date))}${d.type === 'facture' && d.echeance && FACTURES_DUES.includes(d.statut) ? ` · échéance ${echapper(dateCourte(d.echeance))}` : ''}`,
-      /* Trois colonnes fixes, alignées d'une ligne à l'autre : le bouton
-         Voir (ou sa place vide), le montant, le statut. */
-      fin: `${(d.liens || []).length ? `<span class="puce puce--bleu"><i></i>${icone('externe')}</span>` : ''}<span class="piece-fin"><span class="piece-fin-voir">${d.fichier && d.fichier.chemin ? `<button class="btn btn-voir" type="button" data-telecharger="${echapper(d.id)}">${icone('telecharger')} Télécharger</button>` : ''}</span><span class="nb t-fort">${echapper(montantPiece(d, 2))}</span><span class="piece-fin-statut">${pastille(d.type === 'devis' ? STATUTS_DEVIS : STATUTS_FACTURE, statutPiece(d))}</span></span>`,
-      action: 'ouvrir', attrs: `data-id="${echapper(d.id)}"`,
-    });
+    const ligneDoc = (d) => {
+      const etatPiece = statutPiece(d);
+      const declare = d.type === 'facture' && d.reglementDeclare && !d.reglementDeclare.confirme && d.statut !== 'payee';
+      return ligne({
+        icone: d.type === 'devis' ? 'receipt' : 'euro', ton: d.type === 'devis' ? (devisADecider(d) ? 'ambre' : d.statut === 'accepte' ? 'vert' : '') : (etatPiece === 'en-retard' ? 'rouge' : FACTURES_DUES.includes(d.statut) ? 'ambre' : d.statut === 'payee' ? 'vert' : ''),
+        titre: `${d.numero ? `<span class="t-mono t-3" style="font-weight:400">${echapper(d.numero)}</span> ` : ''}${echapper(d.libelle || '')}`,
+        sous: `${echapper(nomProjet(d.projet))} · ${echapper(dateCourte(d.date) || TIRET)}${d.type === 'facture' && d.echeance && FACTURES_DUES.includes(d.statut) ? ` · échéance ${echapper(dateCourte(d.echeance))}` : ''}${declare ? ' · règlement déclaré, en attente de confirmation' : ''}`,
+        /* Trois colonnes fixes, alignées d'une ligne à l'autre : le bouton
+           Voir (ou sa place vide), le montant, le statut. */
+        fin: `${(d.liens || []).length ? `<span class="puce puce--bleu"><i></i>${icone('externe')}</span>` : ''}<span class="piece-fin"><span class="piece-fin-voir">${d.fichier && d.fichier.chemin ? `<button class="btn btn-voir" type="button" data-telecharger="${echapper(d.id)}">${icone('telecharger')} Télécharger</button>` : ''}</span><span class="nb t-fort">${echapper(montantPiece(d, 2) || TIRET)}</span><span class="piece-fin-statut">${pastille(d.type === 'devis' ? STATUTS_DEVIS : STATUTS_FACTURE, etatPiece)}</span></span>`,
+        action: 'ouvrir', attrs: `data-id="${echapper(d.id)}"`,
+      });
+    };
 
     sortie.innerHTML = `<div class="page">
-      <div class="page-tete"><div><h1>Devis et factures</h1><p class="chapo">Tout ce qui a été émis pour vos projets. Un devis accepté ici vaut accord.</p></div></div>
+      <div class="page-tete"><div><h1>Devis et factures</h1><p class="chapo">Tout ce qui a été émis pour vos projets. Un devis accepté ici vaut accord.</p></div>${miens.length > 1 ? `<div class="actions"><label class="etiquette-champ" for="filtre-projet" style="margin:0">Projet</label><select class="select" id="filtre-projet" style="width:auto"><option value="">Tous vos projets</option>${miens.map((p) => `<option value="${echapper(p.id)}"${etat.projet === p.id ? ' selected' : ''}>${echapper(p.nom)}</option>`).join('')}</select></div>` : ''}</div>
       <div class="metriques">
-        ${metrique(montantTTC(du), 'Reste à payer', { ton: du > 0 ? 'ambre' : 'vert', nuance: dues.length ? `${dues.length} facture${dues.length > 1 ? 's' : ''}` : 'Rien en attente' })}
+        ${metrique(montantTTC(du) || `${montant(0)} TTC`, 'Reste à payer', { ton: du > 0 ? 'ambre' : 'vert', nuance: dues.length ? `${dues.length} facture${dues.length > 1 ? 's' : ''}` : 'Rien en attente' })}
         ${metrique(aDecider.length, 'Devis à décider', { ton: aDecider.length ? 'ambre' : '' })}
-        ${metrique(montantTTC(totalPaye), 'Réglé au total')}
-        ${metrique(factures.length, 'Factures émises')}
+        ${metrique(montantTTC(totalPaye) || `${montant(0)} TTC`, 'Réglé au total')}
+        ${metrique(emises.length, 'Factures émises')}
       </div>
       ${aDecider.length ? `<section class="section"><div class="attente"><p class="attente-tete">${icone('receipt')} Devis en attente de votre décision</p><div class="liste" style="margin-top:8px">${aDecider.map(ligneDoc).join('')}</div></div></section>` : ''}
-      <section class="section"><div class="section-tete"><h2>Factures</h2></div>${factures.length ? `<div class="liste">${factures.map(ligneDoc).join('')}</div>` : vide({ icone: 'euro', titre: 'Aucune facture', compact: true })}</section>
-      <section class="section"><div class="section-tete"><h2>Devis</h2></div>${devis.length ? `<div class="liste">${devis.map(ligneDoc).join('')}</div>` : vide({ icone: 'receipt', titre: 'Aucun devis', compact: true })}</section>
-      ${paiements.length ? `<section class="section"><div class="section-tete"><h2>Paiements</h2></div><div class="liste">${paiements.slice().sort(parDateDesc('date')).map((p) => { const f = documents.find((d) => d.id === p.facture) || {}; return ligne({ icone: 'paiement', ton: 'vert', titre: echapper(montantTTC(p.montant, 2)), sous: `${echapper(dateCourte(p.date))} · ${echapper(MOYENS_PAIEMENT[p.moyen] || p.moyen || '')}${f.numero ? ` · ${echapper(f.numero)}` : ''}${p.reference ? ` · ${echapper(p.reference)}` : ''}` }); }).join('')}</div></section>` : ''}
+      <section class="section"><div class="section-tete"><h2>Factures</h2></div>${factures.length ? `<div class="liste">${factures.map(ligneDoc).join('')}</div>` : vide({ icone: 'euro', titre: 'Aucune facture', texte: "Elles apparaîtront ici dès qu'une sera émise, avec son échéance et comment la régler.", compact: true })}</section>
+      <section class="section"><div class="section-tete"><h2>Devis</h2></div>${autresDevis.length ? `<div class="liste">${autresDevis.map(ligneDoc).join('')}</div>` : vide({ icone: 'receipt', titre: aDecider.length ? 'Aucun autre devis' : 'Aucun devis', texte: aDecider.length ? 'Ceux qui attendent votre décision sont juste au-dessus.' : "Ils apparaîtront ici dès qu'un vous sera proposé. Besoin d'un chiffrage ? Ouvrez une demande de devis depuis votre projet.", compact: true })}</section>
+      <section class="section"><div class="section-tete"><h2>Paiements</h2></div>${paiements.length ? `<div class="liste">${paiements.slice().sort(parDateDesc('date')).map((p) => { const f = documents.find((d) => d.id === p.facture) || {}; return ligne({ icone: 'paiement', ton: 'vert', titre: echapper(montantTTC(p.montant, 2)), sous: `${echapper(dateCourte(p.date) || TIRET)} · ${echapper(MOYENS_PAIEMENT[p.moyen] || p.moyen || TIRET)}${f.numero ? ` · ${echapper(f.numero)}` : ''}${p.reference ? ` · ${echapper(p.reference)}` : ''}` }); }).join('')}</div>` : vide({ icone: 'paiement', titre: 'Aucun paiement', texte: 'Chaque règlement que nous enregistrons apparaîtra ici.', compact: true })}</section>
     </div>`;
 
+    const filtre = sortie.querySelector('#filtre-projet');
+    if (filtre) filtre.addEventListener('change', (e) => { etat.projet = e.target.value; rendre(); });
+
     if (ouvert) {
-      const d = documents.find((x) => x.id === ouvert);
-      ouvert = null;
-      if (d) ouvrirDocument(d, env, { projets, paiements }).then(() => naviguer('/finances', { remplacer: true }));
+      const d = tousDocuments.find((x) => x.id === ouvert);
+      if (d) {
+        ouvert = null;
+        ouvrirDocument(d, env, { projets, paiements: agreger(session, G.paiements), documents: tousDocuments }).then(() => naviguer('/finances', { remplacer: true }));
+      } else if (miens.every((p) => magasin.chargee(K.documents(p.id)))) {
+        /* Tout est arrivé et la pièce n'y est pas : fermée, archivée ou
+           inconnue. Le dire vaut mieux qu'une page qui ne réagit pas. */
+        ouvert = null;
+        toast("Cette pièce n'est pas disponible.", 'info');
+        naviguer('/finances', { remplacer: true });
+      }
     }
   };
 
   const gestes = sur(sortie, 'click', '[data-action="ouvrir"]', (el, ev) => {
     if (ev && ev.target.closest('[data-telecharger]')) return;
     const projets = magasin.lire(K.projets) || session.projets;
-    const d = agreger(session, G.documents).find((x) => x.id === el.dataset.id);
-    if (d) ouvrirDocument(d, env, { projets, paiements: agreger(session, G.paiements) });
+    const documents = agreger(session, G.documents);
+    const d = documents.find((x) => x.id === el.dataset.id);
+    if (d) ouvrirDocument(d, env, { projets, paiements: agreger(session, G.paiements), documents });
   });
   /* « Télécharger » dans la liste : le PDF, direct, sans passer par la fiche. */
   const gestesVoir = sur(sortie, 'click', '[data-telecharger]', (el, ev) => {
@@ -215,9 +321,9 @@ export const vue = async (ctx, env) => {
   });
   let minuteur = null;
   const planifier = () => { clearTimeout(minuteur); minuteur = setTimeout(rendre, 40); };
-  [K.projets, ...session.projets.flatMap((p) => [K.documents(p.id), K.paiements(p.id)])].forEach((c) => lot.sur(c, planifier));
+  [K.projets, K.reglages, ...session.projets.flatMap((p) => [K.documents(p.id), K.paiements(p.id)])].forEach((c) => lot.sur(c, planifier));
   planifier();
   return () => { clearTimeout(minuteur); gestes(); gestesVoir(); lot.fin(); };
 };
 
-void toast; void lienPiece;
+void toast; void lienPiece; void montantHT;

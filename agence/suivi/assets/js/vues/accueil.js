@@ -5,9 +5,11 @@
 
 import {
   echapper, prenom, nomAffiche, depuis, dateCourte, heure, dateHeure, montant, montantTTC, enDate, parDateDesc,
-  OUVERTS, STATUTS_PROJET, pluriel, statutProjet, verdictDelai
+  OUVERTS, ATTEND_CLIENT, STATUTS_PROJET, pluriel, statutProjet, verdictDelai, estResponsable, libellePlateforme
 } from '../noyau.js';
-import { icone, pastille, avatarProjet, progression, progressionOuPas, verdictHtml, ligne, vide, chronoItem, parJour, titrePage, echeanceHtml, squelette } from '../ui.js';
+import { telechargerICS } from './calendrier.js';
+import { icone, pastille, avatarProjet, progression, progressionOuPas, verdictHtml, ligne, vide, chronoItem, parJour, titrePage, echeanceHtml, squelette, modale, sur } from '../ui.js';
+import { naviguer } from '../routeur.js';
 import * as magasin from '../magasin.js';
 import { K, G, agreger, enAttenteDeVous, progressionProjet, jalonCourant, prochaineReunion, resteAPayer, depuisVisite, nonLusProjet, risquesProjet, messagesDuProjet } from '../donnees.js';
 import { filAriane } from '../coquille.js';
@@ -42,6 +44,28 @@ export const lienPourMoi = (lien, equipe) => {
   for (const [motif, vers] of regles) if (motif.test(brut)) return brut.replace(motif, vers);
   return brut;
 };
+
+/**
+ * « Pour quel projet ? » : quand le client a plusieurs projets actifs, un
+ * raccourci (nouvelle demande, message, créneau) ne peut pas deviner
+ * lequel. Résout l'identifiant choisi, ou '' si la fenêtre est fermée sans
+ * choix. Un seul projet : il est rendu sans rien demander.
+ */
+export const choisirProjet = (projets, { titre = 'Pour quel projet ?', ok = 'Continuer' } = {}) => {
+  const liste = (projets || []).filter((p) => p && !p.archive);
+  if (liste.length <= 1) return Promise.resolve(liste[0] ? liste[0].id : '');
+  const m = modale({
+    titre,
+    corps: `<select class="select" id="choix-p" aria-label="Projet">${liste.map((p) => `<option value="${echapper(p.id)}">${echapper(p.nom)}</option>`).join('')}</select>`,
+    pied: `<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button><button class="btn btn-principal" type="button" data-ok>${echapper(ok)}</button>`,
+  });
+  m.el.querySelector('[data-ok]').addEventListener('click', () => m.fermer(m.el.querySelector('#choix-p').value));
+  return m.fin.then((v) => (typeof v === 'string' ? v : ''));
+};
+
+/* Le message qui demande un créneau, prérempli dans la conversation du
+   projet : la page Messages lit « brouillon » dans l'adresse. */
+export const lienCreneau = (pid) => `/messages/${pid}?brouillon=${encodeURIComponent('Je souhaite un créneau pour ')}`;
 
 export const activiteHtml = (liste, options = {}) => {
   const activite = liste.filter((a) => a.date);
@@ -95,23 +119,31 @@ export const vue = async (ctx, env) => {
        téléphone comme sur ordinateur, et c'est le bloc Finances qu'on ne
        voyait plus. Le reste se lit d'un clic. */
     const recentes = activite.slice(0, 5).map((a) => ({ ...a, projetNom: nomProjet(a.projet) }));
-    const depuisPassage = depuisVisite(activite, env.derniereVisite);
+    /* Ce que le client a fait lui-même n'a pas « bougé » pendant son
+       absence : on ne compte que les mouvements des autres. */
+    const depuisPassage = depuisVisite(activite, env.derniereVisite).filter((a) => !(a.par && a.par.uid === session.utilisateur.uid));
     const dernieresReleases = releases.filter((r) => r.statut === 'disponible').sort(parDateDesc('date')).slice(0, 3);
     const nonLus = projets.reduce((s, p) => s + nonLusProjet(messagesDuProjet(p.id), profil, p.id, session.utilisateur.uid), 0);
 
     const bonjour = (() => { const h = new Date().getHours(); return h < 5 || h >= 18 ? 'Bonsoir' : 'Bonjour'; })();
     const nom = prenom(nomAffiche(session));
 
+    /* Chaque compteur mène au bon endroit : la section du projet quand
+       tout vient du même projet, sinon l'activité de tous les projets. */
     const resumeDepuis = depuisPassage.length ? (() => {
-      const compte = (type) => depuisPassage.filter((a) => a.type === type).length;
+      const de = (type) => depuisPassage.filter((a) => a.type === type);
+      const versSection = (type, section) => {
+        const pids = [...new Set(de(type).map((a) => a.projet).filter(Boolean))];
+        return pids.length === 1 ? `#/projets/${echapper(pids[0])}/${section}` : '#/activite';
+      };
       const parts = [];
-      if (compte('tache')) parts.push(`${icone('check')} ${pluriel(compte('tache'), 'mouvement de tâche', 'mouvements de tâches')}`);
-      if (compte('release')) parts.push(`${icone('releases')} ${pluriel(compte('release'), 'nouvelle version', 'nouvelles versions')}`);
-      if (compte('message')) parts.push(`${icone('messages')} ${pluriel(compte('message'), 'message')}`);
-      if (compte('validation')) parts.push(`${icone('valider')} ${pluriel(compte('validation'), 'validation')}`);
-      if (compte('fichier')) parts.push(`${icone('fichiers')} ${pluriel(compte('fichier'), 'fichier')}`);
-      if (!parts.length) parts.push(`${icone('activite')} ${pluriel(depuisPassage.length, 'mouvement')}`);
-      return `<div class="encart encart--info" style="margin-bottom:var(--e-6)"><div><strong>Depuis votre dernière visite</strong><span class="rang" style="margin-top:6px;gap:16px">${parts.map((p) => `<span class="rang" style="gap:6px">${p}</span>`).join('')}</span></div></div>`;
+      if (de('tache').length) parts.push([versSection('tache', 'taches'), `${icone('check')} ${pluriel(de('tache').length, 'mouvement de tâche', 'mouvements de tâches')}`]);
+      if (de('release').length) parts.push([versSection('release', 'releases'), `${icone('releases')} ${pluriel(de('release').length, 'nouvelle version', 'nouvelles versions')}`]);
+      if (de('message').length) parts.push(['#/messages', `${icone('messages')} ${pluriel(de('message').length, 'message')}`]);
+      if (de('validation').length) parts.push(['#/valider', `${icone('valider')} ${pluriel(de('validation').length, 'validation')}`]);
+      if (de('fichier').length) parts.push(['#/documents', `${icone('fichiers')} ${pluriel(de('fichier').length, 'fichier')}`]);
+      if (!parts.length) parts.push(['#/activite', `${icone('activite')} ${pluriel(depuisPassage.length, 'mouvement')}`]);
+      return `<div class="encart encart--info" id="depuis-visite" style="margin-bottom:var(--e-6)"><div><strong>Depuis votre dernière visite</strong><span class="rang" style="margin-top:6px;gap:16px">${parts.map(([href, p]) => `<a class="rang" style="gap:6px;color:inherit" href="${href}">${p}</a>`).join('')}</span></div></div>`;
     })() : '';
 
     sortie.innerHTML = `<div class="page">
@@ -124,8 +156,10 @@ export const vue = async (ctx, env) => {
             : "Votre espace est prêt. Il s'animera dès qu'un projet y sera rattaché."}</p>
         </div>
         <div class="actions">
-          ${projets[0] ? `<a class="btn btn-principal" href="#/projets/${echapper(projets[0].id)}/nouvelle-demande">${icone('plus')} Nouvelle demande</a>` : ''}
-          <a class="btn btn-secondaire" href="#/messages">${icone('messages')} Message</a>
+          ${projets.length > 1 ? `<button class="btn btn-principal" type="button" data-raccourci="nouvelle-demande">${icone('plus')} Nouvelle demande</button>`
+            : projets[0] ? `<a class="btn btn-principal" href="#/projets/${echapper(projets[0].id)}/nouvelle-demande">${icone('plus')} Nouvelle demande</a>` : ''}
+          ${projets.length > 1 ? `<button class="btn btn-secondaire" type="button" data-raccourci="message">${icone('messages')} Message</button>`
+            : `<a class="btn btn-secondaire" href="#/messages${projets[0] ? `/${echapper(projets[0].id)}` : ''}">${icone('messages')} Message</a>`}
         </div>
       </div>
 
@@ -173,7 +207,12 @@ export const vue = async (ctx, env) => {
             </div>
             <div class="rang" style="margin-top:14px;gap:14px" class="t-petit">
               ${p.cible ? verdictHtml(delai, { vide: false }) : ''}
-              <span class="puce">${icone('demandes')} ${pluriel(ouvertsProjet, 'demande ouverte', 'demandes ouvertes')}</span>
+              <span class="puce">${icone('demandes')} ${(() => {
+                /* Qui a la main : ce que nous traitons, ce qui attend le client. */
+                const aVous = ouverts.filter((t) => t.projet === p.id && ATTEND_CLIENT.includes(t.statut)).length;
+                const chezNous = ouvertsProjet - aVous;
+                return ouvertsProjet ? `${chezNous} chez nous · ${aVous} à vous` : 'Aucune demande ouverte';
+              })()}</span>
               ${attenteProjet ? `<span class="puce puce--ambre"><i></i>${pluriel(attenteProjet, 'point pour vous', 'points pour vous')}</span>` : ''}
             </div>
           </a>`;
@@ -183,7 +222,7 @@ export const vue = async (ctx, env) => {
 
       <div class="grille grille-tiers section">
         <section>
-          <div class="section-tete"><h2>Activité récente</h2>${projets[0] ? `<a class="lien" href="#/projets/${echapper(projets[0].id)}/activite">Tout voir</a>` : ''}</div>
+          <div class="section-tete"><h2>Activité récente</h2>${projets[0] ? '<a class="lien" href="#/activite">Tout voir</a>' : ''}</div>
           ${activiteHtml(recentes, { avecProjet: projets.length > 1, equipe: false })}
         </section>
         <aside class="pile" style="gap:var(--e-5)">
@@ -192,24 +231,26 @@ export const vue = async (ctx, env) => {
             ${reunion ? `
               <p class="t-titre-3" style="margin-top:8px">${echapper(reunion.titre)}</p>
               <p class="t-petit t-2" style="margin-top:4px">${echapper(dateHeure(reunion.date))}${reunion.duree ? ` · ${reunion.duree} min` : ''}</p>
-              ${reunion.lien ? `<a class="btn btn-secondaire btn-petit" style="margin-top:12px" href="${echapper(reunion.lien)}" target="_blank" rel="noopener">${icone('video')} Rejoindre</a>` : ''}
-              <p style="margin-top:10px"><a class="t-petit" href="#/projets/${echapper(reunion.projet)}/reunions">Ordre du jour et historique</a></p>`
-            : `<p class="t-petit t-2" style="margin-top:8px">Aucune réunion programmée.</p><p style="margin-top:8px"><a class="t-petit" href="#/messages">Demander un créneau</a></p>`}
+              <div class="rang" style="margin-top:12px;gap:6px">${reunion.lien ? `<a class="btn btn-secondaire btn-petit" href="${echapper(reunion.lien)}" target="_blank" rel="noopener">${icone('video')} Rejoindre</a>` : ''}<button class="btn btn-doux btn-petit" type="button" data-ics-reunion="${echapper(reunion.id)}" data-astuce="Le fichier .ics de cette réunion">${icone('calendrier')} Ajouter à mon agenda</button></div>
+              <p style="margin-top:10px"><a class="t-petit" href="#/projets/${echapper(reunion.projet)}/reunions/${echapper(reunion.id)}">Ordre du jour et historique</a></p>`
+            : `<p class="t-petit t-2" style="margin-top:8px">Aucune réunion programmée.</p><p style="margin-top:8px">${projets.length > 1
+              ? '<button class="lien t-petit" type="button" data-raccourci="creneau" style="background:none;border:0;padding:0;cursor:pointer">Demander un créneau</button>'
+              : `<a class="t-petit" href="#${projets[0] ? echapper(lienCreneau(projets[0].id)) : '/messages'}">Demander un créneau</a>`}</p>`}
           </div>
-          <div class="carte carte--creuse">
+          ${projets.some((p) => estResponsable(session, p)) ? `<div class="carte carte--creuse">
             <p class="surtitre">Finances</p>
             ${dues.length ? `
               <p class="prix" style="margin-top:8px"><span class="montant">${echapper(montant(du))}</span><span class="unite">TTC à régler</span></p>
               <p class="t-petit t-2" style="margin-top:4px">${pluriel(dues.length, 'facture en attente', 'factures en attente')}</p>`
             : '<p class="t-petit t-2" style="margin-top:8px">Aucune facture en attente.</p>'}
             <p style="margin-top:10px"><a class="t-petit" href="#/finances">Devis et factures</a></p>
-          </div>
+          </div>` : ''}
           ${dernieresReleases.length ? `<div class="carte carte--creuse">
             <p class="surtitre">Dernières versions</p>
             <div class="pile" style="margin-top:10px;gap:8px">${dernieresReleases.map((r) => `
               <a class="rang" style="gap:10px;color:inherit;flex-wrap:nowrap" href="#/projets/${echapper(r.projet)}/releases">
                 <span class="ligne-icone ligne-icone--vert" style="width:30px;height:30px">${icone('releases')}</span>
-                <span style="min-width:0"><span class="t-petit t-fort" style="display:block">${echapper(`${r.plateforme || ''} ${r.version || ''}`.trim())}</span><span class="t-micro t-3">${echapper(dateCourte(r.date))}</span></span>
+                <span style="min-width:0"><span class="t-petit t-fort" style="display:block">${echapper(`${libellePlateforme(r.plateforme)} ${r.version || ''}`.trim())}</span><span class="t-micro t-3">${echapper(dateCourte(r.date))}</span></span>
               </a>`).join('')}</div>
           </div>` : ''}
         </aside>
@@ -222,10 +263,28 @@ export const vue = async (ctx, env) => {
     K.taches(p.id), K.blocages(p.id), K.reunions(p.id), K.releases(p.id), K.activite(p.id), K.messages(p.id),
     K.composants(p.id),
   ])];
+  /* Les raccourcis qui visent un projet : à plusieurs projets, on demande
+     lequel avant d'y aller. */
+  const gestes = sur(sortie, 'click', '[data-raccourci]', async (el) => {
+    const projets = (magasin.lire(K.projets) || session.projets).filter((p) => !p.archive);
+    const pid = await choisirProjet(projets);
+    if (!pid) return;
+    const cible = el.dataset.raccourci;
+    if (cible === 'nouvelle-demande') naviguer(`/projets/${pid}/nouvelle-demande`);
+    else if (cible === 'message') naviguer(`/messages/${pid}`);
+    else if (cible === 'creneau') naviguer(lienCreneau(pid));
+  });
+  /* Le fichier d'agenda de la prochaine réunion, depuis l'accueil : le
+     même fichier que depuis la fiche et le calendrier. */
+  const gesteIcs = sur(sortie, 'click', '[data-ics-reunion]', (el) => {
+    const r = agreger(session, G.reunions).find((x) => x.id === el.dataset.icsReunion);
+    const projets = magasin.lire(K.projets) || session.projets || [];
+    if (r) telechargerICS(r, { nomProjet: (pid) => ((projets.find((p) => p.id === pid) || {}).nom || '') });
+  });
   let minuteur = null;
   const planifier = () => { clearTimeout(minuteur); minuteur = setTimeout(rendre, 40); };
   cles.forEach((c) => lot.sur(c, planifier));
   planifier();
   void enDate; void echeanceHtml; void echeance; void depuis;
-  return () => { clearTimeout(garde); clearTimeout(minuteur); lot.fin(); };
+  return () => { clearTimeout(garde); clearTimeout(minuteur); gestes(); gesteIcs(); lot.fin(); };
 };

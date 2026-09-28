@@ -130,7 +130,17 @@ exports.hubTacheEcrite = onDocumentWritten({ region: REGION, document: 'taches/{
     return;
   }
   if (avant.statut !== apres.statut) {
-    const libelles = { 'a-faire': 'à faire', 'en-cours': 'en cours', 'en-revue': 'en revue', 'bloquee': 'bloquée', 'attente-client': 'en attente du client', 'terminee': 'terminée' };
+    const libelles = { 'a-faire': 'à faire', 'en-cours': 'en cours', 'en-revue': 'en revue', 'bloquee': 'bloquée', 'attente-client': 'en attente du client', 'repondu': 'réponse reçue', 'terminee': 'terminée' };
+    /* La réponse du client depuis la fiche de la tâche : l'activité est à
+       son nom, l'équipe est prévenue (notification et lettre). */
+    const reponse = apres.statut === 'repondu' && avant.statut === 'attente-client' && apres.reponseClient ? apres.reponseClient : null;
+    if (reponse) {
+      const parClient = { uid: reponse.par || null, nom: reponse.nom || 'Le client', cote: 'client' };
+      await activite({ projet: apres.projet, type: 'tache', texte: `a répondu sur la tâche « ${apres.titre} »`, par: parClient, lien, visibilite });
+      await notifierEquipe(apres.projet, { type: 'tache', titre: 'Réponse du client sur une tâche', texte: `${apres.titre} · ${nomProjet(projet)}`, lien: `#${lien}`, projet: apres.projet });
+      await mettreEnFile('tache-reponse', contactsEquipe(), { projetNom: nomProjet(projet), titre: apres.titre, par: reponse.nom || '', texte: reponse.texte || '', pieces: Array.isArray(reponse.pieces) ? reponse.pieces.length : 0, lien: LIEN_ADMIN(lien) }, { projet: apres.projet, evenement: 'tache-reponse' });
+      return;
+    }
     await activite({ projet: apres.projet, type: 'tache', texte: `a passé la tâche « ${apres.titre} » en ${libelles[apres.statut] || apres.statut}`, par, lien, visibilite });
     if (apres.statut === 'attente-client' && visibilite === 'client') {
       await notifierClients(projet, 'tache', { type: 'tache', titre: 'Nous attendons votre retour', texte: apres.titre, lien: `#${lien}`, projet: apres.projet });
@@ -162,6 +172,19 @@ async function recalculerProgression(projetId) {
   if (valeur !== Number(p.progression.valeur)) await ref.update({ 'progression.valeur': valeur, maj: FieldValue.serverTimestamp() });
 }
 
+/* Le devis d'une étape et le montant HT de sa ligne (projets/{p}/montants/
+   jalon-{id}), quand elle en a. Rien n'est levé : une étape sans devis
+   rend simplement vide. */
+const euros = (n) => `${Number(n).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} €`;
+async function ligneDeDevis(projetId, jalonId, jalon) {
+  if (!jalon || !jalon.devis) return { numero: '', montant: null };
+  let numero = '';
+  let montant = null;
+  try { const d = await bdd.doc(`documents/${jalon.devis}`).get(); if (d.exists) numero = String(d.data().numero || ''); } catch (err) { console.error('Devis de l étape illisible', err); }
+  try { const m = await bdd.doc(`projets/${projetId}/montants/jalon-${jalonId}`).get(); if (m.exists && Number.isFinite(Number(m.data().montant))) montant = Number(m.data().montant); } catch (err) { console.error('Montant de l étape illisible', err); }
+  return { numero, montant };
+}
+
 exports.hubJalonEcrit = onDocumentWritten({ region: REGION, document: 'projets/{projetId}/jalons/{jalonId}' }, async (evenement) => {
   const projetId = evenement.params.projetId;
   const avant = evenement.data.before.exists ? evenement.data.before.data() : null;
@@ -172,7 +195,18 @@ exports.hubJalonEcrit = onDocumentWritten({ region: REGION, document: 'projets/{
   else if (apres && avant && avant.statut !== apres.statut && apres.statut === 'termine') {
     await activite({ projet: projetId, type: 'jalon', texte: `a terminé l'étape « ${apres.titre} »`, lien });
     const projet = await lireProjet(projetId);
-    await notifierClients(projet, 'jalon', { type: 'jalon', titre: 'Étape terminée', texte: apres.titre, lien: `#${lien}`, projet: projetId });
+    /* Une étape née d'une ligne de devis : la notification nomme le devis,
+       et dit le montant HT de la ligne aux seuls responsables, puisque la
+       finance n'est qu'à eux. Les autres lisent le devis sans le chiffre. */
+    const { numero, montant } = await ligneDeDevis(projetId, evenement.params.jalonId, apres);
+    const texteBase = numero ? `${apres.titre} · devis ${numero}` : apres.titre;
+    const uids = await communication.uidsClients(projet, 'jalon');
+    const roles = (projet && projet.roles) || {};
+    const responsables = uids.filter((u) => roles[u] === 'responsable');
+    const autres = uids.filter((u) => roles[u] !== 'responsable');
+    const notif = { type: 'jalon', titre: 'Étape terminée', lien: `#${lien}`, projet: projetId };
+    if (responsables.length) await notifier(responsables, { ...notif, texte: numero && montant !== null ? `${texteBase} · ${euros(montant)} HT` : texteBase });
+    if (autres.length) await notifier(autres, { ...notif, texte: texteBase });
   } else if (apres && avant && avant.statut !== apres.statut && apres.statut === 'bloque') {
     await activite({ projet: projetId, type: 'jalon', texte: `a marqué l'étape « ${apres.titre} » comme bloqué`, lien, visibilite: 'interne' });
   } else if (!apres && avant) await activite({ projet: projetId, type: 'jalon', texte: `a retiré l'étape « ${avant.titre} »`, lien, visibilite: 'interne' });
@@ -187,8 +221,9 @@ exports.hubReleaseEcrite = onDocumentWritten({ region: REGION, document: 'releas
   const apres = evenement.data.after.exists ? evenement.data.after.data() : null;
   if (!apres) return;
   const projet = await lireProjet(apres.projet);
-  const nom = `${({ ios: 'iOS', android: 'Android', web: 'Web', backend: 'Backend', admin: 'Tableau de bord' })[apres.plateforme] || apres.plateforme || ''} ${apres.version || ''}`.trim();
-  const lien = `/projets/${apres.projet}/releases`;
+  const nom = `${({ ios: 'iPhone', android: 'Android', web: 'Web', backend: 'Serveur', admin: 'Tableau de bord', landing: 'Site vitrine' })[apres.plateforme] || apres.plateforme || ''} ${apres.version || ''}`.trim();
+  /* La fiche de la version, pas la liste : un clic, et tout y est. */
+  const lien = `/projets/${apres.projet}/releases/${evenement.params.releaseId}`;
   const visibilite = apres.visibilite === 'interne' ? 'interne' : 'client';
   const devientDisponible = apres.statut === 'disponible' && (!avant || avant.statut !== 'disponible');
   if (!avant) await activite({ projet: apres.projet, type: 'release', texte: `a créé la version ${nom}`, par: auteurDe(apres), lien, visibilite: devientDisponible ? visibilite : 'interne' });
@@ -223,6 +258,19 @@ exports.hubFichierCree = onDocumentCreated({ region: REGION, document: 'fichiers
   }
 });
 
+/* Le client retire un fichier qu'il avait déposé (les règles ne laissent
+   effacer que cela) : l'équipe le sait, l'activité le garde. */
+exports.hubFichierRetire = v2firestore.onDocumentDeleted({ region: REGION, document: 'fichiers/{fichierId}' }, async (evenement) => {
+  const f = evenement.data && evenement.data.data();
+  if (!f || !f.projet) return;
+  const par = f.par ? { uid: f.par.uid, nom: f.par.nom, cote: f.par.cote } : null;
+  if (!par || par.cote !== 'client') return;
+  const projet = await lireProjet(f.projet);
+  const lien = `/projets/${f.projet}/fichiers`;
+  await activite({ projet: f.projet, type: 'fichier', texte: `a retiré le fichier « ${f.nom} »`, par, lien, visibilite: 'client' });
+  await notifierEquipe(f.projet, { type: 'fichier', titre: 'Fichier retiré par le client', texte: `${f.nom} · ${nomProjet(projet)}`, lien: `#${lien}`, projet: f.projet });
+});
+
 /* ==========================================================================
    5. Les réunions
    ========================================================================== */
@@ -232,7 +280,8 @@ exports.hubReunionEcrite = onDocumentWritten({ region: REGION, document: 'reunio
   const apres = evenement.data.after.exists ? evenement.data.after.data() : null;
   if (!apres) return;
   const projet = await lireProjet(apres.projet);
-  const lien = `/projets/${apres.projet}/reunions`;
+  /* La fiche de la réunion, pas la liste : rejoindre, agenda, compte rendu. */
+  const lien = `/projets/${apres.projet}/reunions/${evenement.params.reunionId}`;
   const visibilite = apres.visibilite === 'interne' ? 'interne' : 'client';
   const quand = apres.date && apres.date.toDate ? apres.date.toDate() : null;
   const dateTexte = quand ? quand.toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' }) : '';
@@ -273,17 +322,42 @@ exports.hubValidationModifiee = onDocumentUpdated({ region: REGION, document: 'v
   if (avant.statut === apres.statut) return;
   const projet = await lireProjet(apres.projet);
   const lienAdmin = `/validations/${evenement.params.validationId}`;
+  const lienClient = `/valider/${evenement.params.validationId}`;
   if (apres.statut === 'approuvee' || apres.statut === 'modifications') {
     const qui = apres.reponse || {};
-    const texte = apres.statut === 'approuvee' ? `a approuvé « ${apres.titre} »` : `a demandé des modifications sur « ${apres.titre} »`;
+    const approuvee = apres.statut === 'approuvee';
+    const texte = approuvee ? `a approuvé « ${apres.titre} »` : `a demandé des modifications sur « ${apres.titre} »`;
     await activite({ projet: apres.projet, type: 'validation', texte, par: { uid: qui.par, nom: qui.nom, cote: 'client' }, lien: lienAdmin });
-    await notifierEquipe(apres.projet, { type: 'validation', titre: apres.statut === 'approuvee' ? 'Validation approuvée' : 'Modifications demandées', texte: `${apres.titre} · ${nomProjet(projet)}`, lien: `#${lienAdmin}`, projet: apres.projet });
+    await notifierEquipe(apres.projet, { type: 'validation', titre: approuvee ? 'Validation approuvée' : 'Modifications demandées', texte: `${apres.titre} · ${nomProjet(projet)}`, lien: `#${lienAdmin}`, projet: apres.projet });
     await mettreEnFile('validation-reponse', contactsEquipe(), { projetNom: nomProjet(projet), titre: apres.titre, statut: apres.statut, par: qui.nom, commentaire: qui.commentaire, lien: LIEN_ADMIN(lienAdmin) });
     await audit('validation', { projet: apres.projet, validation: evenement.params.validationId, statut: apres.statut, par: qui.par || null, nom: qui.nom || '' });
+    /* Un accusé à celui qui a répondu, et ses collègues du projet sont
+       prévenus (lui exclu) : avant, rien ne revenait à personne. */
+    if (qui.par) await notifier([qui.par], { type: 'validation', titre: approuvee ? 'Merci, c\'est validé' : 'Vos remarques sont transmises', texte: apres.titre, lien: `#${lienClient}`, projet: apres.projet });
+    await notifierClients(projet, 'validation', { type: 'validation', titre: `${qui.nom || 'Un collègue'} a ${approuvee ? 'approuvé' : 'demandé des modifications sur'} « ${apres.titre} »`, texte: nomProjet(projet), lien: `#${lienClient}`, projet: apres.projet }, { exclure: [qui.par].filter(Boolean) });
   } else if (apres.statut === 'annulee') {
     await activite({ projet: apres.projet, type: 'validation', texte: `a annulé la demande de validation « ${apres.titre} »`, lien: lienAdmin, visibilite: 'interne' });
+    /* Le client l'apprend, et la notification « Votre validation est
+       attendue » qui pointait vers elle est marquée lue : elle ne
+       renvoie plus vers une validation annulée. */
+    await notifierClients(projet, 'validation', { type: 'validation', titre: 'Validation retirée', texte: `${apres.titre} : vous n'avez plus rien à faire.`, lien: `#${lienClient}`, projet: apres.projet });
+    await marquerLuesParLien((projet && projet.membres) || [], `#${lienClient}`, { saufTitre: 'Validation retirée' });
   }
 });
+
+/* Marque lues, dans la boîte de chaque uid, les notifications qui mènent
+   à ce lien, sauf celle qui vient d'être écrite (son titre). */
+async function marquerLuesParLien(uids, lien, { saufTitre = '' } = {}) {
+  for (const uid of new Set((uids || []).filter(Boolean))) {
+    try {
+      const q = await bdd.collection(`boites/${uid}/notifications`).where('lien', '==', lien).where('lu', '==', false).get();
+      const lot = bdd.batch();
+      let n = 0;
+      for (const d of q.docs) { if (saufTitre && d.data().titre === saufTitre) continue; lot.update(d.ref, { lu: true }); n += 1; }
+      if (n) await lot.commit();
+    } catch (err) { console.error(`Notifications de ${uid} non marquées lues`, err); }
+  }
+}
 
 /* ==========================================================================
    7. Les notes, les blocages
@@ -305,15 +379,26 @@ exports.hubBlocageEcrit = onDocumentWritten({ region: REGION, document: 'blocage
   const apres = evenement.data.after.exists ? evenement.data.after.data() : null;
   if (!apres) return;
   const lien = `/projets/${apres.projet}`;
+  /* La fiche du point bloquant s'ouvre à l'arrivée : « ?blocage=<id> ». */
+  const lienFiche = `/projets/${apres.projet}?blocage=${evenement.params.blocageId}`;
   const visibilite = apres.visibilite === 'interne' ? 'interne' : 'client';
   if (!avant) {
     await activite({ projet: apres.projet, type: 'blocage', texte: `a signalé un point bloquant : « ${apres.titre} »`, lien, visibilite });
     if (visibilite === 'client' && apres.responsable === 'client') {
       const projet = await lireProjet(apres.projet);
-      await notifierClients(projet, 'blocage', { type: 'blocage', titre: 'Un point bloque de votre côté', texte: apres.titre, lien: `#${lien}`, projet: apres.projet });
+      await notifierClients(projet, 'blocage', { type: 'blocage', titre: 'Un point bloque de votre côté', texte: apres.titre, lien: `#${lienFiche}`, projet: apres.projet });
+      /* Une lettre, avec ce qu'on attend de lui : la notification seule ne
+         disait ni quoi faire, ni pour quand. */
+      await ecrireAuxClients(projet, 'blocage-client', 'blocage-client', { projetNom: nomProjet(projet), titre: apres.titre, description: apres.description || '', attendu: apres.attendu || '', echeance: apres.echeance || null, lien: LIEN(lienFiche) }, { parDestinataire: true });
     }
   } else if (!avant.resolu && apres.resolu) {
     await activite({ projet: apres.projet, type: 'blocage', texte: `a levé le point bloquant « ${apres.titre} »`, lien, visibilite });
+  } else if (!avant.signaleFait && apres.signaleFait) {
+    /* « C'est fait », dit le client : l'équipe vérifie et lève. */
+    const qui = apres.signaleFait;
+    const projet = await lireProjet(apres.projet);
+    await activite({ projet: apres.projet, type: 'blocage', texte: `a dit que le point bloquant « ${apres.titre} » est réglé de son côté`, par: { uid: qui.par || null, nom: qui.nom || 'Le client', cote: 'client' }, lien, visibilite });
+    await notifierEquipe(apres.projet, { type: 'blocage', titre: 'Point bloquant : le client dit que c\'est fait', texte: `${apres.titre} · ${nomProjet(projet)}${qui.texte ? ` · ${String(qui.texte).slice(0, 120)}` : ''}`, lien: `#${lien}`, projet: apres.projet });
   }
 });
 
@@ -327,9 +412,12 @@ exports.hubMessageProjet = onDocumentCreated({ region: REGION, document: 'projet
   const projetId = evenement.params.projetId;
   const projet = await lireProjet(projetId);
   const de = m.de || {};
-  const extrait = String(m.texte || '').slice(0, 140);
+  const nbPieces = (m.pieces || []).length;
+  /* Un message sans texte n'est que des pièces : on le dit, plutôt que de
+     citer un mot vide. */
+  const extrait = String(m.texte || '').trim().slice(0, 140) || (nbPieces > 1 ? `${nbPieces} pièces jointes` : 'Pièce jointe');
   const lienClient = `/messages/${projetId}`;
-  await activite({ projet: projetId, type: 'message', texte: `a écrit dans la conversation : « ${extrait}${(m.texte || '').length > 140 ? '…' : ''} »`, par: { uid: de.uid, nom: de.nom, cote: de.cote }, lien: lienClient });
+  await activite({ projet: projetId, type: 'message', texte: String(m.texte || '').trim() ? `a écrit dans la conversation : « ${extrait}${(m.texte || '').length > 140 ? '…' : ''} »` : `a envoyé ${extrait.toLowerCase()} dans la conversation`, par: { uid: de.uid, nom: de.nom, cote: de.cote }, lien: lienClient });
   if (de.cote === 'equipe') {
     await notifierClients(projet, 'message', { type: 'message', titre: `Nouveau message de ${de.nom || 'Capmedia'}`, texte: extrait, lien: `#${lienClient}`, projet: projetId }, { exclure: [de.uid] });
     await ecrireAuxClients(projet, 'message-projet', 'message-projet', { projetNom: nomProjet(projet), auteur: de.nom || 'Capmedia', texte: m.texte, pieces: (m.pieces || []).length, lien: LIEN(lienClient) });
@@ -362,7 +450,37 @@ exports.hubDocumentActivite = onDocumentWritten({ region: REGION, document: 'doc
   const nom = `${apres.numero || ''}`.trim();
   const lien = `/finances/${evenement.params.documentId}`;
   if (!avant) { await activite({ projet: apres.projet, type: genre, texte: `a déposé ${genre === 'devis' ? 'le devis' : 'la facture'} ${nom}`, lien }); return; }
+  /* « J'ai réglé cette facture » : le client déclare, le serveur prévient
+     l'équipe (boîte du Cockpit et lettre) et l'écrit dans l'activité. La
+     confirmation (par l'enregistrement du paiement) ne redéclenche rien. */
+  const declare = apres.reglementDeclare || null;
+  const declareAvant = (avant && avant.reglementDeclare) || null;
+  if (genre === 'facture' && declare && (!declareAvant || enMillis(declareAvant.le) !== enMillis(declare.le))) {
+    const projet = await lireProjet(apres.projet);
+    const somme = Number(declare.montant) || 0;
+    const texteMontant = `${somme.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })} TTC`;
+    const par = { uid: declare.par || null, nom: declare.nom || '', cote: 'client' };
+    await activite({ projet: apres.projet, type: 'paiement', texte: `a déclaré un règlement de ${texteMontant} sur la facture ${nom}`, par, lien });
+    await notifierEquipe(apres.projet, { type: 'paiement', titre: 'Règlement déclaré', texte: `${nom} · ${texteMontant} · ${nomProjet(projet)}`, lien: `#${lien}`, projet: apres.projet });
+    const ttc = typeof apres.ttc === 'number' ? apres.ttc : (Number(apres.montant) || 0) * (1 + (Number(apres.tva) || 0) / 100);
+    let reste = ttc;
+    try {
+      const q = await bdd.collection('paiements').where('facture', '==', evenement.params.documentId).get();
+      reste = Math.max(0, ttc - q.docs.reduce((t, d) => t + (d.data().statut !== 'annule' ? Number(d.data().montant) || 0 : 0), 0));
+    } catch (err) { console.error('Paiements illisibles pour le reste à payer', err); }
+    const MOYENS = { virement: 'Virement', carte: 'Carte', stripe: 'Stripe', cheque: 'Chèque', especes: 'Espèces', autre: 'Autre' };
+    await mettreEnFile('reglement-declare', contactsEquipe(), {
+      numero: apres.numero, libelle: apres.libelle, projetNom: nomProjet(projet), par: declare.nom || '',
+      montant: somme, date: declare.date || null, moyen: MOYENS[declare.moyen] || declare.moyen || '', reference: declare.reference || '',
+      reste, lien: LIEN_ADMIN(lien), cote: 'equipe',
+    }, { projet: apres.projet, evenement: 'reglement-declare' });
+  }
   if (avant.statut !== apres.statut) {
+    /* Le retard et l'expiration posés par la fonction quotidienne portent
+       leur marque (retardSignale, expireSignale) : elle a déjà écrit la
+       ligne d'activité qui va avec, on ne la double pas. */
+    if ((apres.statut === 'en-retard' && apres.retardSignale && !avant.retardSignale)
+        || (apres.statut === 'expire' && apres.expireSignale && !avant.expireSignale)) return;
     /* Une réponse à un devis qui ne vient ni d'un responsable, ni de
        l'équipe qui gère la finance, est défaite par suiviDocumentModifie :
        elle ne laisse aucune trace d'activité. */
@@ -372,8 +490,19 @@ exports.hubDocumentActivite = onDocumentWritten({ region: REGION, document: 'doc
     }
     const qui = apres.reponse && apres.statut !== avant.statut && ['accepte', 'refuse'].includes(apres.statut) ? { uid: apres.reponse.par, nom: apres.reponse.nom, cote: apres.reponse.cote === 'equipe' ? 'equipe' : 'client' } : null;
     const libelles = { accepte: 'a accepté', refuse: 'a refusé', consulte: 'a consulté', payee: 'a réglé', 'a-payer': 'a mis à payer', 'en-retard': 'a marqué en retard', envoye: 'a envoyé', envoyee: 'a envoyé', partielle: 'a réglé en partie', annule: 'a annulé', annulee: 'a annulé', expire: 'a laissé expirer' };
-    await activite({ projet: apres.projet, type: genre, texte: `${libelles[apres.statut] || `a passé en ${apres.statut}`} ${genre === 'devis' ? 'le devis' : 'la facture'} ${nom}`, par: qui, lien, visibilite: apres.statut === 'consulte' ? 'interne' : 'client' });
-    if (['accepte', 'refuse'].includes(apres.statut)) await audit('devis', { projet: apres.projet, document: evenement.params.documentId, statut: apres.statut, par: (apres.reponse || {}).par || null });
+    /* Une seule ligne pour une acceptation, la plus parlante : le devis
+       fondateur fait démarrer le projet, un avenant s'accepte. */
+    const signature = apres.type === 'devis' && apres.statut === 'accepte' && (apres.portee || 'initial') === 'initial';
+    const texte = signature ? `a signé le devis ${nom} : le projet démarre` : `${libelles[apres.statut] || `a passé en ${apres.statut}`} ${genre === 'devis' ? 'le devis' : 'la facture'} ${nom}`;
+    await activite({ projet: apres.projet, type: genre, texte, par: qui, cible: signature ? evenement.params.documentId : undefined, lien, visibilite: apres.statut === 'consulte' ? 'interne' : 'client' });
+    if (['accepte', 'refuse'].includes(apres.statut)) {
+      await audit('devis', { projet: apres.projet, document: evenement.params.documentId, statut: apres.statut, par: (apres.reponse || {}).par || null });
+      /* L'équipe l'apprend dans le Cockpit, pas seulement par la lettre. */
+      if (apres.type === 'devis' && qui && qui.cote === 'client') {
+        const projet = await lireProjet(apres.projet);
+        await notifierEquipe(apres.projet, { type: 'devis', titre: apres.statut === 'accepte' ? 'Devis accepté' : 'Devis refusé', texte: `${nom} · ${nomProjet(projet)}`, lien: `#${lien}`, projet: apres.projet });
+      }
+    }
     if (apres.statut === 'payee') { const projet = await lireProjet(apres.projet); await notifierClients(projet, 'facture', { type: 'facture', titre: 'Facture réglée', texte: nom, lien: `#${lien}`, projet: apres.projet }); }
   }
 });
@@ -392,6 +521,11 @@ exports.hubTicketActivite = onDocumentWritten({ region: REGION, document: 'ticke
   if (!avant) {
     await activite({ projet: apres.projet, type: 'demande', texte: `a ouvert la demande ${nom}`, par: apres.auteur ? { uid: apres.auteur.uid, nom: apres.auteur.nom, cote: apres.auteur.cote } : null, lien });
     if (apres.auteur && apres.auteur.cote === 'client') await notifierEquipe(apres.projet, { type: 'demande', titre: 'Nouvelle demande', texte: `${apres.titre} · ${nomProjet(projet)}`, lien: `#${lien}`, projet: apres.projet });
+    /* « Suite de » : l'ancienne demande apprend laquelle la poursuit. Le
+       client ne peut pas écrire « suivant » (règles) : le serveur le fait. */
+    if (apres.suite && typeof apres.suite === 'string') {
+      try { await bdd.doc(`tickets/${apres.suite}`).update({ suivant: evenement.params.ticketId }); } catch (err) { console.error(`La demande ${apres.suite} n'a pas reçu sa suite`, err); }
+    }
     return;
   }
   if (avant.statut !== apres.statut) {
@@ -400,11 +534,16 @@ exports.hubTicketActivite = onDocumentWritten({ region: REGION, document: 'ticke
     /* La marque « repart » distingue la réponse du client (posée par le
        serveur) du même passage fait à la main par l'équipe. */
     const repondu = avant.statut === 'en-attente-client' && apres.statut === 'en-cours' && Boolean(apres.repart) && String(avant.repart || '') !== String(apres.repart);
-    const parClient = (avant.statut === 'a-valider' && apres.statut === 'resolu') || (avant.statut === 'resolu' && apres.statut === 'en-cours') || conteste || repondu;
-    await activite({ projet: apres.projet, type: 'demande', texte: repondu ? `a répondu : la demande ${nom} repart` : `a passé la demande ${nom} en ${libelles[apres.statut] || apres.statut}`, par: parClient && apres.auteur ? { uid: apres.auteur.uid, nom: apres.auteur.nom, cote: 'client' } : null, lien });
+    /* « Je n'en ai plus besoin » : le client retire sa demande. Sa marque
+       « lu.client » bouge avec le statut ; l'équipe, qui annule depuis le
+       pilotage, ne la touche pas. */
+    const retiree = ['nouveau', 'a-analyser', 'acceptee', 'planifiee'].includes(avant.statut) && apres.statut === 'annulee'
+      && String((avant.lu || {}).client || '') !== String((apres.lu || {}).client || '');
+    const parClient = (avant.statut === 'a-valider' && apres.statut === 'resolu') || (avant.statut === 'resolu' && apres.statut === 'en-cours') || conteste || repondu || retiree;
+    await activite({ projet: apres.projet, type: 'demande', texte: repondu ? `a répondu : la demande ${nom} repart` : retiree ? `a retiré la demande ${nom}` : `a passé la demande ${nom} en ${libelles[apres.statut] || apres.statut}`, par: parClient && apres.auteur ? { uid: apres.auteur.uid, nom: apres.auteur.nom, cote: 'client' } : null, lien });
     /* La réponse elle-même a déjà prévenu l'équipe (le message) : pas de
        seconde notification pour la demande qui repart. */
-    if (!repondu && parClient) await notifierEquipe(apres.projet, { type: 'demande', titre: apres.statut === 'resolu' ? 'Correction validée par le client' : conteste ? 'Correction contestée par le client' : 'Demande rouverte par le client', texte: `${apres.titre} · ${nomProjet(projet)}`, lien: `#${lien}`, projet: apres.projet });
+    if (!repondu && parClient) await notifierEquipe(apres.projet, { type: 'demande', titre: apres.statut === 'resolu' ? 'Correction validée par le client' : conteste ? 'Correction contestée par le client' : retiree ? 'Demande retirée par le client' : 'Demande rouverte par le client', texte: `${apres.titre} · ${nomProjet(projet)}`, lien: `#${lien}`, projet: apres.projet });
     else if (!repondu) await notifierClients(projet, 'demande', { type: 'demande', titre: `Demande ${libelles[apres.statut] || apres.statut}`, texte: apres.titre, lien: `#${lien}`, projet: apres.projet });
   }
   if (avant.qualification !== apres.qualification && apres.qualification) {
@@ -435,7 +574,12 @@ exports.hubMessageTicketBoite = onDocumentCreated({ region: REGION, document: 't
     try { await ticket.ref.update({ statut: 'en-cours', repart: FieldValue.serverTimestamp(), maj: FieldValue.serverTimestamp(), 'lu.client': FieldValue.serverTimestamp() }); } catch (err) { console.error('La demande n\'a pas pu repartir', err); }
   }
   if (de.cote === 'equipe') await notifierClients(projet, 'message', { type: 'message', titre: `Réponse sur ${t.numero || 'votre demande'}`, texte: String(m.texte || '').slice(0, 140), lien: `#${lien}`, projet: t.projet }, { exclure: [de.uid] });
-  else await notifierEquipe(t.projet, { type: 'message', titre: `${de.nom || 'Le client'} a répondu`, texte: `${t.numero || ''} ${t.titre}`.trim(), lien: `#${lien}`, projet: t.projet }, { exclure: [de.uid] });
+  else {
+    await notifierEquipe(t.projet, { type: 'message', titre: `${de.nom || 'Le client'} a répondu`, texte: `${t.numero || ''} ${t.titre}`.trim(), lien: `#${lien}`, projet: t.projet }, { exclure: [de.uid] });
+    /* Ses collègues du projet le savent aussi (lui exclu) : avant, seul
+       l'auteur suivait ce qu'il avait écrit. */
+    await notifierClients(projet, 'message', { type: 'message', titre: `${de.nom || 'Un collègue'} a répondu sur ${t.numero || 'une demande'}`, texte: String(m.texte || '').slice(0, 140), lien: `#${lien}`, projet: t.projet }, { exclure: [de.uid] });
+  }
 });
 
 /* ==========================================================================
@@ -551,6 +695,11 @@ exports.hubMaintenanceEcrite = onDocumentWritten({ region: REGION, document: 'pr
       const L = { proposee: 'remise en proposition', acceptee: 'acceptée', planifiee: 'planifiée', livree: 'livrée', refusee: 'écartée' };
       await activite({ projet: projetId, type: 'maintenance', texte: `a marqué l'évolution « ${apres.titre} » comme ${L[apres.statut] || apres.statut}`, lien });
       await notifierClients(projet, 'maintenance', { type: 'maintenance', titre: `Évolution ${L[apres.statut] || apres.statut}`, texte: apres.titre, lien: `#${lien}`, projet: projetId });
+      /* Une lettre aussi : le Hub seul ne prévient que ceux qui l'ouvrent.
+         Le nom de la séquence, s'il y en a une, se lit sur sa fiche. */
+      let sequence = '';
+      if (apres.sequence) { try { const sq = await bdd.doc(`projets/${projetId}/maintenance/${apres.sequence}`).get(); sequence = sq.exists ? (sq.data().titre || '') : ''; } catch (err) { sequence = ''; } }
+      await ecrireAuxClients(projet, 'evolution-statut', 'evolution-statut', { projet: nom, titre: apres.titre, statut: apres.statut, reponse: apres.reponse || '', sequence, version: apres.version || '', lien: LIEN(lien) });
       return;
     }
     if (!apres && avant) await activite({ projet: projetId, type: 'maintenance', texte: `a retiré l'évolution « ${avant.titre} »`, lien, visibilite: 'interne' });
@@ -569,6 +718,46 @@ exports.hubMaintenanceEcrite = onDocumentWritten({ region: REGION, document: 'pr
     else if (apres && avant && avant.statut !== apres.statut && apres.statut === 'close') await activite({ projet: projetId, type: 'maintenance', texte: `a clos la séquence de maintenance « ${apres.titre} »`, lien });
     else if (!apres && avant) await activite({ projet: projetId, type: 'maintenance', texte: `a retiré la séquence « ${avant.titre} »`, lien, visibilite: 'interne' });
   }
+});
+
+/* ==========================================================================
+   11 ter. Les personnes du projet, vues par le client
+
+   Les interlocuteurs (adresse, invitation) ne se lisent que par l'équipe.
+   Pour que le client sache qui est qui de son côté, le serveur tient sur
+   la fiche du projet un miroir « personnesClient » : le nom et le rôle des
+   interlocuteurs actifs, rien d'autre. Ni le client ni l'équipe ne
+   l'écrivent depuis un écran (règles), seul ce déclencheur.
+
+   Le champ « personnes » (les identifiants, préparés compris) existait
+   avant : il sert au registre des rôles et aux requêtes du serveur, on
+   n'y touche pas.
+   ========================================================================== */
+
+const ROLES_CLIENT_MIROIR = ['responsable', 'collaborateur'];
+const miroirPersonnes = (interlocuteurs) => {
+  const vus = new Set();
+  return interlocuteurs
+    .filter((i) => i && i.statut === 'actif' && i.uid && ROLES_CLIENT_MIROIR.includes(i.role))
+    .filter((i) => { if (vus.has(i.uid)) return false; vus.add(i.uid); return true; })
+    .map((i) => ({ uid: String(i.uid), nom: String(i.nom || i.email || '').slice(0, 120), role: i.role }))
+    .sort((a, b) => (a.role === b.role ? a.nom.localeCompare(b.nom) : (a.role === 'responsable' ? -1 : 1)));
+};
+
+exports.hubInterlocuteurEcrit = onDocumentWritten({ region: REGION, document: 'projets/{projetId}/interlocuteurs/{cle}' }, async (evenement) => {
+  const projetId = evenement.params.projetId;
+  const ref = bdd.doc(`projets/${projetId}`);
+  const projet = await ref.get();
+  if (!projet.exists) return;
+  const interlocuteurs = (await ref.collection('interlocuteurs').get()).docs.map((d) => d.data());
+  const miroir = miroirPersonnes(interlocuteurs);
+  /* Rien à écrire si rien n'a changé : une écriture pour rien réveillerait
+     les écoutes du client et le déclencheur du projet. */
+  const actuel = Array.isArray(projet.data().personnesClient) ? projet.data().personnesClient : [];
+  if (JSON.stringify(actuel) === JSON.stringify(miroir)) return;
+  /* « maj » bouge aussi : c'est elle que les écrans regardent pour savoir
+     s'il y a quelque chose de neuf à redessiner. */
+  try { await ref.update({ personnesClient: miroir, maj: FieldValue.serverTimestamp() }); } catch (err) { console.error(`Miroir des personnes non écrit sur ${projetId}`, err); }
 });
 
 /* ==========================================================================
@@ -636,6 +825,85 @@ exports.hubProjetCree = onDocumentCreated({ region: REGION, document: 'projets/{
   if (p.organisation) await acces.recalculerOrganisation(String(p.organisation));
   /* L'annonce « votre espace est ouvert » part à l'ouverture, pas à la
      création : un projet naît fermé (voir ouvrirAuClient). */
+});
+
+/* ==========================================================================
+   12 bis. Les tests avant la sortie, vus du client
+
+   Une anomalie qui naît d'un échec de testeur, une anomalie corrigée, une
+   campagne qui s'ouvre ou se ferme : le client en est prévenu dans le Hub
+   et par lettre (préférence « projet »). À la clôture d'une campagne, le
+   serveur crée la validation « Bon pour sortie », réservée au responsable :
+   c'est le feu vert du client pour la mise en ligne, et lui seul le donne.
+   ========================================================================== */
+
+const LIBELLES_GRAVITE = { bloquant: 'bloquante', critique: 'critique', important: 'importante', mineur: 'mineure' };
+
+exports.hubAnomalieEcrite = onDocumentWritten({ region: REGION, document: 'projets/{projetId}/anomalies/{anomalieId}' }, async (evenement) => {
+  const avant = evenement.data.before.exists ? evenement.data.before.data() : null;
+  const apres = evenement.data.after.exists ? evenement.data.after.data() : null;
+  if (!apres) return;
+  const { projetId, anomalieId } = evenement.params;
+  const lien = `/tests?projet=${projetId}&anomalie=${anomalieId}`;
+  const gravite = LIBELLES_GRAVITE[apres.gravite] || apres.gravite || '';
+  const variables = { projetNom: '', titre: apres.titre || '', scenario: apres.scenario || '', gravite: apres.gravite || '', description: apres.description || '', lien: LIEN(lien) };
+  if (!avant) {
+    /* Une anomalie posée à la main par l'équipe n'est pas encore une
+       nouvelle pour le client : seule celle que les testeurs ont trouvée. */
+    if (apres.origine !== 'testeur') return;
+    const projet = await lireProjet(projetId);
+    await activite({ projet: projetId, type: 'test', texte: `Les testeurs ont trouvé une anomalie : « ${apres.titre || apres.scenario || ''} »`, par: { uid: null, nom: 'Capmedia Test', cote: 'equipe' }, lien, visibilite: 'client' });
+    await notifierClients(projet, 'anomalie', { type: 'test', titre: 'Une anomalie a été trouvée par les testeurs', texte: [apres.scenario, apres.titre, gravite].filter(Boolean).join(' · '), lien: `#${lien}`, projet: projetId });
+    await ecrireAuxClients(projet, 'anomalie', 'anomalie', { ...variables, projetNom: nomProjet(projet), evenement: 'trouvee' });
+    return;
+  }
+  if (avant.statut === apres.statut || apres.statut !== 'corrigee') return;
+  const projet = await lireProjet(projetId);
+  await activite({ projet: projetId, type: 'test', texte: `a corrigé l'anomalie « ${apres.titre || apres.scenario || ''} »`, lien, visibilite: 'client' });
+  await notifierClients(projet, 'anomalie', { type: 'test', titre: 'Anomalie corrigée', texte: [apres.scenario, apres.titre].filter(Boolean).join(' · '), lien: `#${lien}`, projet: projetId });
+  await ecrireAuxClients(projet, 'anomalie', 'anomalie', { ...variables, projetNom: nomProjet(projet), evenement: 'corrigee' });
+});
+
+exports.hubCampagneEcrite = onDocumentWritten({ region: REGION, document: 'projets/{projetId}/campagnes/{campagneId}' }, async (evenement) => {
+  const avant = evenement.data.before.exists ? evenement.data.before.data() : null;
+  const apres = evenement.data.after.exists ? evenement.data.after.data() : null;
+  if (!apres) return;
+  const statutAvant = avant ? avant.statut : null;
+  if (statutAvant === apres.statut || !['en-cours', 'close'].includes(apres.statut)) return;
+  const { projetId, campagneId } = evenement.params;
+  const projet = await lireProjet(projetId);
+  const titre = apres.titre || 'Campagne de tests';
+  const lien = `/tests?projet=${projetId}&campagne=${campagneId}`;
+  const close = apres.statut === 'close';
+  let ouvertes = 0;
+  if (close) {
+    try {
+      const q = await bdd.collection(`projets/${projetId}/anomalies`).get();
+      ouvertes = q.docs.filter((d) => !['corrigee', 'sans-suite'].includes((d.data() || {}).statut)).length;
+    } catch (err) { console.error('Anomalies illisibles à la clôture', err); }
+  }
+  await activite({ projet: projetId, type: 'test', texte: close ? `a clos la campagne de tests « ${titre} »` : `a ouvert la campagne de tests « ${titre} »`, lien, visibilite: 'client' });
+  await notifierClients(projet, 'campagne', { type: 'test', titre: close ? 'Campagne close' : 'Campagne de tests ouverte', texte: titre, lien: `#${lien}`, projet: projetId });
+  await ecrireAuxClients(projet, 'campagne', 'campagne', {
+    projetNom: nomProjet(projet), titre, evenement: apres.statut, lien: LIEN(lien),
+    scenarios: (apres.scenarios || []).length, testeurs: (apres.testeurs || []).length, anomalies: ouvertes,
+  });
+  if (!close) return;
+  /* Le feu vert de sortie : une validation par campagne close, jamais deux
+     (rouvrir puis reclore la campagne ne redemande pas ce qui est déjà
+     demandé ou déjà donné). Sa création déclenche la notification et la
+     lettre « Votre validation est attendue » comme toute validation. */
+  try {
+    const deja = await bdd.collection('validations').where('projet', '==', projetId).where('type', '==', 'sortie').where('cible.id', '==', campagneId).limit(1).get();
+    if (!deja.empty) return;
+    await bdd.collection('validations').add(sansIndefini({
+      projet: projetId, titre: `Bon pour sortie : ${titre}`, type: 'sortie',
+      description: 'Les tests de la campagne sont terminés. En approuvant, vous donnez votre accord pour la mise en ligne.',
+      cible: { id: campagneId, libelle: titre, chemin: lien }, pieces: [], statut: 'en-attente', echeance: null,
+      reserveeResponsable: true, demandeur: { uid: null, nom: 'Capmedia Test' }, reponse: null,
+      cree: FieldValue.serverTimestamp(), maj: FieldValue.serverTimestamp(),
+    }));
+  } catch (err) { console.error('Validation de sortie non créée', err); }
 });
 
 /* ==========================================================================
@@ -843,8 +1111,17 @@ async function pointsEnAttente(projetId) {
   const expire = (x) => { const d = enDateFn(x.expiration); return Boolean(d) && d.getTime() < Date.now(); };
   await prendre('documents', (x) => x.type === 'devis' && ['envoye', 'consulte'].includes(x.statut) && !expire(x),
     (x) => ({ quoi: 'Devis à décider', detail: `${x.numero || ''} ${x.libelle || ''}`.trim() }));
+  /* Chaque facture avec ce qu'elle vaut et quand : « F-2026-0031 ·
+     1 200,00 € TTC · échéance 30/09 ». Sans montant ni date, la ligne ne
+     disait pas de quoi il retournait. */
+  const ttcDe = (x) => (typeof x.ttc === 'number' ? x.ttc : (Number(x.montant) || 0) * (1 + (Number(x.tva) || 0) / 100));
+  const jourMois = (v) => { const d = enDateFn(v); return d ? d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : ''; };
   await prendre('documents', (x) => x.type === 'facture' && FACTURES_DUES.includes(x.statut),
-    (x) => ({ quoi: 'Facture à régler', detail: `${x.numero || ''} ${x.libelle || ''}`.trim() }));
+    (x) => {
+      const j = ageEnJours(x.echeance);
+      const quand = x.echeance ? (j !== null && j > 0 ? `en retard de ${j} jour${j > 1 ? 's' : ''} (échéance ${jourMois(x.echeance)})` : `échéance ${jourMois(x.echeance)}`) : '';
+      return { quoi: 'Facture à régler', detail: [x.numero || x.libelle || '', `${ttcDe(x).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })} TTC`, quand].filter(Boolean).join(' · ') };
+    });
   await prendre('taches', (x) => !x.archive && x.statut === 'attente-client' && x.visibilite === 'client',
     (x) => ({ quoi: 'Tâche en attente de vous', detail: `${x.titre || ''} · ${depuisJours(x.maj)}` }));
   await prendre('blocages', (b) => !b.resolu && b.responsable === 'client' && b.visibilite === 'client',
@@ -932,4 +1209,173 @@ exports.hubRelanceHebdo = onSchedule(
     }
     console.log(`Relance hebdomadaire : ${envoyees} projet(s) relancé(s), ${ignorees} laissé(s) tranquilles.`);
   },
+);
+
+/* ==========================================================================
+   15. Les échéances, chaque matin
+
+   Le retard d'une facture et l'expiration d'un devis se posaient à la
+   main, quand l'équipe y pensait ; le client ne l'apprenait qu'au lundi
+   suivant, s'il lui restait des points. Chaque matin à 8 h, cette fonction
+   pose ce que le calendrier a déjà décidé :
+     - trois jours avant l'échéance d'une facture due, un rappel au client
+       (« Facture à régler avant le … »), une seule fois (echeanceSignalee) ;
+     - l'échéance passée, la facture passe « en retard », le client en est
+       averti (notification et lettre), une seule fois (retardSignale) ;
+     - la validité passée, le devis passe « expiré » (activité, pas de
+       lettre : on lui en propose un à jour de vive voix).
+   Le déclencheur d'activité (hubDocumentActivite) reconnaît les marques et
+   n'écrit pas une seconde ligne.
+   ========================================================================== */
+
+const JOUR = 24 * 3600 * 1000;
+const RAPPEL_AVANT_JOURS = 3;
+
+/* Le calendrier se lit en jours pleins, dans le fuseau de l'agence : une
+   échéance « le 30 » est passée le 1er au matin, pas à minuit UTC. */
+const debutDuJour = (d) => new Date(new Date(d).toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' }));
+const joursAvantEcheance = (v, maintenant) => { const d = enDateFn(v); return d ? Math.round((debutDuJour(d) - debutDuJour(maintenant)) / JOUR) : null; };
+const ttcDuDocument = (x) => (typeof x.ttc === 'number' ? x.ttc : (Number(x.montant) || 0) * (1 + (Number(x.tva) || 0) / 100));
+const dateFrCourte = (v) => { const d = enDateFn(v); return d ? d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Paris' }) : ''; };
+const resteSurFacture = async (id, x) => {
+  try {
+    const q = await bdd.collection('paiements').where('facture', '==', id).get();
+    return Math.max(0, ttcDuDocument(x) - q.docs.reduce((t, d) => t + (d.data().statut !== 'annule' ? Number(d.data().montant) || 0 : 0), 0));
+  } catch (err) { console.error('Paiements illisibles', err); return ttcDuDocument(x); }
+};
+
+/** Le passage d'un matin. Séparé de la planification pour l'épreuve. */
+async function passerLesEcheances(maintenant = new Date()) {
+  const bilan = { rappels: 0, retards: 0, expires: 0 };
+  let factures = [];
+  let devis = [];
+  try {
+    factures = (await bdd.collection('documents').where('type', '==', 'facture').where('statut', 'in', FACTURES_DUES).get()).docs;
+    devis = (await bdd.collection('documents').where('type', '==', 'devis').where('statut', 'in', ['envoye', 'consulte']).get()).docs;
+  } catch (err) { console.error('Échéances : documents illisibles', err); return bilan; }
+
+  for (const d of factures) {
+    const x = d.data();
+    if (x.archive === true || !x.echeance) continue;
+    const jours = joursAvantEcheance(x.echeance, maintenant);
+    if (jours === null) continue;
+    const nom = `${x.numero || ''}`.trim();
+    const lien = `/finances/${d.id}`;
+    const projet = await lireProjet(x.projet);
+    if (jours < 0 && !x.retardSignale) {
+      /* La facture passe en retard, et le client l'apprend une fois. */
+      const reste = await resteSurFacture(d.id, x);
+      try { await d.ref.update({ statut: 'en-retard', retardSignale: FieldValue.serverTimestamp() }); } catch (err) { console.error(`Retard non posé sur ${d.id}`, err); continue; }
+      /* Sans auteur : c'est le calendrier qui parle, pas quelqu'un. */
+      await activite({ projet: x.projet, type: 'facture', texte: `La facture ${nom} est passée en retard (échéance du ${dateFrCourte(x.echeance)})`, par: { uid: null, nom: '', cote: 'equipe' }, lien });
+      await notifierClients(projet, 'facture-retard', { type: 'facture', titre: 'Facture en retard', texte: `${nom} · ${reste.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })} TTC`, lien: `#${lien}`, projet: x.projet });
+      await ecrireAuxClients(projet, 'facture-retard', 'facture-retard', { numero: x.numero, libelle: x.libelle, reste, echeance: x.echeance, projetNom: nomProjet(projet), clientNom: (projet && projet.client && projet.client.nom) || '', lien: LIEN(lien) });
+      bilan.retards += 1;
+    } else if (jours >= 0 && jours <= RAPPEL_AVANT_JOURS && !x.echeanceSignalee && x.statut !== 'en-retard') {
+      /* Trois jours avant, un rappel, une fois. */
+      const reste = await resteSurFacture(d.id, x);
+      try { await d.ref.update({ echeanceSignalee: FieldValue.serverTimestamp() }); } catch (err) { console.error(`Rappel non marqué sur ${d.id}`, err); continue; }
+      await notifierClients(projet, 'facture-echeance', { type: 'facture', titre: `Facture à régler avant le ${dateFrCourte(x.echeance)}`, texte: `${nom} · ${reste.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })} TTC`, lien: `#${lien}`, projet: x.projet });
+      await ecrireAuxClients(projet, 'facture-echeance', 'facture-echeance', { numero: x.numero, libelle: x.libelle, reste, echeance: x.echeance, projetNom: nomProjet(projet), clientNom: (projet && projet.client && projet.client.nom) || '', lien: LIEN(lien) });
+      bilan.rappels += 1;
+    }
+  }
+
+  for (const d of devis) {
+    const x = d.data();
+    if (x.archive === true || !x.expiration) continue;
+    const jours = joursAvantEcheance(x.expiration, maintenant);
+    if (jours === null || jours >= 0) continue;
+    const nom = `${x.numero || ''}`.trim();
+    try { await d.ref.update({ statut: 'expire', expireSignale: FieldValue.serverTimestamp() }); } catch (err) { console.error(`Expiration non posée sur ${d.id}`, err); continue; }
+    await activite({ projet: x.projet, type: 'devis', texte: `Le devis ${nom} est arrivé au bout de sa validité (${dateFrCourte(x.expiration)})`, par: { uid: null, nom: '', cote: 'equipe' }, lien: `/finances/${d.id}` });
+    bilan.expires += 1;
+  }
+  console.log(`Échéances du matin : ${bilan.rappels} rappel(s), ${bilan.retards} facture(s) passée(s) en retard, ${bilan.expires} devis expiré(s).`);
+  return bilan;
+}
+
+/* Exposée pour l'épreuve, sans la planification. */
+exports._passerLesEcheances = passerLesEcheances;
+
+exports.hubEcheancesQuotidien = onSchedule(
+  { region: REGION, schedule: 'every day 08:00', timeZone: 'Europe/Paris' },
+  async () => { await passerLesEcheances(new Date()); },
+);
+
+/* ==========================================================================
+   Le rappel de la veille pour les réunions
+
+   Rien ne rappelait une réunion avant l'heure. À 17 h (Europe/Paris),
+   chaque réunion visible du client qui a lieu demain reçoit une
+   notification et une lettre « reunion-rappel », une seule fois : la
+   réunion garde la marque « rappelEnvoye ». La lettre suit la préférence
+   « reunions » du client, comme la programmation. Séparé de la
+   planification pour l'épreuve.
+   ========================================================================== */
+
+/* Minuit à Paris pour un jour du calendrier (année, mois de 0 à 11, jour) :
+   minuit UTC moins le décalage de Paris à cet instant, en deux passes pour
+   tenir le jour du changement d'heure. */
+const decalageParis = (d) => {
+  const p = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Paris', hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    .formatToParts(d).reduce((o, x) => ({ ...o, [x.type]: x.value }), {});
+  return Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day), Number(p.hour), Number(p.minute), Number(p.second)) - d.getTime();
+};
+const minuitParis = (annee, mois, jour) => {
+  let t = Date.UTC(annee, mois, jour);
+  t = Date.UTC(annee, mois, jour) - decalageParis(new Date(t));
+  t = Date.UTC(annee, mois, jour) - decalageParis(new Date(t));
+  return new Date(t);
+};
+
+/** La fenêtre « demain » à Paris : [début, fin[. */
+function fenetreDemain(maintenant = new Date()) {
+  const p = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' })
+    .formatToParts(maintenant).reduce((o, x) => ({ ...o, [x.type]: x.value }), {});
+  return {
+    debut: minuitParis(Number(p.year), Number(p.month) - 1, Number(p.day) + 1),
+    fin: minuitParis(Number(p.year), Number(p.month) - 1, Number(p.day) + 2),
+  };
+}
+
+async function rappelerLesReunions(maintenant = new Date()) {
+  const { debut, fin } = fenetreDemain(maintenant);
+  const bilan = { envoyes: 0, ignores: 0 };
+  let reunions = [];
+  try { reunions = (await bdd.collection('reunions').where('date', '>=', debut).where('date', '<', fin).get()).docs; }
+  catch (err) { console.error('Rappels : réunions illisibles', err); return bilan; }
+
+  for (const d of reunions) {
+    const r = d.data();
+    if (r.visibilite === 'interne' || r.rappelEnvoye) { bilan.ignores += 1; continue; }
+    const projet = await lireProjet(r.projet);
+    if (!projet) { bilan.ignores += 1; continue; }
+    /* On marque avant d'envoyer : si le passage rejoue, rien ne repart. */
+    try { await d.ref.update({ rappelEnvoye: FieldValue.serverTimestamp() }); } catch (err) { console.error(`Rappel non marqué sur ${d.id}`, err); continue; }
+    const quand = enDateFn(r.date);
+    const heure = quand ? quand.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' }) : '';
+    const dateTexte = quand ? quand.toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' }) : '';
+    const lien = `/projets/${r.projet}/reunions/${d.id}`;
+    await notifierClients(projet, 'reunion-rappel', {
+      type: 'reunion', titre: `Demain : ${r.titre || 'réunion'}${heure ? ` à ${heure}` : ''}`,
+      texte: [r.lieu, r.lien ? 'en visioconférence' : ''].filter(Boolean).join(' · ') || nomProjet(projet),
+      lien: `#${lien}`, projet: r.projet,
+    });
+    await ecrireAuxClients(projet, 'reunion-rappel', 'reunion-rappel', {
+      projetNom: nomProjet(projet), titre: r.titre, date: dateTexte, heure, duree: r.duree, lieu: r.lieu, lienVisio: r.lien, ordreDuJour: r.ordreDuJour, lien: LIEN(lien),
+    });
+    bilan.envoyes += 1;
+  }
+  console.log(`Rappels de réunions : ${bilan.envoyes} envoyé(s), ${bilan.ignores} laissé(s).`);
+  return bilan;
+}
+
+/* Exposés pour l'épreuve, sans la planification. */
+exports._fenetreDemain = fenetreDemain;
+exports._rappelerLesReunions = rappelerLesReunions;
+
+exports.hubRappelsReunions = onSchedule(
+  { region: REGION, schedule: 'every day 17:00', timeZone: 'Europe/Paris' },
+  async () => { await rappelerLesReunions(new Date()); },
 );

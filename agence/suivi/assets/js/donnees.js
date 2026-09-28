@@ -11,9 +11,9 @@
 
 import {
   bdd, collection, collectionGroup, query, where, orderBy, limit, doc, getDoc, getDocs, addDoc, updateDoc, setDoc, deleteDoc,
-  serverTimestamp, arrayUnion, arrayRemove, Timestamp,
+  serverTimestamp, arrayUnion, arrayRemove, Timestamp, stockage, refStockage, deleteObject,
   nomAffiche, enDate, parDateDesc, parDateAsc, joursAvant, borner, age, retard, dateCourte,
-  OUVERTS, ATTEND_CLIENT, ATTEND_EQUIPE, FACTURES_DUES, PROJETS_ACTIFS, CATEGORIES_CLIENT, projetEstActif, devisADecider,
+  OUVERTS, ATTEND_CLIENT, ATTEND_EQUIPE, FACTURES_DUES, PROJETS_ACTIFS, CATEGORIES_CLIENT, projetEstActif, devisADecider, statutPiece,
   statutProjet, pluriel, verdictDelai, NIVEAUX_SCENARIO, STATUTS_PIECE_VISIBLES, startAfter, peut,
 } from './noyau.js';
 import * as magasin from './magasin.js';
@@ -102,6 +102,9 @@ export const K = {
   montantsTous: 'montants',
   organisationsInternes: 'organisations-internes',
   paiementsInternes: 'paiements-internes',
+  /* Les coordonnées de règlement de l'agence (reglages/finance) : un seul
+     document, lu par tout le monde, écrit par la finance. */
+  reglages: 'reglages:finance',
   /* Le profil sans nom des testeurs d'un projet. */
   profilsTesteurs: (p) => `profils-testeurs:${p}`,
   /* Les notes des projets à faire, hors des projets : équipe seule. */
@@ -127,6 +130,9 @@ export const nouvelId = (collectionNom) => doc(col(collectionNom)).id;
    partagent la même écoute (le magasin garde la première posée). */
 export const FENETRE_MESSAGES = 150;
 export const requeteMessages = (pid) => query(col('projets', pid, 'messages'), orderBy('date', 'desc'), limit(FENETRE_MESSAGES));
+/* Les accusés de lecture d'un projet (qui a lu, qui écrit) : la page
+   Messages les écoute projet par projet, comme la bulle. */
+export const requeteLectures = (pid) => col('projets', pid, 'lectures');
 
 /** Les messages d'avant `avant` (date du plus ancien affiché), par pages. Rend une liste dans l'ordre chronologique. */
 export const lireMessagesAnterieurs = async (pid, avant, taille = 50) => {
@@ -237,6 +243,9 @@ export const abonnerGlobal = (lot, session) => {
   sessionCourante = session;
   const equipe = Boolean(session.equipe);
   lot.abonner(K.profil, () => doc(bdd, 'profils', session.utilisateur.uid));
+  /* Les coordonnées de règlement : le client les lit sur une facture due,
+     l'équipe les règle dans les paramètres. Un seul document. */
+  lot.abonner(K.reglages, () => doc(bdd, 'reglages', 'finance'));
   if (equipe && session.equipe.role !== 'admin') {
     abonnerAgent(lot, session);
   } else if (equipe) {
@@ -465,9 +474,17 @@ export const ecrire = {
       etapes: d.etapes || '', attendu: d.attendu || '', obtenu: d.obtenu || '',
       contexte: d.contexte || '', appareil: d.appareil || '', liens: Array.isArray(d.liens) ? d.liens : [],
       assigne: null, auteur, pieces, archive: false,
+      /* Une demande née d'une anomalie de test garde le lien avec elle. */
+      ...(d.anomalie ? { anomalie: String(d.anomalie).slice(0, 80) } : {}),
       cree: serverTimestamp(), maj: serverTimestamp(), resolu: null,
-      lu: { client: auteur.cote === 'client' ? serverTimestamp() : null, equipe: auteur.cote === 'equipe' ? serverTimestamp() : null },
+      /* « lu.client » reste le repère commun ; « lu.clients » en garde un
+         par personne, pour que le point « non lu » soit celui de chacun
+         et non celui du dernier collègue passé. */
+      lu: { client: auteur.cote === 'client' ? serverTimestamp() : null, equipe: auteur.cote === 'equipe' ? serverTimestamp() : null, clients: auteur.cote === 'client' ? { [auteur.uid]: serverTimestamp() } : {} },
       qualification: null, devis: null,
+      /* La demande qui en poursuit une autre : le serveur écrit « suivant »
+         sur l'ancienne, et les deux fiches se renvoient l'une à l'autre. */
+      suite: d.suite || null,
     };
     const ref = await addDoc(col('tickets'), fiche);
     return ref.id;
@@ -481,10 +498,14 @@ export const ecrire = {
     if (de.cote === 'equipe') await updateDoc(doc(bdd, 'tickets', tid), { maj: serverTimestamp(), 'lu.equipe': serverTimestamp() });
   },
 
-  marquerLuDemande: (tid, cote) => updateDoc(doc(bdd, 'tickets', tid), { [`lu.${cote}`]: serverTimestamp() }),
+  marquerLuDemande: (tid, cote, uid = null) => updateDoc(doc(bdd, 'tickets', tid), { [`lu.${cote}`]: serverTimestamp(), ...(cote === 'client' && uid ? { [`lu.clients.${uid}`]: serverTimestamp() } : {}) }),
 
   clientValideDemande: (tid) => updateDoc(doc(bdd, 'tickets', tid), { statut: 'resolu', resolu: serverTimestamp(), maj: serverTimestamp(), 'lu.client': serverTimestamp() }),
   clientRouvreDemande: (tid) => updateDoc(doc(bdd, 'tickets', tid), { statut: 'en-cours', maj: serverTimestamp(), 'lu.client': serverTimestamp() }),
+  /* « Je n'en ai plus besoin » : le client retire sa demande tant qu'elle
+     est ouverte et chez nous (règle clientAnnule). La marque « lu.client »
+     dit au serveur que c'est lui, pas l'équipe. */
+  clientAnnuleDemande: (tid) => updateDoc(doc(bdd, 'tickets', tid), { statut: 'annulee', maj: serverTimestamp(), 'lu.client': serverTimestamp() }),
   /* « Pas tout à fait » : la correction livrée ne tient pas, la demande
      repasse chez nous, avec le message qui dit pourquoi. */
   clientContesteDemande: (tid) => updateDoc(doc(bdd, 'tickets', tid), { statut: 'en-cours', maj: serverTimestamp(), 'lu.client': serverTimestamp() }),
@@ -494,9 +515,11 @@ export const ecrire = {
   majDemande: (tid, changements) => updateDoc(doc(bdd, 'tickets', tid), nettoyer({ ...changements, maj: serverTimestamp() })),
 
   /* --- La conversation d'un projet ------------------------------------ */
+  /* Un message peut n'être que des pièces : le texte reste vide, jamais un
+     mot inventé à la place. La règle l'accepte quand `pieces` n'est pas vide. */
   async messageProjet(session, pid, texte, pieces = []) {
     const de = auteurDe(session);
-    await addDoc(col('projets', pid, 'messages'), { de: { uid: de.uid, nom: de.nom, cote: de.cote }, texte, pieces, date: serverTimestamp() });
+    await addDoc(col('projets', pid, 'messages'), { de: { uid: de.uid, nom: de.nom, cote: de.cote }, texte: String(texte || ''), pieces, date: serverTimestamp() });
   },
 
   /* L'accusé de lecture d'un projet : l'instant lu, et l'instant de la
@@ -517,10 +540,10 @@ export const ecrire = {
   epingler: (uid, cle, oui) => setDoc(doc(bdd, 'profils', uid), { epingles: oui ? arrayUnion(cle) : arrayRemove(cle) }, { merge: true }),
 
   /* --- Les validations ------------------------------------------------ */
-  async repondreValidation(session, vid, statut, commentaire) {
+  async repondreValidation(session, vid, statut, commentaire, pieces = []) {
     const par = auteurDe(session);
     await updateDoc(doc(bdd, 'validations', vid), {
-      statut, reponse: { par: par.uid, nom: par.nom, date: serverTimestamp(), commentaire: commentaire || '' }, maj: serverTimestamp(),
+      statut, reponse: { par: par.uid, nom: par.nom, date: serverTimestamp(), commentaire: commentaire || '', pieces: Array.isArray(pieces) ? pieces.slice(0, 10) : [] }, maj: serverTimestamp(),
     });
   },
   async creerValidation(session, pid, d, pieces = []) {
@@ -557,6 +580,15 @@ export const ecrire = {
     return ref.id;
   },
   majFichier: (fid, changements) => updateDoc(doc(bdd, 'fichiers', fid), nettoyer(changements)),
+  /* Le client retire un fichier qu'il a lui-même déposé : l'objet d'abord
+     (la règle Storage relit la fiche pour vérifier l'auteur), la fiche
+     ensuite. Si l'objet a déjà disparu, la fiche part quand même. */
+  async retirerFichier(f) {
+    if (f && f.chemin) {
+      try { await deleteObject(refStockage(stockage, f.chemin)); } catch (e) { if (!e || e.code !== 'storage/object-not-found') throw e; }
+    }
+    await deleteDoc(doc(bdd, 'fichiers', f.id));
+  },
 
   /* --- Les pièces comptables (côté client) ---------------------------- */
   async repondreDevis(session, did, statut, commentaire) {
@@ -566,6 +598,25 @@ export const ecrire = {
     });
   },
   consulterDevis: (did) => updateDoc(doc(bdd, 'documents', did), { statut: 'consulte' }),
+  /* « J'ai réglé cette facture » : le client déclare, l'équipe confirme en
+     enregistrant le paiement. La règle borne les champs et exige que le
+     déclarant soit celui qui écrit, sur une facture due. */
+  async declarerReglement(session, did, { date, moyen, reference, montant }) {
+    const par = auteurDe(session);
+    const quand = enDate(date) || new Date();
+    await updateDoc(doc(bdd, 'documents', did), {
+      reglementDeclare: {
+        par: par.uid, nom: par.nom, date: Timestamp.fromDate(quand), moyen: moyen || 'virement',
+        reference: String(reference || '').trim().slice(0, 80), montant: Math.round((Number(montant) || 0) * 100) / 100,
+        le: serverTimestamp(),
+      },
+    });
+  },
+  /* Les coordonnées de règlement de l'agence, par la finance de l'équipe. */
+  reglerFinance: (d) => setDoc(doc(bdd, 'reglages', 'finance'), {
+    titulaire: String(d.titulaire || '').trim(), iban: String(d.iban || '').replace(/\s+/g, '').toUpperCase(), bic: String(d.bic || '').trim().toUpperCase(),
+    banque: String(d.banque || '').trim(), mention: String(d.mention || '').trim(), maj: serverTimestamp(),
+  }),
 
   /* --- Les demandes de nouveau projet --------------------------------- */
   async creerDemandeProjet(session, d, pieces = []) {
@@ -670,15 +721,22 @@ export const ecrire = {
     else await setDoc(ref, { genre: 'contrat', statut: 'demande', demande, cree: serverTimestamp(), maj: serverTimestamp() });
   },
 
-  /* Une évolution proposée par le client : un titre, une description. Le
-     statut et l'origine sont imposés, l'équipe tranche ensuite. */
-  proposerEvolution(session, pid, d) {
+  /* Une évolution proposée par le client : un titre, une description, des
+     pièces jointes. Le statut et l'origine sont imposés, l'équipe tranche
+     ensuite. L'identifiant peut être tiré d'avance : les pièces se rangent
+     sous lui avant que la fiche existe. */
+  proposerEvolution(session, pid, d, id = null) {
     const par = auteurDe(session);
-    return addDoc(col('projets', pid, 'maintenance'), {
+    const fiche = {
       genre: 'evolution', titre: d.titre, description: d.description || '', statut: 'proposee', origine: 'client',
+      pieces: Array.isArray(d.pieces) ? d.pieces : [],
       par: { uid: par.uid, nom: par.nom, email: par.email }, cree: serverTimestamp(), maj: serverTimestamp(),
-    });
+    };
+    return id ? setDoc(doc(bdd, 'projets', pid, 'maintenance', id), fiche) : addDoc(col('projets', pid, 'maintenance'), fiche);
   },
+  /* Le client retire sa propre proposition tant qu'elle est « proposée » :
+     les règles vérifient l'auteur et le statut. */
+  retirerEvolution: (pid, id) => deleteDoc(doc(bdd, 'projets', pid, 'maintenance', id)),
 
   /* Le contrat, posé ou repris par l'équipe. « merge » garde la demande
      du client telle qu'il l'a écrite. */
@@ -726,6 +784,8 @@ export const ecrire = {
   creerLien: (pid, d) => addDoc(col('projets', pid, 'liens'), nettoyer({
     nom: d.nom, categorie: d.categorie || 'autre', url: d.url, environnement: d.environnement || '',
     composant: d.composant || '', description: d.description || '', visibilite: d.visibilite || 'client', etat: d.etat || 'actif',
+    /* Un lien « Accès » porte l'identifiant que le client doit connaître. */
+    identifiants: d.identifiants || '',
     cree: serverTimestamp(),
   })),
   majLien: (pid, lid, d) => updateDoc(doc(bdd, 'projets', pid, 'liens', lid), nettoyer(d)),
@@ -745,6 +805,17 @@ export const ecrire = {
   },
   majTache: (tid, d) => updateDoc(doc(bdd, 'taches', tid), nettoyer({ ...d, maj: serverTimestamp() })),
   supprimerTache: (tid) => deleteDoc(doc(bdd, 'taches', tid)),
+  /* La réponse du client sur une tâche qui l'attend : un texte, des
+     pièces, et la tâche passe « réponse reçue » (règle clientRepondTache).
+     Elle quitte « En attente de vous » sans que l'équipe ait à la changer. */
+  async repondreTache(session, tid, texte, pieces = []) {
+    const par = auteurDe(session);
+    await updateDoc(doc(bdd, 'taches', tid), {
+      statut: 'repondu',
+      reponseClient: { par: par.uid, nom: par.nom, texte: String(texte || ''), pieces: Array.isArray(pieces) ? pieces.slice(0, 10) : [], date: serverTimestamp() },
+      maj: serverTimestamp(),
+    });
+  },
 
   async creerRelease(session, pid, d) {
     const par = auteurDe(session);
@@ -772,6 +843,12 @@ export const ecrire = {
   },
   majReunion: (rid, d) => updateDoc(doc(bdd, 'reunions', rid), nettoyer({ ...d, maj: serverTimestamp() })),
   supprimerReunion: (rid) => deleteDoc(doc(bdd, 'reunions', rid)),
+  /* Le client coche une action d'une réunion. Il n'écrit que la liste des
+     actions, rien d'autre : la règle ne lui laisse que ce champ, et la
+     liste garde sa taille. */
+  cocherAction: (rid, actions, i, fait) => updateDoc(doc(bdd, 'reunions', rid), {
+    actions: (actions || []).map((a, k) => (k === i ? { ...a, fait: Boolean(fait) } : a)),
+  }),
 
   async creerNote(session, pid, d) {
     const par = auteurDe(session);
@@ -791,10 +868,21 @@ export const ecrire = {
     projet: pid, composant: d.composant || '', plateforme: d.plateforme || '',
     titre: d.titre, description: d.description || '', responsable: d.responsable || 'client',
     impact: d.impact || '', depuis: dateOuNull(d.depuis) || Timestamp.now(), resolu: null,
+    /* Ce qu'on attend du client, et pour quand : c'est ce que sa fiche du
+       point bloquant lui dit, au lieu d'un titre sans consigne. */
+    attendu: d.attendu || '', echeance: dateOuNull(d.echeance), signaleFait: null,
     visibilite: d.visibilite || 'client', cree: serverTimestamp(), maj: serverTimestamp(),
   })),
   majBlocage: (bid, d) => updateDoc(doc(bdd, 'blocages', bid), nettoyer({ ...d, maj: serverTimestamp() })),
   supprimerBlocage: (bid) => deleteDoc(doc(bdd, 'blocages', bid)),
+  /* « C'est fait » : le client dit qu'un point bloquant de son côté est
+     réglé (règle clientSignaleFait, une fois). L'équipe lève ensuite. */
+  async signalerBlocageFait(session, bid, texte = '') {
+    const par = auteurDe(session);
+    await updateDoc(doc(bdd, 'blocages', bid), {
+      signaleFait: { par: par.uid, nom: par.nom, date: serverTimestamp(), texte: String(texte || '') }, maj: serverTimestamp(),
+    });
+  },
 };
 
 /* ==========================================================================
@@ -804,13 +892,17 @@ export const ecrire = {
 /** La progression d'un projet, selon son mode. */
 /* D'où sort le chiffre. Le dire évite qu'on le croie plus précis qu'il ne l'est. */
 export const MODES_PROGRESSION = {
-  etapes:  'Calculée sur les étapes',
-  manuel:  'Estimée par Capmedia',
-  parties: 'Calculée sur les parties du projet',
-  taches:  'Calculée sur les tâches',
-  termine: 'Projet terminé',
+  etapes:  "d'après les étapes de la feuille de route",
+  manuel:  'estimé par Capmedia',
+  parties: "d'après les parties du projet",
+  taches:  "d'après les tâches",
+  termine: 'projet terminé',
   inconnu: '',
 };
+
+/* La marque « date du serveur », pour un éditeur qui date ce qu'il
+   enregistre (le pouls) sans composer lui-même une écriture Firestore. */
+export const horodatage = () => serverTimestamp();
 
 /**
  * La progression d'un projet.
@@ -858,7 +950,7 @@ export const risquesProjet = ({ jalons = [], blocages = [], taches = [], tickets
   const retards = taches.filter((t) => t.statut !== 'terminee' && joursAvant(t.echeance) < 0);
   if (retards.length) r.push(pluriel(retards.length, 'tâche en retard', 'tâches en retard'));
   const cote = tickets.filter((t) => ATTEND_CLIENT.includes(t.statut) && joursAvant(t.maj) < -7);
-  if (cote.length) r.push(pluriel(cote.length, 'demande en attente du client depuis plus d\'une semaine', 'demandes en attente du client depuis plus d\'une semaine'));
+  if (cote.length) r.push(pluriel(cote.length, 'demande en attente de votre réponse depuis plus d\'une semaine', 'demandes en attente de votre réponse depuis plus d\'une semaine'));
   return r;
 };
 
@@ -926,11 +1018,40 @@ export const jalonSuivant = (jalons = []) => {
   return tries.slice(i + 1).find((j) => j.statut !== 'termine') || null;
 };
 
-export const prochaineReunion = (reunions = []) => {
-  const maintenant = Date.now() - 3600 * 1000;
-  return [...reunions]
-    .filter((r) => { const d = enDate(r.date); return d && d.getTime() >= maintenant; })
-    .sort(parDateAsc('date'))[0] || null;
+/* Une réunion est à venir tant que son heure n'est pas passée depuis plus
+   d'une heure : la même règle partout (accueil, onglet Réunions, agenda).
+   Raisonner au jour laissait une réunion du matin « à venir » tout
+   l'après-midi. */
+export const reunionAVenir = (r) => {
+  const d = enDate(r && r.date);
+  return Boolean(d) && d.getTime() >= Date.now() - 3600 * 1000;
+};
+export const prochaineReunion = (reunions = []) => [...reunions]
+  .filter(reunionAVenir)
+  .sort(parDateAsc('date'))[0] || null;
+
+/* Ce qu'on sait d'une plateforme d'après ses versions, et non d'après un
+   champ saisi à la main : la dernière disponible, et la dernière en route
+   (en test, soumise ou en validation). Une version se rattache par sa
+   plateforme, ou par la partie du projet qui la porte. */
+export const etatVersions = (releases = [], cle, composant = null) => {
+  const siennes = releases.filter((r) => r.plateforme === cle || (composant && r.composant && r.composant === composant.id));
+  const derniere = (liste) => liste.slice().sort(parDateDesc('date'))[0] || null;
+  return {
+    disponible: derniere(siennes.filter((r) => r.statut === 'disponible')),
+    enRoute: derniere(siennes.filter((r) => ['test', 'soumise', 'revue'].includes(r.statut))),
+  };
+};
+
+/** L'activité arrivée après une date, sans les gestes de la personne
+    elle-même : ce qu'elle a fait, elle le sait déjà. */
+export const activiteDepuis = (activite = [], depuisDate, { sansUid = null } = {}) => {
+  const seuil = enDate(depuisDate);
+  if (!seuil) return [];
+  return activite.filter((a) => {
+    const d = enDate(a.date);
+    return d && d > seuil && !(sansUid && a.par && a.par.uid === sansUid);
+  });
 };
 
 /** Le total dû sur des factures. */
@@ -994,13 +1115,13 @@ export const enAttenteDeVous = ({ projets = [], tickets = [], validations = [], 
     genre: 'devis', projet: d.projet, icone: 'receipt', ton: 'bleu', titre: d.libelle, sous: `Devis à décider, envoyé il y a ${age(d.date)} · ${nomProjet(d.projet)}`, chemin: `/finances/${d.id}`, date: d.date,
   }));
   documents.filter((d) => d.type === 'facture' && FACTURES_DUES.includes(d.statut) && !d.archive).forEach((d) => items.push({
-    genre: 'facture', projet: d.projet, icone: 'euro', ton: d.statut === 'en-retard' ? 'rouge' : 'ambre', titre: d.libelle, sous: `Facture à régler${retard(d.echeance) ? `, en retard de ${retard(d.echeance)}` : d.echeance ? `, échéance ${dateCourte(d.echeance)}` : ''} · ${nomProjet(d.projet)}`, chemin: `/finances/${d.id}`, date: d.echeance || d.date,
+    genre: 'facture', projet: d.projet, icone: 'euro', ton: statutPiece(d) === 'en-retard' ? 'rouge' : 'ambre', titre: d.libelle, sous: `Facture à régler${retard(d.echeance) ? `, en retard de ${retard(d.echeance)}` : d.echeance ? `, échéance ${dateCourte(d.echeance)}` : ''} · ${nomProjet(d.projet)}`, chemin: `/finances/${d.id}`, date: d.echeance || d.date,
   }));
   taches.filter((t) => t.statut === 'attente-client' && !t.archive).forEach((t) => items.push({
     genre: 'tache', projet: t.projet, icone: 'taches', ton: 'ambre', titre: t.titre, sous: `Nous attendons votre retour${retard(t.echeance) ? `, en retard de ${retard(t.echeance)}` : ''} · ${nomProjet(t.projet)}`, chemin: `/projets/${t.projet}/taches/${t.id}`, date: t.echeance || t.maj,
   }));
   blocages.filter((b) => !b.resolu && b.responsable === 'client').forEach((b) => items.push({
-    genre: 'blocage', projet: b.projet, icone: 'alerte', ton: 'rouge', titre: b.titre, sous: `Point bloquant de votre côté depuis ${age(b.depuis)} · ${nomProjet(b.projet)}`, chemin: `/projets/${b.projet}`, date: b.depuis,
+    genre: 'blocage', projet: b.projet, icone: 'alerte', ton: 'rouge', titre: b.titre, sous: `Point bloquant de votre côté depuis ${age(b.depuis)} · ${nomProjet(b.projet)}`, chemin: `/projets/${b.projet}?blocage=${b.id}`, date: b.depuis,
   }));
   return trierParUrgence(items);
 };

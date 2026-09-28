@@ -16,7 +16,7 @@
    jamais ce qu'elle vaut.
    ========================================================================== */
 
-import { echapper, montant, montantHT, dateCourte, STATUTS_ETAPE } from '../noyau.js';
+import { echapper, montant, montantHT, dateCourte, STATUTS_ETAPE, devisFrisable } from '../noyau.js';
 import { icone, pastille, toast, menu } from '../ui.js';
 import { ecrire, K, montantDe } from '../donnees.js';
 import * as magasin from '../magasin.js';
@@ -27,9 +27,13 @@ export const etapesDuDevis = (devis, jalons) => (jalons || [])
   .filter((j) => j.devis === devis.id)
   .sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
 
-/** Les devis d'un projet qui ont au moins une étape rattachée. */
-export const devisAvecEtapes = (documents, jalons) => (documents || [])
-  .filter((d) => d.type === 'devis' && (jalons || []).some((j) => j.devis === d.id))
+/** Les devis d'un projet qui ont au moins une étape rattachée. Seuls les
+    devis acceptés : « ce que j'ai acheté » ne contient ni un devis refusé,
+    ni un devis expiré, ni un devis encore à décider. */
+export const devisAvecEtapes = (documents, jalons, { equipe = false } = {}) => (documents || [])
+  /* L'équipe, elle, prépare la frise avant l'acceptation : elle voit tout
+     devis qui a des étapes, brouillon compris. */
+  .filter((d) => (equipe ? d && d.type === 'devis' && !d.archive : devisFrisable(d)) && (jalons || []).some((j) => j.devis === d.id))
   .sort((a, b) => String(a.numero || '').localeCompare(String(b.numero || '')));
 
 export const friseDevis = (devis, jalons, { equipe, pid }) => {
@@ -46,9 +50,11 @@ export const friseDevis = (devis, jalons, { equipe, pid }) => {
         <p class="frise-titre">${echapper(devis.numero || 'Devis')}${devis.libelle ? ` · ${echapper(devis.libelle)}` : ''}</p>
         <p class="frise-sous"><b>${faites.length} / ${etapes.length}</b> ${etapes.length > 1 ? 'étapes faites' : 'étape faite'}${total ? ` · <b>${echapper(montant(fait))}</b> sur ${echapper(montantHT(total))}` : ''}</p>
       </div>
-      <span class="frise-pct">${pct} %</span>
     </div>
-    <div class="frise-jauge" role="img" aria-label="${pct} % des étapes faites"><i style="width:${pct}%"></i></div>
+    ${/* Pas de pourcentage ici : le seul chiffre d'avancement du projet est
+          l'anneau de l'aperçu, avec sa source. La jauge reste, elle dit
+          la même chose que « N / M » sans en faire un autre nombre. */ ''}
+    <div class="frise-jauge" role="img" aria-label="${faites.length} sur ${etapes.length} ${etapes.length > 1 ? 'étapes faites' : 'étape faite'}"><i style="width:${pct}%"></i></div>
     <ol class="frise-etapes">${etapes.map((j, i) => `
       <li class="frise-etape${j.statut === 'termine' ? ' est-faite' : ''}${j.statut === 'en-cours' ? ' est-en-cours' : ''}${j.statut === 'bloque' ? ' est-bloquee' : ''}">
         ${equipe

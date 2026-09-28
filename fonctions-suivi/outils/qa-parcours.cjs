@@ -145,7 +145,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
      que la page pose à quiconque la découvre. */
   await page.click('#parcours [data-info]'); await pause(900);
   const expl = await page.evaluate(()=>{const v=document.querySelector('.voile');return v?v.innerText:'';});
-  verifier(/À écrire/.test(expl) && /robot/i.test(expl),'le « i » explique les parcours et « à écrire »',expl.slice(0,80));
+  verifier(/À écrire/.test(expl) && /robot|programme|machine/i.test(expl),'le « i » explique les parcours et « à écrire »',expl.slice(0,80));
   verifier(!/hasOnly|Firestore|Maestro/.test(expl),'sans jargon');
   await page.keyboard.press('Escape'); await pause(600);
   verifier(await page.evaluate(()=>!document.querySelector('.voile')),'et se referme');

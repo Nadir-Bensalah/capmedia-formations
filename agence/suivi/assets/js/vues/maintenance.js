@@ -15,14 +15,14 @@
    ========================================================================== */
 
 import {
-  echapper, dateCourte, dateHeure, montant, pluriel, enDate, joursAvant, joursEnClair,
+  echapper, dateCourte, dateHeure, montant, pluriel, enDate, joursAvant, joursEnClair, estResponsable,
   STATUTS_MAINTENANCE, RECONDUCTIONS_MAINTENANCE, ETAPES_FORFAIT, STATUTS_SEQUENCE, STATUTS_JOURNEE, STATUTS_EVOLUTION,
 } from '../noyau.js';
 import {
-  icone, pastille, ligne, vide, squelette, titrePage, sur, modale, toast, agir, menu, fait,
+  icone, pastille, ligne, vide, squelette, titrePage, sur, modale, toast, agir, menu, fait, depot, pieceHtml, brancherPieces, confirmer,
 } from '../ui.js';
 import * as magasin from '../magasin.js';
-import { K, ecrire, montantDe } from '../donnees.js';
+import { K, ecrire, montantDe, nouvelId } from '../donnees.js';
 import { editer } from './editeurs.js';
 import { filAriane } from '../coquille.js';
 import { friseDevis, brancherFrise } from './frise.js';
@@ -53,6 +53,10 @@ const lireTout = (env) => {
     maintenance: rassembler(K.maintenanceToute, K.maintenance),
     documents: rassembler(K.documentsTous, K.documents),
     jalons: rassembler(K.jalonsTous, K.jalons),
+    /* Le devis est au responsable : un collaborateur ne lit pas les pièces
+       comptables, un lien vers le devis ne mènerait nulle part pour lui. */
+    financeSur: (pid) => equipe || estResponsable(env.session, projets.find((p) => p.id === pid) || pid),
+    uid: ((env.session || {}).utilisateur || {}).uid || '',
   };
 };
 
@@ -67,7 +71,7 @@ const dossier = (d, pid) => {
   const sequences = genre('sequence').sort((a, b) => ((STATUTS_SEQUENCE[a.statut] || {}).ordre || 9) - ((STATUTS_SEQUENCE[b.statut] || {}).ordre || 9) || (enDate(b.debut) || 0) - (enDate(a.debut) || 0));
   const journees = genre('journee').sort((a, b) => (enDate(b.date) || 0) - (enDate(a.date) || 0));
   const evolutions = genre('evolution').sort((a, b) => ((STATUTS_EVOLUTION[a.statut] || {}).ordre || 9) - ((STATUTS_EVOLUTION[b.statut] || {}).ordre || 9) || (enDate(b.maj) || 0) - (enDate(a.maj) || 0));
-  const devis = contrat && contrat.devis ? d.documents.find((x) => x.id === contrat.devis && x.projet === pid) : null;
+  const devis = contrat && contrat.devis && d.financeSur(pid) ? d.documents.find((x) => x.id === contrat.devis && x.projet === pid) : null;
   const jalons = d.jalons.filter((j) => projetDe(j) === pid);
   return { contrat, sequences, journees, evolutions, devis, jalons };
 };
@@ -172,7 +176,8 @@ const carteForfait = (contrat, { equipe, pid, sequences, journees, evolutions })
         ${equipe
           ? `<button class="frise-statut" type="button" data-statut-forfait="${echapper(pid)}" aria-label="Changer le statut" data-astuce="Changer le statut">${pastille(STATUTS_MAINTENANCE, contrat.statut || 'demande')}${icone('chevron')}</button>
              <button class="btn-icone" type="button" data-configurer-forfait="${echapper(pid)}" aria-label="Configurer le forfait" data-astuce="Configurer">${icone('edit')}</button>`
-          : pastille(STATUTS_MAINTENANCE, contrat.statut || 'demande')}
+          : `${pastille(STATUTS_MAINTENANCE, contrat.statut || 'demande')}${['suspendu', 'termine'].includes(contrat.statut)
+            ? `<button class="btn btn-principal btn-petit" type="button" data-demander-forfait="${echapper(pid)}" data-reprise>${icone('restaurer')} Reprendre le forfait</button>` : ''}`}
       </div>
     </div>
     <div class="forfait-chiffres">
@@ -185,7 +190,7 @@ const carteForfait = (contrat, { equipe, pid, sequences, journees, evolutions })
 };
 
 /* La demande du client, telle qu'il l'a écrite. */
-const demandeHtml = (contrat, { equipe, pid }) => {
+const demandeHtml = (contrat, { equipe, pid, finance }) => {
   const dm = contrat.demande || {};
   if (!dm.le && !dm.message) return '';
   const attend = contrat.statut === 'demande';
@@ -194,7 +199,7 @@ const demandeHtml = (contrat, { equipe, pid }) => {
     <blockquote class="citation" style="margin-top:8px">${echapper(dm.message || 'Sans message.')}<cite>${echapper((dm.par || {}).nom || 'Le client')}${dm.le ? `, le ${echapper(dateHeure(dm.le))}` : ''}${dm.rythme ? ` · rythme souhaité : ${echapper(dm.rythme)}` : ''}</cite></blockquote>
     ${attend ? (equipe
       ? `<div class="rang" style="margin-top:14px;gap:10px;flex-wrap:wrap"><button class="btn btn-principal btn-petit" type="button" data-configurer-forfait="${echapper(pid)}">${icone('edit')} Répondre par une proposition</button><span class="aide">Les modalités, le prix, les jours : dès que c'est enregistré en « proposition envoyée », le client le lit.</span></div>`
-      : `<p class="aide" style="margin-top:12px">Nous préparons une proposition : les modalités, le prix, les jours. Vous la lirez ici, et le devis vous attendra dans « Devis et factures ».</p>`) : ''}
+      : `<div class="rang" style="margin-top:14px;gap:10px;flex-wrap:wrap"><button class="btn btn-secondaire btn-petit" type="button" data-modifier-demande="${echapper(pid)}">${icone('edit')} Modifier ma demande</button><span class="aide">Nous préparons une proposition : les modalités, le prix, les jours. Vous la lirez ici${finance ? ', et le devis vous attendra dans « Devis et factures »' : ''}.</span></div>`) : ''}
   </div>`;
 };
 
@@ -256,6 +261,9 @@ const journeeLigne = (j, { equipe, avecSequence, sequences = [] }) => {
   });
 };
 
+/* Le client retire sa propre évolution tant que rien n'est décidé. */
+const retirable = (e, { equipe, uid }) => !equipe && e.origine === 'client' && e.statut === 'proposee' && Boolean(uid) && (e.par || {}).uid === uid;
+
 const evolutionLigne = (e, { equipe, sequences }) => {
   const sq = sequences.find((x) => x.id === e.sequence);
   const s = STATUTS_EVOLUTION[e.statut] || STATUTS_EVOLUTION.proposee;
@@ -267,6 +275,7 @@ const evolutionLigne = (e, { equipe, sequences }) => {
       e.estimation ? `${echapper(joursEnClair(e.estimation))} ${Number(e.estimation) > 1 ? 'estimés' : 'estimée'}` : '',
       sq ? `séquence « ${echapper(sq.titre || '')} »` : '',
       e.version ? `version ${echapper(e.version)}` : '',
+      (e.pieces || []).length ? pluriel(e.pieces.length, 'pièce jointe', 'pièces jointes') : '',
       e.description ? echapper(String(e.description).slice(0, 90)) : '',
     ].filter(Boolean).join(' · '),
     fin: `${equipe
@@ -336,7 +345,7 @@ const unProjet = (d, { pid, equipe }) => {
     <div>
       ${etage('etage-forfait', 'Le forfait', resumeForfait, `
         <div style="margin-top:20px">${carteForfait(contrat, { equipe, pid, sequences, journees, evolutions })}</div>
-        ${demandeHtml(contrat, { equipe, pid })}
+        ${demandeHtml(contrat, { equipe, pid, finance: d.financeSur(pid) })}
         <div style="margin-top:20px">${friseForfait(contrat, devis)}</div>
         ${modalitesHtml(contrat, { equipe, pid, devis, jalons })}`)}
 
@@ -403,17 +412,43 @@ const tousLesProjets = (d, { equipe }) => {
     </section>`;
 };
 
+/* Le client qui a plusieurs projets : une carte par projet, son forfait ou
+   « Pas de forfait », et le bouton qui ouvre le dossier. Jamais la vue de
+   l'équipe ni ses mots (« Demandes à traiter », « clients »). */
+const mesProjets = (d) => {
+  const lignes = d.projets.map((p) => ({ p, ...dossier(d, p.id) }));
+  return `<section class="section" style="margin-top:0">
+    <div class="section-tete"><div><h2>Vos projets ${infoBouton('forfait')}</h2><p class="chapo">Un forfait par projet : ce qui est suivi, et ce qui ne l'est pas encore.</p></div></div>
+    ${lignes.length ? `<div class="grille grille-2">${lignes.map(({ p, contrat, sequences, journees, evolutions }) => `<div class="carte" data-projet-maintenance="${echapper(p.id)}">
+      <div class="rang-espace" style="gap:12px;align-items:flex-start">
+        <div style="min-width:0">
+          <p class="t-titre-3 tronque">${echapper(p.nom)}</p>
+          <p class="t-petit t-2" style="margin-top:4px">${contrat
+            ? `${echapper(contrat.formule || 'Forfait de maintenance')}${Number(contrat.jours) ? ` · ${enClair(contrat.jours)} ${Number(contrat.jours) > 1 ? 'jours' : 'jour'} par ${echapper(periodeDe(contrat))}` : ''}${sequences.length ? ` · ${pluriel(sequences.length, 'séquence', 'séquences')}` : ''}${journees.length ? ` · ${enClair(joursFaits(journees))} j travaillés` : ''}${evolutions.length ? ` · ${pluriel(evolutions.length, 'évolution', 'évolutions')}` : ''}`
+            : 'Pas de forfait'}</p>
+        </div>
+        ${contrat ? pastille(STATUTS_MAINTENANCE, contrat.statut || 'demande') : '<span class="puce puce--vide">aucun</span>'}
+      </div>
+      <div class="rang" style="margin-top:14px;gap:10px">
+        <a class="btn ${contrat ? 'btn-secondaire' : 'btn-principal'} btn-petit" href="#/maintenance?projet=${encodeURIComponent(p.id)}">${contrat ? 'Voir le forfait' : 'Demander un forfait'}</a>
+      </div>
+    </div>`).join('')}</div>` : vide({ icone: 'sante', titre: 'Aucun projet', texte: 'La maintenance s\'ouvre projet par projet, dès qu\'un projet vous est rattaché.', compact: true })}
+  </section>`;
+};
+
 /* --------------------------------------------------------------------------
    Les gestes du client
    -------------------------------------------------------------------------- */
 
 const RYTHMES = ['Chaque mois', 'Chaque trimestre', 'Je ne sais pas encore'];
 
-const demanderForfait = (env, pid, contrat) => {
+const demanderForfait = (env, pid, contrat, { reprise = false, modification = false } = {}) => {
   const dm = (contrat || {}).demande || {};
   const m = modale({
-    titre: 'Demander un forfait de maintenance',
-    sousTitre: 'Deux phrases suffisent. Nous répondons par une proposition, avec les modalités et un devis.',
+    titre: reprise ? 'Reprendre le forfait' : modification ? 'Modifier ma demande' : 'Demander un forfait de maintenance',
+    sousTitre: reprise ? 'Le forfait repart sur une nouvelle demande : nous vous renvoyons une proposition, avec les modalités et un devis.'
+      : modification ? 'Votre demande n\'a pas encore de proposition : vous pouvez la reformuler.'
+        : 'Deux phrases suffisent. Nous répondons par une proposition, avec les modalités et un devis.',
     feuille: true,
     corps: `
       <div class="groupe"><label class="etiquette-champ" for="mf-message">Ce dont vous avez besoin</label>
@@ -421,20 +456,23 @@ const demanderForfait = (env, pid, contrat) => {
         <p class="aide">Ce que vous attendez, ce qui vous inquiète, ce que vous voudriez ajouter. Rien n'engage : c'est le devis qui engage, et il viendra après.</p></div>
       <div class="groupe"><label class="etiquette-champ" for="mf-rythme">À quel rythme</label>
         <select class="select" id="mf-rythme">${RYTHMES.map((r) => `<option value="${echapper(r)}"${dm.rythme === r ? ' selected' : ''}>${echapper(r)}</option>`).join('')}</select></div>`,
-    pied: `<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button><span class="pousse"></span><button class="btn btn-principal" type="button" data-envoyer>${icone('envoyer')} Envoyer ma demande</button>`,
+    pied: `<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button><span class="pousse"></span><button class="btn btn-principal" type="button" data-envoyer>${icone('envoyer')} ${modification ? 'Enregistrer ma demande' : reprise ? 'Reprendre le forfait' : 'Envoyer ma demande'}</button>`,
   });
   const b = m.el.querySelector('[data-envoyer]');
   b.addEventListener('click', () => agir(b, async () => {
     const message = (m.el.querySelector('#mf-message').value || '').trim();
     if (!message) { toast('Dites-nous en deux mots ce dont vous avez besoin.', 'erreur'); return; }
     await ecrire.demanderMaintenance(env.session, pid, { message, rythme: m.el.querySelector('#mf-rythme').value });
-    toast('Demande envoyée. Nous revenons vers vous avec une proposition.');
+    toast(modification ? 'Demande modifiée.' : reprise ? 'Demande de reprise envoyée. Nous revenons vers vous avec une proposition.' : 'Demande envoyée. Nous revenons vers vous avec une proposition.');
     m.fermer(true);
   }));
   return m.fin;
 };
 
 const proposerEvolution = (env, pid) => {
+  /* L'identifiant est tiré avant l'envoi : les pièces se rangent sous lui
+     (projets/{p}/maintenance/{id}/…), et les règles de stockage le lisent. */
+  const id = nouvelId('maintenance');
   const m = modale({
     titre: 'Proposer une évolution',
     sousTitre: 'Une idée pour l\'application. Elle sera lue, puis acceptée ou écartée avec une raison.',
@@ -443,14 +481,17 @@ const proposerEvolution = (env, pid) => {
       <div class="groupe"><label class="etiquette-champ" for="ev-titre">En une ligne</label>
         <input class="champ" id="ev-titre" maxlength="160" placeholder="Exporter mes tâches en tableur"></div>
       <div class="groupe"><label class="etiquette-champ" for="ev-description">Pourquoi, et pour qui <span class="facultatif">(facultatif)</span></label>
-        <textarea class="zone" id="ev-description" rows="5" maxlength="4000" placeholder="À quel moment ça vous manque, et ce que ça changerait."></textarea></div>`,
+        <textarea class="zone" id="ev-description" rows="5" maxlength="4000" placeholder="À quel moment ça vous manque, et ce que ça changerait."></textarea></div>
+      <div class="groupe"><span class="etiquette-champ">Une capture, un croquis <span class="facultatif">(facultatif)</span></span><div id="ev-pieces"></div></div>`,
     pied: `<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button><span class="pousse"></span><button class="btn btn-principal" type="button" data-envoyer>${icone('ampoule')} Proposer</button>`,
   });
+  const boite = depot(m.el.querySelector('#ev-pieces'), { chemin: `projets/${pid}/maintenance/${id}`, max: 5, compact: true });
   const b = m.el.querySelector('[data-envoyer]');
   b.addEventListener('click', () => agir(b, async () => {
     const titre = (m.el.querySelector('#ev-titre').value || '').trim();
     if (!titre) { toast('Donnez-lui une ligne.', 'erreur'); return; }
-    await ecrire.proposerEvolution(env.session, pid, { titre, description: (m.el.querySelector('#ev-description').value || '').trim() });
+    if (boite.occupe) { toast('Attendez la fin des envois.', 'erreur'); return; }
+    await ecrire.proposerEvolution(env.session, pid, { titre, description: (m.el.querySelector('#ev-description').value || '').trim(), pieces: boite.pieces }, id);
     toast('Évolution proposée. Vous saurez ici ce qu\'elle devient.');
     m.fermer(true);
   }));
@@ -458,10 +499,10 @@ const proposerEvolution = (env, pid) => {
 };
 
 /* La fiche d'une évolution : tout ce qu'on en sait. */
-const ouvrirEvolution = (e, { equipe, sequences }) => {
+const ouvrirEvolution = (e, { equipe, sequences, uid }) => {
   const sq = sequences.find((x) => x.id === e.sequence);
   const s = STATUTS_EVOLUTION[e.statut] || STATUTS_EVOLUTION.proposee;
-  return modale({
+  const m = modale({
     titre: e.titre || 'Évolution', sousTitre: e.origine === 'client' ? `Proposée par ${(e.par || {}).nom || 'le client'}` : 'Posée par l\'équipe', feuille: true,
     corps: `
       <div class="rang" style="gap:8px;flex-wrap:wrap;margin-bottom:12px">${pastille(STATUTS_EVOLUTION, e.statut || 'proposee')}</div>
@@ -474,9 +515,12 @@ const ouvrirEvolution = (e, { equipe, sequences }) => {
         ${fait('Proposée le', e.cree ? echapper(dateCourte(e.cree)) : '')}
         ${fait('Dernier changement', e.maj ? echapper(dateHeure(e.maj)) : '')}
       </dl>
+      ${(e.pieces || []).length ? `<div class="groupe" style="margin-top:16px"><span class="etiquette-champ">Pièces jointes</span><div class="pieces" style="margin-top:6px">${e.pieces.map(pieceHtml).join('')}</div></div>` : ''}
       ${e.reponse ? `<div class="groupe" style="margin-top:16px"><span class="etiquette-champ">Ce qu'on en a dit</span><blockquote class="citation" style="margin-top:6px">${echapper(e.reponse)}</blockquote></div>` : ''}`,
-    pied: `${equipe ? `<button class="btn btn-secondaire" type="button" data-modifier>${icone('edit')} Modifier</button>` : ''}<span class="pousse"></span><button class="btn btn-principal" type="button" data-fermer>Fermer</button>`,
+    pied: `${equipe ? `<button class="btn btn-secondaire" type="button" data-modifier>${icone('edit')} Modifier</button>` : ''}${retirable(e, { equipe, uid }) ? `<button class="btn btn-secondaire" type="button" data-retirer-evolution="${echapper(e.id)}">${icone('corbeille')} Retirer ma proposition</button>` : ''}<span class="pousse"></span><button class="btn btn-principal" type="button" data-fermer>Fermer</button>`,
   });
+  brancherPieces(m.el);
+  return m;
 };
 
 /* Les menus de statut de l'équipe : un clic sur la pastille, le choix,
@@ -540,7 +584,7 @@ export const vue = async (ctx, env) => {
         <option value="">Tous les projets</option>
         ${d.projets.map((p) => `<option value="${echapper(p.id)}"${pid === p.id ? ' selected' : ''}>${echapper(p.nom)}</option>`).join('')}
       </select></div>` : ''}
-      ${pid ? unProjet(d, { pid, equipe }) : tousLesProjets(d, { equipe })}
+      ${pid ? unProjet(d, { pid, equipe }) : (equipe ? tousLesProjets(d, { equipe }) : mesProjets(d))}
     </div>`;
 
     const sel = sortie.querySelector('#f-projet');
@@ -548,7 +592,7 @@ export const vue = async (ctx, env) => {
   };
 
   brancherFrise(sortie, env);
-  const gestes = sur(sortie, 'click', '[data-info], [data-aller], [data-demander-forfait], [data-configurer-forfait], [data-statut-forfait], [data-nouvelle-sequence], [data-editer-sequence], [data-statut-sequence], [data-nouvelle-journee], [data-editer-journee], [data-nouvelle-evolution], [data-proposer-evolution], [data-editer-evolution], [data-statut-evolution], [data-action="ouvrir-evolution"]', async (el) => {
+  const gestes = sur(sortie, 'click', '[data-info], [data-aller], [data-demander-forfait], [data-modifier-demande], [data-configurer-forfait], [data-statut-forfait], [data-nouvelle-sequence], [data-editer-sequence], [data-statut-sequence], [data-nouvelle-journee], [data-editer-journee], [data-nouvelle-evolution], [data-proposer-evolution], [data-editer-evolution], [data-statut-evolution], [data-action="ouvrir-evolution"]', async (el) => {
     const pid = projetCourant() || el.dataset.projet || '';
     const d = lireTout(env);
     const dos = pid ? dossier(d, pid) : null;
@@ -563,7 +607,10 @@ export const vue = async (ctx, env) => {
       if (cible) cible.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
-    if (el.dataset.demanderForfait !== undefined) { await demanderForfait(env, el.dataset.demanderForfait, dos && dos.contrat); return; }
+    /* Demander, reprendre (forfait suspendu ou terminé) ou modifier sa
+       demande : la même fenêtre, préremplie de ce qui a déjà été écrit. */
+    if (el.dataset.demanderForfait !== undefined) { await demanderForfait(env, el.dataset.demanderForfait, dos && dos.contrat, { reprise: el.hasAttribute('data-reprise') }); return; }
+    if (el.dataset.modifierDemande !== undefined) { await demanderForfait(env, el.dataset.modifierDemande, dos && dos.contrat, { modification: true }); return; }
     if (el.dataset.proposerEvolution !== undefined) { await proposerEvolution(env, el.dataset.proposerEvolution); return; }
     if (el.dataset.configurerForfait !== undefined) { await editer('maintenance', env, { pid: el.dataset.configurerForfait, fiche: dos && dos.contrat }); return; }
     if (el.dataset.statutForfait !== undefined && dos && dos.contrat) {
@@ -605,8 +652,12 @@ export const vue = async (ctx, env) => {
     if (el.dataset.action === 'ouvrir-evolution') {
       const x = dos && dos.evolutions.find((y) => y.id === el.dataset.id);
       if (!x) return;
-      const m = ouvrirEvolution(x, { equipe, sequences: dos.sequences });
+      const m = ouvrirEvolution(x, { equipe, sequences: dos.sequences, uid: d.uid });
       sur(m.el, 'click', '[data-modifier]', async () => { m.fermer(); await editer('evolution', env, { pid, fiche: x }); });
+      sur(m.el, 'click', '[data-retirer-evolution]', async () => {
+        if (!(await confirmer({ titre: 'Retirer cette proposition ?', texte: 'Elle disparaît de la liste. Vous pourrez en proposer une autre quand vous voulez.', ok: 'Retirer', danger: true }))) return;
+        await agir(null, async () => { await ecrire.retirerEvolution(pid, x.id); m.fermer(); }, 'Proposition retirée.');
+      });
     }
   });
 

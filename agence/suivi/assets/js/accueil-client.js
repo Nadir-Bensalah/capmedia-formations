@@ -1,10 +1,10 @@
 /* ==========================================================================
    CAPMEDIA HUB · l'accueil du client
 
-   Les sept écrans de la première fois (le moteur est dans accueil.js) : son
+   Les écrans de la première fois (le moteur est dans accueil.js) : son
    espace, ses projets tels qu'ils sont dans la base, comment on suit
-   l'avancement, ce qu'on attend de lui, les tests, comment rester proche,
-   puis son espace. Tout ce qui est dit vient de ses projets : l'équipe les
+   l'avancement, ce qu'on lui demandera, les tests (seulement s'il en a),
+   comment rester proche, puis son espace. Tout ce qui est dit vient de ses projets : l'équipe les
    pilote depuis le Cockpit, et l'écran les reflète.
 
    Ce qui est fait est consigné dans son profil (app.js) : l'administrateur
@@ -78,16 +78,22 @@ const ecranSuivre = () => ({
     <p>Vous n'avez rien à relancer : ce qui avance s'écrit ici, au moment où l'équipe le fait.</p>`,
 });
 
+/* Ce que « En attente de vous » contient vraiment : valider, répondre à
+   une demande, décider un devis, régler une facture, débloquer un point.
+   L'ancien écran n'en citait que trois et le client découvrait le reste
+   au premier devis. */
 const ecranAttendu = () => ({
   cle: 'attendu',
   visuel: `<div class="verdicts-accueil">
-      <div><b class="verdict verdict--attente">À valider</b><span>Une maquette, un texte, une version : votre oui fait avancer le projet.</span></div>
-      <div><b class="verdict verdict--demande">Demandes</b><span>Une question, un défaut, une idée : ouvrez une demande, suivez sa réponse.</span></div>
-      <div><b class="verdict verdict--message">Messages</b><span>La conversation du projet, avec l'équipe, au même endroit.</span></div>
+      <div><b class="verdict verdict--attente">Valider</b><span>Une maquette, un texte, une version : votre oui fait avancer le projet.</span></div>
+      <div><b class="verdict verdict--demande">Répondre</b><span>Une précision sur une demande, ou un retour sur une tâche que nous attendons de vous.</span></div>
+      <div><b class="verdict verdict--message">Décider un devis</b><span>Accepter ou refuser, depuis votre espace, quand un devis vous est envoyé.</span></div>
+      <div><b class="verdict verdict--attente">Régler une facture</b><span>Chaque facture émise, son échéance, et comment la régler.</span></div>
+      <div><b class="verdict verdict--demande">Débloquer un point</b><span>Un accès, un contenu, une décision qui manque de votre côté : on vous le dit, vous le levez.</span></div>
     </div>`,
-  texte: `<p class="surtitre">Ce qu'on attend de vous</p>
-    <h2>Trois gestes, et rien d'autre</h2>
-    <p>« En attente de vous », dans le rail, rassemble tout ce qui n'avance pas sans vous. Quand c'est vide, tout est entre nos mains.</p>`,
+  texte: `<p class="surtitre">Ce qu'on vous demandera</p>
+    <h2>Cinq gestes, jamais plus</h2>
+    <p>« En attente de vous », dans le rail, rassemble tout ce qui n'avance pas sans vous, avec un chiffre rouge. Quand c'est vide, tout est entre nos mains.</p>`,
 });
 
 const ecranTests = () => ({
@@ -122,12 +128,17 @@ const ecranFin = (session, projets) => ({
  * Renvoie { el, majProjets, fermer, entame }. `projets` est une fonction :
  * la liste peut arriver pendant que l'accueil est ouvert.
  */
-export const ouvrirAccueil = ({ session, projets, surFin = null }) => {
+/**
+ * `avecTests` dit si des scénarios de test concernent ce client : c'est la
+ * même condition que l'entrée Tests du rail. Sans scénario, l'écran des
+ * tests n'a rien à montrer et promettrait une page vide.
+ */
+export const ouvrirAccueil = ({ session, projets, avecTests = () => true, surFin = null }) => {
   const moteur = ouvrirMoteur({
     service: 'Hub',
     prenom: prenomDe(session) || '',
     texte: 'Vous êtes sur Capmedia Hub, l\'espace où vous suivez vos projets avec l\'équipe Capmedia. Laissez-nous vous présenter ce que vous y trouverez.',
-    ecrans: () => [ecranEspace(session), ecranProjets(projets()), ecranSuivre(), ecranAttendu(), ecranTests(), ecranProche(), ecranFin(session, projets())],
+    ecrans: () => [ecranEspace(session), ecranProjets(projets()), ecranSuivre(), ecranAttendu(), ...(avecTests() ? [ecranTests()] : []), ecranProche(), ecranFin(session, projets())],
     surFin,
   });
   return { el: moteur.el, majProjets: () => { moteur.redessiner('projets'); moteur.redessiner('fin'); }, fermer: moteur.fermer, get entame() { return moteur.entame; } };

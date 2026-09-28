@@ -85,6 +85,11 @@ export const ouvrirAccueil = ({ service, prenom = '', texte, ecrans, surFin = nu
 
   const ecranHtml = (e) => `<div class="ecran-visuel">${e.visuel}</div><div class="ecran-texte">${e.texte}</div>`;
 
+  /* Le guide qui existe, accroché ou pas encore : entre sa construction et
+     son entrée en scène (380 ms d'animation), une donnée peut arriver et
+     changer la liste des écrans. On le garde sous la main plutôt que de
+     le chercher dans la page, où il n'est pas encore. */
+  let guideCourant = null;
   const construireGuide = () => {
     const liste = ecrans();
     const guide = document.createElement('section');
@@ -98,6 +103,7 @@ export const ouvrirAccueil = ({ service, prenom = '', texte, ecrans, surFin = nu
         <button class="btn btn-secondaire btn-petit" type="button" data-accueil="precedent" hidden>Précédent</button>
         <button class="btn btn-principal btn-petit" type="button" data-accueil="suivant">Suivant</button>
       </div>`;
+    guideCourant = guide;
     return tracable(guide);
   };
 
@@ -157,10 +163,11 @@ export const ouvrirAccueil = ({ service, prenom = '', texte, ecrans, surFin = nu
     entame = true;
     const porte = $('.accueil-porte', el);
     porte.classList.add('part');
-    const guide = construireGuide();
+    construireGuide();
     setTimeout(() => {
       if (ferme) return;
       porte.remove();
+      const guide = guideCourant;
       el.appendChild(guide);
       aller(0);
       const s = $('[data-accueil="suivant"]', guide);
@@ -171,9 +178,22 @@ export const ouvrirAccueil = ({ service, prenom = '', texte, ecrans, surFin = nu
   /* Les écrans se redessinent quand ce qu'ils montrent arrive après coup
      (la campagne, les projets). Un seul, par sa clé, ou tous. */
   const redessiner = (cle = '') => {
-    const guide = $('.accueil-guide', el);
+    const guide = guideCourant;
     if (!guide) return;
     const liste = ecrans();
+    /* Un écran de plus ou de moins (les tests, quand les scénarios arrivent
+       après la porte) : le guide se reconstruit, sur le même écran. S'il
+       n'est pas encore en scène, le neuf prendra sa place à l'entrée. */
+    if ($$('.ecran', guide).length !== liste.length) {
+      const actif = $('.ecran.actif', guide);
+      const cleActive = actif ? actif.dataset.cle : '';
+      const neuf = construireGuide();
+      if (guide.isConnected) {
+        guide.replaceWith(neuf);
+        aller(Math.max(0, liste.findIndex((e) => e.cle === cleActive)));
+      }
+      return;
+    }
     liste.forEach((e) => {
       if (cle && e.cle !== cle) return;
       const article = $(`.ecran[data-cle="${e.cle}"]`, guide);

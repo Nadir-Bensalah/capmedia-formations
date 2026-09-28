@@ -266,7 +266,9 @@ service cloud.firestore {
       // l'identité, ni au client, ni au rangement du projet.
       allow update: if equipeSurProjet(projetId) && !estAdmin()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-             'statut', 'progression', 'pulse', 'cible', 'debut', 'reports', 'description', 'maj'
+             'statut', 'progression', 'pulse', 'cible', 'debut', 'reports', 'description', 'maj',
+             // Le pouls est daté et signé : le client lit « mis à jour le … par … ».
+             'pulseMaj', 'pulsePar'
            ])
         && (!('reports' in request.resource.data)
             || (request.resource.data.reports is list && request.resource.data.reports.size() <= 20))
@@ -285,6 +287,8 @@ service cloud.firestore {
              'nom', 'description', 'type', 'statut', 'progression', 'debut', 'cible',
              'responsable', 'pulse', 'archive', 'client', 'plateformes', 'logo', 'maj',
              'contacts', 'interne',
+             // Le pouls est daté et signé : le client lit « mis à jour le … par … ».
+             'pulseMaj', 'pulsePar',
              // L'histoire de la date cible : chaque report, son motif, sa
              // date et son auteur. Le client la lit, c'est tout l'objet.
              'reports',
@@ -293,6 +297,7 @@ service cloud.firestore {
              // l'accès du client.
              'aFaire'
              // « ouvert », « membres », « roles », « personnes »,
+             // « personnesClient » (le miroir nom + rôle que lit le client),
              // « emailsClient » et « membresOrganisation » restent absents de
              // cette liste : ouvrir, donner un accès ou couper les e-mails
              // n'appartient qu'au serveur, qui le trace.
@@ -380,35 +385,52 @@ service cloud.firestore {
           && request.resource.data.statut == 'demande'
           && demandeDeForfait(request.resource.data.demande);
 
-        // Le client propose une évolution : un titre, une description, et
-        // c'est tout. Le statut et l'origine sont imposés, l'équipe tranche.
+        // Le client propose une évolution : un titre, une description, des
+        // pièces jointes, et c'est tout. Le statut et l'origine sont
+        // imposés, l'équipe tranche.
         allow create: if membreDuProjet(projetId)
           && docId != 'contrat'
-          && request.resource.data.keys().hasOnly(['genre', 'titre', 'description', 'statut', 'origine', 'par', 'cree', 'maj'])
+          && request.resource.data.keys().hasOnly(['genre', 'titre', 'description', 'statut', 'origine', 'par', 'pieces', 'cree', 'maj'])
           && request.resource.data.genre == 'evolution'
           && request.resource.data.statut == 'proposee'
           && request.resource.data.origine == 'client'
           && request.resource.data.par.uid == moi()
           && texteRequis(request.resource.data.titre, 160)
-          && texteBorne(request.resource.data.description, 4000);
+          && texteBorne(request.resource.data.description, 4000)
+          && (!('pieces' in request.resource.data)
+              || (request.resource.data.pieces is list && request.resource.data.pieces.size() <= 10));
+        // Il retire sa propre proposition tant que rien n'est décidé : une
+        // évolution acceptée, planifiée ou écartée reste dans l'histoire.
+        allow delete: if membreDuProjet(projetId)
+          && docId != 'contrat'
+          && resource.data.genre == 'evolution'
+          && resource.data.origine == 'client'
+          && resource.data.statut == 'proposee'
+          && resource.data.par.uid == moi();
       }
 
       match /liens/{lienId} {
         allow read:   if accesProjet(projetId) && visiblePourMoi();
+        // Un lien de catégorie « acces » peut porter un identifiant (jamais
+        // un mot de passe) : un texte court, écrit par l'équipe seule.
         allow write:  if equipeSurProjet(projetId)
           && request.resource.data.url is string
-          && request.resource.data.url.matches('https?://.*');
+          && request.resource.data.url.matches('https?://.*')
+          && (!('identifiants' in request.resource.data) || texteBorne(request.resource.data.identifiants, 300));
       }
 
       // La conversation du projet : deux voix, jamais de note interne ici.
+      // Le texte peut être vide quand des pièces l'accompagnent : un envoi
+      // de pièces seules n'invente pas un mot à leur place.
       match /messages/{messageId} {
         allow read: if accesProjet(projetId);
         allow create: if accesProjet(projetId)
           && request.resource.data.keys().hasOnly(['de', 'texte', 'pieces', 'date'])
           && auteurCoherent(request.resource.data.de)
-          && texteRequis(request.resource.data.texte, 6000)
           && request.resource.data.pieces is list
-          && request.resource.data.pieces.size() <= 10;
+          && request.resource.data.pieces.size() <= 10
+          && (texteRequis(request.resource.data.texte, 6000)
+              || (texteBorne(request.resource.data.texte, 6000) && request.resource.data.pieces.size() > 0));
         allow update, delete: if false;
       }
 
@@ -478,8 +500,14 @@ service cloud.firestore {
         return request.resource.data.keys().hasOnly([
                  'numero', 'projet', 'composant', 'titre', 'description', 'type', 'urgence',
                  'statut', 'plateforme', 'version', 'etapes', 'attendu', 'obtenu', 'contexte', 'appareil', 'liens',
-                 'assigne', 'auteur', 'pieces', 'archive', 'cree', 'maj', 'resolu', 'lu', 'qualification', 'devis'
+                 'assigne', 'auteur', 'pieces', 'archive', 'cree', 'maj', 'resolu', 'lu', 'qualification', 'devis',
+                 'anomalie',
+                 // La demande qui en poursuit une autre (« Suite de REF-… »).
+                 'suite'
                ])
+            // Une demande née d'une anomalie de test porte son identifiant.
+            && (!('anomalie' in request.resource.data) || texteBorne(request.resource.data.anomalie, 80))
+            && (!('suite' in request.resource.data) || request.resource.data.suite == null || request.resource.data.suite is string)
             && request.resource.data.numero == null
             && request.resource.data.statut == 'nouveau'
             && request.resource.data.archive == false
@@ -503,11 +531,15 @@ service cloud.firestore {
                            'type', 'plateforme', 'pieces', 'composant', 'qualification', 'devis',
                            // La version qui porte la correction : le client
                            // la demandait par message, faute de la lire.
-                           'release'])
+                           'release',
+                           // Le motif d'un refus : le client le lit dans le bandeau.
+                           'motifRefus'])
             && request.resource.data.statut in ['nouveau', 'a-analyser', 'en-attente-client', 'acceptee', 'planifiee',
                                                 'en-cours', 'en-revue', 'a-valider', 'resolu', 'refuse', 'annulee', 'ferme']
+            && (request.resource.data.get('motifRefus', null) == null || texteBorne(request.resource.data.motifRefus, 2000))
             && request.resource.data.urgence in ['bloquant', 'critique', 'important', 'mineur']
-            && (request.resource.data.qualification == null
+            // Une demande née sans le champ (anciens semis) se pilote quand même.
+            && (request.resource.data.get('qualification', null) == null
                 || request.resource.data.qualification in ['incluse', 'hors-perimetre', 'a-chiffrer', 'offerte']);
       }
 
@@ -548,6 +580,16 @@ service cloud.firestore {
             && request.resource.data.pieces.size() <= 10;
       }
 
+      // « Je n'en ai plus besoin » : le client retire sa demande tant
+      // qu'elle est ouverte et chez nous. Une fois le travail commencé, il
+      // nous écrit, il ne l'annule plus seul.
+      function clientAnnule() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['statut', 'maj', 'lu'])
+            && resource.data.statut in ['nouveau', 'a-analyser', 'acceptee', 'planifiee']
+            && request.resource.data.statut == 'annulee';
+      }
+
       allow read: if equipeSurProjet(resource.data.projet) || membreDuProjet(resource.data.projet);
 
       allow create: if creationValide()
@@ -556,7 +598,7 @@ service cloud.firestore {
       allow update: if estEquipe()
                       ? (equipeSurProjet(resource.data.projet) && majEquipe())
                       : (membreDuProjet(resource.data.projet)
-                         && (clientMarqueLu() || clientValide() || clientRouvre() || clientConteste() || ajoutPieces()));
+                         && (clientMarqueLu() || clientValide() || clientRouvre() || clientConteste() || ajoutPieces() || clientAnnule()));
 
       allow delete: if false;
 
@@ -589,18 +631,35 @@ service cloud.firestore {
     // ================================================================
 
     match /taches/{tacheId} {
+      // Le client répond sur une tâche qui l'attend, depuis sa fiche : sa
+      // réponse (texte, pièces) et le statut « réponse reçue », une fois,
+      // sur une tâche visible et en attente de lui. Rien d'autre ne bouge.
+      function clientRepondTache() {
+        return resource.data.visibilite == 'client'
+            && resource.data.statut == 'attente-client'
+            && request.resource.data.statut == 'repondu'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reponseClient', 'statut', 'maj'])
+            && request.resource.data.reponseClient.par == moi()
+            && texteBorne(request.resource.data.reponseClient.texte, 4000)
+            && request.resource.data.reponseClient.pieces is list
+            && request.resource.data.reponseClient.pieces.size() <= 10
+            && (request.resource.data.reponseClient.texte.size() > 0 || request.resource.data.reponseClient.pieces.size() > 0);
+      }
+
       allow read: if equipeSurProjet(resource.data.projet)
                   || (membreDuProjet(resource.data.projet) && resource.data.visibilite == 'client');
       allow create: if equipeSurProjet(request.resource.data.projet)
         && texteRequis(request.resource.data.titre, 160)
-        && request.resource.data.statut in ['a-faire', 'en-cours', 'en-revue', 'bloquee', 'attente-client', 'terminee']
+        && request.resource.data.statut in ['a-faire', 'en-cours', 'en-revue', 'bloquee', 'attente-client', 'repondu', 'terminee']
         && request.resource.data.priorite in ['faible', 'normale', 'importante', 'bloquante']
         && request.resource.data.visibilite in ['client', 'interne']
         && request.resource.data.projet is string;
-      allow update: if equipeSurProjet(resource.data.projet)
-        && (!('statut' in request.resource.data) || request.resource.data.statut in ['a-faire', 'en-cours', 'en-revue', 'bloquee', 'attente-client', 'terminee'])
-        && (!('visibilite' in request.resource.data) || request.resource.data.visibilite in ['client', 'interne'])
-        && request.resource.data.projet == resource.data.projet;
+      allow update: if estEquipe()
+        ? (equipeSurProjet(resource.data.projet)
+           && (!('statut' in request.resource.data) || request.resource.data.statut in ['a-faire', 'en-cours', 'en-revue', 'bloquee', 'attente-client', 'repondu', 'terminee'])
+           && (!('visibilite' in request.resource.data) || request.resource.data.visibilite in ['client', 'interne'])
+           && request.resource.data.projet == resource.data.projet)
+        : (membreDuProjet(resource.data.projet) && clientRepondTache());
       allow delete: if equipeSurProjet(resource.data.projet);
     }
 
@@ -631,7 +690,11 @@ service cloud.firestore {
            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statut', 'reponse', 'maj'])
            && request.resource.data.statut in ['approuvee', 'modifications']
            && request.resource.data.reponse.par == moi()
-           && texteBorne(request.resource.data.reponse.commentaire, 4000));
+           && texteBorne(request.resource.data.reponse.commentaire, 4000)
+           // Ses remarques peuvent porter des pièces (dix au plus), rangées
+           // sous projets/{p}/validations/{vid}/reponse/ dans le Storage.
+           && (!('pieces' in request.resource.data.reponse)
+               || (request.resource.data.reponse.pieces is list && request.resource.data.reponse.pieces.size() <= 10)));
       allow delete: if false;
     }
 
@@ -665,7 +728,12 @@ service cloud.firestore {
       allow update: if equipeSurProjet(resource.data.projet)
         && request.resource.data.projet == resource.data.projet
         && request.resource.data.chemin == resource.data.chemin;
-      allow delete: if false;
+      // Le client retire ce qu'il a lui-même déposé, et rien d'autre :
+      // l'équipe archive, elle n'efface pas.
+      allow delete: if !estEquipe()
+        && membreDuProjet(resource.data.projet)
+        && resource.data.visibilite == 'client'
+        && resource.data.par.uid == moi();
     }
 
     // ================================================================
@@ -677,8 +745,10 @@ service cloud.firestore {
       allow read: if equipeSurProjet(resource.data.projet)
                   || (membreDuProjet(resource.data.projet) && resource.data.visibilite == 'client');
       allow create: if request.resource.data.projet is string && equipeSurProjet(request.resource.data.projet)
-        && request.resource.data.statut in ['developpement', 'test', 'soumise', 'revue', 'disponible', 'retiree'];
-      allow update: if equipeSurProjet(resource.data.projet) && request.resource.data.projet == resource.data.projet;
+        && request.resource.data.statut in ['developpement', 'test', 'soumise', 'revue', 'disponible', 'retiree']
+        && (!('build' in request.resource.data) || texteBorne(request.resource.data.build, 40));
+      allow update: if equipeSurProjet(resource.data.projet) && request.resource.data.projet == resource.data.projet
+        && (!('build' in request.resource.data) || texteBorne(request.resource.data.build, 40));
       allow delete: if equipeSurProjet(resource.data.projet);
     }
 
@@ -687,6 +757,16 @@ service cloud.firestore {
                   || (membreDuProjet(resource.data.projet) && resource.data.visibilite == 'client');
       allow create: if request.resource.data.projet is string && equipeSurProjet(request.resource.data.projet) && texteRequis(request.resource.data.titre, 160);
       allow update: if equipeSurProjet(resource.data.projet) && request.resource.data.projet == resource.data.projet;
+      // Le client coche ses actions : il n'écrit que la liste « actions »,
+      // qui garde sa taille (ni ajout ni retrait). Le reste de la réunion
+      // (titre, date, compte rendu, décisions) reste à l'équipe. Les règles
+      // ne savent pas parcourir une liste : on ne vérifie pas que seul
+      // « fait » a bougé, on borne ce qui peut l'être.
+      allow update: if membreDuProjet(resource.data.projet) && resource.data.visibilite == 'client'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['actions'])
+        && request.resource.data.actions is list
+        && request.resource.data.actions.size() == resource.data.get('actions', []).size()
+        && request.resource.data.actions.size() <= 50;
       allow delete: if equipeSurProjet(resource.data.projet);
     }
 
@@ -699,10 +779,24 @@ service cloud.firestore {
     }
 
     match /blocages/{blocageId} {
+      // « C'est fait » : le client dit qu'un point bloquant DE SON CÔTÉ
+      // est réglé, une fois, tant qu'il n'est pas levé. L'équipe lève.
+      function clientSignaleFait() {
+        return resource.data.visibilite == 'client'
+            && resource.data.responsable == 'client'
+            && resource.data.get('resolu', null) == null
+            && resource.data.get('signaleFait', null) == null
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['signaleFait', 'maj'])
+            && request.resource.data.signaleFait.par == moi()
+            && (!('texte' in request.resource.data.signaleFait) || texteBorne(request.resource.data.signaleFait.texte, 2000));
+      }
+
       allow read: if equipeSurProjet(resource.data.projet)
                   || (membreDuProjet(resource.data.projet) && resource.data.visibilite == 'client');
       allow create: if request.resource.data.projet is string && equipeSurProjet(request.resource.data.projet) && texteRequis(request.resource.data.titre, 160);
-      allow update: if equipeSurProjet(resource.data.projet) && request.resource.data.projet == resource.data.projet;
+      allow update: if estEquipe()
+        ? (equipeSurProjet(resource.data.projet) && request.resource.data.projet == resource.data.projet)
+        : (membreDuProjet(resource.data.projet) && clientSignaleFait());
       allow delete: if equipeSurProjet(resource.data.projet);
     }
 
@@ -722,25 +816,63 @@ service cloud.firestore {
       allow read: if financeEquipe(resource.data.projet)
         || (responsableDuProjet(resource.data.projet) && resource.data.statut != 'brouillon');
 
+      // « J'ai réglé cette facture » : le responsable déclare un règlement
+      // sur une facture due, et rien d'autre. Qui, quand, comment, combien,
+      // et la date du serveur. L'équipe confirme en enregistrant le paiement.
+      function reglementDeclareValide(r) {
+        return r.keys().hasOnly(['par', 'nom', 'date', 'moyen', 'reference', 'montant', 'le'])
+            && r.par == moi()
+            && texteBorne(r.nom, 120)
+            && r.date is timestamp
+            && r.moyen in ['virement', 'carte', 'stripe', 'cheque', 'especes', 'autre']
+            && texteBorne(r.reference, 80)
+            && r.montant is number && r.montant > 0
+            && r.le == request.time;
+      }
+
       allow update: if !estEquipe()
         && responsableDuProjet(resource.data.projet)
-        && resource.data.type == 'devis'
         && (
-             (resource.data.statut == 'envoye'
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statut'])
-              && request.resource.data.statut == 'consulte')
-          || (resource.data.statut in ['envoye', 'consulte']
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statut', 'reponse'])
-              && request.resource.data.statut in ['accepte', 'refuse']
-              && request.resource.data.reponse.par == moi()
-              && texteBorne(request.resource.data.reponse.commentaire, 2000)
-              // Un devis dont la validité est passée ne s'accepte plus : il
-              // faut nous en demander un à jour.
-              && (!(resource.data.get('expiration', null) is timestamp)
-                  || request.time < resource.data.expiration))
+             (resource.data.type == 'devis'
+              && (
+                   (resource.data.statut == 'envoye'
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statut'])
+                    && request.resource.data.statut == 'consulte')
+                || (resource.data.statut in ['envoye', 'consulte']
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statut', 'reponse'])
+                    && request.resource.data.statut in ['accepte', 'refuse']
+                    && request.resource.data.reponse.par == moi()
+                    && texteBorne(request.resource.data.reponse.commentaire, 2000)
+                    // Un devis dont la validité est passée ne s'accepte plus : il
+                    // faut nous en demander un à jour.
+                    && (!(resource.data.get('expiration', null) is timestamp)
+                        || request.time < resource.data.expiration))
+              ))
+          || (resource.data.type == 'facture'
+              && resource.data.statut in ['envoyee', 'a-payer', 'partielle', 'en-retard']
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reglementDeclare'])
+              && reglementDeclareValide(request.resource.data.reglementDeclare))
         );
 
       allow create, delete: if false;
+    }
+
+    // Les réglages de l'agence. « finance » : les coordonnées de règlement
+    // (titulaire, IBAN, BIC, banque, mention), lues par tout client
+    // connecté sur une facture due (il n'y a qu'une agence), écrites par la
+    // finance de l'équipe.
+    match /reglages/{cle} {
+      allow read: if connecte();
+      allow write: if cle == 'finance'
+        && estEquipe()
+        && (ficheEquipe().get('role', '') == 'admin'
+            || ficheEquipe().get('permissions', []).hasAny(['finance.gerer']))
+        && request.resource.data.keys().hasOnly(['titulaire', 'iban', 'bic', 'banque', 'mention', 'maj'])
+        && texteBorne(request.resource.data.get('titulaire', ''), 120)
+        && texteBorne(request.resource.data.get('iban', ''), 40)
+        && texteBorne(request.resource.data.get('bic', ''), 16)
+        && texteBorne(request.resource.data.get('banque', ''), 120)
+        && texteBorne(request.resource.data.get('mention', ''), 600);
     }
 
     // Un paiement ne porte plus sa note interne : elle vit dans
@@ -772,8 +904,10 @@ service cloud.firestore {
         && request.resource.data.projet == null
         && request.resource.data.pieces is list
         && request.resource.data.pieces.size() <= 10;
+      // « devis » : la pièce envoyée pour cette demande, posée avec le
+      // statut « Devis envoyé » ; le client y trouve son lien.
       allow update: if estAdmin()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statut', 'projet', 'maj'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statut', 'projet', 'devis', 'maj'])
         && request.resource.data.statut in ['nouvelle', 'discussion', 'qualification', 'estimation', 'devis', 'acceptee', 'projet', 'refusee'];
       allow delete: if false;
 

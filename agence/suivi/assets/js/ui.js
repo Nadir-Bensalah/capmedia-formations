@@ -7,7 +7,7 @@
 
 import {
   $, $$, echapper, initiales, borner, poids, depuis, enParagraphes, avecLiens,
-  envoyerPiece, lienPiece, jourRelatif, enDate, PLATEFORMES_CHOIX, libellePlateforme,
+  envoyerPiece, lienPiece, jourRelatif, enDate, PLATEFORMES_CHOIX, libellePlateforme, FORMATS_ACCEPTES,
 } from './noyau.js';
 import { icone } from './icones.js';
 
@@ -301,7 +301,7 @@ export const messageHtml = (m, options = {}) => {
         <span class="message-date">${echapper(depuis(m.date))}</span>
         ${m.interne ? '<span class="marque-interne">Note interne</span>' : ''}
       </div>
-      <div class="message-corps">${avecLiens(m.texte || '')}</div>
+      ${String(m.texte || '').trim() ? `<div class="message-corps">${avecLiens(m.texte || '')}</div>` : ''}
       ${pieces}
     </div>
   </article>`;
@@ -319,39 +319,81 @@ const genreFichier = (type = '', nom = '') => {
   return { classe: '', court: ext.toUpperCase() || 'DOC' };
 };
 
+/* Une image ou un PDF se regarde : la pièce d'un message s'ouvre dans un
+   onglet. Tout autre fichier se télécharge sous son nom. */
+const seRegarde = (g) => g.classe === 'image' || g.classe === 'pdf';
+
 export const pieceHtml = (p) => {
   const g = genreFichier(p.type, p.nom);
-  return `<a class="piece" href="#" data-piece="${echapper(p.chemin)}" title="${echapper(p.nom)}">${icone(g.classe === 'image' ? 'image' : 'file')}<span class="nom">${echapper(p.nom)}</span><span class="t-3">${echapper(poids(p.taille))}</span></a>`;
+  const geste = seRegarde(g) ? 'data-ouvrir-piece' : 'data-piece';
+  return `<a class="piece" href="#" ${geste}="${echapper(p.chemin)}" data-nom="${echapper(p.nom || '')}" title="${echapper(p.nom)}">${icone(g.classe === 'image' ? 'image' : 'file')}<span class="nom">${echapper(p.nom)}</span><span class="t-3">${echapper(poids(p.taille))}</span></a>`;
 };
 
+/**
+ * La carte d'un fichier. `options.moi` (uid) fait dire « Déposé par vous »
+ * sur ses propres dépôts ; `options.menu` pose le menu de l'équipe ;
+ * `options.retirer` pose le menu sur ses propres dépôts seulement, pour
+ * que le client retire ce qu'il a lui-même envoyé.
+ */
 export const fichierHtml = (f, options = {}) => {
   const g = genreFichier(f.type, f.nom);
+  const mien = Boolean(options.moi && f.par && f.par.uid === options.moi);
+  const qui = mien ? 'Déposé par vous' : (f.par && f.par.nom);
+  const avecMenu = options.menu || (options.retirer && mien);
   return `<div class="fichier" data-id="${echapper(f.id || '')}">
     <span class="fichier-icone${g.classe ? ` fichier-icone--${g.classe}` : ''}">${echapper(g.court)}</span>
     <div style="min-width:0">
-      <p class="fichier-nom">${echapper(f.nom)}</p>
-      <p class="fichier-sous">${echapper([f.categorieLibelle, poids(f.taille), f.par && f.par.nom, depuis(f.cree || f.date)].filter(Boolean).join(' · '))}</p>
+      <p class="fichier-nom">${echapper(f.nom)}${f.version ? ` <span class="etiquette" style="vertical-align:middle">${echapper(String(f.version))}</span>` : ''}</p>
+      <p class="fichier-sous">${echapper([f.categorieLibelle, poids(f.taille), qui, depuis(f.cree || f.date)].filter(Boolean).join(' · '))}</p>
     </div>
     <div class="rang" style="gap:4px">
-      <button class="btn-icone" type="button" data-piece="${echapper(f.chemin)}" data-astuce="Télécharger" aria-label="Télécharger">${icone('telecharger')}</button>
-      ${options.menu ? `<button class="btn-icone" type="button" data-menu-fichier="${echapper(f.id || '')}" aria-label="Plus d'actions">${icone('points')}</button>` : ''}
+      ${seRegarde(g) ? `<button class="btn-icone" type="button" data-ouvrir-piece="${echapper(f.chemin)}" data-astuce="Ouvrir" aria-label="Ouvrir dans un nouvel onglet">${icone('externe')}</button>` : ''}
+      <button class="btn-icone" type="button" data-piece="${echapper(f.chemin)}" data-nom="${echapper(f.nom || '')}" data-astuce="Télécharger" aria-label="Télécharger">${icone('telecharger')}</button>
+      ${avecMenu ? `<button class="btn-icone" type="button" data-menu-fichier="${echapper(f.id || '')}" aria-label="Plus d'actions">${icone('points')}</button>` : ''}
     </div>
   </div>`;
 };
 
-/** Ouvre une pièce dans un nouvel onglet, depuis n'importe quel clic [data-piece]. */
+/* Télécharger, c'est poser le fichier sous son nom dans les
+   téléchargements : le lien signé est lu en mémoire, puis remis par un
+   <a download>. Si le navigateur refuse la lecture (un réseau qui coupe,
+   un bucket sans CORS), le lien s'ouvre dans un onglet plutôt que rien. */
+const telechargerPiece = async (chemin, nom) => {
+  const url = await lienPiece({ chemin });
+  try {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const blob = await r.blob();
+    const adresse = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = adresse; a.download = nom || String(chemin).split('/').pop() || 'fichier';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(adresse), 60000);
+  } catch (e) {
+    window.open(url, '_blank', 'noopener');
+  }
+};
+
+/**
+ * Branche les gestes sur les pièces : [data-piece] télécharge sous le nom
+ * porté par data-nom, [data-ouvrir-piece] ouvre dans un nouvel onglet.
+ */
 export const brancherPieces = (racine) => {
   /* La zone des vues est la même d'une page à l'autre : brancher à chaque
      montage empilait les écouteurs, et un clic ouvrait plusieurs onglets. */
   if (racine.__piecesBranchees) return;
   racine.__piecesBranchees = true;
   racine.addEventListener('click', async (ev) => {
-    const cible = ev.target.closest('[data-piece]');
+    const cible = ev.target.closest('[data-piece], [data-ouvrir-piece]');
     if (!cible) return;
     ev.preventDefault();
     try {
-      const url = await lienPiece({ chemin: cible.dataset.piece });
-      window.open(url, '_blank', 'noopener');
+      if (cible.dataset.ouvrirPiece) {
+        const url = await lienPiece({ chemin: cible.dataset.ouvrirPiece });
+        window.open(url, '_blank', 'noopener');
+      } else {
+        await telechargerPiece(cible.dataset.piece, cible.dataset.nom);
+      }
     } catch (e) {
       toast("Ce fichier n'est pas accessible.", 'erreur');
     }
@@ -362,12 +404,15 @@ export const brancherPieces = (racine) => {
  * Un dépôt de fichiers : glisser-déposer, sélection, envoi avec progression,
  * retrait. `chemin` est le dossier de stockage. Renvoie l'état des pièces.
  */
-export const depot = (zone, { chemin, metadonnees = null, max = 10, texte = 'Déposez vos fichiers ici, ou <strong>choisissez-les</strong>.', aide = 'Images, PDF, vidéos courtes. 10 Mo par fichier.', compact = false, cible = null } = {}) => {
+/* L'aide et l'attribut « accept » viennent de la même liste (noyau.js,
+   FORMATS_ACCEPTES) : le texte dit vrai, et le sélecteur du navigateur ne
+   propose que ce qui passera, au lieu de refuser après le choix. */
+export const depot = (zone, { chemin, metadonnees = null, max = 10, texte = 'Déposez vos fichiers ici, ou <strong>choisissez-les</strong>.', aide = FORMATS_ACCEPTES.aide, compact = false, cible = null } = {}) => {
   const etat = { pieces: [], enCours: 0 };
   zone.innerHTML = `
     <label class="depot${compact ? ' depot--compact' : ''}">
       <span>${texte}</span><br><span class="t-micro t-3">${echapper(aide)}</span>
-      <input type="file" multiple>
+      <input type="file" multiple accept="${echapper(FORMATS_ACCEPTES.accept)}">
     </label>
     <div class="pieces" aria-live="polite"></div>`;
   const entree = $('input', zone);

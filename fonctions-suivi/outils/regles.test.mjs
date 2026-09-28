@@ -707,6 +707,198 @@ await refuse("L'équipe ne touche pas au compteur du testeur", updateDoc(doc(equ
 await refuse('Camille ne lit pas les conversations des testeurs', getDocs(collection(camille(), 'conversationsTesteurs')));
 await refuse('Camille ne lit pas un fil de testeur', getDocs(collection(camille(), `conversationsTesteurs/${KARIM}/messages`)));
 
+console.log('\n== Finances : « J\'ai réglé cette facture » et les coordonnées de règlement');
+/* Le responsable déclare un règlement sur une facture due, et rien
+   d'autre : pas sur une payée, pas sur un autre projet, pas au nom d'un
+   autre, pas avec un champ en plus. Les coordonnées de règlement se lisent
+   par tout client connecté (une seule agence) et s'écrivent par la finance. */
+const AGENT_SANS_FINANCE = 'uid-agent-sans-finance';
+const agentSansFinance = () => env.authenticatedContext(AGENT_SANS_FINANCE, jeton(AGENT_SANS_FINANCE, 'agent2.essai@exemple.test')).firestore();
+await env.withSecurityRulesDisabled(async (ctx) => {
+  const b = ctx.firestore();
+  await setDoc(doc(b, 'documents/f-due'), { projet: 'atelier', type: 'facture', numero: 'F-DUE', montant: 1000, tva: 20, ttc: 1200, statut: 'a-payer', reponse: null, archive: false });
+  await setDoc(doc(b, 'documents/f-due-retard'), { projet: 'atelier', type: 'facture', numero: 'F-RETARD', montant: 500, tva: 0, ttc: 500, statut: 'en-retard', reponse: null, archive: false });
+  await setDoc(doc(b, 'documents/f-payee'), { projet: 'atelier', type: 'facture', numero: 'F-PAYEE', montant: 100, tva: 0, ttc: 100, statut: 'payee', reponse: null, archive: false });
+  await setDoc(doc(b, 'documents/f-due-boutique'), { projet: 'boutique', type: 'facture', numero: 'F-BOUT', montant: 100, tva: 0, ttc: 100, statut: 'a-payer', reponse: null, archive: false });
+  await setDoc(doc(b, 'documents/d-pour-reglement'), { projet: 'atelier', type: 'devis', numero: 'D-REGL', montant: 100, statut: 'envoye', reponse: null });
+  await setDoc(doc(b, 'equipe', AGENT_SANS_FINANCE), { nom: 'Sam Agent', email: 'agent2.essai@exemple.test', role: 'agent', actif: true, projets: ['atelier'], permissions: [] });
+});
+const reglement = (extra = {}) => ({ par: CAMILLE, nom: 'Camille Martin', date: Timestamp.fromDate(new Date()), moyen: 'virement', reference: 'VIR-1', montant: 1200, le: serverTimestamp(), ...extra });
+await doit('Camille déclare un règlement sur sa facture due', updateDoc(doc(camille(), 'documents/f-due'), { reglementDeclare: reglement() }));
+await doit('et sur une facture en retard, qui reste due', updateDoc(doc(camille(), 'documents/f-due-retard'), { reglementDeclare: reglement({ montant: 500, reference: '' }) }));
+await refuse('pas sur une facture payée', updateDoc(doc(camille(), 'documents/f-payee'), { reglementDeclare: reglement({ montant: 100 }) }));
+await refuse('pas sur la facture d un autre projet', updateDoc(doc(camille(), 'documents/f-due-boutique'), { reglementDeclare: reglement({ montant: 100 }) }));
+await refuse('pas au nom d une autre personne', updateDoc(doc(camille(), 'documents/f-due'), { reglementDeclare: reglement({ par: LEA }) }));
+await refuse('pas sans la date du serveur', updateDoc(doc(camille(), 'documents/f-due'), { reglementDeclare: reglement({ le: new Date() }) }));
+await refuse('pas avec un montant nul', updateDoc(doc(camille(), 'documents/f-due'), { reglementDeclare: reglement({ montant: 0 }) }));
+await refuse('pas avec un moyen inconnu', updateDoc(doc(camille(), 'documents/f-due'), { reglementDeclare: reglement({ moyen: 'troc' }) }));
+await refuse('pas avec un champ en plus', updateDoc(doc(camille(), 'documents/f-due'), { reglementDeclare: reglement({ confirme: new Date() }) }));
+await refuse('pas en changeant le statut en même temps', updateDoc(doc(camille(), 'documents/f-due'), { reglementDeclare: reglement(), statut: 'payee' }));
+await refuse('pas sur un devis', updateDoc(doc(camille(), 'documents/d-pour-reglement'), { reglementDeclare: reglement({ montant: 100 }) }));
+await refuse('Léa ne déclare rien sur la facture de Camille', updateDoc(doc(lea(), 'documents/f-due'), { reglementDeclare: reglement({ par: LEA }) }));
+await refuse("L'équipe ne déclare pas un règlement depuis le navigateur", updateDoc(doc(equipe(), 'documents/f-due'), { reglementDeclare: reglement({ par: AGENT }) }));
+const coordonnees = { titulaire: 'Capmedia Digital', iban: 'FR7630001007941234567890185', bic: 'BDFEFRPP', banque: 'Banque de France', mention: 'Le numéro de la facture en libellé.', maj: serverTimestamp() };
+await doit("L'administrateur écrit les coordonnées de règlement", setDoc(doc(equipe(), 'reglages/finance'), coordonnees));
+await refuse('Un agent sans permission finance ne les écrit pas', setDoc(doc(agentSansFinance(), 'reglages/finance'), coordonnees));
+await refuse('Camille ne les écrit pas', setDoc(doc(camille(), 'reglages/finance'), coordonnees));
+await refuse('Rien d autre ne se glisse dans les réglages', setDoc(doc(equipe(), 'reglages/finance'), { ...coordonnees, stripe: 'sk_live' }));
+await refuse('Un IBAN de 41 caractères ne passe pas', setDoc(doc(equipe(), 'reglages/finance'), { ...coordonnees, iban: 'F'.repeat(41) }));
+await refuse('Un autre réglage que « finance » ne s écrit pas ainsi', setDoc(doc(equipe(), 'reglages/autre'), coordonnees));
+await doit('Camille lit les coordonnées de règlement', getDoc(doc(camille(), 'reglages/finance')));
+await doit('Léa aussi : il n y a qu une agence', getDoc(doc(lea(), 'reglages/finance')));
+await doit("L'agent sans finance les lit", getDoc(doc(agentSansFinance(), 'reglages/finance')));
+await refuse('Un visiteur ne les lit pas', getDoc(doc(anonyme(), 'reglages/finance')));
+
+console.log('\n== Se repérer, plusieurs projets, le rôle (agent D, 27/09/2026)');
+/* Le miroir « personnesClient » (nom + rôle, lu par le client) et le registre
+   « personnes » ne s'écrivent que par le serveur : ni depuis l'écran du
+   client, ni depuis celui de l'équipe. */
+await refuse('Camille n écrit pas le miroir des personnes', updateDoc(doc(camille(), 'projets/atelier'), { personnesClient: [{ uid: CAMILLE, nom: 'Camille', role: 'responsable' }] }));
+await refuse('Camille n écrit pas le registre des personnes', updateDoc(doc(camille(), 'projets/atelier'), { personnes: [CAMILLE, LEA] }));
+await refuse("L'équipe n écrit pas le miroir des personnes depuis l écran", updateDoc(doc(equipe(), 'projets/atelier'), { personnesClient: [{ uid: LEA, nom: 'Léa', role: 'responsable' }], maj: serverTimestamp() }));
+await refuse('Camille ne se donne pas un rôle', updateDoc(doc(camille(), 'projets/atelier'), { roles: { [CAMILLE]: 'responsable', [LEA]: 'collaborateur' } }));
+/* La demande de forfait se modifie tant qu elle est « demande », se
+   renouvelle après une suspension ou un terme, jamais sur une proposition. */
+const demandeD = { par: { uid: CAMILLE, nom: 'Camille', email: 'camille.essai@exemple.test' }, message: 'Un suivi chaque mois.', rythme: 'Chaque mois', le: serverTimestamp() };
+const poserContrat = (statut) => env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), 'projets/atelier/maintenance/contrat'), { genre: 'contrat', statut, demande: { ...demandeD, le: new Date() }, cree: new Date(), maj: new Date() }));
+await poserContrat('demande');
+await doit('Camille modifie sa demande de forfait tant qu elle est « demande »', updateDoc(doc(camille(), 'projets/atelier/maintenance/contrat'), { statut: 'demande', demande: { ...demandeD, message: 'Plutôt chaque trimestre.' }, maj: serverTimestamp() }));
+await poserContrat('proposition');
+await refuse('mais plus une fois la proposition envoyée', updateDoc(doc(camille(), 'projets/atelier/maintenance/contrat'), { statut: 'demande', demande: demandeD, maj: serverTimestamp() }));
+await poserContrat('suspendu');
+await doit('Camille reprend un forfait suspendu (nouvelle demande)', updateDoc(doc(camille(), 'projets/atelier/maintenance/contrat'), { statut: 'demande', demande: demandeD, maj: serverTimestamp() }));
+await poserContrat('termine');
+await doit('Camille reprend un forfait terminé', updateDoc(doc(camille(), 'projets/atelier/maintenance/contrat'), { statut: 'demande', demande: demandeD, maj: serverTimestamp() }));
+await refuse('Léa ne reprend pas le forfait de Camille', updateDoc(doc(lea(), 'projets/atelier/maintenance/contrat'), { statut: 'demande', demande: { ...demandeD, par: { uid: LEA, nom: 'Léa', email: 'x' } }, maj: serverTimestamp() }));
+/* Une évolution proposée se retire par son auteur, tant qu elle est
+   « proposée » ; elle peut porter des pièces jointes, dix au plus. */
+const evolutionD = { genre: 'evolution', titre: 'Un export en tableur', description: '', statut: 'proposee', origine: 'client', par: { uid: CAMILLE, nom: 'Camille', email: 'camille.essai@exemple.test' }, cree: serverTimestamp(), maj: serverTimestamp() };
+await doit('Camille propose une évolution avec des pièces', setDoc(doc(camille(), 'projets/atelier/maintenance/ev-d-pieces'), { ...evolutionD, pieces: [{ nom: 'croquis.png', chemin: 'projets/atelier/maintenance/ev-d-pieces/croquis.png', taille: 12, type: 'image/png' }] }));
+await refuse('mais pas onze pièces', setDoc(doc(camille(), 'projets/atelier/maintenance/ev-d-onze'), { ...evolutionD, pieces: Array.from({ length: 11 }, (_, i) => ({ nom: `${i}.png`, chemin: `p/${i}.png` })) }));
+await refuse('ni des pièces qui ne sont pas une liste', setDoc(doc(camille(), 'projets/atelier/maintenance/ev-d-faux'), { ...evolutionD, pieces: 'croquis.png' }));
+await env.withSecurityRulesDisabled(async (ctx) => {
+  const b = ctx.firestore();
+  await setDoc(doc(b, 'projets/atelier/maintenance/ev-d-proposee'), { ...evolutionD, cree: new Date(), maj: new Date() });
+  await setDoc(doc(b, 'projets/atelier/maintenance/ev-d-acceptee'), { ...evolutionD, statut: 'acceptee', cree: new Date(), maj: new Date() });
+  await setDoc(doc(b, 'projets/atelier/maintenance/ev-d-equipe'), { ...evolutionD, origine: 'equipe', par: { uid: AGENT, nom: 'Agent' }, cree: new Date(), maj: new Date() });
+  await setDoc(doc(b, 'projets/atelier/maintenance/ev-d-autre'), { ...evolutionD, par: { uid: LEA, nom: 'Léa', email: 'x' }, cree: new Date(), maj: new Date() });
+});
+await doit('Camille retire son évolution « proposée »', deleteDoc(doc(camille(), 'projets/atelier/maintenance/ev-d-proposee')));
+await refuse('mais pas une évolution acceptée', deleteDoc(doc(camille(), 'projets/atelier/maintenance/ev-d-acceptee')));
+await refuse('ni une évolution posée par l équipe', deleteDoc(doc(camille(), 'projets/atelier/maintenance/ev-d-equipe')));
+await refuse('ni celle d une autre personne', deleteDoc(doc(camille(), 'projets/atelier/maintenance/ev-d-autre')));
+await refuse('Léa ne retire rien chez Camille', deleteDoc(doc(lea(), 'projets/atelier/maintenance/ev-d-pieces')));
+await refuse('Camille ne retire pas le contrat en passant par la règle des évolutions', deleteDoc(doc(camille(), 'projets/atelier/maintenance/contrat')));
+/* La demande de projet porte le devis envoyé : l équipe le rattache, le
+   client ne touche pas à sa fiche. */
+await doit("L'équipe rattache un devis à une demande de projet", updateDoc(doc(equipe(), 'demandesProjet/dp1'), { statut: 'devis', devis: 'd1', maj: serverTimestamp() }));
+await refuse('Léa ne rattache pas un devis à sa propre demande', updateDoc(doc(lea(), 'demandesProjet/dp1'), { devis: 'd1', maj: serverTimestamp() }));
+await refuse("L'équipe ne glisse pas un autre champ avec le devis", updateDoc(doc(equipe(), 'demandesProjet/dp1'), { devis: 'd1', titre: 'Autre', maj: serverTimestamp() }));
+
+console.log('\n== Les échanges : des pièces sans un mot, retirer son fichier, une demande née d une anomalie');
+/* Un message peut n'être que des pièces (texte vide), jamais rien du tout.
+   Le client retire ce qu'il a lui-même déposé, pas le fichier de l'équipe,
+   pas celui d'un autre client ; l'équipe archive, elle n'efface pas. Une
+   demande née d'une anomalie de test porte son identifiant, borné. */
+await env.withSecurityRulesDisabled(async (ctx) => {
+  const b = ctx.firestore();
+  await setDoc(doc(b, 'fichiers/f-camille'), { projet: 'atelier', nom: 'logo.png', chemin: 'projets/atelier/fichiers/f-camille/logo.png', visibilite: 'client', archive: false, par: { uid: CAMILLE, nom: 'Camille', cote: 'client' } });
+  await setDoc(doc(b, 'fichiers/f-camille-2'), { projet: 'atelier', nom: 'logo2.png', chemin: 'projets/atelier/fichiers/f-camille-2/logo2.png', visibilite: 'client', archive: false, par: { uid: CAMILLE, nom: 'Camille', cote: 'client' } });
+  await setDoc(doc(b, 'fichiers/f-lea'), { projet: 'boutique', nom: 'carte.pdf', chemin: 'projets/boutique/fichiers/f-lea/carte.pdf', visibilite: 'client', archive: false, par: { uid: LEA, nom: 'Léa', cote: 'client' } });
+});
+await doit('Camille envoie des pièces sans un mot', addDoc(collection(camille(), 'projets/atelier/messages'), { de: { uid: CAMILLE, nom: 'Camille', cote: 'client' }, texte: '', pieces: [{ nom: 'a.png', chemin: 'projets/atelier/messages/a.png', taille: 1, type: 'image/png' }], date: serverTimestamp() }));
+await refuse('mais pas un message sans texte ni pièces', addDoc(collection(camille(), 'projets/atelier/messages'), { de: { uid: CAMILLE, nom: 'Camille', cote: 'client' }, texte: '', pieces: [], date: serverTimestamp() }));
+await refuse('ni un texte vide avec des pièces qui ne sont pas une liste', addDoc(collection(camille(), 'projets/atelier/messages'), { de: { uid: CAMILLE, nom: 'Camille', cote: 'client' }, texte: '', pieces: 'a.png', date: serverTimestamp() }));
+await doit("L'équipe aussi envoie des pièces seules", addDoc(collection(equipe(), 'projets/atelier/messages'), { de: { uid: AGENT, nom: 'Agent', cote: 'equipe' }, texte: '', pieces: [{ nom: 'b.pdf', chemin: 'projets/atelier/messages/b.pdf', taille: 1, type: 'application/pdf' }], date: serverTimestamp() }));
+await doit('Camille retire le fichier qu elle a déposé', deleteDoc(doc(camille(), 'fichiers/f-camille')));
+await refuse('Camille ne retire pas un fichier de l équipe', deleteDoc(doc(camille(), 'fichiers/f-client')));
+await refuse('ni celui de Léa', deleteDoc(doc(camille(), 'fichiers/f-lea')));
+await refuse('Léa ne retire pas le fichier de Camille', deleteDoc(doc(lea(), 'fichiers/f-camille-2')));
+await refuse("L'équipe n efface pas un fichier : elle archive", deleteDoc(doc(equipe(), 'fichiers/f-camille-2')));
+const demandeDepuisAnomalie = (anomalie) => ({ numero: null, projet: 'atelier', composant: '', titre: 'Le bouton Retour ne répond pas', description: 'Constaté par les testeurs.', type: 'bug', urgence: 'important', statut: 'nouveau', plateforme: 'ios', version: '', etapes: '', attendu: '', obtenu: '', contexte: '', appareil: '', liens: [], assigne: null, auteur: { uid: CAMILLE, nom: 'Camille', email: 'camille.essai@exemple.test', cote: 'client' }, pieces: [], archive: false, cree: serverTimestamp(), maj: serverTimestamp(), resolu: null, lu: { client: null, equipe: null }, qualification: null, devis: null, anomalie });
+await doit('Camille crée une demande née d une anomalie de test', addDoc(collection(camille(), 'tickets'), demandeDepuisAnomalie('ko-QA-01')));
+await refuse('mais l identifiant de l anomalie est borné', addDoc(collection(camille(), 'tickets'), demandeDepuisAnomalie('x'.repeat(81))));
+await refuse('et doit être un texte', addDoc(collection(camille(), 'tickets'), demandeDepuisAnomalie(12)));
+
+console.log('\n== La fiche projet : le pouls daté, les actions d une réunion, les accès, le build (agent C, 27/09/2026)');
+/* Le pouls est daté et signé par l'équipe ; le client ne le touche pas.
+   Le client coche une action de réunion : la liste « actions » seule, à la
+   même taille, sur une réunion qui lui est visible. Un lien d'accès porte
+   un identifiant borné, écrit par l'équipe. Une version porte un build. */
+await doit("L'équipe date et signe le pouls du projet", updateDoc(doc(equipe(), 'projets/atelier'), { pulse: { enCours: 'Écran de profil' }, pulseMaj: serverTimestamp(), pulsePar: 'Alex Durand', maj: serverTimestamp() }));
+await refuse('Camille ne réécrit pas le pouls', updateDoc(doc(camille(), 'projets/atelier'), { pulse: { enCours: 'x' }, pulseMaj: serverTimestamp(), pulsePar: 'Camille' }));
+await env.withSecurityRulesDisabled(async (ctx) => {
+  await setDoc(doc(ctx.firestore(), 'reunions/re-actions'), { projet: 'atelier', titre: 'Revue', visibilite: 'client', actions: [{ texte: 'Envoyer les captures', fait: false }, { texte: 'Valider les couleurs', fait: false }] });
+  await setDoc(doc(ctx.firestore(), 'reunions/re-interne'), { projet: 'atelier', titre: 'Interne', visibilite: 'interne', actions: [{ texte: 'x', fait: false }] });
+});
+await doit('Camille coche une action de sa réunion', updateDoc(doc(camille(), 'reunions/re-actions'), { actions: [{ texte: 'Envoyer les captures', fait: true }, { texte: 'Valider les couleurs', fait: false }] }));
+await refuse('Camille ne change pas le titre en passant', updateDoc(doc(camille(), 'reunions/re-actions'), { titre: 'Autre', actions: [{ texte: 'Envoyer les captures', fait: true }, { texte: 'Valider les couleurs', fait: false }] }));
+await refuse('Camille ne touche pas au compte rendu', updateDoc(doc(camille(), 'reunions/re-actions'), { compteRendu: 'x' }));
+await refuse('Camille n ajoute pas une action', updateDoc(doc(camille(), 'reunions/re-actions'), { actions: [{ texte: 'Envoyer les captures', fait: true }, { texte: 'Valider les couleurs', fait: false }, { texte: 'Une de plus', fait: false }] }));
+await refuse('Camille ne retire pas une action', updateDoc(doc(camille(), 'reunions/re-actions'), { actions: [{ texte: 'Envoyer les captures', fait: true }] }));
+await refuse('Camille ne coche rien sur une réunion interne', updateDoc(doc(camille(), 'reunions/re-interne'), { actions: [{ texte: 'x', fait: true }] }));
+await refuse('Léa ne coche pas une action chez Camille', updateDoc(doc(lea(), 'reunions/re-actions'), { actions: [{ texte: 'Envoyer les captures', fait: true }, { texte: 'Valider les couleurs', fait: true }] }));
+await doit("L'équipe date le compte rendu", updateDoc(doc(equipe(), 'reunions/re-actions'), { compteRendu: 'Écrans validés.', compteRenduLe: serverTimestamp(), lieu: 'Dans vos locaux', maj: serverTimestamp() }));
+await doit("L'équipe pose un lien d'accès avec son identifiant", setDoc(doc(equipe(), 'projets/atelier/liens/acces-store'), { nom: 'Compte App Store Connect', url: 'https://appstoreconnect.apple.com', categorie: 'acces', identifiants: 'atelier@exemple.test', visibilite: 'client' }));
+await refuse('Camille ne pose pas de lien d accès', setDoc(doc(camille(), 'projets/atelier/liens/mien'), { nom: 'x', url: 'https://x', categorie: 'acces', identifiants: 'a', visibilite: 'client' }));
+await refuse('Un identifiant démesuré ne passe pas', setDoc(doc(equipe(), 'projets/atelier/liens/acces-long'), { nom: 'x', url: 'https://x', categorie: 'acces', identifiants: 'a'.repeat(301), visibilite: 'client' }));
+await doit("L'équipe enregistre une version avec son build", setDoc(doc(equipe(), 'releases/r-build'), { projet: 'atelier', version: '1.4.2', plateforme: 'android', statut: 'test', build: '87', visibilite: 'client' }));
+await refuse('Un build démesuré ne passe pas', setDoc(doc(equipe(), 'releases/r-build-long'), { projet: 'atelier', version: '1.4.3', plateforme: 'android', statut: 'test', build: 'b'.repeat(41), visibilite: 'client' }));
+await refuse('Camille ne touche pas à une version', updateDoc(doc(camille(), 'releases/r1'), { build: '99' }));
+
+console.log('\n== Brief B : répondre sur une tâche, dire « c est fait », retirer une demande, les pièces d une validation, la suite d une demande');
+/* Camille répond sur une tâche à elle depuis sa fiche, jamais sur une tâche
+   interne ni sur une tâche qui ne l'attend pas, jamais deux fois. Elle dit
+   « c'est fait » sur un point bloquant de son côté, pas sur un point de
+   notre côté, une seule fois. Elle retire sa demande tant qu'elle est chez
+   nous, pas une fois le travail commencé. Ses remarques sur une validation
+   portent dix pièces au plus. Une demande peut en poursuivre une autre
+   (« suite ») ; « suivant » est au serveur. Le motif d'un refus est à
+   l'équipe. */
+await env.withSecurityRulesDisabled(async (ctx) => {
+  const b = ctx.firestore();
+  await setDoc(doc(b, 'taches/t-attente'), { projet: 'atelier', titre: 'Captures', statut: 'attente-client', priorite: 'normale', visibilite: 'client' });
+  await setDoc(doc(b, 'taches/t-attente-interne'), { projet: 'atelier', titre: 'Interne', statut: 'attente-client', priorite: 'normale', visibilite: 'interne' });
+  await setDoc(doc(b, 'taches/t-en-cours'), { projet: 'atelier', titre: 'En cours', statut: 'en-cours', priorite: 'normale', visibilite: 'client' });
+  await setDoc(doc(b, 'blocages/b-client'), { projet: 'atelier', titre: 'Compte Google', responsable: 'client', visibilite: 'client', resolu: null, signaleFait: null });
+  await setDoc(doc(b, 'blocages/b-nous'), { projet: 'atelier', titre: 'Serveur', responsable: 'capmedia', visibilite: 'client', resolu: null, signaleFait: null });
+  await setDoc(doc(b, 'tickets/t-neuf'), { projet: 'atelier', numero: 'ATELIER-010', titre: 'x', statut: 'nouveau', urgence: 'important', auteur: { uid: CAMILLE }, resolu: null, lu: {} });
+  await setDoc(doc(b, 'tickets/t-commence'), { projet: 'atelier', numero: 'ATELIER-011', titre: 'x', statut: 'en-cours', urgence: 'important', auteur: { uid: CAMILLE }, resolu: null, lu: {} });
+  await setDoc(doc(b, 'validations/v-pieces'), { projet: 'atelier', titre: 'Écran', statut: 'en-attente', reponse: null });
+});
+const reponseTache = (texte, pieces = []) => ({ par: CAMILLE, nom: 'Camille', texte, pieces, date: serverTimestamp() });
+await refuse('Camille ne répond pas sur une tâche interne', updateDoc(doc(camille(), 'taches/t-attente-interne'), { statut: 'repondu', reponseClient: reponseTache('fait'), maj: serverTimestamp() }));
+await refuse('ni sur une tâche qui ne l attend pas', updateDoc(doc(camille(), 'taches/t-en-cours'), { statut: 'repondu', reponseClient: reponseTache('fait'), maj: serverTimestamp() }));
+await refuse('ni au nom d un autre', updateDoc(doc(camille(), 'taches/t-attente'), { statut: 'repondu', reponseClient: { ...reponseTache('fait'), par: LEA }, maj: serverTimestamp() }));
+await refuse('ni vers un autre statut que « réponse reçue »', updateDoc(doc(camille(), 'taches/t-attente'), { statut: 'terminee', reponseClient: reponseTache('fait'), maj: serverTimestamp() }));
+await refuse('ni sans un mot ni une pièce', updateDoc(doc(camille(), 'taches/t-attente'), { statut: 'repondu', reponseClient: reponseTache(''), maj: serverTimestamp() }));
+await refuse('ni avec onze pièces', updateDoc(doc(camille(), 'taches/t-attente'), { statut: 'repondu', reponseClient: reponseTache('x', Array.from({ length: 11 }, (_, i) => ({ nom: `${i}.png`, chemin: 'p' }))), maj: serverTimestamp() }));
+await refuse('Léa ne répond pas sur une tâche de Atelier', updateDoc(doc(lea(), 'taches/t-attente'), { statut: 'repondu', reponseClient: { ...reponseTache('fait'), par: LEA }, maj: serverTimestamp() }));
+await doit('Camille répond sur une tâche à elle', updateDoc(doc(camille(), 'taches/t-attente'), { statut: 'repondu', reponseClient: reponseTache('Voici les captures.', [{ nom: 'a.png', chemin: 'projets/atelier/taches/t-attente/reponse/a.png', taille: 10, type: 'image/png' }]), maj: serverTimestamp() }));
+await refuse('mais pas deux fois', updateDoc(doc(camille(), 'taches/t-attente'), { statut: 'repondu', reponseClient: reponseTache('encore'), maj: serverTimestamp() }));
+await refuse('et ne touche pas au reste de la tâche', updateDoc(doc(camille(), 'taches/t-attente'), { titre: 'Autre' }));
+await doit('L équipe passe une tâche en « réponse reçue »', updateDoc(doc(equipe(), 'taches/t-en-cours'), { statut: 'repondu', maj: serverTimestamp() }));
+const cestFait = (texte) => ({ par: CAMILLE, nom: 'Camille', date: serverTimestamp(), texte });
+await refuse('Camille ne dit pas « c est fait » sur un point de notre côté', updateDoc(doc(camille(), 'blocages/b-nous'), { signaleFait: cestFait(''), maj: serverTimestamp() }));
+await refuse('ni au nom d un autre', updateDoc(doc(camille(), 'blocages/b-client'), { signaleFait: { ...cestFait(''), par: LEA }, maj: serverTimestamp() }));
+await refuse('ni ne lève le point elle-même', updateDoc(doc(camille(), 'blocages/b-client'), { resolu: serverTimestamp(), maj: serverTimestamp() }));
+await doit('Camille dit « c est fait » sur un point de son côté', updateDoc(doc(camille(), 'blocages/b-client'), { signaleFait: cestFait('Compte créé.'), maj: serverTimestamp() }));
+await refuse('mais pas deux fois', updateDoc(doc(camille(), 'blocages/b-client'), { signaleFait: cestFait('Encore.'), maj: serverTimestamp() }));
+await refuse('Léa ne dit rien sur un point de Atelier', updateDoc(doc(lea(), 'blocages/b-client'), { signaleFait: { ...cestFait(''), par: LEA }, maj: serverTimestamp() }));
+await doit('Camille retire sa demande reçue', updateDoc(doc(camille(), 'tickets/t-neuf'), { statut: 'annulee', maj: serverTimestamp(), 'lu.client': serverTimestamp() }));
+await refuse('mais pas une demande en cours', updateDoc(doc(camille(), 'tickets/t-commence'), { statut: 'annulee', maj: serverTimestamp(), 'lu.client': serverTimestamp() }));
+await refuse('ni ne pose le motif d un refus', updateDoc(doc(camille(), 'tickets/t-commence'), { motifRefus: 'x', maj: serverTimestamp() }));
+await doit('L équipe refuse avec un motif', updateDoc(doc(equipe(), 'tickets/t-commence'), { statut: 'refuse', motifRefus: 'Hors du périmètre.', maj: serverTimestamp() }));
+await refuse('mais pas un motif de deux mille et un caractères', updateDoc(doc(equipe(), 'tickets/t-commence'), { motifRefus: 'x'.repeat(2001), maj: serverTimestamp() }));
+await doit('Camille marque la demande lue, à son nom', updateDoc(doc(camille(), 'tickets/t-commence'), { 'lu.client': serverTimestamp(), [`lu.clients.${CAMILLE}`]: serverTimestamp() }));
+await refuse('Camille ne joint pas onze pièces à ses remarques', updateDoc(doc(camille(), 'validations/v-pieces'), { statut: 'modifications', reponse: { par: CAMILLE, nom: 'Camille', date: serverTimestamp(), commentaire: 'x', pieces: Array.from({ length: 11 }, (_, i) => ({ nom: `${i}.png` })) }, maj: serverTimestamp() }));
+await doit('Camille joint des pièces à ses remarques', updateDoc(doc(camille(), 'validations/v-pieces'), { statut: 'modifications', reponse: { par: CAMILLE, nom: 'Camille', date: serverTimestamp(), commentaire: 'Voir la capture.', pieces: [{ nom: 'a.png', chemin: 'projets/atelier/validations/v-pieces/reponse/a.png', taille: 10, type: 'image/png' }] }, maj: serverTimestamp() }));
+const demandeSuite = (extra) => ({ numero: null, projet: 'atelier', composant: '', titre: 'Suite', description: 'd', type: 'bug', urgence: 'important', statut: 'nouveau', plateforme: '', version: '', etapes: '', attendu: '', obtenu: '', contexte: '', appareil: '', liens: [], assigne: null, auteur: { uid: CAMILLE, email: 'camille.essai@exemple.test', nom: 'Camille', cote: 'client' }, pieces: [], archive: false, cree: serverTimestamp(), maj: serverTimestamp(), resolu: null, lu: { client: serverTimestamp(), equipe: null, clients: { [CAMILLE]: serverTimestamp() } }, qualification: null, devis: null, ...extra });
+await doit('Camille ouvre une demande qui en poursuit une autre', addDoc(collection(camille(), 'tickets'), demandeSuite({ suite: 't1' })));
+await doit('ou sans suite', addDoc(collection(camille(), 'tickets'), demandeSuite({ suite: null })));
+await refuse('mais une suite est un identifiant, pas un nombre', addDoc(collection(camille(), 'tickets'), demandeSuite({ suite: 12 })));
+await refuse('et elle n écrit pas « suivant » elle-même', addDoc(collection(camille(), 'tickets'), demandeSuite({ suivant: 't1' })));
+
 console.log(`\n${ok} contrôle(s) conforme(s)${ecarts.length ? `, ${ecarts.length} ÉCART(S) :\n  - ${ecarts.join('\n  - ')}` : ''}`);
 await env.cleanup();
 process.exit(ecarts.length ? 1 : 0);

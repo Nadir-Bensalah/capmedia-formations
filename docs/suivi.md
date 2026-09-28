@@ -593,6 +593,11 @@ qa-fiche-testeur.cjs      la fiche du testeur à sa première connexion, la note
 qa-chat-testeur.cjs       la bulle du testeur et la page Testeurs du Cockpit, en direct
 qa-telecharger-piece.cjs  le téléchargement direct d'une pièce par le serveur : droits, nom, traces
 qa-parcours-casses.cjs    les points cassés du relevé des parcours : réponse qui fait repartir, « Pas tout à fait », devis périmé, un seul « lu »
+qa-finance-client.cjs     devis et factures côté client : décision, refus avec motif, « J'ai réglé », coordonnées, retard, échéance, facture liée au devis
+qa-demandes-client.cjs    demandes, tâches, points bloquants, validations : réponse sur une tâche, « C'est fait », annuler, suite d'une demande, pièces
+qa-projet-client.cjs      fiche projet : versions par plateforme, pouls daté, tenue des délais, réunions et ICS, calendrier, activité, accès
+qa-navigation-client.cjs  se repérer : plusieurs projets, rôle et personnes, invitation d'un collègue, demandes tous projets, notifications, recherche, maintenance
+qa-echanges-client.cjs    messages et bulle partout, fichiers (télécharger, retirer le sien), tests (anomalie en demande, bon pour sortie)
 matrice-gate2.test.mjs    12 catégories de personnes x 48 opérations Firestore
 matrice-stockage-gate2    12 catégories x 16 opérations Storage
 invitations-gate2         les quatre familles d'invitation, de bout en bout
@@ -787,3 +792,525 @@ Hub promettait une chose que le code ne faisait pas :
 - Les validations réservées au responsable sont cachées au collaborateur
   sur l'aperçu du projet et la page « En attente de vous »
   (`peutRepondreValidation`, la même règle que le compteur).
+
+## 19. Devis, factures, paiements : ce que le client peut faire (27/09/2026)
+
+Relevé dans `docs/parcours-client-hub.md`, scénarios 2, 13 et 30 à 37.
+
+### La page « Devis et factures » (`vues/finances.js`)
+
+- Un devis ouvert reste « À votre décision » tant que le client n'a pas
+  décidé : `STATUTS_DEVIS.consulte` se lit « À votre décision » côté
+  client et « Consulté » côté équipe (`pastille(..., { equipe })`).
+- Une seule liste : les devis à décider vivent dans le bloc « Devis en
+  attente de votre décision », la section « Devis » garde les autres.
+- Un filtre par projet (`#filtre-projet`) quand le client est responsable
+  de plusieurs projets ; il filtre factures, devis et paiements.
+- Les paiements annulés ne s'affichent pas ; « Factures émises » ne compte
+  ni les annulées ni les avoirs ; un lien profond vers une pièce absente
+  affiche « Cette pièce n'est pas disponible. » une fois toutes les clés
+  `documents:<p>` chargées (`magasin.chargee`).
+- `statutPiece(d)` (noyau.js) rend `en-retard` pour une facture due dont
+  l'échéance est passée (`factureEnRetard`), comme `expire` pour un devis
+  périmé : la pastille, « En attente de vous » et la relance le disent sans
+  attendre la fonction du matin. `devisFrisable(d)` dit quel devis a une
+  frise : un devis accepté, et lui seul.
+
+### La fiche d'un devis
+
+- Pendant la décision, le pied propose « Refuser », « J'ai une question »
+  (vers `#/projets/{p}/nouvelle-demande?type=question&devis={id}&titre=…`,
+  la fiche de demande préremplit le titre et le contexte), « Fermer » et
+  « Accepter ». « Merci, on lance. » seulement pour un devis initial.
+- « Refuser » demande le motif (obligatoire, 2 000 caractères), écrit dans
+  `reponse.commentaire`. La lettre `devis-reponse` à l'équipe donne le HT,
+  le TTC et le motif (« Motif », ou « Un mot du client » avec une
+  acceptation), et mène à la pièce dans le Cockpit.
+- Le serveur écrit UNE ligne d'activité pour une réponse
+  (`hubDocumentActivite`) : « a signé le devis X : le projet démarre » pour
+  un devis initial accepté, « a accepté le devis X » ou « a refusé le devis
+  X » sinon ; et une notification à l'équipe (« Devis accepté » / « Devis
+  refusé », numéro · projet, lien `#/finances/{id}`), réservée à qui lit la
+  finance du projet.
+- Un devis sans étapes montre son « Détail » (un tiret s'il est vide) et
+  rappelle que le PDF fait foi.
+
+### La fiche d'une facture
+
+- « Découle du devis D-… » (lien) quand la facture porte `devis` : le
+  choix se fait au dépôt (`admin-finances.js`, select des devis du projet ;
+  `deposerDocument` vérifie que le devis existe sur le même projet).
+- Les coordonnées de règlement (`reglages/finance` : titulaire, iban, bic,
+  banque, mention) s'affichent sur une facture due avec « Copier l'IBAN ».
+  Saisies dans Paramètres > « Coordonnées de règlement » par la finance
+  (`ecrire.reglerFinance`, règle : administrateur ou permission
+  `finance.gerer`), lues par tout compte connecté (une seule agence) sur la
+  clé `K.reglages`. Sans réglage, la fiche renvoie au PDF, sans promesse de
+  paiement en ligne.
+- « J'ai réglé cette facture » (responsable, facture due) : date, moyen,
+  référence, montant prérempli au reste à payer. `ecrire.declarerReglement`
+  écrit `documents/{id}.reglementDeclare = { par, nom, date, moyen,
+  reference, montant, le }` ; la règle n'accepte que ces clés, `par == moi()`,
+  `le == request.time`, sur une facture due. Le serveur
+  (`hubDocumentActivite`) écrit l'activité, notifie l'équipe (« Règlement
+  déclaré ») et met la lettre `reglement-declare` en file. La fiche dit
+  « Vous avez déclaré un règlement le … · en attente de confirmation », la
+  pastille reste celle de la facture ; `enregistrerPaiement` (et
+  `statutFacture` vers « payée ») pose `reglementDeclare.confirme`, la fiche
+  dit « Confirmé ». Côté équipe, la fenêtre « Enregistrer un paiement » est
+  préremplie avec la déclaration.
+
+### Le serveur, chaque matin (`hubEcheancesQuotidien`)
+
+`onSchedule`, tous les jours à 8 h Europe/Paris, `passerLesEcheances()`
+exposé pour l'épreuve (`_passerLesEcheances`) :
+
+- trois jours avant l'échéance d'une facture due : notification « Facture
+  à régler avant le … » et lettre `facture-echeance`, une fois
+  (`echeanceSignalee`) ;
+- échéance passée : `statut: 'en-retard'`, activité « La facture X est
+  passée en retard », notification « Facture en retard » et lettre
+  `facture-retard`, une fois (`retardSignale`) ;
+- validité passée : `statut: 'expire'` sur le devis, activité, pas de
+  lettre (`expireSignale`).
+
+`hubDocumentActivite` reconnaît ces marques et n'écrit pas une seconde
+ligne. Les événements `facture-echeance`, `facture-retard` et
+`reglement-declare` sont dans `EVENEMENTS` (catégorie `finances`,
+responsable seul).
+
+### Les lettres
+
+`devis` et `facture` annoncent le TTC (HT entre parenthèses, `montantTTC`
+de courriels.js) ; la lettre de facture renvoie à une demande depuis
+l'espace. `suiviDocumentCree` notifie aussi dans le Hub (« Nouveau devis »,
+« Nouvelle facture ») les responsables du projet. La relance du lundi liste
+chaque facture avec son TTC et son échéance.
+
+### Les épreuves
+
+`fonctions-suivi/outils/qa-finance-client.cjs` (navigateur : notification à
+l'émission, « À votre décision » après ouverture, une seule liste, filtre
+par projet avec un second projet posé par REST, facture échue « En
+retard », « Découle du devis », IBAN et « Copier l'IBAN », « J'ai réglé
+cette facture » et ce que l'écran et l'équipe en disent, refus avec motif
+et lettre, lien profond inconnu) ; le bloc « Finances » de
+`regles.test.mjs` (`reglementDeclare` borné, `reglages/finance`).
+
+## 20. Se repérer, plusieurs projets, le rôle, le compte, la maintenance (27/09/2026)
+
+Le lot D du relevé des parcours (`docs/parcours-client-hub.md`, scénarios
+1 à 8, 28, 50 à 59). Ce qui change, et où.
+
+### Arriver et se repérer
+
+- L'accueil de la première fois (`accueil-client.js`) : l'écran « Ce qu'on
+  vous demandera » cite les cinq gestes de « En attente de vous » ; l'écran
+  des tests n'apparaît que si des scénarios ou des parcours concernent le
+  client (`avecTests`, même condition que l'entrée Tests du rail, posée par
+  app.js).
+- `derniereVisite` (app.js) : lue au démarrage dans `env.derniereVisite`,
+  jamais réécrite pendant la session ; posée quand la page se cache
+  (`pagehide`, `visibilitychange` vers hidden) et toutes les dix minutes
+  d'activité (pointeur, clavier). Pas de `sendBeacon` : une écriture
+  Firestore ordinaire. L'encart « Depuis votre dernière visite »
+  (`vues/accueil.js`) exclut les gestes du client (`a.par.uid === uid`), et
+  chaque compteur est un lien (la section du projet si tout vient du même
+  projet, sinon `#/activite`). À la toute première connexion, pas d'encart :
+  l'accueil de la première fois suffit.
+- La recherche (app.js) : validations en attente, décisions, liens (ouverts
+  dans un nouvel onglet), pages de l'espace, fichiers vers
+  `/projets/{p}/fichiers?f={id}` (l'onglet Fichiers doit lire `f`, projet.js),
+  réunions et versions vers leur fiche. Les projets archivés sont exclus.
+  « Nouvelle demande » et « Envoyer un message » demandent le projet.
+- Les notifications (coquille.js) : nom du projet (via `notification.projet`
+  et `K.projets`), icône par `type` (`ICONE_NOTIF`, trait fin, pas de
+  pastille), et `lireSurPlace` : à chaque changement de route, les non lues
+  dont le lien (sans `#`, sans paramètres) est la page ouverte passent
+  `lu: true`.
+
+### Plusieurs projets
+
+- `choisirProjet(projets)` et `lienCreneau(pid)` exportés par
+  `vues/accueil.js` : la fenêtre « Pour quel projet ? » (modèle documents.js)
+  pour « Nouvelle demande », « Message » et « Demander un créneau »
+  (`#/messages/{pid}?brouillon=…`, lu par la page Messages). « Tout voir »
+  de l'activité mène à `#/activite`. La carte Finances n'apparaît qu'à un
+  responsable. La puce d'une carte projet : « N chez nous · M à vous ».
+- `#/demandes` (`vues/demandes.js`) : mes demandes, tous projets, filtres
+  Ouvertes / À vous / Terminées / Toutes et filtre par projet ; entrée
+  « Demandes » du groupe Suivi (gris = ouvertes, rouge = à moi).
+- `#/nouveaux-projets` (`vues/demandes-projet.js`) : mes demandes de projet ;
+  entrée « Mes demandes de projet » sous « Demander un projet », seulement
+  s'il y en a une. La fiche `#/nouveaux-projets/:id` garde son adresse ; au
+  statut « Devis envoyé », l'équipe rattache le devis sur la fiche (champ
+  `devis`, règle `demandesProjet` bornée à `statut, projet, devis, maj`) et le
+  client lit « Un devis vous a été envoyé. Lire le devis et y répondre » vers
+  `#/finances/{id}`. « Sans suite » se voit sur la frise.
+- Maintenance (`vues/maintenance.js`) : un client à plusieurs projets voit
+  `mesProjets` (une carte par projet), jamais `tousLesProjets` (vue équipe).
+
+### Le rôle et les personnes
+
+- Miroir serveur `projets/{p}.personnesClient = [{ uid, nom, role }]`
+  (interlocuteurs actifs avec un rôle connu), tenu par `hubInterlocuteurEcrit`
+  (hub.js) sur `projets/{p}/interlocuteurs/{cle}`. Pourquoi un nouveau champ
+  et non `personnes` : `personnes` existe déjà (liste d'identifiants, préparés
+  compris) et sert au registre des rôles (`acces.planAcces`) et à une requête
+  `array-contains` dans suivi.js ; changer sa forme aurait cassé les deux.
+  Les règles : ni le client ni l'équipe n'écrivent `personnesClient` depuis un
+  écran (absent des `hasOnly` du projet) ; l'Admin SDK passe outre.
+- `vues/personnes.js` : `personnesHtml(projet, env, d)`, insérée dans
+  l'aperçu de projet.js après « Points bloquants ». « Chez Capmedia » (le
+  responsable du projet, nom lu dans l'annuaire ; côté équipe, aussi les
+  agents affectés) et « De votre côté » (rôle de chacun, « vous » sur la
+  sienne), plus `PHRASE_ROLE`. Le client ne peut pas savoir quels agents sont
+  affectés (l'annuaire ne porte que le nom) : il voit le responsable et la
+  phrase « toute l'équipe lit ce projet ».
+- « Inviter un collègue » (responsable seul) : action `inviterCollegue` de
+  suiviAdmin (`ACTIONS`, `client: true` : pas de fiche d'équipe exigée, le
+  contrôle est dans l'action : appelant sans fiche d'équipe, membre du projet,
+  `roles[uid] === 'responsable'`), qui appelle `ajouterInterlocuteur` avec le
+  rôle `collaborateur` et prévient l'équipe (« Le responsable a invité un
+  collègue », lien vers l'onglet Accès client). L'équipe reçoit 403 sur cette
+  action : elle passe par « Accès client ».
+- coquille.js : `definirRoleProjet(texte)` ; app.js pose « Vous êtes
+  responsable » ou « Vous êtes collaborateur » sous le nom de l'entreprise,
+  dans une fiche projet seulement. `/projets/{p}/acces` tapée par un client :
+  aperçu et toast « Les accès sont gérés par Capmedia. ».
+
+### La maintenance
+
+- « Reprendre le forfait » sur un forfait `suspendu` ou `termine` (la règle
+  d'update du contrat l'autorisait déjà, épreuve ajoutée) ; « Modifier ma
+  demande » tant qu'elle est `demande`.
+- Une évolution proposée par le client se retire tant qu'elle est `proposee`
+  (règle delete : `origine == 'client'`, `par.uid == moi()`, statut `proposee`,
+  jamais le contrat) ; elle peut porter des `pieces` (dix au plus), déposées
+  sous `projets/{p}/maintenance/{id}/{nom}` (identifiant tiré d'avance par
+  `nouvelId`, règles Storage dans les deux fichiers : dépôt et lecture par le
+  client du projet, parcours et suppression par l'équipe).
+- Un changement de statut d'une évolution envoie la lettre `evolution-statut`
+  (courriels.js, préférence `projet`) en plus de la notification.
+- Le lien vers le devis du forfait n'apparaît qu'à qui lit la finance
+  (`financeSur`).
+
+### Le compte
+
+- Paramètres : le fuseau horaire est retiré ; catégorie `projet` (« Vie du
+  projet ») ajoutée dans parametres.js et dans `EVENEMENTS`
+  (communication.js), où `tache` et `tache-attente` la rejoignent ; l'aide de
+  « Devis et factures » annonce l'échéance à trois jours.
+- courriels.js : accents rendus aux gabarits `preprojet`, `maintenance`,
+  `message-projet`.
+
+### Les épreuves
+
+`fonctions-suivi/outils/qa-navigation-client.cjs` (navigateur : accents des
+lettres, encart « Depuis votre dernière visite » et dernière visite posée à
+la fin, « Les personnes » et le rôle, invitation d'un collègue avec le miroir
+et la notification équipe, refus de Léa et de l'équipe sur `inviterCollegue`,
+« Demandes » du rail, notification avec le nom du projet lue sur la page,
+recherche, Maintenance et Paramètres, et à deux projets la fenêtre « Pour quel
+projet ? », le rôle dans le rail, la Maintenance en cartes, `/acces`) ; le
+bloc « Se repérer, plusieurs projets, le rôle » de `regles.test.mjs` ; le
+bloc « Les pièces d'une évolution de maintenance » de `storage.test.mjs`.
+
+## 21. Messages et bulle, fichiers, tests : les échanges du client (27/09/2026)
+
+Le lot E du relevé des parcours (`docs/parcours-client-hub.md`, scénarios
+29, 38, 39, 43, 44, 46 à 49). Ce qui change, et où.
+
+### La bulle suit l'adresse (`bulle-projet.js`, `bulle.js`)
+
+- `bulle-projet.js` : `brancherBulle(env)` écoute `surChangement` du
+  routeur et monte UNE bulle dès que l'adresse commence par
+  `/projets/{id}` (fiche, demande, nouvelle demande, brique, tâche), la
+  change de projet ou la démonte sinon. Branché par une ligne à la fin de
+  app.js et d'admin.js (import dynamique) ; projet.js ne monte plus rien.
+- Un état ouvert/fermé par projet : `suivi:bulle-ouverte:{pid}`.
+- N'importe quelle page ouvre la bulle avec un texte déjà écrit :
+  `document.dispatchEvent(new CustomEvent('bulle:ouvrir', { detail: { projet, texte } }))`,
+  le curseur à la fin (`ouvrirAvec`). Sur la page Messages, `?brouillon=`
+  dans l'adresse fait la même chose, une fois.
+- Le titre de l'onglet appartient à la coquille : la bulle envoie
+  `titre:non-lus` (`detail.compte`) et coquille.js (`majTitre`) compose le
+  préfixe `(n)` avec le plus grand des deux comptes (notifications non
+  lues, messages non lus), jamais la somme, parce qu'un message fait aussi
+  une notification. Le battement « Nouveau message · … » a disparu.
+
+### Les mêmes conventions partout (`bulle.js`, `vues/messages.js`)
+
+- Entrée envoie, Maj+Entrée va à la ligne, sur la page Messages comme dans
+  la bulle ; l'aide le dit aux deux endroits.
+- bulle.js exporte ce que la page reprend : `filParJour` (repères
+  « Aujourd'hui », « Hier », « Jeudi 25 septembre », classe `.fil-jour`),
+  `luLe` (« Lu le JJ/MM à HH:MM »), `vientDEnFace` (un message de l'autre
+  côté, jamais le mien) et `demandeDepuisMessage` (le menu des types vers
+  `nouvelle-demande`, texte posé dans `sessionStorage`).
+- La page Messages écoute aussi `lectures` (`requeteLectures` dans
+  donnees.js) : « Capmedia écrit » (marque `frappe`, posée toutes les quatre
+  secondes de saisie au plus), l'accusé sous mon dernier message
+  (`#fil-accuse`), et le geste « En faire une demande » (`.fil-message`,
+  même bouton `.bulle-action`) sur les messages d'en face seulement.
+- Des pièces sans un mot : `ecrire.messageProjet` écrit `texte: ''` ; la
+  règle `projets/{p}/messages` accepte un texte vide quand `pieces` n'est
+  pas vide (jamais ni texte ni pièces) ; `messageHtml` n'affiche pas de
+  bulle de texte vide ; le serveur (`hubMessageProjet`) dit « a envoyé une
+  pièce jointe » et notifie « Pièce jointe » plutôt qu'un extrait vide.
+
+### Les fichiers (`ui.js`, `vues/documents.js`, onglet Fichiers de projet.js)
+
+- `brancherPieces` : `[data-piece]` télécharge (lien signé lu en mémoire,
+  `<a download>` avec `data-nom` ; si la lecture est refusée, un onglet
+  s'ouvre à la place) ; `[data-ouvrir-piece]` ouvre dans un nouvel onglet.
+  `fichierHtml` pose « Ouvrir » sur les images et PDF en plus de
+  « Télécharger », affiche `version` en étiquette, dit « Déposé par vous »
+  (`options.moi`) et pose le menu sur ses propres dépôts (`options.retirer`).
+  La pièce d'un message (`pieceHtml`) s'ouvre si elle se regarde (image,
+  PDF), se télécharge sinon.
+- Une seule source de libellés : `CATEGORIES_FICHIER` (« Éléments (images,
+  textes) » pour `assets`) ; les deux fenêtres de dépôt du client lisent
+  `CATEGORIES_CLIENT`. Message de fin : « Fichier envoyé. » ou « N fichiers
+  envoyés. », partout.
+- Retirer son fichier : `ecrire.retirerFichier(f)` efface l'objet
+  (`deleteObject`) puis la fiche. Règle Firestore `fichiers` : `delete` par
+  un client membre, sur une fiche `visibilite == 'client'` dont `par.uid`
+  est lui ; l'équipe n'efface pas (elle archive). Règle Storage
+  (`storage.rules` ET `storage.transition.rules`) : `auteurDuFichier`, deux
+  lectures (le projet, la fiche). Le serveur (`hubFichierRetire`,
+  `onDocumentDeleted`) écrit l'activité et prévient l'équipe.
+- Page Documents : tri « Plus récents / Plus anciens / Nom » (`#tri-doc`).
+  « Pour quel projet ? » ne s'affiche qu'à plusieurs projets sans filtre.
+
+### Les tests (`vues/tests.js`, `hub.js`, `courriels.js`, `communication.js`)
+
+- Vocabulaire client : « robot » remplacé (« un programme rejoue », « sans
+  personne qui clique »), la phrase figée sur la jauge grise retirée.
+- La fiche d'une anomalie propose au client « En faire une demande » vers
+  `#/projets/{p}/nouvelle-demande?type=bug&titre=…&anomalie={id}` ; le
+  formulaire lit `titre` et `anomalie` (demande.js), `creerDemande` pose le
+  champ `anomalie` (règle : clé acceptée, texte borné à 80). `?anomalie=`
+  ou `?campagne=` sur `#/tests` ouvre la fiche à l'arrivée.
+- `hubAnomalieEcrite` : à la naissance d'une anomalie `origine: 'testeur'`,
+  notification « Une anomalie a été trouvée par les testeurs » (scénario ·
+  titre · gravité) et lettre `anomalie` ; au passage en `corrigee`,
+  « Anomalie corrigée ». `hubCampagneEcrite` : « Campagne de tests
+  ouverte » / « Campagne close » et lettre `campagne` aux passages en
+  `en-cours` / `close`. Événements `anomalie` et `campagne` (préférence
+  `projet`) dans `EVENEMENTS`, gabarits dans `MODELES`.
+- Le feu vert de sortie : à la clôture, le serveur crée une validation
+  `type: 'sortie'` (« Bon pour sortie : {campagne} », description figée,
+  `reserveeResponsable: true`, `cible: { id, libelle, chemin }` vers la
+  campagne, `demandeur: Capmedia Test`), une seule par campagne (requête
+  sur `cible.id`). `TYPES_VALIDATION.sortie = 'Sortie'`. Sa création passe
+  par `hubValidationCreee` comme toute validation.
+
+### Les épreuves
+
+`fonctions-suivi/outils/qa-echanges-client.cjs` (émulateurs avec Functions
+et Storage : notifications et lettres d'anomalie et de campagne, la
+validation de sortie créée une seule fois, la bulle sur une demande et une
+brique puis démontée ailleurs, `bulle:ouvrir`, Entrée envoie et Maj+Entrée
+non, « Lu le … à … », « Capmedia écrit », « En faire une demande » absent
+de mes messages, des pièces sans texte, « Télécharger » qui produit un
+`download` sous le nom du fichier, la version, le libellé unique, retirer
+son fichier jusqu'à l'objet, le tri des Documents, le vocabulaire de la
+page Tests, la fiche d'anomalie et la demande liée, « Bon pour sortie »
+dans « En attente de vous ») ; le bloc « Les échanges » de
+`regles.test.mjs` ; le bloc « Retirer son propre fichier » de
+`storage.test.mjs`.
+
+## 22. Demandes, tâches, points bloquants, validations : ce que le client peut faire (27/09/2026)
+
+Relevé dans `docs/parcours-client-hub.md` (scénarios 8, 9, 11, 12, 16, 20 à
+24). Le client agit directement sur l'objet, et le serveur prévient qui de
+droit. Chaque écriture client passe par `ecrire.*` et une règle qui borne
+les champs.
+
+- **Une tâche « À vous »** (`attente-client`) : la fiche porte « Votre
+  réponse », un dépôt (Storage `projets/{p}/taches/{tid}/reponse/{nom}`) et
+  « Envoyer ma réponse ». `ecrire.repondreTache` écrit
+  `reponseClient = { par, nom, texte, pieces, date }` et le statut
+  `repondu` (règle `clientRepondTache` : tâche visible, en attente de lui,
+  `hasOnly(['reponseClient', 'statut', 'maj'])`, une fois). Nouveau statut
+  `repondu` dans `STATUTS_TACHE` (« Réponse reçue », violet, entre
+  attente-client et terminée). Le client lit « À vous » (clé `client:`, lue
+  par `pastille(…, { client })`). Serveur (`hubTacheEcrite`) : activité
+  « a répondu sur la tâche « … » », notification équipe « Réponse du client
+  sur une tâche », lettre `tache-reponse`. `enAttenteDeVous` ne compte que
+  `attente-client` : le point quitte « En attente de vous ».
+- **Un point bloquant de son côté** : l'éditeur de l'équipe porte
+  `attendu` (« Ce qu'on attend du client ») et `echeance` (« Attendu pour
+  le »). Côté client, la fiche (`ouvrirBlocage` dans `vues/projet.js`,
+  ouverte au clic ou par `/projets/{p}?blocage={id}`) dit « Ce qu'on attend
+  de vous », « Depuis le », « Attendu pour le », et propose « C'est fait »
+  (`ecrire.signalerBlocageFait` écrit `signaleFait = { par, nom, date,
+  texte }`, règle `clientSignaleFait` : responsable client, non levé, une
+  fois) et « Répondre » (événement `bulle:ouvrir` avec le texte prérempli).
+  Serveur (`hubBlocageEcrit`) : à la création d'un point `responsable:
+  'client'` visible, notification et lettre `blocage-client` (une par
+  destinataire) ; au « C'est fait », activité et notification équipe
+  « Point bloquant : le client dit que c'est fait ». Libellés côté client :
+  « De votre côté » / « De notre côté » / « Un tiers » (`coteBlocage`).
+- **Une validation** : le client joint des pièces à sa réponse (Storage
+  `projets/{p}/validations/{vid}/reponse/{nom}`, `reponse.pieces` ≤ 10).
+  Serveur (`hubValidationModifiee`) : accusé à l'auteur (« Merci, c'est
+  validé » / « Vos remarques sont transmises »), notification aux collègues
+  du projet (auteur exclu) ; à l'annulation, « Validation retirée » et les
+  notifications « Votre validation est attendue » qui mènent à
+  `#/valider/{vid}` sont marquées lues (`marquerLuesParLien`). La page
+  « En attente de vous » porte ce seul nom partout, montre une annulée avec
+  sa pastille et une icône neutre, lit les passées par vingt, et dit
+  « Cette validation n'existe plus. » pour un identifiant inconnu.
+- **Une demande** : « Ajouter une pièce » après coup ; « Je n'en ai plus
+  besoin » (règle `clientAnnule`, depuis reçue, à analyser, acceptée ou
+  planifiée, `hasOnly(['statut', 'maj', 'lu'])` ; le serveur reconnaît le
+  client à la marque `lu.client` qui bouge avec le statut, et prévient
+  l'équipe « Demande retirée par le client ») ; motif d'un refus
+  (`motifRefus`, écrit par l'équipe, obligatoire pour un refus, lu dans le
+  bandeau « Pourquoi : … ») ; « Rouvrir » demande un motif dans la même
+  fenêtre que « Pas tout à fait » (`demanderMotif`) ; une demande close ou
+  terminée depuis plus de sept jours propose « Ouvrir une nouvelle
+  demande » vers `nouvelle-demande?suite={tid}` (`suite` à la création,
+  string ou null ; le serveur écrit `suivant` sur l'ancienne ; les deux
+  fiches se lient « Suite de » / « Suivie par ») ; le « non lu » par
+  personne (`lu.clients[uid]`, à côté de `lu.client`, sans règle
+  nouvelle : `clientMarqueLu` borne déjà `lu`).
+- **Le formulaire** : `FORMATS_ACCEPTES` (noyau.js) alimente l'attribut
+  `accept` et l'aide de tous les dépôts (`depot` dans ui.js) ; un lien mal
+  formé est refusé sous le champ ; l'aide de l'urgence vient des `aide` de
+  `URGENCES` ; « Ce que vous attendez » pour une fonctionnalité ; l'aide du
+  forfait de maintenance sur cette carte quand `maintenance/contrat` est
+  `actif`. L'accusé `ticket-cree` connaît les neuf types et salue chaque
+  destinataire par son nom : `ecrireAuxClients(…, { parDestinataire: true })`
+  met en file une lettre par personne avec `par: d.nom`.
+- **Tenue des délais** : « demande en attente de votre réponse depuis plus
+  d'une semaine », lien vers la liste filtrée « Pour vous »
+  (`?filtre=pour-vous`, lu par la page du projet).
+
+Épreuves : `fonctions-suivi/outils/qa-demandes-client.cjs` (navigateur),
+blocs « Brief B » dans `regles.test.mjs` et `storage.test.mjs`.
+
+## 23. La fiche projet, les versions, les réunions, le calendrier (27/09/2026)
+
+Le lot de l'agent C sur le relevé des parcours (scénarios 14 à 19, 36, 40
+à 42, 45, 46, et la part « projet » de 2 et 3).
+
+### Le pouls et la progression
+
+- `projets/{p}.pulseMaj` (date du serveur) et `pulsePar` (nom) sont
+  écrits par l'éditeur du projet quand un texte du pouls change. Les
+  règles `projets` (agent et administrateur) les acceptent. L'aperçu lit
+  « mis à jour le JJ/MM par Prénom » sous chaque case renseignée ; une case
+  vide montre la valeur calculée. « Attendu de vous » ne lit plus le texte
+  libre : le bloc « En attente de vous » fait foi.
+- `progression.le` : posé quand l'estimation à la main change, pour lire
+  « estimé par Capmedia le JJ/MM ». `MODES_PROGRESSION` (donnees.js) est
+  écrit en sources lisibles (« d'après les étapes de la feuille de route »).
+- Un seul pourcentage à l'écran : l'anneau. La frise du devis garde
+  « N / M étapes faites » et sa jauge, la carte d'une partie « avancement
+  de la partie · date », la fiche d'une étape une barre.
+- « Tenue des délais » reste sans date et le dit.
+- Les onglets de la fiche suivent l'ordre des neuf sections du rail ;
+  « Tests » ne s'ajoute au client que s'il y a des scénarios ou des
+  campagnes (`ongletsVisibles`).
+
+### Les versions
+
+- `releases/{r}.build` (texte, 40 caractères, règle `releases`), liens
+  « App Store ou Play Store » et « TestFlight ou Play interne ».
+- `etatVersions(releases, plateforme, composant)` (donnees.js) : la
+  dernière disponible et la dernière en route (test, soumise, revue). Les
+  cartes plateformes de l'aperçu et l'en-tête d'une brique lisent cela,
+  plus `composant.version`.
+- La fiche d'une version : `#/projets/:id/releases/:rid` (routes hub et
+  cockpit, `ouvrirRelease` dans projet.js). Le serveur y mène
+  (`hubReleaseEcrite`).
+- `libellePlateforme` partout où une clé brute s'affichait.
+
+### Les réunions
+
+- `reunions/{r}.lieu`, `compteRenduLe` (posé par l'éditeur quand le
+  texte du compte rendu change), `rappelEnvoye` (serveur).
+- Le client coche ses actions : `ecrire.cocherAction(rid, actions, i,
+  fait)` ; règle `reunions` : un membre du projet, réunion visible du
+  client, seule la clé `actions` change, même taille, 50 au plus. Les
+  règles ne parcourant pas une liste, l'attribution d'une action à une
+  personne n'est pas vérifiée : n'importe quelle action se coche.
+- `reunionAVenir(r)` (donnees.js) : à venir tant que l'heure n'est pas
+  passée depuis plus d'une heure ; `prochaineReunion` s'y appuie, comme
+  l'onglet Réunions et le calendrier.
+- Le fichier d'agenda : `evenementICS`, `icsDe`, `telechargerICS` dans
+  vues/calendrier.js, importés par projet.js et accueil.js. LOCATION,
+  participants et ordre du jour en DESCRIPTION, échappement des virgules,
+  points-virgules et retours. « Tout mettre dans mon agenda » sur le
+  calendrier. Jamais proposé pour une réunion passée.
+- `hubRappelsReunions` (onSchedule, 17:00 Europe/Paris) : pour chaque
+  réunion visible du client dans la fenêtre « demain » à Paris
+  (`_fenetreDemain`), une notification et une lettre `reunion-rappel`
+  (`EVENEMENTS['reunion-rappel']`, catégorie `reunions`), une seule fois.
+  `_rappelerLesReunions(maintenant)` est exposée pour l'épreuve.
+- La fiche : `#/projets/:id/reunions/:rid` (routes hub et cockpit) ; le
+  calendrier, l'accueil, la recherche et le serveur y mènent.
+- « Demander un créneau » dans la fiche projet ouvre la bulle
+  (`bulle:ouvrir`, « Je souhaite un créneau pour ») ; sur l'accueil, le
+  lien `#/messages/{pid}?brouillon=…` (agent D).
+
+### Le calendrier
+
+- Un événement réunion mène à la fiche ; « +N » ouvre une fenêtre avec les
+  événements du jour ; chaque réunion à venir de la colonne « À venir »
+  porte son bouton d'agenda.
+
+### La feuille de route et la bulle
+
+- `devisAvecEtapes` ne retient que les devis acceptés (`devisFrisable`).
+- « Une question sur cette étape », « Écrire à Capmedia » (fiche d'une
+  réunion, d'une version) émettent `bulle:ouvrir` avec un début de
+  phrase ; projet.js ne monte plus la bulle (module global de l'agent E).
+- `hubJalonEcrit` : la notification « Étape terminée » nomme le devis de
+  l'étape (`documents/{devis}.numero`) et, aux responsables seulement, le
+  montant HT de la ligne (`projets/{p}/montants/jalon-{id}`).
+
+### Les accès et l'activité
+
+- `CATEGORIES_LIEN.acces` ; `liens/{l}.identifiants` (texte, 300
+  caractères, équipe seule, visible seulement si catégorie Accès et lien
+  visible du client) ; groupe « Accès » de l'onglet Liens avec « Copier ».
+- `#/activite` (vues/activite.js) : l'activité de tous les projets du
+  client, filtre par projet et par nature, pages de 50.
+- L'aperçu d'un projet a son encart « Depuis votre dernière visite »
+  (`activiteDepuis`, sans les gestes du client, compteurs cliquables).
+
+### Les épreuves
+
+`fonctions-suivi/outils/qa-projet-client.cjs` (navigateur, côté client) ;
+le bloc « La fiche projet : le pouls daté, les actions d'une réunion, les
+accès, le build » de `regles.test.mjs`.
+
+## 24. L'assemblage du chantier des parcours (27/09/2026, soir)
+
+Les sections 19 à 23 ont été écrites par cinq chantiers menés en parallèle
+sur des zones disjointes, puis assemblées et éprouvées ensemble. Ce que
+l'assemblage a corrigé :
+
+- Le rail du client a une entrée « Tests » sous chaque projet, à la même
+  condition que l'onglet de la fiche (scénarios actifs ou campagnes), pour
+  que rail et onglets aient le même compte ; le rail écoute les campagnes.
+- « Demandes » dans le rail ne montre qu'un chiffre, le rouge (ce qui attend
+  la main du client), comme « Messages ».
+- La frise « ligne par ligne » d'un devis : le client la voit pour un devis
+  à décider ou accepté (`devisFrisable`), l'équipe pour tout devis qui a des
+  étapes (`devisAvecEtapes(documents, jalons, { equipe })`).
+- L'accueil de la première fois garde son guide sous la main
+  (`guideCourant`) : un écran qui apparaît après la porte (les tests, quand
+  les scénarios arrivent) reconstruit le guide sur le même écran, même
+  pendant l'animation d'entrée.
+- Le miroir « personnesClient » d'un projet bouge aussi `maj`, sinon
+  l'aperçu ne se redessinait pas.
+- La règle de pilotage d'une demande tolère une demande sans champ
+  `qualification`.
+- Piège pour les épreuves : `<html data-suite>` existe, un sélecteur
+  `[data-suite]` attrape la racine de la page ; avec un bouton en fin de
+  ligne, c'est le titre qui porte `data-action`, on lit `closest('.ligne')`.

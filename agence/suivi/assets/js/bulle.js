@@ -1,17 +1,24 @@
 /* ==========================================================================
    La bulle de discussion d'un projet.
 
-   Une conversation à deux voix, posée en bas à droite de la fiche du
-   projet : l'équipe d'un côté, le client de l'autre. Tout est instantané,
-   les messages arrivent par la même écoute que le reste de la page.
+   Une conversation à deux voix, posée en bas à droite de toute page d'un
+   projet (fiche, demande, brique, tâche : c'est bulle-projet.js qui la
+   monte et la démonte au fil des adresses). L'équipe d'un côté, le client
+   de l'autre. Tout est instantané, les messages arrivent par la même
+   écoute que le reste de la page.
 
-   Elle sait quatre choses que la page des messages ne disait pas :
-   qui a lu et quand, qui est en train d'écrire, prévenir sans déranger
-   (un aperçu, un son court, le titre de l'onglet qui bat), et accepter
-   des fichiers par glisser-déposer.
+   Elle sait quatre choses : qui a lu et quand, qui est en train d'écrire,
+   prévenir sans déranger (un aperçu, un son court, le compte dans le titre
+   de l'onglet, que la coquille tient), et accepter des fichiers par
+   glisser-déposer.
+
+   Les conventions sont les mêmes que sur la page Messages, qui reprend les
+   aides exportées ici : Entrée envoie, Maj+Entrée va à la ligne ; le fil
+   est séparé par jour ; l'accusé dit « Lu le JJ/MM à HH:MM » ; « En faire
+   une demande » n'apparaît que sur les messages d'en face.
    ========================================================================== */
 
-import { echapper, depuis, heure, TYPES, nomsContacts } from './noyau.js';
+import { echapper, TYPES, nomsContacts, enDate, joursAvant } from './noyau.js';
 import { icone } from './icones.js';
 import { messageHtml, depot, toast, agir, brancherPieces, avatarProjet, menu, sur } from './ui.js';
 import * as magasin from './magasin.js';
@@ -19,10 +26,74 @@ import { K, ecrire, messagesDuProjet } from './donnees.js';
 import { naviguer } from './routeur.js';
 
 const CLE_SON = 'suivi:son-messages';
-const CLE_OUVERTE = 'suivi:bulle-ouverte';
+/* Un état ouvert/fermé par projet : refermer la bulle d'un projet ne
+   referme pas celle d'un autre. */
+const cleOuverte = (pid) => `suivi:bulle-ouverte:${pid}`;
 
 const lire = (cle, defaut) => { try { const v = localStorage.getItem(cle); return v === null ? defaut : v === '1'; } catch (e) { return defaut; } };
 const ecrireCle = (cle, oui) => { try { localStorage.setItem(cle, oui ? '1' : '0'); } catch (e) { /* stockage refusé */ } };
+
+/* ==========================================================================
+   Les aides partagées avec la page Messages
+   ========================================================================== */
+
+const deuxChiffres = (n) => String(n).padStart(2, '0');
+
+/** « Lu le 25/09 à 14:32 » : la date ET l'heure, toujours. */
+export const luLe = (valeur) => {
+  const d = enDate(valeur);
+  if (!d) return '';
+  return `Lu le ${deuxChiffres(d.getDate())}/${deuxChiffres(d.getMonth() + 1)} à ${deuxChiffres(d.getHours())}:${deuxChiffres(d.getMinutes())}`;
+};
+
+/** Le repère de jour d'un fil : « Aujourd'hui », « Hier », « Jeudi 25 septembre ». */
+export const jourFil = (valeur) => {
+  const d = enDate(valeur);
+  if (!d) return '';
+  const n = joursAvant(d);
+  if (n === 0) return "Aujourd'hui";
+  if (n === -1) return 'Hier';
+  const memeAnnee = d.getFullYear() === new Date().getFullYear();
+  const texte = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', ...(memeAnnee ? {} : { year: 'numeric' }) });
+  return texte.charAt(0).toUpperCase() + texte.slice(1);
+};
+
+/** Le fil, séparé par jour : `rendreUn(m)` dessine chaque message. */
+export const filParJour = (messages, rendreUn) => {
+  let jour = null;
+  return messages.map((m) => {
+    const j = jourFil(m.date);
+    const repere = j && j !== jour ? `<p class="fil-jour">${echapper(j)}</p>` : '';
+    jour = j || jour;
+    return `${repere}${rendreUn(m)}`;
+  }).join('');
+};
+
+/** Un message d'en face, jamais le mien : c'est lui qui peut devenir une demande. */
+export const vientDEnFace = (m, { uid, equipe }) => Boolean(m.de) && m.de.uid !== uid && ((m.de.cote === 'equipe') !== equipe);
+
+/* D'un message à une demande : le texte part dans le formulaire, déjà
+   rempli, du type choisi. Rien à recopier, rien à perdre. */
+export const demandeDepuisMessage = (bouton, m, pid, { avant = () => {} } = {}) => {
+  menu(bouton, Object.entries(TYPES).filter(([cle]) => cle !== 'demande').map(([cle, t]) => ({
+    libelle: t.libelle,
+    icone: t.icone,
+    action: () => {
+      const texte = (m.texte || '').trim();
+      const premiereLigne = texte.split('\n')[0].slice(0, 110);
+      try {
+        sessionStorage.setItem(`suivi:demande-depuis:${pid}`, JSON.stringify({
+          titre: premiereLigne,
+          description: texte,
+          auteur: (m.de || {}).nom || '',
+          date: new Date().toISOString(),
+        }));
+      } catch (e) { /* stockage refusé : le formulaire s'ouvrira vide */ }
+      avant();
+      naviguer(`/projets/${pid}/nouvelle-demande?type=${cle}`);
+    },
+  })));
+};
 
 /* Un son court, fabriqué à la volée : deux notes montantes, rien à
    télécharger. Le navigateur n'autorise le son qu'après un premier geste,
@@ -51,27 +122,20 @@ const sonner = () => {
   } catch (e) { /* le son n'est pas indispensable */ }
 };
 
-/* Le titre de l'onglet bat tant qu'un message n'est pas lu. */
-const titreOrigine = document.title;
-let battement = null;
-const battre = (n) => {
-  clearInterval(battement);
-  if (!n) { document.title = titreOrigine; return; }
-  let a = false;
-  document.title = `(${n}) ${titreOrigine}`;
-  battement = setInterval(() => {
-    a = !a;
-    document.title = a ? `Nouveau message · ${titreOrigine}` : `(${n}) ${titreOrigine}`;
-  }, 2200);
-};
+/* Le titre de l'onglet appartient à la coquille : la bulle lui dit
+   seulement combien de messages ne sont pas lus. */
+const direNonLus = (n) => document.dispatchEvent(new CustomEvent('titre:non-lus', { detail: { compte: n } }));
 
-const enDate = (v) => (v && typeof v.toDate === 'function' ? v.toDate() : (v ? new Date(v) : null));
+/* ==========================================================================
+   Le montage
+   ========================================================================== */
 
 export const monterBulle = ({ pid, env }) => {
   const uid = env.session.utilisateur.uid;
   const equipe = env.role === 'equipe';
   const racine = document.createElement('div');
   racine.className = 'bulle';
+  racine.dataset.projet = pid;
   racine.innerHTML = `
     <button class="bulle-pastille" type="button" id="bulle-ouvrir" aria-label="Ouvrir la conversation du projet" data-astuce="Conversation">
       ${icone('messages')}
@@ -97,10 +161,11 @@ export const monterBulle = ({ pid, env }) => {
       <form class="bulle-pied" id="bulle-forme" novalidate>
         <div id="bulle-pieces"></div>
         <div class="bulle-saisie">
-          <textarea class="zone" id="bulle-texte" name="texte" rows="1" maxlength="6000" placeholder="Écrivez votre message..."></textarea>
+          <textarea class="zone" id="bulle-texte" name="texte" rows="1" maxlength="6000" placeholder="Écrivez votre message..." aria-label="Votre message. Entrée envoie, Maj+Entrée va à la ligne."></textarea>
           <button class="btn-icone bulle-joindre" type="button" id="bulle-joindre" aria-label="Joindre un fichier" data-astuce="Joindre">${icone('trombone')}</button>
-          <button class="btn bulle-envoyer" type="submit" aria-label="Envoyer">${icone('envoyer')}</button>
+          <button class="btn bulle-envoyer" type="submit" aria-label="Envoyer" data-astuce="Envoyer (Entrée)">${icone('envoyer')}</button>
         </div>
+        <p class="t-micro t-3 bulle-aide">Entrée pour envoyer, Maj+Entrée pour une nouvelle ligne.</p>
       </form>
     </section>`;
   document.body.appendChild(racine);
@@ -110,7 +175,7 @@ export const monterBulle = ({ pid, env }) => {
   const fil = $('#bulle-fil');
   const champ = $('#bulle-texte');
   const compte = $('#bulle-compte');
-  let ouverte = lire(CLE_OUVERTE, false);
+  let ouverte = lire(cleOuverte(pid), false);
   let boite = null;
   let dernierVu = '';
   let premier = true;
@@ -158,16 +223,20 @@ export const monterBulle = ({ pid, env }) => {
     if (!frappe) ecrire.marquerVu(uid, `messages:${pid}`).catch(() => {});
   };
 
+  const unMessage = (m) => `<div class="bulle-message" data-msg="${echapper(m.id || '')}">${messageHtml(m, { moi: uid })}${vientDEnFace(m, { uid, equipe })
+    ? `<button class="bulle-action" type="button" data-transformer="${echapper(m.id || '')}" aria-label="En faire une demande" data-astuce="En faire une demande">${icone('sparkle')}</button>`
+    : ''}</div>`;
+
   const rendreFil = () => {
     const liste = messages();
     const lu = luJusqua();
     const miens = liste.filter((m) => m.de && m.de.uid === uid);
     const dernierMien = miens[miens.length - 1];
     fil.innerHTML = liste.length
-      ? liste.map((m) => `<div class="bulle-message" data-msg="${echapper(m.id || '')}">${messageHtml(m, { moi: uid })}<button class="bulle-action" type="button" data-transformer="${echapper(m.id || '')}" aria-label="Transformer ce message en demande" data-astuce="En faire une demande">${icone('sparkle')}</button></div>`).join('')
+      ? filParJour(liste, unMessage)
         + (dernierMien
           ? `<p class="bulle-accuse">${lu && (enDate(dernierMien.date) || 0) <= lu
-            ? `${icone('checkDouble')} Lu ${echapper(heure(lu))}`
+            ? `${icone('checkDouble')} ${echapper(luLe(lu))}`
             : `${icone('check')} Envoyé`}</p>`
           : '')
       : `<div class="bulle-vide">${icone('messages')}<p>${echapper(equipe
@@ -180,7 +249,7 @@ export const monterBulle = ({ pid, env }) => {
     const qui = ecritMaintenant();
     const bloc = $('#bulle-frappe');
     bloc.hidden = !qui;
-    if (qui) bloc.querySelector('span').textContent = `${qui.nom || (equipe ? 'Le client' : 'Capmedia')} écrit`;
+    if (qui) bloc.querySelector('span').textContent = `${equipe ? (qui.nom || 'Le client') : 'Capmedia'} écrit`;
     $('#bulle-point').classList.toggle('vif', Boolean(qui));
   };
 
@@ -189,17 +258,35 @@ export const monterBulle = ({ pid, env }) => {
     compte.hidden = !n;
     compte.textContent = n > 9 ? '9+' : String(n);
     racine.classList.toggle('bulle--alerte', Boolean(n));
-    battre(document.hidden ? n : 0);
+    direNonLus(n);
+  };
+
+  const ajusterHauteur = () => {
+    champ.style.height = 'auto';
+    champ.style.height = `${Math.min(champ.scrollHeight, 132)}px`;
   };
 
   const ouvrir = (oui) => {
     ouverte = oui;
     panneau.hidden = !oui;
     racine.classList.toggle('bulle--ouverte', oui);
-    ecrireCle(CLE_OUVERTE, oui);
+    ecrireCle(cleOuverte(pid), oui);
     rendreFil();
     if (oui) { marquer(); champ.focus(); fil.scrollTop = fil.scrollHeight; }
     rendrePastille();
+  };
+
+  /* Ouvrir avec un texte déjà posé dans le champ (« Une question sur cette
+     étape »), le curseur à la fin pour continuer la phrase. */
+  const ouvrirAvec = (texte) => {
+    ouvrir(true);
+    if (texte) {
+      champ.value = String(texte);
+      ajusterHauteur();
+      champ.focus();
+      const fin = champ.value.length;
+      try { champ.setSelectionRange(fin, fin); } catch (e) { /* champ sans sélection */ }
+    }
   };
 
   /* Un message qui arrive : le son, l'aperçu, la pastille. */
@@ -216,7 +303,7 @@ export const monterBulle = ({ pid, env }) => {
     if (!nouveau) return;
     sonner();
     if (!ouverte) {
-      toast(`${dernier.de.nom || (equipe ? 'Le client' : 'Capmedia')} : ${(dernier.texte || 'Pièce jointe').slice(0, 90)}`, 'info', {
+      toast(`${dernier.de.nom || (equipe ? 'Le client' : 'Capmedia')} : ${(String(dernier.texte || '').trim() || 'Pièce jointe').slice(0, 90)}`, 'info', {
         libelle: 'Répondre', action: () => ouvrir(true),
       });
     }
@@ -229,39 +316,18 @@ export const monterBulle = ({ pid, env }) => {
   $('#bulle-plein').addEventListener('click', () => { ouvrir(false); naviguer(`/messages/${pid}`); });
   $('#bulle-joindre').addEventListener('click', () => { const e = racine.querySelector('#bulle-pieces input[type="file"]'); if (e) e.click(); });
 
-  /* D'un message à une demande : le texte part dans le formulaire, déjà
-     rempli, du type choisi. Rien à recopier, rien à perdre. */
-  const transformer = (bouton, id) => {
-    const m = messages().find((x) => x.id === id);
-    if (!m) return;
-    menu(bouton, Object.entries(TYPES).filter(([cle]) => cle !== 'demande').map(([cle, t]) => ({
-      libelle: t.libelle,
-      icone: t.icone,
-      action: () => {
-        const texte = (m.texte || '').trim();
-        const premiereLigne = texte.split('\n')[0].slice(0, 110);
-        try {
-          sessionStorage.setItem(`suivi:demande-depuis:${pid}`, JSON.stringify({
-            titre: premiereLigne,
-            description: texte,
-            auteur: (m.de || {}).nom || '',
-            date: new Date().toISOString(),
-          }));
-        } catch (e) { /* stockage refusé : le formulaire s'ouvrira vide */ }
-        ouvrir(false);
-        naviguer(`/projets/${pid}/nouvelle-demande?type=${cle}`);
-      },
-    })));
-  };
-  const gesteTransformer = sur(racine, 'click', '[data-transformer]', (el) => transformer(el, el.dataset.transformer));
+  const gesteTransformer = sur(racine, 'click', '[data-transformer]', (el) => {
+    const m = messages().find((x) => x.id === el.dataset.transformer);
+    if (m) demandeDepuisMessage(el, m, pid, { avant: () => ouvrir(false) });
+  });
 
   let frappe = 0;
   champ.addEventListener('input', () => {
-    champ.style.height = 'auto';
-    champ.style.height = `${Math.min(champ.scrollHeight, 132)}px`;
+    ajusterHauteur();
     if (Date.now() - frappe > 4000) { frappe = Date.now(); marquer(true); }
   });
-  /* Entrée envoie, Maj+Entrée va à la ligne : la convention d'une bulle. */
+  /* Entrée envoie, Maj+Entrée va à la ligne : la même convention que sur
+     la page Messages. */
   champ.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#bulle-forme').requestSubmit(); }
     if (e.key === 'Escape') ouvrir(false);
@@ -276,7 +342,8 @@ export const monterBulle = ({ pid, env }) => {
     if (!texte && !boite.pieces.length) return;
     if (boite.occupe) { toast('Attendez la fin des envois.', 'erreur'); return; }
     await agir(e.target.querySelector('[type="submit"]'), async () => {
-      await ecrire.messageProjet(env.session, pid, texte || '(pièces jointes)', boite.pieces);
+      /* Des pièces sans un mot : le texte reste vide, l'écran montre les pièces seules. */
+      await ecrire.messageProjet(env.session, pid, texte, boite.pieces);
       champ.value = ''; champ.style.height = 'auto'; boite.vider();
       rendreFil();
     });
@@ -300,10 +367,12 @@ export const monterBulle = ({ pid, env }) => {
   rendreFrappe();
 
   return {
+    pid,
+    ouvrirAvec,
     fin: () => {
       clearInterval(pouls);
       gesteTransformer();
-      battre(0);
+      direNonLus(0);
       document.removeEventListener('visibilitychange', surVisible);
       if (typeof arretMessages === 'function') arretMessages();
       if (typeof arretLectures === 'function') arretLectures();
@@ -312,5 +381,3 @@ export const monterBulle = ({ pid, env }) => {
     },
   };
 };
-
-void depuis;

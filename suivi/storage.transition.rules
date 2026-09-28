@@ -44,6 +44,8 @@ rules_version = '2';
     projets/{p}/tickets/{t}/...            pièces des demandes (une pièce de note interne est marquée « interne »)
     projets/{p}/messages/...               pièces de la conversation du projet
     projets/{p}/validations/...            pièces d'une demande de validation
+    projets/{p}/validations/{v}/reponse/.. pièces de la réponse du client à cette validation
+    projets/{p}/taches/{t}/reponse/...     pièces de la réponse du client sur une tâche
     campagnes/{p}/{c}/{uid}/...            preuves d'un testeur de la campagne
     preprojets/{uid}/...                   pièces d'une demande de nouveau projet
     projets/{p}/documents/...              ANCIEN rangement, en attente de migration
@@ -144,7 +146,18 @@ service firebase.storage {
             && fiche(/databases/(default)/documents/fichiers/$(fichierId)).get('archive', false) != true);
       allow list:   if equipeSurProjet(projetId);
       allow create: if (jetonEquipe() ? equipeSurProjet(projetId) : surSonProjet(projetId)) && fichierAccepte();
-      allow update, delete: if equipeSurProjet(projetId);
+      allow update: if equipeSurProjet(projetId);
+      // Retirer : l'équipe, ou le client qui a déposé ce fichier lui-même
+      // (la fiche le dit). Deux lectures : le projet, la fiche, une fois
+      // chacune.
+      function auteurDuFichier(projetId, fichierId) {
+        let f = fiche(/databases/(default)/documents/fichiers/$(fichierId));
+        return surSonProjet(projetId)
+          && f.projet == projetId
+          && f.visibilite == 'client'
+          && f.get('par', {}).get('uid', '') == request.auth.uid;
+      }
+      allow delete: if jetonEquipe() ? equipeSurProjet(projetId) : auteurDuFichier(projetId, fichierId);
     }
 
     // Le PDF d'une pièce comptable. Le chemin porte l'identifiant de la
@@ -190,6 +203,35 @@ service firebase.storage {
 
     // La conversation du projet : tout y est public entre l'équipe et le client.
     match /projets/{projetId}/messages/{fichier=**} {
+      allow get:    if jetonEquipe() ? equipeSurProjet(projetId) : surSonProjet(projetId);
+      allow list:   if equipeSurProjet(projetId);
+      allow create: if (jetonEquipe() ? equipeSurProjet(projetId) : surSonProjet(projetId)) && fichierAccepte();
+      allow update, delete: if equipeSurProjet(projetId);
+    }
+
+    // Les pièces d'une évolution de maintenance : le client joint une
+    // capture ou un croquis à sa proposition, l'équipe et lui les lisent.
+    // Le dossier porte l'identifiant de l'évolution, tiré avant l'envoi.
+    match /projets/{projetId}/maintenance/{evolutionId}/{fichier=**} {
+      allow get:    if jetonEquipe() ? equipeSurProjet(projetId) : surSonProjet(projetId);
+      allow list:   if equipeSurProjet(projetId);
+      allow create: if (jetonEquipe() ? equipeSurProjet(projetId) : surSonProjet(projetId)) && fichierAccepte();
+      allow update, delete: if equipeSurProjet(projetId);
+    }
+
+    // La réponse du client à une validation : ses remarques peuvent porter
+    // une capture, un document annoté. Il dépose sous « reponse », sans
+    // jamais réécrire ; l'équipe et lui les lisent.
+    match /projets/{projetId}/validations/{validationId}/reponse/{nom} {
+      allow get:    if jetonEquipe() ? equipeSurProjet(projetId) : surSonProjet(projetId);
+      allow list:   if equipeSurProjet(projetId);
+      allow create: if (jetonEquipe() ? equipeSurProjet(projetId) : surSonProjet(projetId)) && fichierAccepte();
+      allow update, delete: if equipeSurProjet(projetId);
+    }
+
+    // La réponse du client sur une tâche qui l'attend : même principe, sous
+    // « reponse » de la tâche.
+    match /projets/{projetId}/taches/{tacheId}/reponse/{nom} {
       allow get:    if jetonEquipe() ? equipeSurProjet(projetId) : surSonProjet(projetId);
       allow list:   if equipeSurProjet(projetId);
       allow create: if (jetonEquipe() ? equipeSurProjet(projetId) : surSonProjet(projetId)) && fichierAccepte();

@@ -10,13 +10,16 @@ import { K, ecrire } from '../donnees.js';
 import { filAriane } from '../coquille.js';
 import { quitter } from '../noyau.js';
 
+/* Les catégories, les mêmes que dans communication.js (EVENEMENTS) : une
+   catégorie absente d'ici ne pourrait jamais être coupée. */
 const CATEGORIES = [
   ['messages', 'Messages et réponses', 'Un message dans une conversation ou une demande.'],
   ['demandes', 'Mouvements de mes demandes', 'Changement de statut, qualification, résolution.'],
   ['validations', 'Validations attendues', "Quand Capmedia attend votre accord."],
+  ['projet', 'Vie du projet', 'Étapes, points bloquants, tâches qui attendent votre retour, maintenance, tests.'],
   ['fichiers', 'Nouveaux fichiers', 'Un livrable ou un document déposé.'],
-  ['finances', 'Devis et factures', "Un devis déposé, une facture émise."],
-  ['reunions', 'Réunions', 'Une réunion programmée ou modifiée.'],
+  ['finances', 'Devis et factures', 'Un devis déposé, une facture émise ou à régler dans trois jours.'],
+  ['reunions', 'Réunions', 'Une réunion programmée ou modifiée, et son rappel.'],
   ['releases', 'Nouvelles versions', 'Une version publiée.'],
   ['relance', 'Rappel hebdomadaire', "Le lundi matin, et seulement s'il reste des points en attente de vous."],
 ];
@@ -45,7 +48,6 @@ export const vue = async (ctx, env) => {
           </div>
           <div class="forme-rang">
             <div class="groupe"><label class="etiquette-champ" for="entreprise">Entreprise <span class="facultatif">(facultatif)</span></label><input class="champ" id="entreprise" name="entreprise" value="${echapper(profil.entreprise || ((session.organisations[0] || {}).entreprise || ''))}" maxlength="80"></div>
-            <div class="groupe"><label class="etiquette-champ" for="fuseau">Fuseau horaire</label><select class="select" id="fuseau" name="fuseau">${['Europe/Paris', 'Africa/Tunis', 'Europe/Brussels', 'Europe/Zurich', 'America/Montreal', 'UTC'].map((f) => `<option value="${f}" ${(profil.fuseau || Intl.DateTimeFormat().resolvedOptions().timeZone) === f ? 'selected' : ''}>${f}</option>`).join('')}</select></div>
           </div>
           <div class="groupe"><label class="etiquette-champ">Adresse e-mail</label><p class="t-corps">${echapper(session.utilisateur.email || '')}</p><p class="aide">C'est votre identifiant. Pour en changer, prévenez Capmedia.</p></div>
           <div class="forme-pied"><button class="btn btn-principal" type="submit">Enregistrer</button></div>

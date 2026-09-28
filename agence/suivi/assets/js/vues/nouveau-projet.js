@@ -13,8 +13,10 @@ import { naviguer } from '../routeur.js';
 
 export const nouvelle = async (ctx, env) => {
   const sortie = ctx.sortie;
-  titrePage('Nouveau projet');
-  filAriane([{ libelle: 'Accueil', chemin: '/' }, { libelle: 'Demander un nouveau projet' }]);
+  /* Le rail, le fil d'Ariane et le titre disent la même chose : le client
+     ne doit pas se demander s'il est au bon endroit. */
+  titrePage('Demander un projet');
+  filAriane([{ libelle: 'Accueil', chemin: '/' }, { libelle: 'Demander un projet' }]);
   const org = env.session.organisations[0] || {};
   sortie.innerHTML = `<div class="page" style="max-width:820px">
     <div class="page-tete"><div><p class="surtitre">Cadrage</p><h1>Demander un projet</h1><p class="chapo">Décrivez l'idée avec vos mots. Nous en discutons ici, nous la chiffrons, et nous ouvrons le projet une fois d'accord. Rien de ce que vous écrivez n'est perdu en route.</p></div></div>
@@ -95,11 +97,14 @@ export const detail = async (ctx, env) => {
     const messages = magasin.lire(K.messagesDemandeProjet(id)) || [];
     const brouillon = composeur ? composeur.value : '';
     titrePage(d.titre);
-    filAriane([{ libelle: equipe ? 'Nouveaux projets' : 'Accueil', chemin: equipe ? '/nouveaux-projets' : '/' }, { libelle: d.titre }]);
+    filAriane([{ libelle: equipe ? 'Nouveaux projets' : 'Mes demandes de projet', chemin: '/nouveaux-projets' }, { libelle: d.titre }]);
+    /* Le devis envoyé pour cette demande : posé par l'équipe avec le
+       statut « Devis envoyé », il donne au client un lien vers sa fiche. */
+    const devis = equipe ? (magasin.lire(K.documentsTous) || []).filter((x) => x.type === 'devis' && !x.archive && (!d.organisation || !x.projet || (magasin.lire(K.projets) || []).some((p) => p.id === x.projet && p.organisation === d.organisation))).sort(parDateDesc('date')) : [];
     sortie.innerHTML = `<div class="page" style="max-width:960px">
       <div class="page-tete" style="align-items:flex-start"><div><p class="surtitre">Nouveau projet · ${echapper(TYPES_PROJET[d.type] || d.type || '')}</p><h1>${echapper(d.titre)}</h1><div class="rang" style="margin-top:8px">${pastille(STATUTS_PREPROJET, d.statut)}<span class="puce t-3">${icone('utilisateur')} ${echapper((d.par || {}).nom || '')}</span><span class="puce t-3">${icone('horloge')} ${echapper(depuis(d.cree))}</span></div></div>
-        ${equipe ? `<div class="actions"><select class="select" id="statut-preprojet" style="width:auto">${optionsDe(STATUTS_PREPROJET, d.statut)}</select>${d.projet ? `<a class="btn btn-secondaire" href="#/projets/${echapper(d.projet)}">Ouvrir le projet</a>` : `<a class="btn btn-principal" href="#/projets/nouveau?depuis=${echapper(id)}">${icone('plus')} Créer le projet</a>`}</div>` : ''}</div>
-      ${!equipe ? encart(`<strong>${({ nouvelle: 'Bien reçu.', discussion: 'On en discute ici.', qualification: 'Nous qualifions le besoin.', estimation: 'Nous estimons.', devis: 'Un devis vous a été envoyé.', acceptee: 'Devis accepté, le projet va s\'ouvrir.', projet: 'Le projet est créé.', refusee: 'Cette demande est close.' })[d.statut] || ''}</strong> ${d.projet ? `<a href="#/projets/${echapper(d.projet)}">Voir le projet</a>.` : 'Vous recevez un e-mail à chaque réponse.'}`, 'info', 'sparkle') : ''}
+        ${equipe ? `<div class="actions"><select class="select" id="statut-preprojet" style="width:auto">${optionsDe(STATUTS_PREPROJET, d.statut)}</select>${d.statut === 'devis' ? `<select class="select" id="devis-preprojet" style="width:auto;max-width:260px" aria-label="Le devis envoyé"><option value="">Devis : aucun</option>${devis.map((x) => `<option value="${echapper(x.id)}"${d.devis === x.id ? ' selected' : ''}>${echapper(`${x.numero || 'Devis'} · ${x.libelle || ''}`)}</option>`).join('')}</select>` : ''}${d.projet ? `<a class="btn btn-secondaire" href="#/projets/${echapper(d.projet)}">Ouvrir le projet</a>` : `<a class="btn btn-principal" href="#/projets/nouveau?depuis=${echapper(id)}">${icone('plus')} Créer le projet</a>`}</div>` : ''}</div>
+      ${!equipe ? encart(`<strong>${({ nouvelle: 'Bien reçu.', discussion: 'On en discute ici.', qualification: 'Nous qualifions le besoin.', estimation: 'Nous estimons.', devis: 'Un devis vous a été envoyé.', acceptee: 'Devis accepté, le projet va s\'ouvrir.', projet: 'Le projet est créé.', refusee: 'Cette demande est restée sans suite.' })[d.statut] || ''}</strong> ${d.projet ? `<a href="#/projets/${echapper(d.projet)}">Voir le projet</a>.` : d.statut === 'devis' && d.devis ? `<a href="#/finances/${echapper(d.devis)}">Lire le devis et y répondre</a>.` : d.statut === 'refusee' ? 'Vous pouvez en décrire une autre quand vous voulez.' : 'Vous recevez un e-mail à chaque réponse.'}`, 'info', 'sparkle') : ''}
       <div class="grille grille-tiers section">
         <div>
           <section class="carte"><p class="surtitre">La demande</p><div class="prose t-corps" style="margin-top:10px">${avecLiens(d.idee || '')}</div>
@@ -109,7 +114,16 @@ export const detail = async (ctx, env) => {
             <div class="fil" id="fil" style="margin-top:14px">${messages.length ? messages.map((m) => messageHtml(m, { moi: env.session.utilisateur.uid })).join('') : '<p class="t-petit t-3">Pas encore d\'échange.</p>'}</div>
             <form class="composer" id="forme-message" novalidate><textarea class="zone" name="texte" id="texte-message" maxlength="6000" placeholder="Votre message...">${echapper(brouillon)}</textarea><div id="zone-pieces"></div><div class="composer-pied"><span class="pousse"></span><button class="btn btn-principal" type="submit">${icone('envoyer')} Envoyer</button></div></form></section>
         </div>
-        <aside class="carte carte--creuse"><p class="surtitre">Parcours</p><div class="chrono" style="margin-top:10px">${Object.entries(STATUTS_PREPROJET).filter(([cle]) => cle !== 'refusee').map(([cle, s], i, arr) => { const idx = arr.findIndex(([k]) => k === d.statut); return `<div class="chrono-item"><span class="chrono-point${i < idx ? ' chrono-point--vert' : i === idx ? ' chrono-point--bleu' : ''}">${i < idx ? icone('check') : ''}</span><div class="chrono-texte" style="${i > idx ? 'color:var(--encre-3)' : ''}">${echapper(s.libelle)}</div></div>`; }).join('')}</div></aside>
+        <aside class="carte carte--creuse"><p class="surtitre">Parcours</p><div class="chrono" style="margin-top:10px">${(() => {
+          /* Sans suite : la frise le montre, au lieu de s'arrêter sans rien
+             dire. Les pas franchis avant restent cochés. */
+          const sansSuite = d.statut === 'refusee';
+          const pas = Object.entries(STATUTS_PREPROJET).filter(([cle]) => cle !== 'refusee');
+          const idx = sansSuite ? -1 : pas.findIndex(([k]) => k === d.statut);
+          const lignes = pas.map(([, s], i) => `<div class="chrono-item"><span class="chrono-point${i < idx ? ' chrono-point--vert' : i === idx ? ' chrono-point--bleu' : ''}">${i < idx ? icone('check') : ''}</span><div class="chrono-texte" style="${i > idx ? 'color:var(--encre-3)' : ''}">${echapper(s.libelle)}</div></div>`);
+          if (sansSuite) lignes.push(`<div class="chrono-item" data-pas="sans-suite"><span class="chrono-point">${icone('moins')}</span><div class="chrono-texte"><strong>${echapper(STATUTS_PREPROJET.refusee.libelle)}</strong></div></div>`);
+          return lignes.join('');
+        })()}</div></aside>
       </div></div>`;
     composeur = sortie.querySelector('#texte-message');
     /* Le dossier porte l'identifiant du DEMANDEUR, jamais celui de la
@@ -125,6 +139,8 @@ export const detail = async (ctx, env) => {
     });
     const sel = sortie.querySelector('#statut-preprojet');
     if (sel) sel.addEventListener('change', () => agir(null, () => ecrire.majDemandeProjet(id, { statut: sel.value }), 'Statut mis à jour.'));
+    const selDevis = sortie.querySelector('#devis-preprojet');
+    if (selDevis) selDevis.addEventListener('change', () => agir(null, () => ecrire.majDemandeProjet(id, { devis: selDevis.value || null }), selDevis.value ? 'Devis rattaché : le client a le lien.' : 'Devis détaché.'));
   };
   brancherPieces(sortie);
   let minuteur = null;

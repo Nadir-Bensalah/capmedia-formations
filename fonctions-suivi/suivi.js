@@ -267,12 +267,14 @@ exports.suiviTicketCree = onDocumentCreated(
        la lettre disait alors au client « Bonjour Équipe Capmedia, nous
        avons bien reçu votre demande ». On la lui adresse à son nom, et on
        dit ce qui s'est vraiment passé. */
+    /* Une lettre par interlocuteur, qui salue chacun par son nom : avant,
+       l'accusé saluait l'auteur et partait tel quel à tous ses collègues. */
     await communication.ecrireAuxClients(projet, 'ticket-cree', 'ticket-cree', {
       ...communes,
       parLEquipe: (auteur && auteur.cote) === 'equipe',
       cote: 'client',
       clientNom: auteur.nom || nomClient(projet),
-    });
+    }, { parDestinataire: true });
 
     await mettreEnFile('ticket-cree', contactsEquipe(), {
       ...communes,
@@ -308,6 +310,12 @@ const repartParClient = (avant, apres) => avant.statut === 'en-attente-client' &
 
 const changementDuClient = (avant, apres) =>
   TRANSITIONS_CLIENT.some(([de, vers]) => avant === de && apres === vers);
+
+/* « Je n'en ai plus besoin » : le client retire sa demande tant qu'elle
+   est chez nous. Sa marque « lu.client » bouge avec le statut ; l'équipe,
+   qui annule depuis le pilotage, ne la touche pas (même repère que hub.js). */
+const retireeParClient = (avant, apres) => ['nouveau', 'a-analyser', 'acceptee', 'planifiee'].includes(avant.statut) && apres.statut === 'annulee'
+  && String((avant.lu || {}).client || '') !== String((apres.lu || {}).client || '');
 
 /**
  * Le document de ticket ne garde pas la trace de qui l'a écrit : l'auteur
@@ -353,7 +361,7 @@ exports.suiviTicketModifie = onDocumentUpdated(
     const changeStatut = changements.find((c) => c.type === 'statut');
     const repart = Boolean(changeStatut) && repartParClient(avant, apres);
     const parLeClient = Boolean(changeStatut)
-      && (changementDuClient(changeStatut.avant, changeStatut.apres) || repart);
+      && (changementDuClient(changeStatut.avant, changeStatut.apres) || repart || retireeParClient(avant, apres));
     const par = auteurChangement(apres, parLeClient);
 
     for (const changement of changements) {
@@ -510,10 +518,23 @@ exports.suiviDocumentCree = onDocumentCreated(
     /* Une pièce comptable engage : elle ne part qu'aux responsables du
        projet, jamais à un collaborateur (voir communication.js). */
     const projet = await lireProjet(document.projet);
+    const lienPiece = `/finances/${evenement.params.documentId}`;
+    /* Dans le Hub aussi, et aux responsables seulement (l'événement
+       « devis » ou « facture » est réservé au responsable) : sans cette
+       notification, le client ne découvrait la pièce que par la lettre. */
+    await communication.notifierClients(projet, document.type, {
+      type: document.type,
+      titre: document.type === 'devis' ? 'Nouveau devis' : 'Nouvelle facture',
+      texte: `${document.numero || ''} · ${document.libelle || ''}`.replace(/^ · /, ''),
+      lien: `#${lienPiece}`, projet: document.projet,
+    });
     await communication.ecrireAuxClients(projet, document.type, document.type, {
       numero: document.numero,
       libelle: document.libelle,
       montant: document.montant,
+      /* La lettre annonce le TTC, ce que le client doit vraiment ; le HT
+         reste entre parenthèses. */
+      ttc: typeof document.ttc === 'number' ? document.ttc : (Number(document.montant) || 0) * (1 + (Number(document.tva) || 0) / 100),
       /* Un devis range sa date de validité dans « expiration », une facture
          dans « echeance » : la lettre lisait toujours « echeance », donc la
          ligne « Valable jusqu'au » d'un devis était toujours vide. */
@@ -757,28 +778,27 @@ exports.suiviDocumentModifie = onDocumentUpdated(
         if (portee === 'initial' && ['brouillon', 'prospect', 'devis-envoye', 'cadrage'].includes(String(projet.statut || ''))) {
           await bdd.doc(`projets/${apres.projet}`).update({ statut: 'devis-signe', maj: FieldValue.serverTimestamp() });
         }
-        await bdd.collection('activite').add({
-          projet: apres.projet, organisation: projet.organisation || null, type: 'devis',
-          texte: portee === 'initial'
-            ? `a signé le devis ${apres.numero || ''} : le projet démarre`
-            : `a signé l'avenant ${apres.numero || ''}`,
-          par: { uid: reponse.par || null, nom: reponse.nom || nomClient(projet), cote: 'client' },
-          cible: evenement.params.documentId, lien: `/finances/${evenement.params.documentId}`,
-          visibilite: 'responsable', date: FieldValue.serverTimestamp(),
-        });
       } catch (err) { console.error('Suite du devis non ecrite', err); }
     }
+    /* La ligne d'activité (« a signé le devis X : le projet démarre » ou
+       « a accepté le devis X ») est écrite une seule fois, par
+       hubDocumentActivite : deux lignes pour une acceptation, c'était une
+       de trop. */
 
     await mettreEnFile('devis-reponse', contactsEquipe(), {
       numero: apres.numero,
       libelle: apres.libelle,
       montant: apres.montant,
+      ttc: typeof apres.ttc === 'number' ? apres.ttc : (Number(apres.montant) || 0) * (1 + (Number(apres.tva) || 0) / 100),
       projetNom: nomProjet(projet),
       clientNom: nomClient(projet),
       reponse: apres.statut,
+      /* Le motif du refus, ou le mot laissé avec l'acceptation. */
+      commentaire: String(reponse.commentaire || ''),
       portee,
       date: reponse.date || reponse.le || apres.date || null,
-      lien: courriels.lienProjet(apres.projet),
+      /* Vers la pièce elle-même, dans le Cockpit. */
+      lien: `${courriels.BASE}cockpit#/finances/${encodeURIComponent(evenement.params.documentId)}`,
     }, { projet: apres.projet, evenement: 'devis-reponse' });
 
     console.log(`Devis ${apres.numero || evenement.params.documentId} ${apres.statut} par le client`);
@@ -1191,6 +1211,29 @@ async function ajouterInterlocuteur(identite, { projet: projetId, email, nom, ro
   return { ok: true, cle, uid: utilisateur.uid, role, invitation };
 }
 
+/* Le responsable du projet, côté client, invite un collègue : toujours
+   comme collaborateur (le moindre droit ; un second responsable se nomme
+   depuis le cockpit). Le contrôle est ici, pas dans le registre des
+   permissions : l'appelant est un client, membre du projet, et son rôle
+   sur la fiche est « responsable ». L'équipe est prévenue. */
+async function inviterCollegue(identite, { projet: projetId, email, nom }) {
+  if (identite.fiche) throw new Refus(403, "Cette action est celle du responsable du projet côté client : l'équipe passe par « Accès client ».");
+  if (!projetId) throw new Refus(400, 'Projet requis.');
+  const projet = await lireProjet(String(projetId));
+  if (!projet) throw new Refus(404, 'Projet inconnu.');
+  if (!Array.isArray(projet.membres) || !projet.membres.includes(identite.uid)) throw new Refus(403, "Vous n'avez pas accès à ce projet.");
+  if ((projet.roles || {})[identite.uid] !== 'responsable') throw new Refus(403, 'Seul le responsable du projet peut inviter un collègue.');
+  const adresse = normaliserEmail(email);
+  if (!emailPlausible(adresse)) throw new Refus(400, "L'adresse de votre collègue a l'air incomplète.");
+  if (memeEmail(adresse, identite.email)) throw new Refus(409, "C'est votre propre adresse.");
+  const r = await ajouterInterlocuteur(identite, { projet: projet.id, email: adresse, nom, role: 'collaborateur' });
+  const auteur = await bdd.collection(`projets/${projet.id}/interlocuteurs`).where('uid', '==', identite.uid).limit(1).get();
+  const nomAuteur = auteur.empty ? identite.email : (auteur.docs[0].data().nom || identite.email);
+  await communication.notifierEquipe(projet.id, { type: 'projet', titre: 'Le responsable a invité un collègue', texte: `${nomProjet(projet)} · ${String(nom || adresse).trim()} par ${nomAuteur}`, lien: `#/projets/${projet.id}/acces`, projet: projet.id });
+  await audit('acces.collegue-invite', { projet: projet.id, cle: r.cle, uid: r.uid, par: identite.uid });
+  return r;
+}
+
 async function modifierInterlocuteur(identite, { projet: projetId, cle, email, role, nom }) {
   const projet = await acces.assurerModele(String(projetId));
   const { ref, cle: id, fiche } = await lireInterlocuteur(projet.id, { cle, email });
@@ -1421,6 +1464,9 @@ const ACTIONS = {
   moi: { permission: null },
   creerProjet: { permission: 'projets.creer' },
   ajouterInterlocuteur: { permission: 'acces.gerer', projet: (c) => c.projet },
+  /* La seule action ouverte à un client : le contrôle (membre, responsable)
+     est dans l'action elle-même, pas dans le registre des permissions. */
+  inviterCollegue: { client: true },
   modifierInterlocuteur: { permission: 'acces.gerer', projet: (c) => c.projet },
   retirerInterlocuteur: { permission: 'acces.gerer', projet: (c) => c.projet },
   renvoyerInvitation: { permission: 'acces.gerer', projet: (c) => c.projet },
@@ -1484,7 +1530,10 @@ exports.suiviAdmin = onRequest(
       if (!definition) return res.status(400).send('action inconnue');
       if (definition.retiree) return res.status(410).send(definition.retiree);
       const projetVise = definition.projet ? await definition.projet(req.body || {}) : null;
-      if (definition.projet && !projetVise && definition.permission !== 'systeme') {
+      if (definition.client) {
+        /* Une action du client : pas de fiche d'équipe à exiger, l'action
+           vérifie elle-même le rôle sur le projet. */
+      } else if (definition.projet && !projetVise && definition.permission !== 'systeme') {
         /* Une action sur un projet sans projet désigné : l'action dira
            elle-même ce qui manque, mais un agent ne passe pas sans projet. */
         acces.exiger(identite, definition.permission, identite.fiche && identite.fiche.role === 'admin' ? null : '__aucun__');
@@ -1643,6 +1692,9 @@ exports.suiviAdmin = onRequest(
         if (!projet) return res.status(400).send('projet requis');
         return res.json(await modifierInterlocuteur(identite, { projet, cle: req.body.cle, email, role, nom }));
       }
+      if (action === 'inviterCollegue') {
+        return res.json(await inviterCollegue(identite, { projet, email, nom }));
+      }
       if (action === 'retirerInterlocuteur' || action === 'retirerClient') {
         if (!projet) return res.status(400).send('projet requis');
         return res.json(await retirerInterlocuteur(identite, { projet, cle: req.body.cle, email, uid }));
@@ -1726,6 +1778,14 @@ exports.suiviAdmin = onRequest(
           liens: nettoyerLiens(liens),
           reponse: null, archive: false,
         });
+        /* Une facture peut porter le devis dont elle découle : le client
+           remonte du montant à ce qu'il a accepté. Le devis doit exister et
+           être du même projet, sinon on n'écrit rien. */
+        if (type === 'facture' && String(req.body.devis || '').trim()) {
+          const refDevis = await bdd.doc(`documents/${String(req.body.devis).trim()}`).get();
+          if (!refDevis.exists || refDevis.data().type !== 'devis' || refDevis.data().projet !== String(projet)) return res.status(400).send('devis inconnu sur ce projet');
+          fiche.devis = refDevis.id;
+        }
         /* L'identifiant de la pièce peut être tiré d'avance par l'interface :
            le PDF est alors déjà rangé sous « projets/<p>/pieces/<id>/ », où
            les règles Storage relisent le statut de CETTE pièce. */
@@ -1853,7 +1913,10 @@ exports.suiviAdmin = onRequest(
         /* Sans champ ttc, la TVA se recalcule : la retomber au HT faisait
            passer une facture pour payée alors qu'il restait la taxe. */
         const du = typeof f.ttc === 'number' ? f.ttc : (Number(f.montant) || 0) * (1 + (Number(f.tva) || 0) / 100);
-        await refFacture.update({ statut: paye + 0.005 >= du ? 'payee' : 'partielle' });
+        /* Le client avait déclaré ce règlement : l'enregistrer le confirme,
+           et sa fiche passe de « en attente de confirmation » à « Confirmé ». */
+        const confirmation = f.reglementDeclare && !f.reglementDeclare.confirme ? { 'reglementDeclare.confirme': FieldValue.serverTimestamp() } : {};
+        await refFacture.update({ statut: paye + 0.005 >= du ? 'payee' : 'partielle', ...confirmation });
         return res.status(200).json({ ok: true, id: paiement.id, paye, statut: paye + 0.005 >= du ? 'payee' : 'partielle' });
       }
 
@@ -1914,7 +1977,11 @@ exports.suiviAdmin = onRequest(
         if (!doc.exists) return res.status(404).send('document inconnu');
         if (doc.data().type !== 'facture') return res.status(400).send('ce document n\'est pas une facture');
 
-        await refDocument.update({ statut });
+        /* Marquer payée à la main confirme aussi un règlement déclaré par le client. */
+        const declare = doc.data().reglementDeclare;
+        await refDocument.update(statut === 'payee' && declare && !declare.confirme
+          ? { statut, 'reglementDeclare.confirme': FieldValue.serverTimestamp() }
+          : { statut });
         console.log(`Facture ${doc.data().numero || id} passée à ${statut}`);
         return res.status(200).json({ ok: true, statut });
       }

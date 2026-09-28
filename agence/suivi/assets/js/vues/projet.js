@@ -9,26 +9,31 @@ import { friseDevis, devisAvecEtapes, brancherFrise } from './frise.js';
 import {
   echapper, dateCourte, dateHeure, depuis, heure, montant, pluriel, joursAvant, echeance as calcEcheance, enParagraphes, avecLiens, parDateDesc, parDateAsc, borner,
   STATUTS_PROJET, STATUTS_COMPOSANT, TYPES_COMPOSANT, STATUTS_ETAPE, STATUTS_TACHE, PRIORITES, STATUTS, TYPES, URGENCES, OUVERTS, ATTEND_CLIENT,
-  CATEGORIES_FICHIER, CATEGORIES_LIEN, STATUTS_RELEASE, TYPES_CHANGEMENT, TYPES_NOTE, SANTES, STATUTS_VALIDATION, QUALIFICATIONS, statutProjet, PLATEFORMES, nomsContacts, contactsProjet, PORTEES_DEVIS, age,
+  CATEGORIES_FICHIER, CATEGORIES_CLIENT, CATEGORIES_LIEN, STATUTS_RELEASE, TYPES_CHANGEMENT, TYPES_NOTE, SANTES, STATUTS_VALIDATION, QUALIFICATIONS, statutProjet, PLATEFORMES, nomsContacts, contactsProjet, PORTEES_DEVIS, age,
   verdictDelai, reportsDe, dateOrigine, MOTIFS_REPORT, dateLongue, enDate,
-  STATUTS_CAMPAGNE, STATUTS_ANOMALIE, peut
+  STATUTS_CAMPAGNE, STATUTS_ANOMALIE, peut, libellePlateforme
 } from '../noyau.js';
 import {
   icone, pastille, pastilleTexte, puce, pucePlateforme, iconePlateforme, tonPlateforme, avatarProjet, avatar, progression, anneau, ligne, vide, fait, chronoItem, parJour, squelette, titrePage,
-  echeanceHtml, modale, confirmer, toast, sur, menu, fichierHtml, brancherPieces, depot, lireForme, valider, obligatoire, agir, encart, optionsDe,
-  verdictHtml, anneauOuPas, progressionOuPas,
+  echeanceHtml, modale, confirmer, toast, sur, menu, fichierHtml, brancherPieces, depot, lireForme, valider, obligatoire, agir, encart, optionsDe, pieceHtml,
+  verdictHtml, anneauOuPas, progressionOuPas, copier,
 } from '../ui.js';
 import * as magasin from '../magasin.js';
-import { K, ecrire, nouvelId, interneDuProjet, abonnerProjet, progressionProjet, jalonCourant, jalonSuivant, prochaineReunion, enAttenteDeVous, peutRepondreValidation, parStatut, risquesProjet, MODES_PROGRESSION, trierEtapes, phasesTriees } from '../donnees.js';
+import { K, ecrire, nouvelId, interneDuProjet, abonnerProjet, progressionProjet, jalonCourant, jalonSuivant, prochaineReunion, reunionAVenir, etatVersions, activiteDepuis, enAttenteDeVous, peutRepondreValidation, parStatut, risquesProjet, MODES_PROGRESSION, trierEtapes, phasesTriees } from '../donnees.js';
 import { filAriane } from '../coquille.js';
 import { naviguer } from '../routeur.js';
-import { monterBulle } from '../bulle.js';
 import { editer, supprimer } from './editeurs.js';
 import { appelServeur } from '../serveur.js';
 import { activiteHtml } from './accueil.js';
 import { basculerAFaire } from './admin-a-faire.js';
 import { accesHtml, gesteAcces } from './acces-client.js';
+import { personnesHtml } from './personnes.js';
+import { telechargerICS } from './calendrier.js';
 
+/* Les onglets, dans l'ordre des sections du rail (app.js, SECTIONS) :
+   l'aperçu est le projet lui-même, puis les neuf sections. « Tests » ne
+   s'ajoute, pour le client, que s'il y a des scénarios ou des campagnes :
+   un onglet qui ouvre sur du vide inquiète plus qu'il n'informe. */
 const ONGLETS = [
   { cle: 'apercu', libelle: 'Aperçu', icone: 'accueil' },
   { cle: 'etapes', libelle: 'Feuille de route', icone: 'route' },
@@ -42,6 +47,12 @@ const ONGLETS = [
   { cle: 'tests', libelle: 'Tests', icone: 'check' },
   { cle: 'activite', libelle: 'Activité', icone: 'activite' },
 ];
+const ongletsVisibles = (d, equipe) => ONGLETS.filter((o) => o.cle !== 'tests' || equipe || (d && (d.scenarios.length || d.campagnes.length)));
+
+/* La conversation vit en bulle, montée pour toutes les pages d'un projet
+   par un module global. Depuis une fiche, on lui passe un début de
+   phrase : la bulle s'ouvre avec, et le client n'a plus qu'à finir. */
+const ouvrirBulle = (pid, texte) => document.dispatchEvent(new CustomEvent('bulle:ouvrir', { detail: { projet: pid, texte } }));
 
 const lireTout = (pid) => ({
   projet: magasin.lire(K.projet(pid)),
@@ -96,7 +107,23 @@ export const vue = async (ctx, env) => {
     K.scenarios(pid), K.campagnes(pid), K.anomalies(pid), ...(env.role === 'equipe' ? [K.projetsInternes, K.interlocuteurs(pid)] : [])];
   abonnerProjet(lot, pid, env.role);
 
-  let detailOuvert = ctx.params.tid && onglet === 'taches' ? ctx.params.tid : null;
+  /* Une fiche ouverte par son adresse : une tâche (taches/:tid), une
+     réunion (reunions/:rid) ou une version (releases/:rid). C'est ce que
+     visent les notifications, les lettres et la recherche. */
+  const ficheDemandee = (params, o) => {
+    if (params.tid && o === 'taches') return { genre: 'tache', id: params.tid };
+    if (params.rid && o === 'reunions') return { genre: 'reunion', id: params.rid };
+    if (params.rid && o === 'releases') return { genre: 'release', id: params.rid };
+    return null;
+  };
+  let detailOuvert = ficheDemandee(ctx.params, onglet);
+  /* « ?blocage=<id> » : la fiche d'un point bloquant s'ouvre à l'arrivée
+     (lien de « En attente de vous », de la notification, de la lettre). */
+  let blocageOuvert = (ctx.requete || {}).blocage || null;
+  /* « ?filtre=pour-vous » sur la liste des demandes : le filtre « Pour
+     vous » est posé avant le dessin (lien de « Tenue des délais »). */
+  const poserFiltre = (requete) => { if (requete && requete.filtre === 'pour-vous') { try { sessionStorage.setItem(`suivi:filtre-demandes:${pid}`, 'moi'); } catch (e) { /* stockage refusé */ } } };
+  poserFiltre(ctx.requete);
   let derniereEmpreinte = '';
 
   const rendre = (force = false) => {
@@ -109,6 +136,8 @@ export const vue = async (ctx, env) => {
       return;
     }
     titrePage(projet.nom);
+    const onglets = ongletsVisibles(d, equipe);
+    if (!onglets.some((o) => o.cle === onglet) && ONGLETS.some((o) => o.cle === onglet)) onglet = 'apercu';
     filAriane([{ libelle: equipe ? 'Projets' : 'Accueil', chemin: equipe ? '/projets' : '/' }, { libelle: projet.nom, chemin: `/projets/${pid}` }, ...(onglet !== 'apercu' ? [{ libelle: (ONGLETS.find((o) => o.cle === onglet) || { libelle: onglet === 'acces' ? 'Accès client' : 'Les parties' }).libelle }] : [])]);
 
     const prog = progressionProjet(projet, d.jalons, { composants: d.composants, taches: d.taches });
@@ -122,7 +151,7 @@ export const vue = async (ctx, env) => {
       fichiers: d.fichiers.length,
       releases: d.releases.length,
       liens: d.liens.length,
-      reunions: d.reunions.filter((r) => joursAvant(r.date) >= 0).length,
+      reunions: d.reunions.filter(reunionAVenir).length,
       notes: d.notes.length,
       tests: d.scenarios.length,
     };
@@ -156,7 +185,7 @@ export const vue = async (ctx, env) => {
       ${cartesPlateformes(projet, d, pid)}
 
       <div class="onglets-enveloppe"><nav class="onglets" id="onglets-projet" aria-label="Sections du projet">
-        ${ONGLETS.map((o) => `<a class="onglet${o.cle === onglet ? ' actif' : ''}" href="#/projets/${echapper(pid)}${o.cle === 'apercu' ? '' : `/${o.cle}`}">${o.libelle}${comptes[o.cle] ? `<span class="badge">${comptes[o.cle]}</span>` : ''}</a>`).join('')}
+        ${onglets.map((o) => `<a class="onglet${o.cle === onglet ? ' actif' : ''}" href="#/projets/${echapper(pid)}${o.cle === 'apercu' ? '' : `/${o.cle}`}">${o.libelle}${comptes[o.cle] ? `<span class="badge">${comptes[o.cle]}</span>` : ''}</a>`).join('')}
         ${equipe ? `<a class="onglet${onglet === 'composants' ? ' actif' : ''}" href="#/projets/${echapper(pid)}/composants">Les parties</a>` : ''}
         ${equipe && !projet.interne ? `<a class="onglet${onglet === 'acces' ? ' actif' : ''}" href="#/projets/${echapper(pid)}/acces">Accès client${projet.ouvert === true ? '' : ' <span class="badge">fermé</span>'}</a>` : ''}
       </nav></div>
@@ -169,9 +198,16 @@ export const vue = async (ctx, env) => {
     reglerOnglets(sortie);
 
     if (detailOuvert) {
-      const t = d.taches.find((x) => x.id === detailOuvert);
-      if (t) { ouvrirTache(t, d, { pid, env }); }
+      const { genre, id } = detailOuvert;
+      if (genre === 'tache') { const t = d.taches.find((x) => x.id === id); if (t) ouvrirTache(t, d, { pid, env }); }
+      if (genre === 'reunion') { const r = d.reunions.find((x) => x.id === id); if (r) ouvrirReunion(r, d, { pid, env }); }
+      if (genre === 'release') { const r = d.releases.find((x) => x.id === id); if (r) ouvrirRelease(r, d, { pid, env }); }
       detailOuvert = null;
+    }
+    if (blocageOuvert && d.blocages.length) {
+      const b = d.blocages.find((x) => x.id === blocageOuvert);
+      if (b) ouvrirBlocage(b, d, { pid, env });
+      blocageOuvert = null;
     }
   };
 
@@ -253,18 +289,32 @@ export const vue = async (ctx, env) => {
     if (action === 'resoudre-blocage') {
       return agir(null, () => ecrire.majBlocage(id, { resolu: new Date() }), 'Point bloquant levé.');
     }
+    if (action === 'ouvrir-blocage') { const b = d.blocages.find((x) => x.id === id); if (b) ouvrirBlocage(b, d, { pid, env }); return null; }
     if (action === 'deposer-client') return ouvrirDepotClient(pid, env);
     if (action === 'menu-fichier') {
       const f = d.fichiers.find((x) => x.id === id);
       if (!f) return null;
+      /* Le client ne retire que ce qu'il a lui-même déposé : la règle le
+         vérifie aussi. L'équipe, elle, archive. */
+      if (!equipe) {
+        if (!f.par || f.par.uid !== env.session.utilisateur.uid) return null;
+        return menu(el, [{ libelle: 'Retirer ce fichier', icone: 'corbeille', danger: true, action: async () => { if (await confirmer({ titre: 'Retirer ce fichier ?', texte: 'Il disparaît pour vous et pour Capmedia.', ok: 'Retirer', danger: true })) agir(null, () => ecrire.retirerFichier(f), 'Fichier retiré.'); } }]);
+      }
       const items = [{ libelle: 'Modifier la fiche', icone: 'edit', action: () => editer('fichier', env, { pid, fiche: f }) },
         { libelle: 'Archiver', icone: 'archive', danger: true, action: async () => { if (await confirmer({ titre: 'Archiver ce fichier ?', texte: 'Il reste dans les archives, rien n\'est effacé.', ok: 'Archiver' })) agir(null, () => ecrire.majFichier(f.id, { archive: true }), 'Fichier archivé.'); } }];
       return menu(el, items);
     }
     if (action === 'ouvrir-etape') { const j = d.jalons.find((x) => x.id === id); if (j) ouvrirEtape(j, d, { pid, env }); return null; }
-    if (action === 'ouvrir-reunion') { const r = d.reunions.find((x) => x.id === id); if (r) ouvrirReunion(r, { pid, env }); return null; }
+    if (action === 'ouvrir-reunion') { const r = d.reunions.find((x) => x.id === id); if (r) ouvrirReunion(r, d, { pid, env }); return null; }
+    if (action === 'ouvrir-release') { const r = d.releases.find((x) => x.id === id); if (r) ouvrirRelease(r, d, { pid, env }); return null; }
     if (action === 'ouvrir-note') { const n = d.notes.find((x) => x.id === id); if (n) ouvrirNote(n, { pid, env }); return null; }
     if (action === 'ouvrir-validation') return naviguer(equipe ? `/validations/${id}` : `/valider/${id}`);
+    /* Un identifiant d'accès se copie d'un geste : le client le colle dans
+       l'écran de connexion du store ou du compte de test. */
+    if (action === 'copier-identifiants') { const l = d.liens.find((x) => x.id === id); if (l && l.identifiants) copier(l.identifiants); return null; }
+    /* Écrire à Capmedia depuis l'endroit où la question naît : la bulle
+       s'ouvre avec le début de phrase, sans quitter la page. */
+    if (action === 'ecrire-bulle') { ouvrirBulle(pid, el.dataset.texte || ''); return null; }
     return null;
   });
   const gestesFichiers = sur(sortie, 'click', '[data-menu-fichier]', (el) => {
@@ -286,17 +336,26 @@ export const vue = async (ctx, env) => {
   cles.forEach((c) => lot.sur(c, planifier));
   planifier();
 
-  /* La conversation du projet vit en bulle, hors de la page : changer
-     d'onglet ne la referme pas et n'interrompt pas la frappe. */
-  const bulle = monterBulle({ pid, env });
+  /* La conversation du projet vit en bulle, hors de la page ; elle est
+     montée pour toutes les pages d'un projet par un module global, plus
+     ici : changer d'onglet ou de page ne la referme pas. */
 
   return {
-    fin: () => { clearTimeout(minuteur); gestes(); gestesFichiers(); gestesFiltres(); bulle.fin(); lot.fin(); },
+    fin: () => { clearTimeout(minuteur); gestes(); gestesFichiers(); gestesFiltres(); lot.fin(); },
     /* Changer d'onglet ne recharge pas la page : on redessine, les écoutes
        restent ouvertes et le défilement ne saute pas. */
     maj: (suite) => {
-      onglet = ongletDe(suite.params.onglet || (suite.params.tid ? 'taches' : 'apercu'));
-      if (suite.params.tid && onglet === 'taches') detailOuvert = suite.params.tid;
+      /* Le routeur ne redit pas l'onglet : on le lit dans l'adresse. */
+      const ongletDuChemin = () => {
+        if (suite.params.onglet) return suite.params.onglet;
+        if (suite.params.tid) return 'taches';
+        const m = /^\/projets\/[^/]+\/(reunions|releases)\/[^/]+/.exec(suite.chemin || '');
+        return m ? m[1] : 'apercu';
+      };
+      onglet = ongletDe(ongletDuChemin());
+      detailOuvert = ficheDemandee(suite.params, onglet);
+      if (suite.requete && suite.requete.blocage) blocageOuvert = suite.requete.blocage;
+      poserFiltre(suite.requete);
       rendre(true);
       window.scrollTo({ top: 0, behavior: 'instant' });
     },
@@ -322,30 +381,39 @@ const reglerOnglets = (sortie) => {
   jauger();
 };
 
-/* Les plateformes du projet, en cartes : l'icône dans sa couleur, l'état de
-   la brique, et le lien qui y mène. Un clic ouvre l'application publiée si
-   son adresse est renseignée, sinon la liste des versions. */
+/* Les plateformes du projet, en cartes : l'icône dans sa couleur, ce que
+   disent les versions réelles, et le lien qui mène à la page de la brique.
+   L'état ne vient plus d'un champ saisi à la main sur la partie, mais de
+   la dernière version disponible et de la dernière en route : les deux
+   ne peuvent plus diverger. */
 const cartesPlateformes = (projet, d, pid) => {
   const cles = (projet.plateformes || []).filter((c) => PLATEFORMES[c]);
   if (!cles.length) return '';
   return `<div class="cartes-plateformes" role="list">${cles.map((cle) => {
     const f = PLATEFORMES[cle];
     const c = d.composants.find((x) => x.type === (f.composant || cle)) || null;
-    /* La carte mène à la page de la brique : son histoire complète, ses
-       versions, ses tâches, ses points bloquants. L'adresse publique y
-       vit aussi, en bouton, mais elle ne court-circuite plus la page. */
-    const etat = c
-      ? [c.version && `Version ${c.version}`, (STATUTS_COMPOSANT[c.statut || 'en-cours'] || {}).libelle].filter(Boolean).join(' · ')
-      : 'Pas encore suivie';
-    const att = `href="#/projets/${echapper(pid)}/brique/${echapper(c ? c.id : `p-${cle}`)}"`;
-    return `<a class="carte-plateforme carte-plateforme--${f.voile}" role="listitem" ${att} data-astuce="${echapper(`Ouvrir la page ${f.libelle}`)}">
-      <span class="carte-plateforme-tuile">${icone(f.icone)}</span>
-      <span class="carte-plateforme-corps">
+    const v = etatVersions(d.releases, cle, c);
+    const lignes = [];
+    if (v.disponible) lignes.push(`${v.disponible.version || ''} disponible${v.disponible.date ? ` depuis le ${dateCourte(v.disponible.date)}` : ''}`.trim());
+    if (v.enRoute) lignes.push(`${v.enRoute.version || ''} ${((STATUTS_RELEASE[v.enRoute.statut] || {}).libelle || 'en test').toLowerCase()}${v.enRoute.date ? ` depuis le ${dateCourte(v.enRoute.date)}` : ''}${v.enRoute.build ? ` · build ${v.enRoute.build}` : ''}`.trim());
+    if (!lignes.length) lignes.push(c ? ((STATUTS_COMPOSANT[c.statut || 'en-cours'] || {}).libelle || 'En cours') : 'Pas encore suivie');
+    const store = v.disponible && v.disponible.liens && v.disponible.liens.store;
+    const test = v.enRoute && v.enRoute.liens && v.enRoute.liens.test;
+    const href = `#/projets/${echapper(pid)}/brique/${echapper(c ? c.id : `p-${cle}`)}`;
+    /* Les boutons ne vivent pas dans le lien : un lien dans un lien n'est
+       pas permis, et le navigateur l'éjecterait. */
+    return `<div class="carte-plateforme carte-plateforme--${f.voile}" role="listitem" data-plateforme="${echapper(cle)}" style="grid-template-columns:36px minmax(0,1fr) auto">
+      <a class="carte-plateforme-tuile" href="${href}" aria-label="${echapper(`Ouvrir la page ${f.libelle}`)}">${icone(f.icone)}</a>
+      <a class="carte-plateforme-corps" href="${href}" style="color:inherit;text-decoration:none" data-astuce="${echapper(`Ouvrir la page ${f.libelle}`)}">
         <span class="carte-plateforme-nom">${echapper(f.libelle)}</span>
-        <span class="carte-plateforme-etat">${echapper(etat)}</span>
+        ${lignes.map((l) => `<span class="carte-plateforme-etat">${echapper(l)}</span>`).join('')}
+      </a>
+      <span class="rang" style="gap:4px;flex-wrap:nowrap">
+        ${store ? `<a class="btn btn-doux btn-petit" href="${echapper(store)}" target="_blank" rel="noopener" data-astuce="Ouvrir dans le store">${icone('externe')} Store</a>` : ''}
+        ${test ? `<a class="btn btn-doux btn-petit" href="${echapper(test)}" target="_blank" rel="noopener" data-astuce="Version de test">${icone('externe')} Test</a>` : ''}
+        ${!store && !test ? `<a class="carte-plateforme-fleche" href="${href}" aria-hidden="true" tabindex="-1">${icone('fleche')}</a>` : ''}
       </span>
-      <span class="carte-plateforme-fleche">${icone('fleche')}</span>
-    </a>`;
+    </div>`;
   }).join('')}</div>`;
 };
 
@@ -404,18 +472,22 @@ const tests = (d, { pid, env }) => {
   const ouvertes = anomalies.filter((a) => !['corrigee', 'sans-suite'].includes(a.statut));
   const bloquantes = ouvertes.filter((a) => a.gravite === 'bloquant');
 
+  /* Deux vocabulaires : l'équipe parle de passages et de console, le
+     client lit des phrases simples et un seul bouton, « Voir les tests ». */
   return `
   <section class="section" style="margin-top:0">
     <div class="section-tete">
-      <div><h2>Tests</h2><p class="chapo">${pluriel(scenarios.length, 'scénario', 'scénarios')}, soit ${passages} passages sur mobile par campagne complète.</p></div>
-      <a class="btn btn-principal btn-petit" href="#/tests?projet=${echapper(pid)}">${icone('bug')} Ouvrir la console</a>
+      <div><h2>Tests</h2><p class="chapo">${equipe
+    ? `${pluriel(scenarios.length, 'scénario', 'scénarios')}, soit ${passages} passages sur mobile par campagne complète.`
+    : `Votre application est testée par de vraies personnes avant chaque sortie : ${pluriel(scenarios.length, 'scénario', 'scénarios')} à dérouler${enCours.length ? `, ${pluriel(enCours.length, 'campagne en cours', 'campagnes en cours')}` : ''}.`}</p></div>
+      <a class="btn btn-principal btn-petit" href="#/tests?projet=${echapper(pid)}">${icone('bug')} ${equipe ? 'Ouvrir la console' : 'Voir les tests'}</a>
     </div>
 
     <div class="rang chiffres-tests">
       <div class="chiffre"><span class="chiffre-valeur">${scenarios.length}</span><span class="chiffre-nom">scénarios</span></div>
-      <div class="chiffre"><span class="chiffre-valeur">${parNiveau.socle + parNiveau.transversal}</span><span class="chiffre-nom">passés deux fois</span></div>
+      <div class="chiffre"><span class="chiffre-valeur">${parNiveau.socle + parNiveau.transversal}</span><span class="chiffre-nom">${equipe ? 'passés deux fois' : 'testés sur iPhone et Android'}</span></div>
       <div class="chiffre"><span class="chiffre-valeur">${enCours.length}</span><span class="chiffre-nom">campagnes en cours</span></div>
-      <div class="chiffre${ouvertes.length ? ' chiffre--alerte' : ''}"><span class="chiffre-valeur">${ouvertes.length}</span><span class="chiffre-nom">anomalies ouvertes</span></div>
+      <div class="chiffre${ouvertes.length ? ' chiffre--alerte' : ''}"><span class="chiffre-valeur">${ouvertes.length}</span><span class="chiffre-nom">${equipe ? 'anomalies ouvertes' : 'problèmes à corriger'}</span></div>
     </div>
 
     ${bloquantes.length ? `<div class="liste" style="margin-top:16px">${bloquantes.slice(0, 3).map((a) => ligne({
@@ -426,7 +498,7 @@ const tests = (d, { pid, env }) => {
     ${enCours.length ? `<div class="liste" style="margin-top:16px">${enCours.map((c) => ligne({
       href: `#/tests?projet=${echapper(pid)}`, icone: 'bug', ton: 'bleu',
       titre: echapper(c.titre || 'Campagne'),
-      sous: `${(c.testeurs || []).length ? pluriel((c.testeurs || []).length, 'testeur', 'testeurs') : 'aucun testeur'}${c.debut ? ` · depuis le ${echapper(dateCourte(c.debut))}` : ''}`,
+      sous: `${(c.testeurs || []).length ? pluriel((c.testeurs || []).length, 'testeur', 'testeurs') : (equipe ? 'aucun testeur' : 'testeurs en cours d\'affectation')}${c.debut ? ` · depuis le ${echapper(dateCourte(c.debut))}` : ''}`,
       fin: pastille(STATUTS_CAMPAGNE, c.statut),
     })).join('')}</div>` : ''}
   </section>`;
@@ -468,11 +540,51 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
   const echeances = [
     ...d.jalons.filter((j) => j.fin && j.statut !== 'termine').map((j) => ({ date: j.fin, titre: j.titre, genre: 'Étape', icone: 'drapeau', chemin: `/projets/${pid}/etapes` })),
     ...d.taches.filter((t) => t.echeance && t.statut !== 'terminee').map((t) => ({ date: t.echeance, titre: t.titre, genre: 'Tâche', icone: 'taches', chemin: `/projets/${pid}/taches/${t.id}` })),
-    ...d.reunions.filter((r) => joursAvant(r.date) >= 0).map((r) => ({ date: r.date, titre: r.titre, genre: 'Réunion', icone: 'reunions', chemin: `/projets/${pid}/reunions` })),
+    ...d.reunions.filter(reunionAVenir).map((r) => ({ date: r.date, titre: r.titre, genre: 'Réunion', icone: 'reunions', chemin: `/projets/${pid}/reunions/${r.id}` })),
     ...d.documents.filter((x) => x.type === 'facture' && x.echeance && ['a-payer', 'partielle', 'en-retard'].includes(x.statut)).map((x) => ({ date: x.echeance, titre: x.libelle, genre: 'Facture', icone: 'euro', chemin: equipe ? `/finances/${x.id}` : `/finances/${x.id}` })),
   ].filter((e) => joursAvant(e.date) >= -30).sort(parDateAsc('date')).slice(0, 6);
 
+  /* Le pouls est daté et signé : sans date, une phrase écrite il y a un
+     mois se lit comme une nouvelle du jour. Une case vide montre la valeur
+     calculée. « Attendu de vous » ne lit plus le texte libre : c'est le
+     bloc « En attente de vous » qui fait foi, et il ne peut pas le
+     contredire. */
+  const poulsMaj = projet.pulseMaj
+    ? `<p class="t-micro t-3" style="margin-top:6px">mis à jour le ${echapper(dateCourte(projet.pulseMaj))}${projet.pulsePar ? ` par ${echapper(String(projet.pulsePar).split(' ')[0])}` : ''}</p>`
+    : '';
+  const livraison = derniereRelease
+    ? `${libellePlateforme(derniereRelease.plateforme)} ${derniereRelease.version || ''}`.trim() + (derniereRelease.date ? ` · le ${dateCourte(derniereRelease.date)}` : '')
+    : (dernierTermine ? dernierTermine.titre : 'Rien encore');
+  const attenduTexte = attente.length ? `${pluriel(attente.length, 'point', 'points')}, voir ci-dessus` : 'Rien';
+  const sourceProgression = prog.valeur === null
+    ? 'Rien ne permet encore de la calculer'
+    : `${MODES_PROGRESSION[prog.mode] || ''}${prog.mode === 'manuel' && (projet.progression || {}).le ? ` le ${dateCourte(projet.progression.le)}` : ''}`;
+
+  /* Ce qui a bougé depuis la dernière visite, sur ce projet seulement et
+     sans ses propres gestes. Chaque compteur mène à l'onglet. */
+  const depuisPassage = !equipe ? activiteDepuis(d.activite, env.derniereVisite, { sansUid: env.session && env.session.utilisateur ? env.session.utilisateur.uid : null }) : [];
+  const resumeDepuis = depuisPassage.length ? (() => {
+    const compte = (type) => depuisPassage.filter((a) => a.type === type).length;
+    const parts = [
+      ['tache', 'taches', 'check', 'mouvement de tâche', 'mouvements de tâches'],
+      ['release', 'releases', 'releases', 'nouvelle version', 'nouvelles versions'],
+      ['message', null, 'messages', 'message', 'messages'],
+      ['validation', null, 'valider', 'validation', 'validations'],
+      ['fichier', 'fichiers', 'fichiers', 'fichier', 'fichiers'],
+      ['jalon', 'etapes', 'drapeau', 'étape', 'étapes'],
+      ['reunion', 'reunions', 'reunions', 'réunion', 'réunions'],
+      ['demande', 'demandes', 'demandes', 'demande', 'demandes'],
+    ].filter(([type]) => compte(type)).map(([type, ong, ico, un, plusieurs]) => {
+      const chemin = type === 'message' ? `/messages/${pid}` : type === 'validation' ? '/valider' : `/projets/${pid}/${ong}`;
+      return `<a class="rang" style="gap:6px;color:inherit" href="#${chemin}">${icone(ico)} ${pluriel(compte(type), un, plusieurs)}</a>`;
+    });
+    if (!parts.length) parts.push(`<a class="rang" style="gap:6px;color:inherit" href="#/projets/${echapper(pid)}/activite">${icone('activite')} ${pluriel(depuisPassage.length, 'mouvement')}</a>`);
+    return `<section class="section" style="margin-top:0"><div class="encart encart--info" id="depuis-visite">${icone('info')}<div><strong>Depuis votre dernière visite</strong><span class="rang" style="margin-top:6px;gap:16px">${parts.join('')}</span></div></div></section>`;
+  })() : '';
+
   return `
+    ${resumeDepuis}
+
     ${attente.length ? `<section class="section" style="margin-top:0"><div class="attente">
       <p class="attente-tete">${icone('alerte')} ${equipe ? 'En attente du client' : 'En attente de vous'} <span class="badge badge--vif" style="margin-left:4px">${attente.length}</span></p>
       <div class="liste" style="margin-top:8px">${attente.slice(0, 5).map((a) => ligne({ href: `#${a.chemin}`, icone: a.icone, ton: a.ton, titre: echapper(a.titre), sous: echapper(a.sous) })).join('')}</div>
@@ -483,16 +595,16 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
       <div class="section-tete"><h2>Votre projet en un coup d'œil</h2>${equipe ? `<button class="btn btn-fantome btn-petit" type="button" data-action="editer-projet">${icone('edit')} Le pouls</button>` : ''}</div>
       <div class="grille grille-tiers">
         <div class="pouls">
-          <div><p class="quoi">${icone('play')} En ce moment</p><p class="texte${pulse.enCours ? '' : ' rien'}">${echapper(pulse.enCours || (enCours[0] ? enCours[0].titre : (courant ? courant.titre : 'Rien de renseigné')))}</p></div>
-          <div><p class="quoi">${icone('check')} Dernière livraison</p><p class="texte${pulse.derniereLivraison || derniereRelease || dernierTermine ? '' : ' rien'}">${echapper(pulse.derniereLivraison || (derniereRelease ? `${derniereRelease.plateforme || ''} ${derniereRelease.version || ''}`.trim() : (dernierTermine ? dernierTermine.titre : 'Rien encore')))}</p></div>
-          <div><p class="quoi">${icone('fleche')} Prochaine étape</p><p class="texte${pulse.prochaineEtape || suivant ? '' : ' rien'}">${echapper(pulse.prochaineEtape || (suivant ? suivant.titre : 'À définir'))}</p></div>
-          <div><p class="quoi">${icone('horloge')} ${equipe ? 'Attente client' : 'Attendu de vous'}</p><p class="texte${pulse.attenteClient || attente.length ? '' : ' rien'}">${echapper(pulse.attenteClient || (attente.length ? pluriel(attente.length, 'point à traiter', 'points à traiter') : 'Rien'))}</p></div>
+          <div><p class="quoi">${icone('play')} En ce moment</p><p class="texte${pulse.enCours ? '' : ' rien'}">${echapper(pulse.enCours || (enCours[0] ? enCours[0].titre : (courant ? courant.titre : 'Rien de renseigné')))}</p>${pulse.enCours ? poulsMaj : ''}</div>
+          <div><p class="quoi">${icone('check')} Dernière livraison</p><p class="texte${pulse.derniereLivraison || derniereRelease || dernierTermine ? '' : ' rien'}">${echapper(pulse.derniereLivraison || livraison)}</p>${pulse.derniereLivraison ? poulsMaj : ''}</div>
+          <div><p class="quoi">${icone('fleche')} Prochaine étape</p><p class="texte${pulse.prochaineEtape || suivant ? '' : ' rien'}">${echapper(pulse.prochaineEtape || (suivant ? suivant.titre : 'À définir'))}</p>${pulse.prochaineEtape ? poulsMaj : ''}</div>
+          <div><p class="quoi">${icone('horloge')} ${equipe ? 'Attente client' : 'Attendu de vous'}</p><p class="texte${attente.length ? '' : ' rien'}">${echapper(attenduTexte)}</p></div>
         </div>
         <div class="carte carte--creuse rang" style="gap:18px;align-items:center">
           ${anneauOuPas(prog, true)}
           <div>
             <p class="t-titre-3">Progression</p>
-            <p class="t-petit t-2" style="margin-top:2px">${echapper(MODES_PROGRESSION[prog.mode] || '')}${prog.valeur === null ? 'Rien ne permet encore de la calculer' : ''}</p>
+            <p class="t-petit t-2" style="margin-top:2px" id="source-progression">${echapper(sourceProgression)}</p>
             ${courant ? `<p class="t-petit" style="margin-top:8px"><span class="t-3">Étape en cours ·</span> ${echapper(courant.titre)}</p>` : ''}
             ${prog.valeur === null && equipe ? '<p class="t-micro t-3" style="margin-top:6px">Posez des étapes, ou saisissez une valeur dans Modifier.</p>' : ''}
           </div>
@@ -507,19 +619,25 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
     ${blocagesOuverts.length ? `<section class="section">
       <div class="section-tete"><h2>Points bloquants</h2>${boutonNouveau(env, 'blocage', 'Signaler')}</div>
       <div class="pile">${blocagesOuverts.map((b) => `<div class="encart encart--alerte">${icone('alerte')}<div style="flex:1">
-        <strong>${echapper(b.titre)}</strong>${b.description ? ` · ${echapper(b.description)}` : ''}
-        <div class="rang t-micro t-3" style="margin-top:6px;gap:12px"><span>Responsable : ${echapper({ client: 'le client', capmedia: 'Capmedia', tiers: 'un tiers' }[b.responsable] || b.responsable)}</span><span>Depuis ${echapper(dateCourte(b.depuis))}</span>${b.impact ? `<span>Impact : ${echapper(b.impact)}</span>` : ''}</div>
+        <strong>${equipe ? echapper(b.titre) : `<button class="ligne-titre ligne-titre--bouton" type="button" data-action="ouvrir-blocage" data-id="${echapper(b.id)}" style="font:inherit;padding:0;text-align:left">${echapper(b.titre)}</button>`}</strong>${b.description ? ` · ${echapper(b.description)}` : ''}
+        <div class="rang t-micro t-3" style="margin-top:6px;gap:12px"><span>${echapper(coteBlocage(b.responsable, equipe))}</span><span>Depuis ${echapper(dateCourte(b.depuis))}</span>${b.echeance ? `<span>Attendu pour le ${echapper(dateCourte(b.echeance))}</span>` : ''}${b.impact ? `<span>Impact : ${echapper(b.impact)}</span>` : ''}${b.signaleFait ? `<span>${equipe ? `Le client dit que c'est fait ${echapper(dateCourte(b.signaleFait.date))}` : `Vous avez dit que c'est fait ${echapper(dateCourte(b.signaleFait.date))}`}</span>` : ''}</div>
+        ${!equipe && b.responsable === 'client' ? `<p class="t-petit" style="margin-top:8px"><button class="btn btn-secondaire btn-petit" type="button" data-action="ouvrir-blocage" data-id="${echapper(b.id)}">Voir ce qu'on attend de vous</button></p>` : ''}
       </div>${equipe ? `<span class="rang" style="gap:2px"><button class="btn btn-petit btn-doux" type="button" data-action="resoudre-blocage" data-id="${echapper(b.id)}">Levé</button>${boutonsEdition(env, 'blocage', b.id, b.titre)}</span>` : ''}</div>`).join('')}</div>
     </section>` : ''}
 
+    ${personnesHtml({ id: pid, ...projet }, env, d)}
+
     ${d.composants.length ? `<section class="section">
       <div class="section-tete"><h2>Les parties du projet <span class="compte-section">${d.composants.length}</span></h2><a class="lien" href="#/projets/${echapper(pid)}/${equipe ? 'composants' : 'etapes'}">${equipe ? 'Gérer' : 'Feuille de route'}</a></div>
-      <div class="grille grille-3">${d.composants.map((c) => `<div class="carte carte--serree">
+      ${/* Chaque carte mène à la page de la brique. La barre s'appelle
+            « avancement de la partie », datée quand on sait de quand elle
+            date : ce n'est pas la progression du projet, dite ailleurs. */ ''}
+      <div class="grille grille-3">${d.composants.map((c) => `<a class="carte carte--serree carte--cliquable" href="#/projets/${echapper(pid)}/brique/${echapper(c.id)}" data-partie="${echapper(c.id)}">
         <div class="rang-espace"><p class="t-corps-fort rang" style="gap:8px">${iconePlateforme(c.type) ? `<span class="ligne-icone ligne-icone--${tonPlateforme(c.type)}" style="width:28px;height:28px;border-radius:8px">${icone(iconePlateforme(c.type))}</span>` : ''}${echapper(c.nom)}</p>${pastille(STATUTS_COMPOSANT, c.statut || 'en-cours')}</div>
-        <div class="rang-espace t-micro t-3" style="margin:10px 0 6px"><span>${echapper(TYPES_COMPOSANT[c.type] || c.type || '')}</span><span class="nb">${borner(c.progression)} %</span></div>
+        <div class="rang-espace t-micro t-3" style="margin:10px 0 6px"><span>${echapper(TYPES_COMPOSANT[c.type] || c.type || '')}</span><span>avancement de la partie${c.maj ? ` · ${echapper(dateCourte(c.maj))}` : ''}</span></div>
         ${progression(c.progression, borner(c.progression) >= 100 ? 'vert' : '')}
-        ${c.version || c.environnement ? `<p class="t-micro t-3" style="margin-top:8px">${echapper([c.version && `v${c.version}`, c.versionPrep && `${c.versionPrep} en préparation`, c.environnement].filter(Boolean).join(' · '))}</p>` : ''}
-      </div>`).join('')}</div>
+        ${c.environnement ? `<p class="t-micro t-3" style="margin-top:8px">${echapper(c.environnement)}</p>` : ''}
+      </a>`).join('')}</div>
     </section>` : (equipe ? `<section class="section"><div class="section-tete"><h2>Les parties du projet</h2>${boutonNouveau(env, 'composant', 'Ajouter une partie')}</div>${vide({ icone: 'composants', titre: 'Aucune partie', texte: 'Découpez le projet : iPhone, Android, web, serveur...', compact: true })}</section>` : '')}
 
     <div class="grille grille-tiers section">
@@ -536,7 +654,7 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
       <aside class="pile" style="gap:var(--e-5)">
         <div class="carte carte--creuse">
           <p class="surtitre">Prochaine réunion</p>
-          ${reunion ? `<p class="t-titre-3" style="margin-top:8px">${echapper(reunion.titre)}</p><p class="t-petit t-2" style="margin-top:4px">${echapper(dateHeure(reunion.date))}</p>${reunion.lien ? `<a class="btn btn-secondaire btn-petit" style="margin-top:12px" href="${echapper(reunion.lien)}" target="_blank" rel="noopener">${icone('video')} Rejoindre</a>` : ''}` : `<p class="t-petit t-2" style="margin-top:8px">Aucune réunion programmée.</p>${boutonNouveau(env, 'reunion', 'Programmer')}`}
+          ${reunion ? `<p class="t-titre-3" style="margin-top:8px"><button class="lien" type="button" data-action="ouvrir-reunion" data-id="${echapper(reunion.id)}" style="font:inherit;text-align:left">${echapper(reunion.titre)}</button></p><p class="t-petit t-2" style="margin-top:4px">${echapper(dateHeure(reunion.date))}</p><div class="rang" style="margin-top:12px;gap:6px">${reunion.lien ? `<a class="btn btn-secondaire btn-petit" href="${echapper(reunion.lien)}" target="_blank" rel="noopener">${icone('video')} Rejoindre</a>` : ''}<button class="btn btn-doux btn-petit" type="button" data-action="ouvrir-reunion" data-id="${echapper(reunion.id)}">Ordre du jour</button></div>` : `<p class="t-petit t-2" style="margin-top:8px">Aucune réunion programmée.</p>${equipe ? boutonNouveau(env, 'reunion', 'Programmer') : `<button class="btn btn-doux btn-petit" type="button" style="margin-top:8px" data-action="ecrire-bulle" data-texte="Je souhaite un créneau pour ">${icone('messages')} Demander un créneau</button>`}`}
         </div>
         <div class="carte carte--creuse">
           <p class="surtitre">Échéances</p>
@@ -614,14 +732,18 @@ const tenueDesDelais = (d, { pid, env, delai, risques }) => {
   const decale = origine && projet.cible && dateCourte(origine) !== dateCourte(projet.cible);
   const etapesEnRetard = d.jalons.filter((j) => j.statut !== 'termine' && joursAvant(j.fin) < 0);
 
+  /* Sans date, la section reste et le dit : cacher le bloc laissait le
+     client chercher où était passée la date. */
   if (!projet.cible && !reports.length) {
-    return equipe ? `<section class="section">
-      <div class="section-tete"><h2>Tenue des délais</h2><button class="btn btn-fantome btn-petit" type="button" data-action="editer-projet">${icone('cible')} Fixer une date</button></div>
-      ${encart("Aucune date de livraison n'est fixée. Le client n'a donc rien à quoi se raccrocher, et c'est la première raison pour laquelle il écrit.", 'attention', 'alerte')}
-    </section>` : '';
+    return `<section class="section" id="tenue-delais">
+      <div class="section-tete"><h2>Tenue des délais</h2>${equipe ? `<button class="btn btn-fantome btn-petit" type="button" data-action="editer-projet">${icone('cible')} Fixer une date</button>` : ''}</div>
+      ${equipe
+    ? encart("Aucune date de livraison n'est fixée. Le client n'a donc rien à quoi se raccrocher, et c'est la première raison pour laquelle il écrit.", 'attention', 'alerte')
+    : encart("Aucune date de livraison n'est fixée pour l'instant. Dès qu'elle le sera, vous la verrez ici, avec son histoire si elle bouge.", '', 'horloge')}
+    </section>`;
   }
 
-  return `<section class="section">
+  return `<section class="section" id="tenue-delais">
     <div class="section-tete"><h2>Tenue des délais</h2>${equipe ? `<button class="btn btn-fantome btn-petit" type="button" data-action="editer-projet">${icone('edit')} Changer la date</button>` : ''}</div>
     <div class="carte delais">
       <div class="delais-tete">
@@ -635,7 +757,7 @@ const tenueDesDelais = (d, { pid, env, delai, risques }) => {
 
       ${risques.length ? `<div class="delais-risques">
         <p class="surtitre">Ce qui pèse sur cette date</p>
-        <ul class="pile" style="margin-top:8px;gap:6px">${risques.map((r) => `<li class="rang" style="gap:8px;align-items:flex-start"><span class="ligne-icone ligne-icone--ambre" style="width:22px;height:22px;border-radius:7px">${icone('alerte')}</span><span class="t-petit">${echapper(r)}</span></li>`).join('')}</ul>
+        <ul class="pile" style="margin-top:8px;gap:6px">${risques.map((r) => `<li class="rang" style="gap:8px;align-items:flex-start"><span class="ligne-icone ligne-icone--ambre" style="width:22px;height:22px;border-radius:7px">${icone('alerte')}</span><span class="t-petit">${/demandes? en attente de votre réponse/.test(r) ? `<a href="#/projets/${echapper(pid)}/demandes?filtre=pour-vous">${echapper(r)}</a>` : echapper(r)}</span></li>`).join('')}</ul>
         ${etapesEnRetard.length ? `<p class="t-micro" style="margin-top:8px"><a href="#/projets/${echapper(pid)}/etapes">Voir les étapes concernées</a></p>` : ''}
       </div>` : ''}
 
@@ -708,8 +830,10 @@ const ouvrirEtape = (j, d, { pid, env }) => {
       <div class="rang" style="margin-bottom:18px">
         ${pastille(STATUTS_ETAPE, j.statut || 'a-venir')}
         ${verdictHtml(v, { vide: false })}
-        ${j.statut !== 'termine' ? `<span class="puce t-3">${borner(j.progression)} % fait</span>` : ''}
       </div>
+      ${/* Une barre, pas un autre pourcentage : le seul chiffre du projet
+            est l'anneau de l'aperçu. */ ''}
+      ${j.statut !== 'termine' && borner(j.progression) > 0 ? `<div style="margin:-8px 0 18px"><p class="t-micro t-3" style="margin-bottom:4px">avancement de l'étape</p>${progression(j.progression)}</div>` : ''}
 
       ${j.description ? `<div class="prose t-corps">${avecLiens(j.description)}</div>` : '<p class="t-petit t-3">Pas encore de description.</p>'}
 
@@ -732,7 +856,7 @@ const ouvrirEtape = (j, d, { pid, env }) => {
           ton: t.statut === 'terminee' ? 'vert' : t.statut === 'bloquee' ? 'rouge' : t.statut === 'en-cours' ? 'bleu' : '',
           titre: echapper(t.titre),
           sous: echapper([(d.composants.find((c) => c.id === t.composant) || {}).nom, t.echeance && `pour le ${dateCourte(t.echeance)}`].filter(Boolean).join(' · ')),
-          fin: pastille(STATUTS_TACHE, t.statut || 'a-faire'),
+          fin: pastille(STATUTS_TACHE, t.statut || 'a-faire', { client: !equipe }),
         })).join('')}</div>
       </div>` : ''}
 
@@ -756,10 +880,13 @@ const ouvrirEtape = (j, d, { pid, env }) => {
       </div>` : ''}`,
     pied: equipe
       ? `<button class="btn btn-danger" type="button" data-suppr>Supprimer</button><span class="pousse"></span><button class="btn btn-secondaire" type="button" data-fermer>Fermer</button><button class="btn btn-principal" type="button" data-editer>Modifier</button>`
-      : `<a class="btn btn-secondaire" href="#/messages/${echapper(pid)}">Une question sur cette étape</a><button class="btn btn-principal" type="button" data-fermer>Fermer</button>`,
+      : `<button class="btn btn-secondaire" type="button" data-question>Une question sur cette étape</button><button class="btn btn-principal" type="button" data-fermer>Fermer</button>`,
   });
   sur(m.el, 'click', '[data-editer]', () => { m.fermer(); editer('jalon', env, { pid, fiche: j }); });
   sur(m.el, 'click', '[data-suppr]', async () => { const ok = await supprimer('jalon', env, { pid, fiche: j, libelle: 'cette étape' }); if (ok) m.fermer(); });
+  /* La question part dans la bulle, sur la page : quitter la fiche pour
+     la messagerie faisait perdre l'étape des yeux. */
+  sur(m.el, 'click', '[data-question]', () => { m.fermer(); ouvrirBulle(pid, `À propos de l'étape « ${j.titre} » : `); });
 };
 
 /* --- Les parties du projet (équipe) --------------------------------------- */
@@ -781,7 +908,7 @@ const etapes = (d, { env, pid }) => {
   const phases = phasesTriees(d.jalons);
   /* Les devis qui ont leurs lignes en étapes viennent d'abord : c'est ce
      que le client a acheté, ligne par ligne, et ce qu'il vient vérifier. */
-  const frises = devisAvecEtapes(d.documents, d.jalons).map((dv) => friseDevis(dv, d.jalons, { equipe: env.role === 'equipe', pid })).join('');
+  const frises = devisAvecEtapes(d.documents, d.jalons, { equipe: env.role === 'equipe' }).map((dv) => friseDevis(dv, d.jalons, { equipe: env.role === 'equipe', pid })).join('');
   return `
   ${frises ? `<section class="section" style="margin-top:0">
     <div class="section-tete"><div><h2>Le devis, ligne par ligne</h2><p class="chapo">Chaque ligne du devis est une étape. ${env.role === 'equipe' ? 'Cochez ce qui est livré : le client le voit aussitôt.' : 'Ce qui est coché est livré.'}</p></div></div>
@@ -815,10 +942,10 @@ const taches = (d, { env, pid }) => {
   const ligneTache = (t) => {
     const f = t.echeance && t.statut !== 'terminee' ? calcEcheance(t.echeance) : null;
     return ligne({
-      icone: t.statut === 'terminee' ? 'check' : t.statut === 'bloquee' ? 'alerte' : 'taches', ton: t.statut === 'terminee' ? 'vert' : t.statut === 'bloquee' ? 'rouge' : t.statut === 'attente-client' ? 'ambre' : t.statut === 'en-cours' ? 'bleu' : '',
+      icone: t.statut === 'terminee' ? 'check' : t.statut === 'bloquee' ? 'alerte' : 'taches', ton: t.statut === 'terminee' ? 'vert' : t.statut === 'bloquee' ? 'rouge' : t.statut === 'attente-client' ? 'ambre' : t.statut === 'repondu' ? 'violet' : t.statut === 'en-cours' ? 'bleu' : '',
       titre: `${echapper(t.titre)}${t.visibilite === 'interne' ? ' <span class="etiquette" style="vertical-align:middle">Interne</span>' : ''}`,
       sous: `${(() => { const c = d.composants.find((x) => x.id === t.composant); return c && iconePlateforme(c.type) ? pucePlateforme(c.type, { court: true }) : ''; })()}${echapper([(d.composants.find((c) => c.id === t.composant) || {}).nom, t.assigne && nomEquipe(d.equipe, t.assigne), t.estimation].filter(Boolean).join(' · '))}${f ? ` ${echeanceHtml(f)}` : ''}${t.checklist && t.checklist.length ? ` <span class="t-3">${t.checklist.filter((c) => c.fait).length}/${t.checklist.length}</span>` : ''}`,
-      fin: `${puce(PRIORITES, t.priorite || 'normale')}${pastille(STATUTS_TACHE, t.statut || 'a-faire')}`,
+      fin: `${puce(PRIORITES, t.priorite || 'normale')}${pastille(STATUTS_TACHE, t.statut || 'a-faire', { client: !equipe })}`,
       action: 'ouvrir-tache', attrs: `data-id="${echapper(t.id)}"`,
     });
   };
@@ -847,14 +974,34 @@ const ouvrirTache = (t, d, { pid, env }) => {
   const m = modale({
     titre: t.titre, sousTitre: [composant && composant.nom, jalon && jalon.titre].filter(Boolean).join(' · '), feuille: true,
     corps: `
-      <div class="rang" style="margin-bottom:16px">${pastille(STATUTS_TACHE, t.statut || 'a-faire')}${puce(PRIORITES, t.priorite || 'normale')}${f ? echeanceHtml(f) : ''}${t.visibilite === 'interne' ? '<span class="etiquette">Interne</span>' : ''}</div>
+      <div class="rang" style="margin-bottom:16px">${pastille(STATUTS_TACHE, t.statut || 'a-faire', { client: !equipe })}${puce(PRIORITES, t.priorite || 'normale')}${f ? echeanceHtml(f) : ''}${t.visibilite === 'interne' ? '<span class="etiquette">Interne</span>' : ''}</div>
       ${t.description ? `<div class="prose t-corps">${avecLiens(t.description)}</div>` : '<p class="t-petit t-3">Pas de description.</p>'}
       <dl class="faits" style="margin-top:20px">${fait('Assignée à', echapper(t.assigne ? nomEquipe(d.equipe, t.assigne) || 'Capmedia' : 'Personne'))}${fait('Échéance', t.echeance ? echapper(dateCourte(t.echeance)) : '')}${fait('Estimation', echapper(t.estimation || ''))}${fait('Progression', `${borner(t.progression)} %`)}</dl>
       ${t.checklist && t.checklist.length ? `<div style="margin-top:20px"><p class="surtitre">Liste de contrôle</p><div style="margin-top:6px">${t.checklist.map((c, i) => `<label class="coche${c.fait ? ' faite' : ''}"><input type="checkbox" data-coche="${i}" ${c.fait ? 'checked' : ''} ${equipe ? '' : 'disabled'}><span>${echapper(c.texte)}</span></label>`).join('')}</div></div>` : ''}
       ${equipe ? `<div style="margin-top:24px"><p class="surtitre">Changer le statut</p><div class="rang" style="margin-top:8px">${Object.entries(STATUTS_TACHE).map(([cle, s]) => `<button class="filtre${t.statut === cle ? ' actif' : ''}" type="button" data-statut="${cle}">${echapper(s.libelle)}</button>`).join('')}</div></div>` : ''}
-      ${t.statut === 'attente-client' && !equipe ? encart('Nous attendons votre retour sur cette tâche. Répondez-nous dans la conversation du projet.', 'attention', 'alerte') : ''}`,
-    pied: equipe ? `<button class="btn btn-danger" type="button" data-suppr>Supprimer</button><span class="pousse"></span><button class="btn btn-secondaire" type="button" data-fermer>Fermer</button><button class="btn btn-principal" type="button" data-editer>Modifier</button>` : `<a class="btn btn-secondaire" href="#/messages/${echapper(pid)}">Écrire à Capmedia</a><button class="btn btn-principal" type="button" data-fermer>Fermer</button>`,
+      ${t.reponseClient ? `<div style="margin-top:20px">${encart(`<strong>${equipe ? `${echapper(t.reponseClient.nom || 'Le client')} a répondu` : 'Votre réponse'}</strong> le ${echapper(dateHeure(t.reponseClient.date))}${t.reponseClient.texte ? `<div class="prose" style="margin-top:6px">${avecLiens(t.reponseClient.texte)}</div>` : ''}${(t.reponseClient.pieces || []).length ? `<div class="pieces" style="margin-top:8px">${t.reponseClient.pieces.map(pieceHtml).join('')}</div>` : ''}`, 'ok', 'check')}</div>` : ''}
+      ${t.statut === 'attente-client' && !equipe ? `<div style="margin-top:20px">${encart('<strong>Nous attendons votre retour sur cette tâche.</strong> Répondez ici, avec un fichier si besoin : elle revient chez nous aussitôt.', 'attention', 'alerte')}
+        <form id="forme-reponse-tache" class="forme" style="margin-top:14px" novalidate>
+          <div class="groupe"><label class="etiquette-champ" for="reponse-tache">Votre réponse</label><textarea class="zone" id="reponse-tache" name="texte" rows="4" maxlength="4000" placeholder="Ce que vous avez fait, ou ce qui vous manque."></textarea></div>
+          <div class="groupe"><span class="etiquette-champ">Vos fichiers <span class="facultatif">(facultatif)</span></span><div id="zone-pieces-tache"></div></div>
+        </form></div>` : ''}`,
+    pied: equipe ? `<button class="btn btn-danger" type="button" data-suppr>Supprimer</button><span class="pousse"></span><button class="btn btn-secondaire" type="button" data-fermer>Fermer</button><button class="btn btn-principal" type="button" data-editer>Modifier</button>`
+      : (t.statut === 'attente-client'
+        ? `<a class="btn btn-secondaire" href="#/messages/${echapper(pid)}">Écrire à Capmedia</a><span class="pousse"></span><button class="btn btn-secondaire" type="button" data-fermer>Fermer</button><button class="btn btn-principal" type="button" data-envoyer-reponse>${icone('envoyer')} Envoyer ma réponse</button>`
+        : `<a class="btn btn-secondaire" href="#/messages/${echapper(pid)}">Écrire à Capmedia</a><button class="btn btn-principal" type="button" data-fermer>Fermer</button>`),
   });
+  /* La réponse du client : un texte ou des fichiers (rangés sous
+     « reponse » de la tâche), et la tâche passe « réponse reçue ». */
+  const zoneReponse = m.el.querySelector('#zone-pieces-tache');
+  const boite = zoneReponse ? depot(zoneReponse, { chemin: `projets/${pid}/taches/${t.id}/reponse`, texte: 'Joignez une <strong>capture ou un document</strong>.' }) : null;
+  sur(m.el, 'click', '[data-envoyer-reponse]', async (el) => {
+    const texte = (m.el.querySelector('#reponse-tache') || { value: '' }).value.trim();
+    if (boite && boite.occupe) { toast('Attendez la fin des envois.', 'erreur'); return; }
+    if (!texte && !(boite && boite.pieces.length)) { toast('Écrivez un mot, ou joignez un fichier.', 'erreur'); m.el.querySelector('#reponse-tache').focus(); return; }
+    const ok = await agir(el, () => ecrire.repondreTache(env.session, t.id, texte, boite ? boite.pieces : []), 'Merci, votre réponse est transmise.');
+    if (ok) m.fermer(true);
+  });
+  brancherPieces(m.el);
   sur(m.el, 'click', '[data-statut]', (el) => agir(null, () => ecrire.majTache(t.id, { statut: el.dataset.statut, progression: el.dataset.statut === 'terminee' ? 100 : undefined })).then(() => m.fermer()));
   sur(m.el, 'click', '[data-editer]', () => { m.fermer(); editer('tache', env, { pid, fiche: t }); });
   sur(m.el, 'click', '[data-suppr]', async () => { const ok = await supprimer('tache', env, { pid, fiche: t, libelle: 'cette tâche' }); if (ok) m.fermer(); });
@@ -862,6 +1009,49 @@ const ouvrirTache = (t, d, { pid, env }) => {
     const checklist = (t.checklist || []).map((c, i) => (i === Number(el.dataset.coche) ? { ...c, fait: el.checked } : c));
     agir(null, () => ecrire.majTache(t.id, { checklist }));
   });
+};
+
+/* Qui doit agir sur un point bloquant, dit à la personne qui lit : le
+   client lit « De votre côté », jamais « le client ». */
+const coteBlocage = (responsable, equipe) => (equipe
+  ? ({ client: 'Responsable : le client', capmedia: 'Responsable : Capmedia', tiers: 'Responsable : un tiers' }[responsable] || `Responsable : ${responsable || ''}`)
+  : ({ client: 'De votre côté', capmedia: 'De notre côté', tiers: 'Un tiers' }[responsable] || 'De notre côté'));
+
+/* La fiche d'un point bloquant. Côté client : ce qu'on attend de lui,
+   pour quand, et deux gestes : « C'est fait » (une fois, l'équipe lève
+   ensuite) ou « Répondre » dans la bulle du projet, le sujet déjà posé.
+   Côté équipe : la même fiche, avec ce que le client a dit. */
+const ouvrirBlocage = (b, d, { pid, env }) => {
+  const equipe = env.role === 'equipe';
+  const composant = d.composants.find((c) => c.id === b.composant);
+  const aMoi = !equipe && b.responsable === 'client';
+  const dejaDit = Boolean(b.signaleFait);
+  const m = modale({
+    titre: b.titre, sousTitre: [coteBlocage(b.responsable, equipe), composant && composant.nom].filter(Boolean).join(' · '), feuille: true,
+    corps: `
+      <div class="rang" style="margin-bottom:16px">${b.resolu ? pastilleTexte('Levé', 'vert') : pastilleTexte('Ouvert', 'rouge')}${b.echeance && !b.resolu ? echeanceHtml(calcEcheance(b.echeance)) : ''}</div>
+      ${b.description ? `<div class="prose t-corps">${avecLiens(b.description)}</div>` : '<p class="t-petit t-3">Pas de description.</p>'}
+      ${b.attendu ? `<div style="margin-top:20px">${encart(`<strong>${equipe ? 'Ce qu\'on attend du client' : 'Ce qu\'on attend de vous'}</strong><div class="prose" style="margin-top:6px">${avecLiens(b.attendu)}</div>`, 'attention', 'alerte')}</div>` : (aMoi ? `<div style="margin-top:20px">${encart('<strong>Ce point dépend de vous.</strong> Si vous ne voyez pas quoi faire, répondez-nous : on vous guide.', 'attention', 'alerte')}</div>` : '')}
+      <dl class="faits" style="margin-top:20px">${fait('Depuis le', echapper(dateCourte(b.depuis)))}${fait('Attendu pour le', b.echeance ? echapper(dateCourte(b.echeance)) : '')}${fait('Impact', echapper(b.impact || ''))}${fait('Levé le', b.resolu ? echapper(dateCourte(b.resolu)) : '')}</dl>
+      ${dejaDit ? `<div style="margin-top:20px">${encart(`<strong>${equipe ? `${echapper(b.signaleFait.nom || 'Le client')} dit que c'est fait` : 'Vous avez dit que c\'est fait'}</strong> le ${echapper(dateHeure(b.signaleFait.date))}${b.signaleFait.texte ? `<div class="prose" style="margin-top:6px">${avecLiens(b.signaleFait.texte)}</div>` : ''}<p class="t-micro t-3" style="margin-top:6px">${equipe ? 'Vérifiez, puis levez le point.' : 'Capmedia vérifie et lève le point.'}</p>`, 'ok', 'check')}</div>` : ''}
+      ${aMoi && !dejaDit && !b.resolu ? `<div class="groupe" style="margin-top:20px"><label class="etiquette-champ" for="mot-blocage">Un mot pour nous <span class="facultatif">(facultatif)</span></label><textarea class="zone" id="mot-blocage" rows="2" maxlength="2000" placeholder="Compte créé, invitation envoyée."></textarea></div>` : ''}`,
+    pied: equipe
+      ? `${!b.resolu ? `<button class="btn btn-ok" type="button" data-lever>${icone('check')} Levé</button>` : ''}<span class="pousse"></span><button class="btn btn-secondaire" type="button" data-fermer>Fermer</button><button class="btn btn-principal" type="button" data-editer>Modifier</button>`
+      : `${aMoi && !b.resolu ? `<button class="btn btn-secondaire" type="button" data-repondre>${icone('messages')} Répondre</button>` : ''}<span class="pousse"></span><button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>${aMoi && !dejaDit && !b.resolu ? `<button class="btn btn-ok" type="button" data-fait>${icone('check')} C'est fait</button>` : ''}`,
+  });
+  sur(m.el, 'click', '[data-fait]', async (el) => {
+    const texte = (m.el.querySelector('#mot-blocage') || { value: '' }).value.trim();
+    const ok = await agir(el, () => ecrire.signalerBlocageFait(env.session, b.id, texte), 'Merci, nous vérifions et levons le point.');
+    if (ok) m.fermer(true);
+  });
+  sur(m.el, 'click', '[data-repondre]', () => {
+    /* La bulle du projet s'ouvre avec le sujet déjà posé (bulle.js écoute). */
+    m.fermer();
+    document.dispatchEvent(new CustomEvent('bulle:ouvrir', { detail: { projet: pid, texte: `À propos du point bloquant « ${b.titre} » : ` } }));
+  });
+  sur(m.el, 'click', '[data-lever]', (el) => agir(el, () => ecrire.majBlocage(b.id, { resolu: new Date() }), 'Point bloquant levé.').then((ok) => { if (ok) m.fermer(true); }));
+  sur(m.el, 'click', '[data-editer]', () => { m.fermer(); editer('blocage', env, { pid, fiche: b }); });
+  return m.fin;
 };
 
 /* --- Demandes ----------------------------------------------------------------- */
@@ -876,7 +1066,9 @@ const demandes = (d, { env, pid }) => {
     toutes: tous,
   };
   const liste = groupes[filtre] || groupes.ouvertes;
-  const nonLu = (t) => { const l = t.lu || {}; const marque = equipe ? l.equipe : l.client; return !marque || ((t.maj && t.maj.toMillis ? t.maj.toMillis() : 0) > (marque.toMillis ? marque.toMillis() : 0)); };
+  /* Côté client, le « non lu » est celui de la personne (lu.clients[uid])
+     quand il existe, sinon le repère commun d'avant (lu.client). */
+  const nonLu = (t) => { const l = t.lu || {}; const marque = equipe ? l.equipe : ((l.clients || {})[env.session.utilisateur.uid] || l.client); return !marque || ((t.maj && t.maj.toMillis ? t.maj.toMillis() : 0) > (marque.toMillis ? marque.toMillis() : 0)); };
   return `
   <section class="section" style="margin-top:0">
     <div class="section-tete"><h2>Demandes</h2><a class="btn btn-principal btn-petit" href="#/projets/${echapper(pid)}/nouvelle-demande">${icone('plus')} Nouvelle demande</a></div>
@@ -913,7 +1105,7 @@ const fichiers = (d, { env, pid }) => {
   <section class="section" style="margin-top:0">
     <div class="section-tete"><h2>Fichiers</h2><div class="rang">${equipe ? boutonNouveau(env, 'fichier', 'Déposer') : `<button class="btn btn-secondaire btn-petit" type="button" data-action="deposer-client">${icone('plus')} Envoyer un fichier</button>`}</div></div>
     ${categories.length > 1 ? `<div class="filtres" style="margin-bottom:16px"><button class="filtre${!filtre ? ' actif' : ''}" type="button" data-filtre-fichiers="">Tous<span class="compte">${d.fichiers.length}</span></button>${categories.map(([cle, lib]) => `<button class="filtre${filtre === cle ? ' actif' : ''}" type="button" data-filtre-fichiers="${cle}">${echapper(lib)}<span class="compte">${d.fichiers.filter((f) => f.categorie === cle).length}</span></button>`).join('')}</div>` : ''}
-    ${liste.length ? `<div class="grille grille-2">${liste.map((f) => fichierHtml({ ...f, categorieLibelle: CATEGORIES_FICHIER[f.categorie] || f.categorie, par: f.par }, { menu: equipe })).join('')}</div>`
+    ${liste.length ? `<div class="grille grille-2">${liste.map((f) => fichierHtml({ ...f, categorieLibelle: CATEGORIES_FICHIER[f.categorie] || f.categorie, par: f.par }, { menu: equipe, retirer: !equipe, moi: equipe ? '' : env.session.utilisateur.uid })).join('')}</div>`
     : vide({ icone: 'fichiers', titre: 'Aucun fichier', texte: equipe ? 'Déposez maquettes, livrables, documents.' : 'Vos maquettes, livrables et documents seront rangés ici. Vous pouvez aussi nous envoyer des captures ou des logos.' })}
   </section>`;
 };
@@ -922,7 +1114,7 @@ const ouvrirDepotClient = (pid, env) => {
   const m = modale({
     titre: 'Envoyer des fichiers', sousTitre: 'Captures, logos, documents : ils arrivent directement chez Capmedia.', feuille: true,
     corps: `<form class="forme" id="forme-depot" novalidate>
-      <div class="groupe"><label class="etiquette-champ" for="cat-depot">Catégorie</label><select class="select" id="cat-depot" name="categorie">${optionsDe({ captures: 'Captures', logos: 'Logos', assets: 'Assets (images, textes)', cahier: 'Cahier des charges', autres: 'Autres' }, 'captures')}</select></div>
+      <div class="groupe"><label class="etiquette-champ" for="cat-depot">Catégorie</label><select class="select" id="cat-depot" name="categorie">${optionsDe(Object.fromEntries(CATEGORIES_CLIENT.map((c) => [c, CATEGORIES_FICHIER[c]])), 'captures')}</select></div>
       <div class="groupe"><label class="etiquette-champ" for="desc-depot">Un mot pour nous <span class="facultatif">(facultatif)</span></label><input class="champ" id="desc-depot" name="description" maxlength="200"></div>
       <div id="zone-depot"></div>
     </form>`,
@@ -948,9 +1140,9 @@ const releases = (d, { env }) => {
   return `
   <section class="section" style="margin-top:0">
     <div class="section-tete"><h2>Versions et changements</h2>${boutonNouveau(env, 'release', 'Nouvelle version')}</div>
-    ${liste.length ? `<div class="pile" style="gap:var(--e-4)">${liste.map((r) => `<div class="carte">
+    ${liste.length ? `<div class="pile" style="gap:var(--e-4)">${liste.map((r) => `<div class="carte" data-release="${echapper(r.id)}">
       <div class="rang-espace" style="align-items:flex-start">
-        <div class="rang" style="gap:12px"><span class="ligne-icone${tonPlateforme(r.plateforme) ? ` ligne-icone--${tonPlateforme(r.plateforme)}` : ''}">${icone(iconePlateforme(r.plateforme) || 'releases')}</span><div><p class="t-titre-3 rang" style="gap:8px">${pucePlateforme(r.plateforme, { court: true })}${echapper(r.version || '')}${r.titre ? ` <span class="t-2" style="font-weight:400">· ${echapper(r.titre)}</span>` : ''}</p><p class="t-petit t-3" style="margin-top:2px">${echapper([r.statut === 'disponible' ? `Publiée le ${dateCourte(r.date)}` : dateCourte(r.date), (d.composants.find((c) => c.id === r.composant) || {}).nom].filter(Boolean).join(' · '))}${r.visibilite === 'interne' ? ' · Interne' : ''}</p></div></div>
+        <div class="rang" style="gap:12px"><span class="ligne-icone${tonPlateforme(r.plateforme) ? ` ligne-icone--${tonPlateforme(r.plateforme)}` : ''}">${icone(iconePlateforme(r.plateforme) || 'releases')}</span><div><p class="t-titre-3 rang" style="gap:8px"><button class="lien" type="button" data-action="ouvrir-release" data-id="${echapper(r.id)}" style="font:inherit;color:inherit">${echapper(`${libellePlateforme(r.plateforme)} ${r.version || ''}`.trim())}</button>${r.titre ? ` <span class="t-2" style="font-weight:400">· ${echapper(r.titre)}</span>` : ''}</p><p class="t-petit t-3" style="margin-top:2px">${echapper([r.statut === 'disponible' ? `Publiée le ${dateCourte(r.date)}` : dateCourte(r.date), r.build && `build ${r.build}`, (d.composants.find((c) => c.id === r.composant) || {}).nom].filter(Boolean).join(' · '))}${r.visibilite === 'interne' ? ' · Interne' : ''}</p></div></div>
         <div class="rang">${pastille(STATUTS_RELEASE, r.statut || 'developpement')}${env.role === 'equipe' ? `<button class="btn-icone" type="button" data-action="editer" data-genre="release" data-id="${echapper(r.id)}" aria-label="Modifier">${icone('edit')}</button>` : ''}</div>
       </div>
       ${(r.notes || []).length ? `<ul style="margin-top:14px" class="pile" style="gap:6px">${r.notes.map((n) => `<li class="rang" style="gap:10px;align-items:flex-start"><span style="flex:none">${pastille(TYPES_CHANGEMENT, n.type || 'amelioration')}</span><span class="t-petit">${echapper(n.texte)}</span></li>`).join('')}</ul>` : ''}
@@ -960,68 +1152,118 @@ const releases = (d, { env }) => {
   </section>`;
 };
 
+/*
+ * La fiche d'une version, ouverte d'un clic ou par son adresse
+ * (#/projets/:id/releases/:rid) : c'est elle que visent la notification
+ * « Version disponible », la lettre et la recherche. Tout y est : la
+ * plateforme, le numéro, le build, la partie, la date, les notes, les
+ * liens.
+ */
+const ouvrirRelease = (r, d, { pid, env }) => {
+  const equipe = env.role === 'equipe';
+  const partie = d.composants.find((c) => c.id === r.composant);
+  const m = modale({
+    titre: `${libellePlateforme(r.plateforme)} ${r.version || ''}`.trim(),
+    sousTitre: [r.titre, (STATUTS_RELEASE[r.statut || 'developpement'] || {}).libelle].filter(Boolean).join(' · '),
+    feuille: true,
+    corps: `
+      <div class="rang" style="margin-bottom:16px">${pastille(STATUTS_RELEASE, r.statut || 'developpement')}${pucePlateforme(r.plateforme)}${r.visibilite === 'interne' ? '<span class="etiquette">Interne</span>' : ''}</div>
+      <dl class="faits">
+        ${fait(r.statut === 'disponible' ? 'Disponible depuis le' : 'Date', r.date ? echapper(dateLongue(r.date)) : '')}
+        ${fait('Build', echapper(r.build || ''))}
+        ${fait('Partie du projet', echapper(partie ? partie.nom : ''))}
+        ${fait('Enregistrée par', echapper((r.par && r.par.nom) || ''))}
+      </dl>
+      ${(r.notes || []).length ? `<div style="margin-top:22px"><p class="surtitre">Ce qui change</p><ul class="pile" style="margin-top:8px;gap:6px">${r.notes.map((n) => `<li class="rang" style="gap:10px;align-items:flex-start"><span style="flex:none">${pastille(TYPES_CHANGEMENT, n.type || 'amelioration')}</span><span class="t-petit">${echapper(n.texte)}</span></li>`).join('')}</ul></div>` : '<p class="t-petit t-3" style="margin-top:16px">Aucune note de changement sur cette version.</p>'}
+      ${(r.liens && (r.liens.store || r.liens.test)) ? `<div class="rang" style="margin-top:22px">${r.liens.store ? `<a class="btn btn-secondaire btn-petit" href="${echapper(r.liens.store)}" target="_blank" rel="noopener">${icone('externe')} Ouvrir dans le store</a>` : ''}${r.liens.test ? `<a class="btn btn-doux btn-petit" href="${echapper(r.liens.test)}" target="_blank" rel="noopener">${icone('externe')} Version de test</a>` : ''}</div>` : ''}`,
+    pied: equipe
+      ? `<button class="btn btn-danger" type="button" data-suppr>Supprimer</button><span class="pousse"></span><button class="btn btn-secondaire" type="button" data-fermer>Fermer</button><button class="btn btn-principal" type="button" data-editer>Modifier</button>`
+      : `<button class="btn btn-secondaire" type="button" data-question>Écrire à Capmedia</button><button class="btn btn-principal" type="button" data-fermer>Fermer</button>`,
+  });
+  sur(m.el, 'click', '[data-editer]', () => { m.fermer(); editer('release', env, { pid, fiche: r }); });
+  sur(m.el, 'click', '[data-suppr]', async () => { const ok = await supprimer('release', env, { pid, fiche: r, libelle: 'cette version' }); if (ok) m.fermer(); });
+  sur(m.el, 'click', '[data-question]', () => { m.fermer(); ouvrirBulle(pid, `À propos de la version ${libellePlateforme(r.plateforme)} ${r.version || ''} : `); });
+};
+
 /* --- Liens --------------------------------------------------------------------- */
 const liens = (d, { env }) => {
   const groupes = Object.entries(CATEGORIES_LIEN).map(([cle, lib]) => ({ cle, lib, items: d.liens.filter((l) => l.categorie === cle) })).filter((g) => g.items.length);
   return `
   <section class="section" style="margin-top:0">
     <div class="section-tete"><h2>Liens et environnements</h2>${boutonNouveau(env, 'lien', 'Ajouter un lien')}</div>
-    ${groupes.length ? groupes.map((g) => `<div style="margin-bottom:var(--e-5)"><p class="surtitre" style="margin-bottom:8px">${echapper(g.lib)}</p><div class="grille grille-2">${g.items.map((l) => `<a class="lien-env" href="${echapper(l.url)}" target="_blank" rel="noopener">
-      <span class="ligne-icone${tonPlateforme(l.composant) ? ` ligne-icone--${tonPlateforme(l.composant)}` : ''}">${icone(iconePlateforme(l.composant) || (l.categorie === 'code' ? 'code' : l.categorie === 'design' ? 'sparkle' : l.categorie === 'mobile' ? 'releases' : 'externe'))}</span>
-      <span style="min-width:0"><span class="t-corps-fort" style="display:block">${echapper(l.nom)}${l.environnement ? ` <span class="etiquette" style="vertical-align:middle">${echapper(l.environnement)}</span>` : ''}${l.visibilite === 'interne' ? ' <span class="etiquette">Interne</span>' : ''}</span><span class="url" style="display:block">${echapper(l.url.replace(/^https?:\/\//, ''))}</span>${l.description ? `<span class="t-micro t-3" style="display:block">${echapper(l.description)}</span>` : ''}</span>
-      <span class="rang" style="gap:2px">${env.role === 'equipe' ? `<button class="btn-icone" type="button" data-action="editer" data-genre="lien" data-id="${echapper(l.id)}" aria-label="Modifier" onclick="event.preventDefault()">${icone('edit')}</button>` : ''}<span class="chevron" style="color:var(--encre-4)">${icone('externe')}</span></span>
-    </a>`).join('')}</div></div>`).join('')
+    ${groupes.length ? groupes.map((g) => `<div style="margin-bottom:var(--e-5)" data-groupe-liens="${echapper(g.cle)}"><p class="surtitre" style="margin-bottom:8px">${echapper(g.lib)}</p><div class="grille grille-2">${g.items.map((l) => `<a class="lien-env" href="${echapper(l.url)}" target="_blank" rel="noopener">
+      <span class="ligne-icone${tonPlateforme(l.composant) ? ` ligne-icone--${tonPlateforme(l.composant)}` : ''}">${icone(iconePlateforme(l.composant) || (l.categorie === 'code' ? 'code' : l.categorie === 'design' ? 'sparkle' : l.categorie === 'mobile' ? 'releases' : l.categorie === 'acces' ? 'cle' : 'externe'))}</span>
+      <span style="min-width:0"><span class="t-corps-fort" style="display:block">${echapper(l.nom)}${l.environnement ? ` <span class="etiquette" style="vertical-align:middle">${echapper(l.environnement)}</span>` : ''}${l.visibilite === 'interne' ? ' <span class="etiquette">Interne</span>' : ''}</span><span class="url" style="display:block">${echapper(l.url.replace(/^https?:\/\//, ''))}</span>${l.description ? `<span class="t-micro t-3" style="display:block">${echapper(l.description)}</span>` : ''}${l.categorie === 'acces' && l.identifiants ? `<span class="t-micro" style="display:block;margin-top:4px"><span class="t-3">Identifiant ·</span> <span class="t-mono" data-identifiants>${echapper(l.identifiants)}</span></span>` : ''}</span>
+      <span class="rang" style="gap:2px">${l.categorie === 'acces' && l.identifiants ? `<button class="btn btn-doux btn-petit" type="button" data-action="copier-identifiants" data-id="${echapper(l.id)}" onclick="event.preventDefault()">${icone('copier')} Copier</button>` : ''}${env.role === 'equipe' ? `<button class="btn-icone" type="button" data-action="editer" data-genre="lien" data-id="${echapper(l.id)}" aria-label="Modifier" onclick="event.preventDefault()">${icone('edit')}</button>` : ''}<span class="chevron" style="color:var(--encre-4)">${icone('externe')}</span></span>
+    </a>`).join('')}</div>${g.cle === 'acces' ? '<p class="aide" style="margin-top:8px">Le mot de passe ne s\'écrit jamais ici : il vous est transmis à part.</p>' : ''}</div>`).join('')
     : vide({ icone: 'liens', titre: 'Aucun lien', texte: 'Production, stores, environnements de test, maquettes : tout au même endroit.' })}
   </section>`;
 };
 
 /* --- Réunions -------------------------------------------------------------------- */
 const reunions = (d, { env, pid }) => {
-  const aVenir = d.reunions.filter((r) => joursAvant(r.date) >= 0).sort(parDateAsc('date'));
-  const passees = d.reunions.filter((r) => joursAvant(r.date) < 0).sort(parDateDesc('date'));
+  /* « À venir » raisonne à l'heure, comme l'accueil (reunionAVenir) : une
+     réunion de ce matin est passée l'après-midi. */
+  const aVenir = d.reunions.filter(reunionAVenir).sort(parDateAsc('date'));
+  const passees = d.reunions.filter((r) => !reunionAVenir(r)).sort(parDateDesc('date'));
   const bloc = (r) => ligne({
-    icone: 'reunions', ton: joursAvant(r.date) >= 0 ? 'bleu' : '',
+    icone: 'reunions', ton: reunionAVenir(r) ? 'bleu' : '',
     titre: echapper(r.titre), sous: `${echapper(dateHeure(r.date))}${r.duree ? ` · ${r.duree} min` : ''}${(r.participants || []).length ? ` · ${echapper(r.participants.map((p) => p.nom || p.email).join(', '))}` : ''}${r.visibilite === 'interne' ? ' · Interne' : ''}`,
-    fin: `${r.lien && joursAvant(r.date) >= 0 ? `<a class="btn btn-secondaire btn-petit" href="${echapper(r.lien)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${icone('video')} Rejoindre</a>` : ''}${r.compteRendu ? '<span class="etiquette">Compte rendu</span>' : ''}`,
+    fin: `${r.lien && reunionAVenir(r) ? `<a class="btn btn-secondaire btn-petit" href="${echapper(r.lien)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${icone('video')} Rejoindre</a>` : ''}${r.compteRendu ? '<span class="etiquette">Compte rendu</span>' : ''}`,
     action: 'ouvrir-reunion', attrs: `data-id="${echapper(r.id)}"`,
   });
   return `
   <section class="section" style="margin-top:0">
-    <div class="section-tete"><h2>Réunions</h2><div class="rang">${env.role === 'equipe' ? boutonNouveau(env, 'reunion', 'Programmer') : `<a class="btn btn-secondaire btn-petit" href="#/messages/${echapper(pid)}">${icone('messages')} Demander un créneau</a>`}</div></div>
+    <div class="section-tete"><h2>Réunions</h2><div class="rang">${env.role === 'equipe' ? boutonNouveau(env, 'reunion', 'Programmer') : `<button class="btn btn-secondaire btn-petit" type="button" data-action="ecrire-bulle" data-texte="Je souhaite un créneau pour ">${icone('messages')} Demander un créneau</button>`}</div></div>
     ${aVenir.length ? `<p class="surtitre" style="margin-bottom:8px">À venir</p><div class="liste" style="margin-bottom:var(--e-6)">${aVenir.map(bloc).join('')}</div>` : ''}
     ${passees.length ? `<p class="surtitre" style="margin-bottom:8px">Passées</p><div class="liste">${passees.map(bloc).join('')}</div>` : ''}
     ${!d.reunions.length ? vide({ icone: 'reunions', titre: 'Aucune réunion', texte: 'Les rendez-vous, leur ordre du jour et leur compte rendu seront ici.' }) : ''}
   </section>`;
 };
 
-const ouvrirReunion = (r, { pid, env }) => {
+/*
+ * La fiche d'une réunion, ouverte d'un clic ou par son adresse
+ * (#/projets/:id/reunions/:rid). Le client y coche ses actions, y prend le
+ * fichier d'agenda tant qu'elle est à venir, et lit le compte rendu daté.
+ */
+const ouvrirReunion = (r, d, { pid, env }) => {
   const equipe = env.role === 'equipe';
+  const aVenir = reunionAVenir(r);
+  const sansContenu = !r.ordreDuJour && !r.compteRendu && !r.decisions && !(r.actions || []).length;
   const m = modale({
-    titre: r.titre, sousTitre: `${dateHeure(r.date)}${r.duree ? ` · ${r.duree} min` : ''}`, feuille: true,
+    titre: r.titre, sousTitre: `${dateHeure(r.date)}${r.duree ? ` · ${r.duree} min` : ''}${aVenir ? '' : ' · passée'}`, feuille: true,
     corps: `
-      ${r.lien ? `<a class="btn btn-principal" href="${echapper(r.lien)}" target="_blank" rel="noopener">${icone('video')} Rejoindre la réunion</a>` : ''}
-      <button class="btn btn-secondaire" type="button" data-ics style="margin-left:8px">${icone('calendrier')} Ajouter à mon agenda</button>
+      <div class="rang" style="gap:8px">
+        ${r.lien && aVenir ? `<a class="btn btn-principal" href="${echapper(r.lien)}" target="_blank" rel="noopener">${icone('video')} Rejoindre la réunion</a>` : ''}
+        ${aVenir ? `<button class="btn btn-secondaire" type="button" data-ics>${icone('calendrier')} Ajouter à mon agenda</button>` : ''}
+      </div>
+      ${r.lieu ? `<div style="margin-top:20px"><p class="surtitre">Lieu</p><p class="t-petit" style="margin-top:6px">${echapper(r.lieu)}</p></div>` : ''}
       ${(r.participants || []).length ? `<div style="margin-top:20px"><p class="surtitre">Participants</p><p class="t-petit" style="margin-top:6px">${echapper(r.participants.map((p) => p.nom || p.email).join(', '))}</p></div>` : ''}
       ${r.ordreDuJour ? `<div style="margin-top:20px"><p class="surtitre">Ordre du jour</p><div class="prose t-corps" style="margin-top:6px">${enParagraphes(r.ordreDuJour)}</div></div>` : ''}
-      ${r.compteRendu ? `<div style="margin-top:20px"><p class="surtitre">Compte rendu</p><div class="prose t-corps" style="margin-top:6px">${avecLiens(r.compteRendu)}</div></div>` : ''}
+      ${r.compteRendu ? `<div style="margin-top:20px"><p class="surtitre">Compte rendu${r.compteRenduLe ? ` <span class="t-3" style="text-transform:none;letter-spacing:0">· publié le ${echapper(dateCourte(r.compteRenduLe))}</span>` : ''}</p><div class="prose t-corps" style="margin-top:6px">${avecLiens(r.compteRendu)}</div></div>` : ''}
       ${r.decisions ? `<div style="margin-top:20px"><p class="surtitre">Décisions</p><div class="prose t-corps" style="margin-top:6px">${enParagraphes(r.decisions)}</div></div>` : ''}
-      ${(r.actions || []).length ? `<div style="margin-top:20px"><p class="surtitre">Actions</p>${r.actions.map((a) => `<label class="coche${a.fait ? ' faite' : ''}"><input type="checkbox" ${a.fait ? 'checked' : ''} disabled><span>${echapper(a.texte)}</span></label>`).join('')}</div>` : ''}
-      ${!r.ordreDuJour && !r.compteRendu ? '<p class="t-petit t-3" style="margin-top:20px">Pas encore de contenu pour cette réunion.</p>' : ''}`,
-    pied: equipe ? `<button class="btn btn-danger" type="button" data-suppr>Supprimer</button><span class="pousse"></span><button class="btn btn-secondaire" type="button" data-fermer>Fermer</button><button class="btn btn-principal" type="button" data-editer>Modifier</button>` : `<button class="btn btn-principal" type="button" data-fermer>Fermer</button>`,
+      ${(r.actions || []).length ? `<div style="margin-top:20px"><p class="surtitre">Actions</p><p class="t-micro t-3" style="margin-top:2px">${equipe ? 'Le client peut cocher ce qui est fait.' : 'Cochez ce que vous avez fait : Capmedia le voit aussitôt.'}</p>${r.actions.map((a, i) => `<label class="coche${a.fait ? ' faite' : ''}"><input type="checkbox" data-action-reunion="${i}" ${a.fait ? 'checked' : ''}><span>${echapper(a.texte)}</span></label>`).join('')}</div>` : ''}
+      ${sansContenu ? '<p class="t-petit t-3" style="margin-top:20px">Pas encore de contenu pour cette réunion.</p>' : ''}`,
+    pied: equipe
+      ? `<button class="btn btn-danger" type="button" data-suppr>Supprimer</button><span class="pousse"></span><button class="btn btn-secondaire" type="button" data-fermer>Fermer</button><button class="btn btn-principal" type="button" data-editer>Modifier</button>`
+      : `<button class="btn btn-secondaire" type="button" data-question>Écrire à Capmedia</button><button class="btn btn-principal" type="button" data-fermer>Fermer</button>`,
   });
   sur(m.el, 'click', '[data-editer]', () => { m.fermer(); editer('reunion', env, { pid, fiche: r }); });
   sur(m.el, 'click', '[data-suppr]', async () => { const ok = await supprimer('reunion', env, { pid, fiche: r, libelle: 'cette réunion' }); if (ok) m.fermer(); });
-  sur(m.el, 'click', '[data-ics]', () => telechargerICS(r));
-};
-
-const telechargerICS = (r) => {
-  const debut = r.date && r.date.toDate ? r.date.toDate() : new Date(r.date);
-  const fin = new Date(debut.getTime() + (Number(r.duree) || 60) * 60000);
-  const f = (d) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
-  const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Capmedia//Hub//FR', 'BEGIN:VEVENT', `UID:${r.id}@capmedia.app`, `DTSTAMP:${f(new Date())}`, `DTSTART:${f(debut)}`, `DTEND:${f(fin)}`, `SUMMARY:${(r.titre || '').replace(/\n/g, ' ')}`, r.lien ? `URL:${r.lien}` : '', r.ordreDuJour ? `DESCRIPTION:${r.ordreDuJour.replace(/\n/g, '\\n')}` : '', 'END:VEVENT', 'END:VCALENDAR'].filter(Boolean).join('\r\n');
-  const url = URL.createObjectURL(new Blob([ics], { type: 'text/calendar' }));
-  const a = document.createElement('a'); a.href = url; a.download = `${(r.titre || 'reunion').replace(/[^\w-]+/g, '-')}.ics`; a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  sur(m.el, 'click', '[data-ics]', () => telechargerICS(r, { nomProjet: () => (d.projet || {}).nom || '' }));
+  sur(m.el, 'click', '[data-question]', () => { m.fermer(); ouvrirBulle(pid, `À propos de la réunion « ${r.titre} » : `); });
+  /* Cocher, c'est écrire la liste entière avec la case changée : la règle
+     ne laisse passer que ce champ. Si l'écriture échoue, la case revient. */
+  sur(m.el, 'change', '[data-action-reunion]', async (el) => {
+    const i = Number(el.dataset.actionReunion);
+    const fait = el.checked;
+    el.disabled = true;
+    try {
+      const actuelles = (magasin.lire(K.reunions(pid)) || []).find((x) => x.id === r.id);
+      await ecrire.cocherAction(r.id, (actuelles || r).actions || [], i, fait);
+      el.closest('.coche').classList.toggle('faite', fait);
+    } catch (e) { el.checked = !fait; toast("L'action n'a pas pu être enregistrée.", 'erreur'); } finally { el.disabled = false; }
+  });
 };
 
 /* --- Notes et décisions ------------------------------------------------------------ */

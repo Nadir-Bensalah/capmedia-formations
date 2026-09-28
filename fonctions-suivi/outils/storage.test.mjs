@@ -15,7 +15,7 @@
 
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
-import { ref, uploadString, getBytes, listAll, updateMetadata } from 'firebase/storage';
+import { ref, uploadString, getBytes, listAll, updateMetadata, deleteObject } from 'firebase/storage';
 import { doc, setDoc } from 'firebase/firestore';
 
 /* L'émulateur Storage traite l'écriture sur un objet EXISTANT comme une
@@ -208,7 +208,69 @@ const ecritureClient = /documents\/client[\s\S]*?allow create, update: if \(estE
 if (ecritureClient && /allow get, list: if estEquipe\(\) \|\| surSonProjet\(projetId\);/.test(blocs(transition))) { ok += 1; console.log('  ok     la transition rend à l ancien rangement ses droits d avant (lecture des membres, dépôt client)'); }
 else { ecarts.push('la transition ne rend pas les droits d avant'); console.log('  ÉCART  la transition ne rend pas les droits d avant'); }
 
+console.log('\n== Les réponses du client : pièces d une validation, pièces d une tâche (brief B)');
+/* Le client dépose ses remarques sous « reponse » de la validation, et sa
+   réponse sous « reponse » de la tâche ; il relit ce qu'il a déposé,
+   l'équipe aussi. Un autre client ne lit rien, personne n'écrase, et la
+   racine des pièces de validation reste à l'équipe. */
+await doit('Le client joint une pièce à sa réponse de validation', uploadString(ref(client(), `projets/${P}/validations/st-v/reponse/remarque.png`), 'x', 'raw', png));
+await doit('et la relit', getBytes(ref(client(), `projets/${P}/validations/st-v/reponse/remarque.png`)));
+await doit('L équipe la lit', getBytes(ref(equipe(), `projets/${P}/validations/st-v/reponse/remarque.png`)));
+await refuse('Un autre client ne la lit pas', getBytes(ref(autreClient(), `projets/${P}/validations/st-v/reponse/remarque.png`)));
+await refuse('Le client ne dépose toujours pas à la racine des pièces de validation', uploadString(ref(client(), `projets/${P}/validations/st-v/maquette.png`), 'x', 'raw', png));
+await refuse('ni dans la réponse d un autre projet', uploadString(ref(client(), `projets/${Q}/validations/st-v/reponse/x.png`), 'x', 'raw', png));
+await refuse('ni un exécutable', uploadString(ref(client(), `projets/${P}/validations/st-v/reponse/x.exe`), 'x', 'raw', { contentType: 'application/x-msdownload' }));
+await ecrasement('ni n écrase sa propre pièce', uploadString(ref(client(), `projets/${P}/validations/st-v/reponse/remarque.png`), 'y', 'raw', png));
+await refuse('ni ne liste le dossier de sa réponse', listAll(ref(client(), `projets/${P}/validations/st-v/reponse`)));
+await doit('Le client joint une pièce à sa réponse sur une tâche', uploadString(ref(client(), `projets/${P}/taches/st-t/reponse/capture.png`), 'x', 'raw', png));
+await doit('et la relit', getBytes(ref(client(), `projets/${P}/taches/st-t/reponse/capture.png`)));
+await doit('L équipe la lit', getBytes(ref(equipe(), `projets/${P}/taches/st-t/reponse/capture.png`)));
+await refuse('Un autre client ne la lit pas', getBytes(ref(autreClient(), `projets/${P}/taches/st-t/reponse/capture.png`)));
+await refuse('Le client ne dépose pas hors de « reponse » sur une tâche', uploadString(ref(client(), `projets/${P}/taches/st-t/autre.png`), 'x', 'raw', png));
+await ecrasement('ni n écrase sa pièce', uploadString(ref(client(), `projets/${P}/taches/st-t/reponse/capture.png`), 'y', 'raw', png));
+
 if (nonVerifiables.length) console.log(`\n${nonVerifiables.length} essai(s) d écrasement non vérifiable(s) au banc (l émulateur confond écrasement et création) : gardés par le texte des règles ci-dessus.`);
+console.log('\n== Les pièces d une évolution de maintenance (agent D, 27/09/2026)');
+/* Le client joint une capture à sa proposition, sous l identifiant de
+   l évolution ; lui et l équipe la lisent, un autre client non. Le dossier
+   ne se parcourt pas, et rien ne s y remplace ni ne s y efface côté client. */
+/* deleteObject vient de l'import de tête (ajouté par l'agent E). */
+await doit('Le client joint une capture à son évolution', uploadString(ref(client(), `projets/${P}/maintenance/st-ev/croquis.png`), 'x', 'raw', png));
+await doit('et la relit', getBytes(ref(client(), `projets/${P}/maintenance/st-ev/croquis.png`)));
+await doit('L équipe la lit aussi', getBytes(ref(equipe(), `projets/${P}/maintenance/st-ev/croquis.png`)));
+await refuse('Un autre client ne la lit pas', getBytes(ref(autreClient(), `projets/${P}/maintenance/st-ev/croquis.png`)));
+await refuse('Le testeur ne la lit pas', getBytes(ref(testeur(), `projets/${P}/maintenance/st-ev/croquis.png`)));
+await refuse('Le client ne parcourt pas le dossier des évolutions', listAll(ref(client(), `projets/${P}/maintenance`)));
+await refuse('Le client ne joint pas un exécutable', uploadString(ref(client(), `projets/${P}/maintenance/st-ev/x.exe`), 'x', 'raw', { contentType: 'application/x-msdownload' }));
+await refuse('Le client ne dépose pas chez un autre projet', uploadString(ref(client(), `projets/${Q}/maintenance/st-ev/croquis.png`), 'x', 'raw', png));
+await refuse('Le client ne modifie pas la pièce déposée', updateMetadata(ref(client(), `projets/${P}/maintenance/st-ev/croquis.png`), { customMetadata: { visibilite: 'interne' } }));
+await refuse('Le client n efface pas la pièce', deleteObject(ref(client(), `projets/${P}/maintenance/st-ev/croquis.png`)));
+await doit('L équipe efface la pièce', deleteObject(ref(equipe(), `projets/${P}/maintenance/st-ev/croquis.png`)));
+if (/maintenance\/\{evolutionId\}/.test(readFileSync(new URL('../../suivi/storage.transition.rules', import.meta.url), 'utf8'))) { ok += 1; console.log('  ok     la règle des évolutions est aussi dans storage.transition.rules'); }
+else { ecarts.push('storage.transition.rules n a pas la règle des évolutions'); console.log('  ÉCART  storage.transition.rules n a pas la règle des évolutions'); }
+
+console.log('\n== Retirer son propre fichier : l auteur, et lui seul');
+/* La fiche dit qui a déposé : le client efface l'objet de SON dépôt (la
+   fiche est à son nom, visible client, sous ce projet), jamais celui de
+   l'équipe ni celui d'un autre client. L'équipe efface ce qu'elle veut. */
+await env.withSecurityRulesDisabled(async (ctx) => {
+  const b = ctx.firestore();
+  const s = ctx.storage();
+  await setDoc(doc(b, 'fichiers/st-mien'), { projet: P, visibilite: 'client', archive: false, par: { uid: 'st-client', cote: 'client' } });
+  await setDoc(doc(b, 'fichiers/st-mien-interne'), { projet: P, visibilite: 'interne', archive: false, par: { uid: 'st-client', cote: 'client' } });
+  await setDoc(doc(b, 'fichiers/st-mien-ailleurs'), { projet: Q, visibilite: 'client', archive: false, par: { uid: 'st-client', cote: 'client' } });
+  for (const c of [`projets/${P}/fichiers/st-mien/m.png`, `projets/${P}/fichiers/st-mien-interne/i.png`, `projets/${P}/fichiers/st-mien-ailleurs/a.png`, `projets/${P}/fichiers/st-visible/z.png`]) await uploadString(ref(s, c), 'x', 'raw', png);
+});
+await refuse('Un autre client n efface pas mon fichier', deleteObject(ref(autreClient(), `projets/${P}/fichiers/st-mien/m.png`)));
+await refuse('Le client n efface pas un fichier de l équipe', deleteObject(ref(client(), `projets/${P}/fichiers/st-visible/z.png`)));
+await refuse('ni un fichier à son nom dont la fiche n est plus visible client', deleteObject(ref(client(), `projets/${P}/fichiers/st-mien-interne/i.png`)));
+await refuse('ni un fichier dont la fiche pointe un autre projet', deleteObject(ref(client(), `projets/${P}/fichiers/st-mien-ailleurs/a.png`)));
+await refuse('Un testeur n efface rien', deleteObject(ref(testeur(), `projets/${P}/fichiers/st-mien/m.png`)));
+await doit('Le client efface le fichier qu il a lui-même déposé', deleteObject(ref(client(), `projets/${P}/fichiers/st-mien/m.png`)));
+await doit('L équipe efface un fichier du projet', deleteObject(ref(equipe(), `projets/${P}/fichiers/st-visible/z.png`)));
+if (/auteurDuFichier\(projetId, fichierId\)/.test(readFileSync(new URL('../../suivi/storage.transition.rules', import.meta.url), 'utf8'))) { ok += 1; console.log('  ok     la règle « retirer le sien » est aussi dans storage.transition.rules'); }
+else { ecarts.push('storage.transition.rules n a pas la règle « retirer le sien »'); console.log('  ÉCART  storage.transition.rules n a pas la règle « retirer le sien »'); }
+
 console.log(`\n${ok} contrôle(s) conforme(s)${ecarts.length ? `, ${ecarts.length} ÉCART(S) :\n  - ${ecarts.join('\n  - ')}` : ''}`);
 await env.cleanup();
 process.exit(ecarts.length ? 1 : 0);

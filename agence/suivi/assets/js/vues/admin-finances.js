@@ -27,6 +27,7 @@ const deposer = (env, projets, type) => {
         <p class="aide" id="d-portee-aide">${echapper(PORTEES_DEVIS.initial.aide)}</p></div>` : ''}
       <div class="forme-rang"><div class="groupe"><label class="etiquette-champ" for="d-montant">Montant HT (€)</label><input class="champ" id="d-montant" name="montant" type="number" min="0" step="0.01"></div><div class="groupe"><label class="etiquette-champ" for="d-tva">TVA (%)</label><input class="champ" id="d-tva" name="tva" type="number" min="0" step="0.1" value="0"><p class="aide">0 pour une auto-entreprise sans TVA.</p></div></div>
       <div class="groupe"><label class="etiquette-champ" for="d-echeance">${type === 'devis' ? 'Valable jusqu\'au' : 'Échéance de paiement'}</label><input class="champ" id="d-echeance" name="echeance" type="date"></div>
+      ${type === 'facture' ? `<div class="groupe"><label class="etiquette-champ" for="d-devis">Découle du devis <span class="facultatif">(facultatif)</span></label><select class="select" id="d-devis" name="devis"><option value="">Aucun</option></select><p class="aide">Le client remonte de la facture au devis qu'il a accepté.</p></div>` : ''}
       <div class="groupe"><label class="etiquette-champ" for="d-desc">Détail <span class="facultatif">(facultatif)</span></label><textarea class="zone" id="d-desc" name="description" rows="2" maxlength="2000"></textarea></div>
       ${type === 'devis' ? `<div class="groupe"><label class="etiquette-champ" for="d-etapes">Les lignes du devis, en étapes</label><textarea class="zone" id="d-etapes" name="etapes" rows="5" placeholder="Une ligne par étape, dans l'ordre du devis :
 Cadrage et maquettes · 1200
@@ -44,6 +45,19 @@ Mise en ligne · 600"></textarea><p class="aide">Chaque ligne devient une étape
   const idDocument = nouvelId('documents');
   const rebrancher = () => { boite = depot(m.el.querySelector('#d-depot'), { chemin: () => `projets/${sel.value}/pieces/${idDocument}`, max: 1, texte: 'Déposez le <strong>PDF</strong>.', aide: '' }); };
   rebrancher(); sel.addEventListener('change', rebrancher);
+
+  /* Les devis du projet choisi, pour dire d'où découle la facture. La
+     liste suit le projet. */
+  const selDevis = forme.querySelector('#d-devis');
+  if (selDevis) {
+    const proposerDevis = () => {
+      const liste = (magasin.lire(K.documentsTous) || []).concat(magasin.lire(K.documents(sel.value)) || [])
+        .filter((x, i, l) => x.type === 'devis' && x.projet === sel.value && !x.archive && l.findIndex((y) => y.id === x.id) === i)
+        .sort(parDateDesc('date'));
+      selDevis.innerHTML = `<option value="">Aucun</option>${liste.map((x) => `<option value="${echapper(x.id)}">${echapper(`${x.numero || 'Devis'} · ${x.libelle || ''}`)}${x.statut === 'accepte' ? '' : ` (${echapper((STATUTS_DEVIS[x.statut] || {}).equipe || (STATUTS_DEVIS[x.statut] || {}).libelle || x.statut)})`}</option>`).join('')}`;
+    };
+    proposerDevis(); sel.addEventListener('change', proposerDevis);
+  }
 
   /* La portée propose d'elle-même ce qui est juste : un projet qui n'a pas
      encore de devis fondateur en attend un, un projet déjà lancé attend un
@@ -79,7 +93,7 @@ Mise en ligne · 600"></textarea><p class="aide">Chaque ligne devient une étape
       return { titre: (m2 ? m2[1] : l).trim(), montant: Number.isFinite(somme) ? somme : null };
     }).filter((l) => l.titre);
     let reponse = null;
-    if (await agir(m.pied.querySelector('[type="submit"]'), async () => { reponse = await appelServeur('deposerDocument', { idDocument, projet: d.projet, type, numero: d.numero, libelle: d.libelle, montant: d.montant, tva: d.tva || 0, echeance: d.echeance || null, date: d.date || null, description: d.description, portee: d.portee, fichier, liens }); return reponse; }, `${type === 'devis' ? 'Devis' : 'Facture'} déposé.`)) {
+    if (await agir(m.pied.querySelector('[type="submit"]'), async () => { reponse = await appelServeur('deposerDocument', { idDocument, projet: d.projet, type, numero: d.numero, libelle: d.libelle, montant: d.montant, tva: d.tva || 0, echeance: d.echeance || null, date: d.date || null, description: d.description, portee: d.portee, devis: d.devis || null, fichier, liens }); return reponse; }, `${type === 'devis' ? 'Devis' : 'Facture'} déposé.`)) {
       if (type === 'devis' && lignes.length && reponse && reponse.id) {
         const deja = (magasin.lire(K.jalonsTous) || []).filter((x) => (x.projet || x._parent) === d.projet).length;
         /* L'étape se voit de toute l'équipe du projet et du client ; son
@@ -99,11 +113,15 @@ Mise en ligne · 600"></textarea><p class="aide">Chaque ligne devient une étape
 };
 
 const enregistrerPaiement = (env, facture, projets) => {
+  /* Le client a déclaré un règlement : ses valeurs sont proposées, il
+     suffit de vérifier et d'enregistrer. Enregistrer confirme la déclaration. */
+  const declare = facture.reglementDeclare && !facture.reglementDeclare.confirme ? facture.reglementDeclare : null;
   const m = modale({
     titre: 'Enregistrer un paiement', sousTitre: `${facture.numero || ''} · ${(projets.find((p) => p.id === facture.projet) || {}).nom || ''}`,
     corps: `<form class="forme" id="f-pai" novalidate>
-      <div class="forme-rang"><div class="groupe"><label class="etiquette-champ" for="p-montant">Montant (€ TTC)</label><input class="champ" id="p-montant" name="montant" type="number" min="0" step="0.01" value="${ttcDe(facture).toFixed(2)}"></div><div class="groupe"><label class="etiquette-champ" for="p-date">Date</label><input class="champ" id="p-date" name="date" type="date" value="${dateISO(new Date())}"></div></div>
-      <div class="forme-rang"><div class="groupe"><label class="etiquette-champ" for="p-moyen">Moyen</label><select class="select" id="p-moyen" name="moyen">${optionsDe(MOYENS_PAIEMENT, 'virement')}</select></div><div class="groupe"><label class="etiquette-champ" for="p-ref">Référence <span class="facultatif">(facultatif)</span></label><input class="champ" id="p-ref" name="reference" maxlength="80"></div></div>
+      ${declare ? `<p class="aide" style="margin-bottom:12px">Règlement déclaré par ${echapper(declare.nom || 'le client')} le ${echapper(dateCourte(declare.date))} : les valeurs ci-dessous sont les siennes. Enregistrer le confirme chez lui.</p>` : ''}
+      <div class="forme-rang"><div class="groupe"><label class="etiquette-champ" for="p-montant">Montant (€ TTC)</label><input class="champ" id="p-montant" name="montant" type="number" min="0" step="0.01" value="${(declare && Number(declare.montant) > 0 ? Number(declare.montant) : ttcDe(facture)).toFixed(2)}"></div><div class="groupe"><label class="etiquette-champ" for="p-date">Date</label><input class="champ" id="p-date" name="date" type="date" value="${dateISO(declare && declare.date ? declare.date : new Date())}"></div></div>
+      <div class="forme-rang"><div class="groupe"><label class="etiquette-champ" for="p-moyen">Moyen</label><select class="select" id="p-moyen" name="moyen">${optionsDe(MOYENS_PAIEMENT, (declare && declare.moyen) || 'virement')}</select></div><div class="groupe"><label class="etiquette-champ" for="p-ref">Référence <span class="facultatif">(facultatif)</span></label><input class="champ" id="p-ref" name="reference" maxlength="80" value="${echapper((declare && declare.reference) || '')}"></div></div>
       <div class="groupe"><label class="etiquette-champ" for="p-note">Note <span class="facultatif">(interne)</span></label><input class="champ" id="p-note" name="note" maxlength="200"></div></form>`,
     pied: `<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button><button class="btn btn-principal" type="submit" form="f-pai">Enregistrer</button>`,
   });
@@ -139,7 +157,7 @@ export const vue = async (ctx, env) => {
 
     const ligneDoc = (d) => ligne({ icone: d.type === 'devis' ? 'receipt' : 'euro', ton: d.type === 'devis' ? (['envoye', 'consulte'].includes(d.statut) ? 'ambre' : d.statut === 'accepte' ? 'vert' : '') : (d.statut === 'en-retard' || (d.statut === 'a-payer' && d.echeance && joursAvant(d.echeance) < 0) ? 'rouge' : FACTURES_DUES.includes(d.statut) ? 'ambre' : d.statut === 'payee' ? 'vert' : ''),
       titre: `<span class="t-mono t-3" style="font-weight:400">${echapper(d.numero || '')}</span> ${echapper(d.libelle || '')}`, sous: `${echapper(nomProjet(d.projet))} · ${echapper(dateCourte(d.date))}${d.echeance ? ` · ${retard(d.echeance) && d.statut !== 'payee' ? `en retard de ${echapper(retard(d.echeance))}` : `${d.type === 'devis' ? 'expire' : 'échéance'} ${echapper(dateCourte(d.echeance))}`}` : ''}${['envoye', 'consulte'].includes(d.statut) ? ` · envoyé il y a ${echapper(age(d.date))}` : ''}`,
-      fin: `${d.fichier && d.fichier.chemin ? '' : '<span class="etiquette" title="Le client ne peut rien télécharger">Sans PDF</span>'}${(d.liens || []).length ? `<span class="puce puce--bleu"><i></i>${d.liens.length} lien${d.liens.length > 1 ? 's' : ''}</span>` : ''}<span class="nb t-fort">${echapper(montantPiece(d))}</span>${pastille(d.type === 'devis' ? STATUTS_DEVIS : STATUTS_FACTURE, d.statut, { equipe: true })}<button class="btn-icone" type="button" data-menu-doc="${echapper(d.id)}" aria-label="Actions">${icone('points')}</button>`, action: 'ouvrir', attrs: `data-id="${echapper(d.id)}"` });
+      fin: `${d.fichier && d.fichier.chemin ? '' : '<span class="etiquette" title="Le client ne peut rien télécharger">Sans PDF</span>'}${(d.liens || []).length ? `<span class="puce puce--bleu"><i></i>${d.liens.length} lien${d.liens.length > 1 ? 's' : ''}</span>` : ''}${d.type === 'facture' && d.reglementDeclare && !d.reglementDeclare.confirme && d.statut !== 'payee' ? '<span class="puce puce--bleu"><i></i>Règlement déclaré</span>' : ''}<span class="nb t-fort">${echapper(montantPiece(d))}</span>${pastille(d.type === 'devis' ? STATUTS_DEVIS : STATUTS_FACTURE, d.statut, { equipe: true })}<button class="btn-icone" type="button" data-menu-doc="${echapper(d.id)}" aria-label="Actions">${icone('points')}</button>`, action: 'ouvrir', attrs: `data-id="${echapper(d.id)}"` });
 
     sortie.innerHTML = `<div class="page">
       <div class="page-tete"><div><h1>Finances</h1><p class="chapo">Devis, factures et paiements de tous les projets.</p></div><div class="actions"><select class="select" id="f-projet" style="width:auto"><option value="">Tous les projets</option>${projets.map((p) => `<option value="${echapper(p.id)}" ${etat.projet === p.id ? 'selected' : ''}>${echapper(p.nom)}</option>`).join('')}</select><button class="btn btn-secondaire" type="button" data-deposer="devis">${icone('receipt')} Devis</button><button class="btn btn-principal" type="button" data-deposer="facture">${icone('euro')} Facture</button></div></div>
@@ -151,7 +169,7 @@ export const vue = async (ctx, env) => {
       : (paiements.length ? `<div class="liste">${paiements.slice().sort(parDateDesc('date')).map((p) => { const f = documents.find((d) => d.id === p.facture) || {}; return ligne({ icone: 'paiement', ton: 'vert', titre: echapper(montantTTC(p.montant, 2)), sous: `${echapper(dateCourte(p.date))} · ${echapper(MOYENS_PAIEMENT[p.moyen] || p.moyen || '')} · ${echapper(f.numero || '')} · ${echapper(nomProjet(p.projet))}${p.reference ? ` · ${echapper(p.reference)}` : ''}${noteDuPaiement(p.id) ? ` · ${echapper(noteDuPaiement(p.id))}` : ''}` }); }).join('')}</div>` : vide({ icone: 'paiement', titre: 'Aucun paiement', compact: true }))}
     </div>`;
     sortie.querySelector('#f-projet').addEventListener('change', (e) => { etat.projet = e.target.value; rendre(); });
-    if (ouvert) { const d = documents.find((x) => x.id === ouvert); ouvert = null; if (d) ouvrirDocument(d, env, { projets, paiements }).then(() => naviguer('/finances', { remplacer: true })); }
+    if (ouvert) { const d = documents.find((x) => x.id === ouvert); ouvert = null; if (d) ouvrirDocument(d, env, { projets, paiements, documents }).then(() => naviguer('/finances', { remplacer: true })); }
   };
 
   const gestes = sur(sortie, 'click', '[data-onglet], [data-deposer], [data-action="ouvrir"], [data-menu-doc], [data-marquer-retard]', async (el, ev) => {
@@ -181,7 +199,7 @@ export const vue = async (ctx, env) => {
       return;
     }
     const d = documents.find((x) => x.id === el.dataset.id);
-    if (d) ouvrirDocument(d, env, { projets, paiements: magasin.lire(K.paiementsTous) || [] });
+    if (d) ouvrirDocument(d, env, { projets, paiements: magasin.lire(K.paiementsTous) || [], documents });
   });
   [K.projets, K.documentsTous, K.paiementsTous, K.paiementsInternes].forEach((c) => lot.sur(c, rendre));
   return () => { gestes(); lot.fin(); };

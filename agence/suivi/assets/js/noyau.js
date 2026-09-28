@@ -104,11 +104,13 @@ export const TYPES = {
   'autre':          { libelle: 'Autre',                   court: 'Autre',     icone: 'inbox',   aide: 'Tout ce qui ne rentre pas ailleurs.' },
 };
 
+/* « aide » : ce que le formulaire dit au client pour choisir. Les quatre
+   niveaux sont expliqués, pas seulement les deux premiers. */
 export const URGENCES = {
-  'bloquant':  { libelle: 'Bloquant',  rang: 1, voile: 'rouge' },
-  'critique':  { libelle: 'Critique',  rang: 2, voile: 'rouge' },
-  'important': { libelle: 'Important', rang: 3, voile: 'ambre' },
-  'mineur':    { libelle: 'Mineur',    rang: 4, voile: 'gris' },
+  'bloquant':  { libelle: 'Bloquant',  rang: 1, voile: 'rouge', aide: 'vous ne pouvez plus travailler.' },
+  'critique':  { libelle: 'Critique',  rang: 2, voile: 'rouge', aide: 'une fonction majeure est cassée, vous contournez.' },
+  'important': { libelle: 'Important', rang: 3, voile: 'ambre', aide: 'à traiter dans le cours du projet.' },
+  'mineur':    { libelle: 'Mineur',    rang: 4, voile: 'gris',  aide: 'un détail, quand ce sera possible.' },
 };
 
 export const PLATEFORMES = {
@@ -577,8 +579,13 @@ export const STATUTS_TACHE = {
   'en-cours':       { libelle: 'En cours',          voile: 'bleu',   ordre: 2 },
   'en-revue':       { libelle: 'En revue',          voile: 'violet', ordre: 3 },
   'bloquee':        { libelle: 'Bloquée',           voile: 'rouge',  ordre: 4 },
-  'attente-client': { libelle: 'En attente client', voile: 'ambre',  ordre: 5 },
-  'terminee':       { libelle: 'Terminée',          voile: 'vert',   ordre: 6 },
+  /* « client » : ce que lit le client. « En attente client » est écrit
+     pour l'équipe ; lui, c'est « À vous ». */
+  'attente-client': { libelle: 'En attente client', voile: 'ambre',  ordre: 5, client: 'À vous' },
+  /* Le client a répondu depuis la fiche de la tâche : elle revient chez
+     nous, et quitte « En attente de vous ». */
+  'repondu':        { libelle: 'Réponse reçue',     voile: 'violet', ordre: 6, client: 'Réponse envoyée' },
+  'terminee':       { libelle: 'Terminée',          voile: 'vert',   ordre: 7 },
 };
 
 export const PRIORITES = {
@@ -600,6 +607,7 @@ export const TYPES_VALIDATION = {
   'document':       'Document',
   'devis':          'Devis',
   'changement':     'Changement',
+  'sortie':         'Sortie',
   'autre':          'Autre',
 };
 export const STATUTS_VALIDATION = {
@@ -617,7 +625,7 @@ export const CATEGORIES_FICHIER = {
   'devis':     'Devis',
   'factures':  'Factures',
   'cahier':    'Cahier des charges',
-  'assets':    'Assets',
+  'assets':    'Éléments (images, textes)',
   'logos':     'Logos',
   'captures':  'Captures',
   'livrables': 'Livrables',
@@ -636,6 +644,9 @@ export const CATEGORIES_LIEN = {
   'design':         'Design',
   'infrastructure': 'Infrastructure',
   'documentation':  'Documentation',
+  /* Les accès que le client doit connaître (compte store, compte de test) :
+     le lien porte alors un identifiant, jamais un mot de passe. */
+  'acces':          'Accès',
   'autre':          'Autre',
 };
 
@@ -671,7 +682,9 @@ export const TYPES_NOTE = {
 export const STATUTS_DEVIS = {
   'brouillon': { libelle: 'Brouillon',        voile: 'gris' },
   'envoye':    { libelle: 'À votre décision', voile: 'ambre', equipe: 'Envoyé' },
-  'consulte':  { libelle: 'Consulté',         voile: 'bleu' },
+  /* Ouvrir un devis ne vaut pas décision : le client lit toujours « À votre
+     décision », l'équipe sait qu'il l'a consulté. */
+  'consulte':  { libelle: 'À votre décision', voile: 'ambre', equipe: 'Consulté' },
   'accepte':   { libelle: 'Accepté',          voile: 'vert' },
   'refuse':    { libelle: 'Refusé',           voile: 'gris' },
   'expire':    { libelle: 'Expiré',           voile: 'gris' },
@@ -699,7 +712,17 @@ export const FACTURES_DUES = ['envoyee', 'a-payer', 'partielle', 'en-retard'];
    plus d'accepter, et rien ne le compte parmi ce qui attend le client. */
 export const devisExpire = (d) => Boolean(d) && d.type === 'devis' && ['envoye', 'consulte'].includes(d.statut) && Boolean(d.expiration) && joursAvant(d.expiration) < 0;
 export const devisADecider = (d) => Boolean(d) && d.type === 'devis' && ['envoye', 'consulte'].includes(d.statut) && !devisExpire(d);
-export const statutPiece = (d) => (devisExpire(d) ? 'expire' : d.statut);
+/* Une facture due dont l'échéance est passée est en retard, que l'équipe
+   l'ait marquée ou non : la fonction quotidienne pose le statut en base,
+   l'écran n'attend pas le lendemain matin pour le dire. */
+export const factureEnRetard = (d) => Boolean(d) && d.type === 'facture' && FACTURES_DUES.includes(d.statut) && Boolean(d.echeance) && joursAvant(d.echeance) < 0;
+export const statutPiece = (d) => (devisExpire(d) ? 'expire' : factureEnRetard(d) ? 'en-retard' : d.statut);
+/* Un devis dont les lignes se cochent sur la feuille de route : un devis
+   accepté, et lui seul. Un devis à décider ou refusé n'a pas de frise. */
+/* La frise « ligne par ligne » d'un devis : ce qu'il contient, pour un
+   devis à décider comme pour un devis accepté. Ni refusé, ni expiré, ni
+   annulé : ce n'est plus « ce que j'ai acheté » ni « ce qu'on me propose ». */
+export const devisFrisable = (d) => Boolean(d) && d.type === 'devis' && ['envoye', 'consulte', 'accepte'].includes(d.statut) && !devisExpire(d);
 export const MOYENS_PAIEMENT = { 'virement': 'Virement', 'carte': 'Carte', 'stripe': 'Stripe', 'cheque': 'Chèque', 'especes': 'Espèces', 'autre': 'Autre' };
 
 /* --- Les demandes de nouveau projet ------------------------------------- */
@@ -1184,6 +1207,17 @@ export const rienAAfficher = (titre, texte = '') => `
 export const TAILLE_MAX = 10 * 1024 * 1024;
 const TAILLE_MAX_VIDEO = 100 * 1024 * 1024;
 const TYPES_ACCEPTES = /^(image\/|video\/(mp4|quicktime|webm)$|application\/pdf$|text\/plain$|application\/zip$|application\/(msword|vnd\.openxmlformats-officedocument\.(wordprocessingml\.document|spreadsheetml\.sheet|presentationml\.presentation))$)/;
+
+/* Les formats acceptés, dits une seule fois et lus par tous les dépôts :
+   l'attribut « accept » du champ de fichier (le sélecteur ne propose que
+   ce qui passera), et le texte d'aide sous la zone. Avant, l'aide disait
+   « Images, PDF, vidéos courtes. 10 Mo » alors que Word, Excel et zip
+   passaient, et qu'une vidéo pouvait faire 100 Mo. Ce que dit ce texte
+   est exactement ce que TYPES_ACCEPTES et storage.rules acceptent. */
+export const FORMATS_ACCEPTES = {
+  accept: 'image/*,video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm,application/pdf,.pdf,text/plain,.txt,application/zip,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx',
+  aide: 'Images, PDF, documents Office, zip jusqu\'à 10 Mo ; vidéos mp4, mov, webm jusqu\'à 100 Mo.',
+};
 
 /**
  * Envoie un fichier et renvoie la fiche à ranger dans `pieces`.

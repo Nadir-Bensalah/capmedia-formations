@@ -4,13 +4,13 @@
    navigation vivante et la recherche.
    ========================================================================== */
 
-import { exigerSession, $, echapper, prenom, nomAffiche, OUVERTS, ATTEND_CLIENT, FACTURES_DUES, joursAvant, effacerSecretsLocaux, estResponsable } from './noyau.js';
-import { monterCoquille, definirNavigation, enregistrerRecherche } from './coquille.js';
-import { definir, demarrer, courant, surChangement } from './routeur.js';
+import { exigerSession, $, echapper, prenom, nomAffiche, OUVERTS, ATTEND_CLIENT, FACTURES_DUES, joursAvant, effacerSecretsLocaux, estResponsable, roleSur, ROLES_CLIENT, libellePlateforme } from './noyau.js';
+import { monterCoquille, definirNavigation, enregistrerRecherche, definirRoleProjet } from './coquille.js';
+import { definir, demarrer, courant, surChangement, naviguer } from './routeur.js';
 import * as magasin from './magasin.js';
 import { abonnerGlobal, K, G, agreger, enAttenteDeVous, nonLusProjet, ecrire, messagesDuProjet } from './donnees.js';
 import { icone } from './icones.js';
-import { avatarProjet } from './ui.js';
+import { avatarProjet, toast } from './ui.js';
 import { ouvrirAccueil, accueilVu, marquerAccueilVu } from './accueil-client.js';
 
 import * as accueil from './vues/accueil.js';
@@ -21,6 +21,7 @@ import * as brique from './vues/brique.js';
 import * as messages from './vues/messages.js';
 import * as valider from './vues/valider.js';
 import * as calendrier from './vues/calendrier.js';
+import * as activite from './vues/activite.js';
 import * as tests from './vues/tests.js';
 import * as tableau from './vues/tableau.js';
 import * as finances from './vues/finances.js';
@@ -28,6 +29,8 @@ import * as documents from './vues/documents.js';
 import * as maintenance from './vues/maintenance.js';
 import * as parametres from './vues/parametres.js';
 import * as nouveauProjet from './vues/nouveau-projet.js';
+import * as demandes from './vues/demandes.js';
+import * as demandesProjet from './vues/demandes-projet.js';
 
 const session = await exigerSession();
 if (!session) throw new Error('session absente');
@@ -67,9 +70,12 @@ const { vue } = monterCoquille({ session, role: 'client', groupes: [], sortie: $
 let porte = null;
 const lancerAccueil = ({ demande = false } = {}) => {
   if (porte) return;
+  const projetsDuClient = () => (magasin.lire(K.projets) || session.projets || []);
   porte = ouvrirAccueil({
     session,
-    projets: () => (magasin.lire(K.projets) || session.projets || []),
+    projets: projetsDuClient,
+    /* L'écran des tests, à la même condition que l'entrée Tests du rail. */
+    avecTests: () => projetsDuClient().some((p) => (magasin.lire(K.scenarios(p.id)) || []).some((x) => x.actif !== false) || (magasin.lire(K.parcours(p.id)) || []).some((x) => x.actif !== false)),
     surFin: () => {
       porte = null;
       marquerAccueilVu(session.utilisateur.uid);
@@ -84,6 +90,9 @@ const dejaParcouru = Boolean(session.profil && session.profil.accueil);
 if (!accueilVu(session.utilisateur.uid) && !dejaParcouru) lancerAccueil();
 else if (dejaParcouru) marquerAccueilVu(session.utilisateur.uid);
 magasin.sur(K.projets, () => { if (porte) porte.majProjets(); });
+/* Les scénarios et les parcours arrivent après la porte : l'écran des tests
+   apparaît quand ils sont là. */
+(session.projets || []).forEach((p) => { magasin.sur(K.scenarios(p.id), () => { if (porte) porte.majProjets(); }); magasin.sur(K.parcours(p.id), () => { if (porte) porte.majProjets(); }); });
 
 const compter = () => {
   const projets = magasin.lire(K.projets) || session.projets;
@@ -100,7 +109,10 @@ const compter = () => {
   const parcoursDuClient = projets.reduce((n, p) => n + (magasin.lire(K.parcours(p.id)) || []).filter((x) => x.actif !== false).length, 0);
   /* Les forfaits de maintenance en cours : le gris de l'entrée Maintenance. */
   const forfaits = projets.filter((p) => (magasin.lire(K.maintenance(p.id)) || []).some((x) => x.id === 'contrat' && x.statut === 'actif')).length;
-  return { projets, attente, nonLus, profil, scenariosDuClient, parcoursDuClient, forfaits };
+  /* Les demandes de projet du client : l'entrée « Mes demandes de projet »
+     n'apparaît que s'il en a au moins une. */
+  const demandesDeProjet = (magasin.lire(K.demandesProjet) || []).length;
+  return { projets, attente, nonLus, profil, scenariosDuClient, parcoursDuClient, forfaits, demandesDeProjet };
 };
 
 /* Les sections d'un projet, dans l'ordre de ses onglets. */
@@ -113,6 +125,10 @@ const SECTIONS = [
   { cle: 'liens',   libelle: 'Liens',       icone: 'liens' },
   { cle: 'reunions', libelle: 'Réunions',   icone: 'reunions' },
   { cle: 'notes',   libelle: 'Décisions',   icone: 'note' },
+  /* Les tests n'ont d'entrée que s'il y a quelque chose à voir : la même
+     règle que l'onglet de la fiche projet, pour que le rail et les onglets
+     aient le même compte. */
+  { cle: 'tests',   libelle: 'Tests',       icone: 'check', visible: (pid) => (magasin.lire(K.scenarios(pid)) || []).some((x) => x.actif !== false) || (magasin.lire(K.campagnes(pid)) || []).length > 0 },
   { cle: 'activite', libelle: 'Activité',   icone: 'activite' },
 ];
 
@@ -124,12 +140,14 @@ const projetOuvert = () => {
 const ouvertSur = (pid) => projetOuvert() === pid;
 
 const construireNavigation = () => {
-  const { projets, attente, nonLus, scenariosDuClient, parcoursDuClient, forfaits } = compter();
+  const { projets, attente, nonLus, scenariosDuClient, parcoursDuClient, forfaits, demandesDeProjet } = compter();
   const parProjet = (pid) => attente.filter((a) => a.projet === pid).length;
   const validations = attente.filter((a) => a.genre === 'validation').length;
   const dues = attente.filter((a) => a.genre === 'facture' || a.genre === 'devis').length;
   /* Le gris dit combien il y en a, le rouge combien attendent votre main. */
-  const ouverts = agreger(session, G.tickets).filter((t) => OUVERTS.includes(t.statut));
+  const ouverts = agreger(session, G.tickets).filter((t) => OUVERTS.includes(t.statut) && !t.archive);
+  /* Les demandes qui attendent la main du client : le rouge de « Demandes ». */
+  const aMoi = ouverts.filter((t) => ATTEND_CLIENT.includes(t.statut)).length;
   const aValider = agreger(session, G.validations).filter((v) => v.statut === 'en-attente');
   const pieces = agreger(session, G.documents);
   const fichiers = agreger(session, G.fichiers);
@@ -153,17 +171,22 @@ const construireNavigation = () => {
            nom quand on y entre, et se replient quand on en sort. Les cinq
            pages du groupe « Suivi » restent à plat : elles rassemblent
            tous les projets à la fois, et n'appartiennent à aucun. */
-        ...(ouvertSur(p.id) ? SECTIONS.map((sec) => ({
+        ...(ouvertSur(p.id) ? SECTIONS.filter((sec) => !sec.visible || sec.visible(p.id)).map((sec) => ({
           chemin: `/projets/${p.id}/${sec.cle}`, libelle: sec.libelle, icone: sec.icone, sous: true,
           compte: { total: sec.compte ? sec.compte(p.id) : 0 },
         })) : [])]),
         { chemin: '/nouveau-projet', libelle: 'Demander un projet', icone: 'plus' },
+        ...(demandesDeProjet ? [{ chemin: '/nouveaux-projets', libelle: 'Mes demandes de projet', icone: 'sparkle', sous: true, compte: { total: demandesDeProjet } }] : []),
       ],
     },
     {
       titre: 'Suivi',
       items: [
         { chemin: '/valider', libelle: 'En attente de vous', icone: 'valider', compte: { neuf: attente.length } },
+        /* Toutes les demandes, tous projets : le gris compte les ouvertes,
+           le rouge celles qui attendent le client. */
+        /* Un seul chiffre, le rouge : ce qui attend votre main (les ouvertes se lisent sur la page). */
+        { chemin: '/demandes', libelle: 'Demandes', icone: 'demandes', compte: { total: 0, neuf: aMoi } },
         { chemin: '/messages', libelle: 'Messages', icone: 'messages', compte: { total: 0, neuf: nonLus } },
         { chemin: '/calendrier', libelle: 'Calendrier', icone: 'calendrier', compte: { total: reunionsAVenir.length } },
         ...(scenariosDuClient || parcoursDuClient ? [{ chemin: '/tests', libelle: 'Tests', icone: 'bug', compte: { total: scenariosDuClient } }] : []),
@@ -179,29 +202,61 @@ const construireNavigation = () => {
 
 let minuteurNav = null;
 const planifierNav = () => { clearTimeout(minuteurNav); minuteurNav = setTimeout(construireNavigation, 80); };
-[K.projets, K.profil, ...session.projets.flatMap((p) => [K.tickets(p.id), K.validations(p.id), K.documents(p.id), K.taches(p.id), K.blocages(p.id), K.messages(p.id), K.maintenance(p.id), K.scenarios(p.id), K.parcours(p.id)])]
+[K.projets, K.profil, K.demandesProjet, ...session.projets.flatMap((p) => [K.tickets(p.id), K.validations(p.id), K.documents(p.id), K.taches(p.id), K.blocages(p.id), K.messages(p.id), K.maintenance(p.id), K.scenarios(p.id), K.parcours(p.id), K.campagnes(p.id)])]
   .forEach((cle) => magasin.sur(cle, planifierNav));
 construireNavigation();
 surChangement(construireNavigation);
 
+/* Le rôle du client sur le projet ouvert, sous le nom de l'entreprise dans
+   le rail : « Vous êtes responsable » ou « collaborateur ». Hors d'une
+   fiche projet, rien. Les rôles vivent sur la fiche du projet (K.projets),
+   à jour en direct. */
+const afficherRole = () => {
+  const pid = projetOuvert();
+  const projet = pid ? (magasin.lire(K.projets) || session.projets || []).find((p) => p.id === pid) : null;
+  const role = projet ? roleSur(session, projet) : null;
+  definirRoleProjet(role ? `Vous êtes ${ROLES_CLIENT[role].toLowerCase()}` : '');
+};
+surChangement(afficherRole);
+magasin.sur(K.projets, afficherRole);
+
 /* --- La recherche ------------------------------------------------------- */
 
+/* Les projets archivés n'y figurent pas, ni ce qui leur appartient : on ne
+   cherche pas dans ce qu'on ne suit plus. Un fichier, une réunion, une
+   version mènent à l'élément, pas seulement à l'onglet : « ?f= » pour
+   l'onglet Fichiers, une fiche pour les deux autres. */
 enregistrerRecherche((terme) => {
-  const projets = magasin.lire(K.projets) || session.projets;
+  const projets = (magasin.lire(K.projets) || session.projets).filter((p) => !p.archive);
+  const actif = (pid) => projets.some((p) => p.id === pid);
   const nomProjet = (pid) => ((projets.find((p) => p.id === pid) || {}).nom || '');
+  const des = (fabrique) => agreger(session, fabrique).filter((x) => actif(x.projet) && !x.archive);
+  const parProjet = (cle) => projets.flatMap((p) => (magasin.lire(cle(p.id)) || []).map((x) => ({ ...x, projet: x.projet || p.id })));
   const items = [];
   if (!terme) {
-    items.push({ groupe: 'Actions', libelle: 'Nouvelle demande', icone: 'plus', chemin: projets[0] ? `/projets/${projets[0].id}/nouvelle-demande` : '/' });
-    items.push({ groupe: 'Actions', libelle: 'Envoyer un message', icone: 'messages', chemin: '/messages' });
+    items.push({ groupe: 'Actions', libelle: 'Nouvelle demande', icone: 'plus', action: async () => { const pid = await accueil.choisirProjet(projets); if (pid) naviguer(`/projets/${pid}/nouvelle-demande`); } });
+    items.push({ groupe: 'Actions', libelle: 'Envoyer un message', icone: 'messages', action: async () => { const pid = await accueil.choisirProjet(projets); naviguer(pid ? `/messages/${pid}` : '/messages'); } });
     items.push({ groupe: 'Actions', libelle: 'Voir ce qui vous attend', icone: 'valider', chemin: '/valider' });
   }
+  const { scenariosDuClient, parcoursDuClient } = compter();
+  const pages = [
+    ['En attente de vous', '/valider', 'valider'], ['Demandes', '/demandes', 'demandes'], ['Messages', '/messages', 'messages'],
+    ['Calendrier', '/calendrier', 'calendrier'], ['Documents', '/documents', 'documents'], ['Maintenance', '/maintenance', 'sante'],
+    ...(projets.some((p) => estResponsable(session, p)) ? [['Devis et factures', '/finances', 'finances']] : []),
+    ...(scenariosDuClient || parcoursDuClient ? [['Tests', '/tests', 'bug']] : []),
+    ['Paramètres', '/parametres', 'parametres'], ['Demander un projet', '/nouveau-projet', 'plus'],
+  ];
+  pages.forEach(([libelle, chemin, ic]) => items.push({ groupe: 'Pages', libelle, sous: 'Page de l\'espace', icone: ic, chemin }));
   projets.forEach((p) => items.push({ groupe: 'Projets', libelle: p.nom, sous: p.ref, icone: 'projets', chemin: `/projets/${p.id}` }));
-  agreger(session, G.tickets).forEach((t) => items.push({ groupe: 'Demandes', libelle: t.titre, sous: `${t.numero || ''} ${nomProjet(t.projet)}`.trim(), icone: 'demandes', chemin: `/projets/${t.projet}/demandes/${t.id}` }));
-  agreger(session, G.taches).forEach((t) => items.push({ groupe: 'Tâches', libelle: t.titre, sous: nomProjet(t.projet), icone: 'taches', chemin: `/projets/${t.projet}/taches/${t.id}` }));
-  agreger(session, G.fichiers).forEach((f) => items.push({ groupe: 'Fichiers', libelle: f.nom, sous: nomProjet(f.projet), icone: 'fichiers', chemin: `/projets/${f.projet}/fichiers` }));
-  agreger(session, G.documents).forEach((d) => items.push({ groupe: 'Devis et factures', libelle: `${d.numero || ''} ${d.libelle || ''}`.trim(), sous: nomProjet(d.projet), icone: 'receipt', chemin: `/finances/${d.id}` }));
-  agreger(session, G.reunions).forEach((r) => items.push({ groupe: 'Réunions', libelle: r.titre, sous: nomProjet(r.projet), icone: 'reunions', chemin: `/projets/${r.projet}/reunions` }));
-  agreger(session, G.releases).forEach((r) => items.push({ groupe: 'Versions', libelle: `${r.plateforme || ''} ${r.version || ''}`.trim(), sous: nomProjet(r.projet), icone: 'releases', chemin: `/projets/${r.projet}/releases` }));
+  des(G.tickets).forEach((t) => items.push({ groupe: 'Demandes', libelle: t.titre, sous: `${t.numero || ''} ${nomProjet(t.projet)}`.trim(), icone: 'demandes', chemin: `/projets/${t.projet}/demandes/${t.id}` }));
+  des(G.validations).filter((v) => v.statut === 'en-attente').forEach((v) => items.push({ groupe: 'Validations', libelle: v.titre, sous: nomProjet(v.projet), icone: 'valider', chemin: `/valider/${v.id}` }));
+  des(G.taches).forEach((t) => items.push({ groupe: 'Tâches', libelle: t.titre, sous: nomProjet(t.projet), icone: 'taches', chemin: `/projets/${t.projet}/taches/${t.id}` }));
+  des(G.fichiers).forEach((f) => items.push({ groupe: 'Fichiers', libelle: f.nom, sous: nomProjet(f.projet), icone: 'fichiers', chemin: `/projets/${f.projet}/fichiers?f=${encodeURIComponent(f.id)}` }));
+  parProjet(K.notes).forEach((n) => items.push({ groupe: 'Décisions', libelle: n.titre || '', sous: nomProjet(n.projet), icone: 'note', chemin: `/projets/${n.projet}/notes` }));
+  parProjet(K.liens).forEach((l) => items.push({ groupe: 'Liens', libelle: l.nom || l.url || '', sous: `${nomProjet(l.projet)} · ${l.url || ''}`, icone: 'liens', action: () => { if (l.url) window.open(l.url, '_blank', 'noopener'); } }));
+  des(G.documents).forEach((d) => items.push({ groupe: 'Devis et factures', libelle: `${d.numero || ''} ${d.libelle || ''}`.trim(), sous: nomProjet(d.projet), icone: 'receipt', chemin: `/finances/${d.id}` }));
+  des(G.reunions).forEach((r) => items.push({ groupe: 'Réunions', libelle: r.titre, sous: nomProjet(r.projet), icone: 'reunions', chemin: `/projets/${r.projet}/reunions/${r.id}` }));
+  des(G.releases).forEach((r) => items.push({ groupe: 'Versions', libelle: `${libellePlateforme(r.plateforme)} ${r.version || ''}`.trim(), sous: nomProjet(r.projet), icone: 'releases', chemin: `/projets/${r.projet}/releases/${r.id}` }));
   return items;
 });
 
@@ -214,8 +269,17 @@ definir([
   { chemin: '/projets/:id/demandes/:tid', vue: (ctx) => demande.detail(ctx, env) },
   { chemin: '/demande/:tid', vue: (ctx) => resoudreDemande(ctx) },
   { chemin: '/projets/:id/taches/:tid', cle: (c) => `projet:${c.params.id}`, vue: (ctx) => projet.vue({ ...ctx, onglet: 'taches' }, env) },
+  /* La fiche d'une réunion ou d'une version par son adresse : ce que
+     visent les notifications, les lettres et la recherche. */
+  { chemin: '/projets/:id/reunions/:rid', cle: (c) => `projet:${c.params.id}`, vue: (ctx) => projet.vue({ ...ctx, onglet: 'reunions' }, env) },
+  { chemin: '/projets/:id/releases/:rid', cle: (c) => `projet:${c.params.id}`, vue: (ctx) => projet.vue({ ...ctx, onglet: 'releases' }, env) },
   { chemin: '/projets/:id/brique/:cid', vue: (ctx) => brique.vue(ctx, env) },
+  { chemin: '/activite', vue: (ctx) => activite.vue(ctx, env) },
+  /* Les accès sont gérés par Capmedia : un client qui tape cette adresse
+     retombe sur l'aperçu, et on le lui dit. */
+  { chemin: '/projets/:id/acces', vue: (ctx) => { toast('Les accès sont gérés par Capmedia.'); naviguer(`/projets/${ctx.params.id}`, { remplacer: true }); } },
   { chemin: '/projets/:id/:onglet', cle: (c) => `projet:${c.params.id}`, vue: (ctx) => projet.vue({ ...ctx, onglet: ctx.params.onglet }, env) },
+  { chemin: '/demandes', vue: (ctx) => demandes.vue(ctx, env) },
   { chemin: '/messages', vue: (ctx) => messages.vue(ctx, env) },
   { chemin: '/messages/:pid', vue: (ctx) => messages.vue(ctx, env) },
   { chemin: '/valider', vue: (ctx) => valider.vue(ctx, env) },
@@ -230,16 +294,34 @@ definir([
   { chemin: '/maintenance', vue: (ctx) => maintenance.vue(ctx, env) },
   { chemin: '/parametres', vue: (ctx) => parametres.vue(ctx, env) },
   { chemin: '/nouveau-projet', vue: (ctx) => nouveauProjet.nouvelle(ctx, env) },
+  { chemin: '/nouveaux-projets', vue: (ctx) => demandesProjet.vue(ctx, env) },
   { chemin: '/nouveaux-projets/:id', vue: (ctx) => nouveauProjet.detail(ctx, env) },
 ], { defaut: '/', cible: vue });
 
-/* La dernière visite sert à dire « depuis votre passage ». On la note au
-   départ de la session, et on garde la précédente sous la main. */
+/* La dernière visite sert à dire « depuis votre passage ». Elle était
+   réécrite au démarrage : un simple rechargement vidait l'encart. On lit
+   la valeur d'avant, et on la garde pour toute la session ; la nouvelle se
+   pose quand la page se cache (onglet quitté, fenêtre fermée) et toutes
+   les dix minutes d'activité, jamais dans env.derniereVisite. Pas de
+   sendBeacon : Firestore n'en veut pas, une écriture ordinaire suffit. */
 magasin.attendre(K.profil).then((profil) => {
   env.derniereVisite = profil && profil.derniereVisite ? profil.derniereVisite : null;
-  ecrire.majProfil(session.utilisateur.uid, { derniereVisite: new Date(), nom: nomAffiche(session) }).catch(() => {});
+  ecrire.majProfil(session.utilisateur.uid, { nom: nomAffiche(session) }).catch(() => {});
 }).catch(() => {});
+const DIX_MINUTES = 10 * 60 * 1000;
+let derniereEcriture = 0;
+const poserDerniereVisite = ({ force = false } = {}) => {
+  if (!force && Date.now() - derniereEcriture < DIX_MINUTES) return;
+  derniereEcriture = Date.now();
+  ecrire.majProfil(session.utilisateur.uid, { derniereVisite: new Date() }).catch(() => {});
+};
+window.addEventListener('pagehide', () => poserDerniereVisite({ force: true }));
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') poserDerniereVisite({ force: true }); });
+/* Une activité, c'est un geste : la souris, le clavier, le doigt. */
+['pointerdown', 'keydown'].forEach((type) => document.addEventListener(type, () => poserDerniereVisite(), { passive: true }));
 
 demarrer();
+/* La bulle de conversation suit l'adresse : montée sur toute page d'un projet, démontée ailleurs (bulle-projet.js). */
+import('./bulle-projet.js').then((b) => b.brancherBulle(env)).catch((e) => console.error('[bulle]', e));
 
 void echapper; void prenom; void icone; void OUVERTS; void ATTEND_CLIENT; void FACTURES_DUES;

@@ -1566,8 +1566,14 @@ input, select, textarea { font: inherit; color: inherit; }
 .bulle-titre { display: flex; align-items: center; gap: 7px; }
 .bulle-titre span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* Un message porte un geste discret : en faire une demande, sur place. */
-.bulle-message { position: relative; }
+/* Un message porte un geste discret : en faire une demande, sur place.
+   Le même geste sur la page Messages (.fil-message). */
+.bulle-message, .fil-message { position: relative; min-width: 0; max-width: 100%; }
+.fil-message:has(.message--moi) .bulle-action { right: auto; left: 0; }
+.fil-message:hover .bulle-action { opacity: 1; transform: none; }
+/* Le repère de jour d'un fil : un mot centré, pas un trait. */
+.fil-jour { text-align: center; font: var(--t-micro); font-weight: 600; color: var(--encre-3); text-transform: uppercase; letter-spacing: 0.05em; padding: 4px 0; }
+.bulle-aide { margin: 6px 4px 0; }
 .bulle-action {
   position: absolute; top: 0; right: 0;
   width: 26px; height: 26px; border-radius: 8px;

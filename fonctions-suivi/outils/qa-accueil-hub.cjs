@@ -45,9 +45,15 @@ let page = null;
   const projets = await page.$$eval('.ecran.actif .projets-accueil li', (l) => l.map((x) => x.textContent));
   verifier(projets.length >= 1 && projets.some((x) => /Atelier/.test(x)), `le deuxième écran liste ses projets tels qu ils sont (${projets.length})`);
   verifier(await page.$('.ecran.actif .projets-accueil .pastille'), 'avec leur état');
+  /* L'écran des tests n'est là que si le client a des scénarios ou des
+     parcours, qui arrivent un peu après la porte : on attend que le rail
+     les connaisse avant de compter. */
+  const attendu = (await page.waitForSelector('a[href="#/tests"]', { timeout: 8000, state: 'attached' }).catch(() => null)) ? 7 : 6;
+  await pause(600);
   let n = 2;
   while (await page.$('[data-accueil="suivant"]')) { await page.click('[data-accueil="suivant"]'); n += 1; await pause(350); if (n > 12) break; }
-  verifier(n === 7, `sept écrans en tout (${n})`);
+  /* L'écran des tests n'est là que si le client a des scénarios (même règle que l'entrée Tests du rail). */
+  verifier(n === attendu, `${attendu === 7 ? 'sept' : 'six'} écrans en tout (${n})`);
   verifier(/Vos projets vous attendent/.test(await page.textContent('.ecran.actif')), 'le dernier sait qu elle a des projets');
   await page.click('[data-accueil="fin"]'); await pause(900);
   verifier(!(await page.$('.accueil')), 'C est parti efface l accueil');

@@ -70,6 +70,7 @@ export const monterCoquille = ({ session, role, groupes, sortie }) => {
             <span style="min-width:0">
               <span class="nom tronque" style="display:block">${echapper(nom)}</span>
               <span class="role tronque" style="display:block">${echapper(suite ? (session.utilisateur.email || sousNom) : sousNom)}</span>
+              <span class="role tronque" style="display:block" id="lat-role-projet" hidden></span>
             </span>
             <span class="pousse" style="color:var(--encre-3)">${icone('chevron')}</span>
           </button>
@@ -163,6 +164,17 @@ export const definirEtat = (etat) => {
   el.textContent = etat.texte;
   el.className = `lat-etat${etat.ton ? ` lat-etat--${etat.ton}` : ''}`;
   if (etat.titre) el.title = etat.titre; else el.removeAttribute('title');
+};
+
+/* Le rôle du client sur le projet ouvert (« Vous êtes responsable »),
+   sous le nom de l'entreprise, seulement dans une fiche projet : ailleurs,
+   la ligne disparaît. C'est l'espace client (app.js) qui la pose à chaque
+   changement d'adresse. */
+export const definirRoleProjet = (texte) => {
+  const el = document.getElementById('lat-role-projet');
+  if (!el) return;
+  el.hidden = !texte;
+  el.textContent = texte || '';
 };
 
 const marquerActif = () => {
@@ -301,6 +313,57 @@ const modaleTheme = () => {
 const CLE_NOTIFS = 'notifications';
 let notifications = [];
 
+/* Une icône par type de notification, en trait fin dans la couleur du
+   texte : elle dit de quoi il s'agit sans pastille de couleur. */
+const ICONE_NOTIF = {
+  demande: 'demandes', validation: 'valider', message: 'messages', facture: 'euro', paiement: 'paiement',
+  reunion: 'reunions', release: 'releases', tache: 'taches', blocage: 'alerte', test: 'bug',
+  maintenance: 'sante', projet: 'projets', jalon: 'drapeau', fichier: 'fichiers', note: 'note', devis: 'receipt',
+};
+const nomProjetNotif = (n) => {
+  if (!n || !n.projet) return '';
+  const projets = magasin.lire('projets') || (contexte.session && contexte.session.projets) || [];
+  return ((projets.find((p) => p.id === n.projet) || {}).nom || '');
+};
+
+/* Une notification dont l'objet est sous les yeux n'a plus rien à
+   annoncer : à chaque changement d'adresse, celles dont le lien est la page
+   ouverte (ou la page ouverte avec ses paramètres) passent lues. */
+const lireSurPlace = () => {
+  const uid = contexte.session && contexte.session.utilisateur ? contexte.session.utilisateur.uid : '';
+  if (!uid) return;
+  const chemin = courant().chemin || '';
+  if (!chemin || chemin === '/') return;
+  const vise = (lien) => {
+    const brut = String(lien || '').replace(/^#/, '');
+    if (!brut.startsWith('/')) return false;
+    const sansRequete = brut.split('?')[0].replace(/\/+$/, '');
+    return sansRequete === chemin.replace(/\/+$/, '');
+  };
+  const aLire = notifications.filter((n) => !n.lu && vise(n.lien));
+  if (!aLire.length) return;
+  const lotEcriture = writeBatch(bdd);
+  aLire.forEach((n) => lotEcriture.update(doc(bdd, 'boites', uid, 'notifications', n.id), { lu: true }));
+  lotEcriture.commit().catch(() => { /* la prochaine ouverture réessaiera */ });
+};
+
+/* Le titre de l'onglet n'est réécrit qu'ici. Deux comptes s'y posent : les
+   notifications non lues, et les messages non lus que la bulle annonce par
+   l'événement « titre:non-lus » (detail.compte). Un message fait aussi une
+   notification : les deux se recouvrent, on montre le plus grand, jamais
+   la somme. */
+let nonLuesNotifs = 0;
+let nonLusMessages = 0;
+const majTitre = () => {
+  const n = Math.max(nonLuesNotifs, nonLusMessages);
+  document.title = document.title.replace(/^\(\d+\) /, '');
+  if (n) document.title = `(${n}) ${document.title}`;
+};
+document.addEventListener('titre:non-lus', (e) => {
+  nonLusMessages = Number(e.detail && e.detail.compte) || 0;
+  majTitre();
+});
+
 const brancherNotifications = () => {
   const uid = contexte.session.utilisateur.uid;
   magasin.abonner(CLE_NOTIFS, () => query(collection(bdd, 'boites', uid, 'notifications'), orderBy('date', 'desc'), limit(60)));
@@ -323,9 +386,11 @@ const brancherNotifications = () => {
     }
     const point = $('#point-notifs');
     if (point) point.classList.toggle('masque', nonLues === 0);
-    document.title = document.title.replace(/^\(\d+\) /, '');
-    if (nonLues) document.title = `(${nonLues}) ${document.title}`;
+    nonLuesNotifs = nonLues;
+    majTitre();
+    lireSurPlace();
   });
+  surChangement(lireSurPlace);
   $('#bouton-notifs').addEventListener('click', ouvrirNotifications);
 };
 
@@ -341,10 +406,10 @@ const ouvrirNotifications = () => {
         ${nonLues ? '<button class="btn btn-fantome btn-petit" type="button" data-tout-lu>Tout marquer comme lu</button>' : ''}
       </div>
       ${notifications.length ? notifications.map((n) => `
-        <a class="notif${n.lu ? '' : ' non-lu'}" href="${echapper(n.lien || '#/')}" data-notif="${echapper(n.id)}">
+        <a class="notif${n.lu ? '' : ' non-lu'}" href="${echapper(n.lien || '#/')}" data-notif="${echapper(n.id)}" data-type="${echapper(n.type || '')}">
           <i aria-hidden="true"></i>
           <span>
-            <span class="titre">${echapper(n.titre || '')}</span>
+            <span class="titre rang" style="gap:6px;align-items:center"><span style="display:inline-flex;width:14px;height:14px;color:var(--encre-3);flex:none">${icone(ICONE_NOTIF[n.type] || 'notifications')}</span><span class="tronque">${echapper(n.titre || '')}</span>${nomProjetNotif(n) ? `<span class="t-3 notif-projet" style="font-weight:400">· ${echapper(nomProjetNotif(n))}</span>` : ''}</span>
             ${n.texte ? `<span class="texte" style="display:block">${echapper(n.texte)}</span>` : ''}
             <span class="date" style="display:block">${echapper(depuis(n.date))}</span>
           </span>
