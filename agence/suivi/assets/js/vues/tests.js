@@ -1357,7 +1357,10 @@ export const vue = async (ctx, env) => {
     }
 
     const sel = sortie.querySelector('#f-projet');
-    if (sel) sel.addEventListener('change', (e) => { etat.projet = e.target.value; poser({ projet: etat.projet, plateforme: etat.plateforme }); rendre(true); });
+    /* Changer de projet ou de plateforme, c'est changer d'adresse : le
+       routeur nous redonne la main par `maj`, qui redessine une seule fois.
+       Redessiner ici en plus faisait deux dessins par clic. */
+    if (sel) sel.addEventListener('change', (e) => { poser({ projet: e.target.value, plateforme: etat.plateforme }); });
   };
 
   brancherFrise(sortie, env);
@@ -1478,9 +1481,7 @@ export const vue = async (ctx, env) => {
       if (c) await editer('campagne', env, { pid, fiche: c });
       return;
     }
-    etat.plateforme = el.dataset.plateforme;
-    poser({ projet: etat.projet, plateforme: etat.plateforme });
-    rendre(true);
+    poser({ projet: etat.projet, plateforme: el.dataset.plateforme });
   });
 
   /* La liste des projets d'un client peut grandir en cours de session, quand
@@ -1513,5 +1514,18 @@ export const vue = async (ctx, env) => {
   };
   ouvrirDepuisAdresse();
 
-  return () => { gestes(); lot.fin(); if (tableau) tableau.fin(); };
+  return {
+    fin: () => { gestes(); lot.fin(); if (tableau) tableau.fin(); },
+    /* Même adresse, autres filtres : on lit le projet et la plateforme dans
+       la nouvelle adresse et on redessine en place, sans squelette ni
+       retour en haut de page. */
+    maj: (suite) => {
+      const projet = lire(suite, 'projet', '');
+      const plateforme = lire(suite, 'plateforme', '');
+      if (projet === etat.projet && plateforme === etat.plateforme) return;
+      etat.projet = projet;
+      etat.plateforme = plateforme;
+      rendre(true);
+    },
+  };
 };

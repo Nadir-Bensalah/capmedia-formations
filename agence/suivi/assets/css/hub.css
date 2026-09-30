@@ -1387,10 +1387,9 @@ input, select, textarea { font: inherit; color: inherit; }
    demandé moins de mouvement (voir la règle en tête de fichier).
    ========================================================================== */
 
-/* Le corps d'un onglet se pose quand on change de section, et seulement
-   alors : une donnée qui arrive en temps réel redessine la page sans que
-   rien ne clignote. */
-#onglet-corps.corps-anime { animation: pose 200ms cubic-bezier(0.2, 0, 0, 1) both; }
+/* Changer d'onglet ne fait plus « poser » le corps : le fondu de 200 ms
+   après le remplacement de la page se lisait comme un second dessin. Le
+   nouveau contenu est là d'un coup, comme dans une application native. */
 
 /* Les onglets : le trait glisse sous celui qu'on survole avant d'être actif. */
 .onglet { position: relative; }
@@ -1419,12 +1418,6 @@ input, select, textarea { font: inherit; color: inherit; }
 .ligne:hover { transform: translateX(2px); }
 .ligne .ligne-fin svg { transition: transform var(--vite); }
 .ligne:hover .ligne-fin svg { transform: translateX(2px); }
-
-/* Les métriques et les cartes d'accueil arrivent l'une après l'autre. */
-.corps-anime .metriques > .metrique { animation: pose 240ms cubic-bezier(0.2, 0, 0, 1) both; }
-.corps-anime .metriques > .metrique:nth-child(2) { animation-delay: 30ms; }
-.corps-anime .metriques > .metrique:nth-child(3) { animation-delay: 60ms; }
-.corps-anime .metriques > .metrique:nth-child(4) { animation-delay: 90ms; }
 
 /* Le voile du tiroir et les pastilles de compte. */
 .badge--vif { transition: transform var(--vite); }

@@ -213,7 +213,7 @@ definir([
   { chemin: '/nouveaux-projets/:id', vue: (ctx) => nouveauProjet.detail(ctx, env) },
   { chemin: '/demandes', vue: (ctx) => adminDemandes.vue(ctx, env) },
   { chemin: '/taches', vue: (ctx) => adminTaches.vue(ctx, env) },
-  { chemin: '/tests', vue: (ctx) => tests.vue(ctx, env) },
+  { chemin: '/tests', cle: () => 'tests', vue: (ctx) => tests.vue(ctx, env) },
   /* Le tableau vit dans Tests : ses anciennes adresses y mènent. */
   { chemin: '/tests/tableau', vue: (ctx) => tableau.ancienne(ctx) },
   { chemin: '/tableau', vue: (ctx) => tableau.ancienne(ctx) },

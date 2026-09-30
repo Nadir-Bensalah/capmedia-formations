@@ -285,7 +285,7 @@ definir([
   { chemin: '/valider', vue: (ctx) => valider.vue(ctx, env) },
   { chemin: '/valider/:vid', vue: (ctx) => valider.vue(ctx, env) },
   { chemin: '/calendrier', vue: (ctx) => calendrier.vue(ctx, env) },
-  { chemin: '/tests', vue: (ctx) => tests.vue(ctx, env) },
+  { chemin: '/tests', cle: () => 'tests', vue: (ctx) => tests.vue(ctx, env) },
   { chemin: '/tests/tableau', vue: (ctx) => tableau.ancienne(ctx) },
   { chemin: '/tableau', vue: (ctx) => tableau.ancienne(ctx) },
   { chemin: '/finances', vue: (ctx) => finances.vue(ctx, env) },

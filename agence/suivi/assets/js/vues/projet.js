@@ -100,9 +100,6 @@ export const vue = async (ctx, env) => {
   const sortie = ctx.sortie;
   sortie.innerHTML = `<div class="page">${squelette('page', 6)}</div>`;
 
-  /* L'onglet dont l'animation d'entrée est allée jusqu'au bout : tant
-     qu'elle n'a pas fini, un redessin la rejoue au lieu de la couper. */
-  let ongletAnime = '';
   const cles = [K.projet(pid), K.composants(pid), K.jalons(pid), K.liens(pid), K.taches(pid), K.tickets(pid), K.validations(pid), K.fichiers(pid), K.releases(pid), K.reunions(pid), K.notes(pid), K.blocages(pid), K.documents(pid), K.paiements(pid), K.montants(pid), K.activite(pid), K.equipe,
     K.scenarios(pid), K.campagnes(pid), K.anomalies(pid), ...(env.role === 'equipe' ? [K.projetsInternes, K.interlocuteurs(pid)] : [])];
   abonnerProjet(lot, pid, env.role);
@@ -190,11 +187,9 @@ export const vue = async (ctx, env) => {
         ${equipe && !projet.interne ? `<a class="onglet${onglet === 'acces' ? ' actif' : ''}" href="#/projets/${echapper(pid)}/acces">Accès client${projet.ouvert === true ? '' : ' <span class="badge">fermé</span>'}</a>` : ''}
       </nav></div>
 
-      <div id="onglet-corps"${onglet !== ongletAnime ? ' class="corps-anime"' : ''}>${rendreOnglet(onglet, d, { pid, env, prog, attente, ouverts, delai, risques })}</div>
+      <div id="onglet-corps">${rendreOnglet(onglet, d, { pid, env, prog, attente, ouverts, delai, risques })}</div>
     </div>`;
     derniereEmpreinte = magasin.empreinte(cles) + '|' + onglet;
-    const corps = sortie.querySelector('#onglet-corps.corps-anime');
-    if (corps) corps.addEventListener('animationend', () => { ongletAnime = onglet; corps.classList.remove('corps-anime'); }, { once: true });
     reglerOnglets(sortie);
 
     if (detailOuvert) {
@@ -358,7 +353,10 @@ export const vue = async (ctx, env) => {
       if (suite.requete && suite.requete.blocage) blocageOuvert = suite.requete.blocage;
       poserFiltre(suite.requete);
       rendre(true);
-      window.scrollTo({ top: 0, behavior: 'instant' });
+      /* Le défilement ne saute au haut de page que si la barre des onglets
+         est sortie de l'écran : sinon l'en-tête reste exactement où il est. */
+      const barre = sortie.querySelector('#onglets-projet');
+      if (barre && barre.getBoundingClientRect().top < 0) barre.scrollIntoView({ block: 'start', behavior: 'instant' });
     },
   };
 };

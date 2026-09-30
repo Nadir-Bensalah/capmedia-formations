@@ -815,32 +815,16 @@ svg[stroke-width="1.8"] { stroke-width: 1.6; }
 
 /* Entre deux écrans : la zone de travail glisse, le rail ne bouge pas. */
 #vue { view-transition-name: vue; }
-::view-transition-old(vue) { animation: vue-sort .16s var(--courbe) both; }
-::view-transition-new(vue) { animation: vue-entre .32s var(--ressort) both; }
+::view-transition-old(vue) { animation: vue-sort .12s var(--courbe) both; }
+::view-transition-new(vue) { animation: vue-entre .18s var(--courbe) both; }
 ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
 @keyframes vue-sort { to { opacity: 0; transform: translateY(-4px); } }
-@keyframes vue-entre { from { opacity: 0; transform: translateY(10px); } }
+@keyframes vue-entre { from { opacity: 0; transform: translateY(4px); } }
 
-/* À l'arrivée sur un écran, ses cartes arrivent l'une après l'autre, et les
-   lignes des listes en cascade brève. Seulement à l'arrivée : une donnée qui
-   arrive en direct redessine la page sans que rien ne rejoue. */
-#vue.arrivee .page > * { animation: carte-entre .45s var(--ressort) both; }
-#vue.arrivee .page > *:nth-child(2) { animation-delay: .04s; }
-#vue.arrivee .page > *:nth-child(3) { animation-delay: .08s; }
-#vue.arrivee .page > *:nth-child(4) { animation-delay: .12s; }
-#vue.arrivee .page > *:nth-child(5) { animation-delay: .16s; }
-#vue.arrivee .page > *:nth-child(n+6) { animation-delay: .2s; }
-#vue.arrivee .liste > .ligne { animation: ligne-entre .35s var(--ressort) both; }
-#vue.arrivee .liste > .ligne:nth-child(2) { animation-delay: .03s; }
-#vue.arrivee .liste > .ligne:nth-child(3) { animation-delay: .06s; }
-#vue.arrivee .liste > .ligne:nth-child(4) { animation-delay: .09s; }
-#vue.arrivee .liste > .ligne:nth-child(5) { animation-delay: .12s; }
-#vue.arrivee .liste > .ligne:nth-child(n+6) { animation-delay: .15s; }
-#vue.arrivee .metriques > .metrique { animation: carte-entre .5s var(--ressort) both; }
-#vue.arrivee .metriques > .metrique:nth-child(2) { animation-delay: .05s; }
-#vue.arrivee .metriques > .metrique:nth-child(3) { animation-delay: .1s; }
-#vue.arrivee .metriques > .metrique:nth-child(4) { animation-delay: .15s; }
-#vue.arrivee .metriques > .metrique:nth-child(n+5) { animation-delay: .2s; }
+/* À l'arrivée sur un écran, rien ne se pose « l'une après l'autre » : les
+   cartes qui arrivaient en cascade après la glissade de la zone de travail
+   donnaient deux mouvements de suite, et l'écran semblait se dessiner deux
+   fois. Un seul passage, court, et la page est là entière. */
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001s !important; animation-delay: 0s !important; transition-duration: .001s !important; }
