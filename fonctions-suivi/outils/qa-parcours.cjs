@@ -152,9 +152,33 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   const m = v.texte.match(/(\d+) parcours rejoués[^.]*/);
   if (m) console.log('    ', m[0]);
 
-  console.log('\n== Ce qui ne va pas remonte');
+  console.log('\n== Bugs à corriger d\'urgence : replié, il compte ses lignes');
+  const erreursPage=[]; page.on('pageerror',(e)=>erreursPage.push(String(e.message||e)));
   await aller(page,'/tests',null,'Tests');
-  await pause(1600);
+  await page.waitForSelector('#bugs-urgents, .section .calme',{timeout:15000}).catch(()=>{});
+  await pause(800);
+  const b0 = await page.evaluate(()=>{
+    const l=document.querySelector('#liste-bugs'); const b=document.querySelector('[data-plier-bugs]');
+    return { existe:!!l, replie:l?l.hidden:null, lignes:l?l.querySelectorAll('.ligne').length:0, bouton:b?b.innerText:'',
+      titre:((document.querySelector('#bugs-urgents h2')||{}).innerText||'').trim() };
+  });
+  /* Sans aucun bug à signaler, le bloc garde son titre et dit « Rien à signaler » : rien à replier. */
+  const calme = await page.evaluate(()=>!!document.querySelector('.section .calme'));
+  if(calme && !b0.existe){ console.log('    (aucun bug à signaler sur ce banc : les contrôles du repli sont sautés)'); }
+  else {
+  verifier(erreursPage.length===0,'aucune erreur dans la page',erreursPage.slice(0,2).join(' | '));
+  verifier(b0.existe,'le bloc existe');
+  verifier(/^Bugs à corriger d'urgence/.test(b0.titre),'il s appelle « Bugs à corriger d urgence »',b0.titre);
+  verifier(b0.replie===true,'il est replié au départ');
+  verifier(new RegExp(`Voir les ${b0.lignes} lignes?`).test(b0.bouton) && b0.lignes>0,`replié, il annonce ses ${b0.lignes} lignes`,b0.bouton);
+  await page.click('[data-plier-bugs]'); await pause(600);
+  verifier(await page.evaluate(()=>!document.querySelector('#liste-bugs').hidden),'un clic le déplie');
+  verifier(/Replier/.test(await page.evaluate(()=>document.querySelector('[data-plier-bugs]').innerText)),'le bouton dit Replier');
+  await page.reload(); await pause(2500);
+  verifier(await page.evaluate(()=>{const l=document.querySelector('#liste-bugs');return !!l&&!l.hidden;}),'le choix tient après un rechargement');
+  }
+
+  console.log('\n== Ce qui ne va pas remonte');
   const g = await page.evaluate(()=>({
     haut:(document.querySelector('.section')||{}).innerText||'',
     sections:[...document.querySelectorAll('.section-tete h2')].map(h=>h.innerText.trim()),
@@ -201,6 +225,27 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
 
   await page.click('[data-plier-parcours]'); await pause(800);
   verifier(await page.evaluate(()=>document.querySelector('#catalogue-parcours').hidden)===true,'un second clic le replie');
+
+  console.log('\n== Le filtre de plateforme filtre vraiment');
+  const lirePlat = async (plat) => {
+    await aller(page,`/tests?projet=atelier${plat?`&plateforme=${plat}`:''}`,'.chiffres-tests','Tests');
+    await pause(1500);
+    return page.evaluate(()=>{
+      const cat=document.querySelector('#catalogue-parcours');
+      const lignes=cat?[...cat.querySelectorAll('.ligne')].map(l=>((l.querySelector('.ligne-sous')||{}).textContent||'').replace(/\s+/g,' ')):[];
+      const meta=[...document.querySelectorAll('.tb-ligne-meta')].map(x=>x.innerText);
+      return { lignes, machine:(meta[1]||'').match(/sur (\d+)/)?.[1]||'' };
+    });
+  };
+  const toutes = await lirePlat('');
+  const web = await lirePlat('web');
+  const ios = await lirePlat('ios');
+  /* La ligne sous le titre dit « Outil · iOS, Android · 2 scénarios » : on lit le morceau des plateformes. */
+  const plats = (t) => (t.split(' · ').find((x)=>/^(iOS|Android|Web)(, (iOS|Android|Web))*$/.test(x.trim()))||'');
+  verifier(web.lignes.length>0 && web.lignes.every(t=>!plats(t)||/Web/.test(plats(t))),'sur Web, aucun parcours seulement iPhone ou Android',web.lignes.filter(t=>plats(t)&&!/Web/.test(plats(t))).slice(0,2).join(' | '));
+  verifier(ios.lignes.every(t=>!plats(t)||/iOS/.test(plats(t))),'sur iOS, aucun parcours seulement Web ou Android');
+  verifier(web.lignes.length+ios.lignes.length>toutes.lignes.length || web.lignes.length<toutes.lignes.length,'le filtre change bien la liste',`${toutes.lignes.length} / web ${web.lignes.length} / ios ${ios.lignes.length}`);
+  verifier(Number(web.machine)<=Number(toutes.machine) && (Number(web.machine)<Number(toutes.machine) || web.lignes.length===toutes.lignes.length),'l avancement des tests automatisés suit le filtre',`${toutes.machine} → web ${web.machine}`);
 
   console.log('\n== En créer un');
   await aller(page,'/tests?projet=atelier','.chiffres-tests','Tests');

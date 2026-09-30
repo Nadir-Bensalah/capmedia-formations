@@ -98,6 +98,9 @@ const lireDeplie = () => { try { return localStorage.getItem(CLE_DEPLIE) === '1'
  * page Tests ('' pour tous : la section prend alors celui qui a une
  * campagne en cours). Rend la fonction de démontage.
  */
+/* Même règle que la page Tests : sans plateforme déclarée, partout. */
+const surPlateforme = (x, plateforme) => !plateforme || !(x.plateformes || []).length || x.plateformes.includes(plateforme);
+
 export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme: plateformeChoisie = () => '' } = {}) => {
   const equipe = env.role === 'equipe';
   const lot = magasin.lot();
@@ -191,12 +194,14 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
 
     const nom = (d.projets.find((p) => p.id === pid) || {}).nom || '';
     const passages = campagne ? (magasin.lire(K.passages(campagne.id)) || []) : [];
+    /* Le filtre de plateforme de la page vaut aussi pour les deux lignes
+       d'avancement : sans lui, « Web » montrait les chiffres de l'iPhone. */
     const th = campagne ? tableauHumain({
       scenarios: d.scenarios.filter((s) => projetDe(s) === pid), campagne, passages,
-      anomalies: d.anomalies.filter((a) => projetDe(a) === pid), blocs: BLOCS_SCENARIO, trous: equipe,
+      anomalies: d.anomalies.filter((a) => projetDe(a) === pid), plateforme: etat.plateforme, blocs: BLOCS_SCENARIO, trous: equipe,
     }) : null;
     const tm = tableauMachine({
-      parcours: d.parcours.filter((x) => projetDe(x) === pid), regles: d.regles.filter((x) => projetDe(x) === pid),
+      parcours: d.parcours.filter((x) => projetDe(x) === pid && surPlateforme(x, etat.plateforme)), regles: d.regles.filter((x) => projetDe(x) === pid),
       scenarios: d.scenarios.filter((s) => projetDe(s) === pid), blocs: BLOCS_SCENARIO, outils: OUTILS_PARCOURS,
     });
 
@@ -213,7 +218,7 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
       equipe && datesFausses ? '<span class="tb-rouge">dates de campagne inversées</span>' : '',
     ].filter(Boolean).join(' · ') : 'Aucune campagne pour ce projet';
 
-    const derniers = d.parcours.filter((x) => projetDe(x) === pid).map((x) => enDate((x.dernier || {}).le)).filter(Boolean).sort((a, b) => b - a);
+    const derniers = d.parcours.filter((x) => projetDe(x) === pid && surPlateforme(x, etat.plateforme)).map((x) => enDate((x.dernier || {}).le)).filter(Boolean).sort((a, b) => b - a);
     const metaMachine = tm.total
       ? [`${tm.compte.ok} au vert sur ${tm.total}`, tm.tournent ? `<span class="tb-bleu">${pluriel(tm.tournent, 'test', 'tests')} en exécution</span>` : '', derniers.length ? `dernier résultat ${echapper(depuis(derniers[0]))}` : 'jamais exécutés'].filter(Boolean).join(' · ')
       : 'Aucun test automatisé déclaré';

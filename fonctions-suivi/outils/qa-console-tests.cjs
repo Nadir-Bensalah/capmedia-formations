@@ -108,6 +108,8 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   console.log('\n== La vue globale');
   await aller(page,'/tests','.section-tete h2','Tests');
   await pause(1500);
+  /* Le bloc des bugs urgents est replié au départ : on le déplie pour lire ses lignes. */
+  await page.evaluate(()=>{const l=document.querySelector('#liste-bugs');const b=document.querySelector('[data-plier-bugs]');if(l&&l.hidden&&b)b.click();}); await pause(500);
   const g = await page.evaluate(()=>({
     titre:(document.querySelector('.page h1')||{}).innerText||'',
     sections:[...document.querySelectorAll('.section-tete h2')].map(h=>h.innerText.trim()),
@@ -116,7 +118,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
     texte: document.body.innerText,
   }));
   verifier(g.titre==='Tests','le titre est « Tests »',g.titre);
-  verifier(g.sections[0]==='Ce qui ne va pas','« Ce qui ne va pas » vient en premier',g.sections.join(' / '));
+  verifier(g.sections[0]==='Bugs à corriger d\'urgence','« Bugs à corriger d\'urgence » vient en premier',g.sections.join(' / '));
   verifier(g.sections.includes('Avancement'),'la section Avancement est là');
   verifier(g.sections.includes('Activité'),'la section Activité est là');
   verifier(g.selecteur,'le sélecteur de projet est présent');
@@ -219,7 +221,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   if (c.selecteur) {
     verifier(c.options.length>=2,`le sélecteur propose ses projets (${c.options.join(', ')})`);
     verifier(!c.options.some(o=>/boutique/i.test(o)),'le projet d\'un autre client n\'y figure pas',c.options.join(', '));
-    verifier(c.sections[0]==='Ce qui ne va pas','il voit la vue globale',c.sections.join('/'));
+    verifier(c.sections[0]==='Bugs à corriger d\'urgence','il voit la vue globale',c.sections.join('/'));
   } else {
     verifier(c.sections.includes('Campagnes'),'son projet unique s\'ouvre d\'office',c.sections.join('/'));
     verifier(c.sections.includes('Scénarios'),'avec sa bibliothèque');

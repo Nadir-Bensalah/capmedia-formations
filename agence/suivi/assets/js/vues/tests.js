@@ -138,7 +138,7 @@ const etage = (id, sur, resume, corps) => `<div class="etage" id="${echapper(id)
    indispensable, il est expliqué dans la phrase qui le porte. Un client
    qui comprend sa page ne demande pas pourquoi elle est rouge. */
 const EXPLICATIONS = {
-  'soucis': { titre: 'Ce qui ne va pas', corps: `
+  'soucis': { titre: 'Bugs à corriger d\'urgence', corps: `
     <p>C'est la liste de ce qui mérite votre attention aujourd'hui, et rien d'autre. Si elle est vide, tout va bien.</p>
     <p>On y trouve trois choses : un problème grave trouvé par un testeur et confirmé, une campagne de tests qui a dépassé sa date de fin, et un test automatique qui vient d'échouer.</p>
     <p>Quand quelque chose apparaît ici, c'est qu'il faut agir. Le reste de la page est là pour le contexte.</p>` },
@@ -200,6 +200,10 @@ const infoBouton = (cle) => `<button class="btn-info" type="button" data-info="$
 
 const projetDe = (x) => x.projet || x._parent || '';
 
+/* Replié par défaut ; le choix est gardé d'une visite à l'autre. */
+const CLE_BUGS = 'suivi:bugs-deplies';
+let bugsDeplies = (() => { try { return localStorage.getItem(CLE_BUGS) === '1'; } catch (e) { return false; } })();
+
 const dansPlateforme = (x, plateforme) => {
   if (!plateforme) return true;
   const p = x.plateformes || [];
@@ -239,7 +243,7 @@ const alertes = (d, { nomProjet, plateforme }) => {
      rouge dit qu'il y a un défaut, l'instable n'apprend rien, et un
      parcours qu'on finit par ignorer ne garde plus rien. */
   (d.parcours || [])
-    .filter((x) => x.actif !== false && PARCOURS_A_REGARDER.includes(x.etat))
+    .filter((x) => x.actif !== false && PARCOURS_A_REGARDER.includes(x.etat) && dansPlateforme(x, plateforme))
     .forEach((x) => soucis.push({
       ton: x.etat === 'rouge' ? 'rouge' : 'ambre', icone: 'code',
       titre: `${echapper(x.ref)} · ${echapper(x.titre || '')}`,
@@ -273,14 +277,20 @@ const alertes = (d, { nomProjet, plateforme }) => {
 
   if (!soucis.length) {
     return `<section class="section" style="margin-top:0">
-      <div class="section-tete"><h2>Ce qui ne va pas ${infoBouton('soucis')}</h2></div>
+      <div class="section-tete"><h2>Bugs à corriger d'urgence ${infoBouton('soucis')}</h2></div>
       <p class="calme">${icone('check')} Rien à signaler : aucune anomalie bloquante, aucune campagne en retard, aucun parcours rouge.</p>
     </section>`;
   }
 
-  return `<section class="section section--alerte" style="margin-top:0">
-    <div class="section-tete"><div><h2>Ce qui ne va pas ${infoBouton('soucis')}</h2><p class="chapo">${pluriel(soucis.length, 'point à regarder', 'points à regarder')}.</p></div></div>
-    <div class="liste">${soucis.map((s) => ligne(s)).join('')}</div>
+  /* Soixante lignes rouges en tête de page, c'est la page qu'on ne voit
+     plus. Le bloc se replie ; replié, il dit combien de lignes il garde. */
+  const n = pluriel(soucis.length, 'ligne', 'lignes');
+  return `<section class="section section--alerte" style="margin-top:0" id="bugs-urgents">
+    <div class="section-tete">
+      <div><h2>Bugs à corriger d'urgence ${infoBouton('soucis')}</h2><p class="chapo">${n} à regarder.</p></div>
+      <button class="btn btn-secondaire btn-petit" type="button" data-plier-bugs aria-controls="liste-bugs" aria-expanded="${bugsDeplies}">${icone(bugsDeplies ? 'plier' : 'deplier')} ${bugsDeplies ? 'Replier' : `Voir les ${n}`}</button>
+    </div>
+    <div class="liste" id="liste-bugs"${bugsDeplies ? '' : ' hidden'}>${soucis.map((s) => ligne(s)).join('')}</div>
   </section>`;
 };
 
@@ -353,8 +363,8 @@ const activite = (d, { nomProjet, plateforme }) => {
    Un parcours instable est pire qu'un parcours rouge. Le rouge dit qu'il y
    a un défaut ; l'instable n'apprend rien, et on finit par l'ignorer. Il
    remonte donc au même niveau. */
-const parcoursHtml = (d, { pid, equipe }) => {
-  const liste = (d.parcours || []).filter((x) => x.actif !== false && (!pid || projetDe(x) === pid))
+const parcoursHtml = (d, { pid, equipe, plateforme = '' }) => {
+  const liste = (d.parcours || []).filter((x) => x.actif !== false && (!pid || projetDe(x) === pid) && dansPlateforme(x, plateforme))
     .sort((a, b) => ((ETATS_PARCOURS[a.etat] || {}).ordre || 9) - ((ETATS_PARCOURS[b.etat] || {}).ordre || 9) || (a.ordre || 0) - (b.ordre || 0));
 
   const par = {};
@@ -570,7 +580,7 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
   const scen = d.scenarios.filter((s) => projetDe(s) === pid && s.actif !== false && dansPlateforme(s, plateforme));
   const camp = d.campagnes.filter((c) => projetDe(c) === pid)
     .sort((a, b) => ((STATUTS_CAMPAGNE[a.statut] || {}).ordre || 9) - ((STATUTS_CAMPAGNE[b.statut] || {}).ordre || 9));
-  const ano = d.anomalies.filter((a) => projetDe(a) === pid)
+  const ano = d.anomalies.filter((a) => projetDe(a) === pid && dansPlateforme(a, plateforme))
     .sort((a, b) => ((GRAVITES_ANOMALIE[a.gravite] || {}).rang || 9) - ((GRAVITES_ANOMALIE[b.gravite] || {}).rang || 9));
 
   const parNiveau = { socle: 0, transversal: 0, reparti: 0 };
@@ -590,7 +600,7 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
   /* Ce que chaque étage résume, calculé ici pour que la phrase et les
      sections en dessous lisent les mêmes listes. */
   const gens = (equipe ? (d.testeurs || []) : (d.profils || [])).filter((t) => (t.projets || []).includes(pid));
-  const parc = (d.parcours || []).filter((x) => x.actif !== false && projetDe(x) === pid);
+  const parc = (d.parcours || []).filter((x) => x.actif !== false && projetDe(x) === pid && dansPlateforme(x, plateforme));
   const regl = (d.regles || []).filter((x) => x.actif !== false && projetDe(x) === pid);
   const casRegles = regl.reduce((n, x) => n + (Number(x.cas) || 0), 0);
   const parcVerts = parc.filter((x) => x.etat === 'vert').length;
@@ -704,7 +714,7 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
       ${devisProjet.length ? etage('etage-devis', 'Le devis, ligne par ligne', resumeDevis, `<div style="margin-top:20px">${devisProjet.map((dv) => friseDevis(dv, jalonsProjet, { equipe, pid })).join('')}</div>`) : ''}
       ${etage('etage-humain', 'Tests humains', humain, `${sectionCampagnes}${sectionAnomalies}${vivierHtml({ ...d, testeurs: gens, profils: gens }, { equipe })}`)}
       ${etage('etage-avis', 'Ce que les testeurs en pensent', resumeAvis, avisHtml(avis, { nommer }))}
-      ${etage('etage-machine', 'Tests automatisés', machine, `${parcoursHtml(d, { pid, equipe })}${reglesHtml(d, { pid, equipe })}`)}
+      ${etage('etage-machine', 'Tests automatisés', machine, `${parcoursHtml(d, { pid, equipe, plateforme })}${reglesHtml(d, { pid, equipe })}`)}
       ${etage('etage-bibli', 'Bibliothèque', bibli, sectionScenarios)}
     </div>
     <aside class="index-page" aria-label="Sur cette page">
@@ -1330,7 +1340,7 @@ export const vue = async (ctx, env) => {
         : `<div id="tableau-ici"></div>
           ${alertes(d, { nomProjet, plateforme: etat.plateforme })}
           ${etage('etage-projets', 'Projets', `<b>${d.projets.length}</b> ${d.projets.length > 1 ? 'projets' : 'projet'}, <b>${d.campagnes.filter((c) => c.statut === 'en-cours').length}</b> ${d.campagnes.filter((c) => c.statut === 'en-cours').length > 1 ? 'campagnes en cours' : 'campagne en cours'}.`, avancement(d, { nomProjet, plateforme: etat.plateforme, equipe: env.role === 'equipe' }))}
-          ${etage('etage-machine', 'Tests automatisés', `<b>${(d.parcours || []).filter((x) => x.actif !== false).length}</b> parcours et <b>${(d.regles || []).reduce((n, x) => n + (x.actif !== false ? (Number(x.cas) || 0) : 0), 0)}</b> cas de règles, tous projets confondus.`, `${parcoursHtml(d, { pid: '', equipe: env.role === 'equipe' })}${reglesHtml(d, { pid: '', equipe: env.role === 'equipe' })}`)}
+          ${etage('etage-machine', 'Tests automatisés', `<b>${(d.parcours || []).filter((x) => x.actif !== false).length}</b> parcours et <b>${(d.regles || []).reduce((n, x) => n + (x.actif !== false ? (Number(x.cas) || 0) : 0), 0)}</b> cas de règles, tous projets confondus.`, `${parcoursHtml(d, { pid: '', equipe: env.role === 'equipe', plateforme: etat.plateforme })}${reglesHtml(d, { pid: '', equipe: env.role === 'equipe' })}`)}
           ${env.role === 'equipe' ? etage('etage-gens', 'Testeurs', `<b>${(d.testeurs || []).length}</b> ${(d.testeurs || []).length > 1 ? 'personnes au vivier' : 'personne au vivier'}.`, vivierHtml(d, { equipe: true })) : ''}
           ${activite(d, { nomProjet, plateforme: etat.plateforme })}`}
     </div>`;
@@ -1351,7 +1361,7 @@ export const vue = async (ctx, env) => {
   };
 
   brancherFrise(sortie, env);
-  const gestes = sur(sortie, 'click', '[data-info], [data-aller], [data-nouvelle-anomalie], [data-editer-anomalie], [data-action="ouvrir-anomalie"], [data-plateforme], [data-scenario], [data-plier-scenarios], [data-plier-parcours], [data-plier-regles], [data-nouvelle-regle], [data-editer-regle], [data-nouvelle-campagne], [data-editer-campagne], [data-action="ouvrir-campagne"], [data-nouveau-testeur], [data-action="ouvrir-testeur"], [data-nouveau-parcours], [data-editer-parcours]', async (el) => {
+  const gestes = sur(sortie, 'click', '[data-info], [data-aller], [data-nouvelle-anomalie], [data-editer-anomalie], [data-action="ouvrir-anomalie"], [data-plateforme], [data-scenario], [data-plier-bugs], [data-plier-scenarios], [data-plier-parcours], [data-plier-regles], [data-nouvelle-regle], [data-editer-regle], [data-nouvelle-campagne], [data-editer-campagne], [data-action="ouvrir-campagne"], [data-nouveau-testeur], [data-action="ouvrir-testeur"], [data-nouveau-parcours], [data-editer-parcours]', async (el) => {
     /* Une référence n'est unique qu'à l'intérieur d'un projet : deux plans
        de tests portent chacun leur « DI-15 ». Chercher sans le projet
        ouvrirait l'énoncé d'une autre application, sans rien dire. */
@@ -1372,6 +1382,17 @@ export const vue = async (ctx, env) => {
     if (el.dataset.aller) {
       const cible = sortie.querySelector(`#${el.dataset.aller}`);
       if (cible) cible.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    if (el.hasAttribute('data-plier-bugs')) {
+      const boite = sortie.querySelector('#liste-bugs');
+      if (!boite) return;
+      bugsDeplies = boite.hidden;
+      boite.hidden = !bugsDeplies;
+      try { localStorage.setItem(CLE_BUGS, bugsDeplies ? '1' : '0'); } catch (e) { /* stockage refusé */ }
+      const n = boite.querySelectorAll('.ligne').length;
+      el.setAttribute('aria-expanded', String(bugsDeplies));
+      el.innerHTML = `${icone(bugsDeplies ? 'plier' : 'deplier')} ${bugsDeplies ? 'Replier' : `Voir les ${pluriel(n, 'ligne', 'lignes')}`}`;
       return;
     }
     if (el.hasAttribute('data-plier-scenarios')) {
