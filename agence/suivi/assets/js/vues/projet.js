@@ -19,8 +19,9 @@ import {
   verdictHtml, anneauOuPas, progressionOuPas, copier, reglerBarreOnglets,
 } from '../ui.js';
 import * as magasin from '../magasin.js';
-import { K, ecrire, nouvelId, interneDuProjet, abonnerProjet, progressionProjet, jalonCourant, jalonSuivant, prochaineReunion, reunionAVenir, etatVersions, activiteDepuis, enAttenteDeVous, peutRepondreValidation, parStatut, risquesProjet, MODES_PROGRESSION, trierEtapes, phasesTriees } from '../donnees.js';
+import { K, ecrire, nouvelId, interneDuProjet, abonnerProjet, progressionProjet, jalonCourant, jalonSuivant, prochaineReunion, reunionAVenir, etatVersions, activiteDepuis, enAttenteDeVous, peutRepondreValidation, parStatut, risquesProjet, MODES_PROGRESSION, trierEtapes, phasesTriees, notesPartageesDuProjet } from '../donnees.js';
 import { filAriane } from '../coquille.js';
+import { notesPartageesHtml, gesteNoteDemande } from './notes-client.js';
 import { naviguer } from '../routeur.js';
 import { editer, supprimer } from './editeurs.js';
 import { appelServeur } from '../serveur.js';
@@ -85,6 +86,9 @@ const lireTout = (pid) => ({
   activite: (magasin.lire(K.activite(pid)) || []).slice().sort(parDateDesc('date')),
   equipe: magasin.lire(K.equipe) || [],
   interlocuteurs: magasin.lire(K.interlocuteurs(pid)) || [],
+  /* Les notes que le client a partagées (équipe seule : un client n'a
+     jamais cette clé, la liste est vide chez lui). */
+  notesPartagees: notesPartageesDuProjet(pid),
 });
 
 const nomEquipe = (equipe, uid) => ((equipe.find((e) => e.id === uid) || {}).nom || '');
@@ -111,7 +115,7 @@ export const vue = async (ctx, env) => {
   sortie.innerHTML = `<div class="page">${squelette('page', 6)}</div>`;
 
   const cles = [K.projet(pid), K.composants(pid), K.jalons(pid), K.liens(pid), K.taches(pid), K.tickets(pid), K.validations(pid), K.fichiers(pid), K.releases(pid), K.reunions(pid), K.notes(pid), K.blocages(pid), K.documents(pid), K.paiements(pid), K.montants(pid), K.activite(pid), K.equipe,
-    K.scenarios(pid), K.campagnes(pid), K.anomalies(pid), ...(env.role === 'equipe' ? [K.projetsInternes, K.interlocuteurs(pid)] : [])];
+    K.scenarios(pid), K.campagnes(pid), K.anomalies(pid), ...(env.role === 'equipe' ? [K.projetsInternes, K.interlocuteurs(pid), K.notesPartagees] : [])];
   abonnerProjet(lot, pid, env.role);
 
   /* Une fiche ouverte par son adresse : une tâche (taches/:tid), une
@@ -357,13 +361,15 @@ export const vue = async (ctx, env) => {
   const planifier = magasin.dessinateur(() => rendre(false), 60, cles);
   cles.forEach((c) => lot.sur(c, planifier));
   planifier();
+  /* « En faire une demande » sur une note partagée par le client (équipe). */
+  const gesteNotes = gesteNoteDemande(sortie, () => lireTout(pid).notesPartagees);
 
   /* La conversation du projet vit en bulle, hors de la page ; elle est
      montée pour toutes les pages d'un projet par un module global, plus
      ici : changer d'onglet ou de page ne la referme pas. */
 
   return {
-    fin: () => { demonterCoffre(); planifier.arreter(); gestes(); gestesSansLien(); sortie.removeEventListener('click', sansPropagation, true); gestesFichiers(); gestesFiltres(); lot.fin(); },
+    fin: () => { demonterCoffre(); planifier.arreter(); gestes(); gestesSansLien(); sortie.removeEventListener('click', sansPropagation, true); gestesFichiers(); gestesFiltres(); gesteNotes(); lot.fin(); },
     /* Changer d'onglet ne recharge pas la page : on redessine, les écoutes
        restent ouvertes et le défilement ne saute pas. */
     maj: (suite) => {
@@ -630,6 +636,8 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
     </section>
 
     ${rideauHtml(d, { pid, env })}
+
+    ${equipe ? notesPartageesHtml(d.notesPartagees, { carte: false }) : ''}
 
     ${tenueDesDelais(d, { pid, env, delai, risques })}
 

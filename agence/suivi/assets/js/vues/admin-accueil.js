@@ -5,9 +5,10 @@
 import { echapper, prenom, nomAffiche, dateCourte, dateHeure, montant, pluriel, joursAvant, parDateDesc, parDateAsc, OUVERTS, ATTEND_EQUIPE, ATTEND_CLIENT, FACTURES_DUES, STATUTS_PROJET, URGENCES, statutProjet, verdictDelai, peut } from '../noyau.js';
 import { icone, pastille, puce, avatarProjet, ligne, vide, squelette, titrePage, metrique, progression, progressionOuPas, verdictHtml } from '../ui.js';
 import * as magasin from '../magasin.js';
-import { K, enAttenteDeNous, enAttenteDuClient, projetsActifs, prochaineReunion, progressionProjet, resteAPayer, risquesProjet } from '../donnees.js';
+import { K, enAttenteDeNous, enAttenteDuClient, projetsActifs, prochaineReunion, progressionProjet, resteAPayer, risquesProjet, trierNotes } from '../donnees.js';
 import { filAriane } from '../coquille.js';
 import { activiteHtml } from './accueil.js';
+import { notesPartageesHtml, gesteNoteDemande } from './notes-client.js';
 
 export const vue = async (ctx, env) => {
   const lot = magasin.lot();
@@ -30,6 +31,9 @@ export const vue = async (ctx, env) => {
     const demandesProjet = magasin.lire(K.demandesProjet) || [];
     const jalons = magasin.lire(K.jalonsTous) || [];
     const nomProjet = (pid) => ((projets.find((p) => p.id === pid) || {}).nom || '');
+    /* Ce que les clients ont partagé de leur carnet : à lire en premier,
+       c'est ce qu'ils ont voulu nous dire. */
+    const notesPartagees = trierNotes(magasin.lire(K.notesPartagees) || []);
     /* Les accès qui attendent un choix humain : un contact préparé sans
        rôle (il n'a aucun accès), ou un point laissé par la migration (un
        ancien membre sans compte, une adresse qui porte un autre rôle). */
@@ -94,6 +98,7 @@ export const vue = async (ctx, env) => {
           </section>
         </div>
         <aside class="pile" style="gap:var(--e-5)">
+          ${notesPartageesHtml(notesPartagees, { nomProjet })}
           ${aArbitrer.length ? `<div class="carte carte--creuse" id="acces-a-arbitrer"><p class="surtitre">Accès à arbitrer</p><div class="pile" style="margin-top:10px;gap:8px">${aArbitrer.map((x) => `<a class="rang-espace" style="color:inherit" href="#/projets/${echapper(x.pid)}/acces"><span class="t-petit tronque">${echapper(nomProjet(x.pid))}</span><span class="t-micro t-2">${[x.roles ? pluriel(x.roles, 'rôle à choisir', 'rôles à choisir') : '', x.points ? pluriel(x.points, 'point', 'points') : ''].filter(Boolean).join(' · ')}</span></a>`).join('')}</div></div>` : ''}
           <div class="carte carte--creuse"><p class="surtitre">Attendent le client</p>${attendClient.length ? `<div class="pile" style="margin-top:10px;gap:8px">${attendClient.slice(0, 6).map((a) => `<a class="rang" style="gap:10px;color:inherit;align-items:flex-start;flex-wrap:nowrap" href="#${echapper(a.chemin)}"><span class="ligne-icone ligne-icone--${a.ton || 'ambre'}" style="width:28px;height:28px;border-radius:8px">${icone(a.icone)}</span><span style="min-width:0"><span class="t-petit t-fort tronque" style="display:block">${echapper(a.titre)}</span><span class="t-micro t-3">${echapper(a.sous)}</span></span></a>`).join('')}</div>` : '<p class="t-petit t-2" style="margin-top:8px">Rien en attente côté client.</p>'}</div>
           <div class="carte carte--creuse"><p class="surtitre">Prochaines réunions</p>${prochaines.length ? `<div class="pile" style="margin-top:10px;gap:10px">${prochaines.map((r) => `<a class="rang" style="gap:10px;color:inherit;align-items:flex-start;flex-wrap:nowrap" href="#/projets/${echapper(r.projet)}/reunions"><span class="ligne-icone ligne-icone--bleu" style="width:28px;height:28px;border-radius:8px">${icone('reunions')}</span><span style="min-width:0"><span class="t-petit t-fort tronque" style="display:block">${echapper(r.titre)}</span><span class="t-micro t-3">${echapper(dateHeure(r.date))} · ${echapper(nomProjet(r.projet))}</span></span></a>`).join('')}</div>` : '<p class="t-petit t-2" style="margin-top:8px">Aucune réunion programmée.</p>'}<p style="margin-top:10px"><a class="t-petit" href="#/planning">Planning</a></p></div>
@@ -106,11 +111,12 @@ export const vue = async (ctx, env) => {
 
   /* Premier dessin avant l'affichage, les suivants regroupés : la page
      n'apparaît qu'une fois, sans squelette quand la donnée est déjà là. */
-  const cles = [K.projets, K.organisations, K.ticketsTous, K.tachesToutes, K.validationsToutes, K.documentsTous, K.paiementsTous, K.reunionsToutes, K.blocagesTous, K.activiteToute, K.demandesProjet, K.jalonsTous, K.projetsInternes];
+  const cles = [K.projets, K.organisations, K.ticketsTous, K.tachesToutes, K.validationsToutes, K.documentsTous, K.paiementsTous, K.reunionsToutes, K.blocagesTous, K.activiteToute, K.demandesProjet, K.jalonsTous, K.projetsInternes, K.notesPartagees];
   const planifier = magasin.dessinateur(rendre, 40, cles);
   cles.forEach((c) => lot.sur(c, planifier));
   planifier();
-  return () => { planifier.arreter(); lot.fin(); };
+  const gesteNotes = gesteNoteDemande(sortie, () => magasin.lire(K.notesPartagees) || []);
+  return () => { planifier.arreter(); gesteNotes(); lot.fin(); };
 };
 
 void ATTEND_EQUIPE; void ATTEND_CLIENT; void FACTURES_DUES; void prochaineReunion;

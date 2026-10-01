@@ -197,6 +197,45 @@ service cloud.firestore {
         && (!('epingles' in request.resource.data) || (request.resource.data.epingles is list && request.resource.data.epingles.size() <= 50));
     }
 
+    // Les notes du client (« Vos notes », sur l'accueil du Hub). Un carnet
+    // personnel : une note appartient à qui l'a écrite (uid), et personne
+    // d'autre ne la lit, pas même l'équipe. Quand le client la partage
+    // (partagee), l'équipe du projet rattaché la lit ; sa requête doit le
+    // dire (where partagee == true) : une note privée demandée par
+    // l'équipe est refusée, par son adresse comme en liste. Une collection
+    // à part, et non une sous-collection « notes » du profil : le nom
+    // « notes » est déjà celui des décisions d'un projet, et une lecture en
+    // groupe de l'équipe aurait ouvert les deux d'un coup.
+    match /notesClient/{noteId} {
+      function noteDuClient(d) {
+        return d.keys().hasOnly(['uid', 'nom', 'projet', 'texte', 'epinglee', 'partagee', 'cree', 'maj'])
+            && d.uid == moi()
+            && texteBorne(d.nom, 120)
+            && texteRequis(d.texte, 4000)
+            && texteBorne(d.projet, 80)
+            && d.epinglee is bool
+            && d.partagee is bool
+            && d.cree is timestamp
+            && d.maj == request.time
+            // Partagée, une note est rattachée à un projet dont le client
+            // est membre : rien ne part vers l'équipe d'un autre projet.
+            && (d.partagee == false || (d.projet != '' && membreDuProjet(d.projet)));
+      }
+      // Le propriétaire lit les siennes.
+      allow read: if connecte() && resource.data.uid == moi();
+      // L'équipe du projet lit celles qui lui sont partagées, rien d'autre.
+      allow read: if resource.data.partagee == true && equipeSurProjet(resource.data.projet);
+      // Un client écrit, à son nom, une note qui naît maintenant. Ni
+      // l'équipe ni un testeur n'ont de carnet ici.
+      allow create: if connecte() && !estEquipe() && request.auth.token.get('testeur', false) != true
+        && noteDuClient(request.resource.data)
+        && request.resource.data.cree == request.time;
+      allow update: if connecte() && resource.data.uid == moi()
+        && noteDuClient(request.resource.data)
+        && request.resource.data.cree == resource.data.cree;
+      allow delete: if connecte() && resource.data.uid == moi();
+    }
+
     // Une organisation regroupe des projets ; elle ne donne aucun accès.
     // Ses « membres » sont déduits des accès aux projets, par le serveur,
     // pour que chacun lise la fiche de sa propre société.

@@ -1658,3 +1658,15 @@ génération de clé en cours, version qui monte d'un, enveloppe archivée). Pre
 et `outils/qa-coffre.cjs` (navigateur, base relue, vrais jetons).
 
 Déployer : `firebase deploy --config firebase.suivi.json --only firestore:rules --project capmedia-1f90d`.
+
+## 31. Vos notes (01/10/2026)
+
+Sur l'accueil du client, un carnet « Vos notes » : une idée, une remarque,
+posée en une ligne, sans titre. Privée par défaut : personne d'autre ne la
+lit, pas même Capmedia (collection `notesClient`, règle « uid == moi() »).
+« Partager avec Capmedia » la rend lisible de l'équipe du projet (requête
+`where partagee == true`, lecture d'une note privée refusée) et la poste dans
+la bulle de conversation, précédée de « Note partagée : ». « Reprendre » la
+rend privée ; le message déjà envoyé reste. Côté Cockpit : bloc « Notes
+partagées par le client » sur l'accueil et sur l'aperçu du projet, avec
+« En faire une demande ». Code : vues/notes-client.js. Épreuve : qa-notes.cjs.

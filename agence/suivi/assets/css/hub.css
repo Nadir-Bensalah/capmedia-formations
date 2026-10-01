@@ -2355,6 +2355,39 @@ input, select, textarea { font: inherit; color: inherit; }
 .tb-deplier[aria-expanded="true"] svg { transform: rotate(180deg); }
 
 /* ==========================================================================
+   « Vos notes » : le carnet du client sur son accueil (vues/notes-client.js),
+   et les notes partagées vues du Cockpit. Des fonds et des espaces, pas de
+   traits : seule la séparation entre deux notes est un trait fin.
+   ========================================================================== */
+.notes-explication { max-width: 62ch; margin-bottom: var(--e-4); }
+.notes-amorce {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 12px 14px; border-radius: 12px;
+  background: var(--fond-2); color: var(--encre-3); font: var(--t-corps); text-align: left; cursor: text;
+  transition: background .15s ease, color .15s ease;
+}
+.notes-amorce:hover { background: var(--fond-3); color: var(--encre-2); }
+.notes-amorce:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--anneau); }
+.notes-amorce svg { width: 18px; height: 18px; flex: none; }
+.notes-forme .zone { width: 100%; min-height: 84px; }
+.notes-forme-pied { margin-top: 10px; gap: 10px; flex-wrap: wrap; }
+.notes-liste { margin-top: var(--e-4); }
+.note-client { padding: 14px 0; }
+.note-client + .note-client { border-top: 1px solid var(--trait-fin); }
+.note-client-texte { font: var(--t-corps); overflow-wrap: anywhere; }
+.note-client-texte p + p { margin-top: 8px; }
+.note-client-pied { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: 8px; font: var(--t-micro); color: var(--encre-3); }
+.note-client-pied svg { width: 13px; height: 13px; vertical-align: -2px; margin-right: 3px; }
+.note-client-etat { color: var(--encre-2); }
+.note-client--partagee .note-client-etat { color: var(--accent); }
+.note-client-gestes { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+.note-partagee + .note-partagee { padding-top: 12px; border-top: 1px solid var(--trait-fin); }
+.note-partagee .note-client-texte { font: var(--t-petit); }
+@media (max-width: 720px) {
+  .note-client-gestes { margin-left: 0; width: 100%; }
+}
+
+/* ==========================================================================
    Les projets à faire : des cartes d'idées, et une note qui se lit
    ========================================================================== */
 

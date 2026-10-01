@@ -14,6 +14,7 @@ import * as magasin from '../magasin.js';
 import { K, G, agreger, enAttenteDeVous, progressionProjet, jalonCourant, prochaineReunion, resteAPayer, depuisVisite, nonLusProjet, risquesProjet, messagesDuProjet } from '../donnees.js';
 import { filAriane } from '../coquille.js';
 import { echeance } from '../noyau.js';
+import { monterNotesClient } from './notes-client.js';
 
 const iconeActivite = {
   'tache': 'taches', 'jalon': 'drapeau', 'release': 'releases', 'fichier': 'fichiers', 'reunion': 'reunions',
@@ -91,6 +92,10 @@ export const vue = async (ctx, env) => {
      on cliquait « Tableau des tests » et l'accueil revenait. */
   let impatient = false;
   const garde = setTimeout(() => { impatient = true; planifier(); }, 2500);
+
+  /* « Vos notes » : son carnet, dessiné avec la page (un seul dessin),
+     ce qui s'y écrit survit au redessin. */
+  const notes = monterNotesClient(sortie, env);
 
   const rendre = () => {
     if (!impatient && !cles.every((c) => magasin.chargee(c))) return;
@@ -216,6 +221,8 @@ export const vue = async (ctx, env) => {
         : vide({ icone: 'projets', titre: 'Aucun projet pour le moment', texte: 'Décrivez-nous votre idée, on la cadre ensemble ici.', action: '<a class="btn btn-principal" href="#/nouveau-projet">Demander un nouveau projet</a>' })}
       </section>
 
+      ${notes.html()}
+
       <div class="grille grille-tiers section">
         <section>
           <div class="section-tete"><h2>Activité récente</h2>${projets[0] ? '<a class="lien" href="#/activite">Tout voir</a>' : ''}</div>
@@ -250,9 +257,10 @@ export const vue = async (ctx, env) => {
         </aside>
       </div>
     </div>`;
+    notes.apres();
   };
 
-  const cles = [K.projets, K.profil, ...session.projets.flatMap((p) => [
+  const cles = [K.projets, K.profil, K.notesClient, ...session.projets.flatMap((p) => [
     K.jalons(p.id), K.tickets(p.id), K.validations(p.id), K.documents(p.id), K.paiements(p.id),
     K.taches(p.id), K.blocages(p.id), K.reunions(p.id), K.releases(p.id), K.activite(p.id), K.messages(p.id),
     K.composants(p.id),
@@ -283,5 +291,5 @@ export const vue = async (ctx, env) => {
   cles.forEach((c) => lot.sur(c, planifier));
   planifier();
   void enDate; void echeanceHtml; void echeance; void depuis;
-  return () => { clearTimeout(garde); planifier.arreter(); gestes(); gesteIcs(); lot.fin(); };
+  return () => { clearTimeout(garde); planifier.arreter(); gestes(); gesteIcs(); notes.fin(); lot.fin(); };
 };

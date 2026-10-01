@@ -111,6 +111,12 @@ export const K = {
   idees: 'idees',
   audit: 'audit',
   envois: 'envois',
+  /* « Vos notes » : le carnet du client (les siennes seulement). Côté
+     équipe, celles que les clients ont partagées : d'un coup pour un
+     administrateur, projet par projet pour un agent. */
+  notesClient: 'notes-client',
+  notesPartagees: 'notes-partagees',
+  notesPartageesProjet: (p) => `notes-partagees:${p}`,
 };
 
 /* ==========================================================================
@@ -279,6 +285,9 @@ export const abonnerGlobal = (lot, session) => {
     lot.abonner(K.montantsTous, () => collectionGroup(bdd, 'montants'));
     lot.abonner(K.organisationsInternes, () => col('organisationsInternes'));
     lot.abonner(K.paiementsInternes, () => col('paiementsInternes'));
+    /* Les notes que les clients ont partagées : la requête le dit, les
+       règles ne laissent passer que celle-là. */
+    lot.abonner(K.notesPartagees, () => query(col('notesClient'), where('partagee', '==', true)));
   } else {
     /* Le client lit le profil sans nom des testeurs de SES projets, projet
        par projet (voir abonnerProjet), jamais le vivier ni les testeurs des
@@ -287,6 +296,9 @@ export const abonnerGlobal = (lot, session) => {
     lot.abonner(K.projets, () => query(col('projets'), where('membres', 'array-contains', uid)));
     lot.abonner(K.organisations, () => query(col('organisations'), where('membres', 'array-contains', uid)));
     lot.abonner(K.demandesProjet, () => query(col('demandesProjet'), where('par.uid', '==', uid)));
+    /* Son carnet : ses notes, et rien d'autre (les règles refusent toute
+       autre requête sur cette collection). */
+    lot.abonner(K.notesClient, () => query(col('notesClient'), where('uid', '==', uid)));
     /* Pour mettre un nom sur le responsable du projet, au lieu de
        « Capmedia » : l'annuaire, qui ne porte que le nom. La fiche d'équipe
        (adresse, rôle) n'est plus lisible par un client. */
@@ -334,6 +346,9 @@ const abonnerAgent = (lot, session) => {
   for (const pid of pids) {
     abonnerProjet(lot, pid, 'equipe');
     lot.abonner(`projet-interne:${pid}`, () => doc(bdd, 'projetsInternes', pid));
+    /* Les notes partagées sur SES projets : la requête nomme le projet,
+       c'est ce que les règles demandent à un agent. */
+    lot.abonner(K.notesPartageesProjet(pid), () => query(col('notesClient'), where('projet', '==', pid), where('partagee', '==', true)));
   }
   const assembler = (fab, tri = null) => () => {
     const tout = pids.flatMap((pid) => magasin.lire(fab(pid)) || []);
@@ -361,6 +376,7 @@ const abonnerAgent = (lot, session) => {
   deriver(K.maintenanceToute, K.maintenance);
   deriver(K.scenariosTous, K.scenarios);
   deriver(K.profils, K.profilsTesteurs);
+  deriver(K.notesPartagees, K.notesPartageesProjet);
   lot.ajouter(magasin.deriver(K.projetsInternes, pids.map((pid) => `projet-interne:${pid}`),
     () => pids.map((pid) => magasin.lire(`projet-interne:${pid}`)).filter(Boolean)));
   /* Les sociétés et les testeurs de SES projets : les règles refusent à un
@@ -888,7 +904,41 @@ export const ecrire = {
       signaleFait: { par: par.uid, nom: par.nom, date: serverTimestamp(), texte: String(texte || '') }, maj: serverTimestamp(),
     });
   },
+
+  /* --- « Vos notes » : le carnet du client ---------------------------- */
+  /* Une note naît privée, à son nom. Les règles n'acceptent que ces
+     champs (notesClient), et refusent toute lecture par un autre. */
+  async creerNoteClient(session, { texte, projet = '' }) {
+    const par = auteurDe(session);
+    const ref = await addDoc(col('notesClient'), {
+      uid: par.uid, nom: par.nom, projet: String(projet || ''), texte: String(texte || '').trim(),
+      epinglee: false, partagee: false, cree: serverTimestamp(), maj: serverTimestamp(),
+    });
+    return ref.id;
+  },
+  majNoteClient: (id, d) => updateDoc(doc(bdd, 'notesClient', id), nettoyer({ ...d, maj: serverTimestamp() })),
+  supprimerNoteClient: (id) => deleteDoc(doc(bdd, 'notesClient', id)),
+  /* Partager : la note devient lisible par l'équipe du projet, et son
+     texte part dans la conversation du projet, précédé de « Note
+     partagée : », comme un message du client. Ce message suit les règles
+     des messages (ligne d'activité, notification et lettre à l'équipe,
+     hubMessageProjet) ; reprendre la note ensuite ne le retire pas. */
+  async partagerNoteClient(session, note, pid) {
+    await updateDoc(doc(bdd, 'notesClient', note.id), { partagee: true, projet: pid, maj: serverTimestamp() });
+    await ecrire.messageProjet(session, pid, `Note partagée : ${String(note.texte || '').trim()}`.slice(0, 6000));
+  },
+  reprendreNoteClient: (id) => updateDoc(doc(bdd, 'notesClient', id), { partagee: false, maj: serverTimestamp() }),
 };
+
+/** Les notes dans l'ordre du carnet : les épinglées d'abord, puis les plus récentes en haut. */
+export const trierNotes = (notes = []) => notes.slice().sort((a, b) => {
+  if (Boolean(a.epinglee) !== Boolean(b.epinglee)) return a.epinglee ? -1 : 1;
+  const quand = (n) => { const d = enDate(n.cree); return d ? d.getTime() : 0; };
+  return quand(b) - quand(a);
+});
+
+/** Les notes partagées sur un projet, vues par l'équipe. Un client n'en a pas (clé jamais abonnée : vide). */
+export const notesPartageesDuProjet = (pid) => trierNotes((magasin.lire(K.notesPartagees) || []).filter((n) => n.projet === pid && n.partagee === true));
 
 /* ==========================================================================
    5. Les calculs dérivés
