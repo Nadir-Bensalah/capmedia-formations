@@ -150,7 +150,8 @@ const construireNavigation = () => {
   const aMoi = ouverts.filter((t) => ATTEND_CLIENT.includes(t.statut)).length;
   const aValider = agreger(session, G.validations).filter((v) => v.statut === 'en-attente');
   const pieces = agreger(session, G.documents);
-  const fichiers = agreger(session, G.fichiers);
+  /* Le badge de Documents compte ce que la page montre : la même source. */
+  const vusDansDocuments = (() => { const v = documents.documentsVisibles(session); return v.fichiers.length + v.pieces.length; })();
   const reunionsAVenir = agreger(session, G.reunions).filter((r) => joursAvant(r.date) >= 0);
 
   definirNavigation([
@@ -193,7 +194,7 @@ const construireNavigation = () => {
         { chemin: '/maintenance', libelle: 'Maintenance', icone: 'sante', compte: { total: forfaits } },
         /* La finance est au responsable : un collaborateur ne voit pas l'entrée. */
         ...(projets.some((p) => estResponsable(session, p)) ? [{ chemin: '/finances', libelle: 'Devis et factures', icone: 'finances', compte: { total: dues, neuf: dues } }] : []),
-        { chemin: '/documents', libelle: 'Documents', icone: 'documents', compte: { total: fichiers.length } },
+        { chemin: '/documents', libelle: 'Documents', icone: 'documents', compte: { total: vusDansDocuments } },
       ],
     },
     { titre: 'Compte', items: [{ chemin: '/parametres', libelle: 'Paramètres', icone: 'parametres' }] },
@@ -202,7 +203,7 @@ const construireNavigation = () => {
 
 let minuteurNav = null;
 const planifierNav = () => { clearTimeout(minuteurNav); minuteurNav = setTimeout(construireNavigation, 80); };
-[K.projets, K.profil, K.demandesProjet, ...session.projets.flatMap((p) => [K.tickets(p.id), K.validations(p.id), K.documents(p.id), K.taches(p.id), K.blocages(p.id), K.messages(p.id), K.maintenance(p.id), K.scenarios(p.id), K.parcours(p.id), K.campagnes(p.id)])]
+[K.projets, K.profil, K.demandesProjet, ...session.projets.flatMap((p) => [K.tickets(p.id), K.validations(p.id), K.documents(p.id), K.fichiers(p.id), K.taches(p.id), K.blocages(p.id), K.messages(p.id), K.maintenance(p.id), K.scenarios(p.id), K.parcours(p.id), K.campagnes(p.id)])]
   .forEach((cle) => magasin.sur(cle, planifierNav));
 construireNavigation();
 surChangement(construireNavigation);

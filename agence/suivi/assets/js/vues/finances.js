@@ -217,6 +217,48 @@ export const editerLiens = (d) => {
   return m.fin;
 };
 
+/* La ligne d'une pièce comptable, la même ici et dans « Documents » :
+   numéro, libellé, projet, date, puis trois colonnes fixes (Télécharger ou
+   sa place vide, le montant, l'état). `detailHT` ajoute le hors taxes
+   quand le montant affiché est TTC. */
+export const lignePiece = (d, nomProjet, { detailHT = false } = {}) => {
+  const etatPiece = statutPiece(d);
+  const declare = d.type === 'facture' && d.reglementDeclare && !d.reglementDeclare.confirme && d.statut !== 'payee';
+  const ttc = ttcDe(d);
+  const ht = Number(d.montant);
+  const avecHT = detailHT && Number.isFinite(ht) && d.montant !== null && d.montant !== undefined && d.montant !== '' && Math.abs(ttc - ht) > 0.004;
+  return ligne({
+    icone: d.type === 'devis' ? 'receipt' : 'euro', ton: d.type === 'devis' ? (devisADecider(d) ? 'ambre' : d.statut === 'accepte' ? 'vert' : '') : (etatPiece === 'en-retard' ? 'rouge' : FACTURES_DUES.includes(d.statut) ? 'ambre' : d.statut === 'payee' ? 'vert' : ''),
+    titre: `${d.numero ? `<span class="t-mono t-3" style="font-weight:400">${echapper(d.numero)}</span> ` : ''}${echapper(d.libelle || '')}`,
+    sous: `${echapper(nomProjet(d.projet) || TIRET)} · ${echapper(dateCourte(d.date) || TIRET)}${avecHT ? ` · ${echapper(montantHT(ht, 2))}` : ''}${d.type === 'facture' && d.echeance && FACTURES_DUES.includes(d.statut) ? ` · échéance ${echapper(dateCourte(d.echeance))}` : ''}${declare ? ' · règlement déclaré, en attente de confirmation' : ''}`,
+    /* Trois colonnes fixes, alignées d'une ligne à l'autre : le bouton
+       Télécharger (ou sa place vide), le montant, le statut. */
+    fin: `${(d.liens || []).length ? `<span class="puce puce--bleu"><i></i>${icone('externe')}</span>` : ''}<span class="piece-fin"><span class="piece-fin-voir">${d.fichier && d.fichier.chemin ? `<button class="btn btn-voir" type="button" data-telecharger="${echapper(d.id)}">${icone('telecharger')} Télécharger</button>` : ''}</span><span class="nb t-fort">${echapper(montantPiece(d, 2) || TIRET)}</span><span class="piece-fin-statut">${pastille(d.type === 'devis' ? STATUTS_DEVIS : STATUTS_FACTURE, etatPiece)}</span></span>`,
+    action: 'ouvrir', attrs: `data-id="${echapper(d.id)}"`,
+  });
+};
+
+/* Les gestes sur ces lignes : la ligne ouvre la fiche de la pièce,
+   « Télécharger » remet le PDF par le serveur (suiviPiece), sans aperçu.
+   Rend la fonction qui les débranche. */
+export const brancherPiecesComptables = (racine, env) => {
+  const { session } = env;
+  const ouvrir = sur(racine, 'click', '[data-action="ouvrir"]', (el, ev) => {
+    if (ev && ev.target.closest('[data-telecharger]')) return;
+    const projets = magasin.lire(K.projets) || session.projets;
+    const documents = agreger(session, G.documents);
+    const d = documents.find((x) => x.id === el.dataset.id);
+    if (d) ouvrirDocument(d, env, { projets, paiements: agreger(session, G.paiements), documents });
+  });
+  /* « Télécharger » dans la liste : le PDF, direct, sans passer par la fiche. */
+  const telecharger = sur(racine, 'click', '[data-telecharger]', (el, ev) => {
+    ev.stopPropagation();
+    const d = agreger(session, G.documents).find((x) => x.id === el.dataset.telecharger);
+    if (d) agir(el, () => telechargerPiece(d));
+  });
+  return () => { ouvrir(); telecharger(); };
+};
+
 export const vue = async (ctx, env) => {
   const { session } = env;
   const lot = magasin.lot();
@@ -260,19 +302,7 @@ export const vue = async (ctx, env) => {
     const emises = factures.filter((f) => !['annulee', 'avoir'].includes(f.statut));
     const totalPaye = paiements.reduce((s, p) => s + (Number(p.montant) || 0), 0);
 
-    const ligneDoc = (d) => {
-      const etatPiece = statutPiece(d);
-      const declare = d.type === 'facture' && d.reglementDeclare && !d.reglementDeclare.confirme && d.statut !== 'payee';
-      return ligne({
-        icone: d.type === 'devis' ? 'receipt' : 'euro', ton: d.type === 'devis' ? (devisADecider(d) ? 'ambre' : d.statut === 'accepte' ? 'vert' : '') : (etatPiece === 'en-retard' ? 'rouge' : FACTURES_DUES.includes(d.statut) ? 'ambre' : d.statut === 'payee' ? 'vert' : ''),
-        titre: `${d.numero ? `<span class="t-mono t-3" style="font-weight:400">${echapper(d.numero)}</span> ` : ''}${echapper(d.libelle || '')}`,
-        sous: `${echapper(nomProjet(d.projet))} · ${echapper(dateCourte(d.date) || TIRET)}${d.type === 'facture' && d.echeance && FACTURES_DUES.includes(d.statut) ? ` · échéance ${echapper(dateCourte(d.echeance))}` : ''}${declare ? ' · règlement déclaré, en attente de confirmation' : ''}`,
-        /* Trois colonnes fixes, alignées d'une ligne à l'autre : le bouton
-           Voir (ou sa place vide), le montant, le statut. */
-        fin: `${(d.liens || []).length ? `<span class="puce puce--bleu"><i></i>${icone('externe')}</span>` : ''}<span class="piece-fin"><span class="piece-fin-voir">${d.fichier && d.fichier.chemin ? `<button class="btn btn-voir" type="button" data-telecharger="${echapper(d.id)}">${icone('telecharger')} Télécharger</button>` : ''}</span><span class="nb t-fort">${echapper(montantPiece(d, 2) || TIRET)}</span><span class="piece-fin-statut">${pastille(d.type === 'devis' ? STATUTS_DEVIS : STATUTS_FACTURE, etatPiece)}</span></span>`,
-        action: 'ouvrir', attrs: `data-id="${echapper(d.id)}"`,
-      });
-    };
+    const ligneDoc = (d) => lignePiece(d, nomProjet);
 
     sortie.innerHTML = `<div class="page">
       <div class="page-tete"><div><h1>Devis et factures</h1><p class="chapo">Tout ce qui a été émis pour vos projets. Un devis accepté ici vaut accord.</p></div>${miens.length > 1 ? `<div class="actions"><label class="etiquette-champ" for="filtre-projet" style="margin:0">Projet</label><select class="select" id="filtre-projet" style="width:auto"><option value="">Tous vos projets</option>${miens.map((p) => `<option value="${echapper(p.id)}"${etat.projet === p.id ? ' selected' : ''}>${echapper(p.nom)}</option>`).join('')}</select></div>` : ''}</div>
@@ -306,26 +336,14 @@ export const vue = async (ctx, env) => {
     }
   };
 
-  const gestes = sur(sortie, 'click', '[data-action="ouvrir"]', (el, ev) => {
-    if (ev && ev.target.closest('[data-telecharger]')) return;
-    const projets = magasin.lire(K.projets) || session.projets;
-    const documents = agreger(session, G.documents);
-    const d = documents.find((x) => x.id === el.dataset.id);
-    if (d) ouvrirDocument(d, env, { projets, paiements: agreger(session, G.paiements), documents });
-  });
-  /* « Télécharger » dans la liste : le PDF, direct, sans passer par la fiche. */
-  const gestesVoir = sur(sortie, 'click', '[data-telecharger]', (el, ev) => {
-    ev.stopPropagation();
-    const d = agreger(session, G.documents).find((x) => x.id === el.dataset.telecharger);
-    if (d) agir(el, () => telechargerPiece(d));
-  });
+  const gestes = brancherPiecesComptables(sortie, env);
   /* Premier dessin avant l'affichage, les suivants regroupés : la page
      n'apparaît qu'une fois, sans squelette quand la donnée est déjà là. */
   const cles = [K.projets, K.reglages, ...session.projets.flatMap((p) => [K.documents(p.id), K.paiements(p.id)])];
   const planifier = magasin.dessinateur(rendre, 40, cles);
   cles.forEach((c) => lot.sur(c, planifier));
   planifier();
-  return () => { planifier.arreter(); gestes(); gestesVoir(); lot.fin(); };
+  return () => { planifier.arreter(); gestes(); lot.fin(); };
 };
 
-void toast; void lienPiece; void montantHT;
+void toast; void lienPiece;
