@@ -145,7 +145,7 @@ export const detail = async (ctx, env) => {
   brancherPieces(sortie);
   /* Premier dessin avant l'affichage, les suivants regroupés : la page
      n'apparaît qu'une fois, sans squelette quand la donnée est déjà là. */
-  const planifier = magasin.dessinateur(rendre, 40);
+  const planifier = magasin.dessinateur(rendre, 40, [`preprojet:${id}`, K.messagesDemandeProjet(id)]);
   lot.sur(`preprojet:${id}`, planifier);
   lot.sur(K.messagesDemandeProjet(id), planifier);
   return () => { planifier.arreter(); lot.fin(); };

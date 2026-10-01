@@ -85,8 +85,9 @@ export const vue = async (ctx, env) => {
 
   /* Premier dessin avant l'affichage, les suivants regroupés : la page
      n'apparaît qu'une fois, sans squelette quand la donnée est déjà là. */
-  const planifier = magasin.dessinateur(rendre, 40);
-  [K.projets, ...session.projets.map((p) => K.tickets(p.id))].forEach((c) => lot.sur(c, planifier));
+  const cles = [K.projets, ...session.projets.map((p) => K.tickets(p.id))];
+  const planifier = magasin.dessinateur(rendre, 40, cles);
+  cles.forEach((c) => lot.sur(c, planifier));
   /* Un projet ouvert après le montage amène ses demandes sur une clé que la
      vue ne connaissait pas : on l'écoute dès qu'il apparaît. */
   const suivis = new Set(session.projets.map((p) => p.id));

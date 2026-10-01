@@ -106,8 +106,9 @@ export const vue = async (ctx, env) => {
 
   /* Premier dessin avant l'affichage, les suivants regroupés : la page
      n'apparaît qu'une fois, sans squelette quand la donnée est déjà là. */
-  const planifier = magasin.dessinateur(rendre, 40);
-  [K.projets, K.organisations, K.ticketsTous, K.tachesToutes, K.validationsToutes, K.documentsTous, K.paiementsTous, K.reunionsToutes, K.blocagesTous, K.activiteToute, K.demandesProjet, K.jalonsTous, K.projetsInternes].forEach((c) => lot.sur(c, planifier));
+  const cles = [K.projets, K.organisations, K.ticketsTous, K.tachesToutes, K.validationsToutes, K.documentsTous, K.paiementsTous, K.reunionsToutes, K.blocagesTous, K.activiteToute, K.demandesProjet, K.jalonsTous, K.projetsInternes];
+  const planifier = magasin.dessinateur(rendre, 40, cles);
+  cles.forEach((c) => lot.sur(c, planifier));
   planifier();
   return () => { planifier.arreter(); lot.fin(); };
 };

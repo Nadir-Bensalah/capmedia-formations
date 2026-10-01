@@ -199,7 +199,7 @@ export const vue = async (ctx, env) => {
 
   /* Premier dessin avant l'affichage, les suivants regroupés : la page
      n'apparaît qu'une fois, sans squelette quand la donnée est déjà là. */
-  const planifier = magasin.dessinateur(rendre, 40);
+  const planifier = magasin.dessinateur(rendre, 40, [K.projets, K.profil]);
   lot.sur(K.projets, planifier);
   lot.sur(K.profil, planifier);
   brancherPieces(sortie);

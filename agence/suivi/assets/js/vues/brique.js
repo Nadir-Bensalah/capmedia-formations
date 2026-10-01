@@ -330,7 +330,7 @@ export const vue = async (ctx, env) => {
 
   /* Premier dessin avant l'affichage, les suivants regroupés : la page
      n'apparaît qu'une fois, sans squelette quand la donnée est déjà là. */
-  const planifier = magasin.dessinateur(() => rendre(false), 60);
+  const planifier = magasin.dessinateur(() => rendre(false), 60, cles);
   cles.forEach((c) => lot.sur(c, planifier));
   planifier();
 

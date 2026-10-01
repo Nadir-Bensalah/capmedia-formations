@@ -321,8 +321,9 @@ export const vue = async (ctx, env) => {
   });
   /* Premier dessin avant l'affichage, les suivants regroupés : la page
      n'apparaît qu'une fois, sans squelette quand la donnée est déjà là. */
-  const planifier = magasin.dessinateur(rendre, 40);
-  [K.projets, K.reglages, ...session.projets.flatMap((p) => [K.documents(p.id), K.paiements(p.id)])].forEach((c) => lot.sur(c, planifier));
+  const cles = [K.projets, K.reglages, ...session.projets.flatMap((p) => [K.documents(p.id), K.paiements(p.id)])];
+  const planifier = magasin.dessinateur(rendre, 40, cles);
+  cles.forEach((c) => lot.sur(c, planifier));
   planifier();
   return () => { planifier.arreter(); gestes(); gestesVoir(); lot.fin(); };
 };

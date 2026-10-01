@@ -94,8 +94,9 @@ export const vue = async (ctx, env) => {
   brancherPieces(sortie);
   /* Premier dessin avant l'affichage, les suivants regroupés : la page
      n'apparaît qu'une fois, sans squelette quand la donnée est déjà là. */
-  const planifier = magasin.dessinateur(rendre, 40);
-  (session.equipe ? [K.projets, K.fichiersTous] : [K.projets, ...session.projets.map((p) => K.fichiers(p.id))]).forEach((c) => lot.sur(c, planifier));
+  const cles = (session.equipe ? [K.projets, K.fichiersTous] : [K.projets, ...session.projets.map((p) => K.fichiers(p.id))]);
+  const planifier = magasin.dessinateur(rendre, 40, cles);
+  cles.forEach((c) => lot.sur(c, planifier));
   planifier();
   return () => { planifier.arreter(); gestes(); lot.fin(); };
 };

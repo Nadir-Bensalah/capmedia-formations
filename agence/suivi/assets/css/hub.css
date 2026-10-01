@@ -2252,6 +2252,11 @@ input, select, textarea { font: inherit; color: inherit; }
 .tb-pourcent span { display: block; color: var(--encre-3); font: var(--t-petit); margin-top: 4px; }
 .tb-barre { height: 12px; border-radius: var(--r-pilule); background: var(--case-vide); display: flex; gap: 2px; overflow: hidden; }
 .tb-barre i { display: block; height: 100%; transition: flex-basis var(--doux); }
+/* La barre se remplit de gauche à droite quand elle apparaît ou que ses
+   valeurs changent (arrivée, onglet, filtre), jamais quand la page se
+   redessine à l'identique : la classe est posée par la vue. */
+.tb-barre--anime { animation: barre-remplit .7s cubic-bezier(0.2, 0, 0, 1) both; }
+@keyframes barre-remplit { from { clip-path: inset(0 100% 0 0 round 999px); } to { clip-path: inset(0 0 0 0 round 999px); } }
 .tb-legende { display: flex; flex-wrap: wrap; gap: 6px 18px; font: var(--t-petit); color: var(--encre-2); font-variant-numeric: tabular-nums; }
 .tb-legende span { display: inline-flex; align-items: center; gap: 7px; }
 .tb-legende b { color: var(--encre); font-weight: 600; }

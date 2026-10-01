@@ -110,6 +110,20 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
   /* La plateforme n'est pas un choix de la section : c'est le filtre de
      la page Tests, en haut, qui vaut pour tout ce qu'elle montre. */
   const etat = { campagne: memoire.campagne, voie: memoire.voie, deplie: lireDeplie() };
+
+  /* Les barres de progression se remplissent quand elles arrivent ou que
+     leurs valeurs changent ; un redessin à l'identique (présence, horloge)
+     les laisse en place. On retient la signature de chaque barre. */
+  const barresVues = new Map();
+  const animerBarres = (pid) => {
+    sortie.querySelectorAll('.tb-barre').forEach((b, i) => {
+      const cle = `${i}|${b.closest('.tb-resume') ? 'resume' : 'carte'}`;
+      const signature = `${pid}|${etat.plateforme}|${etat.voie}|${etat.deplie}|${b.getAttribute('aria-label') || ''}`;
+      if (barresVues.get(cle) === signature) return;
+      barresVues.set(cle, signature);
+      b.classList.add('tb-barre--anime');
+    });
+  };
   Object.defineProperty(etat, 'plateforme', { get: () => plateformeChoisie() || '', enumerable: true });
 
   /* La présence et les robots ne s'ouvrent qu'à l'équipe : les règles
@@ -163,7 +177,9 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
     lot.abonner(cle, fabrique);
     lot.sur(cle, redessiner);
   };
-  const redessiner = () => rendre();
+  /* Un dessin par tour, et le premier seulement quand toutes les clés sont
+     là (voir « planifier », plus bas). */
+  const redessiner = () => planifier();
 
   let dernier = null;
   let empreinte = '';
@@ -172,17 +188,26 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
     : [...(magasin.lire(K.projets) || []).flatMap((p) => [K.scenarios(p.id), K.campagnes(p.id), K.anomalies(p.id), K.parcours(p.id), K.regles(p.id), K.profilsTesteurs(p.id)])]),
   ...suivis];
 
-  const rendre = (force = false) => {
-    const d = donnees();
-    const { pid, avecTests } = projetCourant(d);
+  /* Les clés nées en cours de route (passages de la campagne, exécutions,
+     sessions des testeurs) : on s'y abonne dès qu'on sait lesquelles, avant
+     même le premier dessin, pour l'attendre avec elles. */
+  const suivreTout = (d) => {
+    const { pid } = projetCourant(d);
     const camps = pid ? campagnesDe(d, pid) : [];
     const campagne = camps.find((c) => c.id === etat.campagne) || camps[0] || null;
-
     if (campagne) suivre(K.passages(campagne.id), () => collection(bdd, 'projets', pid, 'campagnes', campagne.id, 'passages'));
     if (equipe && pid) suivre(K.executions(pid), () => query(collection(bdd, 'projets', pid, 'executions'), orderBy('debut', 'desc'), limit(8)));
     if (equipe && campagne) {
       (campagne.testeurs || []).forEach((uid) => suivre(K.sessions(uid), () => query(collection(bdd, 'presences', uid, 'sessions'), orderBy('debut', 'desc'), limit(60))));
     }
+  };
+
+  const rendre = (force = false) => {
+    const d = donnees();
+    const { pid, avecTests } = projetCourant(d);
+    const camps = pid ? campagnesDe(d, pid) : [];
+    const campagne = camps.find((c) => c.id === etat.campagne) || camps[0] || null;
+    suivreTout(d);
 
     /* La présence vieillit sans que rien ne change en base : l'horloge
        redessine, et l'empreinte doit donc compter la minute. */
@@ -271,6 +296,7 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
       ${etat.deplie ? `${controles}${etat.voie === 'machine' ? voieMachine(d, pid, tm, execs) : voieHumains(d, pid, campagne, th, passages, nommer, maintenant, presents)}` : ''}
     </div>`;
     dernier = { d, pid, campagne };
+    animerBarres(pid);
 
     const selC = sortie.querySelector('#tb-campagne');
     if (selC) selC.addEventListener('change', (e) => { etat.campagne = e.target.value; memoire.campagne = etat.campagne; rendre(true); });
@@ -504,15 +530,24 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
     ecoutees.add(c);
     lot.sur(c, surChangement);
   });
-  const surChangement = () => { ecouter(); rendre(); };
+  /* Tout est là quand plus aucune clé de la section, y compris celles
+     découvertes en route, n'attend sa première valeur. */
+  const clesAttendues = () => { ecouter(); suivreTout(donnees()); return cles(); };
+  /* Premier dessin quand tout est là (le squelette de la page reste
+     jusque-là), les suivants regroupés : la section se peint une fois, pas
+     une fois par clé qui arrive. */
+  const planifier = magasin.dessinateur(() => rendre(false), 40, clesAttendues);
+  const surChangement = () => { ecouter(); planifier(); };
   ecouter();
   const horloge = equipe ? setInterval(() => rendre(), 15000) : null;
-  rendre(true);
+  planifier();
 
   return {
     /* La page Tests a changé de projet : on redessine tout de suite. */
     rafraichir: () => rendre(true),
-    fin: () => { gestes(); lot.fin(); if (horloge) clearInterval(horloge); },
+    /* Pour la page qui nous accueille : son premier dessin attend nos clés. */
+    cles: clesAttendues,
+    fin: () => { planifier.arreter(); gestes(); lot.fin(); if (horloge) clearInterval(horloge); },
   };
 };
 

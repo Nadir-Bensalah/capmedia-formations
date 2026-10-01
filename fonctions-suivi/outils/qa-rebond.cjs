@@ -44,7 +44,7 @@ const sonder=(page)=>page.evaluate(()=>{
   const tourner=()=>{s.image+=1;requestAnimationFrame(tourner);};requestAnimationFrame(tourner);
   const obs=new MutationObserver((ms)=>{for(const m of ms){if(m.type!=='childList')continue;
     for(const n of m.addedNodes){if(n.nodeType!==1)continue;
-      const cible=m.target;const genre=cible.id==='vue'?'page':(cible.id==='onglet-corps'||n.id==='onglet-corps'?'onglet':null);
+      const cible=m.target;const genre=cible.id==='vue'?'page':(cible.id==='onglet-corps'||n.id==='onglet-corps'?'onglet':(cible.classList&&cible.classList.contains('tb-section')?'tableau':null));
       if(!genre)continue;
       const squelette=n.classList.contains('squelette')||!!(n.querySelector&&n.querySelector('.squelette'));
       s.ev.push({t:Math.round(performance.now()),image:s.image,genre,squelette,taille:(n.innerHTML||'').length,scroll:Math.round(scrollY)});}}});
@@ -54,17 +54,21 @@ const relever=async(page,geste)=>{
   await page.evaluate(()=>{window.__sonde.ev=[];window.__sonde.t0=performance.now();});
   await geste();
   await pause(1400);
-  const r=await page.evaluate(()=>{const s=window.__sonde;const pages=s.ev.filter(e=>e.genre==='page');const onglets=s.ev.filter(e=>e.genre==='onglet');
-    const tous=[...pages,...onglets].sort((a,b)=>a.t-b.t);
-    /* Ce qui a été PEINT : un remplacement par image affichée. */
+  const r=await page.evaluate(()=>{const s=window.__sonde;const pages=s.ev.filter(e=>e.genre==='page');const onglets=s.ev.filter(e=>e.genre==='onglet');const tableaux=s.ev.filter(e=>e.genre==='tableau');
+    const tous=[...pages,...onglets,...tableaux].sort((a,b)=>a.t-b.t);
+    /* Ce qui a été PEINT : un remplacement par image affichée. Le tableau
+       des tests compte : il vit dans la page et se repeignait seul. */
     const peints=new Set(tous.map(e=>e.image)).size;
+    /* Les images où du CONTENU (pas un squelette) a été peint : une seule,
+       même quand la donnée arrive du serveur. */
+    const contenus=new Set(tous.filter(e=>!e.squelette).map(e=>e.image)).size;
     const squelettePeint=s.ev.some(e=>e.squelette&&!s.ev.some(f=>!f.squelette&&f.image===e.image));
-    return {pages:pages.length,onglets:onglets.length,peints,squelette:s.ev.some(e=>e.squelette),squelettePeint,
+    return {pages:pages.length,onglets:onglets.length,tableaux:tableaux.length,peints,contenus,squelette:s.ev.some(e=>e.squelette),squelettePeint,
       temps:tous.map(e=>e.t-Math.round(s.t0)),arrivee:document.querySelector('#vue').classList.contains('arrivee'),
       scroll:Math.round(scrollY),h1:((document.querySelector('.page h1')||{}).innerText||'').trim().slice(0,30)};});
   return r;
 };
-const ligne=(nom,r)=>console.log(`  ${nom.padEnd(40)} peints=${r.peints} (remplacements ${r.pages}+${r.onglets}) squelette peint=${r.squelettePeint?'OUI':'non'} temps=[${r.temps.join(',')}] scroll=${r.scroll} ${r.h1}`);
+const ligne=(nom,r)=>console.log(`  ${nom.padEnd(40)} peints=${r.peints} contenu=${r.contenus} (remplacements ${r.pages}+${r.onglets}+${r.tableaux}) squelette peint=${r.squelettePeint?'OUI':'non'} temps=[${r.temps.join(',')}] scroll=${r.scroll} ${r.h1}`);
 
 (async()=>{
   const nav=await chromium.launch();
@@ -78,6 +82,8 @@ const ligne=(nom,r)=>console.log(`  ${nom.padEnd(40)} peints=${r.peints} (rempla
     await ctx.addInitScript(()=>{Object.defineProperty(navigator,'webdriver',{get:()=>false});});
     const page=await ctx.newPage();
     page.on('pageerror',e=>err.push('PAGE: '+e.message.slice(0,180)));
+    /* Le magasin dit quand un dessin a cessé d'attendre une clé : c'est un défaut. */
+    page.on('console',m=>{const t=m.text();if(t.includes('[magasin]'))err.push(`${role} CONSOLE: `+t.slice(0,300));});
     await connecter(page,email);
     await sonder(page);
     const aller=(h)=>()=>page.evaluate(x=>{location.hash=x;},h);
@@ -87,11 +93,26 @@ const ligne=(nom,r)=>console.log(`  ${nom.padEnd(40)} peints=${r.peints} (rempla
     await mesurer('projet (arrivée)',aller('/projets/atelier'));
     for(const o of ['taches','demandes','fichiers','tests','activite']) await mesurer(`onglet ${o}`,aller(`/projets/atelier/${o}`));
     await mesurer('onglet apercu',aller('/projets/atelier'));
-    await mesurer('page Tests',aller('/tests'));
+    /* Première visite de la page Tests : la donnée vient du serveur, le
+       squelette a le droit d'être peint, le contenu une seule fois. */
+    await mesurer('page Tests',aller(role==='équipe'?'/tests?projet=atelier':'/tests'));
     if(role==='équipe'){await mesurer('page Tâches',aller('/taches'));await mesurer('page Planning',aller('/planning'));await mesurer('page Projets',aller('/projets'));}
     else{await mesurer('page Accueil',aller('/'));await mesurer('page Demandes',aller('/demandes'));}
     await mesurer('page Tests (retour)',aller('/tests?projet=atelier'));
     for(const p of ['ios','android','web','']) await mesurer(`filtre ${p||'toutes'} (clic)`,()=>page.click(`[data-plateforme="${p}"]`));
+    if(role==='équipe'){
+      /* « Tous les projets » porte le tableau des tests, qui a ses propres clés. */
+      await mesurer('page Tests (tous les projets)',aller('/tests'));
+      await mesurer('page Tâches (retour)',aller('/taches'));
+      await mesurer('page Tests (tous, retour)',aller('/tests'));
+    }
+
+    /* Les barres de progression se remplissent à l'arrivée et au changement
+       de filtre, et restent en place quand la page se redessine à l'identique. */
+    const barres=async()=>page.evaluate(()=>[...document.querySelectorAll('.tb-resume .tb-barre')].map(b=>b.classList.contains('tb-barre--anime')));
+    await page.click('[data-plateforme="web"]');await pause(200);
+    const apresFiltre=await barres();
+    verifier(apresFiltre.length===2&&apresFiltre.every(Boolean),'les deux barres se remplissent au changement de filtre',JSON.stringify(apresFiltre));
 
     console.log('\n  -- ce qui compte');
     const onglets=Object.entries(releves).filter(([n])=>n.startsWith('onglet '));
@@ -102,11 +123,17 @@ const ligne=(nom,r)=>console.log(`  ${nom.padEnd(40)} peints=${r.peints} (rempla
     verifier(filtres.every(([,r])=>r.peints===1),'un filtre de plateforme ne peint la page qu\'une fois',filtres.map(([n,r])=>`${n}:${r.peints}`).join(' '));
     verifier(filtres.every(([,r])=>!r.squelettePeint),'et ne repeint pas de squelette');
     const pages=Object.entries(releves).filter(([n])=>n.startsWith('page '));
-    verifier(pages.every(([,r])=>r.peints===1),'un changement de page n\'est peint qu\'une fois',pages.filter(([,r])=>r.peints!==1).map(([n,r])=>`${n}:${r.peints}`).join(' '));
-    verifier(pages.every(([,r])=>!r.squelettePeint),'sans squelette peint quand la donnée est déjà là',pages.filter(([,r])=>r.squelettePeint).map(([n])=>n).join(' '));
+    verifier(pages.every(([,r])=>r.contenus===1),'un changement de page n\'est peint qu\'une fois (tableau compris)',pages.filter(([,r])=>r.contenus!==1).map(([n,r])=>`${n}:${r.contenus}`).join(' '));
+    /* Première visite : la donnée vient du serveur, le squelette a le droit
+       d'être peint, mais le contenu une seule fois. Retour : plus de squelette. */
+    const retours=pages.filter(([n])=>!(n.startsWith('page Tests')&&!n.includes('retour')));
+    verifier(retours.every(([,r])=>!r.squelettePeint),'sans squelette peint quand la donnée est déjà là',retours.filter(([,r])=>r.squelettePeint).map(([n])=>n).join(' '));
+    const arrivee=releves['projet (arrivée)'];
+    verifier(arrivee&&arrivee.contenus===1,'la première arrivée sur un projet ne peint son contenu qu\'une fois',arrivee&&`${arrivee.contenus}`);
     await ctx.close();
   }
-  if(err.length)console.log('\n  erreurs :',err.slice(0,5).join('\n    '));
+  verifier(!err.some(e=>e.includes('clés encore en route')),'aucun dessin n\'a cessé d\'attendre une clé',err.filter(e=>e.includes('clés encore en route')).join(' ; ').slice(0,400));
+  if(err.length)console.log('\n  erreurs :',err.slice(0,8).join('\n    '));
   await nav.close();
   console.log(`\n${soucis.length} ÉCART(S)`);
   process.exit(soucis.length?1:0);

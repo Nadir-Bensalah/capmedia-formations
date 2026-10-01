@@ -97,6 +97,9 @@ export const abonner = (cle, fabrique) => {
   const e = obtenir(cle);
   e.compte += 1;
   if (!e.arreter) {
+    /* Un souvenir qui s'était terminé sur une erreur ne vaut rien : on
+       repart de zéro plutôt que de montrer un écran d'accès refusé périmé. */
+    if (e.erreur) { e.valeur = undefined; e.chargee = false; e.erreur = null; }
     try {
       e.arreter = onSnapshot(
         fabrique(),
@@ -134,8 +137,15 @@ export const abonner = (cle, fabrique) => {
     retire = true;
     e.compte -= 1;
     if (e.compte <= 0) {
+      /* La dernière vue part : l'écoute se referme, mais la valeur reste en
+         souvenir. Au retour sur la page, elle se dessine d'un coup avec ce
+         souvenir, et l'instantané qui suit ne la redessine que s'il change
+         quelque chose. Sans lui, chaque retour peignait d'abord une page
+         vide ou un squelette, puis la vraie page une image plus tard. */
       if (e.arreter) e.arreter();
-      entrees.delete(cle);
+      e.arreter = null;
+      e.compte = 0;
+      e.enAttente = false;
     }
   };
 };
@@ -144,6 +154,17 @@ export const abonner = (cle, fabrique) => {
 export const lire = (cle) => (entrees.get(cle) || {}).valeur;
 
 export const chargee = (cle) => Boolean((entrees.get(cle) || {}).chargee);
+
+/* Une clé « en route » : quelqu'un l'écoute (ou la dérive) et sa première
+   valeur n'est pas encore arrivée. Une clé que personne n'a demandée n'est
+   pas en route : elle ne retient aucun dessin. */
+export const enRoute = (cle) => {
+  const e = entrees.get(cle);
+  return Boolean(e) && !e.chargee && (Boolean(e.arreter) || e.compte > 0);
+};
+
+/** Vrai quand aucune des clés n'est encore en route. */
+export const pretes = (cles) => cles.every((c) => !enRoute(c));
 
 /** L'erreur d'une clé, ou null. Un accès refusé vaut mieux qu'un écran qui attend. */
 export const erreur = (cle) => (entrees.get(cle) || {}).erreur || null;
@@ -237,7 +258,7 @@ export const deriver = (cle, sources, calcul) => {
     retire = true;
     retraits.forEach((r) => r());
     e.compte -= 1;
-    if (e.compte <= 0) entrees.delete(cle);
+    /* Plus personne n'écoute ni n'est abonné : la valeur reste en souvenir (voir abonner). */
   };
 };
 
@@ -249,17 +270,37 @@ export const deriver = (cle, sources, calcul) => {
  * réveillent au montage, dans la même foulée) sont absorbés par ce premier
  * dessin ; plus tard, les changements sont regroupés par un court délai.
  *
- *   const planifier = dessinateur(rendre, 40);
+ * `cles` (un tableau, ou une fonction qui le renvoie, ou une fonction qui
+ * répond vrai quand tout est là) : le premier dessin attend que plus aucune
+ * de ces clés ne soit en route. Dessiner avec la moitié de la donnée, puis
+ * redessiner avec le reste, c'est la page qui se rend deux fois : on garde
+ * le squelette et on dessine une seule fois, tout arrivé. Chaque clé qui se
+ * charge rappelle « planifier » ; au-delà de `patience`, on dessine avec ce
+ * qu'on a.
+ *
+ *   const planifier = dessinateur(rendre, 40, cles);
  *   cles.forEach((c) => lot.sur(c, planifier)); planifier();
  *   fin : planifier.arreter();
  */
-export const dessinateur = (dessiner, delai = 40) => {
+export const dessinateur = (dessiner, delai = 40, cles = null, patience = 1500) => {
   let minuteur = null;
+  let garde = null;
   let dessine = false;
   let prevu = false;
   let absorbe = false;
   let enAttente = false;
   let arrete = false;
+  let patient = true;
+  const liste = () => {
+    if (!cles) return [];
+    const r = Array.isArray(cles) ? cles : cles();
+    return Array.isArray(r) ? r : [];
+  };
+  const pret = () => {
+    if (!cles) return true;
+    const r = Array.isArray(cles) ? cles : cles();
+    return Array.isArray(r) ? pretes(r) : Boolean(r);
+  };
   const planifier = () => {
     if (arrete) return;
     if (!dessine) {
@@ -267,7 +308,20 @@ export const dessinateur = (dessiner, delai = 40) => {
       prevu = true;
       queueMicrotask(() => {
         prevu = false;
-        if (arrete) return;
+        if (arrete || dessine) return;
+        if (patient && !pret()) {
+          if (!garde) {
+            garde = setTimeout(() => {
+              garde = null; patient = false;
+              /* On dessine avec ce qu'on a, et on dit ce qui manquait :
+                 une clé qui n'arrive jamais est un défaut à corriger. */
+              console.warn('[magasin] dessin sans attendre, clés encore en route :', liste().filter(enRoute).join(', ') || '(inconnues)');
+              planifier();
+            }, patience);
+          }
+          return;
+        }
+        clearTimeout(garde); garde = null;
         dessine = true;
         /* Ce qui arrive dans la même foulée n'a pas besoin d'un second
            dessin : la tâche suivante rouvre la porte. */
@@ -281,7 +335,9 @@ export const dessinateur = (dessiner, delai = 40) => {
     clearTimeout(minuteur);
     minuteur = setTimeout(() => { if (!arrete) { try { dessiner(); } catch (err) { console.error('[magasin] dessin', err); } } }, delai);
   };
-  planifier.arreter = () => { arrete = true; clearTimeout(minuteur); };
+  planifier.arreter = () => { arrete = true; clearTimeout(minuteur); clearTimeout(garde); };
+  /* Vrai une fois le premier dessin fait. */
+  planifier.dessine = () => dessine;
   return planifier;
 };
 

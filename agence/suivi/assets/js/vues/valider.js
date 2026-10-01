@@ -132,8 +132,9 @@ export const vue = async (ctx, env) => {
 
   /* Premier dessin avant l'affichage, les suivants regroupés : la page
      n'apparaît qu'une fois, sans squelette quand la donnée est déjà là. */
-  const planifier = magasin.dessinateur(rendre, 40);
-  [K.projets, ...session.projets.flatMap((p) => [K.validations(p.id), K.tickets(p.id), K.documents(p.id), K.taches(p.id), K.blocages(p.id)])].forEach((c) => lot.sur(c, planifier));
+  const cles = [K.projets, ...session.projets.flatMap((p) => [K.validations(p.id), K.tickets(p.id), K.documents(p.id), K.taches(p.id), K.blocages(p.id)])];
+  const planifier = magasin.dessinateur(rendre, 40, cles);
+  cles.forEach((c) => lot.sur(c, planifier));
   planifier();
   return () => { planifier.arreter(); gestes(); lot.fin(); };
 };

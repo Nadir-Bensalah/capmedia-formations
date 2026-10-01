@@ -1287,8 +1287,9 @@ export const vue = async (ctx, env) => {
     return env.role !== 'equipe' && p.length === 1 ? p[0].id : '';
   };
 
-  /* Une seule fonction pour toutes les clés : le lot groupe ses appels. */
-  const redessiner = () => rendre();
+  /* Une seule fonction pour toutes les clés : un dessin par tour, et le
+     premier quand tout est là (voir « planifier », plus bas). */
+  const redessiner = () => planifier();
   const suivreCampagnes = () => {
     const pid = projetCourant();
     if (!pid) return;
@@ -1488,16 +1489,30 @@ export const vue = async (ctx, env) => {
      l'équipe lève un rideau. On réabonne alors les clés qui viennent
      d'apparaître, faute de quoi le nouveau projet n'arriverait jamais. */
   const suivies = new Set();
+  /* Les clés du tableau aussi : leur arrivée doit réveiller le premier
+     dessin de la page, qui les attend. Ensuite, elles ne changent pas
+     l'empreinte de la page : pas de redessin pour rien. */
+  const toutesLesCles = () => [...clesSuivies(), ...(tableau ? tableau.cles() : [])];
   const suivre = () => {
-    clesSuivies().forEach((c) => {
+    toutesLesCles().forEach((c) => {
       if (suivies.has(c)) return;
       suivies.add(c);
       lot.sur(c, surChangement);
     });
   };
-  const surChangement = () => { suivre(); rendre(); };
+  /* Le tableau des tests est dans les deux vues (un projet, tous les
+     projets) : on le monte avant le premier dessin, dans sa boîte encore
+     détachée, pour que la page n'apparaisse qu'une fois lui aussi prêt. */
+  if (!tableau) tableau = monterTableau(boiteTableau, env, { projet: projetCourant, plateforme: () => etat.plateforme });
+  /* Tout est là quand aucune clé suivie (campagnes comprises) ni le tableau
+     n'attend plus sa première valeur. */
+  const clesAttendues = () => { suivreCampagnes(); suivre(); return toutesLesCles(); };
+  /* Premier dessin quand tout est là, les suivants regroupés : la page se
+     peint une fois, pas une fois par clé qui arrive. */
+  const planifier = magasin.dessinateur(() => { suivre(); rendre(); }, 40, clesAttendues);
+  const surChangement = () => { suivre(); planifier(); };
   suivre();
-  rendre(true);
+  planifier();
 
   /* Une notification mène droit à sa fiche : « ?anomalie= » ou
      « ?campagne= » dans l'adresse ouvre l'anomalie ou la campagne dès
@@ -1515,7 +1530,7 @@ export const vue = async (ctx, env) => {
   ouvrirDepuisAdresse();
 
   return {
-    fin: () => { gestes(); lot.fin(); if (tableau) tableau.fin(); },
+    fin: () => { planifier.arreter(); gestes(); lot.fin(); if (tableau) tableau.fin(); },
     /* Même adresse, autres filtres : on lit le projet et la plateforme dans
        la nouvelle adresse et on redessine en place, sans squelette ni
        retour en haut de page. */
