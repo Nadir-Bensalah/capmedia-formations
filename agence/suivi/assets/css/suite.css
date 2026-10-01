@@ -1445,3 +1445,9 @@ a.coffre-lien:hover { color: var(--accent); }
   .coffre-entree-tete { flex-direction: column; }
 }
 .coffre-vide { padding: var(--e-4) 0; }
+/* Masqué sans type=password : les gestionnaires de mots de passe ne s'en
+   emparent pas, et l'écran ne montre que des points. */
+.coffre-masque { -webkit-text-security: disc; text-security: disc; }
+.coffre-bandeau { margin-bottom: var(--e-4); }
+.coffre-bandeau p { margin: 0; }
+.coffre-renouveler { margin-top: var(--e-5); max-width: 66ch; }

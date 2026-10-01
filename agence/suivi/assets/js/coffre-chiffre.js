@@ -11,14 +11,18 @@
                  └─ enveloppe la CLÉ DU COFFRE (32 octets aléatoires)
                       └─ chaque entrée : AES-256-GCM, IV de 12 octets neuf
 
-   Changer la phrase ne réécrit que l'enveloppe : les entrées restent
-   chiffrées par la même clé du coffre. Un appareil à empreinte (WebAuthn,
-   extension PRF) garde sa propre enveloppe, tirée de la sortie PRF par
-   HKDF-SHA256 : voir coffre-appareil.js.
+   Changer la phrase renouvelle aussi la clé du coffre : une clé neuve est
+   tirée, toutes les entrées sont rechiffrées avec elle dans le même lot
+   d'écriture, et l'ancienne clé ne déchiffre plus rien de ce qui est en
+   base. Ce que quelqu'un a lu ou recopié avant, en revanche, il le garde :
+   aucun chiffrement ne reprend un secret déjà vu. Un appareil à empreinte
+   (WebAuthn, extension PRF) garde sa propre enveloppe, tirée de la sortie
+   PRF par HKDF-SHA256 : voir coffre-appareil.js.
 
-   Chaque chiffré est lié à sa place par ses données associées (projet,
-   rôle, identifiant) : une entrée recopiée dans un autre projet, ou sous
-   un autre identifiant, ne se déchiffre plus.
+   Chaque chiffré est lié à sa place par ses données associées : projet,
+   identifiant, génération de la clé (g) et numéro de version de l'entrée
+   (n). Une entrée recopiée ailleurs, ou remise à une version antérieure,
+   ne se déchiffre plus.
 
    Ce module ne parle ni à Firestore ni à l'écran : il se teste seul
    (fonctions-suivi/outils/coffre-chiffre.test.mjs).
@@ -37,6 +41,9 @@ export const KDF = 'PBKDF2-SHA256';
 /* Le plancher recommandé pour PBKDF2-SHA256 (OWASP, 2023). Le nombre est
    enregistré avec le coffre : on pourra le relever sans rien casser. */
 export const ITERATIONS = 600000;
+/* Le plafond : au-delà, une enveloppe piégée ferait tourner le navigateur
+   de qui l'ouvre pendant des minutes. Les règles imposent la même borne. */
+export const ITERATIONS_MAX = 2000000;
 export const MOTS_PAR_PHRASE = 7;
 
 const encodeur = new TextEncoder();
@@ -153,11 +160,15 @@ export const envelopperPourPhrase = async (pid, cleCoffre, phrase, iterations = 
   } finally { octets.fill(0); }
 };
 
+/** Une clé de coffre neuve, tirée au hasard. */
+export const nouvelleCle = async () => {
+  const octets = aleatoire(32);
+  try { return await importerCleCoffre(octets); } finally { octets.fill(0); }
+};
+
 /** Un coffre neuf : une clé aléatoire, enveloppée sous la phrase donnée. */
 export const creerCoffre = async (pid, phrase) => {
-  const octets = aleatoire(32);
-  const cleCoffre = await importerCleCoffre(octets);
-  octets.fill(0);
+  const cleCoffre = await nouvelleCle();
   const enveloppe = await envelopperPourPhrase(pid, cleCoffre, phrase);
   return { enveloppe, cleCoffre };
 };
@@ -166,6 +177,7 @@ export const creerCoffre = async (pid, phrase) => {
 export const ouvrirAvecPhrase = async (pid, meta, phrase) => {
   if (!meta || meta.version !== VERSION || meta.kdf !== KDF) throw new Error('Ce coffre a un format que cette page ne connaît pas.');
   if (!(meta.iterations >= ITERATIONS)) throw new Error('Ce coffre annonce un réglage trop faible : il est refusé.');
+  if (meta.iterations > ITERATIONS_MAX) throw new Error('Ce coffre annonce un réglage hors bornes : il est refusé.');
   const kek = await cleDePhrase(phrase, deB64(meta.sel), meta.iterations);
   let octets;
   try { octets = await dechiffrer(kek, { iv: meta.iv, donnees: meta.cle }, aad(pid, 'cle')); }
@@ -185,18 +197,26 @@ const CHAMPS_ENTREE = ['service', 'lien', 'identifiant', 'motDePasse', 'note'];
    la longueur du chiffré ne trahit plus celle d'un mot de passe. */
 const BLOC = 256;
 
-export const chiffrerEntree = async (pid, id, cleCoffre, entree) => {
+const entier = (x) => Number.isInteger(x) && x >= 1;
+
+/* g : la génération de la clé du coffre (le numéro de son enveloppe) ;
+   n : la version de l'entrée, 1 à la création, +1 à chaque écriture (les
+   règles l'imposent). Les deux sont authentifiés : remettre en base un
+   ancien chiffré sous un n plus grand ne passe pas le déchiffrement. */
+export const chiffrerEntree = async (pid, id, cleCoffre, entree, { g, n }) => {
+  if (!entier(g) || !entier(n)) throw new Error('Génération ou version d\'entrée invalide.');
   const propre = {};
   for (const k of CHAMPS_ENTREE) propre[k] = String((entree || {})[k] || '');
   let json = JSON.stringify(propre);
   const longueur = encodeur.encode(json).length;
   json += ' '.repeat((BLOC - (longueur % BLOC)) % BLOC);
-  const { iv, donnees } = await chiffrer(cleCoffre, encodeur.encode(json), aad(pid, 'entree', id));
-  return { v: VERSION, iv, donnees };
+  const { iv, donnees } = await chiffrer(cleCoffre, encodeur.encode(json), aad(pid, 'entree', id, `g${g}`, `n${n}`));
+  return { v: VERSION, g, n, iv, donnees };
 };
 
 export const dechiffrerEntree = async (pid, id, cleCoffre, docChiffre) => {
-  const clair = await dechiffrer(cleCoffre, docChiffre, aad(pid, 'entree', id));
+  if (!entier(docChiffre.g) || !entier(docChiffre.n)) throw new Error('Entrée sans génération ni version.');
+  const clair = await dechiffrer(cleCoffre, docChiffre, aad(pid, 'entree', id, `g${docChiffre.g}`, `n${docChiffre.n}`));
   const objet = JSON.parse(decodeur.decode(clair));
   const propre = {};
   for (const k of CHAMPS_ENTREE) propre[k] = String(objet[k] || '');

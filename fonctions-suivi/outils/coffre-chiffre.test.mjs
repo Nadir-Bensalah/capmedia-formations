@@ -13,7 +13,7 @@
 import {
   genererPhrase, normaliserPhrase, entropiePhrase, creerCoffre, ouvrirAvecPhrase, envelopperPourPhrase,
   chiffrerEntree, dechiffrerEntree, envelopperPourAppareil, ouvrirAvecAppareil, aleatoire, versB64, deB64,
-  PhraseRefusee, ITERATIONS, MOTS_PAR_PHRASE,
+  PhraseRefusee, ITERATIONS, ITERATIONS_MAX, MOTS_PAR_PHRASE, nouvelleCle,
 } from '../../agence/suivi/assets/js/coffre-chiffre.js';
 import { MOTS_COFFRE } from '../../agence/suivi/assets/js/mots-coffre.js';
 
@@ -55,17 +55,20 @@ const autreProjet = await leve(ouvrirAvecPhrase('boutique', enveloppe, p1));
 verifier(autreProjet instanceof PhraseRefusee, 'l enveloppe recopiée sous un autre projet ne s ouvre pas');
 const faible = await leve(ouvrirAvecPhrase('atelier', { ...enveloppe, iterations: 1000 }, p1));
 verifier(faible && /trop faible/.test(faible.message), 'un coffre qui annonce 1 000 tours est refusé d office');
+const enorme = await leve(ouvrirAvecPhrase('atelier', { ...enveloppe, iterations: ITERATIONS_MAX + 1 }, p1));
+verifier(enorme && /hors bornes/.test(enorme.message), `un coffre qui annonce plus de ${ITERATIONS_MAX} tours est refusé (pas de page bloquée)`);
 
 console.log('\n== Les entrées');
 const secret = 'Mdp-Tr3s-Secret!';
-const e1 = await chiffrerEntree('atelier', 'e1', cleCoffre, { service: 'Stripe', lien: 'https://dashboard.stripe.com', identifiant: 'compta@atelier.test', motDePasse: secret, note: 'compte principal' });
+const V1 = { g: 1, n: 1 };
+const e1 = await chiffrerEntree('atelier', 'e1', cleCoffre, { service: 'Stripe', lien: 'https://dashboard.stripe.com', identifiant: 'compta@atelier.test', motDePasse: secret, note: 'compte principal' }, V1);
 const brut = JSON.stringify(e1);
 verifier(!/Stripe|compta@|Secret|principal/.test(brut), 'le chiffré ne laisse rien lire', brut.slice(0, 80));
 verifier(deB64(e1.iv).length === 12, 'IV de 12 octets');
-const e1bis = await chiffrerEntree('atelier', 'e1', cleCoffre, { service: 'Stripe', motDePasse: secret });
+const e1bis = await chiffrerEntree('atelier', 'e1', cleCoffre, { service: 'Stripe', motDePasse: secret }, V1);
 verifier(e1bis.iv !== e1.iv, 'chaque chiffrement tire un IV neuf');
-const court = await chiffrerEntree('atelier', 'e2', cleCoffre, { service: 'A', motDePasse: 'x' });
-const long = await chiffrerEntree('atelier', 'e3', cleCoffre, { service: 'A', motDePasse: 'x'.repeat(60) });
+const court = await chiffrerEntree('atelier', 'e2', cleCoffre, { service: 'A', motDePasse: 'x' }, V1);
+const long = await chiffrerEntree('atelier', 'e3', cleCoffre, { service: 'A', motDePasse: 'x'.repeat(60) }, V1);
 verifier(court.donnees.length === long.donnees.length, 'la longueur du chiffré ne trahit pas celle du mot de passe');
 const lu = await dechiffrerEntree('atelier', 'e1', ouverte, e1);
 verifier(lu.motDePasse === secret && lu.service === 'Stripe' && lu.note === 'compte principal', 'la clé rouverte relit l entrée');
@@ -74,13 +77,26 @@ verifier(await leve(dechiffrerEntree('boutique', 'e1', ouverte, e1)), 'ni sous u
 const abime = { ...e1, donnees: versB64(deB64(e1.donnees).map((o, i) => (i === 5 ? o ^ 1 : o))) };
 verifier(await leve(dechiffrerEntree('atelier', 'e1', ouverte, abime)), 'un seul bit changé est détecté');
 
-console.log('\n== Changer la phrase : les entrées ne bougent pas');
+console.log('\n== Pas de retour à une version antérieure');
+const e1v2 = await chiffrerEntree('atelier', 'e1', cleCoffre, { service: 'Stripe', motDePasse: 'nouveau-mdp' }, { g: 1, n: 2 });
+verifier((await dechiffrerEntree('atelier', 'e1', ouverte, e1v2)).motDePasse === 'nouveau-mdp', 'la version 2 se lit');
+verifier(await leve(dechiffrerEntree('atelier', 'e1', ouverte, { ...e1, n: 3 })), 'l ancien chiffré remis en base sous n = 3 est refusé');
+verifier(await leve(dechiffrerEntree('atelier', 'e1', ouverte, { ...e1v2, n: 1 })), 'un n qui ne correspond pas au chiffré est refusé');
+verifier(await leve(dechiffrerEntree('atelier', 'e1', ouverte, { ...e1, g: 2 })), 'une génération de clé qui ne correspond pas est refusée');
+verifier(await leve(chiffrerEntree('atelier', 'e1', cleCoffre, { service: 'x' }, { g: 1, n: 0 })), 'n vaut 1 au moins');
+verifier(await leve(dechiffrerEntree('atelier', 'e1', ouverte, { iv: e1.iv, donnees: e1.donnees })), 'une entrée sans g ni n est refusée');
+
+console.log('\n== Changer la phrase renouvelle la clé');
 const p2 = genererPhrase();
-const env2 = await envelopperPourPhrase('atelier', ouverte, p2);
+const cle2 = await nouvelleCle();
+const env2 = await envelopperPourPhrase('atelier', cle2, p2);
 verifier(env2.sel !== enveloppe.sel && env2.cle !== enveloppe.cle, 'sel et enveloppe neufs');
+const e1g2 = await chiffrerEntree('atelier', 'e1', cle2, await dechiffrerEntree('atelier', 'e1', ouverte, e1v2), { g: 2, n: 3 });
+verifier(e1g2.donnees !== e1v2.donnees, 'l entrée est rechiffrée');
 verifier(await leve(ouvrirAvecPhrase('atelier', env2, p1)) instanceof PhraseRefusee, 'l ancienne phrase n ouvre plus la nouvelle enveloppe');
 const ouverte3 = await ouvrirAvecPhrase('atelier', env2, p2);
-verifier((await dechiffrerEntree('atelier', 'e1', ouverte3, e1)).motDePasse === secret, 'la nouvelle phrase relit l entrée d avant, sans l avoir réécrite');
+verifier((await dechiffrerEntree('atelier', 'e1', ouverte3, e1g2)).motDePasse === 'nouveau-mdp', 'la nouvelle phrase relit l entrée rechiffrée');
+verifier(await leve(dechiffrerEntree('atelier', 'e1', ouverte, e1g2)), 'l ancienne clé, même gardée en mémoire, ne lit plus l entrée rechiffrée');
 verifier(await leve(envelopperPourPhrase('atelier', ouverte, 'trois mots seulement')), 'une phrase de moins de six mots est refusée');
 
 console.log('\n== Un appareil (sortie PRF simulée)');
