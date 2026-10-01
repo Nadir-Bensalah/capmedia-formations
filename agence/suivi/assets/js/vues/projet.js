@@ -11,7 +11,7 @@ import {
   STATUTS_PROJET, STATUTS_COMPOSANT, TYPES_COMPOSANT, STATUTS_ETAPE, STATUTS_TACHE, PRIORITES, STATUTS, TYPES, URGENCES, OUVERTS, ATTEND_CLIENT,
   CATEGORIES_FICHIER, CATEGORIES_CLIENT, CATEGORIES_LIEN, STATUTS_RELEASE, TYPES_CHANGEMENT, TYPES_NOTE, SANTES, STATUTS_VALIDATION, QUALIFICATIONS, statutProjet, PLATEFORMES, nomsContacts, contactsProjet, PORTEES_DEVIS, age,
   verdictDelai, reportsDe, dateOrigine, MOTIFS_REPORT, dateLongue, enDate,
-  STATUTS_CAMPAGNE, STATUTS_ANOMALIE, peut, libellePlateforme
+  STATUTS_CAMPAGNE, STATUTS_ANOMALIE, peut, libellePlateforme, estResponsable
 } from '../noyau.js';
 import {
   icone, pastille, pastilleTexte, puce, pucePlateforme, iconePlateforme, tonPlateforme, avatarProjet, avatar, progression, anneau, ligne, vide, fait, chronoItem, parJour, squelette, titrePage,
@@ -29,7 +29,13 @@ import { basculerAFaire } from './admin-a-faire.js';
 import { accesHtml, gesteAcces } from './acces-client.js';
 import { personnesHtml } from './personnes.js';
 import { telechargerICS } from './calendrier.js';
-import { monterCoffre, demonterCoffre, voitLeCoffre } from './coffre.js';
+
+/* Le coffre-fort ne se charge qu'à l'ouverture de son onglet : son
+   chiffrement et sa liste de mots ne pèsent pas sur les autres pages. */
+let moduleCoffre = null;
+const chargerCoffre = () => { if (!moduleCoffre) moduleCoffre = import('./coffre.js'); return moduleCoffre; };
+const voitLeCoffre = (env, projet) => env.role === 'equipe' || Boolean(projet && estResponsable(env.session, projet));
+const demonterCoffre = () => { if (moduleCoffre) moduleCoffre.then((m) => m.demonterCoffre()).catch(() => {}); };
 
 /* Les onglets, dans l'ordre des sections du rail (app.js, SECTIONS) :
    l'aperçu est le projet lui-même, puis les neuf sections. « Tests » ne
@@ -201,8 +207,10 @@ export const vue = async (ctx, env) => {
     reglerOnglets(sortie);
     /* Le coffre garde sa zone d'un dessin à l'autre ; quitter l'onglet le
        verrouille et coupe ses écoutes. */
-    if (onglet === 'coffre') monterCoffre(sortie.querySelector('#coffre-zone'), { pid, env, projet });
-    else demonterCoffre();
+    if (onglet === 'coffre') {
+      chargerCoffre().then((m) => { if (onglet === 'coffre') m.monterCoffre(sortie.querySelector('#coffre-zone'), { pid, env, projet }); })
+        .catch(() => toast('Le coffre-fort n\'a pas pu se charger. Rechargez la page.', 'erreur'));
+    } else demonterCoffre();
 
     if (detailOuvert) {
       const { genre, id } = detailOuvert;
