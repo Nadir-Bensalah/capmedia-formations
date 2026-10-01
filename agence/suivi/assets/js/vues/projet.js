@@ -16,7 +16,7 @@ import {
 import {
   icone, pastille, pastilleTexte, puce, pucePlateforme, iconePlateforme, tonPlateforme, avatarProjet, avatar, progression, anneau, ligne, vide, fait, chronoItem, parJour, squelette, titrePage,
   echeanceHtml, modale, confirmer, toast, sur, menu, fichierHtml, brancherPieces, depot, lireForme, valider, obligatoire, agir, encart, optionsDe, pieceHtml,
-  verdictHtml, anneauOuPas, progressionOuPas, copier,
+  verdictHtml, anneauOuPas, progressionOuPas, copier, reglerBarreOnglets,
 } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K, ecrire, nouvelId, interneDuProjet, abonnerProjet, progressionProjet, jalonCourant, jalonSuivant, prochaineReunion, reunionAVenir, etatVersions, activiteDepuis, enAttenteDeVous, peutRepondreValidation, parStatut, risquesProjet, MODES_PROGRESSION, trierEtapes, phasesTriees } from '../donnees.js';
@@ -363,22 +363,7 @@ export const vue = async (ctx, env) => {
 
 /* La barre d'onglets : l'onglet actif se ramène dans le champ de vision, et
    le dégradé du bord droit ne s'affiche que s'il reste quelque chose à voir. */
-const reglerOnglets = (sortie) => {
-  const barre = sortie.querySelector('#onglets-projet');
-  if (!barre) return;
-  const enveloppe = barre.parentElement;
-  const jauger = () => enveloppe.classList.toggle('deborde', barre.scrollWidth - barre.clientWidth - barre.scrollLeft > 8);
-  const actif = barre.querySelector('.onglet.actif');
-  if (actif) {
-    const g = actif.offsetLeft;
-    const d = g + actif.offsetWidth;
-    if (g < barre.scrollLeft + 8 || d > barre.scrollLeft + barre.clientWidth - 8) {
-      barre.scrollTo({ left: Math.max(0, g - 24), behavior: 'smooth' });
-    }
-  }
-  barre.addEventListener('scroll', jauger, { passive: true });
-  jauger();
-};
+const reglerOnglets = (sortie) => reglerBarreOnglets(sortie.querySelector('#onglets-projet'));
 
 /* Les plateformes du projet, en cartes : l'icône dans sa couleur, ce que
    disent les versions réelles, et le lien qui mène à la page de la brique.

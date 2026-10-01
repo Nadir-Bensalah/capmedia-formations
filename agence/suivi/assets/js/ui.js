@@ -828,5 +828,23 @@ export const copier = async (texte) => {
 /** Un titre de page pour l'onglet du navigateur. */
 export const titrePage = (texte) => { document.title = `${texte} · Capmedia`; };
 
+/* Une barre d'onglets qui déborde sur téléphone : l'onglet actif est
+   ramené en vue, et l'enveloppe signale qu'il en reste à droite. */
+export const reglerBarreOnglets = (barre) => {
+  if (!barre) return;
+  const enveloppe = barre.parentElement;
+  const jauger = () => enveloppe.classList.toggle('deborde', barre.scrollWidth - barre.clientWidth - barre.scrollLeft > 8);
+  const actif = barre.querySelector('.onglet.actif');
+  if (actif) {
+    const g = actif.offsetLeft;
+    const d = g + actif.offsetWidth;
+    if (g < barre.scrollLeft + 8 || d > barre.scrollLeft + barre.clientWidth - 8) {
+      barre.scrollTo({ left: Math.max(0, g - 24), behavior: 'smooth' });
+    }
+  }
+  barre.addEventListener('scroll', jauger, { passive: true });
+  jauger();
+};
+
 /** Défilement doux vers un élément, s'il existe. */
 export const defilerVers = (sel) => { const el = $(sel); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); };

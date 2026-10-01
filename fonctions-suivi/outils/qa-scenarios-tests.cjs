@@ -133,7 +133,7 @@ const aller = async (page, hash, attendu) => {
   await page.keyboard.press('Escape'); await pause(700);
 
   console.log('\n== La console le montre, en lecture seule');
-  await aller(page, `/tests?projet=${P}`, '[data-scenario="ZZ-01"]');
+  await aller(page, `/tests?projet=${P}&onglet=bibliotheque`, '[data-scenario="ZZ-01"]');
   verifier(await page.evaluate(() => !!document.querySelector('[data-scenario="ZZ-01"]')), 'ZZ-01 est dans la console du projet');
   /* La bibliothèque est repliée sous « Voir la bibliothèque » : on la déplie, comme on le ferait. */
   await page.click('[data-plier-scenarios]'); await pause(700);
@@ -147,7 +147,7 @@ const aller = async (page, hash, attendu) => {
   const nav2 = await chromium.launch();
   const client = await (await nav2.newContext({ viewport: { width: 1400, height: 1000 } })).newPage();
   await connecter(client, 'lea.essai@exemple.test');
-  await aller(client, `/tests?projet=${P}`, '[data-scenario="ZZ-01"]');
+  await aller(client, `/tests?projet=${P}&onglet=bibliotheque`, '[data-scenario="ZZ-01"]');
   await pause(1200);
   const vueClient = await client.evaluate(() => ({
     scenario: !!document.querySelector('[data-scenario="ZZ-01"]'),

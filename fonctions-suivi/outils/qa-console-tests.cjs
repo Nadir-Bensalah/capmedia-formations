@@ -128,15 +128,21 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   verifier(/sans aucun scénario|aucun scénario retenu/i.test(g.texte),'la campagne sans scénario est signalée');
 
   console.log('\n== Un projet choisi');
+  /* La page d'un projet a des onglets : la campagne est dans « Tests
+     humains » (l'onglet par défaut), les scénarios dans « Bibliothèque ». */
   await aller(page,'/tests?projet=atelier','.chiffres-tests');
+  await pause(1200);
+  const creer = await page.evaluate(()=>!!document.querySelector('[data-nouvelle-campagne]'));
+  await aller(page,'/tests?projet=atelier&onglet=bibliotheque','[data-plier-scenarios]');
   await pause(1200);
   const u = await page.evaluate(()=>({
     chiffres:[...document.querySelectorAll('.chiffre')].map(c=>c.innerText.replace(/\n/g,' ')),
     scenarios:document.querySelectorAll('.scenario').length,
     doubles:document.querySelectorAll('.scenario--double').length,
     plier: !!document.querySelector('[data-plier-scenarios]'),
-    creer: !!document.querySelector('[data-nouvelle-campagne]'),
+    onglets:[...document.querySelectorAll('#onglets-tests .onglet')].map(a=>a.innerText.trim().split('\n')[0]),
   }));
+  u.creer = creer;
   console.log('    chiffres :', u.chiffres.join(' | '));
   /* Les comptes réels, lus en base : la bibliothèque grandit, et une
      suite qui exige 173 tombe au premier ajout pour une raison qui n'est
@@ -161,6 +167,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   verifier(u.chiffres.length>=4,`les chiffres du haut (${u.chiffres.length})`);
   verifier(u.plier,'la bibliothèque est repliable');
   verifier(u.creer,'le bouton de création de campagne est là');
+  verifier(u.onglets.length>=4 && u.onglets.includes('Tests humains') && u.onglets.includes('Bibliothèque'),'la page a ses onglets',u.onglets.join('/'));
 
   console.log('\n== Le filtre par plateforme');
   await page.click('[data-plateforme="web"]'); await pause(1400);
@@ -211,6 +218,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
     selecteur: !!document.querySelector('#f-projet'),
     options: [...document.querySelectorAll('#f-projet option')].map(o=>o.textContent.trim()),
     sections: [...document.querySelectorAll('.section-tete h2')].map(h=>h.innerText.trim()),
+    onglets: [...document.querySelectorAll('#onglets-tests .onglet')].map(a=>a.innerText.trim().split('\n')[0]),
     chapo: (document.querySelector('.chapo')||{}).innerText||'',
     projets: (document.body.innerText.match(/(\d+) projets? actifs?/)||[])[1],
   }));
@@ -224,17 +232,19 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
     verifier(c.sections[0]==='Bugs à corriger d\'urgence','il voit la vue globale',c.sections.join('/'));
   } else {
     verifier(c.sections.includes('Campagnes'),'son projet unique s\'ouvre d\'office',c.sections.join('/'));
-    verifier(c.sections.includes('Scénarios'),'avec sa bibliothèque');
+    verifier(c.onglets.includes('Bibliothèque'),'avec l\'onglet de sa bibliothèque',c.onglets.join('/'));
     const fuite = await cl.evaluate(()=>/boutique/i.test(document.body.innerText));
     verifier(!fuite,'et rien du projet d\'un autre client');
   }
 
-  await aller(cl,'/tests?projet=atelier','#parcours','Tests');
+  await aller(cl,'/tests?projet=atelier&onglet=bibliotheque','[data-plier-scenarios]','Tests');
   await pause(1000);
   const cp = await cl.evaluate(()=>({
     scenarios: document.querySelectorAll('.scenario').length,
     chiffres: document.querySelectorAll('.chiffre').length,
   }));
+  await aller(cl,'/tests?projet=atelier','#testeurs','Tests');
+  await pause(1000);
   verifier(cp.scenarios===nScen,`il voit les ${nScen} scénarios de son projet`,`${cp.scenarios} vus`);
 
   /* Le client voit les testeurs de son projet, mais pas leur nom ni leur

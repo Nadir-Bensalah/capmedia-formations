@@ -107,7 +107,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   console.log(`    (${nb} parcours en base, ${refsCouvertes.size} scénarios couverts)`);
 
   console.log('\n== Les parcours dans un projet');
-  await aller(page,'/tests?projet=atelier','.chiffres-tests','Tests');
+  await aller(page,'/tests?projet=atelier&onglet=automatises','.chiffres-tests','Tests');
   await pause(1500);
   const v = await page.evaluate(()=>({
     sections:[...document.querySelectorAll('.section-tete h2')].map(h=>h.innerText.trim()),
@@ -189,7 +189,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   verifier(g.sections.includes('Parcours automatisés'),'et la section globale existe');
 
   console.log('\n== Le catalogue se replie');
-  await aller(page,'/tests?projet=atelier','.chiffres-tests','Tests');
+  await aller(page,'/tests?projet=atelier&onglet=automatises','.chiffres-tests','Tests');
   await pause(1500);
   const r1 = await page.evaluate(()=>{
     const b=document.querySelector('#catalogue-parcours');
@@ -228,7 +228,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
 
   console.log('\n== Le filtre de plateforme filtre vraiment');
   const lirePlat = async (plat) => {
-    await aller(page,`/tests?projet=atelier${plat?`&plateforme=${plat}`:''}`,'.chiffres-tests','Tests');
+    await aller(page,`/tests?projet=atelier&onglet=automatises${plat?`&plateforme=${plat}`:''}`,'.chiffres-tests','Tests');
     await pause(1500);
     return page.evaluate(()=>{
       const cat=document.querySelector('#catalogue-parcours');
@@ -248,7 +248,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   verifier(Number(web.machine)<=Number(toutes.machine) && (Number(web.machine)<Number(toutes.machine) || web.lignes.length===toutes.lignes.length),'l avancement des tests automatisés suit le filtre',`${toutes.machine} → web ${web.machine}`);
 
   console.log('\n== En créer un');
-  await aller(page,'/tests?projet=atelier','.chiffres-tests','Tests');
+  await aller(page,'/tests?projet=atelier&onglet=automatises','.chiffres-tests','Tests');
   await pause(1400);
   const avant = await toutesPages('projets/atelier/parcours');
   await page.click('[data-nouveau-parcours]'); await pause(1200);
@@ -280,7 +280,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   const nav2=await chromium.launch();
   const cl=await (await nav2.newContext({viewport:{width:1500,height:1100}})).newPage();
   await connecter(cl,'camille.essai@exemple.test');
-  await aller(cl,'/tests?projet=atelier',null,'Tests');
+  await aller(cl,'/tests?projet=atelier&onglet=automatises',null,'Tests');
   await pause(1500);
   /* Le catalogue est replié pour lui aussi : chercher une référence dans
      le texte visible ne prouverait rien. On déplie, comme il le ferait. */

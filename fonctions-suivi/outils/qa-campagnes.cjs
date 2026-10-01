@@ -61,7 +61,8 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   page.on('console',m=>{if(m.type()==='error')err.push(m.text().slice(0,160));});
 
   await connecter(page,'agent.essai@exemple.test');
-  await aller(page,'/tests?projet=atelier','.chiffres-tests','Tests');
+  /* La bibliothèque a son onglet sur la page d'un projet. */
+  await aller(page,'/tests?projet=atelier&onglet=bibliotheque','#bibliotheque, [data-plier-scenarios]','Tests');
 
   console.log('\n== La bibliothèque se replie');
   const plie = await page.evaluate(()=>{const b=document.querySelector('#bibliotheque');return b?b.hidden:null;});
@@ -90,6 +91,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
 
   verifier(visible2===nScen,`elle se déplie sur demande (${nScen})`,`${visible2} visibles`);
   await page.click('[data-plier-scenarios]'); await pause(600);
+  await aller(page,'/tests?projet=atelier','#campagnes','Tests'); await pause(600);
 
   console.log('\n== Créer une campagne');
   const avant = (await lire('projets/atelier/campagnes?pageSize=50'));

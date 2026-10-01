@@ -43,7 +43,7 @@ const statutEnBase=async(id)=>((((await lire(`projets/atelier/jalons/${id}`))||{
   await page.reload({waitUntil:'domcontentloaded'}); await page.waitForSelector('.lat a',{timeout:60000}).catch(()=>{}); await pause(1200);
 
   console.log('\n== Le devis en tête de la page Tests');
-  await aller(page,'/tests?projet=atelier','#etage-devis .frise');
+  await aller(page,'/tests?projet=atelier&onglet=devis','#etage-devis .frise');
   const f=await page.evaluate(()=>{const fr=document.querySelector('#etage-devis .frise');return{
     frise:!!fr, etapes:fr?fr.querySelectorAll('.frise-etape').length:0,
     cases:fr?fr.querySelectorAll('[data-cocher-etape]').length:0,
@@ -100,7 +100,7 @@ const statutEnBase=async(id)=>((((await lire(`projets/atelier/jalons/${id}`))||{
   const nav2=await chromium.launch();
   const cl=await (await nav2.newContext({viewport:{width:1500,height:1100}})).newPage();
   await connecter(cl,'camille.essai@exemple.test');
-  await aller(cl,'/tests?projet=atelier','#etage-devis .frise');
+  await aller(cl,'/tests?projet=atelier&onglet=devis','#etage-devis .frise');
   const c=await cl.evaluate(()=>{const fr=document.querySelector('#etage-devis .frise');return{
     frise:!!fr, etapes:fr?fr.querySelectorAll('.frise-etape').length:0,
     cases:fr?fr.querySelectorAll('input').length:0, coches:fr?fr.querySelectorAll('.frise-coche').length:0};});

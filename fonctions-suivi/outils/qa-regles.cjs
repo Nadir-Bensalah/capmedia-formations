@@ -106,7 +106,7 @@ const aller = async (page, hash, sel, titre) => {
   console.log(`\n    (${nb} familles, ${cas} cas en base)`);
 
   console.log('\n== La section existe et dit la profondeur');
-  await aller(page, '/tests?projet=atelier', '.chiffres-tests', 'Tests');
+  await aller(page, '/tests?projet=atelier&onglet=automatises', '.chiffres-tests', 'Tests');
   await pause(1600);
   const v = await page.evaluate(() => ({
     sections: [...document.querySelectorAll('.section-tete h2')].map((h) => h.innerText.trim()),
@@ -201,7 +201,7 @@ const aller = async (page, hash, sel, titre) => {
   /* Le titre « Tests » arrive avant les sections, qui se montent après
      la lecture des données. Attendre le titre seul faisait lire une page
      encore vide : on attend la section elle-même. */
-  await aller(cl, '/tests?projet=atelier', '#regles', 'Tests');
+  await aller(cl, '/tests?projet=atelier&onglet=automatises', '#regles', 'Tests');
   await pause(1600);
   const c = await cl.evaluate(() => ({
     voit: /Règles métier/.test(document.body.innerText),

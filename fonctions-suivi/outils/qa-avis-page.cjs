@@ -63,7 +63,7 @@ const nombre=(page,sel)=>page.evaluate((s)=>document.querySelectorAll(s).length,
   await connecter(page,'agent.essai@exemple.test');
 
   console.log('\n== L équipe : le questionnaire est sur la page');
-  await aller(page,'/tests?projet=atelier','#etage-avis');
+  await aller(page,'/tests?projet=atelier&onglet=avis','#etage-avis');
   await pause(2500);
   verifier(await page.evaluate(()=>!!document.querySelector('#etage-avis')),'l étage « Ce que les testeurs en pensent » existe');
   const resume=await texte(page,'#etage-avis .etage-resume');
@@ -78,11 +78,13 @@ const nombre=(page,sel)=>page.evaluate((s)=>document.querySelectorAll(s).length,
   verifier(/Karim/.test(avisT)&&/Infirmier/.test(avisT),'signée du prénom et du profil pour l équipe');
   verifier(/Une note de 1 à 5/.test(avisT),'une question sans réponse dit ce qu elle attend');
   verifier(/Avant de commencer/i.test(avisT)&&/Après avoir tout déroulé/i.test(avisT),'chaque famille dit quand elle est posée');
-  verifier(await page.evaluate(()=>[...document.querySelectorAll('.index-page button')].some(b=>/Questionnaire/.test(b.innerText))),'l index de page mène au questionnaire');
+  verifier(await page.evaluate(()=>[...document.querySelectorAll('#onglets-tests .onglet')].some(b=>/Questionnaire/.test(b.innerText))),'l onglet Questionnaire est dans la barre');
   verifier(await page.evaluate(()=>!!document.querySelector('[data-info="avis"]')),'le « i » du questionnaire est là');
   verifier(await page.evaluate(()=>!!document.querySelector('#alertes, .section--alerte, .calme')),'« Ce qui ne va pas » est sur la page du projet');
 
   console.log('\n== L équipe : les résultats, scénario par scénario');
+  /* Les campagnes vivent dans l'onglet « Tests humains », celui par défaut. */
+  await aller(page,'/tests?projet=atelier','#campagnes'); await pause(800);
   await page.click(`[data-action="ouvrir-campagne"][data-id="${cid}"] .ligne-titre, [data-action="ouvrir-campagne"][data-id="${cid}"]`).catch(()=>{}); await pause(1500);
   verifier(await page.evaluate(()=>!!document.querySelector('.voile #resultats')),'la feuille de campagne porte les résultats');
   const res=await texte(page,'.voile #resultats');
@@ -103,7 +105,7 @@ const nombre=(page,sel)=>page.evaluate((s)=>document.querySelectorAll(s).length,
   const cl=await (await nav.newContext({viewport:{width:1500,height:1100}})).newPage();
   cl.on('pageerror',e=>err.push('CLIENT: '+e.message.slice(0,160)));
   await connecter(cl,'camille.essai@exemple.test');
-  await aller(cl,'/tests','#etage-avis'); await pause(3000);
+  await aller(cl,'/tests?onglet=avis','#etage-avis'); await pause(3000);
   verifier(await cl.evaluate(()=>!!document.querySelector('#etage-avis')),'l étage du questionnaire est chez le client');
   const resumeC=await texte(cl,'#etage-avis .etage-resume');
   verifier(/2 testeurs ont répondu/.test(resumeC),'avec les deux réponses',resumeC);
@@ -114,17 +116,22 @@ const nombre=(page,sel)=>page.evaluate((s)=>document.querySelectorAll(s).length,
   verifier(/Infirmier/.test(avisC)&&/25-34 ans/.test(avisC),'et leur profil reste');
   verifier(await nombre(cl,'#avis .avis-question')===35,'les 35 questions sont là aussi');
   /* Le même numéro partout : celui du vivier et celui de la citation. */
-  const coherence=await cl.evaluate(()=>{
-    const vivier=[...document.querySelectorAll('#testeurs .ligne')].map(l=>l.innerText);
-    const ligneInf=vivier.find(t=>/Infirmier/.test(t))||'';
-    const numVivier=(ligneInf.match(/Testeur (\d+)/)||[])[1];
+  const numCite=await cl.evaluate(()=>{
     const cite=[...document.querySelectorAll('#avis .avis-verbatim')].find(b=>/récurrences, le calendrier/.test(b.innerText));
-    const numCite=cite?(cite.querySelector('cite').innerText.match(/Testeur (\d+)/)||[])[1]:'';
-    return {numVivier,numCite};
+    return cite?(cite.querySelector('cite').innerText.match(/Testeur (\d+)/)||[])[1]:'';
   });
+  /* Le vivier est dans l'onglet « Tests humains » : on y va pour lire son numéro. */
+  await aller(cl,'/tests?projet=atelier','#testeurs'); await pause(800);
+  const numVivier=await cl.evaluate(()=>{
+    const ligneInf=[...document.querySelectorAll('#testeurs .ligne')].map(l=>l.innerText).find(t=>/Infirmier/.test(t))||'';
+    return (ligneInf.match(/Testeur (\d+)/)||[])[1];
+  });
+  await aller(cl,'/tests?projet=atelier&onglet=avis','#avis'); await pause(800);
+  const coherence={numVivier,numCite};
   verifier(coherence.numVivier&&coherence.numVivier===coherence.numCite,'le numéro d un testeur est le même au vivier et sous sa citation',JSON.stringify(coherence));
   verifier(await cl.evaluate(()=>!!document.querySelector('.section--alerte, .calme')),'« Ce qui ne va pas » est aussi chez le client');
 
+  await aller(cl,'/tests?projet=atelier','#campagnes'); await pause(800);
   await cl.click(`[data-action="ouvrir-campagne"][data-id="${cid}"] .ligne-titre, [data-action="ouvrir-campagne"][data-id="${cid}"]`).catch(()=>{}); await pause(1500);
   const resC=await texte(cl,'.voile #resultats');
   verifier(/2\s+réussis/.test(resC)&&/1\s+échoué/.test(resC),'le client lit les résultats scénario par scénario');

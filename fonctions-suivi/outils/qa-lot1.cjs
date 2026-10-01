@@ -134,7 +134,7 @@ const attendre=async(fn,n=25)=>{for(let i=0;i<n;i++){const v=await fn();if(v)ret
     await eq.keyboard.press('Escape'); await pause(500);
 
     /* Le doublon d'une référence de parcours, depuis la console. */
-    await aller(eq,'/tests?projet=atelier','#parcours');
+    await aller(eq,'/tests?projet=atelier&onglet=automatises','#parcours');
     const dejaPris=await eq.evaluate(()=>{
       const l=document.querySelectorAll('#catalogue-parcours .ligne, #parcours .ligne');
       return l.length?null:'aucun parcours à l\'écran';

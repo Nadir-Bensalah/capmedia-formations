@@ -24,7 +24,7 @@ import {
 } from '../noyau.js';
 import {
   icone, pastille, ligne, vide, squelette, titrePage, sur, modale, toast, agir, confirmer,
-  brancherPieces, lisible, menu,
+  brancherPieces, lisible, menu, reglerBarreOnglets,
 } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K, ecrire, repartir, profilsTesteurs } from '../donnees.js';
@@ -40,10 +40,38 @@ import { monter as monterTableau } from './tableau.js';
 const lire = (ctx, cle, defaut) => (ctx.requete && ctx.requete[cle]) || defaut;
 
 const poser = (cles) => {
-  const p = new URLSearchParams(location.hash.split('?')[1] || '');
+  location.hash = adresse(cles, location.hash.split('?')[1] || '');
+};
+
+/* L'adresse de la page avec ces paramètres posés (vides : retirés). */
+const adresse = (cles, depuis = '') => {
+  const p = new URLSearchParams(depuis);
   Object.entries(cles).forEach(([k, v]) => { if (v) p.set(k, v); else p.delete(k); });
   const chaine = p.toString();
-  location.hash = `/tests${chaine ? `?${chaine}` : ''}`;
+  return `/tests${chaine ? `?${chaine}` : ''}`;
+};
+
+/* Les onglets d'un projet, sous les chiffres et les bugs urgents : la page
+   était trop longue d'un seul tenant. Le haut (chiffres, tableau, bugs à
+   corriger d'urgence) reste commun ; à partir du devis, chaque sujet a son
+   onglet. « humains » est l'onglet par défaut (l'adresse sans « onglet »). */
+const ONGLETS_TESTS = [
+  { cle: 'devis', libelle: 'Le devis' },
+  { cle: 'humains', libelle: 'Tests humains' },
+  { cle: 'avis', libelle: 'Questionnaire' },
+  { cle: 'automatises', libelle: 'Tests automatisés' },
+  { cle: 'bibliotheque', libelle: 'Bibliothèque' },
+];
+const ONGLET_DEFAUT = 'humains';
+const ongletValide = (o) => (ONGLETS_TESTS.some((x) => x.cle === o) ? o : ONGLET_DEFAUT);
+/* Quel onglet porte chaque section : pour un lien qui vise une section
+   (index, alerte, adresse), on ouvre d'abord le bon onglet. */
+const ONGLET_DE_SECTION = {
+  'etage-devis': 'devis',
+  'etage-humain': 'humains', campagnes: 'humains', anomalies: 'humains', testeurs: 'humains',
+  'etage-avis': 'avis', avis: 'avis',
+  'etage-machine': 'automatises', parcours: 'automatises', regles: 'automatises',
+  'etage-bibli': 'bibliotheque', scenarios: 'bibliotheque', bibliotheque: 'bibliotheque',
 };
 
 /* --------------------------------------------------------------------------
@@ -573,7 +601,7 @@ const vivierClientHtml = (d) => {
    Un projet choisi : toute la panoplie
    -------------------------------------------------------------------------- */
 
-const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
+const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAUT }) => {
   const projet = d.projets.find((p) => p.id === pid);
   if (!projet) return vide({ icone: 'bug', titre: 'Projet introuvable', texte: 'Il a peut-être été archivé.' });
 
@@ -625,16 +653,17 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
     ? `<b>${avis.length}</b> ${avis.length > 1 ? 'testeurs ont répondu' : 'testeur a répondu'} au questionnaire${recommande ? `, recommandation <b>${recommande.v.toFixed(1)}</b> sur 10` : ''}${suspect && cher ? `, prix acceptable entre <b>${suspect.median}</b> et <b>${cher.median} €</b> par mois` : ''}.`
     : `Personne n'a encore répondu. Les <b>${nbQuestions}</b> questions posées à chaque testeur sont ci-dessous.`;
 
-  const index = [
-    ...(devisProjet.length ? [['etage-devis', 'Le devis', `${etapesFaites.length}/${etapesDevis.length}`]] : []),
-    ['campagnes', 'Campagnes', camp.length],
-    ...(ano.length ? [['anomalies', 'Anomalies', ano.length]] : []),
-    ['testeurs', 'Testeurs', gens.length],
-    ['avis', 'Questionnaire', avis.length],
-    ['parcours', 'Parcours', parc.length],
-    ['regles', 'Règles', casRegles],
-    ['scenarios', 'Scénarios', scen.length],
-  ];
+  /* Les onglets et leur compte : un devis absent n'a pas d'onglet. Le
+     compte dit ce qu'il y a dedans, pas ce qui va mal. */
+  const comptes = {
+    devis: devisProjet.length ? `${etapesFaites.length}/${etapesDevis.length}` : '',
+    humains: camp.length + ano.length,
+    avis: avis.length,
+    automatises: parc.length,
+    bibliotheque: scen.length,
+  };
+  const onglets = ONGLETS_TESTS.filter((o) => o.cle !== 'devis' || devisProjet.length);
+  const actif = onglets.some((o) => o.cle === onglet) ? onglet : ONGLET_DEFAUT;
 
   const sectionCampagnes = `<section class="section" id="campagnes">
     <div class="section-tete">
@@ -708,19 +737,18 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe }) => {
 
   <div id="tableau-ici"></div>
 
-  <div class="tests-corps tests-corps--index">
-    <div>
-      ${alertes({ ...d, anomalies: ano, campagnes: camp, parcours: parc, scenarios: scen }, { nomProjet, plateforme })}
-      ${devisProjet.length ? etage('etage-devis', 'Le devis, ligne par ligne', resumeDevis, `<div style="margin-top:20px">${devisProjet.map((dv) => friseDevis(dv, jalonsProjet, { equipe, pid })).join('')}</div>`) : ''}
-      ${etage('etage-humain', 'Tests humains', humain, `${sectionCampagnes}${sectionAnomalies}${vivierHtml({ ...d, testeurs: gens, profils: gens }, { equipe })}`)}
-      ${etage('etage-avis', 'Ce que les testeurs en pensent', resumeAvis, avisHtml(avis, { nommer }))}
-      ${etage('etage-machine', 'Tests automatisés', machine, `${parcoursHtml(d, { pid, equipe, plateforme })}${reglesHtml(d, { pid, equipe })}`)}
-      ${etage('etage-bibli', 'Bibliothèque', bibli, sectionScenarios)}
-    </div>
-    <aside class="index-page" aria-label="Sur cette page">
-      <span class="etage-sur">Sur cette page</span>
-      ${index.map(([id, nom, n]) => `<button type="button" data-aller="${id}">${echapper(nom)}<b>${n}</b></button>`).join('')}
-    </aside>
+  ${alertes({ ...d, anomalies: ano, campagnes: camp, parcours: parc, scenarios: scen }, { nomProjet, plateforme })}
+
+  <div class="onglets-enveloppe"><nav class="onglets" id="onglets-tests" aria-label="Sections des tests">
+    ${onglets.map((o) => `<a class="onglet${o.cle === actif ? ' actif' : ''}" href="#${adresse({ projet: pid, plateforme, onglet: o.cle === ONGLET_DEFAUT ? '' : o.cle })}" data-onglet="${o.cle}">${o.libelle}${comptes[o.cle] ? `<span class="badge">${echapper(String(comptes[o.cle]))}</span>` : ''}</a>`).join('')}
+  </nav></div>
+
+  <div id="onglet-tests" data-onglet="${actif}">
+    ${actif === 'devis' ? etage('etage-devis', 'Le devis, ligne par ligne', resumeDevis, `<div style="margin-top:20px">${devisProjet.map((dv) => friseDevis(dv, jalonsProjet, { equipe, pid })).join('')}</div>`) : ''}
+    ${actif === 'humains' ? etage('etage-humain', 'Tests humains', humain, `${sectionCampagnes}${sectionAnomalies}${vivierHtml({ ...d, testeurs: gens, profils: gens }, { equipe })}`) : ''}
+    ${actif === 'avis' ? etage('etage-avis', 'Ce que les testeurs en pensent', resumeAvis, avisHtml(avis, { nommer })) : ''}
+    ${actif === 'automatises' ? etage('etage-machine', 'Tests automatisés', machine, `${parcoursHtml(d, { pid, equipe, plateforme })}${reglesHtml(d, { pid, equipe })}`) : ''}
+    ${actif === 'bibliotheque' ? etage('etage-bibli', 'Bibliothèque', bibli, sectionScenarios) : ''}
   </div>`;
 };
 
@@ -1256,7 +1284,10 @@ export const vue = async (ctx, env) => {
   const etat = {
     projet: lire(ctx, 'projet', ''),
     plateforme: lire(ctx, 'plateforme', ''),
+    onglet: ongletValide(lire(ctx, 'onglet', '')),
   };
+  /* Une section visée par un lien, à faire défiler une fois l'onglet ouvert. */
+  let allerA = '';
 
   let empreinte = '';
   /* Les lectures en groupe n'existent que côté équipe : les règles les lui
@@ -1305,7 +1336,7 @@ export const vue = async (ctx, env) => {
 
   const rendre = (force = false) => {
     suivreCampagnes();
-    const sceau = magasin.empreinte(clesSuivies()) + '|' + etat.projet + '|' + etat.plateforme;
+    const sceau = magasin.empreinte(clesSuivies()) + '|' + etat.projet + '|' + etat.plateforme + '|' + etat.onglet;
     if (!force && sceau === empreinte) return;
     empreinte = sceau;
 
@@ -1337,7 +1368,7 @@ export const vue = async (ctx, env) => {
       </div>
 
       ${pid
-        ? unProjet(d, { pid, nomProjet, plateforme: etat.plateforme, equipe: env.role === 'equipe' })
+        ? unProjet(d, { pid, nomProjet, plateforme: etat.plateforme, equipe: env.role === 'equipe', onglet: etat.onglet })
         : `<div id="tableau-ici"></div>
           ${alertes(d, { nomProjet, plateforme: etat.plateforme })}
           ${etage('etage-projets', 'Projets', `<b>${d.projets.length}</b> ${d.projets.length > 1 ? 'projets' : 'projet'}, <b>${d.campagnes.filter((c) => c.statut === 'en-cours').length}</b> ${d.campagnes.filter((c) => c.statut === 'en-cours').length > 1 ? 'campagnes en cours' : 'campagne en cours'}.`, avancement(d, { nomProjet, plateforme: etat.plateforme, equipe: env.role === 'equipe' }))}
@@ -1357,11 +1388,18 @@ export const vue = async (ctx, env) => {
       pidTableau = `${pid}|${etat.plateforme}`;
     }
 
+    reglerBarreOnglets(sortie.querySelector('#onglets-tests'));
+    if (allerA) {
+      const cible = sortie.querySelector(`#${allerA}`);
+      allerA = '';
+      if (cible) cible.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
     const sel = sortie.querySelector('#f-projet');
     /* Changer de projet ou de plateforme, c'est changer d'adresse : le
        routeur nous redonne la main par `maj`, qui redessine une seule fois.
        Redessiner ici en plus faisait deux dessins par clic. */
-    if (sel) sel.addEventListener('change', (e) => { poser({ projet: e.target.value, plateforme: etat.plateforme }); });
+    if (sel) sel.addEventListener('change', (e) => { poser({ projet: e.target.value, plateforme: etat.plateforme, onglet: '' }); });
   };
 
   brancherFrise(sortie, env);
@@ -1385,7 +1423,10 @@ export const vue = async (ctx, env) => {
     }
     if (el.dataset.aller) {
       const cible = sortie.querySelector(`#${el.dataset.aller}`);
-      if (cible) cible.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (cible) { cible.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+      /* La section vit dans un autre onglet : on l'ouvre, puis on y va. */
+      const o = ONGLET_DE_SECTION[el.dataset.aller];
+      if (o) { allerA = el.dataset.aller; poser({ projet: etat.projet, plateforme: etat.plateforme, onglet: o === ONGLET_DEFAUT ? '' : o }); }
       return;
     }
     if (el.hasAttribute('data-plier-bugs')) {
@@ -1482,7 +1523,7 @@ export const vue = async (ctx, env) => {
       if (c) await editer('campagne', env, { pid, fiche: c });
       return;
     }
-    poser({ projet: etat.projet, plateforme: el.dataset.plateforme });
+    poser({ projet: etat.projet, plateforme: el.dataset.plateforme, onglet: etat.onglet === ONGLET_DEFAUT ? '' : etat.onglet });
   });
 
   /* La liste des projets d'un client peut grandir en cours de session, quand
@@ -1518,6 +1559,8 @@ export const vue = async (ctx, env) => {
      « ?campagne= » dans l'adresse ouvre l'anomalie ou la campagne dès
      qu'elle est là, une seule fois. */
   const aOuvrir = { anomalie: lire(ctx, 'anomalie', ''), campagne: lire(ctx, 'campagne', '') };
+  /* Une anomalie ou une campagne à ouvrir vit dans l'onglet des tests humains. */
+  if (aOuvrir.anomalie || aOuvrir.campagne) etat.onglet = ONGLET_DEFAUT;
   let essais = 0;
   const ouvrirDepuisAdresse = () => {
     if (!aOuvrir.anomalie && !aOuvrir.campagne) return;
@@ -1537,10 +1580,17 @@ export const vue = async (ctx, env) => {
     maj: (suite) => {
       const projet = lire(suite, 'projet', '');
       const plateforme = lire(suite, 'plateforme', '');
-      if (projet === etat.projet && plateforme === etat.plateforme) return;
+      const onglet = ongletValide(lire(suite, 'onglet', ''));
+      if (projet === etat.projet && plateforme === etat.plateforme && onglet === etat.onglet) return;
+      const changeOnglet = onglet !== etat.onglet;
       etat.projet = projet;
       etat.plateforme = plateforme;
+      etat.onglet = onglet;
       rendre(true);
+      /* Changer d'onglet quand la barre est sortie de l'écran : on la
+         ramène en haut, sinon l'en-tête reste exactement où il est. */
+      const barre = sortie.querySelector('#onglets-tests');
+      if (changeOnglet && barre && barre.getBoundingClientRect().top < 0) barre.scrollIntoView({ block: 'start', behavior: 'instant' });
     },
   };
 };
