@@ -462,6 +462,125 @@ service cloud.firestore {
     }
 
     // ================================================================
+    // Le coffre-fort d'un projet
+    //
+    // Les accès du client (sites, consoles, stores), chiffrés dans le
+    // navigateur avant d'arriver ici (assets/js/coffre-chiffre.js). La base
+    // ne voit que des octets : ni secret, ni phrase, ni clé qu'on en
+    // tirerait sans elle. Ces règles disent QUI touche aux octets, et
+    // quelle FORME ils ont : aucun champ en clair ne peut s'y glisser.
+    //
+    // Qui : l'équipe du projet (administrateur, ou agent affecté), et le
+    // ou les responsables du projet côté client. Jamais un collaborateur,
+    // jamais un autre client, jamais un testeur.
+    // ================================================================
+
+    function accesCoffre(projetId) {
+      return equipeSurProjet(projetId)
+          || (responsableDuProjet(projetId) && request.auth.token.get('testeur', false) != true);
+    }
+
+    // Du base64url, d'une longueur bornée : la seule forme d'un chiffré.
+    function octets(valeur, min, max) {
+      return valeur is string && valeur.size() >= min && valeur.size() <= max
+          && valeur.matches('^[A-Za-z0-9_-]+$');
+    }
+
+    // L'enveloppe de la clé du coffre : PBKDF2-SHA256, 600 000 tours au
+    // moins, sel de 16 octets, IV de 12, clé de 32 octets plus l'étiquette.
+    function enveloppeValide(d) {
+      return d.version == 1
+          && d.kdf == 'PBKDF2-SHA256'
+          && d.iterations is int && d.iterations >= 600000 && d.iterations <= 10000000
+          && octets(d.sel, 22, 22)
+          && octets(d.iv, 16, 16)
+          && octets(d.cle, 64, 64);
+    }
+
+    match /coffres/{projetId} {
+      allow read: if accesCoffre(projetId);
+      // L'équipe ouvre le coffre et génère la phrase. Une création ne peut
+      // pas écraser un coffre existant (ce serait une mise à jour, et elle
+      // exige « cree » et « creePar » inchangés).
+      allow create: if equipeSurProjet(projetId)
+        && request.resource.data.keys().hasOnly(['version', 'kdf', 'iterations', 'sel', 'iv', 'cle', 'creePar', 'cree', 'maj', 'phraseLe'])
+        && request.resource.data.keys().hasAll(['version', 'kdf', 'iterations', 'sel', 'iv', 'cle', 'creePar', 'cree', 'maj', 'phraseLe'])
+        && enveloppeValide(request.resource.data)
+        && request.resource.data.creePar == moi()
+        && request.resource.data.cree == request.time
+        && request.resource.data.maj == request.time
+        && request.resource.data.phraseLe == request.time;
+      // Changer la phrase : seule l'enveloppe change.
+      allow update: if accesCoffre(projetId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['iterations', 'sel', 'iv', 'cle', 'maj', 'phraseLe'])
+        && enveloppeValide(request.resource.data)
+        && request.resource.data.maj == request.time
+        && request.resource.data.phraseLe == request.time;
+      // La phrase perdue : l'équipe efface et recommence.
+      allow delete: if equipeSurProjet(projetId);
+
+      match /entrees/{entreeId} {
+        allow read: if accesCoffre(projetId);
+        allow create: if accesCoffre(projetId)
+          && exists(/databases/$(database)/documents/coffres/$(projetId))
+          && request.resource.data.keys().hasOnly(['v', 'iv', 'donnees', 'cree', 'maj'])
+          && request.resource.data.keys().hasAll(['v', 'iv', 'donnees', 'cree', 'maj'])
+          && request.resource.data.v == 1
+          && octets(request.resource.data.iv, 16, 16)
+          && octets(request.resource.data.donnees, 300, 40000)
+          && request.resource.data.cree == request.time
+          && request.resource.data.maj == request.time;
+        allow update: if accesCoffre(projetId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['v', 'iv', 'donnees', 'maj'])
+          && request.resource.data.v == 1
+          && octets(request.resource.data.iv, 16, 16)
+          && octets(request.resource.data.donnees, 300, 40000)
+          && request.resource.data.maj == request.time;
+        allow delete: if accesCoffre(projetId);
+      }
+
+      // La copie de la clé propre à un appareil à empreinte (WebAuthn PRF).
+      // Inutile sans l'appareil et le doigt de son propriétaire ; chacun
+      // pose la sienne, tous la voient (transparence), tous la retirent.
+      match /appareils/{appareilId} {
+        allow read: if accesCoffre(projetId);
+        allow create: if accesCoffre(projetId)
+          && exists(/databases/$(database)/documents/coffres/$(projetId))
+          && request.resource.data.keys().hasOnly(['uid', 'nom', 'appareil', 'credId', 'selPrf', 'iv', 'cle', 'cree'])
+          && request.resource.data.keys().hasAll(['uid', 'nom', 'appareil', 'credId', 'selPrf', 'iv', 'cle', 'cree'])
+          && request.resource.data.uid == moi()
+          && texteBorne(request.resource.data.nom, 120)
+          && texteBorne(request.resource.data.appareil, 80)
+          && octets(request.resource.data.credId, 16, 1400)
+          && octets(request.resource.data.selPrf, 43, 43)
+          && octets(request.resource.data.iv, 16, 16)
+          && octets(request.resource.data.cle, 64, 64)
+          && request.resource.data.cree == request.time;
+        allow update: if false;
+        allow delete: if accesCoffre(projetId);
+      }
+
+      // Le journal : qui a ouvert, quand, comment. Aucun contenu. Chacun
+      // n'écrit que sa propre ligne, datée par le serveur ; personne ne la
+      // corrige ni ne l'efface.
+      match /journal/{ligneId} {
+        allow read: if accesCoffre(projetId);
+        allow create: if accesCoffre(projetId)
+          && request.resource.data.keys().hasOnly(['uid', 'nom', 'cote', 'action', 'moyen', 'date'])
+          && request.resource.data.keys().hasAll(['uid', 'nom', 'cote', 'action', 'moyen', 'date'])
+          && request.resource.data.uid == moi()
+          && request.resource.data.cote == (estEquipe() ? 'equipe' : 'client')
+          && texteBorne(request.resource.data.nom, 120)
+          && request.resource.data.action in ['creation', 'deverrouillage', 'echec', 'phrase-changee',
+                                              'entree-ajoutee', 'entree-modifiee', 'entree-supprimee',
+                                              'appareil-ajoute', 'appareil-retire', 'coffre-efface']
+          && request.resource.data.moyen in ['phrase', 'appareil', '']
+          && request.resource.data.date == request.time;
+        allow update, delete: if false;
+      }
+    }
+
+    // ================================================================
     // Les demandes (collection « tickets »)
     // ================================================================
 

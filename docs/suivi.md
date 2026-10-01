@@ -1355,3 +1355,63 @@ Première publication le 28/09/2026 (0.1.0) : Mac signée ad hoc seulement,
 donc bloquée par Gatekeeper tant que la signature Developer ID et la
 notarisation ne sont pas faites ; Windows sans signature (avertissement
 SmartScreen).
+
+## 26. Le coffre-fort d'un projet (01/10/2026)
+
+Un onglet « Coffre-fort » sur la page d'un projet, pour ranger tous les
+accès du client : sites, Firebase, Stripe, stores. Nom du service, lien,
+identifiant, mot de passe, note. Il est visible de l'équipe du projet et
+du ou des responsables côté client ; un collaborateur ne le voit pas.
+
+**Chiffré de bout en bout, dans le navigateur.** La base ne reçoit jamais
+un secret en clair, ni la phrase, ni une clé qu'on en tirerait sans elle.
+Le serveur et l'équipe, sans la phrase, ne lisent rien.
+
+```
+phrase (7 mots tirés par crypto.getRandomValues dans 2 107 mots, ~77 bits)
+  PBKDF2-SHA256, 600 000 tours, sel aléatoire de 16 octets  -> clé d'enveloppe
+  la clé d'enveloppe chiffre (AES-256-GCM) la clé du coffre, 32 octets aléatoires
+  la clé du coffre chiffre chaque entrée (AES-256-GCM, IV de 12 octets neuf)
+  données associées : projet + rôle + identifiant (une entrée recopiée ailleurs ne s'ouvre plus)
+  clair complété au multiple de 256 octets : la longueur ne trahit pas le mot de passe
+```
+
+Code : `assets/js/coffre-chiffre.js` (le chiffrement seul, testé sous Node
+par `outils/coffre-chiffre.test.mjs`), `mots-coffre.js` (la liste),
+`coffre-appareil.js` (WebAuthn), `vues/coffre.js` (l'onglet), et la
+section « coffre » de `donnees.js`.
+
+**La phrase** est générée à la création (l'équipe seule crée), montrée une
+fois avec un bouton « Copier », et la fenêtre ne se ferme qu'après « J'ai
+noté ». Elle se transmet de vive voix ou sur papier, jamais par e-mail ni
+dans le Hub. « Changer la phrase » ré-enveloppe la clé du coffre sous une
+phrase neuve, sans toucher aux entrées, et retire les appareils à
+empreinte. Phrase perdue : l'équipe efface le coffre et en recrée un.
+
+**Touch ID, Face ID, Windows Hello** par WebAuthn et son extension PRF
+(Safari 18 et plus, Chrome, Edge) : la sortie PRF, passée par HKDF-SHA256,
+chiffre une copie de la clé du coffre propre à l'appareil. Aucune
+vérification serveur n'est nécessaire : sans l'authentificateur et le
+geste, pas de sortie PRF. Si le navigateur ne sait pas, la page le dit et
+la phrase reste la seule clé.
+
+**Verrou** : à la main, après cinq minutes sans geste, en quittant
+l'onglet ou la page. Rien n'est écrit dans localStorage ni sessionStorage.
+
+**Données** (règles : `suivi/firestore.rules`, section coffre)
+
+```
+coffres/{projetId}                 version, kdf, iterations, sel, iv, cle, creePar, cree, maj, phraseLe
+coffres/{projetId}/entrees/{id}    v, iv, donnees, cree, maj           (rien d'autre n'est accepté)
+coffres/{projetId}/appareils/{id}  uid, nom, appareil, credId, selPrf, iv, cle, cree
+coffres/{projetId}/journal/{id}    uid, nom, cote, action, moyen, date (qui a ouvert, quand ; aucun contenu)
+```
+
+Lecture et écriture : `equipeSurProjet` ou `responsableDuProjet` (et
+jamais un testeur). Création et effacement du coffre : l'équipe. Les
+règles imposent la forme (base64url borné, 600 000 tours au moins, dates
+du serveur, journal à son propre nom, non modifiable). Preuves :
+`outils/regles-coffre.test.mjs` (règles, `@firebase/rules-unit-testing`)
+et `outils/qa-coffre.cjs` (navigateur, base relue, vrais jetons).
+
+Déployer : `firebase deploy --config firebase.suivi.json --only firestore:rules --project capmedia-1f90d`.

@@ -14,7 +14,7 @@ import {
   serverTimestamp, arrayUnion, arrayRemove, Timestamp, stockage, refStockage, deleteObject,
   nomAffiche, enDate, parDateDesc, parDateAsc, joursAvant, borner, age, retard, dateCourte,
   OUVERTS, ATTEND_CLIENT, ATTEND_EQUIPE, FACTURES_DUES, PROJETS_ACTIFS, CATEGORIES_CLIENT, projetEstActif, devisADecider, statutPiece,
-  statutProjet, pluriel, verdictDelai, NIVEAUX_SCENARIO, STATUTS_PIECE_VISIBLES, startAfter, peut,
+  statutProjet, pluriel, verdictDelai, NIVEAUX_SCENARIO, STATUTS_PIECE_VISIBLES, startAfter, peut, onSnapshot, writeBatch,
 } from './noyau.js';
 import * as magasin from './magasin.js';
 
@@ -1233,3 +1233,107 @@ export const repartir = (scenarios, testeurs) => {
 export const chargeParTesteur = (plan, testeurs) => testeurs.map((t) => ({
   ...t, passages: (plan[t.id] || []).length,
 }));
+
+/* ==========================================================================
+   Le coffre-fort d'un projet
+
+   coffres/{projetId}                 l'enveloppe de la clé (sel, IV, chiffré)
+   coffres/{projetId}/entrees/{id}    une entrée : { v, iv, donnees, cree, maj }
+   coffres/{projetId}/appareils/{id}  la copie de la clé propre à un appareil
+   coffres/{projetId}/journal/{id}    qui a ouvert, quand, comment ; aucun contenu
+
+   Rien n'est en clair : le chiffrement a lieu avant (coffre-chiffre.js).
+   Les règles n'acceptent pas d'autres champs que ceux-ci, ce qui interdit
+   qu'un nom de service ou une note y glisse un jour en clair. Ces écoutes
+   ne passent pas par le magasin : elles naissent et meurent avec l'onglet.
+   ========================================================================== */
+
+const refCoffre = (pid) => doc(bdd, 'coffres', pid);
+const colCoffre = (pid, sous) => col('coffres', pid, sous);
+
+const ligneJournal = (session, action, moyen = '') => ({
+  uid: session.utilisateur.uid,
+  nom: String(nomAffiche(session) || session.utilisateur.email || '').slice(0, 120),
+  cote: session.equipe ? 'equipe' : 'client',
+  action, moyen, date: serverTimestamp(),
+});
+
+export const coffre = {
+  /** Écoute le coffre d'un projet. Rend la fonction qui coupe tout. */
+  ecouter(pid, { meta, entrees, appareils, journal, erreur }) {
+    const fin = [];
+    const tant = (e) => { if (erreur) erreur(e); };
+    fin.push(onSnapshot(refCoffre(pid), (d) => meta(d.exists() ? { id: d.id, ...d.data({ serverTimestamps: 'estimate' }) } : null), tant));
+    fin.push(onSnapshot(colCoffre(pid, 'entrees'), (q) => entrees(q.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) }))), tant));
+    fin.push(onSnapshot(colCoffre(pid, 'appareils'), (q) => appareils(q.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) }))), tant));
+    fin.push(onSnapshot(query(colCoffre(pid, 'journal'), orderBy('date', 'desc'), limit(30)), (q) => journal(q.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) }))), tant));
+    return () => fin.splice(0).forEach((f) => { try { f(); } catch (e) { /* déjà coupée */ } });
+  },
+
+  nouvelId: (pid, sous = 'entrees') => doc(colCoffre(pid, sous)).id,
+
+  /* La création ne peut pas écraser un coffre existant : la règle de mise
+     à jour exige « cree » et « creePar » inchangés. */
+  async creer(pid, session, enveloppe) {
+    const b = writeBatch(bdd);
+    b.set(refCoffre(pid), { ...enveloppe, creePar: session.utilisateur.uid, cree: serverTimestamp(), maj: serverTimestamp(), phraseLe: serverTimestamp() });
+    b.set(doc(colCoffre(pid, 'journal')), ligneJournal(session, 'creation'));
+    await b.commit();
+  },
+
+  /* Nouvelle enveloppe, et les copies des appareils retirées : si la
+     phrase a changé parce qu'elle a fui, aucune porte ne reste ouverte. */
+  async changerPhrase(pid, session, enveloppe, appareilsIds = []) {
+    const b = writeBatch(bdd);
+    b.update(refCoffre(pid), { iterations: enveloppe.iterations, sel: enveloppe.sel, iv: enveloppe.iv, cle: enveloppe.cle, maj: serverTimestamp(), phraseLe: serverTimestamp() });
+    appareilsIds.forEach((id) => b.delete(doc(colCoffre(pid, 'appareils'), id)));
+    b.set(doc(colCoffre(pid, 'journal')), ligneJournal(session, 'phrase-changee'));
+    await b.commit();
+  },
+
+  async ecrireEntree(pid, session, id, chiffre, nouvelle) {
+    const b = writeBatch(bdd);
+    const ref = doc(colCoffre(pid, 'entrees'), id);
+    if (nouvelle) b.set(ref, { v: chiffre.v, iv: chiffre.iv, donnees: chiffre.donnees, cree: serverTimestamp(), maj: serverTimestamp() });
+    else b.update(ref, { v: chiffre.v, iv: chiffre.iv, donnees: chiffre.donnees, maj: serverTimestamp() });
+    b.set(doc(colCoffre(pid, 'journal')), ligneJournal(session, nouvelle ? 'entree-ajoutee' : 'entree-modifiee'));
+    await b.commit();
+  },
+
+  async supprimerEntree(pid, session, id) {
+    const b = writeBatch(bdd);
+    b.delete(doc(colCoffre(pid, 'entrees'), id));
+    b.set(doc(colCoffre(pid, 'journal')), ligneJournal(session, 'entree-supprimee'));
+    await b.commit();
+  },
+
+  async ajouterAppareil(pid, session, aid, fiche) {
+    const b = writeBatch(bdd);
+    b.set(doc(colCoffre(pid, 'appareils'), aid), { uid: session.utilisateur.uid, nom: String(nomAffiche(session) || '').slice(0, 120), appareil: String(fiche.appareil || '').slice(0, 80), credId: fiche.credId, selPrf: fiche.selPrf, iv: fiche.iv, cle: fiche.cle, cree: serverTimestamp() });
+    b.set(doc(colCoffre(pid, 'journal')), ligneJournal(session, 'appareil-ajoute', 'appareil'));
+    await b.commit();
+  },
+
+  async retirerAppareil(pid, session, aid) {
+    const b = writeBatch(bdd);
+    b.delete(doc(colCoffre(pid, 'appareils'), aid));
+    b.set(doc(colCoffre(pid, 'journal')), ligneJournal(session, 'appareil-retire'));
+    await b.commit();
+  },
+
+  journaliser: (pid, session, action, moyen = '') => setDoc(doc(colCoffre(pid, 'journal')), ligneJournal(session, action, moyen)),
+
+  /* La phrase perdue : on efface tout (l'équipe seule), le journal reste. */
+  async effacer(pid, session, entreesIds = [], appareilsIds = []) {
+    const ops = [...entreesIds.map((id) => doc(colCoffre(pid, 'entrees'), id)), ...appareilsIds.map((id) => doc(colCoffre(pid, 'appareils'), id))];
+    for (let i = 0; i < ops.length; i += 400) {
+      const b = writeBatch(bdd);
+      ops.slice(i, i + 400).forEach((r) => b.delete(r));
+      await b.commit();
+    }
+    const b = writeBatch(bdd);
+    b.delete(refCoffre(pid));
+    b.set(doc(colCoffre(pid, 'journal')), ligneJournal(session, 'coffre-efface'));
+    await b.commit();
+  },
+};

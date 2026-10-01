@@ -29,6 +29,7 @@ import { basculerAFaire } from './admin-a-faire.js';
 import { accesHtml, gesteAcces } from './acces-client.js';
 import { personnesHtml } from './personnes.js';
 import { telechargerICS } from './calendrier.js';
+import { monterCoffre, demonterCoffre, voitLeCoffre } from './coffre.js';
 
 /* Les onglets, dans l'ordre des sections du rail (app.js, SECTIONS) :
    l'aperçu est le projet lui-même, puis les neuf sections. « Tests » ne
@@ -42,12 +43,15 @@ const ONGLETS = [
   { cle: 'fichiers', libelle: 'Fichiers', icone: 'fichiers' },
   { cle: 'releases', libelle: 'Versions', icone: 'releases' },
   { cle: 'liens', libelle: 'Ressources', icone: 'liens' },
+  /* Les accès du client, chiffrés : l'équipe et le responsable seuls. */
+  { cle: 'coffre', libelle: 'Coffre-fort', icone: 'cadenas' },
   { cle: 'reunions', libelle: 'Réunions', icone: 'reunions' },
   { cle: 'notes', libelle: 'Décisions', icone: 'note' },
   { cle: 'tests', libelle: 'Tests', icone: 'check' },
   { cle: 'activite', libelle: 'Activité', icone: 'activite' },
 ];
-const ongletsVisibles = (d, equipe) => ONGLETS.filter((o) => o.cle !== 'tests' || equipe || (d && (d.scenarios.length || d.campagnes.length)));
+const ongletsVisibles = (d, equipe, env) => ONGLETS.filter((o) => (o.cle !== 'tests' || equipe || (d && (d.scenarios.length || d.campagnes.length)))
+  && (o.cle !== 'coffre' || (env && voitLeCoffre(env, d && d.projet))));
 
 /* La conversation vit en bulle, montée pour toutes les pages d'un projet
    par un module global. Depuis une fiche, on lui passe un début de
@@ -122,18 +126,22 @@ export const vue = async (ctx, env) => {
   const poserFiltre = (requete) => { if (requete && requete.filtre === 'pour-vous') { try { sessionStorage.setItem(`suivi:filtre-demandes:${pid}`, 'moi'); } catch (e) { /* stockage refusé */ } } };
   poserFiltre(ctx.requete);
   let derniereEmpreinte = '';
+  /* L'empreinte du magasin ne relit pas les rôles d'un projet : un client
+     qui perd la responsabilité doit pourtant perdre le coffre tout de
+     suite. Son droit au coffre entre donc dans l'empreinte de la page. */
+  const empreintePage = () => `${magasin.empreinte(cles)}|${onglet}|${voitLeCoffre(env, magasin.lire(K.projet(pid))) ? 'coffre' : ''}`;
 
   const rendre = (force = false) => {
     const d = lireTout(pid);
     const projet = d.projet;
     if (projet === undefined && !magasin.erreur(K.projet(pid))) return;
-    if (!force && magasin.empreinte(cles) + '|' + onglet === derniereEmpreinte) return;
+    if (!force && empreintePage() === derniereEmpreinte) return;
     if (projet === null || projet === undefined) {
       sortie.innerHTML = `<div class="page">${vide({ icone: 'projets', titre: 'Ce projet est introuvable', texte: "Il a peut-être été archivé, ou vous n'y avez plus accès.", action: '<a class="btn btn-secondaire" href="#/">Retour à l\'accueil</a>' })}</div>`;
       return;
     }
     titrePage(projet.nom);
-    const onglets = ongletsVisibles(d, equipe);
+    const onglets = ongletsVisibles(d, equipe, env);
     if (!onglets.some((o) => o.cle === onglet) && ONGLETS.some((o) => o.cle === onglet)) onglet = 'apercu';
     filAriane([{ libelle: equipe ? 'Projets' : 'Accueil', chemin: equipe ? '/projets' : '/' }, { libelle: projet.nom, chemin: `/projets/${pid}` }, ...(onglet !== 'apercu' ? [{ libelle: (ONGLETS.find((o) => o.cle === onglet) || { libelle: onglet === 'acces' ? 'Accès client' : 'Les parties' }).libelle }] : [])]);
 
@@ -189,8 +197,12 @@ export const vue = async (ctx, env) => {
 
       <div id="onglet-corps">${rendreOnglet(onglet, d, { pid, env, prog, attente, ouverts, delai, risques })}</div>
     </div>`;
-    derniereEmpreinte = magasin.empreinte(cles) + '|' + onglet;
+    derniereEmpreinte = empreintePage();
     reglerOnglets(sortie);
+    /* Le coffre garde sa zone d'un dessin à l'autre ; quitter l'onglet le
+       verrouille et coupe ses écoutes. */
+    if (onglet === 'coffre') monterCoffre(sortie.querySelector('#coffre-zone'), { pid, env, projet });
+    else demonterCoffre();
 
     if (detailOuvert) {
       const { genre, id } = detailOuvert;
@@ -337,7 +349,7 @@ export const vue = async (ctx, env) => {
      ici : changer d'onglet ou de page ne la referme pas. */
 
   return {
-    fin: () => { planifier.arreter(); gestes(); gestesFichiers(); gestesFiltres(); lot.fin(); },
+    fin: () => { demonterCoffre(); planifier.arreter(); gestes(); gestesFichiers(); gestesFiltres(); lot.fin(); },
     /* Changer d'onglet ne recharge pas la page : on redessine, les écoutes
        restent ouvertes et le défilement ne saute pas. */
     maj: (suite) => {
@@ -502,6 +514,7 @@ const rendreOnglet = (onglet, d, c) => {
     case 'reunions': return reunions(d, c);
     case 'notes': return notes(d, c);
     case 'tests': return tests(d, c);
+    case 'coffre': return '<div id="coffre-zone"></div>';
     case 'activite': return `<section class="section" style="margin-top:0"><div class="section-tete"><h2>Activité du projet</h2></div>${activiteHtml(d.activite.slice(0, 80), { equipe: c.env.role === 'equipe' })}</section>`;
     default: return '';
   }

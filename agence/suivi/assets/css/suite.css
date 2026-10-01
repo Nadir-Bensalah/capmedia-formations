@@ -1407,3 +1407,41 @@ html.accueil-ouvert { overflow: hidden; }
 .btn-voir:active { transform: scale(.97); }
 .btn-voir svg { width: 14px; height: 14px; }
 @media (max-width: 720px) { .piece-fin { grid-template-columns: auto auto auto; gap: 8px; } }
+
+/* ==========================================================================
+   Le coffre-fort d'un projet (vues/coffre.js). Des fonds, pas de traits :
+   chaque accès est un bloc posé sur le fond doux, la valeur en chasse fixe.
+   ========================================================================== */
+.coffre-chapeau { margin: 0 0 var(--e-4); max-width: 66ch; }
+.coffre-ouvrir { display: flex; flex-direction: column; gap: 6px; max-width: 520px; }
+.coffre-recherche { width: 100%; margin-bottom: var(--e-3); }
+.coffre-liste { display: flex; flex-direction: column; gap: 8px; }
+.coffre-entree { padding: 14px 16px; border-radius: 12px; background: var(--fond-2); min-width: 0; }
+.coffre-entree-tete { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.coffre-entree-tete h3 { margin: 0; font: var(--t-corps-fort); color: var(--encre); overflow-wrap: anywhere; }
+.coffre-lien { display: block; font: var(--t-micro); color: var(--encre-3); overflow-wrap: anywhere; }
+a.coffre-lien:hover { color: var(--accent); }
+.coffre-champs { margin: 10px 0 0; display: grid; gap: 6px; }
+.coffre-champs > div { display: grid; grid-template-columns: 120px minmax(0, 1fr); align-items: center; gap: 12px; }
+.coffre-champs dt { font: var(--t-micro); color: var(--encre-3); }
+.coffre-champs dd { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.coffre-valeur { overflow-wrap: anywhere; min-width: 0; margin-right: 4px; }
+.coffre-note { font: var(--t-petit); color: var(--encre-2); white-space: pre-wrap; overflow-wrap: anywhere; }
+.coffre-mdp-champ { display: flex; gap: 6px; align-items: center; }
+.coffre-mdp-champ .champ { flex: 1; min-width: 0; }
+.coffre-phrase { margin: var(--e-4) 0 var(--e-3); padding: 16px 18px; border-radius: 12px; background: var(--fond-2); font-size: 19px; line-height: 1.7; word-spacing: .35em; color: var(--encre); user-select: all; }
+.coffre-bas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--e-5); margin-top: var(--e-5); }
+.coffre-titre { margin: 0 0 8px; font: var(--t-corps-fort); }
+.coffre-appareils, .coffre-journal { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.coffre-appareils li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-radius: 10px; background: var(--fond-2); font: var(--t-petit); }
+.coffre-journal li { font: var(--t-petit); color: var(--encre-2); }
+.coffre-pourquoi { margin-top: var(--e-5); }
+.coffre-pourquoi summary { cursor: pointer; font: var(--t-corps-fort); color: var(--encre); padding: 4px 0; }
+.coffre-pourquoi summary:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--anneau); border-radius: 6px; }
+.coffre-pourquoi .prose { margin-top: var(--e-3); }
+@media (max-width: 720px) {
+  .coffre-bas { grid-template-columns: 1fr; }
+  .coffre-champs > div { grid-template-columns: 1fr; gap: 2px; }
+  .coffre-entree-tete { flex-direction: column; }
+}
+.coffre-vide { padding: var(--e-4) 0; }
