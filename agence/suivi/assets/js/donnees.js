@@ -32,6 +32,9 @@ export const K = {
   parcours: (p) => `parcours:${p}`,
   regles: (p) => `regles:${p}`,
   maintenance: (p) => `maintenance:${p}`,
+  /* Les suggestions d'amélioration de Capmedia : le client ne lit que les
+     publiées (la requête le dit, les règles aussi). */
+  suggestions: (p) => `suggestions:${p}`,
   /* Les avis et les passages vivent sous une campagne, pas sous un projet :
      c'est la seule granularité que les règles ouvrent au client. */
   appreciations: (c) => `appreciations:${c}`,
@@ -218,6 +221,12 @@ export const abonnerProjet = (lot, pid, role) => {
   /* La maintenance continue : le contrat, ses séquences, ses journées et
      ses évolutions. Le client lit tout, c'est son espace. */
   lot.abonner(K.maintenance(pid), () => col('projets', pid, 'maintenance'));
+  /* Les suggestions : l'équipe lit tout, brouillons compris ; le client ne
+     demande que les publiées, et les règles refuseraient une requête plus
+     large. */
+  lot.abonner(K.suggestions(pid), () => (client
+    ? query(col('projets', pid, 'suggestions'), where('publication', '==', 'publiee'))
+    : col('projets', pid, 'suggestions')));
   lot.abonner(K.taches(pid), () => surProjetVisible('taches'));
   lot.abonner(K.tickets(pid), () => surProjet('tickets'));
   lot.abonner(K.validations(pid), () => surProjet('validations'));
@@ -492,6 +501,9 @@ export const ecrire = {
       assigne: null, auteur, pieces, archive: false,
       /* Une demande née d'une anomalie de test garde le lien avec elle. */
       ...(d.anomalie ? { anomalie: String(d.anomalie).slice(0, 80) } : {}),
+      /* Une demande née d'une suggestion de Capmedia (« Ça m'intéresse »)
+         garde le lien avec elle : les deux fiches se renvoient l'une à l'autre. */
+      ...(d.suggestion ? { suggestion: String(d.suggestion).slice(0, 80) } : {}),
       /* Une demande de rendez-vous, posée depuis le calendrier : le jour,
          le créneau (matin, après-midi, heure), l'heure et le sujet. */
       ...(d.rendezVous ? { rendezVous: { date: String(d.rendezVous.date || ''), creneau: d.rendezVous.creneau, heure: String(d.rendezVous.heure || ''), sujet: String(d.rendezVous.sujet || '').slice(0, 100) } } : {}),
@@ -770,6 +782,51 @@ export const ecrire = {
     const inst = await getDocs(col('projets', pid, 'maintenance'));
     await Promise.all(inst.docs.map((x) => deleteDoc(x.ref)));
   },
+
+  /* --- Les suggestions d'amélioration ----------------------------------
+     L'équipe les écrit en entier. Le client ne touche qu'à sa réponse (et
+     à l'état qui va avec), et à la marque « vue » : les règles ne lui
+     laissent rien d'autre, ni le prix ni le texte. */
+  creerSuggestion: (pid, d, id = null) => {
+    const fiche = nettoyer({
+      famille: d.famille === 'conseil' ? 'conseil' : 'developpement',
+      titre: d.titre, resume: d.resume || '', texte: d.texte || '', benefice: d.benefice || '',
+      plateformes: Array.isArray(d.plateformes) ? d.plateformes : [],
+      duree: d.duree || '', prix: typeof d.prix === 'number' && Number.isFinite(d.prix) ? d.prix : null,
+      tva: typeof d.tva === 'number' && Number.isFinite(d.tva) ? d.tva : 20,
+      devis: d.devis || '', visuel: d.visuel || null,
+      statut: d.statut || 'proposee', publication: d.publication === 'publiee' ? 'publiee' : 'brouillon',
+      publieLe: d.publication === 'publiee' ? serverTimestamp() : null,
+      ordre: Number(d.ordre) || 0, aLaUne: Boolean(d.aLaUne),
+      reponse: null, jalon: '', vues: {},
+      cree: serverTimestamp(), maj: serverTimestamp(),
+    });
+    if (id) return setDoc(doc(bdd, 'projets', pid, 'suggestions', id), fiche).then(() => ({ id }));
+    return addDoc(col('projets', pid, 'suggestions'), fiche);
+  },
+  majSuggestion: (pid, sid, d) => updateDoc(doc(bdd, 'projets', pid, 'suggestions', sid), nettoyer({ ...d, maj: serverTimestamp() })),
+  /* Publier date la publication : c'est elle que compte « nouveau » côté
+     client, et c'est elle qui déclenche l'activité. Dépublier l'efface. */
+  publierSuggestion: (pid, sid, oui) => updateDoc(doc(bdd, 'projets', pid, 'suggestions', sid), {
+    publication: oui ? 'publiee' : 'brouillon', publieLe: oui ? serverTimestamp() : null, maj: serverTimestamp(),
+  }),
+  supprimerSuggestion: (pid, sid) => deleteDoc(doc(bdd, 'projets', pid, 'suggestions', sid)),
+  /* « Ça m'intéresse » (avec la demande qui vient de naître) ou « Pas
+     intéressé » (avec une raison facultative). La règle vérifie l'auteur,
+     le choix et l'état qui va avec. */
+  async repondreSuggestion(session, pid, sid, { choix, raison = '', demande = '' }) {
+    const par = auteurDe(session);
+    const interesse = choix === 'interesse';
+    await updateDoc(doc(bdd, 'projets', pid, 'suggestions', sid), {
+      statut: interesse ? 'a-l-etude' : 'refusee',
+      reponse: { par: par.uid, nom: par.nom, choix: interesse ? 'interesse' : 'pas-interesse', raison: String(raison || '').slice(0, 1000), demande: String(demande || '').slice(0, 80), le: serverTimestamp() },
+      maj: serverTimestamp(),
+    });
+  },
+  /* Revenir sur son choix : la suggestion redevient simplement proposée. */
+  retirerReponseSuggestion: (pid, sid) => updateDoc(doc(bdd, 'projets', pid, 'suggestions', sid), { statut: 'proposee', reponse: null, maj: serverTimestamp() }),
+  /* La marque « vue » de la personne, et rien d'autre (règle : sa seule clé). */
+  marquerSuggestionVue: (uid, pid, sid) => updateDoc(doc(bdd, 'projets', pid, 'suggestions', sid), { [`vues.${uid}`]: serverTimestamp() }),
 
   creerCampagne: (pid, d) => addDoc(col('projets', pid, 'campagnes'), nettoyer({
     titre: d.titre, statut: d.statut || 'preparation',

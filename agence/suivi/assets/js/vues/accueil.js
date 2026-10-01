@@ -17,6 +17,7 @@ import { echeance } from '../noyau.js';
 import { monterNotesClient } from './notes-client.js';
 
 const iconeActivite = {
+  suggestion: 'ampoule',
   'tache': 'taches', 'jalon': 'drapeau', 'release': 'releases', 'fichier': 'fichiers', 'reunion': 'reunions',
   'validation': 'valider', 'demande': 'demandes', 'message': 'messages', 'devis': 'receipt', 'facture': 'euro',
   'paiement': 'paiement', 'note': 'note', 'blocage': 'alerte', 'projet': 'projets', 'maintenance': 'sante', 'test': 'bug',
