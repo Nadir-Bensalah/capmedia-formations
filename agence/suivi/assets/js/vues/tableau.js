@@ -450,8 +450,8 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
       corps: `
         <p class="tb-pourquoi"><strong>${echapper(e.libelle || c.etat)}.</strong> ${der.le ? `Dernier résultat ${echapper(dateHeure(der.le))}${der.duree ? `, en ${echapper(String(der.duree))} s` : ''}.` : 'Jamais exécuté.'}${x.etat === 'instable' ? ' Passé au vert après un nouvel essai : un parcours instable n\'apprend rien, il faut le fiabiliser.' : ''}</p>
         ${(x.scenarios || []).length ? `<p class="aide">Couvre ${(x.scenarios || []).map((r) => `<span class="ref">${echapper(r)}</span>`).join(', ')}.</p>` : ''}
-        ${!regle ? `<p class="aide">${x.mutation ? 'Éprouvé : on l\'a vu tomber en remettant le défaut exprès.' : 'Pas encore éprouvé par une mutation : tant qu\'on ne l\'a pas vu tomber, son vert ne prouve rien.'}</p>` : ''}
-        ${detail ? `<div class="fs-bloc"><p class="fs-bloc-sur">Ce que la machine a dit</p>
+        ${!regle ? `<p class="aide">${x.mutation ? 'Contre-épreuve faite : on a cassé l\'app exprès, ce robot l\'a vu.' : 'Contre-épreuve à faire : on n\'a pas encore vérifié que ce robot repère une vraie panne.'}</p>` : ''}
+        ${detail ? `<div class="fs-bloc"><p class="fs-bloc-sur">Ce que le robot a fait, et ce qu'il a trouvé</p>
           <p>${detail.message ? echapper(detail.message) : 'Aucun message.'}</p>
           <p class="aide">${detail.essais > 1 ? `${detail.essais} essais · ` : ''}exécution ${echapper(der.execution)}${detail.lien ? ` · <a href="${echapper(detail.lien)}" target="_blank" rel="noopener">voir le rapport</a>` : ''}</p></div>` : ''}`,
       pied: `<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>${equipe && !regle ? '<button class="btn btn-principal" type="button" data-modifier>Modifier</button>' : ''}`,
