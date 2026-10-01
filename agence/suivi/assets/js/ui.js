@@ -323,8 +323,32 @@ const genreFichier = (type = '', nom = '') => {
    onglet. Tout autre fichier se télécharge sous son nom. */
 const seRegarde = (g) => g.classe === 'image' || g.classe === 'pdf';
 
+/* Les images d'une conversation se voient en vignette, pas en nom de
+   fichier. L'adresse lue une fois est gardée pour la session : un redessin
+   remet la même image tout de suite, sans la recharger ni clignoter. */
+const vignettes = new Map();
+const chargerVignette = (chemin) => {
+  if (!vignettes.has(chemin)) {
+    const promesse = (estPieceMessage(chemin)
+      ? lirePieceMessage(chemin).then((blob) => URL.createObjectURL(blob))
+      : lienPiece({ chemin }))
+      .then((url) => { vignettes.set(chemin, url); return url; })
+      .catch((e) => { vignettes.delete(chemin); throw e; });
+    vignettes.set(chemin, promesse);
+  }
+  return Promise.resolve(vignettes.get(chemin));
+};
+const adresseConnue = (chemin) => { const v = vignettes.get(chemin); return typeof v === 'string' ? v : ''; };
+
 export const pieceHtml = (p) => {
   const g = genreFichier(p.type, p.nom);
+  if (g.classe === 'image' && p.chemin) {
+    const src = adresseConnue(p.chemin);
+    return `<a class="piece piece--vignette" href="#" data-agrandir-piece="${echapper(p.chemin)}" data-nom="${echapper(p.nom || '')}" title="${echapper(p.nom || '')}" aria-label="${echapper(`Agrandir ${p.nom || 'l\'image'}`)}">
+      <img alt="${echapper(p.nom || '')}" data-vignette="${echapper(p.chemin)}"${src ? ` src="${echapper(src)}"` : ''} decoding="async">
+      <span class="piece-vignette-pied"><span class="nom">${echapper(p.nom)}</span><span class="t-3">${echapper(poids(p.taille))}</span></span>
+    </a>`;
+  }
   const geste = seRegarde(g) ? 'data-ouvrir-piece' : 'data-piece';
   return `<a class="piece" href="#" ${geste}="${echapper(p.chemin)}" data-nom="${echapper(p.nom || '')}" title="${echapper(p.nom)}">${icone(g.classe === 'image' ? 'image' : 'file')}<span class="nom">${echapper(p.nom)}</span><span class="t-3">${echapper(poids(p.taille))}</span></a>`;
 };
@@ -397,7 +421,33 @@ export const brancherPieces = (racine) => {
      montage empilait les écouteurs, et un clic ouvrait plusieurs onglets. */
   if (racine.__piecesBranchees) return;
   racine.__piecesBranchees = true;
+  /* Les vignettes qui arrivent dans la zone se remplissent seules. */
+  const remplir = () => racine.querySelectorAll('img[data-vignette]:not([src])').forEach((img) => {
+    if (img.__enCours) return;
+    img.__enCours = true;
+    chargerVignette(img.dataset.vignette)
+      .then((url) => { img.src = url; })
+      .catch(() => { const a = img.closest('.piece--vignette'); if (a) a.classList.add('piece--vignette-ko'); });
+  });
+  new MutationObserver(remplir).observe(racine, { childList: true, subtree: true });
+  remplir();
   racine.addEventListener('click', async (ev) => {
+    const grande = ev.target.closest('[data-agrandir-piece]');
+    if (grande) {
+      ev.preventDefault();
+      const chemin = grande.dataset.agrandirPiece;
+      const nom = grande.dataset.nom || '';
+      try {
+        const url = await chargerVignette(chemin);
+        const m = modale({ titre: nom || 'Image', large: true,
+          corps: `<img class="piece-agrandie" src="${echapper(url)}" alt="${echapper(nom)}">`,
+          pied: `<button class="btn btn-secondaire" type="button" data-piece="${echapper(chemin)}" data-nom="${echapper(nom)}">${icone('telecharger')} Télécharger</button>` });
+        brancherPieces(m.el);
+      } catch (e) {
+        toast("Cette image n'est pas accessible.", 'erreur');
+      }
+      return;
+    }
     const cible = ev.target.closest('[data-piece], [data-ouvrir-piece]');
     if (!cible) return;
     ev.preventDefault();

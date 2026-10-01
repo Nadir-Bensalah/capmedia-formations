@@ -88,6 +88,17 @@ const ouvrirPiece = async (p, selecteur) => {
   ]);
   return arrivee || {};
 };
+/* Une photo de conversation se voit en vignette dans le fil, puis s'agrandit
+   dans une fenêtre au clic : on attend l'image chargée, on clique, on lit. */
+const vignetteVue = async (p, chemin) => {
+  const sel = `#fil img[data-vignette="${chemin}"]`;
+  const petite = await attendre(async () => p.evaluate((s) => { const i = document.querySelector(s); return Boolean(i && i.complete && i.naturalWidth > 0); }, sel), 20000);
+  if (!petite) return { petite: false, grande: false };
+  await p.click(`#fil [data-agrandir-piece="${chemin}"]`);
+  const grande = await attendre(async () => p.evaluate(() => { const i = document.querySelector('.voile img.piece-agrandie'); return Boolean(i && i.complete && i.naturalWidth > 0); }), 15000);
+  await p.keyboard.press('Escape'); await pause(500);
+  return { petite: true, grande };
+};
 const imageVue = async (onglet) => onglet.evaluate(async () => {
   const img = document.querySelector('img');
   if (!img) return 0;
@@ -189,10 +200,9 @@ const erreursAffichees = async (p) => p.$$eval('.toast--erreur span', (els) => e
   const plan = pieces.find((p) => p.type === 'application/pdf');
   const [objPhoto] = photo ? await seau.file(photo.chemin).download().catch(() => [Buffer.alloc(0)]) : [Buffer.alloc(0)];
   verifier(pareil(objPhoto, PNG), 'la photo est bien dans le stockage, entière');
-  await page.waitForSelector(`#fil [data-ouvrir-piece="${photo ? photo.chemin : 'x'}"]`, { timeout: 15000 }).catch(() => {});
-  const vue1 = await ouvrirPiece(page, `#fil [data-ouvrir-piece="${photo ? photo.chemin : 'x'}"]`);
-  verifier(vue1.onglet && /^blob:/.test(vue1.onglet.url()) && (await imageVue(vue1.onglet)) === 8, 'la cliente rouvre sa photo dans un onglet, elle s affiche', vue1.onglet ? vue1.onglet.url() : '(rien)');
-  if (vue1.onglet) await vue1.onglet.close();
+  const vue1 = await vignetteVue(page, photo ? photo.chemin : 'x');
+  verifier(vue1.petite, 'la cliente voit sa photo en vignette dans le fil, pas un nom de fichier');
+  verifier(vue1.grande, 'et la photo s agrandit dans une fenêtre au clic');
   const vue2 = await ouvrirPiece(page, `#fil [data-ouvrir-piece="${plan ? plan.chemin : 'x'}"]`);
   verifier(Boolean(vue2.onglet || vue2.telechargement), 'elle rouvre son PDF');
   if (vue2.onglet) await vue2.onglet.close();
@@ -215,10 +225,8 @@ const erreursAffichees = async (p) => p.$$eval('.toast--erreur span', (els) => e
   const equipe = await (await nav.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true })).newPage();
   await connecter(equipe, 'agent.essai@exemple.test');
   await aller(equipe, '#/messages/atelier');
-  await equipe.waitForSelector(`#fil [data-ouvrir-piece="${photo ? photo.chemin : 'x'}"]`, { timeout: 20000 }).catch(() => {});
-  const vue3 = await ouvrirPiece(equipe, `#fil [data-ouvrir-piece="${photo ? photo.chemin : 'x'}"]`);
-  verifier(vue3.onglet && (await imageVue(vue3.onglet)) === 8, 'l équipe ouvre la photo de la cliente');
-  if (vue3.onglet) await vue3.onglet.close();
+  const vue3 = await vignetteVue(equipe, photo ? photo.chemin : 'x');
+  verifier(vue3.petite && vue3.grande, 'l équipe voit la photo de la cliente en vignette, et l agrandit');
   await equipe.setInputFiles('#zone-pieces input[type="file"]', [
     { name: 'retour-equipe.png', mimeType: 'image/png', buffer: PNG },
     { name: 'compte-rendu.pdf', mimeType: 'application/pdf', buffer: PDF },
@@ -235,10 +243,8 @@ const erreursAffichees = async (p) => p.$$eval('.toast--erreur span', (els) => e
   const photoEq = piecesEquipe.find((p) => p.type === 'image/png');
   const pdfEq = piecesEquipe.find((p) => p.type === 'application/pdf');
   await aller(page, '#/messages/atelier');
-  await page.waitForSelector(`#fil [data-ouvrir-piece="${photoEq ? photoEq.chemin : 'x'}"]`, { timeout: 20000 }).catch(() => {});
-  const vue4 = await ouvrirPiece(page, `#fil [data-ouvrir-piece="${photoEq ? photoEq.chemin : 'x'}"]`);
-  verifier(vue4.onglet && (await imageVue(vue4.onglet)) === 8, 'la cliente ouvre la photo de l équipe');
-  if (vue4.onglet) await vue4.onglet.close();
+  const vue4 = await vignetteVue(page, photoEq ? photoEq.chemin : 'x');
+  verifier(vue4.petite && vue4.grande, 'la cliente voit la photo de l équipe en vignette, et l agrandit');
   const vue5 = await ouvrirPiece(page, `#fil [data-ouvrir-piece="${pdfEq ? pdfEq.chemin : 'x'}"]`);
   verifier(Boolean(vue5.onglet || vue5.telechargement), 'et le PDF de l équipe');
   if (vue5.onglet) await vue5.onglet.close();
