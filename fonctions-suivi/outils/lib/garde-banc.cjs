@@ -65,8 +65,27 @@ const fuite = (url, ou) => {
   process.exit(3);
 };
 
+/* La politique de sécurité du contenu (docs/suivi.md, « En-têtes de
+   sécurité ») : toute violation vue par une suite, n'importe laquelle, est
+   un écart. Elle est relevée sur la console de chaque page et rendue en fin
+   de suite ; une suite verte devient rouge. qa-csp, qui en provoque exprès,
+   pose exports.cspVoulue = true et fait ses propres comptes. */
+const violationsCSP = [];
+const relever = (page) => page.on('console', (m) => {
+  const t = m.text();
+  if (/Content Security Policy/i.test(t)) violationsCSP.push(`${page.url().replace(/^https?:\/\/[^/]+/, '')} : ${t.slice(0, 200)}`);
+});
+process.on('exit', (code) => {
+  if (exports.cspVoulue || !violationsCSP.length) return;
+  for (const v of violationsCSP.slice(0, 10)) console.log(`  ÉCART  violation de la CSP · ${v}`);
+  console.log(`GARDE DU BANC : ${violationsCSP.length} violation(s) de la politique de sécurité du contenu.`);
+  if (!code) process.exitCode = 1;
+});
+
 /* Chaque contexte : branchement du banc d'avance, et coupure de la production. */
 const garderContexte = async (ctx) => {
+  ctx.pages().forEach(relever);
+  ctx.on('page', relever);
   await ctx.addInitScript(() => { try { localStorage.setItem('suivi:emul', '1'); } catch (e) { /* stockage refusé */ } });
   await ctx.route(PRODUCTION, (route) => { const url = route.request().url(); route.abort('blockedbyclient').catch(() => {}); fuite(url, 'navigateur'); });
   ctx.on('request', (r) => { if (PRODUCTION.test(r.url())) fuite(r.url(), 'navigateur, requête vue'); });

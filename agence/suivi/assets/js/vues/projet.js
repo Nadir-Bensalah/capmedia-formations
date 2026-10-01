@@ -312,6 +312,12 @@ export const vue = async (ctx, env) => {
     if (action === 'ecrire-bulle') { ouvrirBulle(pid, el.dataset.texte || ''); return null; }
     return null;
   });
+  /* Un bouton posé dans un lien ne suit pas le lien, et le lien « Rejoindre »
+     d'une réunion n'ouvre pas sa fiche : écouteurs plutôt qu'attributs
+     onclick, que la politique de sécurité du contenu refuse. */
+  const gestesSansLien = sur(sortie, 'click', '[data-sans-lien]', (el, ev) => ev.preventDefault());
+  const sansPropagation = (ev) => { if (ev.target.closest && ev.target.closest('[data-sans-propagation]')) ev.stopPropagation(); };
+  sortie.addEventListener('click', sansPropagation, true);
   const gestesFichiers = sur(sortie, 'click', '[data-menu-fichier]', (el) => {
     el.dataset.action = 'menu-fichier'; el.dataset.id = el.dataset.menuFichier; el.click();
   });
@@ -337,7 +343,7 @@ export const vue = async (ctx, env) => {
      ici : changer d'onglet ou de page ne la referme pas. */
 
   return {
-    fin: () => { planifier.arreter(); gestes(); gestesFichiers(); gestesFiltres(); lot.fin(); },
+    fin: () => { planifier.arreter(); gestes(); gestesSansLien(); sortie.removeEventListener('click', sansPropagation, true); gestesFichiers(); gestesFiltres(); lot.fin(); },
     /* Changer d'onglet ne recharge pas la page : on redessine, les écoutes
        restent ouvertes et le défilement ne saute pas. */
     maj: (suite) => {
@@ -1184,7 +1190,7 @@ const liens = (d, { env }) => {
     ${groupes.length ? groupes.map((g) => `<div style="margin-bottom:var(--e-5)" data-groupe-liens="${echapper(g.cle)}"><p class="surtitre" style="margin-bottom:8px">${echapper(g.lib)}</p><div class="grille grille-2">${g.items.map((l) => `<a class="lien-env" href="${echapper(l.url)}" target="_blank" rel="noopener">
       <span class="ligne-icone${tonPlateforme(l.composant) ? ` ligne-icone--${tonPlateforme(l.composant)}` : ''}">${icone(iconePlateforme(l.composant) || (l.categorie === 'code' ? 'code' : l.categorie === 'design' ? 'sparkle' : l.categorie === 'mobile' ? 'releases' : l.categorie === 'acces' ? 'cle' : 'externe'))}</span>
       <span style="min-width:0"><span class="t-corps-fort" style="display:block">${echapper(l.nom)}${l.environnement ? ` <span class="etiquette" style="vertical-align:middle">${echapper(l.environnement)}</span>` : ''}${l.visibilite === 'interne' ? ' <span class="etiquette">Interne</span>' : ''}</span><span class="url" style="display:block">${echapper(l.url.replace(/^https?:\/\//, ''))}</span>${l.description ? `<span class="t-micro t-3" style="display:block">${echapper(l.description)}</span>` : ''}${l.categorie === 'acces' && l.identifiants ? `<span class="t-micro" style="display:block;margin-top:4px"><span class="t-3">Identifiant ·</span> <span class="t-mono" data-identifiants>${echapper(l.identifiants)}</span></span>` : ''}</span>
-      <span class="rang" style="gap:2px">${l.categorie === 'acces' && l.identifiants ? `<button class="btn btn-doux btn-petit" type="button" data-action="copier-identifiants" data-id="${echapper(l.id)}" onclick="event.preventDefault()">${icone('copier')} Copier</button>` : ''}${env.role === 'equipe' ? `<button class="btn-icone" type="button" data-action="editer" data-genre="lien" data-id="${echapper(l.id)}" aria-label="Modifier" onclick="event.preventDefault()">${icone('edit')}</button>` : ''}<span class="chevron" style="color:var(--encre-4)">${icone('externe')}</span></span>
+      <span class="rang" style="gap:2px">${l.categorie === 'acces' && l.identifiants ? `<button class="btn btn-doux btn-petit" type="button" data-action="copier-identifiants" data-id="${echapper(l.id)}" data-sans-lien>${icone('copier')} Copier</button>` : ''}${env.role === 'equipe' ? `<button class="btn-icone" type="button" data-action="editer" data-genre="lien" data-id="${echapper(l.id)}" aria-label="Modifier" data-sans-lien>${icone('edit')}</button>` : ''}<span class="chevron" style="color:var(--encre-4)">${icone('externe')}</span></span>
     </a>`).join('')}</div>${g.cle === 'acces' ? '<p class="aide" style="margin-top:8px">Le mot de passe ne s\'écrit jamais ici : il vous est transmis à part.</p>' : ''}</div>`).join('')
     : vide({ icone: 'liens', titre: 'Aucune ressource', texte: 'Production, stores, code source, environnements de test, maquettes : tout au même endroit.' })}
   </section>`;
@@ -1199,7 +1205,7 @@ const reunions = (d, { env, pid }) => {
   const bloc = (r) => ligne({
     icone: 'reunions', ton: reunionAVenir(r) ? 'bleu' : '',
     titre: echapper(r.titre), sous: `${echapper(dateHeure(r.date))}${r.duree ? ` · ${r.duree} min` : ''}${(r.participants || []).length ? ` · ${echapper(r.participants.map((p) => p.nom || p.email).join(', '))}` : ''}${r.visibilite === 'interne' ? ' · Interne' : ''}`,
-    fin: `${r.lien && reunionAVenir(r) ? `<a class="btn btn-secondaire btn-petit" href="${echapper(r.lien)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${icone('video')} Rejoindre</a>` : ''}${r.compteRendu ? '<span class="etiquette">Compte rendu</span>' : ''}`,
+    fin: `${r.lien && reunionAVenir(r) ? `<a class="btn btn-secondaire btn-petit" href="${echapper(r.lien)}" target="_blank" rel="noopener" data-sans-propagation>${icone('video')} Rejoindre</a>` : ''}${r.compteRendu ? '<span class="etiquette">Compte rendu</span>' : ''}`,
     action: 'ouvrir-reunion', attrs: `data-id="${echapper(r.id)}"`,
   });
   return `
