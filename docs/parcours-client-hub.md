@@ -304,6 +304,7 @@ Fait le 27/09/2026 : même clavier partout (Entrée envoie, Maj+Entrée va à la
 **Ce qui coince** : aucune proposition de créneau, aucun formulaire.
 **Verdict** : Manque, si c'est fréquent. Sinon À alléger : préremplir le message « Je souhaite un créneau… ».
 Fait le 27/09/2026 : dans la fiche projet (onglet Réunions et carte « Prochaine réunion » de l'aperçu), « Demander un créneau » ouvre la bulle avec « Je souhaite un créneau pour » ; sur l'accueil, le lien `#/messages/{pid}?brouillon=…` (agent D).
+Fait le 01/10/2026 : sur l'accueil, « Demander un créneau » ouvre le formulaire de demande de rendez-vous du calendrier (date, créneau, sujet), projet prérempli quand il n'y en a qu'un ; la demande créée porte `rendezVous`. Contrôle dans qa-calendrier.cjs.
 
 ### 41. J'ai une réunion : la rejoindre, l'ajouter à mon agenda, lire le compte rendu
 **Aujourd'hui** : carte « Prochaine réunion » sur l'accueil avec « Rejoindre », onglet Réunions (À venir, Passées), fiche avec « Rejoindre la réunion », « Ajouter à mon agenda » (fichier ICS), Participants, Ordre du jour, Compte rendu, Décisions, Actions. Notification et e-mail à la création, au déplacement, et notification pour le compte rendu.

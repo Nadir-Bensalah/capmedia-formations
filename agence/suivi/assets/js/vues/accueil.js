@@ -7,7 +7,7 @@ import {
   echapper, prenom, nomAffiche, depuis, dateCourte, heure, dateHeure, montant, montantTTC, enDate, parDateDesc,
   OUVERTS, ATTEND_CLIENT, STATUTS_PROJET, pluriel, statutProjet, verdictDelai, estResponsable, libellePlateforme
 } from '../noyau.js';
-import { telechargerICS } from './calendrier.js';
+import { telechargerICS, demanderRendezVous } from './calendrier.js';
 import { icone, pastille, avatarProjet, progression, progressionOuPas, verdictHtml, ligne, vide, chronoItem, parJour, titrePage, echeanceHtml, squelette, modale, sur } from '../ui.js';
 import { naviguer } from '../routeur.js';
 import * as magasin from '../magasin.js';
@@ -62,10 +62,6 @@ export const choisirProjet = (projets, { titre = 'Pour quel projet ?', ok = 'Con
   m.el.querySelector('[data-ok]').addEventListener('click', () => m.fermer(m.el.querySelector('#choix-p').value));
   return m.fin.then((v) => (typeof v === 'string' ? v : ''));
 };
-
-/* Le message qui demande un créneau, prérempli dans la conversation du
-   projet : la page Messages lit « brouillon » dans l'adresse. */
-export const lienCreneau = (pid) => `/messages/${pid}?brouillon=${encodeURIComponent('Je souhaite un créneau pour ')}`;
 
 export const activiteHtml = (liste, options = {}) => {
   const activite = liste.filter((a) => a.date);
@@ -233,9 +229,7 @@ export const vue = async (ctx, env) => {
               <p class="t-petit t-2" style="margin-top:4px">${echapper(dateHeure(reunion.date))}${reunion.duree ? ` · ${reunion.duree} min` : ''}</p>
               <div class="rang" style="margin-top:12px;gap:6px">${reunion.lien ? `<a class="btn btn-secondaire btn-petit" href="${echapper(reunion.lien)}" target="_blank" rel="noopener">${icone('video')} Rejoindre</a>` : ''}<button class="btn btn-doux btn-petit" type="button" data-ics-reunion="${echapper(reunion.id)}" data-astuce="Le fichier .ics de cette réunion">${icone('calendrier')} Ajouter à mon agenda</button></div>
               <p style="margin-top:10px"><a class="t-petit" href="#/projets/${echapper(reunion.projet)}/reunions/${echapper(reunion.id)}">Ordre du jour et historique</a></p>`
-            : `<p class="t-petit t-2" style="margin-top:8px">Aucune réunion programmée.</p><p style="margin-top:8px">${projets.length > 1
-              ? '<button class="lien t-petit" type="button" data-raccourci="creneau" style="background:none;border:0;padding:0;cursor:pointer">Demander un créneau</button>'
-              : `<a class="t-petit" href="#${projets[0] ? echapper(lienCreneau(projets[0].id)) : '/messages'}">Demander un créneau</a>`}</p>`}
+            : `<p class="t-petit t-2" style="margin-top:8px">Aucune réunion programmée.</p><p style="margin-top:8px"><button class="lien t-petit" type="button" data-raccourci="creneau" style="background:none;border:0;padding:0;cursor:pointer">Demander un créneau</button></p>`}
           </div>
           ${projets.some((p) => estResponsable(session, p)) ? `<div class="carte carte--creuse">
             <p class="surtitre">Finances</p>
@@ -264,15 +258,17 @@ export const vue = async (ctx, env) => {
     K.composants(p.id),
   ])];
   /* Les raccourcis qui visent un projet : à plusieurs projets, on demande
-     lequel avant d'y aller. */
+     lequel avant d'y aller. « Demander un créneau » ouvre le formulaire de
+     rendez-vous du calendrier, qui porte lui-même le choix du projet : à
+     un seul projet, il arrive prérempli. */
   const gestes = sur(sortie, 'click', '[data-raccourci]', async (el) => {
     const projets = (magasin.lire(K.projets) || session.projets).filter((p) => !p.archive);
+    const cible = el.dataset.raccourci;
+    if (cible === 'creneau') { demanderRendezVous(env, { pid: projets.length === 1 ? projets[0].id : '' }); return; }
     const pid = await choisirProjet(projets);
     if (!pid) return;
-    const cible = el.dataset.raccourci;
     if (cible === 'nouvelle-demande') naviguer(`/projets/${pid}/nouvelle-demande`);
     else if (cible === 'message') naviguer(`/messages/${pid}`);
-    else if (cible === 'creneau') naviguer(lienCreneau(pid));
   });
   /* Le fichier d'agenda de la prochaine réunion, depuis l'accueil : le
      même fichier que depuis la fiche et le calendrier. */

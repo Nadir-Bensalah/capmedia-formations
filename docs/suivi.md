@@ -943,10 +943,11 @@ Le lot D du relevé des parcours (`docs/parcours-client-hub.md`, scénarios
 
 ### Plusieurs projets
 
-- `choisirProjet(projets)` et `lienCreneau(pid)` exportés par
-  `vues/accueil.js` : la fenêtre « Pour quel projet ? » (modèle documents.js)
-  pour « Nouvelle demande », « Message » et « Demander un créneau »
-  (`#/messages/{pid}?brouillon=…`, lu par la page Messages). « Tout voir »
+- `choisirProjet(projets)` exporté par `vues/accueil.js` : la fenêtre
+  « Pour quel projet ? » (modèle documents.js) pour « Nouvelle demande » et
+  « Message ». « Demander un créneau » ouvre `demanderRendezVous()` de
+  `vues/calendrier.js`, dont le formulaire porte lui-même le choix du
+  projet (prérempli à un seul projet). « Tout voir »
   de l'activité mène à `#/activite`. La carte Finances n'apparaît qu'à un
   responsable. La puce d'une carte projet : « N chez nous · M à vous ».
 - `#/demandes` (`vues/demandes.js`) : en tête « En attente de vous », puis
@@ -1284,8 +1285,9 @@ Le lot de l'agent C sur le relevé des parcours (scénarios 14 à 19, 36, 40
 - La fiche : `#/projets/:id/reunions/:rid` (routes hub et cockpit) ; le
   calendrier, l'accueil, la recherche et le serveur y mènent.
 - « Demander un créneau » dans la fiche projet ouvre la bulle
-  (`bulle:ouvrir`, « Je souhaite un créneau pour ») ; sur l'accueil, le
-  lien `#/messages/{pid}?brouillon=…` (agent D).
+  (`bulle:ouvrir`, « Je souhaite un créneau pour ») ; sur l'accueil, il
+  ouvre le formulaire de demande de rendez-vous du calendrier
+  (`demanderRendezVous`, projet prérempli à un seul projet ; 01/10/2026).
 
 ### Le calendrier
 

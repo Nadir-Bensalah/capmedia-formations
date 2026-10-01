@@ -8,8 +8,9 @@
    et en sombre, avec une légende ; le client demande un rendez-vous (une
    demande « tickets » qui porte « rendezVous », que les règles bornent),
    l'équipe la programme depuis son planning, la réunion apparaît en
-   direct dans le calendrier du client et la demande passe « planifiée ».
-   Un seul dessin à l'arrivée, aucune erreur de page.
+   direct dans le calendrier du client et la demande passe « planifiée » ;
+   « Demander un créneau » de l'accueil ouvre ce même formulaire, projet
+   prérempli. Un seul dessin à l'arrivée, aucune erreur de page.
    Banc : émulateurs, site local, semer-suivi. */
 require('./lib/garde-banc.cjs');
 const { chromium } = require('@playwright/test');
@@ -50,6 +51,10 @@ const J2 = auJour(9, 14, 30);
 const ISO2 = iso(J2);
 const SUJET = 'Point calendrier du banc';
 let page = null; let equipe = null; let ticketId = '';
+/* Les réunions reculées le temps d'un contrôle, à remettre à leur date. */
+let reculees = [];
+const dater = (d, date) => fetch(`http://127.0.0.1:8080/v1/${d.name}?updateMask.fieldPaths=date`, { method: 'PATCH', headers: { ...prop, 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: { date: T(date) } }) });
+const remettre = async () => { for (const d of reculees) await dater(d, new Date(champ(d, 'date').timestampValue)); reculees = []; };
 
 /* Une case s'ouvre d'un clic sur son numéro (le bouton qui couvre la case
    est dessous : le numéro laisse passer le clic). */
@@ -287,6 +292,36 @@ const nettoyer = async () => {
   await aller(page, `#/projets/atelier/demandes/${ticketId}`, '[data-rdv-programme]');
   verifier(/Rendez-vous programmé le .*15:30/.test(await page.textContent('[data-rdv-programme]')) && Boolean(await page.$(`[data-rdv-programme] a[href="#/projets/atelier/reunions/${reunionId}"]`)), 'la fiche de sa demande dit « Rendez-vous programmé » et mène à la réunion');
 
+  console.log('\n== Hub : « Demander un créneau » de l accueil ouvre le même formulaire');
+  /* La carte « Prochaine réunion » ne propose un créneau que sans réunion à
+     venir : on recule le temps d'un instant les réunions d'Atelier, puis on
+     les remet à leur date. */
+  reculees = ((await lire('reunions?pageSize=300')).documents || []).filter((d) => str(d, 'projet') === 'atelier' && champ(d, 'date').timestampValue && new Date(champ(d, 'date').timestampValue) > new Date());
+  for (const d of reculees) await dater(d, auJour(-40));
+  await aller(page, '#/', '.page');
+  verifier(await attendre(async () => Boolean(await page.$('[data-raccourci="creneau"]')), 15000), 'sans réunion à venir, l accueil propose « Demander un créneau »');
+  await page.click('[data-raccourci="creneau"]');
+  verifier(Boolean(await page.waitForSelector('#cal-forme-rdv', { timeout: 8000 }).catch(() => null)), 'le clic ouvre le formulaire de demande de rendez-vous');
+  verifier(!/messages/.test(page.url()) && !(await page.$('#texte-message')), 'sans passer par la messagerie', page.url());
+  const projetForme = await page.evaluate(() => { const f = document.querySelector('#cal-forme-rdv'); return f ? { valeur: (f.elements.projet || {}).value || '', note: (f.querySelector('.cal-forme-projet') || {}).textContent || '', choix: Boolean(f.querySelector('#rdv-projet')) } : null; });
+  verifier(projetForme && projetForme.valeur === 'atelier' && (projetForme.choix || /Pour le projet\s+Atelier/.test(projetForme.note)), 'le projet est prérempli : Atelier', JSON.stringify(projetForme));
+  const SUJET2 = 'Créneau depuis l accueil';
+  const JOUR2 = iso(auJour(12));
+  await page.fill('#rdv-date', JOUR2);
+  await page.fill('#rdv-sujet', SUJET2);
+  await page.click('.modale--cal [type="submit"][form="cal-forme-rdv"]');
+  let ticket2 = null;
+  verifier(await attendre(async () => {
+    ticket2 = ((await lire('tickets?pageSize=300')).documents || []).find((d) => str(d, 'titre') === `Rendez-vous : ${SUJET2}`) || null;
+    return Boolean(ticket2);
+  }, 15000), 'l envoi crée la demande');
+  const rv2 = ((champ(ticket2, 'rendezVous').mapValue || {}).fields) || {};
+  verifier(ticket2 && str(ticket2, 'type') === 'demande' && str(ticket2, 'projet') === 'atelier' && str(ticket2, 'statut') === 'nouveau', 'de nature « demande », sur Atelier, nouvelle');
+  verifier((rv2.date || {}).stringValue === JOUR2 && (rv2.creneau || {}).stringValue === 'matin' && (rv2.sujet || {}).stringValue === SUJET2, 'et elle porte « rendezVous » : le jour, le matin, le sujet', JSON.stringify(rv2));
+  verifier(await attendre(async () => !(await page.$('#cal-forme-rdv')), 8000), 'le formulaire se referme');
+  await remettre();
+  verifier(await attendre(async () => !(await page.$('[data-raccourci="creneau"]')) && /Point hebdomadaire|Point calendrier du banc/.test(await page.textContent('.page')), 15000), 'les réunions remises à leur date, la carte reprend la prochaine réunion');
+
   verifier(erreurs.length === 0, `aucune erreur de page ${erreurs.join(' | ')}`);
   await nav.close();
   await nettoyer();
@@ -295,6 +330,7 @@ const nettoyer = async () => {
 })().catch(async (e) => {
   console.error(e);
   for (const p of [page, equipe]) { if (p) { try { console.error('adresse :', p.url()); } catch (err) { /* rien */ } } }
+  await remettre().catch(() => {});
   await nettoyer().catch(() => {});
   process.exit(2);
 });
