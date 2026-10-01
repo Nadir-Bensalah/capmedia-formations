@@ -46,6 +46,7 @@ export const ICONES = {
   chevron:      T('<path d="m6 9 6 6 6-6"/>'),
   chevronDroite:T('<path d="m9 6 6 6-6 6"/>'),
   chevronGauche:T('<path d="m15 6-6 6 6 6"/>'),
+  chevronHaut:  T('<path d="m6 15 6-6 6 6"/>'),
   retour:       T('<path d="M19 12H5"/><path d="m11 18-6-6 6-6"/>'),
   fleche:       T('<path d="M5 12h14"/><path d="m13 6 6 6-6 6"/>'),
   points:       T('<circle cx="6" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18" cy="12" r="1.4"/>'),

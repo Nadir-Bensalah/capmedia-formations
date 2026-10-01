@@ -1658,3 +1658,20 @@ génération de clé en cours, version qui monte d'un, enveloppe archivée). Pre
 et `outils/qa-coffre.cjs` (navigateur, base relue, vrais jetons).
 
 Déployer : `firebase deploy --config firebase.suivi.json --only firestore:rules --project capmedia-1f90d`.
+
+## 32. Les suggestions d'amélioration (01/10/2026)
+
+Onglet « Suggestions » d'un projet : ce que Capmedia propose au client sans
+qu'il l'ait demandé, en deux familles (« Ce que Capmedia peut faire pour
+vous », « Ce qu'on vous conseille de mettre en place »), avec un filtre par
+plateforme. Une fiche porte titre, résumé, détail, bénéfice, durée, prix HT
+et TTC, devis joint, état (proposée, à l'étude, acceptée, livrée, déclinée,
+retirée) et publication (brouillon ou publiée : le client ne voit que les
+publiées). Le client répond « Ça m'intéresse » (une demande naît, la
+suggestion passe à l'étude), « Pas pour le moment » (raison facultative,
+réversible), ou pose une question dans la bulle. L'équipe crée, modifie,
+duplique, ordonne, publie, met à la une (aperçu du projet), et pose
+l'étape dans la feuille de route quand c'est accepté. Données :
+`projets/{pid}/suggestions`, règles : équipe en écriture, client limité à
+`vues.<uid>` et à sa réponse. Code : vues/suggestions.js, éditeur
+« suggestion » dans editeurs.js. Épreuve : qa-suggestions.cjs.

@@ -23,6 +23,7 @@ import { K, ecrire, nouvelId, interneDuProjet, abonnerProjet, progressionProjet,
 import { filAriane } from '../coquille.js';
 import { naviguer } from '../routeur.js';
 import { editer, supprimer } from './editeurs.js';
+import { ongletSuggestions, apercuSuggestionHtml, gesteSuggestion, marquerVues, compteOnglet as compteSuggestions, estPubliee as suggestionPubliee } from './suggestions.js';
 import { appelServeur } from '../serveur.js';
 import { activiteHtml } from './accueil.js';
 import { basculerAFaire } from './admin-a-faire.js';
@@ -49,6 +50,8 @@ const ONGLETS = [
   { cle: 'fichiers', libelle: 'Fichiers', icone: 'fichiers' },
   { cle: 'releases', libelle: 'Versions', icone: 'releases' },
   { cle: 'liens', libelle: 'Ressources', icone: 'liens' },
+  /* Ce que Capmedia propose : le client ne voit l'onglet que s'il y a une suggestion publiée. */
+  { cle: 'suggestions', libelle: 'Suggestions', icone: 'ampoule' },
   /* Les accès du client, chiffrés : l'équipe et le responsable seuls. */
   { cle: 'coffre', libelle: 'Coffre-fort', icone: 'cadenas' },
   { cle: 'reunions', libelle: 'Réunions', icone: 'reunions' },
@@ -57,7 +60,8 @@ const ONGLETS = [
   { cle: 'activite', libelle: 'Activité', icone: 'activite' },
 ];
 const ongletsVisibles = (d, equipe, env) => ONGLETS.filter((o) => (o.cle !== 'tests' || equipe || (d && (d.scenarios.length || d.campagnes.length)))
-  && (o.cle !== 'coffre' || (env && voitLeCoffre(env, d && d.projet))));
+  && (o.cle !== 'coffre' || (env && voitLeCoffre(env, d && d.projet)))
+  && (o.cle !== 'suggestions' || equipe || (d && (d.suggestions || []).some(suggestionPubliee))));
 
 /* La conversation vit en bulle, montée pour toutes les pages d'un projet
    par un module global. Depuis une fiche, on lui passe un début de
@@ -85,6 +89,7 @@ const lireTout = (pid) => ({
   activite: (magasin.lire(K.activite(pid)) || []).slice().sort(parDateDesc('date')),
   equipe: magasin.lire(K.equipe) || [],
   interlocuteurs: magasin.lire(K.interlocuteurs(pid)) || [],
+  suggestions: magasin.lire(K.suggestions(pid)) || [],
 });
 
 const nomEquipe = (equipe, uid) => ((equipe.find((e) => e.id === uid) || {}).nom || '');
@@ -111,7 +116,7 @@ export const vue = async (ctx, env) => {
   sortie.innerHTML = `<div class="page">${squelette('page', 6)}</div>`;
 
   const cles = [K.projet(pid), K.composants(pid), K.jalons(pid), K.liens(pid), K.taches(pid), K.tickets(pid), K.validations(pid), K.fichiers(pid), K.releases(pid), K.reunions(pid), K.notes(pid), K.blocages(pid), K.documents(pid), K.paiements(pid), K.montants(pid), K.activite(pid), K.equipe,
-    K.scenarios(pid), K.campagnes(pid), K.anomalies(pid), ...(env.role === 'equipe' ? [K.projetsInternes, K.interlocuteurs(pid)] : [])];
+    K.scenarios(pid), K.campagnes(pid), K.anomalies(pid), K.suggestions(pid), ...(env.role === 'equipe' ? [K.projetsInternes, K.interlocuteurs(pid)] : [])];
   abonnerProjet(lot, pid, env.role);
 
   /* Une fiche ouverte par son adresse : une tâche (taches/:tid), une
@@ -165,6 +170,7 @@ export const vue = async (ctx, env) => {
       reunions: d.reunions.filter(reunionAVenir).length,
       notes: d.notes.length,
       tests: d.scenarios.length,
+      suggestions: compteSuggestions(d.suggestions, env),
     };
 
     sortie.innerHTML = `<div class="page">
@@ -207,6 +213,7 @@ export const vue = async (ctx, env) => {
     reglerOnglets(sortie);
     /* Le coffre garde sa zone d'un dessin à l'autre ; quitter l'onglet le
        verrouille et coupe ses écoutes. */
+    if (onglet === 'suggestions') marquerVues(d, { pid, env });
     if (onglet === 'coffre') {
       chargerCoffre().then((m) => { if (onglet === 'coffre') m.monterCoffre(sortie.querySelector('#coffre-zone'), { pid, env, projet }); })
         .catch(() => toast('Le coffre-fort n\'a pas pu se charger. Rechargez la page.', 'erreur'));
@@ -244,6 +251,7 @@ export const vue = async (ctx, env) => {
     const action = el.dataset.action;
     const id = el.dataset.id;
     if (action === 'editer-projet') return editer('projet', env, { pid, fiche: d.projet });
+    if (await gesteSuggestion(el, d, { pid, env })) return null;
     if (await gesteAcces(el, d, { pid, env })) return null;
     if (action === 'ouvrir-au-client') {
       const personnes = (d.interlocuteurs || []).filter((i) => i.statut === 'actif');
@@ -342,11 +350,12 @@ export const vue = async (ctx, env) => {
     el.dataset.action = 'menu-fichier'; el.dataset.id = el.dataset.menuFichier; el.click();
   });
   // Les filtres et les bascules d'affichage se souviennent, puis redessinent.
-  const gestesFiltres = sur(sortie, 'click', '[data-vue-taches], [data-filtre-demandes], [data-filtre-fichiers]', (el) => {
+  const gestesFiltres = sur(sortie, 'click', '[data-vue-taches], [data-filtre-demandes], [data-filtre-fichiers], [data-filtre-suggestions]', (el) => {
     try {
       if (el.dataset.vueTaches !== undefined) localStorage.setItem('suivi:taches-vue', el.dataset.vueTaches);
       if (el.dataset.filtreDemandes !== undefined) sessionStorage.setItem(`suivi:filtre-demandes:${pid}`, el.dataset.filtreDemandes);
       if (el.dataset.filtreFichiers !== undefined) sessionStorage.setItem(`suivi:filtre-fichiers:${pid}`, el.dataset.filtreFichiers);
+      if (el.dataset.filtreSuggestions !== undefined) sessionStorage.setItem(`suivi:filtre-suggestions:${pid}`, el.dataset.filtreSuggestions);
     } catch (e) { /* stockage refusé */ }
     rendre(true);
   });
@@ -535,6 +544,7 @@ const rendreOnglet = (onglet, d, c) => {
     case 'notes': return notes(d, c);
     case 'tests': return tests(d, c);
     case 'coffre': return '<div id="coffre-zone"></div>';
+    case 'suggestions': return ongletSuggestions(d, c);
     case 'activite': return `<section class="section" style="margin-top:0"><div class="section-tete"><h2>Activité du projet</h2></div>${activiteHtml(d.activite.slice(0, 80), { equipe: c.env.role === 'equipe' })}</section>`;
     default: return '';
   }
@@ -601,6 +611,7 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
 
   return `
     ${resumeDepuis}
+    ${apercuSuggestionHtml(d, { pid, env })}
 
     ${attente.length ? `<section class="section" style="margin-top:0"><div class="attente">
       <p class="attente-tete">${icone('alerte')} ${equipe ? 'En attente du client' : 'En attente de vous'} <span class="badge badge--vif" style="margin-left:4px">${attente.length}</span></p>

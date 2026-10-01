@@ -695,11 +695,14 @@ service cloud.firestore {
                  // La demande qui en poursuit une autre (« Suite de REF-… »).
                  'suite',
                  // Une demande de rendez-vous, posée depuis le calendrier.
-                 'rendezVous'
+                 'rendezVous',
+                 // La suggestion de Capmedia dont la demande est née.
+                 'suggestion'
                ])
             && rendezVousValide()
             // Une demande née d'une anomalie de test porte son identifiant.
             && (!('anomalie' in request.resource.data) || texteBorne(request.resource.data.anomalie, 80))
+            && (!('suggestion' in request.resource.data) || texteBorne(request.resource.data.suggestion, 80))
             && (!('suite' in request.resource.data) || request.resource.data.suite == null || request.resource.data.suite is string)
             && request.resource.data.numero == null
             && request.resource.data.statut == 'nouveau'
@@ -1468,6 +1471,63 @@ service cloud.firestore {
       // Les familles de règles métier. Mêmes droits que les parcours, et
       // pour la même raison : le client paie une base de tests, il a le
       // droit de voir sa profondeur. Le testeur n'y a rien à faire.
+      // Les suggestions d'amélioration de Capmedia. L'équipe écrit tout ;
+      // le client membre ne lit que les publiées, et ne touche qu'à sa
+      // réponse (intéressé ou non, avec l'état qui va avec) et à sa marque
+      // « vue » : jamais le prix, le texte ni la publication.
+      match /suggestions/{suggestionId} {
+        function suggestionValide(d) {
+          return d.keys().hasOnly(['famille', 'titre', 'resume', 'texte', 'benefice', 'plateformes', 'duree', 'prix', 'tva', 'devis', 'visuel',
+                                   'statut', 'publication', 'publieLe', 'ordre', 'aLaUne', 'reponse', 'jalon', 'vues', 'cree', 'maj'])
+              && d.famille in ['developpement', 'conseil']
+              && texteRequis(d.titre, 160)
+              && texteBorne(d.resume, 400)
+              && texteBorne(d.texte, 8000)
+              && texteBorne(d.benefice, 400)
+              && d.plateformes is list && d.plateformes.size() <= 8
+              && texteBorne(d.duree, 80)
+              && (d.prix == null || (d.prix is number && d.prix >= 0 && d.prix <= 10000000))
+              && d.tva is number && d.tva >= 0 && d.tva <= 100
+              && texteBorne(d.devis, 80)
+              && d.statut in ['proposee', 'a-l-etude', 'acceptee', 'livree', 'refusee', 'retiree']
+              && d.publication in ['brouillon', 'publiee']
+              && d.ordre is number
+              && d.aLaUne is bool
+              && texteBorne(d.jalon, 80)
+              && d.vues is map;
+        }
+        allow read: if equipeSurProjet(projetId)
+          || (membreDuProjet(projetId) && resource.data.publication == 'publiee');
+        allow create: if equipeSurProjet(projetId) && suggestionValide(request.resource.data);
+        allow delete: if equipeSurProjet(projetId);
+        // L'équipe modifie tout, dans les bornes.
+        allow update: if equipeSurProjet(projetId) && suggestionValide(request.resource.data);
+        // Le client marque qu'il a vu : sa seule clé, et rien d'autre ne bouge.
+        allow update: if membreDuProjet(projetId)
+          && resource.data.publication == 'publiee'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['vues'])
+          && request.resource.data.vues.diff(resource.data.vues).affectedKeys().hasOnly([moi()]);
+        // Le client répond : intéressé (à l'étude) ou non (déclinée), ou
+        // revient sur son choix (proposée). Rien d'autre ne change.
+        allow update: if membreDuProjet(projetId)
+          && resource.data.publication == 'publiee'
+          && resource.data.statut in ['proposee', 'a-l-etude', 'refusee']
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statut', 'reponse', 'maj'])
+          && request.resource.data.maj == request.time
+          && (
+            (request.resource.data.statut == 'proposee' && request.resource.data.reponse == null)
+            || (request.resource.data.statut in ['a-l-etude', 'refusee']
+                && request.resource.data.reponse is map
+                && request.resource.data.reponse.keys().hasOnly(['par', 'nom', 'choix', 'raison', 'demande', 'le'])
+                && request.resource.data.reponse.par == moi()
+                && texteBorne(request.resource.data.reponse.nom, 120)
+                && request.resource.data.reponse.choix == (request.resource.data.statut == 'a-l-etude' ? 'interesse' : 'pas-interesse')
+                && texteBorne(request.resource.data.reponse.raison, 1000)
+                && texteBorne(request.resource.data.reponse.demande, 80)
+                && request.resource.data.reponse.le == request.time)
+          );
+      }
+
       match /regles/{regleId} {
         allow read:   if accesProjet(projetId);
         allow write:  if equipeSurProjet(projetId);

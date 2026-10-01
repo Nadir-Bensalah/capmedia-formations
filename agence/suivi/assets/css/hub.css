@@ -2429,3 +2429,29 @@ input, select, textarea { font: inherit; color: inherit; }
   .af-sommaire button { white-space: nowrap; background: var(--fond-2); border-radius: var(--r-pilule); padding: 6px 12px; }
   .af-note { font-size: 15.5px; }
 }
+
+
+/* Les suggestions d'amélioration : des cartes posées sur le fond doux, le
+   titre en bouton, les faits (plateformes, prix) en bas. La « une » de
+   l'aperçu reprend la même carte, en plus large. */
+.sugg-groupe + .sugg-groupe { margin-top: 28px; }
+.sugg-groupe-tete { margin: 0 0 12px; }
+.sugg-liste { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.sugg { display: flex; gap: 12px; padding: 16px; border-radius: 12px; background: var(--fond-2); min-width: 0; }
+.sugg--brouillon { opacity: .72; }
+.sugg--retiree { opacity: .55; }
+.sugg--une { background: var(--fond-2); margin-bottom: 20px; }
+.sugg-corps { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 8px; }
+.sugg-titre { font: inherit; font-weight: 600; text-align: left; background: none; border: 0; padding: 0; color: inherit; cursor: pointer; line-height: 1.3; }
+.sugg-titre:hover { text-decoration: underline; }
+.sugg-resume { margin: 0; color: var(--encre-2); }
+.sugg-faits { gap: 8px; flex-wrap: wrap; align-items: center; }
+.sugg-prix { font-weight: 600; font-variant-numeric: tabular-nums; }
+.sugg-pied { gap: 8px; flex-wrap: wrap; align-items: center; margin-top: auto; }
+.sugg-visuel { display: block; border-radius: 8px; overflow: hidden; flex: none; width: 96px; height: 72px; background: var(--fond-3, var(--fond-2)); }
+.sugg-visuel img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sugg-visuel--grand { width: 100%; height: auto; aspect-ratio: 16 / 9; }
+.sugg-texte { margin-top: 12px; }
+.sugg-texte h2, .sugg-texte h3 { font-size: 1.05em; margin: 16px 0 6px; }
+.sugg-texte ul, .sugg-texte ol { padding-left: 20px; }
+@media (max-width: 720px) { .sugg-liste { grid-template-columns: 1fr; } }
