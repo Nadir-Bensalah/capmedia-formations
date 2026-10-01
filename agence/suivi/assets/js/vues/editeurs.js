@@ -1164,20 +1164,24 @@ const editeurs = {
     },
   }),
 
-  reunion: (env, { pid, fiche }) => feuille({
-    titre: fiche ? 'La réunion' : 'Nouvelle réunion', sousTitre: 'Programmée, elle prévient le client.',
+  /* « defaut » préremplit une nouvelle réunion (le jour cliqué dans le
+     planning, ou le rendez-vous demandé par le client). « ticket » : la
+     demande de rendez-vous qu'elle accepte ; la réunion en garde le lien,
+     la demande passe « planifiée » et le client en est averti dans son fil. */
+  reunion: (env, { pid, fiche, defaut = {}, ticket = null }) => feuille({
+    titre: fiche ? 'La réunion' : (ticket ? 'Programmer le rendez-vous demandé' : 'Nouvelle réunion'), sousTitre: ticket ? 'Le créneau proposé par le client est prérempli. Programmée, elle prévient le client.' : 'Programmée, elle prévient le client.',
     corps: `
-      ${champ('titre', 'Titre', fiche ? fiche.titre : '', { placeholder: 'Point hebdomadaire' })}
+      ${champ('titre', 'Titre', fiche ? fiche.titre : (defaut.titre || ''), { placeholder: 'Point hebdomadaire' })}
       <div class="forme-rang">
-        ${champ('date', 'Date et heure', fiche ? dateHeureISO(fiche.date) : '', { type: 'datetime-local' })}
+        ${champ('date', 'Date et heure', fiche ? dateHeureISO(fiche.date) : (defaut.date || ''), { type: 'datetime-local' })}
         ${champ('duree', 'Durée (minutes)', fiche ? fiche.duree : 45, { type: 'number' })}
       </div>
       <div class="forme-rang">
         ${champ('lien', 'Lien de visioconférence', fiche ? fiche.lien : '', { type: 'url', facultatif: true, placeholder: 'https://meet.google.com/...' })}
         ${champ('lieu', 'Lieu', fiche ? fiche.lieu : '', { facultatif: true, placeholder: 'Dans vos locaux, 12 rue…', aide: "Repris dans le fichier d'agenda du client." })}
       </div>
-      ${champ('participants', 'Participants', fiche ? (fiche.participants || []).map((p) => p.nom || p.email).join(', ') : '', { facultatif: true, aide: 'Séparés par des virgules.' })}
-      ${zone('ordreDuJour', "Ordre du jour", fiche ? fiche.ordreDuJour : '', { facultatif: true, lignes: 3 })}
+      ${champ('participants', 'Participants', fiche ? (fiche.participants || []).map((p) => p.nom || p.email).join(', ') : (defaut.participants || ''), { facultatif: true, aide: 'Séparés par des virgules.' })}
+      ${zone('ordreDuJour', "Ordre du jour", fiche ? fiche.ordreDuJour : (defaut.ordreDuJour || ''), { facultatif: true, lignes: 3 })}
       ${zone('compteRendu', 'Compte rendu', fiche ? fiche.compteRendu : '', { facultatif: true, lignes: 4, aide: 'Le client lit « publié le … » : la date se pose quand le texte change.' })}
       ${zone('decisions', 'Décisions prises', fiche ? fiche.decisions : '', { facultatif: true, lignes: 2 })}
       ${zone('actions', 'Actions à réaliser', fiche ? (fiche.actions || []).map((a) => `${a.fait ? '[x] ' : ''}${a.texte}`).join('\n') : '', { facultatif: true, aide: 'Une ligne par action. Le client peut cocher lui-même ce qui est fait.', lignes: 2 })}
@@ -1194,8 +1198,18 @@ const editeurs = {
            client lit « publié le … ». Un compte rendu effacé perd sa date. */
         compteRenduLe: compteRendu !== ancien ? (compteRendu ? new Date() : null) : ((fiche && fiche.compteRenduLe) || null),
       };
-      if (fiche) await ecrire.majReunion(fiche.id, donnees); else await ecrire.creerReunion(env.session, pid, donnees);
-      toast(fiche ? 'Réunion mise à jour.' : 'Réunion programmée.');
+      if (fiche) { await ecrire.majReunion(fiche.id, donnees); toast('Réunion mise à jour.'); return; }
+      await ecrire.creerReunion(env.session, pid, { ...donnees, ticket: ticket || null });
+      /* La réunion existe : la demande ne doit plus bloquer la feuille,
+         sinon un second clic la créerait deux fois. */
+      if (ticket) {
+        try {
+          await ecrire.majDemande(ticket, { statut: 'planifiee' });
+          const quand = donnees.date.toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+          await ecrire.messageDemande(env.session, ticket, `Rendez-vous confirmé : ${quand}. Il est dans votre calendrier${donnees.lien ? ', avec le lien de la visioconférence' : ''}.`);
+        } catch (e) { toast(`Réunion programmée, mais la demande n'a pas suivi : ${lisible(e)}`, 'erreur'); return; }
+      }
+      toast(ticket ? 'Rendez-vous programmé : le client le voit dans son calendrier.' : 'Réunion programmée.');
     },
   }),
 

@@ -597,6 +597,7 @@ qa-finance-client.cjs     devis et factures côté client : décision, refus ave
 qa-demandes-client.cjs    demandes, tâches, points bloquants, validations : réponse sur une tâche, « C'est fait », annuler, suite d'une demande, pièces
 qa-projet-client.cjs      fiche projet : versions par plateforme, pouls daté, tenue des délais, réunions et ICS, calendrier, activité, accès
 qa-navigation-client.cjs  se repérer : plusieurs projets, rôle et personnes, invitation d'un collègue, demandes tous projets, notifications, recherche, maintenance
+qa-calendrier.cjs         le calendrier : jours qui s'ouvrent (souris, clavier), détail d'un élément, couleurs et légende, demande de rendez-vous du client programmée par l'équipe
 qa-echanges-client.cjs    messages et bulle partout, fichiers (télécharger, retirer le sien), tests (anomalie en demande, bon pour sortie)
 matrice-gate2.test.mjs    12 catégories de personnes x 48 opérations Firestore
 matrice-stockage-gate2    12 catégories x 16 opérations Storage
@@ -1406,3 +1407,49 @@ jamais montré (`phraseEnvoi`, `phraseServeur`). La règle Storage du
 dossier reste en place, inchangée.
 
 Épreuve : `qa-pieces-messages.cjs`.
+
+## 27. Le calendrier qu'on utilise (01/10/2026)
+
+« Cette page est belle mais elle n'est pas utilisable en l'état. » Le
+calendrier du Hub (`#/calendrier`) et le planning du Cockpit (`#/planning`)
+partagent désormais tout leur code (`vues/calendrier.js`) : la grille, la
+fenêtre d'un jour, le détail d'un élément, la légende.
+
+- **Un jour s'ouvre.** Toute la case est un bouton (souris, Tab, Entrée),
+  sous les pastilles. La fenêtre est celle des fiches de tests (fond flou) :
+  la date en toutes lettres, puis chaque élément avec son heure (« Journée »
+  quand il n'en a pas), son genre, son projet, ce qu'il y a à faire (dit au
+  client ou à l'équipe) et le lien vers sa fiche. Un jour vide le dit et
+  propose, s'il n'est pas passé, de demander un rendez-vous (client) ou de
+  programmer une réunion (équipe) ce jour-là. Ouverte, la fenêtre suit les
+  données en direct sans se rouvrir.
+- **Une pastille ou une ligne « À venir » ouvre son détail** (quand, ce qu'il
+  y a à faire, lieu et ordre du jour d'une réunion, Rejoindre, agenda, fiche).
+  Le clic du milieu sur une pastille ouvre toujours la fiche dans un onglet.
+- **Un genre, une couleur, une icône** : réunion (bleu), rendez-vous demandé
+  (sarcelle, horloge), étape (violet, drapeau), tâche (gris, rouge en
+  retard), facture (ambre), devis (corail), version (vert), validation
+  (framboise). Jetons `--g-*` de `suite.css`, réglés en clair et en sombre ;
+  légende sous la grille.
+- **Le client demande un rendez-vous** (bouton en haut, ou depuis un jour) :
+  projet, date, créneau (matin, après-midi, ou une heure), sujet,
+  précisions. C'est une **demande** (`tickets`, type `demande`) qui porte
+  `rendezVous: { date: 'AAAA-MM-JJ', creneau: 'matin'|'apres-midi'|'heure',
+  heure: 'HH:MM'|'', sujet }`. Choisie plutôt qu'un message : elle a un
+  numéro, un statut, ses e-mails, sa place dans « Demandes » du Cockpit, et
+  le client peut la retirer tant qu'elle attend. Tant qu'elle attend
+  (`nouveau`, `a-analyser`, `en-attente-client`, `acceptee`), elle figure
+  dans les deux calendriers en « Rendez-vous demandé ».
+- **L'équipe la programme** depuis le planning (fenêtre du jour, détail,
+  liste « Rendez-vous demandés ») ou depuis la fiche de la demande : la
+  feuille de réunion arrive préremplie (sujet, jour et heure, précisions,
+  participant). À l'enregistrement, la réunion porte `ticket`, la demande
+  passe `planifiee`, et un message « Rendez-vous confirmé : … » part dans
+  son fil. Le client voit la réunion remplacer la demande, en direct.
+- **Règles** : `tickets` accepte la clé `rendezVous` à la création, bornée
+  par `rendezVousValide()` (format du jour et de l'heure, créneau connu,
+  heure obligatoire pour « heure », sujet de 1 à 100 caractères, aucune
+  autre clé). À déployer avec le reste des règles du Hub.
+- Le planning dessine désormais par `magasin.dessinateur`, comme le
+  calendrier : un dessin par tour.
+

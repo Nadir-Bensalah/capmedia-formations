@@ -494,6 +494,22 @@ service cloud.firestore {
             && request.resource.data.pieces.size() <= 10;
       }
 
+      // Une demande de rendez-vous : le jour (AAAA-MM-JJ), le créneau, l'heure
+      // quand le client en donne une (HH:MM), le sujet. Rien d'autre.
+      function rendezVousValide() {
+        return !('rendezVous' in request.resource.data)
+            || (request.resource.data.rendezVous is map
+                && request.resource.data.rendezVous.keys().hasOnly(['date', 'creneau', 'heure', 'sujet'])
+                && request.resource.data.rendezVous.date is string
+                && request.resource.data.rendezVous.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+                && request.resource.data.rendezVous.creneau in ['matin', 'apres-midi', 'heure']
+                && request.resource.data.rendezVous.get('heure', '') is string
+                && (request.resource.data.rendezVous.get('heure', '') == ''
+                    || request.resource.data.rendezVous.heure.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$'))
+                && (request.resource.data.rendezVous.creneau != 'heure' || request.resource.data.rendezVous.get('heure', '') != '')
+                && texteRequis(request.resource.data.rendezVous.get('sujet', ''), 100));
+      }
+
       // Création : le numéro est posé par la fonction, jamais par le client.
       // L'auteur est forcément celui qui écrit.
       function creationValide() {
@@ -503,8 +519,11 @@ service cloud.firestore {
                  'assigne', 'auteur', 'pieces', 'archive', 'cree', 'maj', 'resolu', 'lu', 'qualification', 'devis',
                  'anomalie',
                  // La demande qui en poursuit une autre (« Suite de REF-… »).
-                 'suite'
+                 'suite',
+                 // Une demande de rendez-vous, posée depuis le calendrier.
+                 'rendezVous'
                ])
+            && rendezVousValide()
             // Une demande née d'une anomalie de test porte son identifiant.
             && (!('anomalie' in request.resource.data) || texteBorne(request.resource.data.anomalie, 80))
             && (!('suite' in request.resource.data) || request.resource.data.suite == null || request.resource.data.suite is string)

@@ -476,6 +476,9 @@ export const ecrire = {
       assigne: null, auteur, pieces, archive: false,
       /* Une demande née d'une anomalie de test garde le lien avec elle. */
       ...(d.anomalie ? { anomalie: String(d.anomalie).slice(0, 80) } : {}),
+      /* Une demande de rendez-vous, posée depuis le calendrier : le jour,
+         le créneau (matin, après-midi, heure), l'heure et le sujet. */
+      ...(d.rendezVous ? { rendezVous: { date: String(d.rendezVous.date || ''), creneau: d.rendezVous.creneau, heure: String(d.rendezVous.heure || ''), sujet: String(d.rendezVous.sujet || '').slice(0, 100) } } : {}),
       cree: serverTimestamp(), maj: serverTimestamp(), resolu: null,
       /* « lu.client » reste le repère commun ; « lu.clients » en garde un
          par personne, pour que le point « non lu » soit celui de chacun
@@ -837,6 +840,8 @@ export const ecrire = {
       participants: d.participants || [], lien: d.lien || '', ordreDuJour: d.ordreDuJour || '',
       notes: d.notes || '', compteRendu: d.compteRendu || '', decisions: d.decisions || '',
       actions: d.actions || [], visibilite: d.visibilite || 'client',
+      /* La demande de rendez-vous qu'elle accepte, s'il y en a une. */
+      ...(d.ticket ? { ticket: d.ticket } : {}),
       cree: serverTimestamp(), maj: serverTimestamp(), par: { uid: par.uid, nom: par.nom },
     }));
     return ref.id;

@@ -5,7 +5,7 @@
    ========================================================================== */
 
 import {
-  echapper, dateCourte, dateHeure, depuis, enParagraphes, avecLiens, parDateAsc, parDateDesc, joursAvant, age,
+  echapper, enDate, dateCourte, dateHeure, depuis, enParagraphes, avecLiens, parDateAsc, parDateDesc, joursAvant, age,
   bdd, collection, query, where, orderBy, doc, marquerPiece,
   STATUTS, TYPES, URGENCES, PLATEFORMES, QUALIFICATIONS, OUVERTS, ATTEND_CLIENT, STATUTS_RELEASE, pluriel,
 } from '../noyau.js';
@@ -17,6 +17,7 @@ import { K, ecrire, abonnerProjet } from '../donnees.js';
 import { filAriane } from '../coquille.js';
 import { naviguer } from '../routeur.js';
 import { editer } from './editeurs.js';
+import { programmerRendezVous, quandRendezVous, RDV_EN_ATTENTE } from './calendrier.js';
 
 /* ==========================================================================
    1. Nouvelle demande
@@ -160,6 +161,20 @@ export const nouvelle = async (ctx, env) => {
    2. La fiche d'une demande
    ========================================================================== */
 
+/* Une demande de rendez-vous (posée depuis le calendrier) dit le créneau
+   souhaité ; l'équipe la programme d'ici, et une fois la réunion créée,
+   les deux côtés y trouvent le lien vers sa fiche. */
+const encartRendezVous = (t, { equipe, pid, reunions }) => {
+  if (!t.rendezVous) return '';
+  const reunion = reunions.find((r) => r.ticket === t.id);
+  if (reunion) {
+    const d = enDate(reunion.date);
+    return `<div class="encart encart--ok section" data-rdv-programme>${icone('reunions')}<div>Rendez-vous programmé${d ? ` le ${echapper(d.toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }))}` : ''}. <a href="#/projets/${echapper(pid)}/reunions/${echapper(reunion.id)}">Voir la réunion</a></div></div>`;
+  }
+  const attend = RDV_EN_ATTENTE.includes(t.statut);
+  return `<div class="encart encart--info section" data-rdv-demande>${icone('horloge')}<div>Rendez-vous souhaité ${echapper(quandRendezVous(t.rendezVous))}.${attend ? (equipe ? ' Programmez-le : la réunion apparaîtra dans le calendrier du client.' : ' L\'équipe vous confirme le créneau.') : ''}</div>${equipe && attend ? '<button class="btn btn-principal btn-petit" type="button" data-action="programmer-rdv">Programmer ce rendez-vous</button>' : ''}</div>`;
+};
+
 export const detail = async (ctx, env) => {
   const pid = ctx.params.id;
   const tid = ctx.params.tid;
@@ -179,7 +194,7 @@ export const detail = async (ctx, env) => {
   let luMarque = false;
   let composeur = null;
   let derniereEmpreinte = '';
-  const cles = [K.projet(pid), K.ticket(tid), K.messagesTicket(tid), K.evenementsTicket(tid), K.composants(pid), K.taches(pid), K.releases(pid), K.equipe];
+  const cles = [K.projet(pid), K.ticket(tid), K.messagesTicket(tid), K.evenementsTicket(tid), K.composants(pid), K.taches(pid), K.releases(pid), K.equipe, K.reunions(pid)];
 
   const rendre = () => {
     const projet = magasin.lire(K.projet(pid));
@@ -238,6 +253,7 @@ export const detail = async (ctx, env) => {
       </header>
 
       ${bandeauSuivi(t, { equipe, release, nomEquipe, evenements, tickets, pid })}
+      ${encartRendezVous(t, { equipe, pid, reunions: magasin.lire(K.reunions(pid)) || [] })}
 
 
       <div class="grille grille-tiers section">
@@ -321,6 +337,7 @@ export const detail = async (ctx, env) => {
     if (!t) return;
     const action = el.dataset.action;
     if (action === 'piloter') return editer('demande-pilotage', env, { pid, fiche: t });
+    if (action === 'programmer-rdv') return programmerRendezVous(env, t);
     if (action === 'tache') return editer('tache', env, { pid, defaut: { titre: t.titre, ticket: tid, composant: t.composant || '' } });
     if (action === 'valider') {
       const ok = await confirmer({ titre: 'Valider cette correction ?', texte: 'La demande passe en terminée. Vous pourrez la rouvrir pendant sept jours.', ok: 'Je valide' });
