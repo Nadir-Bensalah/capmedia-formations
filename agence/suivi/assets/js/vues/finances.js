@@ -339,7 +339,9 @@ export const vue = async (ctx, env) => {
   const gestes = brancherPiecesComptables(sortie, env);
   /* Premier dessin avant l'affichage, les suivants regroupés : la page
      n'apparaît qu'une fois, sans squelette quand la donnée est déjà là. */
-  const cles = [K.projets, K.reglages, ...session.projets.flatMap((p) => [K.documents(p.id), K.paiements(p.id)])];
+  /* Un projet où le client n'est que collaborateur n'ouvre pas sa finance :
+     sa clé n'arrive jamais, et le premier dessin l'attendait pour rien. */
+  const cles = [K.projets, K.reglages, ...session.projets.filter((p) => estResponsable(session, p)).flatMap((p) => [K.documents(p.id), K.paiements(p.id)])];
   const planifier = magasin.dessinateur(rendre, 40, cles);
   cles.forEach((c) => lot.sur(c, planifier));
   planifier();
