@@ -7,7 +7,7 @@
 
 import {
   $, $$, echapper, initiales, borner, poids, depuis, enParagraphes, avecLiens,
-  envoyerPiece, lienPiece, jourRelatif, enDate, PLATEFORMES_CHOIX, libellePlateforme, FORMATS_ACCEPTES,
+  envoyerPiece, lienPiece, estPieceMessage, lirePieceMessage, jourRelatif, enDate, PLATEFORMES_CHOIX, libellePlateforme, FORMATS_ACCEPTES,
 } from './noyau.js';
 import { icone } from './icones.js';
 
@@ -358,7 +358,21 @@ export const fichierHtml = (f, options = {}) => {
    téléchargements : le lien signé est lu en mémoire, puis remis par un
    <a download>. Si le navigateur refuse la lecture (un réseau qui coupe,
    un bucket sans CORS), le lien s'ouvre dans un onglet plutôt que rien. */
+const poserTelechargement = (blob, nom) => {
+  const adresse = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = adresse; a.download = nom || 'fichier';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(adresse), 60000);
+};
+
 const telechargerPiece = async (chemin, nom) => {
+  /* Une pièce de conversation arrive par le serveur, jamais par un lien
+     du stockage (noyau.js, lirePieceMessage). */
+  if (estPieceMessage(chemin)) {
+    poserTelechargement(await lirePieceMessage(chemin), nom || String(chemin).split('/').pop());
+    return;
+  }
   const url = await lienPiece({ chemin });
   try {
     const r = await fetch(url);
@@ -387,17 +401,45 @@ export const brancherPieces = (racine) => {
     const cible = ev.target.closest('[data-piece], [data-ouvrir-piece]');
     if (!cible) return;
     ev.preventDefault();
+    /* Une pièce de conversation s'ouvre depuis son contenu, lu par le
+       serveur : l'onglet est réservé tout de suite, pendant le clic, pour
+       que le navigateur ne le prenne pas pour une fenêtre surgissante. */
+    const ouvrirMessage = cible.dataset.ouvrirPiece && estPieceMessage(cible.dataset.ouvrirPiece);
+    const onglet = ouvrirMessage ? window.open('', '_blank') : null;
     try {
-      if (cible.dataset.ouvrirPiece) {
+      if (ouvrirMessage) {
+        const blob = await lirePieceMessage(cible.dataset.ouvrirPiece);
+        if (onglet && !onglet.closed) {
+          onglet.opener = null;
+          onglet.location.href = URL.createObjectURL(blob);
+        } else {
+          poserTelechargement(blob, cible.dataset.nom || String(cible.dataset.ouvrirPiece).split('/').pop());
+        }
+      } else if (cible.dataset.ouvrirPiece) {
         const url = await lienPiece({ chemin: cible.dataset.ouvrirPiece });
         window.open(url, '_blank', 'noopener');
       } else {
         await telechargerPiece(cible.dataset.piece, cible.dataset.nom);
       }
     } catch (e) {
-      toast("Ce fichier n'est pas accessible.", 'erreur');
+      if (onglet) { try { onglet.close(); } catch (err) { /* déjà fermé */ } }
+      /* Nos phrases (serveur, session) se montrent ; un texte technique, jamais. */
+      const m = (e && e.message) || '';
+      toast(m && !/firebase|storage\//i.test(m) && m.length < 260 ? m : "Ce fichier n'est pas accessible.", 'erreur');
     }
   });
+};
+
+/* Un envoi refusé se dit en français, jamais avec le texte brut de
+   Firebase (« Firebase Storage: User does not have permission... »). */
+const phraseEnvoi = (e, nom) => {
+  const code = String((e && e.code) || '');
+  if (code === 'storage/unauthorized') return `« ${nom} » n'a pas pu être joint : vous n'avez pas accès à ce dossier.`;
+  if (code === 'storage/canceled') return 'Envoi annulé.';
+  if (code === 'storage/quota-exceeded') return "L'espace de stockage est plein. Prévenez-nous.";
+  if (code.startsWith('storage/')) return `« ${nom} » n'a pas pu être envoyé. Réessayez dans un instant.`;
+  const m = (e && e.message) || '';
+  return m && !/firebase/i.test(m) && m.length < 260 ? m : `« ${nom} » n'a pas pu être envoyé. Réessayez dans un instant.`;
 };
 
 /**
@@ -444,7 +486,7 @@ export const depot = (zone, { chemin, metadonnees = null, max = 10, texte = 'Dé
         Object.assign(provisoire, fiche, { envoi: false });
       } catch (e) {
         etat.pieces = etat.pieces.filter((p) => p !== provisoire);
-        toast(e.message || "L'envoi a échoué.", 'erreur');
+        toast(phraseEnvoi(e, f.name), 'erreur');
       } finally {
         etat.enCours -= 1;
         rendre();

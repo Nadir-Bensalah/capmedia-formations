@@ -1355,3 +1355,37 @@ Première publication le 28/09/2026 (0.1.0) : Mac signée ad hoc seulement,
 donc bloquée par Gatekeeper tant que la signature Developer ID et la
 notarisation ne sont pas faites ; Windows sans signature (avertissement
 SmartScreen).
+
+## 26. Les photos et les documents dans les messages (01/10/2026)
+
+Vu en production par le client de ForgeMe : joindre une photo dans
+Messages affichait « Firebase Storage: User does not have permission to
+access 'projets/…/messages/….png'. (storage/unauthorized) ». La règle
+Storage de la conversation (`projets/{p}/messages/**`) décide par
+`surSonProjet` ou `equipeSurProjet`, donc par une lecture Firestore
+(`firestore.get`) ; en production, cette lecture répond 403 tant que le
+compte des règles n'a pas `roles/firebaserules.firestoreServiceAgent`
+(voir section 16). Le banc ne le voit pas : l'émulateur n'a pas d'IAM.
+
+Les pièces de la conversation passent désormais par la fonction
+`suiviPieceMessage` (`fonctions-suivi/pieces.js`) :
+
+- `POST ?projet=<p>&nom=<nom>&type=<type>`, le fichier en corps : le
+  serveur vérifie le jeton, puis l'équipe autorisée sur le projet
+  (`acces.equipeSurProjet`) ou un client membre effectif
+  (`projets/{p}.membres`), jamais les deux pour la même personne ; il
+  contrôle le format (la liste du dépôt) et la taille (10 Mo, vidéo
+  30 Mo : une requête vers une fonction s'arrête à 32 Mo), puis écrit
+  sous `projets/{p}/messages/<horodatage>-<nom>` par l'Admin SDK ;
+- `GET ?chemin=projets/<p>/messages/<objet>` : même vérification, puis
+  le fichier est remis tel quel. Aucun autre chemin n'est servi.
+
+Chaque refus laisse une trace (`piece-message.refusee`). Côté page :
+`envoyerPiece` (noyau.js) aiguille tout dépôt vers `projets/{p}/messages`
+au serveur, et `brancherPieces` (ui.js) lit ces pièces par
+`lirePieceMessage` ; la bulle et la page Messages en profitent toutes
+deux. Un refus se dit en français ; le texte brut de Firebase n'est
+jamais montré (`phraseEnvoi`, `phraseServeur`). La règle Storage du
+dossier reste en place, inchangée.
+
+Épreuve : `qa-pieces-messages.cjs`.

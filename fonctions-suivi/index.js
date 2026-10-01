@@ -36,4 +36,7 @@ const connexion = require('./connexion');
 exports.suiviConnexion = connexion.suiviConnexion;
 
 /* Le téléchargement d'une pièce : le serveur vérifie qui demande, et remet le PDF. */
-exports.suiviPiece = require('./pieces').suiviPiece;
+const pieces = require('./pieces');
+exports.suiviPiece = pieces.suiviPiece;
+/* Les pièces de la conversation du projet : envoyées et remises par le serveur. */
+exports.suiviPieceMessage = pieces.suiviPieceMessage;

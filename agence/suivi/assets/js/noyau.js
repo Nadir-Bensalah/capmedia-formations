@@ -1233,6 +1233,7 @@ export const envoyerPiece = async (fichier, chemin, surProgres, metadonnees = nu
   if (!TYPES_ACCEPTES.test(fichier.type)) {
     throw new Error(`« ${fichier.name} » : ce type de fichier n'est pas accepté.`);
   }
+  if (DOSSIER_MESSAGES.test(chemin)) return envoyerPieceMessage(fichier, chemin, surProgres);
   const plafond = /^video\//.test(fichier.type) ? TAILLE_MAX_VIDEO : TAILLE_MAX;
   if (fichier.size > plafond) {
     throw new Error(`« ${fichier.name} » dépasse ${Math.round(plafond / 1024 / 1024)} Mo.`);
@@ -1251,6 +1252,76 @@ export const envoyerPiece = async (fichier, chemin, surProgres, metadonnees = nu
 };
 
 export const lienPiece = (piece) => getDownloadURL(refStockage(stockage, piece.chemin));
+
+/* --- Les pièces de la conversation du projet ----------------------------
+
+   Elles passent par le serveur (suiviPieceMessage), qui vérifie qui envoie
+   et qui lit : en production, la règle Storage de ce dossier relit le
+   projet dans Firestore, et cette lecture est refusée (403) tant que le
+   compte des règles n'a pas son rôle. Le serveur dit la même règle :
+   l'équipe du projet, ou un client membre du projet. */
+
+const DOSSIER_MESSAGES = /^projets\/[^/]+\/messages$/;
+const CHEMIN_MESSAGE = /^projets\/[^/]+\/messages\/[^/]+$/;
+/* Une requête vers une fonction s'arrête à 32 Mo. */
+const TAILLE_MAX_VIDEO_MESSAGE = 30 * 1024 * 1024;
+const PROJET_FIREBASE = (config && config.projectId) || 'capmedia-1f90d';
+const URL_PIECE_MESSAGE = surEmulateur
+  ? `http://127.0.0.1:5001/${PROJET_FIREBASE}/europe-west1/suiviPieceMessage`
+  : `https://europe-west1-${PROJET_FIREBASE}.cloudfunctions.net/suiviPieceMessage`;
+
+/** Le chemin est-il celui d'une pièce de conversation ? */
+export const estPieceMessage = (chemin) => CHEMIN_MESSAGE.test(String(chemin || ''));
+
+const jetonSession = async () => {
+  const u = auth.currentUser;
+  if (!u) throw new Error('Votre session est fermée. Reconnectez-vous.');
+  try { return await u.getIdToken(); } catch (e) { throw new Error('Votre session a expiré. Reconnectez-vous.'); }
+};
+
+/* Le serveur répond par une phrase écrite pour être lue ; tout le reste
+   (une page d'erreur, un texte technique) devient une phrase simple. */
+const phraseServeur = (texte, defaut) => {
+  const t = String(texte || '').trim();
+  return t && t.length < 260 && !/[<{]|firebase|error/i.test(t) ? t : defaut;
+};
+
+const envoyerPieceMessage = async (fichier, dossier, surProgres) => {
+  const plafond = /^video\//.test(fichier.type) ? TAILLE_MAX_VIDEO_MESSAGE : TAILLE_MAX;
+  if (fichier.size > plafond) {
+    throw new Error(`« ${fichier.name} » dépasse ${Math.round(plafond / 1024 / 1024)} Mo.`);
+  }
+  const projet = dossier.split('/')[1];
+  const jeton = await jetonSession();
+  const adresse = `${URL_PIECE_MESSAGE}?projet=${encodeURIComponent(projet)}&nom=${encodeURIComponent(fichier.name)}&type=${encodeURIComponent(fichier.type)}`;
+  const refus = `« ${fichier.name} » n'a pas pu être envoyé. Réessayez dans un instant.`;
+  return new Promise((ok, ko) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', adresse);
+    xhr.setRequestHeader('Authorization', `Bearer ${jeton}`);
+    xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+    xhr.upload.onprogress = (e) => { if (surProgres && e.lengthComputable) surProgres(Math.round((e.loaded / e.total) * 100)); };
+    xhr.onerror = () => ko(new Error('Le serveur est injoignable. Vérifiez votre connexion et réessayez.'));
+    xhr.onload = () => {
+      if (xhr.status !== 200) { ko(new Error(phraseServeur(xhr.responseText, refus))); return; }
+      try {
+        const r = JSON.parse(xhr.responseText);
+        ok({ nom: fichier.name, chemin: r.chemin, taille: r.taille, type: r.type });
+      } catch (e) { ko(new Error(refus)); }
+    };
+    xhr.send(fichier);
+  });
+};
+
+/** Le contenu d'une pièce de conversation, remis par le serveur (Blob). */
+export const lirePieceMessage = async (chemin) => {
+  const jeton = await jetonSession();
+  let r;
+  try { r = await fetch(`${URL_PIECE_MESSAGE}?chemin=${encodeURIComponent(chemin)}`, { headers: { Authorization: `Bearer ${jeton}` } }); }
+  catch (e) { throw new Error('Le serveur est injoignable. Vérifiez votre connexion et réessayez.'); }
+  if (!r.ok) throw new Error(phraseServeur(await r.text().catch(() => ''), "Ce fichier n'a pas pu être ouvert."));
+  return r.blob();
+};
 
 /** Change la visibilité d'une pièce déjà envoyée (équipe seule, par les règles). */
 export const marquerPiece = (piece, visibilite) => updateMetadata(refStockage(stockage, piece.chemin), { customMetadata: { visibilite } });
