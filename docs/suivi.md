@@ -1093,6 +1093,23 @@ Le lot E du relevé des parcours (`docs/parcours-client-hub.md`, scénarios
   `onDocumentDeleted`) écrit l'activité et prévient l'équipe.
 - Page Documents : tri « Plus récents / Plus anciens / Nom » (`#tri-doc`).
   « Pour quel projet ? » ne s'affiche qu'à plusieurs projets sans filtre.
+- Page Documents du client (octobre 2026) : TOUS ses documents. Les
+  fichiers des projets et, sur les projets dont il est responsable, ses
+  pièces comptables (jamais un brouillon ni une archive). Rangées par genre
+  (`GENRES` : Factures, Devis, Avoirs, Fichiers du projet), une section par
+  genre (`section[data-rayon]`) et des puces `[data-genre]` pour n'en
+  garder qu'un ; les catégories de fichiers se proposent sous « Fichiers du
+  projet ». La recherche lit aussi le numéro et le libellé d'une pièce ; le
+  tri date une pièce à son émission. Une pièce n'est pas redessinée : sa
+  ligne (`lignePiece`, avec le HT en plus quand le montant affiché est
+  TTC), sa fiche (`ouvrirDocument`) et son téléchargement par `suiviPiece`
+  (`brancherPiecesComptables`) viennent de `vues/finances.js`. Pas d'aperçu.
+  Un collaborateur non responsable ne voit ni pièce, ni filtre de genre, ni
+  mot sur les devis : il ne s'abonne pas à la finance, et
+  `documentsVisibles(session)` filtre aussi par `estResponsable`. Cette
+  même fonction donne le badge de l'entrée Documents (fichiers + pièces),
+  qui se recalcule aussi sur `fichiers:<p>`. L'équipe garde ses seuls
+  fichiers : la finance a sa page. Épreuve : `qa-documents-client.cjs`.
 
 ### Les tests (`vues/tests.js`, `hub.js`, `courriels.js`, `communication.js`)
 
