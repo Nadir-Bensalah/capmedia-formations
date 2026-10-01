@@ -1568,3 +1568,91 @@ partage aujourd'hui l'origine, donc le stockage local et la session du Hub.
 Une origine isolée la tiendrait hors d'atteinte. Non fait : il faut un
 domaine autorisé dans Firebase Auth, l'adresse dans les applications de
 bureau et les e-mails, et une redirection depuis `/suivi`.
+
+## 30. Le coffre-fort d'un projet (01/10/2026)
+
+Un onglet « Coffre-fort » sur la page d'un projet, pour ranger tous les
+accès du client : sites, Firebase, Stripe, stores. Nom du service, lien,
+identifiant, mot de passe, note. Il est visible de l'équipe du projet et
+du ou des responsables côté client ; un collaborateur ne le voit pas.
+
+**Chiffré de bout en bout, dans le navigateur.** La base ne reçoit jamais
+un secret en clair, ni la phrase, ni une clé qu'on en tirerait sans elle.
+Le serveur et l'équipe, sans la phrase, ne lisent rien.
+
+```
+phrase (7 mots tirés par crypto.getRandomValues dans 2 107 mots, ~77 bits)
+  PBKDF2-SHA256, 600 000 tours, sel aléatoire de 16 octets  -> clé d'enveloppe
+  la clé d'enveloppe chiffre (AES-256-GCM) la clé du coffre, 32 octets aléatoires
+  la clé du coffre chiffre chaque entrée (AES-256-GCM, IV de 12 octets neuf)
+  données associées : projet + identifiant + génération de clé g + version n
+  (une entrée recopiée ailleurs, ou remise à une version antérieure, ne s'ouvre plus)
+  clair complété au multiple de 256 octets : la longueur ne trahit pas le mot de passe
+```
+
+Code : `assets/js/coffre-chiffre.js` (le chiffrement seul, testé sous Node
+par `outils/coffre-chiffre.test.mjs`), `mots-coffre.js` (la liste),
+`coffre-appareil.js` (WebAuthn), `vues/coffre.js` (l'onglet), et la
+section « coffre » de `donnees.js`.
+
+**La phrase** est générée à la création (l'équipe seule crée), montrée une
+fois pour être recopiée à la main (pas de bouton « Copier »), et la
+fenêtre ne se ferme qu'après « J'ai recopié ». Elle se transmet de vive
+voix ou sur papier, jamais par e-mail ni dans le Hub.
+
+**Renouveler la clé et la phrase** (revue de sécurité du 01/10) : une clé
+de coffre neuve est tirée, toutes les entrées sont rechiffrées avec elle
+(g neuf, n + 1) dans UN seul lot avec la nouvelle enveloppe, les
+appareils à empreinte sont retirés. Après le lot, l'ancienne phrase et
+l'ancienne clé ne déchiffrent plus rien de ce qui est en base ; ce que
+quelqu'un a déjà lu ou recopié, il le garde (changer le mot de passe chez
+le service reste le seul remède). Le coffre tient la liste des
+« porteurs » de la clé en cours (`equipe:uid` ou `client:uid`, chacun
+s'inscrit à l'ouverture) : dès qu'un porteur n'a plus accès au projet
+(client qui n'est plus responsable ; côté équipe, membre désactivé ou
+retiré du projet), un bandeau propose le renouvellement. 350 accès au plus,
+pour que le lot tienne sous 400 écritures. Phrase perdue : l'équipe efface
+le coffre et en recrée un.
+
+**Enveloppes archivées** : chaque enveloppe posée sur le coffre l'est aussi
+dans `enveloppes/{n}` (ajout seul, ni correction ni effacement), dans le
+même lot ; son numéro monte d'un à chaque fois. Si quelqu'un sabote
+l'enveloppe en cours, on retrouve la précédente (à la main, en console).
+
+**Gestionnaires de mots de passe** : aucun `type=password` ; champs texte
+masqués en CSS (`-webkit-text-security`), `autocomplete="off"`,
+`data-1p-ignore`, `data-lpignore`, noms neutres (`coffre-mots`, `cf-secret`).
+Un mot de passe copié est effacé du presse-papiers après 30 secondes (si
+la page a le focus, sinon dès qu'elle le reprend).
+
+**Touch ID, Face ID, Windows Hello** par WebAuthn et son extension PRF
+(Safari 18 et plus, Chrome, Edge) : la sortie PRF, passée par HKDF-SHA256,
+chiffre une copie de la clé du coffre propre à l'appareil. Aucune
+vérification serveur n'est nécessaire : sans l'authentificateur et le
+geste, pas de sortie PRF. Si le navigateur ne sait pas, la page le dit et
+la phrase reste la seule clé.
+
+**Verrou** : à la main, après cinq minutes sans geste, dès que l'onglet du
+navigateur passe en arrière-plan, en quittant l'onglet du projet ou la
+page ; la zone affichée est vidée. Revenue par « Précédent », la page
+revient verrouillée. Rien n'est écrit dans localStorage ni sessionStorage.
+
+**Données** (règles : `suivi/firestore.rules`, section coffre)
+
+```
+coffres/{projetId}                  version, kdf, iterations, sel, iv, cle, enveloppe, porteurs, creePar, cree, maj, phraseLe
+coffres/{projetId}/enveloppes/{n}   version, kdf, iterations, sel, iv, cle, par, date   (ajout seul)
+coffres/{projetId}/entrees/{id}     v, g, n, iv, donnees, cree, maj   (n == 1 à la création, n + 1 à chaque écriture)
+coffres/{projetId}/appareils/{id}   uid, appareil, credId, selPrf, iv, cle, g, cree
+coffres/{projetId}/journal/{id}     uid, cote, action, moyen, date   (aucun contenu, aucun nom : l'écran le prend dans l'annuaire)
+```
+
+Lecture et écriture : `equipeSurProjet` ou `responsableDuProjet` (et
+jamais un testeur). Création et effacement du coffre : l'équipe. Les
+règles imposent la forme (base64url borné, entre 600 000 et 2 000 000
+tours, dates du serveur, journal à son propre nom, non modifiable,
+génération de clé en cours, version qui monte d'un, enveloppe archivée). Preuves :
+`outils/regles-coffre.test.mjs` (règles, `@firebase/rules-unit-testing`)
+et `outils/qa-coffre.cjs` (navigateur, base relue, vrais jetons).
+
+Déployer : `firebase deploy --config firebase.suivi.json --only firestore:rules --project capmedia-1f90d`.

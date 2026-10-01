@@ -462,6 +462,180 @@ service cloud.firestore {
     }
 
     // ================================================================
+    // Le coffre-fort d'un projet
+    //
+    // Les accès du client (sites, consoles, stores), chiffrés dans le
+    // navigateur avant d'arriver ici (assets/js/coffre-chiffre.js). La base
+    // ne voit que des octets : ni secret, ni phrase, ni clé qu'on en
+    // tirerait sans elle. Ces règles disent QUI touche aux octets, et
+    // quelle FORME ils ont : aucun champ en clair ne peut s'y glisser.
+    //
+    // Qui : l'équipe du projet (administrateur, ou agent affecté), et le
+    // ou les responsables du projet côté client. Jamais un collaborateur,
+    // jamais un autre client, jamais un testeur.
+    // ================================================================
+
+    function accesCoffre(projetId) {
+      return equipeSurProjet(projetId)
+          || (responsableDuProjet(projetId) && request.auth.token.get('testeur', false) != true);
+    }
+
+    // La marque d'une personne qui connaît la clé en cours : son côté et
+    // son uid. Le coffre garde la liste (« porteurs ») pour qu'on sache
+    // quand renouveler la clé : quelqu'un qui l'a connue a perdu l'accès.
+    function marqueCoffre() {
+      return (estEquipe() ? 'equipe:' : 'client:') + moi();
+    }
+
+    function refCoffre(projetId) {
+      return /databases/$(database)/documents/coffres/$(projetId);
+    }
+
+    // Du base64url, d'une longueur bornée : la seule forme d'un chiffré.
+    function octets(valeur, min, max) {
+      return valeur is string && valeur.size() >= min && valeur.size() <= max
+          && valeur.matches('^[A-Za-z0-9_-]+$');
+    }
+
+    // L'enveloppe de la clé du coffre : PBKDF2-SHA256, entre 600 000 et
+    // 2 000 000 tours (au-delà, une enveloppe piégée bloquerait la page de
+    // qui l'ouvre), sel de 16 octets, IV de 12, clé de 32 octets plus
+    // l'étiquette.
+    function enveloppeValide(d) {
+      return d.version == 1
+          && d.kdf == 'PBKDF2-SHA256'
+          && d.iterations is int && d.iterations >= 600000 && d.iterations <= 2000000
+          && octets(d.sel, 22, 22)
+          && octets(d.iv, 16, 16)
+          && octets(d.cle, 64, 64);
+    }
+
+    // Toute enveloppe posée sur le coffre est aussi archivée, dans le même
+    // lot, sous son numéro : en cas de sabotage, on retrouve la précédente.
+    function enveloppeArchivee(projetId, d) {
+      let a = getAfter(/databases/$(database)/documents/coffres/$(projetId)/enveloppes/$(string(d.enveloppe))).data;
+      return a.cle == d.cle && a.sel == d.sel && a.iv == d.iv && a.iterations == d.iterations;
+    }
+
+    match /coffres/{projetId} {
+      allow read: if accesCoffre(projetId);
+      // L'équipe ouvre le coffre et génère la phrase. Une création ne peut
+      // pas écraser un coffre existant (ce serait une mise à jour).
+      allow create: if equipeSurProjet(projetId)
+        && request.resource.data.keys().hasOnly(['version', 'kdf', 'iterations', 'sel', 'iv', 'cle', 'enveloppe', 'porteurs', 'creePar', 'cree', 'maj', 'phraseLe'])
+        && request.resource.data.keys().hasAll(['version', 'kdf', 'iterations', 'sel', 'iv', 'cle', 'enveloppe', 'porteurs', 'creePar', 'cree', 'maj', 'phraseLe'])
+        && enveloppeValide(request.resource.data)
+        && request.resource.data.enveloppe is int && request.resource.data.enveloppe >= 1
+        && enveloppeArchivee(projetId, request.resource.data)
+        && request.resource.data.porteurs == [marqueCoffre()]
+        && request.resource.data.creePar == moi()
+        && request.resource.data.cree == request.time
+        && request.resource.data.maj == request.time
+        && request.resource.data.phraseLe == request.time;
+      // Nouvelle phrase, nouvelle clé : l'enveloppe change, son numéro
+      // monte d'un, elle est archivée, et seul son auteur connaît la clé.
+      // L'équipe du projet ou le responsable, comme pour le reste.
+      allow update: if accesCoffre(projetId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['iterations', 'sel', 'iv', 'cle', 'enveloppe', 'porteurs', 'maj', 'phraseLe'])
+        && enveloppeValide(request.resource.data)
+        && request.resource.data.enveloppe == resource.data.enveloppe + 1
+        && enveloppeArchivee(projetId, request.resource.data)
+        && request.resource.data.porteurs == [marqueCoffre()]
+        && request.resource.data.maj == request.time
+        && request.resource.data.phraseLe == request.time;
+      // Qui ouvre le coffre s'ajoute, lui seul, aux porteurs de la clé.
+      allow update: if accesCoffre(projetId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['porteurs'])
+        && !(marqueCoffre() in resource.data.porteurs)
+        && marqueCoffre() in request.resource.data.porteurs
+        && request.resource.data.porteurs.hasAll(resource.data.porteurs)
+        && request.resource.data.porteurs.size() == resource.data.porteurs.size() + 1
+        && request.resource.data.porteurs.size() <= 200;
+      // La phrase perdue : l'équipe efface et recommence.
+      allow delete: if equipeSurProjet(projetId);
+
+      // Les enveloppes, en ajout seul : ni corrigées, ni effacées, même
+      // quand le coffre l'est. Chacune n'existe qu'avec le coffre qui la porte.
+      match /enveloppes/{numero} {
+        allow read: if accesCoffre(projetId);
+        allow create: if accesCoffre(projetId)
+          && request.resource.data.keys().hasOnly(['version', 'kdf', 'iterations', 'sel', 'iv', 'cle', 'par', 'date'])
+          && request.resource.data.keys().hasAll(['version', 'kdf', 'iterations', 'sel', 'iv', 'cle', 'par', 'date'])
+          && request.resource.data.par == moi()
+          && request.resource.data.date == request.time
+          && getAfter(refCoffre(projetId)).data.enveloppe == int(numero)
+          && getAfter(refCoffre(projetId)).data.cle == request.resource.data.cle;
+        allow update, delete: if false;
+      }
+
+      // Une entrée : g, la génération de la clé (le numéro de l'enveloppe en
+      // cours), et n, sa version, qui monte d'un à chaque écriture. Les deux
+      // sont authentifiés par le chiffrement : une version antérieure remise
+      // en base ne se déchiffre plus, une écriture faite avec l'ancienne clé
+      // pendant un renouvellement est refusée.
+      match /entrees/{entreeId} {
+        allow read: if accesCoffre(projetId);
+        allow create: if accesCoffre(projetId)
+          && request.resource.data.keys().hasOnly(['v', 'g', 'n', 'iv', 'donnees', 'cree', 'maj'])
+          && request.resource.data.keys().hasAll(['v', 'g', 'n', 'iv', 'donnees', 'cree', 'maj'])
+          && request.resource.data.v == 1
+          && request.resource.data.n == 1
+          && request.resource.data.g == getAfter(refCoffre(projetId)).data.enveloppe
+          && octets(request.resource.data.iv, 16, 16)
+          && octets(request.resource.data.donnees, 300, 40000)
+          && request.resource.data.cree == request.time
+          && request.resource.data.maj == request.time;
+        allow update: if accesCoffre(projetId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['g', 'n', 'iv', 'donnees', 'maj'])
+          && request.resource.data.n == resource.data.n + 1
+          && request.resource.data.g == getAfter(refCoffre(projetId)).data.enveloppe
+          && octets(request.resource.data.iv, 16, 16)
+          && octets(request.resource.data.donnees, 300, 40000)
+          && request.resource.data.maj == request.time;
+        allow delete: if accesCoffre(projetId);
+      }
+
+      // La copie de la clé propre à un appareil à empreinte (WebAuthn PRF),
+      // pour la génération de clé en cours. Inutile sans l'appareil et le
+      // doigt de son propriétaire ; chacun pose la sienne, tous la voient
+      // (transparence), tous la retirent.
+      match /appareils/{appareilId} {
+        allow read: if accesCoffre(projetId);
+        allow create: if accesCoffre(projetId)
+          && request.resource.data.keys().hasOnly(['uid', 'appareil', 'credId', 'selPrf', 'iv', 'cle', 'g', 'cree'])
+          && request.resource.data.keys().hasAll(['uid', 'appareil', 'credId', 'selPrf', 'iv', 'cle', 'g', 'cree'])
+          && request.resource.data.uid == moi()
+          && request.resource.data.g == getAfter(refCoffre(projetId)).data.enveloppe
+          && texteBorne(request.resource.data.appareil, 80)
+          && octets(request.resource.data.credId, 16, 1400)
+          && octets(request.resource.data.selPrf, 43, 43)
+          && octets(request.resource.data.iv, 16, 16)
+          && octets(request.resource.data.cle, 64, 64)
+          && request.resource.data.cree == request.time;
+        allow update: if false;
+        allow delete: if accesCoffre(projetId);
+      }
+
+      // Le journal : qui a ouvert, quand, comment. Aucun contenu, aucun nom
+      // (l'écran le prend dans l'annuaire). Chacun n'écrit que sa propre
+      // ligne, datée par le serveur ; personne ne la corrige ni ne l'efface.
+      match /journal/{ligneId} {
+        allow read: if accesCoffre(projetId);
+        allow create: if accesCoffre(projetId)
+          && request.resource.data.keys().hasOnly(['uid', 'cote', 'action', 'moyen', 'date'])
+          && request.resource.data.keys().hasAll(['uid', 'cote', 'action', 'moyen', 'date'])
+          && request.resource.data.uid == moi()
+          && request.resource.data.cote == (estEquipe() ? 'equipe' : 'client')
+          && request.resource.data.action in ['creation', 'deverrouillage', 'echec', 'cle-renouvelee',
+                                              'entree-ajoutee', 'entree-modifiee', 'entree-supprimee',
+                                              'appareil-ajoute', 'appareil-retire', 'coffre-efface']
+          && request.resource.data.moyen in ['phrase', 'appareil', '']
+          && request.resource.data.date == request.time;
+        allow update, delete: if false;
+      }
+    }
+
+    // ================================================================
     // Les demandes (collection « tickets »)
     // ================================================================
 
