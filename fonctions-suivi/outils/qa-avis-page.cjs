@@ -65,7 +65,8 @@ const nombre=(page,sel)=>page.evaluate((s)=>document.querySelectorAll(s).length,
   console.log('\n== L équipe : le questionnaire est sur la page');
   await aller(page,'/tests?projet=atelier&onglet=avis','#etage-avis');
   await pause(2500);
-  verifier(await page.evaluate(()=>!!document.querySelector('#etage-avis')),'l étage « Ce que les testeurs en pensent » existe');
+  verifier(await page.evaluate(()=>!!document.querySelector('#etage-avis')),'l étage « Ce que les testeurs ont pensé de l app » existe');
+  verifier(/Ce que les testeurs ont pensé de l.app/i.test(await texte(page,'#etage-avis .etage-sur')),'sous ce titre',await texte(page,'#etage-avis .etage-sur'));
   const resume=await texte(page,'#etage-avis .etage-resume');
   verifier(/2 testeurs ont répondu/.test(resume),'le résumé compte deux réponses',resume);
   verifier(/7[,.]5/.test(resume),'et une recommandation de 7,5',resume);
@@ -78,12 +79,25 @@ const nombre=(page,sel)=>page.evaluate((s)=>document.querySelectorAll(s).length,
   verifier(/Karim/.test(avisT)&&/Infirmier/.test(avisT),'signée du prénom et du profil pour l équipe');
   verifier(/Une note de 1 à 5/.test(avisT),'une question sans réponse dit ce qu elle attend');
   verifier(/Avant de commencer/i.test(avisT)&&/Après avoir tout déroulé/i.test(avisT),'chaque famille dit quand elle est posée');
-  verifier(await page.evaluate(()=>[...document.querySelectorAll('#onglets-tests .onglet')].some(b=>/Questionnaire/.test(b.innerText))),'l onglet Questionnaire est dans la barre');
+  /* Plus d'onglet « Questionnaire » : l'ancienne adresse ouvre « Testeurs
+     humains », et le questionnaire y vient sous campagnes, problèmes et testeurs. */
+  const placeAvis=await page.evaluate(()=>{
+    const actif=document.querySelector('#onglets-tests .onglet.actif');
+    const av=document.querySelector('#etage-avis'), hu=document.querySelector('#etage-humain');
+    return {
+      actif:actif?actif.innerText:'',
+      questionnaire:[...document.querySelectorAll('#onglets-tests .onglet')].some(b=>/Questionnaire/.test(b.innerText)),
+      dedans:!!(av&&av.closest('#onglet-tests[data-onglet="humains"]')),
+      apres:!!(av&&hu&&(hu.compareDocumentPosition(av)&Node.DOCUMENT_POSITION_FOLLOWING)),
+    };
+  });
+  verifier(/^Testeurs humains/.test(placeAvis.actif)&&!placeAvis.questionnaire,'onglet=avis ouvre « Testeurs humains », et la barre n a plus d onglet Questionnaire',JSON.stringify(placeAvis));
+  verifier(placeAvis.dedans&&placeAvis.apres,'le questionnaire est dans l onglet « Testeurs humains », sous campagnes, problèmes et testeurs',JSON.stringify(placeAvis));
   verifier(await page.evaluate(()=>!!document.querySelector('[data-info="avis"]')),'le « i » du questionnaire est là');
   verifier(await page.evaluate(()=>!!document.querySelector('#alertes, .section--alerte, .calme')),'« Ce qui ne va pas » est sur la page du projet');
 
   console.log('\n== L équipe : les résultats, scénario par scénario');
-  /* Les campagnes vivent dans l'onglet « Tests humains », celui par défaut. */
+  /* Les campagnes vivent dans l'onglet « Testeurs humains », celui par défaut. */
   await aller(page,'/tests?projet=atelier','#campagnes'); await pause(800);
   await page.click(`[data-action="ouvrir-campagne"][data-id="${cid}"] .ligne-titre, [data-action="ouvrir-campagne"][data-id="${cid}"]`).catch(()=>{}); await pause(1500);
   verifier(await page.evaluate(()=>!!document.querySelector('.voile #resultats')),'la feuille de campagne porte les résultats');
@@ -120,7 +134,7 @@ const nombre=(page,sel)=>page.evaluate((s)=>document.querySelectorAll(s).length,
     const cite=[...document.querySelectorAll('#avis .avis-verbatim')].find(b=>/récurrences, le calendrier/.test(b.innerText));
     return cite?(cite.querySelector('cite').innerText.match(/Testeur (\d+)/)||[])[1]:'';
   });
-  /* Le vivier est dans l'onglet « Tests humains » : on y va pour lire son numéro. */
+  /* Le vivier est dans l'onglet « Testeurs humains » : on y va pour lire son numéro. */
   await aller(cl,'/tests?projet=atelier','#testeurs'); await pause(800);
   const numVivier=await cl.evaluate(()=>{
     const ligneInf=[...document.querySelectorAll('#testeurs .ligne')].map(l=>l.innerText).find(t=>/Infirmier/.test(t))||'';

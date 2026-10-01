@@ -56,7 +56,7 @@ const connecter=async(page,email)=>{
   await page.waitForURL(/\/suivi\/(hub|cockpit|testeur)/,{timeout:40000}).catch(()=>{});
   await pause(2500);
 };
-/* Le tableau vit dans la page Tests, sous les quatre chiffres, replié
+/* Le tableau vit dans la page Tests, en haut (« Où en sont les tests »), replié
    par défaut. On ouvre la page du projet, on le déploie s'il ne l'est pas,
    puis on choisit la campagne et la voie comme le ferait quelqu'un.
    Juste après la connexion, l'accueil finit parfois de se dessiner après
@@ -173,22 +173,35 @@ const SCENARIOS=[
   verifier(/Nina/.test(feuille)&&/Omar/.test(feuille),'et nomme les testeurs, côté équipe');
   await equipe.keyboard.press('Escape'); await equipe.click('.feuille [data-fermer], .modale--scenario [data-fermer]').catch(()=>{}); await pause(300);
 
-  console.log('\n== Le tableau vit DANS Tests, replié sous les quatre chiffres');
+  console.log('\n== Le tableau vit DANS Tests, replié en haut de la page');
   {
     const entrees=await equipe.$$eval('.lat-lien',as=>as.map(a=>a.textContent.trim()));
     verifier(!entrees.some(t=>/Tableau/.test(t)),'aucune entrée « Tableau » dans le menu');
-    verifier(!(await equipe.$('.onglets-tests')),'et pas d onglets : une seule page');
-    const ordre=await equipe.evaluate(()=>{const c=document.querySelector('.chiffres-tests'),t=document.querySelector('.tb-section');return !!(c&&t&&(c.compareDocumentPosition(t)&Node.DOCUMENT_POSITION_FOLLOWING));});
-    verifier(ordre,'la section vient juste sous les quatre chiffres');
+    verifier(!(await equipe.$('.tb-section .onglets')),'et le tableau n a pas d onglets à lui : une seule section');
+    /* Les quatre chiffres ont disparu de la page d'un projet : l'avancement
+       en haut les remplace. Il ouvre la page, avant la barre d'onglets. */
+    const haut=await equipe.evaluate(()=>{const t=document.querySelector('.tb-section'),o=document.querySelector('#onglets-tests');return {
+      lignes:document.querySelectorAll('.tb-resume .tb-ligne').length,
+      /* Le questionnaire (#avis) et la feuille d'une campagne (.voile) gardent les leurs. */
+      tuiles:[...document.querySelectorAll('.chiffres-tests')].filter(e=>!e.closest('.voile, #etage-avis, #avis')).length,
+      avant:!!(t&&o&&(t.compareDocumentPosition(o)&Node.DOCUMENT_POSITION_FOLLOWING)),
+      sur:((document.querySelector('.tb-resume .surtitre')||{}).innerText||'').trim(),
+    };});
+    verifier(haut.lignes===2&&haut.tuiles===0,'l avancement en haut a ses deux lignes, et plus de tuiles de chiffres',JSON.stringify(haut));
+    verifier(haut.avant,'la section vient en tête, avant les onglets',JSON.stringify(haut));
+    verifier(/^Où en sont les tests/i.test(haut.sur),'sous le surtitre « Où en sont les tests »',haut.sur);
     /* Une autre personne, un navigateur neuf : replié par défaut. */
     const neuf=await (await nav.newContext({viewport:{width:1440,height:900}})).newPage();
     await connecter(neuf,'agent.essai@exemple.test');
     for (let i=0;i<6;i++){ await neuf.evaluate(()=>{location.hash='#/tests?projet=atelier';window.dispatchEvent(new HashChangeEvent('hashchange'));}); if (await neuf.waitForSelector('[data-deplier]',{timeout:5000}).then(()=>true).catch(()=>false)) break; }
     verifier(await neuf.$eval('[data-deplier]',b=>b.getAttribute('aria-expanded')==='false').catch(()=>false),'replié par défaut');
     verifier((await neuf.$$eval('.tb-case',x=>x.length))===0,'aucune case tant qu on ne déploie pas');
-    verifier((await neuf.$$eval('.tb-resume .tb-barre',x=>x.length))===2,'mais les deux barres de progression sont là : humains et automatisés');
+    verifier((await neuf.$$eval('.tb-resume .tb-barre',x=>x.length))===2,'mais les deux barres de progression sont là : testeurs humains et tests par robot');
+    const noms=await neuf.$$eval('.tb-resume .tb-ligne-nom',x=>x.map(e=>e.textContent.trim()));
+    verifier(noms.join('|')==='Testeurs humains|Tests par robot','les deux lignes s appellent « Testeurs humains » et « Tests par robot »',noms.join(' / '));
     const resume=await neuf.textContent('.tb-resume');
-    verifier(/Passe du tableau/.test(resume)&&/passages sur/.test(resume),'avec la campagne et où elle en est',resume.replace(/\s+/g,' ').slice(0,140));
+    verifier(/Passe du tableau/.test(resume)&&/vérifications faites sur/.test(resume)&&/3 testeurs/.test(resume),'avec la campagne, où elle en est (vérifications faites) et ses testeurs',resume.replace(/\s+/g,' ').slice(0,180));
+    verifier(/Déployer le tableau · \d+ vérifications?/.test(await neuf.textContent('[data-deplier]').catch(()=>'')),'le bouton compte en vérifications',(await neuf.textContent('[data-deplier]').catch(()=>'')).trim());
     await neuf.click('[data-deplier]');
     verifier(!!(await neuf.waitForSelector('.tb-case',{timeout:10000}).catch(()=>null)),'un geste, et tout le tableau se déploie');
     await neuf.evaluate(()=>location.reload()); await neuf.waitForSelector('[data-deplier]',{timeout:30000}).catch(()=>{});
@@ -314,7 +327,7 @@ const SCENARIOS=[
   verifier(await attendreEtat(client,'TB-03','ok'),'l équipe classe sans suite : le client le voit passer au vert en direct');
   verifier(erreursClient.length===0,'aucune erreur dans la page du client',erreursClient.join(' | ').slice(0,200));
 
-  console.log('\n== Tests automatisés : un robot rend ses verdicts en direct');
+  console.log('\n== Tests par robot : un robot rend ses verdicts en direct');
   const S2=(ref,titre,outil,scen,etat)=>poser(`projets/${PID}/parcours/${ref}`,{ref:S(ref),titre:S(titre),outil:S(outil),plateformes:L([S('ios')]),scenarios:L(scen.map(S)),etat:S(etat),actif:B(true),ordre:N(1),mutation:B(false)});
   await S2('P-01','Créer une tâche récurrente','maestro',['TB-01'],'ecrit');
   await S2('P-02','Règle des rappels','jest',[],'ecrit');

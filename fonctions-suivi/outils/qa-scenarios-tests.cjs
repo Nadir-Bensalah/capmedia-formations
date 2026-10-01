@@ -135,8 +135,25 @@ const aller = async (page, hash, attendu) => {
   console.log('\n== La console le montre, en lecture seule');
   await aller(page, `/tests?projet=${P}&onglet=bibliotheque`, '[data-scenario="ZZ-01"]');
   verifier(await page.evaluate(() => !!document.querySelector('[data-scenario="ZZ-01"]')), 'ZZ-01 est dans la console du projet');
-  /* La bibliothèque est repliée sous « Voir la bibliothèque » : on la déplie, comme on le ferait. */
+  /* La liste est repliée sous « Voir la liste », dans « Les vérifications » : on la déplie, comme on le ferait. */
+  const tete = await page.evaluate(() => ({
+    titre: ((document.querySelector('#scenarios h2') || {}).innerText || '').trim(),
+    bouton: ((document.querySelector('[data-plier-scenarios]') || {}).innerText || '').trim(),
+  }));
+  verifier(/^Les vérifications/.test(tete.titre), 'la section s appelle « Les vérifications »', `vu « ${tete.titre} »`);
+  verifier(/Voir la liste/.test(tete.bouton), 'et se déplie par « Voir la liste »', `vu « ${tete.bouton} »`);
   await page.click('[data-plier-scenarios]'); await pause(700);
+  /* Chaque vérification dit qui la fait. ZZ-01 n'est ni dans une campagne
+     (le projet n'en a pas) ni couverte par un robot : « Personne encore ». */
+  const qui = await page.evaluate(() => [...document.querySelectorAll('.scenario')].map((e) => ({
+    ref: ((e.querySelector('.scenario-ref') || {}).innerText || '').trim(),
+    puces: [...e.querySelectorAll('.scenario-fin .puce')].map((x) => x.innerText.trim()),
+  })));
+  const QUI = /^(Testeur|Robot|Testeur et robot|Personne encore)$/;
+  const sansQui = qui.filter((x) => x.puces.filter((t) => QUI.test(t)).length !== 1);
+  verifier(qui.length > 0 && !sansQui.length, `chaque vérification porte une seule puce « qui fait » (${qui.length})`, sansQui.map((x) => x.ref).join(', ') || 'aucune vérification');
+  const zz = qui.find((x) => x.ref === 'ZZ-01');
+  verifier(zz && zz.puces.includes('Personne encore'), 'ZZ-01, hors campagne et sans robot : « Personne encore »', zz ? zz.puces.join(' / ') : 'introuvable');
   await page.click('[data-scenario="ZZ-01"]'); await pause(900);
   const feuille = await page.evaluate(() => { const v = [...document.querySelectorAll('.voile')].pop(); return v ? { texte: v.innerText, edition: v.querySelectorAll('[data-action="editer"], [data-action="supprimer"], form').length } : null; });
   verifier(feuille && /Le résultat se voit tout de suite/.test(feuille.texte), 'sa fiche s ouvre avec le résultat attendu');

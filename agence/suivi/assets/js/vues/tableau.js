@@ -236,7 +236,8 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
     const metaHumain = campagne ? [
       echapper(campagne.titre || 'Campagne'),
       (STATUTS_CAMPAGNE[campagne.statut] || {}).libelle || '',
-      `${th.faits} passages sur ${th.attendus}`,
+      `${th.faits} vérifications faites sur ${th.attendus}`,
+      (campagne.testeurs || []).length ? pluriel((campagne.testeurs || []).length, 'testeur', 'testeurs') : 'aucun testeur',
       r && r.avant ? `commence dans ${pluriel(r.avant, 'jour', 'jours')}` : '',
       r && !r.avant ? `jour ${r.jour} sur ${r.jours}` : '',
       r && !r.avant && r.reste !== null && r.reste > 0 ? `reste ≈ ${r.reste} j au rythme actuel` : '',
@@ -244,9 +245,13 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
     ].filter(Boolean).join(' · ') : 'Aucune campagne pour ce projet';
 
     const derniers = d.parcours.filter((x) => projetDe(x) === pid && surPlateforme(x, etat.plateforme)).map((x) => enDate((x.dernier || {}).le)).filter(Boolean).sort((a, b) => b - a);
+    /* Une seule unité pour les robots : le test. Deux sortes, dites en mots :
+       ceux qui utilisent l'app comme un humain, ceux qui vérifient un calcul. */
+    const nApp = d.parcours.filter((x) => x.actif !== false && projetDe(x) === pid && surPlateforme(x, etat.plateforme)).length;
+    const nCalculs = d.regles.filter((x) => x.actif !== false && projetDe(x) === pid).length;
     const metaMachine = tm.total
-      ? [`${tm.compte.ok} au vert sur ${tm.total}`, tm.tournent ? `<span class="tb-bleu">${pluriel(tm.tournent, 'test', 'tests')} en exécution</span>` : '', derniers.length ? `dernier résultat ${echapper(depuis(derniers[0]))}` : 'jamais exécutés'].filter(Boolean).join(' · ')
-      : 'Aucun test automatisé déclaré';
+      ? [`${tm.compte.ok} réussis sur ${tm.total}`, nApp && nCalculs ? `${nApp} dans l'app, ${nCalculs} sur les calculs` : '', tm.tournent ? `<span class="tb-bleu">${pluriel(tm.tournent, 'test', 'tests')} en exécution</span>` : '', derniers.length ? `dernier résultat ${echapper(depuis(derniers[0]))}` : 'jamais exécutés'].filter(Boolean).join(' · ')
+      : 'Aucun test par robot pour l\'instant';
 
     const ligneResume = (nomLigne, meta, t, pc) => `<div class="tb-ligne">
       <div class="tb-ligne-tete">
@@ -271,13 +276,13 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
 
     const pcHumain = th ? Math.round((th.faits / (th.attendus || 1)) * 100) : 0;
     const pcMachine = Math.round((tm.compte.ok / (tm.total || 1)) * 100);
-    const combien = `${th ? pluriel(th.total, 'scénario', 'scénarios') : ''}${th && tm.total ? ' et ' : ''}${tm.total ? pluriel(tm.total, 'test automatisé', 'tests automatisés') : ''}`;
+    const combien = `${th ? pluriel(th.total, 'vérification', 'vérifications') : ''}${th && tm.total ? ' et ' : ''}${tm.total ? pluriel(tm.total, 'test par robot', 'tests par robot') : ''}`;
 
     const controles = `<div class="tb-controles">
       <div class="rang">
         <div class="segments" role="group" aria-label="Voie">
-          <button type="button" data-voie="humains" aria-pressed="${etat.voie !== 'machine'}">Tests humains</button>
-          <button type="button" data-voie="machine" aria-pressed="${etat.voie === 'machine'}">Tests automatisés</button>
+          <button type="button" data-voie="humains" aria-pressed="${etat.voie !== 'machine'}">Testeurs humains</button>
+          <button type="button" data-voie="machine" aria-pressed="${etat.voie === 'machine'}">Tests par robot</button>
         </div>
         ${etat.voie !== 'machine' && camps.length > 1 ? `<select class="select" id="tb-campagne" style="width:auto" aria-label="Campagne">${camps.map((c) => `<option value="${echapper(c.id)}"${campagne && c.id === campagne.id ? ' selected' : ''}>${echapper(c.titre || 'Campagne')} · ${echapper((STATUTS_CAMPAGNE[c.statut] || {}).libelle || '')}</option>`).join('')}</select>` : ''}
       </div>
@@ -286,10 +291,10 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
     sortie.innerHTML = `<div class="tb${etat.voie === 'machine' ? ' tb--machine' : ''}">
       <div class="tb-tete tb-resume">
         <div class="tb-resume-tete">
-          <div><p class="surtitre">Tableau des tests${projetChoisi() ? '' : ` · ${echapper(nom)}`}</p><h2 class="tb-titre">Avancement</h2></div>
+          <div><p class="surtitre">Où en sont les tests${projetChoisi() ? '' : ` · ${echapper(nom)}`}</p><h2 class="tb-titre">Avancement</h2></div>
         </div>
-        ${ligneResume('Tests humains', metaHumain, th, pcHumain)}
-        ${ligneResume('Tests automatisés', metaMachine, tm, pcMachine)}
+        ${ligneResume('Testeurs humains', metaHumain, th, pcHumain)}
+        ${ligneResume('Tests par robot', metaMachine, tm, pcMachine)}
         ${direct}
         <button type="button" class="tb-deplier" data-deplier aria-expanded="${etat.deplie}">${icone('chevron')} ${etat.deplie ? 'Replier le tableau' : `Déployer le tableau${combien ? ` · ${combien}` : ''}`}</button>
       </div>
@@ -349,7 +354,7 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
      ------------------------------------------------------------------------ */
   const voieMachine = (d, pid, t, execs) => {
     const vivants = new Set(t.familles.flatMap((f) => f.cases).filter((c) => c.etat === 'tourne').map((c) => c.ref));
-    return `${t.total ? famillesHtml(t, { mode: 'machine', vivants }) : vide({ icone: 'code', titre: 'Aucun test automatisé', texte: equipe ? 'Déclarez vos parcours dans la section Parcours ci-dessous, puis branchez un robot : chaque résultat s\'allumera ici en direct.' : 'Les tests automatisés apparaîtront ici.', compact: true })}
+    return `${t.total ? famillesHtml(t, { mode: 'machine', vivants }) : vide({ icone: 'code', titre: 'Aucun test par robot', texte: equipe ? 'Déclarez vos parcours dans l\'onglet Tests par robot, ci-dessous, puis branchez un robot : chaque résultat s\'allumera ici en direct.' : 'Les tests automatisés apparaîtront ici.', compact: true })}
     ${equipe ? robotsHtml(pid, execs) : ''}`;
   };
 

@@ -106,7 +106,7 @@ const aller = async (page, hash, sel, titre) => {
   console.log(`\n    (${nb} familles, ${cas} cas en base)`);
 
   console.log('\n== La section existe et dit la profondeur');
-  await aller(page, '/tests?projet=atelier&onglet=automatises', '.chiffres-tests', 'Tests');
+  await aller(page, '/tests?projet=atelier&onglet=automatises', '#onglets-tests', 'Tests');
   await pause(1600);
   const v = await page.evaluate(() => ({
     sections: [...document.querySelectorAll('.section-tete h2')].map((h) => h.innerText.trim()),
@@ -116,19 +116,19 @@ const aller = async (page, hash, sel, titre) => {
   /* Quand la section manque, dire OÙ la page en est : sans cela un
      écart de rendu et un écart de connexion se ressemblent trait pour
      trait, et on accuse le mauvais. */
-  if (!v.sections.includes('Règles métier')) {
+  if (!v.sections.includes('Robots qui vérifient les calculs')) {
     console.log('    [où en est la page]', JSON.stringify(await page.evaluate(() => ({
       hash: location.hash, h1: (document.querySelector('.page h1') || {}).innerText || '(aucun)',
       lat: document.querySelectorAll('.lat a').length, forme: !!document.querySelector('#forme:not(.masque)'),
       corps: document.body.innerText.slice(0, 160).replace(/\n+/g, ' | '),
     }))));
   }
-  verifier(v.sections.includes('Règles métier'), 'la section existe', v.sections.join('/'));
+  verifier(v.sections.includes('Robots qui vérifient les calculs'), 'la section existe', v.sections.join('/'));
   verifier(v.bouton, 'le bouton de création est là');
-  verifier(new RegExp(`${nb} familles`).test(v.texte), `les ${nb} familles sont annoncées`);
-  verifier(new RegExp(`${cas} cas`).test(v.texte), `les ${cas} cas aussi`);
-  verifier(/milliseconde/.test(v.texte), 'la page dit pourquoi c est gratuit');
-  verifier(/éprouvées par mutation/.test(v.texte), 'et le compte des éprouvées');
+  verifier(new RegExp(`${nb} tests? de calcul`).test(v.texte), `les ${nb} familles sont annoncées`);
+  verifier(new RegExp(`${cas} situations? en tout`).test(v.texte), `les ${cas} cas aussi (situations)`);
+  verifier(/fraction de seconde/.test(v.texte), 'la page dit pourquoi c est gratuit');
+  verifier(/\d+ \/ \d+\s+avec contre-épreuve/.test(v.texte), 'et le compte des éprouvées (avec contre-épreuve)');
 
   /* Une barre par famille, la longueur dit le nombre de cas. La plus
      longue fait toute la piste : sinon l'échelle ment. */
@@ -152,7 +152,7 @@ const aller = async (page, hash, sel, titre) => {
   });
   verifier(r1.existe, 'le catalogue existe');
   verifier(r1.replie === true, 'il est replié au départ', 'il est déplié : mille lignes dans la page');
-  verifier(new RegExp(`Voir les ${nb} familles`).test(r1.bouton), `le bouton annonce les ${nb}`, r1.bouton);
+  verifier(new RegExp(`Voir les ${nb} tests? de calcul`).test(r1.bouton), `le bouton annonce les ${nb}`, r1.bouton);
 
   await page.click('[data-plier-regles]'); await pause(900);
   const r2 = await page.evaluate(() => {
@@ -178,7 +178,7 @@ const aller = async (page, hash, sel, titre) => {
   verifier(f.familles >= 6, `les familles (${f.familles})`);
   verifier(f.etats === 3, 'les trois états', String(f.etats));
   verifier(f.cas, 'le champ du nombre de cas');
-  verifier(f.mutation, 'la case « éprouvée par mutation »');
+  verifier(f.mutation, 'la case de la contre-épreuve');
 
   /* Une famille à zéro cas n'essaie rien : la garde doit tenir. */
   await page.fill('#ed-ref', 'ZZ-99');
@@ -204,8 +204,8 @@ const aller = async (page, hash, sel, titre) => {
   await aller(cl, '/tests?projet=atelier&onglet=automatises', '#regles', 'Tests');
   await pause(1600);
   const c = await cl.evaluate(() => ({
-    voit: /Règles métier/.test(document.body.innerText),
-    cas: /cas essayés/.test(document.body.innerText),
+    voit: /Robots qui vérifient les calculs/.test(document.body.innerText),
+    cas: /\d+ situations? en tout/.test(document.body.innerText),
     creer: document.querySelectorAll('[data-nouvelle-regle]').length,
   }));
   verifier(c.voit, 'il voit la section');
@@ -215,8 +215,10 @@ const aller = async (page, hash, sel, titre) => {
   const c2 = await cl.evaluate(() => ({
     lignes: document.querySelectorAll('#catalogue-regles .ligne').length,
     editer: document.querySelectorAll('[data-editer-regle]').length,
+    situations: /\d+ situations? essayées?/.test((document.querySelector('#catalogue-regles') || {}).innerText || ''),
   }));
   verifier(c2.lignes > 10, `il les voit toutes (${c2.lignes})`);
+  verifier(c2.situations, 'chaque famille dit ses situations essayées');
   verifier(c2.editer === 0, 'sans bouton de modification');
 
   console.log('\n' + (soucis.length ? `${soucis.length} ÉCART(S)` : 'tout est conforme'));

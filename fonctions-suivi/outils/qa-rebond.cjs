@@ -101,8 +101,8 @@ const ligne=(nom,r)=>console.log(`  ${nom.padEnd(40)} peints=${r.peints} contenu
     await mesurer('page Tests (retour)',aller('/tests?projet=atelier'));
     for(const p of ['ios','android','web','']) await mesurer(`filtre ${p||'toutes'} (clic)`,()=>page.click(`[data-plateforme="${p}"]`));
     /* Les onglets de la page Tests d'un projet : un dessin en place, sans squelette ni saut. */
-    for(const o of ['automatises','bibliotheque','avis','devis']) await mesurer(`onglet tests ${o}`,aller(`/tests?projet=atelier&onglet=${o}`));
-    if(process.env.CAPTURE_REBOND)await page.screenshot({path:`${process.env.CAPTURE_REBOND}/tests-${role==='équipe'?'equipe':'client'}.png`,fullPage:false});
+    for(const o of ['automatises','bibliotheque','avis','devis']){await mesurer(`onglet tests ${o}`,aller(`/tests?projet=atelier&onglet=${o}`));
+      if(process.env.CAPTURE_REBOND)await page.screenshot({path:`${process.env.CAPTURE_REBOND}/tests-${role==='équipe'?'equipe':'client'}-${o}.png`,fullPage:true});}
     await mesurer('onglet tests humains',aller('/tests?projet=atelier'));
     if(role==='équipe'){
       /* « Tous les projets » porte le tableau des tests, qui a ses propres clés. */

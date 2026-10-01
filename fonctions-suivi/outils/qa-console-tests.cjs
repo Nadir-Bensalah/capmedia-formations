@@ -128,22 +128,23 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   verifier(/sans aucun scénario|aucun scénario retenu/i.test(g.texte),'la campagne sans scénario est signalée');
 
   console.log('\n== Un projet choisi');
-  /* La page d'un projet a des onglets : la campagne est dans « Tests
-     humains » (l'onglet par défaut), les scénarios dans « Bibliothèque ». */
-  await aller(page,'/tests?projet=atelier','.chiffres-tests');
+  /* La page d'un projet a des onglets : la campagne est dans « Testeurs
+     humains » (l'onglet par défaut), les scénarios dans « Ce qu'on vérifie ». */
+  await aller(page,'/tests?projet=atelier','#onglets-tests');
   await pause(1200);
   const creer = await page.evaluate(()=>!!document.querySelector('[data-nouvelle-campagne]'));
   await aller(page,'/tests?projet=atelier&onglet=bibliotheque','[data-plier-scenarios]');
+  await page.waitForSelector('.tb-resume .tb-ligne',{timeout:15000}).catch(()=>{});
   await pause(1200);
   const u = await page.evaluate(()=>({
-    chiffres:[...document.querySelectorAll('.chiffre')].map(c=>c.innerText.replace(/\n/g,' ')),
+    avancement:[...document.querySelectorAll('.tb-resume .tb-ligne-nom')].map(c=>c.innerText.trim()),
     scenarios:document.querySelectorAll('.scenario').length,
     doubles:document.querySelectorAll('.scenario--double').length,
     plier: !!document.querySelector('[data-plier-scenarios]'),
     onglets:[...document.querySelectorAll('#onglets-tests .onglet')].map(a=>a.innerText.trim().split('\n')[0]),
   }));
   u.creer = creer;
-  console.log('    chiffres :', u.chiffres.join(' | '));
+  console.log('    avancement :', u.avancement.join(' | '));
   /* Les comptes réels, lus en base : la bibliothèque grandit, et une
      suite qui exige 173 tombe au premier ajout pour une raison qui n'est
      pas un défaut. */
@@ -162,12 +163,12 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
 
   verifier(u.scenarios===nScen,`les ${nScen} scénarios sont dans la page`,`${u.scenarios} vus`);
   verifier(u.doubles===nDoubles,`${nDoubles} marqués double`,`${u.doubles} vus`);
-  /* Quatre chiffres pour la campagne, quatre pour les parcours : la page
-     en porte huit dès qu'un projet a des parcours automatisés. */
-  verifier(u.chiffres.length>=4,`les chiffres du haut (${u.chiffres.length})`);
+  /* Les quatre tuiles du haut ont disparu : l'avancement en haut les
+     remplace, une ligne pour les testeurs humains, une pour les robots. */
+  verifier(u.avancement.length===2 && u.avancement.includes('Testeurs humains') && u.avancement.includes('Tests par robot'),`l'avancement en haut (${u.avancement.length} lignes)`,u.avancement.join('/'));
   verifier(u.plier,'la bibliothèque est repliable');
   verifier(u.creer,'le bouton de création de campagne est là');
-  verifier(u.onglets.length>=4 && u.onglets.includes('Tests humains') && u.onglets.includes('Bibliothèque'),'la page a ses onglets',u.onglets.join('/'));
+  verifier(u.onglets.length>=3 && u.onglets.includes('Testeurs humains') && u.onglets.includes('Tests par robot') && u.onglets.includes('Ce qu\'on vérifie'),'la page a ses onglets',u.onglets.join('/'));
 
   console.log('\n== Le filtre par plateforme');
   await page.click('[data-plateforme="web"]'); await pause(1400);
@@ -232,16 +233,17 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
     verifier(c.sections[0]==='Bugs à corriger d\'urgence','il voit la vue globale',c.sections.join('/'));
   } else {
     verifier(c.sections.includes('Campagnes'),'son projet unique s\'ouvre d\'office',c.sections.join('/'));
-    verifier(c.onglets.includes('Bibliothèque'),'avec l\'onglet de sa bibliothèque',c.onglets.join('/'));
+    verifier(c.onglets.includes('Ce qu\'on vérifie'),'avec l\'onglet de sa bibliothèque (« Ce qu\'on vérifie »)',c.onglets.join('/'));
     const fuite = await cl.evaluate(()=>/boutique/i.test(document.body.innerText));
     verifier(!fuite,'et rien du projet d\'un autre client');
   }
 
   await aller(cl,'/tests?projet=atelier&onglet=bibliotheque','[data-plier-scenarios]','Tests');
+  await cl.waitForSelector('.tb-resume .tb-ligne',{timeout:15000}).catch(()=>{});
   await pause(1000);
   const cp = await cl.evaluate(()=>({
     scenarios: document.querySelectorAll('.scenario').length,
-    chiffres: document.querySelectorAll('.chiffre').length,
+    avancement: document.querySelectorAll('.tb-resume .tb-ligne').length,
   }));
   await aller(cl,'/tests?projet=atelier','#testeurs','Tests');
   await pause(1000);
@@ -260,7 +262,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   verifier(!/@/.test(ct.texte),'sans aucune adresse e-mail');
   verifier(!/karim|sonia/i.test(ct.texte),'sans aucun prénom');
   verifier(ct.boutons===0,'et rien à cliquer');
-  verifier(cp.chiffres>=4,`et les chiffres du haut (${cp.chiffres})`);
+  verifier(cp.avancement===2,`et l'avancement en haut (${cp.avancement} lignes)`);
 
   console.log('\n'+(soucis.length?`${soucis.length} ÉCART(S)`:'tout est conforme'));
   console.log('Erreurs JS :', err.length?err.slice(0,4).join('\n  '):'aucune');

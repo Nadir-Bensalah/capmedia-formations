@@ -55,21 +55,29 @@ const adresse = (cles, depuis = '') => {
    était trop longue d'un seul tenant. Le haut (chiffres, tableau, bugs à
    corriger d'urgence) reste commun ; à partir du devis, chaque sujet a son
    onglet. « humains » est l'onglet par défaut (l'adresse sans « onglet »). */
+/* Une idée par onglet, dite avec les mots du client : ce que font les
+   personnes, ce que font les robots, et la liste de ce qu'on vérifie. Le
+   questionnaire d'appréciation est dans l'onglet des testeurs : ce sont
+   leurs avis. */
 const ONGLETS_TESTS = [
   { cle: 'devis', libelle: 'Le devis' },
-  { cle: 'humains', libelle: 'Tests humains' },
-  { cle: 'avis', libelle: 'Questionnaire' },
-  { cle: 'automatises', libelle: 'Tests automatisés' },
-  { cle: 'bibliotheque', libelle: 'Bibliothèque' },
+  { cle: 'humains', libelle: 'Testeurs humains' },
+  { cle: 'automatises', libelle: 'Tests par robot' },
+  { cle: 'bibliotheque', libelle: 'Ce qu\'on vérifie' },
 ];
 const ONGLET_DEFAUT = 'humains';
-const ongletValide = (o) => (ONGLETS_TESTS.some((x) => x.cle === o) ? o : ONGLET_DEFAUT);
+/* Les anciennes adresses (« onglet=avis ») mènent au bon endroit. */
+const ALIAS_ONGLET = { avis: 'humains' };
+const ongletValide = (o) => {
+  const v = ALIAS_ONGLET[o] || o;
+  return ONGLETS_TESTS.some((x) => x.cle === v) ? v : ONGLET_DEFAUT;
+};
 /* Quel onglet porte chaque section : pour un lien qui vise une section
    (index, alerte, adresse), on ouvre d'abord le bon onglet. */
 const ONGLET_DE_SECTION = {
   'etage-devis': 'devis',
   'etage-humain': 'humains', campagnes: 'humains', anomalies: 'humains', testeurs: 'humains',
-  'etage-avis': 'avis', avis: 'avis',
+  'etage-avis': 'humains', avis: 'humains',
   'etage-machine': 'automatises', parcours: 'automatises', regles: 'automatises',
   'etage-bibli': 'bibliotheque', scenarios: 'bibliotheque', bibliotheque: 'bibliotheque',
 };
@@ -414,14 +422,14 @@ const parcoursHtml = (d, { pid, equipe, plateforme = '' }) => {
   const rangee = (x) => ligne({
     icone: x.outil === 'playwright' ? 'globe' : x.outil === 'jest' ? 'code' : 'smartphone',
     ton: x.etat === 'vert' ? 'vert' : x.etat === 'rouge' ? 'rouge' : x.etat === 'instable' ? 'ambre' : '',
-    titre: `${ref(x.ref)} ${echapper(x.titre || '')}${x.mutation || x.etat !== 'vert' ? '' : ' <span class="etiquette">Non éprouvé</span>'}`,
+    titre: `${ref(x.ref)} ${echapper(x.titre || '')}${x.mutation || x.etat !== 'vert' ? '' : ' <span class="etiquette">Sans contre-épreuve</span>'}`,
     sous: `${echapper((OUTILS_PARCOURS[x.outil] || {}).court || x.outil)}${(x.plateformes || []).length ? ` · ${echapper((x.plateformes || []).map((p) => (PLATEFORMES_TEST[p] || {}).court || p).join(', '))}` : ''}${(x.scenarios || []).length ? ` · ${pluriel((x.scenarios || []).length, 'scénario', 'scénarios')}` : ''}${x.note ? ` · ${echapper(x.note.slice(0, 60))}` : ''}`,
     fin: `${pastille(ETATS_PARCOURS, x.etat || 'a-ecrire')}${equipe ? `<span class="rang boutons-edition"><button class="btn-icone" type="button" data-editer-parcours="${echapper(x.ref)}" aria-label="Modifier" data-astuce="Modifier">${icone('edit')}</button></span>` : ''}`,
   });
 
   return `<section class="section" id="parcours">
     <div class="section-tete">
-      <div><h2>Parcours automatisés ${infoBouton('parcours')}</h2><p class="chapo">${liste.length ? `${pluriel(liste.length, 'parcours', 'parcours')} rejoués à chaque version${couverts ? `, couvrant ${pluriel(couverts, 'scénario', 'scénarios')}` : ''}.` : 'Ce que la machine rejouera à chaque version.'}</p></div>
+      <div><h2>Robots qui utilisent l'app ${infoBouton('parcours')}</h2><p class="chapo">${liste.length ? `${pluriel(liste.length, 'robot ouvre', 'robots ouvrent')} l'app et ${liste.length > 1 ? 'cliquent' : 'clique'} comme un humain, à chaque version${couverts ? `. Ils font ${pluriel(couverts, 'vérification', 'vérifications')} de la liste` : ''}.` : 'Ce que la machine rejouera à chaque version.'}</p></div>
       ${equipe && pid ? `<button class="btn btn-principal btn-petit" type="button" data-nouveau-parcours="${echapper(pid)}">${icone('plus')} Nouveau parcours</button>` : ''}
     </div>
 
@@ -434,7 +442,7 @@ const parcoursHtml = (d, { pid, equipe, plateforme = '' }) => {
       { n: (par['a-ecrire'] || 0) + (par.suspendu || 0), nom: 'à écrire', ton: 'gris' },
     ])}
 
-    <p class="doctrine"><b>${eprouves} / ${liste.length}</b> éprouvés par mutation${eprouves < liste.length ? ` · ${pluriel(liste.length - eprouves, 'parcours n\'a pas encore été remis en défaut', 'parcours n\'ont pas encore été remis en défaut')}. Un parcours au vert ne prouve rien tant qu'on ne l'a pas vu tomber.` : '.'}</p>
+    <p class="doctrine"><b>${eprouves} / ${liste.length}</b> avec contre-épreuve${eprouves < liste.length ? ` · contre-épreuve à faire pour ${pluriel(liste.length - eprouves, 'robot', 'robots')} : on casse l'app exprès pour vérifier que le robot le voit. Un robot qui réussit ne prouve rien tant qu'on ne l'a pas vu échouer.` : '.'}</p>
 
     <div class="rang couverture" style="margin:18px 0 14px">
       ${parOutil.map((g) => `<span class="puce" data-astuce="${echapper(g.f.ou)}"><b>${g.items.length}</b> ${echapper(g.f.court)}</span>`).join('')}
@@ -442,7 +450,7 @@ const parcoursHtml = (d, { pid, equipe, plateforme = '' }) => {
 
     ${aVoir.length ? `<div class="liste" style="margin-bottom:14px">${aVoir.map(rangee).join('')}</div>` : ''}
 
-    <button class="btn btn-secondaire btn-petit" type="button" data-plier-parcours aria-expanded="false">${icone('deplier')} Voir les ${liste.length} parcours</button>
+    <button class="btn btn-secondaire btn-petit" type="button" data-plier-parcours aria-expanded="false">${icone('deplier')} Voir les ${pluriel(liste.length, 'robot', 'robots')}</button>
     <div id="catalogue-parcours" hidden style="margin-top:14px">
       ${parOutil.map((g) => `
         <div class="bloc-scenarios">
@@ -473,7 +481,7 @@ const reglesHtml = (d, { pid, equipe }) => {
   if (!liste.length) {
     return `<section class="section">
       <div class="section-tete">
-        <div><h2>Règles métier ${infoBouton('regles')}</h2><p class="chapo">Ce que la machine vérifie en millisecondes.</p></div>
+        <div><h2>Robots qui vérifient les calculs ${infoBouton('regles')}</h2><p class="chapo">Dates, répétitions, points : vérifiés en une fraction de seconde.</p></div>
         ${equipe && pid ? `<button class="btn btn-principal btn-petit" type="button" data-nouvelle-regle="${echapper(pid)}">${icone('plus')} Nouvelle famille</button>` : ''}
       </div>
       ${vide({ icone: 'code', titre: 'Aucune règle',
@@ -496,14 +504,14 @@ const reglesHtml = (d, { pid, equipe }) => {
   const rangee = (x) => ligne({
     icone: 'code',
     ton: x.etat === 'vert' ? 'vert' : x.etat === 'rouge' ? 'rouge' : '',
-    titre: `${ref(x.ref)} ${echapper(x.titre || '')}${x.mutation || x.etat !== 'vert' ? '' : ' <span class="etiquette">Non éprouvée</span>'}`,
-    sous: `${pluriel(Number(x.cas) || 0, 'cas essayé', 'cas essayés')}${x.cherche ? ` · ${echapper(x.cherche)}` : ''}`,
+    titre: `${ref(x.ref)} ${echapper(x.titre || '')}${x.mutation || x.etat !== 'vert' ? '' : ' <span class="etiquette">Sans contre-épreuve</span>'}`,
+    sous: `${pluriel(Number(x.cas) || 0, 'situation essayée', 'situations essayées')}${x.cherche ? ` · ${echapper(x.cherche)}` : ''}`,
     fin: `${pastille(ETATS_REGLE, x.etat || 'a-ecrire')}${equipe ? `<span class="rang boutons-edition"><button class="btn-icone" type="button" data-editer-regle="${echapper(x.ref)}" aria-label="Modifier" data-astuce="Modifier">${icone('edit')}</button></span>` : ''}`,
   });
 
   return `<section class="section" id="regles">
     <div class="section-tete">
-      <div><h2>Règles métier ${infoBouton('regles')}</h2><p class="chapo">${pluriel(liste.length, 'famille', 'familles')}, ${pluriel(cas, 'cas essayé', 'cas essayés')} à chaque enregistrement.</p></div>
+      <div><h2>Robots qui vérifient les calculs ${infoBouton('regles')}</h2><p class="chapo">${pluriel(liste.length, 'test de calcul', 'tests de calcul')}. Chacun essaie beaucoup de situations : ${pluriel(cas, 'situation', 'situations')} en tout, à chaque enregistrement.</p></div>
       ${equipe && pid ? `<button class="btn btn-principal btn-petit" type="button" data-nouvelle-regle="${echapper(pid)}">${icone('plus')} Nouvelle famille</button>` : ''}
     </div>
 
@@ -512,13 +520,13 @@ const reglesHtml = (d, { pid, equipe }) => {
       ton: g.items.some((r) => r.etat === 'rouge') ? 'rouge' : g.items.length && g.items.every((r) => r.etat === 'vert') ? 'vert' : '',
     })))}
 
-    <p class="doctrine"><b>${eprouvees} / ${liste.length}</b> éprouvées par mutation · <b>${casVerts}</b> cas au vert${rouges.length ? ` · <b>${rouges.length}</b> ${rouges.length > 1 ? 'familles rouges' : 'famille rouge'}` : ''}</p>
+    <p class="doctrine"><b>${eprouvees} / ${liste.length}</b> avec contre-épreuve · <b>${casVerts}</b> situations réussies${rouges.length ? ` · <b>${rouges.length}</b> ${rouges.length > 1 ? 'familles rouges' : 'famille rouge'}` : ''}</p>
 
-    <p class="aide" style="margin:14px 0">Une règle métier tourne en une milliseconde : les ${cas} passent en moins d'une minute, à chaque enregistrement. C'est ce qui permet d'essayer le 29 février sur cinquante ans, ou les cent vingt-sept combinaisons de jours d'une répétition hebdomadaire, là où un parcours d'interface en essaie trois.</p>
+    <p class="aide" style="margin:14px 0">Un test de calcul ne passe pas par les écrans : il pose une question au programme et vérifie la réponse, en une fraction de seconde. On peut donc essayer les ${cas} situations à chaque enregistrement, comme le 29 février sur cinquante ans, là où un robot qui clique dans l'app en essaie trois.</p>
 
     ${rouges.length ? `<div class="liste" style="margin-bottom:14px">${rouges.map(rangee).join('')}</div>` : ''}
 
-    <button class="btn btn-secondaire btn-petit" type="button" data-plier-regles aria-expanded="false">${icone('deplier')} Voir les ${liste.length} familles</button>
+    <button class="btn btn-secondaire btn-petit" type="button" data-plier-regles aria-expanded="false">${icone('deplier')} Voir les ${pluriel(liste.length, 'test de calcul', 'tests de calcul')}</button>
     <div id="catalogue-regles" hidden style="margin-top:14px">
       ${parFamille.map((g) => `
         <div class="bloc-scenarios">
@@ -634,8 +642,25 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAU
   const parcVerts = parc.filter((x) => x.etat === 'vert').length;
 
   const humain = `${enCours ? `<b>${enCours}</b> ${enCours > 1 ? 'campagnes en cours' : 'campagne en cours'}` : `<b>${camp.length}</b> ${camp.length > 1 ? 'campagnes' : 'campagne'}, aucune en cours`}, <b>${gens.length}</b> ${gens.length > 1 ? 'testeurs' : 'testeur'}, <b>${ouvertes}</b> ${ouvertes > 1 ? 'anomalies ouvertes' : 'anomalie ouverte'}.`;
-  const machine = `<b>${parc.length}</b> parcours d'interface et <b>${casRegles}</b> cas de règles rejoués à chaque version${parc.length ? `, <b>${parcVerts}</b> ${parcVerts > 1 ? 'parcours au vert' : 'parcours au vert'}` : ''}.`;
-  const bibli = `<b>${scen.length}</b> scénarios en <b>${parBloc.length}</b> blocs, soit <b>${passages}</b> passages mobiles par campagne complète.`;
+  /* Une seule unité pour les robots : le test, comme dans l'avancement en
+     haut de page. Les « cas » d'un test de calcul ne comptent qu'à
+     l'intérieur de sa fiche. */
+  const reglVertes = regl.filter((x) => x.etat === 'vert').length;
+  const nRobots = parc.length + regl.length;
+  const machine = nRobots
+    ? `<b>${nRobots}</b> ${nRobots > 1 ? 'tests par robot' : 'test par robot'}, <b>${parcVerts + reglVertes}</b> ${parcVerts + reglVertes > 1 ? 'réussis' : 'réussi'} au dernier passage. Deux sortes : <b>${parc.length}</b> utilisent l'app comme un humain (ils ouvrent les écrans et cliquent), <b>${regl.length}</b> vérifient des calculs (dates, répétitions, points).`
+    : 'Aucun test par robot pour l\'instant.';
+  /* Qui fait chaque vérification : un testeur (elle est dans une campagne),
+     un robot (un test la couvre), ou les deux. */
+  const parTesteur = new Set(camp.flatMap((c) => c.scenarios || []));
+  const parRobot = new Set(parc.flatMap((x) => x.scenarios || []));
+  const lesDeux = scen.filter((x) => parTesteur.has(x.ref) && parRobot.has(x.ref)).length;
+  const bibli = `<b>${scen.length}</b> ${scen.length > 1 ? 'vérifications' : 'vérification'}, rangées en <b>${parBloc.length}</b> ${parBloc.length > 1 ? 'blocs' : 'bloc'}. Chacune dit qui la fait : un testeur, un robot, ou les deux${lesDeux ? ` (<b>${lesDeux}</b> par les deux)` : ''}.`;
+  const quiFait = (x) => {
+    const t = parTesteur.has(x.ref); const rb = parRobot.has(x.ref);
+    const mot = t && rb ? 'Testeur et robot' : t ? 'Testeur' : rb ? 'Robot' : 'Personne encore';
+    return `<span class="puce puce--mini" data-astuce="${t && rb ? 'Vérifiée par une personne pendant la campagne, et par un robot à chaque version.' : t ? 'Vérifiée par une personne pendant la campagne.' : rb ? 'Vérifiée par un robot à chaque version.' : 'Ni dans une campagne, ni couverte par un robot.'}">${mot}</span>`;
+  };
 
   const devisProjet = devisAvecEtapes((d.documents || []).filter((x) => x.projet === pid), (d.jalons || []).filter((j) => projetDe(j) === pid), { equipe });
   const jalonsProjet = (d.jalons || []).filter((j) => projetDe(j) === pid);
@@ -657,9 +682,8 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAU
      compte dit ce qu'il y a dedans, pas ce qui va mal. */
   const comptes = {
     devis: devisProjet.length ? `${etapesFaites.length}/${etapesDevis.length}` : '',
-    humains: camp.length + ano.length,
-    avis: avis.length,
-    automatises: parc.length,
+    humains: ouvertes ? pluriel(ouvertes, 'problème', 'problèmes') : '',
+    automatises: nRobots ? `${parcVerts + reglVertes}/${nRobots}` : '',
     bibliotheque: scen.length,
   };
   const onglets = ONGLETS_TESTS.filter((o) => o.cle !== 'devis' || devisProjet.length);
@@ -673,7 +697,7 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAU
     ${camp.length ? `<div class="liste">${camp.map((c) => ligne({
       icone: 'bug', ton: c.statut === 'close' ? 'vert' : c.statut === 'en-cours' ? 'bleu' : '',
       titre: echapper(c.titre || 'Campagne'),
-      sous: `${(c.scenarios || []).length ? pluriel((c.scenarios || []).length, 'scénario', 'scénarios') : 'aucun scénario'} · ${(c.testeurs || []).length ? pluriel((c.testeurs || []).length, 'testeur', 'testeurs') : 'aucun testeur'}${c.debut ? ` · ${echapper(dateCourte(c.debut))}` : ''}`,
+      sous: `${(c.scenarios || []).length ? pluriel((c.scenarios || []).length, 'vérification', 'vérifications') : 'aucune vérification'} · ${(c.testeurs || []).length ? pluriel((c.testeurs || []).length, 'testeur', 'testeurs') : 'aucun testeur'}${c.debut ? ` · ${echapper(dateCourte(c.debut))}` : ''}`,
       fin: `${pastille(STATUTS_CAMPAGNE, c.statut || 'preparation')}${equipe ? `<span class="rang boutons-edition"><button class="btn-icone" type="button" data-editer-campagne="${echapper(c.id)}" aria-label="Modifier" data-astuce="Modifier">${icone('edit')}</button></span>` : ''}`,
       action: 'ouvrir-campagne', attrs: `data-id="${echapper(c.id)}"`,
     })).join('')}</div>`
@@ -684,7 +708,7 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAU
      anomalie à la main. Pour le client, une section vide ne dit rien. */
   const sectionAnomalies = (ano.length || equipe) ? `<section class="section" id="anomalies">
     <div class="section-tete">
-      <div><h2>Anomalies ${infoBouton('anomalies')}</h2><p class="chapo">Plusieurs échecs sur le même scénario font une seule anomalie. ${equipe ? 'Un KO de testeur en crée une tout seul ; vous pouvez aussi en poser une à la main.' : ''}</p></div>
+      <div><h2>Problèmes signalés par les testeurs ${infoBouton('anomalies')}</h2><p class="chapo">Plusieurs échecs sur le même scénario font une seule anomalie. ${equipe ? 'Un KO de testeur en crée une tout seul ; vous pouvez aussi en poser une à la main.' : ''}</p></div>
       ${equipe ? `<button class="btn btn-principal btn-petit" type="button" data-nouvelle-anomalie="${echapper(pid)}">${icone('plus')} Nouvelle anomalie</button>` : ''}
     </div>
     ${ano.length ? `<div class="liste">${ano.map((a) => ligne({
@@ -699,8 +723,8 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAU
 
   const sectionScenarios = `<section class="section" id="scenarios">
     <div class="section-tete">
-      <div><h2>Scénarios ${infoBouton('scenarios')}</h2><p class="chapo">La bibliothèque du projet${plateforme ? `, sur ${(PLATEFORMES_TEST[plateforme] || {}).libelle}` : ''}. ${scen.length ? pluriel(scen.length, 'scénario', 'scénarios') : 'Vide.'}</p></div>
-      <button class="btn btn-secondaire btn-petit" type="button" data-plier-scenarios aria-expanded="false">${icone('deplier')} Voir la bibliothèque</button>
+      <div><h2>Les vérifications ${infoBouton('scenarios')}</h2><p class="chapo">Tout ce qu'on vérifie dans l'app${plateforme ? `, sur ${(PLATEFORMES_TEST[plateforme] || {}).libelle}` : ''}. ${scen.length ? pluriel(scen.length, 'vérification', 'vérifications') : 'Vide.'}</p></div>
+      <button class="btn btn-secondaire btn-petit" type="button" data-plier-scenarios aria-expanded="false">${icone('deplier')} Voir la liste</button>
     </div>
     ${scen.length ? `
     <div id="bibliotheque" hidden>
@@ -717,6 +741,7 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAU
               <span class="scenario-ref">${echapper(s.ref)}</span>
               <span class="scenario-titre">${echapper(s.titre)}</span>
               <span class="scenario-fin">
+                ${quiFait(s)}
                 ${(s.plateformes || []).length < 3 ? `<span class="puce puce--mini">${echapper((s.plateformes || []).map((p) => (PLATEFORMES_TEST[p] || {}).court || p).join(' '))}</span>` : ''}
                 ${pastille(NIVEAUX_SCENARIO, s.niveau || 'reparti')}
               </span>
@@ -727,14 +752,10 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAU
     : vide({ icone: 'bug', titre: plateforme ? 'Aucun scénario sur cette plateforme' : 'Aucun scénario', texte: plateforme ? 'Changez de filtre, ou élargissez les plateformes de vos scénarios.' : equipe ? 'Versez un plan de tests sur ce projet.' : 'Les scénarios de test apparaîtront ici dès qu\'ils seront écrits.', compact: true })}
   </section>`;
 
+  /* Les quatre tuiles d'autrefois redisaient l'avancement avec d'autres
+     unités (« passages mobiles ») : l'avancement en haut suffit. */
+  void passages; void ouvertes;
   return `
-  <div class="rang chiffres-tests">
-    <div class="chiffre"><span class="chiffre-valeur">${scen.length}</span><span class="chiffre-nom">scénarios</span></div>
-    <div class="chiffre"><span class="chiffre-valeur">${passages}</span><span class="chiffre-nom">passages mobiles</span></div>
-    <div class="chiffre"><span class="chiffre-valeur">${enCours}</span><span class="chiffre-nom">campagnes en cours</span></div>
-    <div class="chiffre${ouvertes ? ' chiffre--alerte' : ''}"><span class="chiffre-valeur">${ouvertes}</span><span class="chiffre-nom">anomalies ouvertes</span></div>
-  </div>
-
   <div id="tableau-ici"></div>
 
   ${alertes({ ...d, anomalies: ano, campagnes: camp, parcours: parc, scenarios: scen }, { nomProjet, plateforme })}
@@ -745,10 +766,10 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAU
 
   <div id="onglet-tests" data-onglet="${actif}">
     ${actif === 'devis' ? etage('etage-devis', 'Le devis, ligne par ligne', resumeDevis, `<div style="margin-top:20px">${devisProjet.map((dv) => friseDevis(dv, jalonsProjet, { equipe, pid })).join('')}</div>`) : ''}
-    ${actif === 'humains' ? etage('etage-humain', 'Tests humains', humain, `${sectionCampagnes}${sectionAnomalies}${vivierHtml({ ...d, testeurs: gens, profils: gens }, { equipe })}`) : ''}
-    ${actif === 'avis' ? etage('etage-avis', 'Ce que les testeurs en pensent', resumeAvis, avisHtml(avis, { nommer })) : ''}
-    ${actif === 'automatises' ? etage('etage-machine', 'Tests automatisés', machine, `${parcoursHtml(d, { pid, equipe, plateforme })}${reglesHtml(d, { pid, equipe })}`) : ''}
-    ${actif === 'bibliotheque' ? etage('etage-bibli', 'Bibliothèque', bibli, sectionScenarios) : ''}
+    ${actif === 'humains' ? `${etage('etage-humain', 'Testeurs humains', humain, `${sectionCampagnes}${sectionAnomalies}${vivierHtml({ ...d, testeurs: gens, profils: gens }, { equipe })}`)}
+      ${etage('etage-avis', 'Ce que les testeurs ont pensé de l\'app', resumeAvis, avisHtml(avis, { nommer }))}` : ''}
+    ${actif === 'automatises' ? etage('etage-machine', 'Tests par robot', machine, `${parcoursHtml(d, { pid, equipe, plateforme })}${reglesHtml(d, { pid, equipe })}`) : ''}
+    ${actif === 'bibliotheque' ? etage('etage-bibli', 'Ce qu\'on vérifie', bibli, sectionScenarios) : ''}
   </div>`;
 };
 
@@ -1099,8 +1120,9 @@ const avisHtml = (avis, { nommer }) => {
     <div class="section-tete">
       <div><h2>Le questionnaire ${infoBouton('avis')}</h2><p class="chapo">${nbQuestions} questions en sept familles. Trois avant de commencer, le reste après avoir tout déroulé. ${avis.length ? 'Les réponses libres sont rendues mot pour mot.' : 'Personne n\'a encore répondu : voici ce qui sera demandé.'}</p></div>
     </div>
-    ${avis.length ? chiffresAvis(avis) : ''}
-    ${restitutionHtml(avis, { nommer, toutes: true })}
+    ${avis.length ? `${chiffresAvis(avis)}${restitutionHtml(avis, { nommer, toutes: true })}`
+    : `<button class="btn btn-secondaire btn-petit" type="button" data-plier-questions aria-expanded="false">${icone('deplier')} Voir les ${nbQuestions} questions</button>
+    <div id="questions-avis" hidden style="margin-top:14px">${restitutionHtml(avis, { nommer, toutes: true })}</div>`}
   </section>`;
 };
 
@@ -1372,7 +1394,7 @@ export const vue = async (ctx, env) => {
         : `<div id="tableau-ici"></div>
           ${alertes(d, { nomProjet, plateforme: etat.plateforme })}
           ${etage('etage-projets', 'Projets', `<b>${d.projets.length}</b> ${d.projets.length > 1 ? 'projets' : 'projet'}, <b>${d.campagnes.filter((c) => c.statut === 'en-cours').length}</b> ${d.campagnes.filter((c) => c.statut === 'en-cours').length > 1 ? 'campagnes en cours' : 'campagne en cours'}.`, avancement(d, { nomProjet, plateforme: etat.plateforme, equipe: env.role === 'equipe' }))}
-          ${etage('etage-machine', 'Tests automatisés', `<b>${(d.parcours || []).filter((x) => x.actif !== false).length}</b> parcours et <b>${(d.regles || []).reduce((n, x) => n + (x.actif !== false ? (Number(x.cas) || 0) : 0), 0)}</b> cas de règles, tous projets confondus.`, `${parcoursHtml(d, { pid: '', equipe: env.role === 'equipe', plateforme: etat.plateforme })}${reglesHtml(d, { pid: '', equipe: env.role === 'equipe' })}`)}
+          ${etage('etage-machine', 'Tests par robot', `<b>${(d.parcours || []).filter((x) => x.actif !== false).length + (d.regles || []).filter((x) => x.actif !== false).length}</b> tests par robot, tous projets confondus : <b>${(d.parcours || []).filter((x) => x.actif !== false).length}</b> utilisent l'app comme un humain, <b>${(d.regles || []).filter((x) => x.actif !== false).length}</b> vérifient des calculs.`, `${parcoursHtml(d, { pid: '', equipe: env.role === 'equipe', plateforme: etat.plateforme })}${reglesHtml(d, { pid: '', equipe: env.role === 'equipe' })}`)}
           ${env.role === 'equipe' ? etage('etage-gens', 'Testeurs', `<b>${(d.testeurs || []).length}</b> ${(d.testeurs || []).length > 1 ? 'personnes au vivier' : 'personne au vivier'}.`, vivierHtml(d, { equipe: true })) : ''}
           ${activite(d, { nomProjet, plateforme: etat.plateforme })}`}
     </div>`;
@@ -1403,7 +1425,7 @@ export const vue = async (ctx, env) => {
   };
 
   brancherFrise(sortie, env);
-  const gestes = sur(sortie, 'click', '[data-info], [data-aller], [data-nouvelle-anomalie], [data-editer-anomalie], [data-action="ouvrir-anomalie"], [data-plateforme], [data-scenario], [data-plier-bugs], [data-plier-scenarios], [data-plier-parcours], [data-plier-regles], [data-nouvelle-regle], [data-editer-regle], [data-nouvelle-campagne], [data-editer-campagne], [data-action="ouvrir-campagne"], [data-nouveau-testeur], [data-action="ouvrir-testeur"], [data-nouveau-parcours], [data-editer-parcours]', async (el) => {
+  const gestes = sur(sortie, 'click', '[data-info], [data-aller], [data-nouvelle-anomalie], [data-editer-anomalie], [data-action="ouvrir-anomalie"], [data-plateforme], [data-scenario], [data-plier-bugs], [data-plier-scenarios], [data-plier-parcours], [data-plier-regles], [data-plier-questions], [data-nouvelle-regle], [data-editer-regle], [data-nouvelle-campagne], [data-editer-campagne], [data-action="ouvrir-campagne"], [data-nouveau-testeur], [data-action="ouvrir-testeur"], [data-nouveau-parcours], [data-editer-parcours]', async (el) => {
     /* Une référence n'est unique qu'à l'intérieur d'un projet : deux plans
        de tests portent chacun leur « DI-15 ». Chercher sans le projet
        ouvrirait l'énoncé d'une autre application, sans rien dire. */
@@ -1446,7 +1468,7 @@ export const vue = async (ctx, env) => {
       const ouverte = !boite.hidden;
       boite.hidden = ouverte;
       el.setAttribute('aria-expanded', String(!ouverte));
-      el.innerHTML = `${icone(ouverte ? 'deplier' : 'plier')} ${ouverte ? 'Voir la bibliothèque' : 'Replier'}`;
+      el.innerHTML = `${icone(ouverte ? 'deplier' : 'plier')} ${ouverte ? 'Voir la liste' : 'Replier'}`;
       return;
     }
     /* Cent quarante-quatre parcours au-dessus du vivier, c'est le vivier
@@ -1457,7 +1479,18 @@ export const vue = async (ctx, env) => {
       const ouverte = !boite.hidden;
       boite.hidden = ouverte;
       el.setAttribute('aria-expanded', String(!ouverte));
-      el.innerHTML = `${icone(ouverte ? 'deplier' : 'plier')} ${ouverte ? `Voir les ${boite.querySelectorAll('.ligne').length} parcours` : 'Replier'}`;
+      el.innerHTML = `${icone(ouverte ? 'deplier' : 'plier')} ${ouverte ? `Voir les ${pluriel(boite.querySelectorAll('.ligne').length, 'robot', 'robots')}` : 'Replier'}`;
+      return;
+    }
+    /* Tant que personne n'a répondu, les 35 questions restent repliées :
+       elles occupaient toute la page des testeurs pour ne rien dire encore. */
+    if (el.hasAttribute('data-plier-questions')) {
+      const boite = sortie.querySelector('#questions-avis');
+      if (!boite) return;
+      const ouverte = !boite.hidden;
+      boite.hidden = ouverte;
+      el.setAttribute('aria-expanded', String(!ouverte));
+      el.innerHTML = `${icone(ouverte ? 'deplier' : 'plier')} ${ouverte ? `Voir les ${boite.querySelectorAll('.avis-question').length} questions` : 'Replier'}`;
       return;
     }
     if (el.hasAttribute('data-plier-regles')) {
@@ -1466,7 +1499,7 @@ export const vue = async (ctx, env) => {
       const ouverte = !boite.hidden;
       boite.hidden = ouverte;
       el.setAttribute('aria-expanded', String(!ouverte));
-      el.innerHTML = `${icone(ouverte ? 'deplier' : 'plier')} ${ouverte ? `Voir les ${boite.querySelectorAll('.ligne').length} familles` : 'Replier'}`;
+      el.innerHTML = `${icone(ouverte ? 'deplier' : 'plier')} ${ouverte ? `Voir les ${pluriel(boite.querySelectorAll('.ligne').length, 'test de calcul', 'tests de calcul')}` : 'Replier'}`;
       return;
     }
     if (el.dataset.nouvelleRegle) { await editer('regle', env, { pid: el.dataset.nouvelleRegle }); return; }

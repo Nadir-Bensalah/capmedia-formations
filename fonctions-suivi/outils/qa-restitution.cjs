@@ -49,7 +49,7 @@ const dire=m=>{soucis.push(m);console.log('  ÉCART  '+m);};
 const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
 
 const ouvrirLesAvis=async(page)=>{
-  await aller(page,'/tests?projet=atelier','.chiffres-tests','Tests');
+  await aller(page,'/tests?projet=atelier','#onglets-tests','Tests');
   /* Celle qui porte les avis, pas la premiere venue : le semis en laisse
      plusieurs, et ouvrir la mauvaise donne une feuille vide. */
   const l=await page.$('[data-action="ouvrir-campagne"][data-id="c-oct"]') || await page.$('[data-action="ouvrir-campagne"]');

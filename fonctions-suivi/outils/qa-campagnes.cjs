@@ -61,7 +61,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   page.on('console',m=>{if(m.type()==='error')err.push(m.text().slice(0,160));});
 
   await connecter(page,'agent.essai@exemple.test');
-  /* La bibliothèque a son onglet sur la page d'un projet. */
+  /* La liste des vérifications a son onglet, « Ce qu'on vérifie », sur la page d'un projet. */
   await aller(page,'/tests?projet=atelier&onglet=bibliotheque','#bibliotheque, [data-plier-scenarios]','Tests');
 
   console.log('\n== La bibliothèque se replie');
@@ -90,7 +90,15 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   console.log(`    (${nScen} scénarios actifs, ${nSocle} doublés, ${nBlocs} blocs, ${nPassagesMob} passages mobiles)`);
 
   verifier(visible2===nScen,`elle se déplie sur demande (${nScen})`,`${visible2} visibles`);
+  /* Le résumé de l'étage « Ce qu'on vérifie » compte en vérifications et
+     en blocs, et dit qui les fait (plus de « passages mobiles » ici). */
+  const resumeBibli = await page.evaluate(()=>{const e=document.querySelector('#etage-bibli');return e?{sur:(e.querySelector('.etage-sur')||{}).innerText||'',resume:(e.querySelector('.etage-resume')||{}).innerText||''}:null;});
+  verifier(resumeBibli&&/Ce qu.on vérifie/i.test(resumeBibli.sur),'l étage s appelle « Ce qu on vérifie »',resumeBibli?resumeBibli.sur:'étage introuvable');
+  verifier(resumeBibli&&new RegExp(`${nScen} vérifications?, rangées en ${nBlocs} blocs?`).test(resumeBibli.resume)&&/qui la fait/.test(resumeBibli.resume),`son résumé annonce ${nScen} vérifications en ${nBlocs} blocs, et qui les fait`,resumeBibli?resumeBibli.resume:'');
+  verifier(/Replier/.test(await page.evaluate(()=>(document.querySelector('[data-plier-scenarios]')||{}).innerText||'')),'déplié, le bouton dit « Replier »');
   await page.click('[data-plier-scenarios]'); await pause(600);
+  const apresRepli = await page.evaluate(()=>(document.querySelector('[data-plier-scenarios]')||{}).innerText||'');
+  verifier(/Voir la liste/.test(apresRepli),'replié, il redit « Voir la liste »',apresRepli.trim());
   await aller(page,'/tests?projet=atelier','#campagnes','Tests'); await pause(600);
 
   console.log('\n== Créer une campagne');
@@ -146,6 +154,19 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   }
   const vue = await page.evaluate(()=>document.body.innerText);
   verifier(/Octobre 2026/.test(vue),'elle apparaît dans la liste sans recharger');
+  /* Sa ligne compte en vérifications, comme le reste de la page. */
+  const ligneNeuve = await page.evaluate(()=>{const l=[...document.querySelectorAll('[data-action="ouvrir-campagne"]')].find(x=>/Octobre 2026/.test(x.innerText));const r=l&&(l.closest('.ligne')||l);return r?r.innerText.replace(/\s+/g,' '):'';});
+  verifier(new RegExp(`${nScen} vérifications`).test(ligneNeuve),`et sa ligne annonce ${nScen} vérifications`,ligneNeuve.slice(0,140));
+
+  /* Elle retient toutes les vérifications : chacune est désormais faite
+     au moins par un testeur, et sa puce le dit. */
+  await aller(page,'/tests?projet=atelier&onglet=bibliotheque','[data-plier-scenarios]','Tests');
+  await page.click('[data-plier-scenarios]'); await pause(800);
+  const puces = await page.evaluate(()=>[...document.querySelectorAll('.scenario')].map(e=>[...e.querySelectorAll('.scenario-fin .puce')].map(x=>x.innerText.trim()).find(t=>/^(Testeur|Robot|Testeur et robot|Personne encore)$/.test(t))||''));
+  const sansTesteur = puces.filter(t=>!/^Testeur/.test(t));
+  verifier(puces.length===nScen&&!sansTesteur.length,`les ${nScen} vérifications portent « Testeur » ou « Testeur et robot »`,`${puces.length} vues, ${sansTesteur.length} autres : ${[...new Set(sansTesteur)].join(' / ')}`);
+  await page.click('[data-plier-scenarios]'); await pause(400);
+  await aller(page,'/tests?projet=atelier','#campagnes','Tests');
 
   console.log('\n== Modifier');
   const btn = await page.$('[data-editer-campagne]');

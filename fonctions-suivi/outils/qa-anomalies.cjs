@@ -59,6 +59,8 @@ const str=(d,k)=>champ(d,k).stringValue||'';
 
   console.log('\n== À la main');
   await aller(page,'/tests?projet=atelier','#anomalies');
+  const titreAno=await page.evaluate(()=>((document.querySelector('#anomalies h2')||{}).innerText||'').trim());
+  verifier(/^Problèmes signalés par les testeurs/.test(titreAno),'la section s appelle « Problèmes signalés par les testeurs »',`vu « ${titreAno} »`);
   verifier(await page.evaluate(()=>!!document.querySelector('[data-nouvelle-anomalie]')),'le bouton « Nouvelle anomalie » est là');
   await page.click('[data-nouvelle-anomalie]'); await pause(1100);
   const f=await page.evaluate(()=>({feuille:!!document.querySelector('.feuille'),gravites:document.querySelectorAll('#ed-gravite option').length,statuts:document.querySelectorAll('#ed-statut option').length,scen:document.querySelectorAll('#ed-scenario option').length,plat:document.querySelectorAll('[data-plateforme-a]').length}));

@@ -54,7 +54,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   page.on('console',m=>{if(m.type()==='error')err.push(m.text().slice(0,160));});
 
   await connecter(page,'agent.essai@exemple.test');
-  await aller(page,'/tests?projet=atelier','.chiffres-tests','Tests');
+  await aller(page,'/tests?projet=atelier','#onglets-tests','Tests');
 
   console.log('\n== Ouvrir une campagne');
   const lien = await page.$('[data-action="ouvrir-campagne"]');

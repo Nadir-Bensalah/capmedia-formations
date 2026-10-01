@@ -107,19 +107,19 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   console.log(`    (${nb} parcours en base, ${refsCouvertes.size} scénarios couverts)`);
 
   console.log('\n== Les parcours dans un projet');
-  await aller(page,'/tests?projet=atelier&onglet=automatises','.chiffres-tests','Tests');
+  await aller(page,'/tests?projet=atelier&onglet=automatises','#onglets-tests','Tests');
   await pause(1500);
   const v = await page.evaluate(()=>({
     sections:[...document.querySelectorAll('.section-tete h2')].map(h=>h.innerText.trim()),
     texte: document.body.innerText,
     bouton: !!document.querySelector('[data-nouveau-parcours]'),
   }));
-  verifier(v.sections.includes('Parcours automatisés'),'la section existe',v.sections.join('/'));
+  verifier(v.sections.includes('Robots qui utilisent l\'app'),'la section existe',v.sections.join('/'));
   verifier(v.bouton,'le bouton de création est là');
-  verifier(new RegExp(`${nb} parcours`).test(v.texte),`les ${nb} sont annoncés`);
-  verifier(new RegExp(`${refsCouvertes.size} scénarios`).test(v.texte),`avec les ${refsCouvertes.size} scénarios couverts`);
-  verifier(/éprouvés par mutation/.test(v.texte),'et le compte des éprouvés');
-  verifier(/remis en défaut/.test(v.texte),'la page dit pourquoi ça compte');
+  verifier(new RegExp(`${nb} robots? ouvren?t l'app`).test(v.texte),`les ${nb} sont annoncés`);
+  verifier(new RegExp(`Ils font ${refsCouvertes.size} vérifications? de la liste`).test(v.texte),`avec les ${refsCouvertes.size} scénarios couverts`);
+  verifier(/\d+ \/ \d+\s+avec contre-épreuve/.test(v.texte),'et le compte des éprouvés (avec contre-épreuve)');
+  verifier(/contre-épreuve à faire pour \d+ robots?/.test(v.texte) && /on casse l'app exprès/.test(v.texte),'la page dit pourquoi ça compte');
 
   /* L'état des parcours est une FORME, pas quatre tuiles : une jauge dont
      les parts sont proportionnelles, et une référence en chasse fixe sur
@@ -149,7 +149,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   verifier(!/hasOnly|Firestore|Maestro/.test(expl),'sans jargon');
   await page.keyboard.press('Escape'); await pause(600);
   verifier(await page.evaluate(()=>!document.querySelector('.voile')),'et se referme');
-  const m = v.texte.match(/(\d+) parcours rejoués[^.]*/);
+  const m = v.texte.match(/(\d+) robots? ouvren?t l'app[^.]*/);
   if (m) console.log('    ', m[0]);
 
   console.log('\n== Bugs à corriger d\'urgence : replié, il compte ses lignes');
@@ -186,10 +186,10 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   verifier(/R-04/.test(g.haut),'le parcours rouge est en haut',g.haut.slice(0,80));
   verifier(/C-02/.test(g.haut),'l instable aussi');
   verifier(/une fois sur trois/.test(g.haut),'avec sa note');
-  verifier(g.sections.includes('Parcours automatisés'),'et la section globale existe');
+  verifier(g.sections.includes('Robots qui utilisent l\'app'),'et la section globale existe');
 
   console.log('\n== Le catalogue se replie');
-  await aller(page,'/tests?projet=atelier&onglet=automatises','.chiffres-tests','Tests');
+  await aller(page,'/tests?projet=atelier&onglet=automatises','#onglets-tests','Tests');
   await pause(1500);
   const r1 = await page.evaluate(()=>{
     const b=document.querySelector('#catalogue-parcours');
@@ -199,7 +199,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   });
   verifier(r1.existe,'le catalogue existe');
   verifier(r1.replie===true,'il est replié au départ','il est déplié : 144 lignes au-dessus du vivier');
-  verifier(new RegExp(`Voir les ${nb} parcours`).test(r1.bouton),`le bouton annonce les ${nb}`,r1.bouton);
+  verifier(new RegExp(`Voir les ${nb} robots?`).test(r1.bouton),`le bouton annonce les ${nb}`,r1.bouton);
 
   await page.click('[data-plier-parcours]'); await pause(900);
   const r2 = await page.evaluate(()=>{
@@ -228,13 +228,13 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
 
   console.log('\n== Le filtre de plateforme filtre vraiment');
   const lirePlat = async (plat) => {
-    await aller(page,`/tests?projet=atelier&onglet=automatises${plat?`&plateforme=${plat}`:''}`,'.chiffres-tests','Tests');
+    await aller(page,`/tests?projet=atelier&onglet=automatises${plat?`&plateforme=${plat}`:''}`,'#onglets-tests','Tests');
     await pause(1500);
     return page.evaluate(()=>{
       const cat=document.querySelector('#catalogue-parcours');
       const lignes=cat?[...cat.querySelectorAll('.ligne')].map(l=>((l.querySelector('.ligne-sous')||{}).textContent||'').replace(/\s+/g,' ')):[];
       const meta=[...document.querySelectorAll('.tb-ligne-meta')].map(x=>x.innerText);
-      return { lignes, machine:(meta[1]||'').match(/sur (\d+)/)?.[1]||'' };
+      return { lignes, machine:(meta[1]||'').match(/réussis? sur (\d+)/)?.[1]||'' };
     });
   };
   const toutes = await lirePlat('');
@@ -248,7 +248,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   verifier(Number(web.machine)<=Number(toutes.machine) && (Number(web.machine)<Number(toutes.machine) || web.lignes.length===toutes.lignes.length),'l avancement des tests automatisés suit le filtre',`${toutes.machine} → web ${web.machine}`);
 
   console.log('\n== En créer un');
-  await aller(page,'/tests?projet=atelier&onglet=automatises','.chiffres-tests','Tests');
+  await aller(page,'/tests?projet=atelier&onglet=automatises','#onglets-tests','Tests');
   await pause(1400);
   const avant = await toutesPages('projets/atelier/parcours');
   await page.click('[data-nouveau-parcours]'); await pause(1200);
@@ -263,7 +263,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   verifier(f.outils.length===4,'les quatre outils',f.outils.join('/'));
   verifier(f.etats.length===6,'les six états',f.etats.join('/'));
   verifier(f.scenarios>=200,`les scénarios à couvrir (${f.scenarios})`);
-  verifier(f.mutation,'la case « éprouvé par mutation »');
+  verifier(f.mutation,'la case de la contre-épreuve');
 
   await page.fill('#ed-ref','X-99');
   await page.fill('#ed-titre','Un parcours écrit à la main');
@@ -285,8 +285,8 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   /* Le catalogue est replié pour lui aussi : chercher une référence dans
      le texte visible ne prouverait rien. On déplie, comme il le ferait. */
   const c = await cl.evaluate(()=>({
-    voit:/Parcours automatisés/.test(document.body.innerText),
-    annonce:/\d+ parcours rejoués/.test(document.body.innerText),
+    voit:/Robots qui utilisent l'app/.test(document.body.innerText),
+    annonce:/\d+ robots? ouvren?t l'app/.test(document.body.innerText),
     replie:(document.querySelector('#catalogue-parcours')||{}).hidden,
     creer:document.querySelectorAll('[data-nouveau-parcours]').length,
     editer:document.querySelectorAll('[data-editer-parcours]').length,
