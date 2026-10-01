@@ -9,7 +9,8 @@
 
 import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js';
 import {
-  getAuth, onAuthStateChanged, signOut,
+  getAuth, initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence,
+  onAuthStateChanged, signOut,
   sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink,
 } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js';
 import {
@@ -27,7 +28,21 @@ const config = (window.AZ_SUIVI || {}).firebase;
 if (!config) throw new Error('config-suivi.js doit être chargé avant le noyau');
 
 export const app = getApps().length ? getApps()[0] : initializeApp(config);
-export const auth = getAuth(app);
+/* L'authentification sans le module des fenêtres surgissantes et des
+   redirections : la porte n'ouvre une session que par code ou par lien.
+   getAuth() le branche d'office et, sur Safari, iPhone et téléphones, il
+   charge aussitôt un script de apis.google.com et une iframe du domaine
+   firebaseapp.com : deux origines que la politique de sécurité du contenu
+   n'a pas à ouvrir. Mêmes mémoires de session que getAuth(), dans le même
+   ordre. */
+const ouvrirAuth = () => {
+  try {
+    return initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence] });
+  } catch (e) {
+    return getAuth(app); // déjà initialisée (module rechargé) : la même instance
+  }
+};
+export const auth = ouvrirAuth();
 export const bdd = getFirestore(app);
 export const stockage = getStorage(app);
 

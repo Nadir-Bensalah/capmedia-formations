@@ -55,3 +55,26 @@ DirectoryIndex index.html index.php
     Header set Cache-Control "no-cache, must-revalidate"
   </FilesMatch>
 </IfModule>
+
+# --- En-têtes de sécurité de l'espace de suivi (/suivi seulement) -----------
+# Le Hub, le Cockpit, l'espace Test et la porte de connexion. Une seule XSS
+# sur cette origine lirait tout ce que la page lit : la politique ne laisse
+# exécuter que les fichiers du site et le SDK Firebase de la version utilisée,
+# et ne laisse parler la page qu'aux services Firebase du projet. Détail et
+# raisons : docs/suivi.md, « En-têtes de sécurité ». Les pages portent la même
+# politique en <meta> (avec 127.0.0.1 en plus pour le banc local) : le
+# navigateur applique les deux, la plus stricte gagne. frame-ancestors et
+# upgrade-insecure-requests n'existent qu'en en-tête.
+# Le reste du site (pages, /academy) n'est pas concerné.
+<IfModule mod_headers.c>
+  <If "%{REQUEST_URI} =~ m#^/suivi(/|$)#">
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self' https://www.gstatic.com/firebasejs/10.13.2/; style-src 'self' 'unsafe-inline'; style-src-elem 'self'; img-src 'self' data: blob: https://firebasestorage.googleapis.com https://storage.googleapis.com https://www.google.com/images/cleardot.gif; connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firebasestorage.googleapis.com https://europe-west1-capmedia-1f90d.cloudfunctions.net; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+    Header always set X-Frame-Options "DENY"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), publickey-credentials-get=(self), publickey-credentials-create=(self)"
+    # Tout capmedia.app est servi en https (redirection en tête de fichier) :
+    # le navigateur s'en souvient un an. Sans sous-domaines, sans preload.
+    Header always set Strict-Transport-Security "max-age=31536000"
+  </If>
+</IfModule>

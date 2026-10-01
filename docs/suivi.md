@@ -1484,3 +1484,87 @@ fenêtre d'un jour, le détail d'un élément, la légende.
   ouverte ni avec « réduire les animations ». Le rail écoute les campagnes :
   l'animation vient et part sans recharger. Le Cockpit anime son entrée
   Tests de la même façon quand une campagne tourne.
+
+## 29. En-têtes de sécurité (01/10/2026)
+
+Un coffre chiffré dans le navigateur arrive dans le Hub : une seule XSS sur
+`capmedia.app` lirait la phrase de passe au moment où elle est tapée. La
+politique de sécurité du contenu (CSP) réduit ce que du code injecté peut
+faire : il ne s'exécute pas, et même exécuté il ne peut rien envoyer ailleurs
+qu'aux services du projet.
+
+**Deux copies, une seule politique.** Chaque page de `agence/suivi/` porte la
+CSP en `<meta>`, première balise après `charset` (le banc local sert les
+fichiers sans `.htaccess`). En production, `agence/.htaccess` envoie la même
+en en-tête pour `/suivi` seulement (bloc `<If>`). Le navigateur applique les
+deux, la plus stricte gagne :
+
+- la `<meta>` ajoute `http://127.0.0.1:*` à `connect-src` et `img-src` : les
+  émulateurs du banc (8080, 9099, 9199, 5001). En production l'en-tête ne
+  les a pas, donc la page ne peut pas les joindre. Choisi plutôt qu'un
+  remplacement au moment du service : n'importe quel serveur statique
+  (banc, poste de développement, application de bureau sur une adresse
+  locale) donne le même résultat, sans outil à maintenir ;
+- l'en-tête ajoute `frame-ancestors 'none'` (impossible en `<meta>`) et
+  `upgrade-insecure-requests`.
+
+**Ce qui est autorisé, et pourquoi.**
+
+| Directive | Valeur | Pourquoi |
+|---|---|---|
+| `default-src` | `'self'` | tout ce qui n'est pas listé ne vient que du site |
+| `script-src` | `'self' https://www.gstatic.com/firebasejs/10.13.2/` | nos fichiers et le SDK Firebase de **cette** version seulement. Ni `'unsafe-inline'` ni `'unsafe-eval'` : aucun script en ligne, aucun `onclick=` |
+| `style-src` | `'self' 'unsafe-inline'` | les vues fabriquent leur HTML avec plus de 500 attributs `style=` ; les retirer est un chantier à part. Un style injecté ne vole rien, il peut seulement maquiller |
+| `style-src-elem` | `'self'` | les balises `<style>` restent interdites : seuls les attributs ont besoin d'`'unsafe-inline'` |
+| `img-src` | `'self' data: blob: https://firebasestorage.googleapis.com https://storage.googleapis.com https://www.google.com/images/cleardot.gif` | les icônes SVG en `data:` des feuilles de style, une pièce ouverte dans un onglet (`blob:`), les visuels des campagnes (liens de téléchargement Storage), les logos de projet (rendus publics par `poserLogo`), et le pixel par lequel le canal temps réel de Firestore teste le réseau quand la connexion flanche (ce fichier-là seulement, pas le reste de google.com) |
+| `connect-src` | `'self'` + `firestore`, `identitytoolkit`, `securetoken`, `firebasestorage` (`.googleapis.com`) + `https://europe-west1-capmedia-1f90d.cloudfunctions.net` | la base, la session, le stockage, nos fonctions. Rien d'autre : du code injecté n'a nulle part où envoyer ce qu'il lit |
+| `frame-src` | `'none'` | aucune iframe |
+| `object-src`, `base-uri` | `'none'` | ni plugin, ni `<base>` qui détournerait les chemins relatifs |
+| `form-action` | `'self'` | les formulaires sont envoyés par le script ; aucun ne part ailleurs |
+| `frame-ancestors` | `'none'` (en-tête) | personne n'encadre l'espace (avec `X-Frame-Options: DENY` pour les anciens navigateurs) |
+
+Pas de Google Fonts, pas de service worker, pas de manifeste : rien à ouvrir.
+WebAuthn (clés d'accès) n'a besoin d'aucune directive CSP.
+
+**Ce qui a changé dans le code pour la tenir.**
+
+- Les scripts en ligne sont sortis en fichiers : `assets/js/theme-avant.js`
+  (le thème avant le premier pixel, toujours bloquant dans le `<head>`, la
+  clé dans `data-cle`), `assets/js/porte-service.js` (le badge de la porte
+  dans une application de bureau), `assets/js/redirection.js` (console,
+  projet, ticket : destination dans `data-vers`, `data-param`, `data-ancre`).
+- Les trois `onclick=` des vues sont devenus des écouteurs :
+  `data-sans-lien` (un bouton posé dans un lien ne le suit pas),
+  `data-sans-propagation` (« Rejoindre » n'ouvre pas la fiche de la réunion),
+  `data-recharger` (le bouton du routeur quand une vue échoue).
+- `noyau.js` ouvre l'authentification par `initializeAuth` avec les mêmes
+  mémoires que `getAuth`, sans le module des fenêtres surgissantes : sur
+  Safari et les téléphones, `getAuth` chargeait d'office un script de
+  `apis.google.com` et une iframe de `firebaseapp.com`, inutiles à une porte
+  par code ou par lien.
+- Une nouvelle version du SDK Firebase change le chemin : mettre à jour
+  `script-src` dans les pages ET dans le `.htaccess` (`qa-csp` vérifie
+  qu'ils sont identiques).
+
+**Les autres en-têtes (`/suivi` seulement).** `X-Content-Type-Options:
+nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`,
+`Permissions-Policy: camera=(), microphone=(), geolocation=(),
+publickey-credentials-get=(self), publickey-credentials-create=(self)`,
+`Strict-Transport-Security: max-age=31536000` (un an, sans sous-domaines,
+sans preload : tout `capmedia.app` est déjà redirigé vers https, et le
+navigateur applique HSTS à tout le domaine, `/academy` compris, ce qui est
+sans effet puisqu'il est déjà en https).
+
+**La garde.** `fonctions-suivi/outils/qa-csp.cjs` ouvre la porte, les trois
+redirections, le Hub (cliente), le Cockpit (équipe) et l'espace Test
+(testeur), et échoue à la moindre violation ; elle vérifie aussi qu'un
+script en ligne, un `onerror=`, un script d'un hôte inconnu et une balise
+`<style>` injectés sont refusés, et que les fichiers n'ont plus aucun script
+en ligne.
+
+**À terme.** Servir le Hub sur un sous-domaine à lui (`hub.capmedia.app`) :
+une faille sur une autre page de `capmedia.app` (site, blog, académie)
+partage aujourd'hui l'origine, donc le stockage local et la session du Hub.
+Une origine isolée la tiendrait hors d'atteinte. Non fait : il faut un
+domaine autorisé dans Firebase Auth, l'adresse dans les applications de
+bureau et les e-mails, et une redirection depuis `/suivi`.

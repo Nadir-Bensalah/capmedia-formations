@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="fr"><head><meta charset="utf-8"><title>Redirection · Capmedia</title><meta name="robots" content="noindex, nofollow">
-<script>
-(function () {
-  var p = new URLSearchParams(location.search).get('p');
-  location.replace('./hub' + (p ? '#/projets/' + encodeURIComponent(p) : ''));
-})();
-</script></head><body><p style="font-family:system-ui;padding:24px">Redirection vers votre espace...</p></body></html>
+<html lang="fr"><head><meta charset="utf-8">
+<!-- Politique de sécurité du contenu : docs/suivi.md, « En-têtes de sécurité ».
+     En production, le .htaccess envoie la même sans 127.0.0.1 (le banc local),
+     et le navigateur applique les deux : c'est la plus stricte qui gagne. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com/firebasejs/10.13.2/; style-src 'self' 'unsafe-inline'; style-src-elem 'self'; img-src 'self' data: blob: https://firebasestorage.googleapis.com https://storage.googleapis.com https://www.google.com/images/cleardot.gif http://127.0.0.1:*; connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firebasestorage.googleapis.com https://europe-west1-capmedia-1f90d.cloudfunctions.net http://127.0.0.1:*; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'">
+<title>Redirection · Capmedia</title><meta name="robots" content="noindex, nofollow">
+<script src="./assets/js/redirection.js" data-vers="./hub" data-param="p" data-ancre="#/projets/"></script></head><body><p style="font-family:system-ui;padding:24px">Redirection vers votre espace...</p></body></html>

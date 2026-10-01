@@ -127,7 +127,10 @@ const rendre = async () => {
   } catch (e) {
     if (mien !== generation) return;
     console.error('[routeur] la vue a échoué', e);
-    sortie.innerHTML = `<div class="page"><div class="vide"><p class="vide-titre">Cette page n'a pas pu s'ouvrir.</p><p class="vide-texte">Réessayez dans un instant. Si cela continue, prévenez-nous.</p><button class="btn btn-secondaire" type="button" onclick="location.reload()">Recharger</button></div></div>`;
+    sortie.innerHTML = `<div class="page"><div class="vide"><p class="vide-titre">Cette page n'a pas pu s'ouvrir.</p><p class="vide-texte">Réessayez dans un instant. Si cela continue, prévenez-nous.</p><button class="btn btn-secondaire" type="button" data-recharger>Recharger</button></div></div>`;
+    /* Pas d'onclick en ligne : la politique de sécurité du contenu le refuse. */
+    const recharger = sortie.querySelector('[data-recharger]');
+    if (recharger) recharger.addEventListener('click', () => location.reload());
   }
 };
 
