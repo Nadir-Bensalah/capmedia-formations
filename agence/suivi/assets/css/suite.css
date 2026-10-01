@@ -1407,3 +1407,85 @@ html.accueil-ouvert { overflow: hidden; }
 .btn-voir:active { transform: scale(.97); }
 .btn-voir svg { width: 14px; height: 14px; }
 @media (max-width: 720px) { .piece-fin { grid-template-columns: auto auto auto; gap: 8px; } }
+
+/* ==========================================================================
+   22. Le calendrier : un genre, une couleur et une icône
+
+   Les mêmes partout : la grille, les listes, la fenêtre d'un jour, le
+   détail, la légende. Chaque jeton a sa valeur claire et sombre ; rien
+   n'est encadré, la couleur ne porte que le genre.
+   ========================================================================== */
+
+:root {
+  --g-reunion: var(--bleu); --g-rdv: var(--sarcelle); --g-etape: var(--violet-desk); --g-tache: var(--encre-2);
+  --g-retard: var(--rouge); --g-facture: var(--ambre); --g-devis: #C93400; --g-version: var(--vert); --g-validation: #B4236B;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --g-devis: #FF7F50; --g-validation: #FF6FAE; } }
+:root[data-theme="dark"] { --g-devis: #FF7F50; --g-validation: #FF6FAE; }
+
+.g-reunion { --g: var(--g-reunion); } .g-rdv { --g: var(--g-rdv); } .g-etape { --g: var(--g-etape); }
+.g-tache { --g: var(--g-tache); } .g-retard { --g: var(--g-retard); } .g-facture { --g: var(--g-facture); }
+.g-devis { --g: var(--g-devis); } .g-version { --g: var(--g-version); } .g-validation { --g: var(--g-validation); }
+.ligne-icone--g-reunion { color: var(--g-reunion); } .ligne-icone--g-rdv { color: var(--g-rdv); } .ligne-icone--g-etape { color: var(--g-etape); }
+.ligne-icone--g-tache { color: var(--g-tache); } .ligne-icone--g-retard { color: var(--g-retard); } .ligne-icone--g-facture { color: var(--g-facture); }
+.ligne-icone--g-devis { color: var(--g-devis); } .ligne-icone--g-version { color: var(--g-version); } .ligne-icone--g-validation { color: var(--g-validation); }
+
+/* La case d'un jour : un bouton la couvre, les pastilles passent dessus. */
+.calendrier .jour { position: relative; transition: background .15s var(--courbe); }
+.calendrier .jour:hover { background: var(--eleve); }
+.calendrier .jour-ouvrir { position: absolute; inset: 0; z-index: 0; width: 100%; padding: 0; border: 0; border-radius: inherit; background: none; cursor: pointer; }
+.calendrier .jour-ouvrir:focus-visible { outline: 0; }
+.calendrier .jour:has(> .jour-ouvrir:focus-visible) { outline: 2px solid var(--bleu); outline-offset: 2px; }
+.calendrier .jour .numero { position: relative; z-index: 1; pointer-events: none; }
+.calendrier .evt {
+  position: relative; z-index: 1; display: flex; align-items: center; gap: 4px; min-width: 0;
+  --g: var(--g-reunion); background: color-mix(in srgb, var(--g) 13%, transparent); color: var(--g); border: 0;
+}
+.calendrier .evt svg { width: 12px; height: 12px; flex: none; }
+.calendrier .evt span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.calendrier .evt b { font: 500 10.5px var(--mono); letter-spacing: 0; }
+.calendrier .evt:hover { background: color-mix(in srgb, var(--g) 22%, transparent); text-decoration: none; }
+.calendrier .evt.g-reunion { --g: var(--g-reunion); } .calendrier .evt.g-rdv { --g: var(--g-rdv); } .calendrier .evt.g-etape { --g: var(--g-etape); }
+.calendrier .evt.g-tache { --g: var(--g-tache); } .calendrier .evt.g-retard { --g: var(--g-retard); } .calendrier .evt.g-facture { --g: var(--g-facture); }
+.calendrier .evt.g-devis { --g: var(--g-devis); } .calendrier .evt.g-version { --g: var(--g-version); } .calendrier .evt.g-validation { --g: var(--g-validation); }
+.calendrier .evt--plus { --g: var(--encre-2); justify-content: flex-start; cursor: pointer; }
+@media (max-width: 700px) { .calendrier .evt svg { display: none; } }
+
+/* La légende, sous la grille : petite, en ligne. */
+.cal-legende { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 14px 0 0; padding: 0; list-style: none; font: 400 12px var(--police); color: var(--encre-2); }
+.cal-legende li { display: inline-flex; align-items: center; gap: 6px; }
+.cal-legende svg { width: 13px; height: 13px; color: var(--g); }
+
+/* La fenêtre d'un jour : l'heure en chasse fixe, puis l'élément. */
+.cal-jour-liste { display: grid; margin: 0; padding: 0; list-style: none; }
+.cal-item { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 14px; padding: 16px 0; border-top: 1px solid var(--trait-fin); }
+.cal-item:first-child { border-top: 0; }
+.cal-item-heure { font: 500 13px/1.6 var(--mono); color: var(--encre); letter-spacing: 0; }
+.cal-item-corps p { margin: 0; }
+.cal-item-genre { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font: 500 11px/1.4 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--g); }
+.cal-item-genre svg { width: 14px; height: 14px; }
+.cal-item-projet { color: var(--encre-3); }
+.cal-item-projet::before { content: '·'; margin-right: 6px; }
+.cal-item-titre { margin-top: 4px !important; font: 500 16px/1.35 var(--police); letter-spacing: -.012em; color: var(--encre); }
+.cal-item-faire { margin-top: 4px !important; font: 400 14px/1.45 var(--police); color: var(--encre-2); text-wrap: pretty; }
+.cal-item-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px !important; }
+.cal-jour-vide { padding: 8px 0 4px; text-align: center; }
+.cal-jour-vide-titre { margin: 0; font: 600 19px/1.3 var(--titre); letter-spacing: -.018em; color: var(--encre); }
+.cal-genre { display: inline-flex; align-items: center; gap: 6px; font: 500 12px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--g); }
+.cal-genre svg { width: 15px; height: 15px; }
+.modale--cal .modale-pied { justify-content: center; flex-wrap: wrap; }
+@media (max-width: 640px) { .cal-item { grid-template-columns: 1fr; gap: 6px; } }
+
+/* La demande de rendez-vous. */
+.cal-forme { display: grid; gap: 14px; text-align: left; }
+.cal-forme-projet { margin: 0 0 2px; }
+.cal-creneaux { display: flex; flex-wrap: wrap; gap: 6px; }
+.cal-creneaux label { cursor: pointer; }
+.cal-creneaux input { position: absolute; opacity: 0; width: 0; height: 0; }
+.cal-creneaux span { display: inline-flex; align-items: center; height: 36px; padding: 0 14px; border-radius: 10px; background: var(--eleve); box-shadow: inset 0 0 0 1px var(--trait-clair); font: 500 14px var(--police); color: var(--encre); transition: background .15s var(--courbe); }
+.cal-creneaux label:hover span { background: var(--actif); }
+.cal-creneaux input:checked + span { background: var(--encre); color: var(--blanc); box-shadow: none; }
+.cal-creneaux input:focus-visible + span { outline: 2px solid var(--bleu); outline-offset: 2px; }
+.cal-heure { margin-top: 10px; max-width: 180px; }
+.encart [data-action="programmer-rdv"] { margin-left: auto; flex: none; align-self: center; }
+.encart > div { flex: 1 1 auto; }

@@ -111,8 +111,14 @@ const remettre = async () => {
   const [dlTout] = await Promise.all([page.waitForEvent('download', { timeout: 10000 }), page.click('[data-ics-tout]')]);
   const icsTout = fs.readFileSync(await dlTout.path(), 'utf8');
   verifier((icsTout.match(/BEGIN:VEVENT/g) || []).length >= 1, '« Tout mettre dans mon agenda » donne toutes les réunions à venir en un fichier');
-  await page.click('.liste [data-action="aller"][data-chemin*="re-demain"]');
-  await page.waitForSelector('.modale-corps', { timeout: 15000 }); await pause(600);
+  /* Depuis le 01/10/2026, « À venir » ouvre d'abord le détail dans le
+     calendrier (agenda, Rejoindre, et le lien vers la fiche). */
+  await page.click('.liste [data-action="detail"][data-chemin*="re-demain"]');
+  await page.waitForSelector('.modale--cal [data-fiche]', { timeout: 15000 });
+  verifier(/Dans vos locaux/.test(await page.$eval('.modale--cal', (el) => el.textContent)) && Boolean(await page.$('.modale--cal [data-ics="re-demain"]')), 'le détail de la réunion s ouvre dans le calendrier, avec le lieu et l agenda');
+  await page.click('.modale--cal [data-fiche]');
+  await page.waitForURL(/\/projets\/atelier\/reunions\/re-demain/, { timeout: 15000 }).catch(() => {});
+  await page.waitForSelector('.modale-corps', { timeout: 15000 }); await pause(900);
   verifier(/\/projets\/atelier\/reunions\/re-demain/.test(page.url()), 'l adresse est celle de la fiche de la réunion', page.url());
   const fiche = await page.$eval('.modale-corps', (el) => el.textContent);
   verifier(/Dans vos locaux/.test(fiche) && /Ajouter à mon agenda/.test(fiche), 'la fiche s ouvre, avec le lieu et son bouton d agenda');
