@@ -27,6 +27,8 @@ export const ICONES = {
   video:        T('<rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3z"/>'),
   activite:     T('<path d="M3 12h4l3-7 4 14 3-7h4"/>'),
   messages:     T('<path d="M4 6h16v9H9l-4 3z"/><path d="M8 10h8"/>'),
+  /* Rien en cours : un rond barré, au trait. */
+  aucun:        T('<circle cx="12" cy="12" r="7.5"/><path d="m6.7 17.3 10.6-10.6"/>'),
   valider:      T('<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>'),
   check:        T('<path d="m5 12 4 4L19 6"/>'),
   calendrier:   T('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M8 3v4"/><path d="M16 3v4"/>'),

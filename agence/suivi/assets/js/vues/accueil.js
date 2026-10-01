@@ -140,7 +140,7 @@ export const vue = async (ctx, env) => {
       if (de('tache').length) parts.push([versSection('tache', 'taches'), `${icone('check')} ${pluriel(de('tache').length, 'mouvement de tâche', 'mouvements de tâches')}`]);
       if (de('release').length) parts.push([versSection('release', 'releases'), `${icone('releases')} ${pluriel(de('release').length, 'nouvelle version', 'nouvelles versions')}`]);
       if (de('message').length) parts.push(['#/messages', `${icone('messages')} ${pluriel(de('message').length, 'message')}`]);
-      if (de('validation').length) parts.push(['#/valider', `${icone('valider')} ${pluriel(de('validation').length, 'validation')}`]);
+      if (de('validation').length) parts.push(['#/demandes', `${icone('valider')} ${pluriel(de('validation').length, 'validation')}`]);
       if (de('fichier').length) parts.push(['#/documents', `${icone('fichiers')} ${pluriel(de('fichier').length, 'fichier')}`]);
       if (!parts.length) parts.push(['#/activite', `${icone('activite')} ${pluriel(depuisPassage.length, 'mouvement')}`]);
       return `<div class="encart encart--info" id="depuis-visite" style="margin-bottom:var(--e-6)"><div><strong>Depuis votre dernière visite</strong><span class="rang" style="margin-top:6px;gap:16px">${parts.map(([href, p]) => `<a class="rang" style="gap:6px;color:inherit" href="${href}">${p}</a>`).join('')}</span></div></div>`;
@@ -171,9 +171,9 @@ export const vue = async (ctx, env) => {
           <p class="attente-tete">${icone('alerte')} En attente de vous <span class="badge badge--vif" style="margin-left:4px">${attente.length}</span></p>
           <div class="liste" style="margin-top:8px">
             ${attente.slice(0, 6).map((a) => ligne({ href: `#${a.chemin}`, icone: a.icone, ton: a.ton, titre: echapper(a.titre), sous: echapper(a.sous) })).join('')}
-            ${attente.length > 6 ? `<p class="t-petit" style="margin-top:8px"><a href="#/valider">${echapper(pluriel(attente.length - 6, 'autre point', 'autres points'))} à voir</a></p>` : ''}
+            ${attente.length > 6 ? `<p class="t-petit" style="margin-top:8px"><a href="#/demandes">${echapper(pluriel(attente.length - 6, 'autre point', 'autres points'))} à voir</a></p>` : ''}
           </div>
-          ${attente.length > 6 ? `<p style="margin-top:8px"><a class="t-petit t-fort" href="#/valider">Tout voir (${attente.length})</a></p>` : ''}
+          ${attente.length > 6 ? `<p style="margin-top:8px"><a class="t-petit t-fort" href="#/demandes">Tout voir (${attente.length})</a></p>` : ''}
         </div>
       </section>` : ''}
 

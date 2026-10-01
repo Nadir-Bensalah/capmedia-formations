@@ -48,6 +48,7 @@ const SECOND = 'second-d';
 const nettoyer = async () => {
   try { await appelAdmin('retirerInterlocuteur', { projet: 'atelier', email: COLLEGUE }); } catch (e) { /* pas invité */ }
   await effacer(`projets/${SECOND}`).catch(() => {});
+  for (const c of ['projets/atelier/campagnes/c-barre', 'projets/atelier/scenarios/s-barre', 'projets/atelier/maintenance/contrat']) await effacer(c).catch(() => {});
 };
 
 (async () => {
@@ -76,7 +77,7 @@ const nettoyer = async () => {
   verifier(Boolean(encart), 'l encart est là avec une dernière visite d il y a deux jours');
   const texteEncart = encart ? await encart.textContent() : '';
   verifier(/validation/.test(texteEncart), 'il compte la validation demandée par l équipe', texteEncart.trim().slice(0, 120));
-  verifier(Boolean(await page.$('#depuis-visite a[href="#/valider"]')), 'et le compteur des validations mène à « En attente de vous »');
+  verifier(Boolean(await page.$('#depuis-visite a[href="#/demandes"]')), 'et le compteur des validations mène à la page Demandes (« En attente de vous » en tête)');
   const profilAvant = await lire(`profils/${uid}`);
   verifier(new Date(champ(profilAvant, 'derniereVisite').timestampValue) < new Date(Date.now() - 86400000), 'le démarrage n a pas réécrit la dernière visite');
   await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
@@ -125,6 +126,58 @@ const nettoyer = async () => {
   await poser('tickets/t-anniv', { statut: S('a-valider') }, ['statut']); await pause(1200);
   await page.click('[data-filtre="moi"]'); await pause(500);
   verifier(/anniversaires reste incomplète/.test(await page.textContent('.page')), 'le filtre « À vous » ne garde que ce qui attend Camille');
+
+  console.log('\n== La barre latérale, resserrée');
+  await aller(page, '#/projets/atelier', '.page-tete--projet');
+  const sousProjet = await page.$$eval('#lat-corps .lat-lien', (as) => as.filter((a) => /^\/projets\/atelier\//.test(a.dataset.chemin || '')).map((a) => a.dataset.chemin));
+  verifier(sousProjet.length === 0 && Boolean(await page.$('#lat-corps a[data-chemin="/projets/atelier"]')), 'sous le projet ouvert, plus aucune sous-entrée (ses onglets suffisent), le projet reste', sousProjet.join(' '));
+  verifier(Boolean(await page.$('#lat-corps a[data-chemin="/projets/atelier"] .avatar-projet')), 'avec son écusson');
+  const chemins = (await page.$$eval('#lat-corps .lat-lien', (as) => as.map((a) => a.dataset.chemin))).filter((c) => c !== '/nouveaux-projets');
+  verifier(chemins.indexOf('/nouveau-projet') > 0 && chemins.indexOf('/nouveau-projet') === chemins.indexOf('/parametres') - 1 && chemins.indexOf('/nouveau-projet') > chemins.indexOf('/documents'), '« Demander un projet » est en bas, juste avant « Paramètres »', chemins.join(' '));
+  verifier(!chemins.includes('/valider') && chemins.filter((c) => c === '/demandes').length === 1, '« En attente de vous » et « Demandes » ne font qu une entrée', chemins.join(' '));
+  await aller(page, '#/demandes', '#en-attente');
+  const lignesAttente = (await page.$$('#en-attente .ligne')).length;
+  const rougeDemandes = await page.$eval('#lat-corps a[data-chemin="/demandes"] .compte.vif', (el) => Number(el.textContent)).catch(() => 0);
+  verifier(lignesAttente > 0 && rougeDemandes === lignesAttente, 'le rouge de « Demandes » compte tout ce qui attend Camille', `${rougeDemandes} pour ${lignesAttente} point(s)`);
+  const repere = '#lat-corps a[data-chemin="/maintenance"] .lat-repere';
+  verifier(await attendre(async () => Boolean(await page.$(repere))), 'sans forfait, un repère « rien en cours » à droite de Maintenance');
+  const etiquette = await page.$eval(repere, (el) => ({ label: el.getAttribute('aria-label'), astuce: el.getAttribute('data-astuce'), role: el.getAttribute('role'), fond: getComputedStyle(el).backgroundColor, svg: Boolean(el.querySelector('svg')) })).catch(() => ({}));
+  verifier(etiquette.label === 'Aucun forfait de maintenance en cours' && etiquette.astuce === etiquette.label && etiquette.role === 'img' && etiquette.svg, 'nommé et en infobulle : « Aucun forfait de maintenance en cours »', JSON.stringify(etiquette));
+  verifier(/rgba\(0, 0, 0, 0\)|transparent/.test(etiquette.fond || ''), 'sans fond', etiquette.fond);
+  await poser('projets/atelier/maintenance/contrat', { genre: S('contrat'), statut: S('actif'), cree: T(new Date()), maj: T(new Date()) });
+  verifier(await attendre(async () => !(await page.$(repere))), 'un forfait actif : le repère s en va, sans recharger');
+  await effacer('projets/atelier/maintenance/contrat');
+  verifier(await attendre(async () => Boolean(await page.$(repere))), 'le forfait retiré : il revient');
+  const tests = '#lat-corps a[data-chemin="/tests"]';
+  /* Les campagnes déjà ouvertes par les semis passent « en préparation » le
+     temps du contrôle (ce statut ne déclenche rien côté serveur) : on part
+     d'un rail sans campagne en cours. */
+  const ouvertes = ((await lire('projets/atelier/campagnes?pageSize=50')).documents || []).filter((d) => str(d, 'statut') === 'en-cours').map((d) => d.name.split('/').pop());
+  for (const id of ouvertes) await poser(`projets/atelier/campagnes/${id}`, { statut: S('preparation') }, ['statut']);
+  await poser('projets/atelier/scenarios/s-barre', { titre: S('Scénario du banc (barre)'), actif: B(true), cree: T(new Date()), maj: T(new Date()) });
+  verifier(await attendre(async () => Boolean(await page.$(tests)) && !(await page.$(`${tests}.lat-lien--en-cours`))), 'aucune campagne en cours : l entrée Tests est immobile');
+  await poser('projets/atelier/campagnes/c-barre', { titre: S('Campagne du banc (barre)'), statut: S('en-cours'), scenarios: L([]), testeurs: L([]), cree: T(new Date()), maj: T(new Date()) });
+  verifier(await attendre(async () => Boolean(await page.$(`${tests}.lat-lien--en-cours`))), 'une campagne en cours : l entrée Tests s anime, sans recharger');
+  /* Lu d'un seul geste dans la page : le rail se redessine souvent, une
+     poignée gardée entre deux allers-retours peut viser une ligne remplacée. */
+  const anim = await page.evaluate((sel) => { const a = document.querySelector(sel); return ({ texte: getComputedStyle(a.querySelector('.tronque')).animationName, icone: getComputedStyle(a.querySelector('svg')).animationName, duree: getComputedStyle(a.querySelector('.tronque')).animationDuration, boucle: getComputedStyle(a.querySelector('.tronque')).animationIterationCount, dit: (a.querySelector('.sr-only') || {}).textContent || '' }); }, tests).catch(() => ({}));
+  verifier(anim.texte && anim.texte !== 'none' && anim.icone && anim.icone !== 'none' && anim.boucle === 'infinite' && parseFloat(anim.duree) >= 2 && parseFloat(anim.duree) <= 3, 'un reflet sur le texte, l icône qui respire, en boucle, entre 2 et 3 s', JSON.stringify(anim));
+  verifier(/campagne de tests en cours/.test(anim.dit || ''), 'et un lecteur d écran l entend', anim.dit);
+  const surActive = await page.evaluate((sel) => { const a = document.querySelector(sel); a.classList.add('actif'); const n = getComputedStyle(a.querySelector('.tronque')).animationName; a.classList.remove('actif'); return n; }, tests);
+  verifier(surActive === 'none', 'l entrée ouverte reste calme', surActive);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  let reduit = [];
+  const calme = await attendre(async () => {
+    reduit = await page.evaluate((sel) => { const a = document.querySelector(sel); return [a.isConnected, window.matchMedia('(prefers-reduced-motion: reduce)').matches, getComputedStyle(a.querySelector('.tronque')).animationName, getComputedStyle(a.querySelector('svg')).animationName]; }, tests).catch((e) => [String(e).slice(0, 80)]);
+    return reduit[1] === true && reduit[2] === 'none' && reduit[3] === 'none';
+  }, 8000);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  verifier(calme, 'avec « réduire les animations », rien ne bouge', JSON.stringify(reduit));
+  const reponseClose = await poser('projets/atelier/campagnes/c-barre', { statut: S('close'), maj: T(new Date()) }, ['statut', 'maj']);
+  const ferme = await attendre(async () => Boolean(await page.$(tests)) && !(await page.$(`${tests}.lat-lien--en-cours`)));
+  verifier(ferme, 'la campagne close : l animation s arrête, sans recharger', ferme ? '' : `écriture ${reponseClose.status} · en base : ${str(await lire('projets/atelier/campagnes/c-barre'), 'statut')} · dans la page : ${await page.evaluate(async () => { const m = await import('./assets/js/magasin.js'); return JSON.stringify((m.lire('campagnes:atelier') || []).map((c) => [c.id, c.statut])); }).catch((e) => String(e).slice(0, 80))}`);
+  await effacer('projets/atelier/campagnes/c-barre'); await effacer('projets/atelier/scenarios/s-barre');
+  for (const id of ouvertes) await poser(`projets/atelier/campagnes/${id}`, { statut: S('en-cours') }, ['statut']);
 
   console.log('\n== Une notification porte le nom de son projet, et passe lue sur la page');
   const r = await fetch(bdd(`boites/${uid}/notifications`), { method: 'POST', headers: { ...prop, 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: { type: S('reunion'), titre: S('Réunion programmée (banc D)'), texte: S('Point hebdo'), lien: S('#/calendrier'), projet: S('atelier'), lu: B(false), date: T(new Date()) } }) });

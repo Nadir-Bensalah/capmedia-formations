@@ -1200,7 +1200,7 @@ exports.hubRelanceHebdo = onSchedule(
         if (!siens.length) continue;
         quelquUn = true;
         await mettreEnFile('relance', [d], {
-          par: d.nom || '', projet: projet.nom || '', points: siens.map(({ quoi, detail }) => ({ quoi, detail })), lien: LIEN('/valider'),
+          par: d.nom || '', projet: projet.nom || '', points: siens.map(({ quoi, detail }) => ({ quoi, detail })), lien: LIEN('/demandes'),
         }, { projet: projet.id, evenement: 'relance' });
       }
       if (!quelquUn) { ignorees += 1; continue; }

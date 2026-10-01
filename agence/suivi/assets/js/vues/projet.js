@@ -559,7 +559,7 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
       ['reunion', 'reunions', 'reunions', 'réunion', 'réunions'],
       ['demande', 'demandes', 'demandes', 'demande', 'demandes'],
     ].filter(([type]) => compte(type)).map(([type, ong, ico, un, plusieurs]) => {
-      const chemin = type === 'message' ? `/messages/${pid}` : type === 'validation' ? '/valider' : `/projets/${pid}/${ong}`;
+      const chemin = type === 'message' ? `/messages/${pid}` : type === 'validation' ? '/demandes' : `/projets/${pid}/${ong}`;
       return `<a class="rang" style="gap:6px;color:inherit" href="#${chemin}">${icone(ico)} ${pluriel(compte(type), un, plusieurs)}</a>`;
     });
     if (!parts.length) parts.push(`<a class="rang" style="gap:6px;color:inherit" href="#/projets/${echapper(pid)}/activite">${icone('activite')} ${pluriel(depuisPassage.length, 'mouvement')}</a>`);
@@ -572,7 +572,7 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
     ${attente.length ? `<section class="section" style="margin-top:0"><div class="attente">
       <p class="attente-tete">${icone('alerte')} ${equipe ? 'En attente du client' : 'En attente de vous'} <span class="badge badge--vif" style="margin-left:4px">${attente.length}</span></p>
       <div class="liste" style="margin-top:8px">${attente.slice(0, 5).map((a) => ligne({ href: `#${a.chemin}`, icone: a.icone, ton: a.ton, titre: echapper(a.titre), sous: echapper(a.sous) })).join('')}</div>
-      ${attente.length > 5 ? `<p class="t-petit" style="margin-top:8px"><a href="#/valider">${echapper(pluriel(attente.length - 5, 'autre point', 'autres points'))} à voir</a></p>` : ''}
+      ${attente.length > 5 ? `<p class="t-petit" style="margin-top:8px"><a href="#/demandes">${echapper(pluriel(attente.length - 5, 'autre point', 'autres points'))} à voir</a></p>` : ''}
     </div></section>` : ''}
 
     <section class="section${attente.length ? '' : ' section--premiere'}" style="${attente.length ? '' : 'margin-top:0'}">

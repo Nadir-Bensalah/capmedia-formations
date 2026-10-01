@@ -223,9 +223,9 @@ let page = null;
   if (ticket) await fetch(`http://127.0.0.1:8080/v1/${ticket.name}`, { method: 'DELETE', headers: prop });
 
   console.log('\n== « Bon pour sortie » côté client');
-  await aller(page, '#/valider');
-  await page.waitForSelector('.page', { timeout: 15000 }); await pause(1200);
-  verifier(/Bon pour sortie : Campagne de sortie QA/.test(await page.textContent('.page')), 'la validation de sortie attend Camille dans « En attente de vous »');
+  await aller(page, '#/demandes');
+  await page.waitForSelector('#en-attente', { timeout: 15000 }); await pause(1200);
+  verifier(/Bon pour sortie : Campagne de sortie QA/.test(await page.textContent('#en-attente')), 'la validation de sortie attend Camille dans « En attente de vous »');
 
   verifier(erreurs.length === 0, `aucune erreur de page ${erreurs.join(' | ')}`);
   await nav.close();

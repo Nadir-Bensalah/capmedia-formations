@@ -115,7 +115,8 @@ const construireNavigation = () => {
       items: [
         { chemin: '/demandes', libelle: 'Demandes', icone: 'inbox', compte: { total: ouvertes, neuf: nouvelles } },
         { chemin: '/taches', libelle: 'Tâches', icone: 'taches', compte: { total: aFaire, neuf: enRetard } },
-        { chemin: '/tests', libelle: 'Tests', icone: 'bug', compte: { total: campagnesEnCours, neuf: anomaliesOuvertes } },
+        /* Une campagne qui tourne anime l'entrée, comme chez le client. */
+        { chemin: '/tests', libelle: 'Tests', icone: 'bug', compte: { total: campagnesEnCours, neuf: anomaliesOuvertes }, enCours: campagnesEnCours ? (campagnesEnCours > 1 ? `${campagnesEnCours} campagnes de tests en cours` : 'campagne de tests en cours') : '' },
         { chemin: '/planning', libelle: 'Planning', icone: 'calendrier', compte: { total: reunions.length } },
         { chemin: '/messages', libelle: 'Messages', icone: 'messages', compte: { total: projets.filter((p) => !p.archive && !p.interne).length, neuf: nonLus } },
         { chemin: '/testeurs-messages', libelle: 'Testeurs', icone: 'smartphone', compte: { total: conversationsTesteurs.length, neuf: nonLusTesteurs }, si: peut(session, 'qa.gerer') },
