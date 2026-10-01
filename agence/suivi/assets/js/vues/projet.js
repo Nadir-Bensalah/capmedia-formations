@@ -383,6 +383,11 @@ const cartesPlateformes = (projet, d, pid) => {
     if (!lignes.length) lignes.push(c ? ((STATUTS_COMPOSANT[c.statut || 'en-cours'] || {}).libelle || 'En cours') : 'Pas encore suivie');
     const store = v.disponible && v.disponible.liens && v.disponible.liens.store;
     const test = v.enRoute && v.enRoute.liens && v.enRoute.liens.test;
+    /* L'adresse publique de la partie (fiche du store, site en ligne,
+       tableau de bord) : l'éditeur promettait qu'elle rendait la carte
+       cliquable, et la carte ne la lisait pas. Seul un lien web est suivi. */
+    const publique = !store && c && /^https:\/\//i.test(String(c.lien || '')) ? c.lien : '';
+    const surStore = cle === 'ios' || cle === 'android';
     const href = `#/projets/${echapper(pid)}/brique/${echapper(c ? c.id : `p-${cle}`)}`;
     /* Les boutons ne vivent pas dans le lien : un lien dans un lien n'est
        pas permis, et le navigateur l'éjecterait. */
@@ -395,7 +400,8 @@ const cartesPlateformes = (projet, d, pid) => {
       <span class="rang" style="gap:4px;flex-wrap:nowrap">
         ${store ? `<a class="btn btn-doux btn-petit" href="${echapper(store)}" target="_blank" rel="noopener" data-astuce="Ouvrir dans le store">${icone('externe')} Store</a>` : ''}
         ${test ? `<a class="btn btn-doux btn-petit" href="${echapper(test)}" target="_blank" rel="noopener" data-astuce="Version de test">${icone('externe')} Test</a>` : ''}
-        ${!store && !test ? `<a class="carte-plateforme-fleche" href="${href}" aria-hidden="true" tabindex="-1">${icone('fleche')}</a>` : ''}
+        ${publique ? `<a class="btn btn-doux btn-petit" href="${echapper(publique)}" target="_blank" rel="noopener" data-astuce="${surStore ? 'Ouvrir dans le store' : 'Ouvrir le site'}">${icone('externe')} ${surStore ? 'Store' : 'Ouvrir'}</a>` : ''}
+        ${!store && !test && !publique ? `<a class="carte-plateforme-fleche" href="${href}" aria-hidden="true" tabindex="-1">${icone('fleche')}</a>` : ''}
       </span>
     </div>`;
   }).join('')}</div>`;
