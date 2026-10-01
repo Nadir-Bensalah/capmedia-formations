@@ -949,9 +949,10 @@ Le lot D du relevé des parcours (`docs/parcours-client-hub.md`, scénarios
   (`#/messages/{pid}?brouillon=…`, lu par la page Messages). « Tout voir »
   de l'activité mène à `#/activite`. La carte Finances n'apparaît qu'à un
   responsable. La puce d'une carte projet : « N chez nous · M à vous ».
-- `#/demandes` (`vues/demandes.js`) : mes demandes, tous projets, filtres
-  Ouvertes / À vous / Terminées / Toutes et filtre par projet ; entrée
-  « Demandes » du groupe Suivi (gris = ouvertes, rouge = à moi).
+- `#/demandes` (`vues/demandes.js`) : en tête « En attente de vous », puis
+  mes demandes, tous projets, filtres Ouvertes / À vous / Terminées / Toutes
+  et filtre par projet, puis les validations passées ; entrée « Demandes »
+  du groupe Suivi (rouge = tout ce qui attend le client). Voir la section 26.
 - `#/nouveaux-projets` (`vues/demandes-projet.js`) : mes demandes de projet ;
   entrée « Mes demandes de projet » sous « Demander un projet », seulement
   s'il y en a une. La fiche `#/nouveaux-projets/:id` garde son adresse ; au
@@ -1453,3 +1454,33 @@ fenêtre d'un jour, le détail d'un élément, la légende.
 - Le planning dessine désormais par `magasin.dessinateur`, comme le
   calendrier : un dessin par tour.
 
+
+## 28. La barre latérale du Hub, resserrée (01/10/2026)
+
+- Sous un projet, plus aucune sous-entrée : ses sections (feuille de route,
+  tâches, demandes, fichiers, versions...) sont les onglets de sa page. Le
+  projet garde son écusson et son chiffre (ce qui attend le client).
+- « Demander un projet » descend dans le groupe Compte, juste avant
+  « Paramètres » (avec « Mes demandes de projet » en retrait s'il y en a).
+- « En attente de vous » et « Demandes » ne font plus qu'une entrée,
+  « Demandes » (`#/demandes`). La page s'ouvre sur la section « En attente
+  de vous » (`#en-attente` : validations à examiner, puis les autres
+  points), puis « Vos demandes » (`#vos-demandes`), puis « Validations
+  passées ». Le rouge du rail compte tout ce qui attend le client
+  (`enAttenteDeVous`, les demandes à sa réponse comprises, jamais deux
+  fois). `#/valider` mène à `#/demandes` ; `#/valider/{id}` (e-mails,
+  notifications, recherche, calendrier) ouvre la page Demandes avec la
+  fiche de la validation, puis revient à `#/demandes`. La relance du lundi
+  (`hub.js`) vise `#/demandes`. `vues/valider.js` ne garde que la fiche
+  (`ouvrirValidation`), partagée avec le Cockpit.
+- Maintenance : sans aucun forfait actif (`contrat.statut === 'actif'` dans
+  `projets/{p}/maintenance`), un rond barré fin, sans fond, à la place des
+  chiffres (`repere` d'une entrée, `.lat-repere`), nommé et en infobulle
+  « Aucun forfait de maintenance en cours ». Il n'apparaît qu'une fois la
+  maintenance de chaque projet arrivée.
+- Tests : une campagne `en-cours` sur un projet du client anime l'entrée
+  (`enCours` d'une entrée, `.lat-lien--en-cours`) : un reflet lent sur le
+  libellé et l'icône qui respire, 2,6 s en boucle, rien quand l'entrée est
+  ouverte ni avec « réduire les animations ». Le rail écoute les campagnes :
+  l'animation vient et part sans recharger. Le Cockpit anime son entrée
+  Tests de la même façon quand une campagne tourne.

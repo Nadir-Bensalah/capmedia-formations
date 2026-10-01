@@ -93,7 +93,7 @@ const ecranAttendu = () => ({
     </div>`,
   texte: `<p class="surtitre">Ce qu'on vous demandera</p>
     <h2>Cinq gestes, jamais plus</h2>
-    <p>« En attente de vous », dans le rail, rassemble tout ce qui n'avance pas sans vous, avec un chiffre rouge. Quand c'est vide, tout est entre nos mains.</p>`,
+    <p>« Demandes », dans le rail, s'ouvre sur « En attente de vous » : tout ce qui n'avance pas sans vous, avec un chiffre rouge. Quand c'est vide, tout est entre nos mains.</p>`,
 });
 
 const ecranTests = () => ({

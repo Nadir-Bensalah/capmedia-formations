@@ -19,7 +19,6 @@ import * as demande from './vues/demande.js';
 import { resoudreDemande } from './lien-profond.js';
 import * as brique from './vues/brique.js';
 import * as messages from './vues/messages.js';
-import * as valider from './vues/valider.js';
 import * as calendrier from './vues/calendrier.js';
 import * as activite from './vues/activite.js';
 import * as tests from './vues/tests.js';
@@ -109,47 +108,28 @@ const compter = () => {
   const parcoursDuClient = projets.reduce((n, p) => n + (magasin.lire(K.parcours(p.id)) || []).filter((x) => x.actif !== false).length, 0);
   /* Les forfaits de maintenance en cours : le gris de l'entrée Maintenance. */
   const forfaits = projets.filter((p) => (magasin.lire(K.maintenance(p.id)) || []).some((x) => x.id === 'contrat' && x.statut === 'actif')).length;
+  /* On ne dit « aucun forfait » qu'une fois la maintenance de chaque projet
+     arrivée : avant, on ne sait pas, et le repère clignoterait au démarrage. */
+  const maintenanceConnue = projets.every((p) => magasin.lire(K.maintenance(p.id)) !== undefined || magasin.erreur(K.maintenance(p.id)));
+  /* Une campagne de tests en cours sur l'un de ses projets : l'entrée Tests
+     le montre (le même statut que la page des tests, « en-cours »). */
+  const campagnesEnCours = projets.filter((p) => !p.archive).reduce((n, p) => n + (magasin.lire(K.campagnes(p.id)) || []).filter((c) => c.statut === 'en-cours').length, 0);
   /* Les demandes de projet du client : l'entrée « Mes demandes de projet »
      n'apparaît que s'il en a au moins une. */
   const demandesDeProjet = (magasin.lire(K.demandesProjet) || []).length;
-  return { projets, attente, nonLus, profil, scenariosDuClient, parcoursDuClient, forfaits, demandesDeProjet };
+  return { projets, attente, nonLus, profil, scenariosDuClient, parcoursDuClient, forfaits, maintenanceConnue, campagnesEnCours, demandesDeProjet };
 };
-
-/* Les sections d'un projet, dans l'ordre de ses onglets. */
-const SECTIONS = [
-  { cle: 'etapes',  libelle: 'Feuille de route', icone: 'route' },
-  { cle: 'taches',  libelle: 'Tâches',      icone: 'taches',   compte: (pid) => (magasin.lire(K.taches(pid)) || []).filter((t) => !t.archive && t.statut !== 'terminee').length },
-  { cle: 'demandes', libelle: 'Demandes',   icone: 'demandes', compte: (pid) => (magasin.lire(K.tickets(pid)) || []).filter((t) => !t.archive && OUVERTS.includes(t.statut)).length },
-  { cle: 'fichiers', libelle: 'Fichiers',   icone: 'fichiers', compte: (pid) => (magasin.lire(K.fichiers(pid)) || []).filter((f) => !f.archive).length },
-  { cle: 'releases', libelle: 'Versions',   icone: 'releases', compte: (pid) => (magasin.lire(K.releases(pid)) || []).length },
-  { cle: 'liens',   libelle: 'Ressources',  icone: 'liens' },
-  { cle: 'reunions', libelle: 'Réunions',   icone: 'reunions' },
-  { cle: 'notes',   libelle: 'Décisions',   icone: 'note' },
-  /* Les tests n'ont d'entrée que s'il y a quelque chose à voir : la même
-     règle que l'onglet de la fiche projet, pour que le rail et les onglets
-     aient le même compte. */
-  { cle: 'tests',   libelle: 'Tests',       icone: 'check', visible: (pid) => (magasin.lire(K.scenarios(pid)) || []).some((x) => x.actif !== false) || (magasin.lire(K.campagnes(pid)) || []).length > 0 },
-  { cle: 'activite', libelle: 'Activité',   icone: 'activite' },
-];
 
 /* Le projet où l'on se trouve, quelle que soit la profondeur de l'adresse. */
 const projetOuvert = () => {
   const m = /^\/projets\/([^/]+)/.exec(courant().chemin || '');
   return m ? m[1] : '';
 };
-const ouvertSur = (pid) => projetOuvert() === pid;
 
 const construireNavigation = () => {
-  const { projets, attente, nonLus, scenariosDuClient, parcoursDuClient, forfaits, demandesDeProjet } = compter();
+  const { projets, attente, nonLus, scenariosDuClient, parcoursDuClient, forfaits, maintenanceConnue, campagnesEnCours, demandesDeProjet } = compter();
   const parProjet = (pid) => attente.filter((a) => a.projet === pid).length;
-  const validations = attente.filter((a) => a.genre === 'validation').length;
   const dues = attente.filter((a) => a.genre === 'facture' || a.genre === 'devis').length;
-  /* Le gris dit combien il y en a, le rouge combien attendent votre main. */
-  const ouverts = agreger(session, G.tickets).filter((t) => OUVERTS.includes(t.statut) && !t.archive);
-  /* Les demandes qui attendent la main du client : le rouge de « Demandes ». */
-  const aMoi = ouverts.filter((t) => ATTEND_CLIENT.includes(t.statut)).length;
-  const aValider = agreger(session, G.validations).filter((v) => v.statut === 'en-attente');
-  const pieces = agreger(session, G.documents);
   /* Le badge de Documents compte ce que la page montre : la même source. */
   const vusDansDocuments = (() => { const v = documents.documentsVisibles(session); return v.fichiers.length + v.pieces.length; })();
   const reunionsAVenir = agreger(session, G.reunions).filter((r) => joursAvant(r.date) >= 0);
@@ -158,46 +138,50 @@ const construireNavigation = () => {
     { items: [{ chemin: '/', libelle: 'Accueil', icone: 'accueil', exact: true }] },
     {
       titre: 'Vos projets',
-      items: [
-        ...projets.filter((p) => !p.archive).flatMap((p) => [{
-          /* Le projet porte son propre logo : dans une liste de plusieurs, l'œil
-             retrouve le sien avant d'avoir lu le nom. */
-          chemin: `/projets/${p.id}`, libelle: p.nom, ecusson: avatarProjet(p, 'mini'),
-          /* Un seul chiffre : ce qui attend VOTRE main sur ce projet. Le gris
-             comptait les demandes ouvertes et le rouge les points en attente :
-             deux familles différentes, donc « 5 9 » ne voulait rien dire. */
-          compte: { total: parProjet(p.id), neuf: parProjet(p.id) },
-        },
-        /* Les sections d'un projet sont à lui : elles se déplient sous son
-           nom quand on y entre, et se replient quand on en sort. Les cinq
-           pages du groupe « Suivi » restent à plat : elles rassemblent
-           tous les projets à la fois, et n'appartiennent à aucun. */
-        ...(ouvertSur(p.id) ? SECTIONS.filter((sec) => !sec.visible || sec.visible(p.id)).map((sec) => ({
-          chemin: `/projets/${p.id}/${sec.cle}`, libelle: sec.libelle, icone: sec.icone, sous: true,
-          compte: { total: sec.compte ? sec.compte(p.id) : 0 },
-        })) : [])]),
-        { chemin: '/nouveau-projet', libelle: 'Demander un projet', icone: 'plus' },
-        ...(demandesDeProjet ? [{ chemin: '/nouveaux-projets', libelle: 'Mes demandes de projet', icone: 'sparkle', sous: true, compte: { total: demandesDeProjet } }] : []),
-      ],
+      /* Le projet seul, avec son chiffre : ses sections (feuille de route,
+         tâches, fichiers...) sont les onglets de sa page, le rail ne les
+         répète pas. */
+      items: projets.filter((p) => !p.archive).map((p) => ({
+        /* Le projet porte son propre logo : dans une liste de plusieurs, l'œil
+           retrouve le sien avant d'avoir lu le nom. */
+        chemin: `/projets/${p.id}`, libelle: p.nom, ecusson: avatarProjet(p, 'mini'),
+        /* Un seul chiffre : ce qui attend VOTRE main sur ce projet. */
+        compte: { total: parProjet(p.id), neuf: parProjet(p.id) },
+      })),
     },
     {
       titre: 'Suivi',
       items: [
-        { chemin: '/valider', libelle: 'En attente de vous', icone: 'valider', compte: { neuf: attente.length } },
-        /* Toutes les demandes, tous projets : le gris compte les ouvertes,
-           le rouge celles qui attendent le client. */
-        /* Un seul chiffre, le rouge : ce qui attend votre main (les ouvertes se lisent sur la page). */
-        { chemin: '/demandes', libelle: 'Demandes', icone: 'demandes', compte: { total: 0, neuf: aMoi } },
+        /* Une seule entrée pour ce qu'on attend du client et pour ses
+           demandes : la page ouvre sur « En attente de vous », puis la liste
+           des demandes. Le rouge compte tout ce qui attend sa main (les
+           demandes à sa réponse en font partie : jamais comptées deux fois). */
+        { chemin: '/demandes', libelle: 'Demandes', icone: 'demandes', compte: { total: 0, neuf: attente.length } },
         { chemin: '/messages', libelle: 'Messages', icone: 'messages', compte: { total: 0, neuf: nonLus } },
         { chemin: '/calendrier', libelle: 'Calendrier', icone: 'calendrier', compte: { total: reunionsAVenir.length } },
-        ...(scenariosDuClient || parcoursDuClient ? [{ chemin: '/tests', libelle: 'Tests', icone: 'bug', compte: { total: scenariosDuClient } }] : []),
-        { chemin: '/maintenance', libelle: 'Maintenance', icone: 'sante', compte: { total: forfaits } },
+        ...(scenariosDuClient || parcoursDuClient || campagnesEnCours ? [{
+          chemin: '/tests', libelle: 'Tests', icone: 'bug', compte: { total: scenariosDuClient },
+          enCours: campagnesEnCours ? (campagnesEnCours > 1 ? `${campagnesEnCours} campagnes de tests en cours` : 'campagne de tests en cours') : '',
+        }] : []),
+        {
+          chemin: '/maintenance', libelle: 'Maintenance', icone: 'sante', compte: { total: forfaits },
+          repere: maintenanceConnue && !forfaits ? { texte: 'Aucun forfait de maintenance en cours', icone: 'aucun' } : null,
+        },
         /* La finance est au responsable : un collaborateur ne voit pas l'entrée. */
         ...(projets.some((p) => estResponsable(session, p)) ? [{ chemin: '/finances', libelle: 'Devis et factures', icone: 'finances', compte: { total: dues, neuf: dues } }] : []),
         { chemin: '/documents', libelle: 'Documents', icone: 'documents', compte: { total: vusDansDocuments } },
       ],
     },
-    { titre: 'Compte', items: [{ chemin: '/parametres', libelle: 'Paramètres', icone: 'parametres' }] },
+    {
+      titre: 'Compte',
+      items: [
+        /* Demander un nouveau projet : un geste rare, rangé en bas, juste
+           avant les paramètres. */
+        { chemin: '/nouveau-projet', libelle: 'Demander un projet', icone: 'plus' },
+        ...(demandesDeProjet ? [{ chemin: '/nouveaux-projets', libelle: 'Mes demandes de projet', icone: 'sparkle', sous: true, compte: { total: demandesDeProjet } }] : []),
+        { chemin: '/parametres', libelle: 'Paramètres', icone: 'parametres' },
+      ],
+    },
   ]);
 };
 
@@ -237,11 +221,11 @@ enregistrerRecherche((terme) => {
   if (!terme) {
     items.push({ groupe: 'Actions', libelle: 'Nouvelle demande', icone: 'plus', action: async () => { const pid = await accueil.choisirProjet(projets); if (pid) naviguer(`/projets/${pid}/nouvelle-demande`); } });
     items.push({ groupe: 'Actions', libelle: 'Envoyer un message', icone: 'messages', action: async () => { const pid = await accueil.choisirProjet(projets); naviguer(pid ? `/messages/${pid}` : '/messages'); } });
-    items.push({ groupe: 'Actions', libelle: 'Voir ce qui vous attend', icone: 'valider', chemin: '/valider' });
+    items.push({ groupe: 'Actions', libelle: 'Voir ce qui vous attend', icone: 'valider', chemin: '/demandes' });
   }
   const { scenariosDuClient, parcoursDuClient } = compter();
   const pages = [
-    ['En attente de vous', '/valider', 'valider'], ['Demandes', '/demandes', 'demandes'], ['Messages', '/messages', 'messages'],
+    ['En attente de vous', '/demandes', 'valider'], ['Demandes', '/demandes', 'demandes'], ['Messages', '/messages', 'messages'],
     ['Calendrier', '/calendrier', 'calendrier'], ['Documents', '/documents', 'documents'], ['Maintenance', '/maintenance', 'sante'],
     ...(projets.some((p) => estResponsable(session, p)) ? [['Devis et factures', '/finances', 'finances']] : []),
     ...(scenariosDuClient || parcoursDuClient ? [['Tests', '/tests', 'bug']] : []),
@@ -283,8 +267,11 @@ definir([
   { chemin: '/demandes', vue: (ctx) => demandes.vue(ctx, env) },
   { chemin: '/messages', vue: (ctx) => messages.vue(ctx, env) },
   { chemin: '/messages/:pid', vue: (ctx) => messages.vue(ctx, env) },
-  { chemin: '/valider', vue: (ctx) => valider.vue(ctx, env) },
-  { chemin: '/valider/:vid', vue: (ctx) => valider.vue(ctx, env) },
+  /* « En attente de vous » vit en tête de la page Demandes. L'ancienne
+     adresse y mène ; celle d'une validation (e-mails, notifications) ouvre
+     la page Demandes avec la fiche de la validation par-dessus. */
+  { chemin: '/valider', vue: () => { naviguer('/demandes', { remplacer: true }); } },
+  { chemin: '/valider/:vid', vue: (ctx) => demandes.vue(ctx, env) },
   { chemin: '/calendrier', vue: (ctx) => calendrier.vue(ctx, env) },
   { chemin: '/tests', cle: () => 'tests', vue: (ctx) => tests.vue(ctx, env) },
   { chemin: '/tests/tableau', vue: (ctx) => tableau.ancienne(ctx) },

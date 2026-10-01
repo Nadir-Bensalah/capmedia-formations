@@ -132,6 +132,15 @@ const compteHtml = (valeur) => {
   return `<span class="comptes">${gris ? `<span class="compte">${echapper(total)}</span>` : ''}${neuf ? `<span class="compte vif" aria-label="${echapper(neuf)} à traiter">${echapper(neuf > 99 ? '99+' : neuf)}</span>` : ''}</span>`;
 };
 
+/* Un repère à la place des chiffres, quand il n'y a rien à compter mais
+   quelque chose à dire (« aucun forfait en cours ») : une icône fine, sans
+   fond, dans la couleur discrète des totaux. Le texte est son nom pour un
+   lecteur d'écran, et son infobulle au survol. */
+const repereHtml = (repere) => {
+  if (!repere || !repere.texte) return '';
+  return `<span class="comptes"><span class="lat-repere" role="img" aria-label="${echapper(repere.texte)}" data-astuce="${echapper(repere.texte)}">${icone(repere.icone || 'aucun')}</span></span>`;
+};
+
 /* Le rail ne se réécrit que s'il change vraiment. Chaque page le
    redemandait, et réécrire les mêmes lignes les faisait toutes rejouer
    leur entrée : le rail entier tressautait à chaque clic. */
@@ -143,8 +152,8 @@ export const rendreNavigation = () => {
     <div class="lat-groupe">
       ${g.titre ? `<p class="lat-titre">${echapper(g.titre)}</p>` : ''}
       ${g.items.map((it) => `
-        <a class="lat-lien${it.sous ? ' lat-sous-lien' : ''}" href="#${echapper(it.lien || it.chemin)}" data-chemin="${echapper(it.chemin)}"${it.exact ? ' data-exact' : ''}>
-          ${it.ecusson || (it.icone ? icone(it.icone) : '')}<span class="tronque">${echapper(it.libelle)}</span>${compteHtml(typeof it.compte === 'function' ? it.compte() : it.compte)}
+        <a class="lat-lien${it.sous ? ' lat-sous-lien' : ''}${it.enCours ? ' lat-lien--en-cours' : ''}" href="#${echapper(it.lien || it.chemin)}" data-chemin="${echapper(it.chemin)}"${it.exact ? ' data-exact' : ''}>
+          ${it.ecusson || (it.icone ? icone(it.icone) : '')}<span class="tronque">${echapper(it.libelle)}</span>${it.enCours ? `<span class="sr-only">, ${echapper(it.enCours)}</span>` : ''}${compteHtml(typeof it.compte === 'function' ? it.compte() : it.compte)}${repereHtml(it.repere)}
         </a>`).join('')}
     </div>`).join('');
   if (html !== railRendu) { corps.innerHTML = html; railRendu = html; }

@@ -1,17 +1,13 @@
 /* ==========================================================================
-   « En attente de vous » : tout ce qui attend le client, réuni, sous un
-   seul nom (rail, titre, onglet, fil d'Ariane). Les validations formelles
-   ont leur fiche : approuver, ou demander des modifications, avec des
-   pièces si besoin.
+   La fiche d'une validation : approuver, ou demander des modifications,
+   avec des pièces si besoin. La liste de ce qui attend le client vit en
+   tête de la page Demandes (vues/demandes.js), sous le titre « En attente
+   de vous » ; cette fiche s'y ouvre, et dans le cockpit.
    ========================================================================== */
 
-import { echapper, dateHeure, dateCourte, depuis, avecLiens, parDateDesc, joursAvant, STATUTS_VALIDATION, TYPES_VALIDATION, estResponsable } from '../noyau.js';
-import { icone, pastille, ligne, vide, squelette, titrePage, modale, toast, sur, agir, pieceHtml, brancherPieces, echeanceHtml, encart, depot } from '../ui.js';
-import * as magasin from '../magasin.js';
-import { K, G, agreger, ecrire, enAttenteDeVous, peutRepondreValidation } from '../donnees.js';
-import { filAriane } from '../coquille.js';
-import { naviguer } from '../routeur.js';
-import { echeance } from '../noyau.js';
+import { echapper, dateHeure, avecLiens, STATUTS_VALIDATION, TYPES_VALIDATION, estResponsable, echeance } from '../noyau.js';
+import { icone, pastille, modale, toast, sur, agir, pieceHtml, brancherPieces, echeanceHtml, encart, depot } from '../ui.js';
+import { ecrire } from '../donnees.js';
 
 export const ouvrirValidation = (v, env, projets) => {
   const equipe = env.role === 'equipe';
@@ -66,77 +62,3 @@ export const ouvrirValidation = (v, env, projets) => {
   return m.fin;
 };
 
-export const vue = async (ctx, env) => {
-  const { session } = env;
-  const lot = magasin.lot();
-  const sortie = ctx.sortie;
-  titrePage('En attente de vous');
-  filAriane([{ libelle: 'En attente de vous' }]);
-  sortie.innerHTML = `<div class="page">${squelette('page', 5)}</div>`;
-  let ouvert = ctx.params.vid || null;
-  /* « Validations passées » se lit par vingt : un bouton « Voir plus »
-     allonge la liste, au lieu de couper à vingt sans le dire. */
-  let limitePassees = 20;
-
-  const rendre = () => {
-    const projets = magasin.lire(K.projets) || session.projets;
-    const validations = agreger(session, G.validations);
-    const attente = enAttenteDeVous({ projets, tickets: agreger(session, G.tickets), validations, documents: agreger(session, G.documents), taches: agreger(session, G.taches), blocages: agreger(session, G.blocages) });
-    /* Un collaborateur ne voit pas les validations réservées au responsable :
-       il ne pourrait pas y répondre, et le chapo ne les compte pas. */
-    const enAttente = validations.filter((v) => v.statut === 'en-attente' && peutRepondreValidation(v)).sort(parDateDesc('cree'));
-    const passees = validations.filter((v) => v.statut !== 'en-attente').sort(parDateDesc('maj'));
-    const autres = attente.filter((a) => a.genre !== 'validation');
-    const nomProjet = (pid) => ((projets.find((p) => p.id === pid) || {}).nom || '');
-
-    sortie.innerHTML = `<div class="page">
-      <div class="page-tete"><div><h1>En attente de vous</h1><p class="chapo">${attente.length ? `${attente.length} point${attente.length > 1 ? 's' : ''} attend${attente.length > 1 ? 'ent' : ''} votre retour. Le reste avance sans vous.` : 'Rien ne vous attend. Tout avance de notre côté.'}</p></div></div>
-
-      ${enAttente.length ? `<section class="section" style="margin-top:0"><div class="section-tete"><h2>Validations</h2></div><div class="liste">${enAttente.map((v) => ligne({
-        icone: 'valider', ton: 'violet', titre: echapper(v.titre), sous: `${echapper(TYPES_VALIDATION[v.type] || 'Validation')} · ${echapper(nomProjet(v.projet))} · ${echapper(depuis(v.cree))}${v.echeance ? ` ${echeanceHtml(echeance(v.echeance))}` : ''}`,
-        fin: '<span class="btn btn-principal btn-petit">Examiner</span>', action: 'ouvrir', attrs: `data-id="${echapper(v.id)}"`,
-      })).join('')}</div></section>` : ''}
-
-      ${autres.length ? `<section class="section"${enAttente.length ? '' : ' style="margin-top:0"'}><div class="section-tete"><h2>Autres points</h2></div><div class="liste">${autres.map((a) => ligne({ href: `#${a.chemin}`, icone: a.icone, ton: a.ton, titre: echapper(a.titre), sous: echapper(a.sous) })).join('')}</div></section>` : ''}
-
-      ${!attente.length ? vide({ icone: 'check', titre: 'Tout est à jour', texte: 'Quand une validation, une réponse ou un paiement vous sera demandé, il apparaîtra ici.' }) : ''}
-
-      ${passees.length ? `<section class="section"><div class="section-tete"><h2>Validations passées</h2></div><div class="liste">${passees.slice(0, limitePassees).map((v) => ligne({
-        /* Une validation annulée n'a été ni approuvée ni contestée : icône
-           neutre, pastille « Annulée ». */
-        icone: v.statut === 'approuvee' ? 'check' : v.statut === 'modifications' ? 'edit' : 'valider', ton: v.statut === 'approuvee' ? 'vert' : v.statut === 'modifications' ? 'ambre' : '',
-        titre: echapper(v.titre), sous: `${echapper(nomProjet(v.projet))} · ${echapper(dateCourte((v.reponse || {}).date || v.maj))}`, fin: pastille(STATUTS_VALIDATION, v.statut), action: 'ouvrir', attrs: `data-id="${echapper(v.id)}"`,
-      })).join('')}</div>${passees.length > limitePassees ? `<p style="margin-top:12px"><button class="btn btn-secondaire btn-petit" type="button" data-action="voir-plus">Voir plus</button> <span class="t-micro t-3">${passees.length - limitePassees} de plus</span></p>` : ''}</section>` : ''}
-    </div>`;
-
-    if (ouvert) {
-      /* Un identifiant dans l'adresse. Tant que les validations ne sont
-         pas toutes arrivées, on ne conclut pas : un lien d'e-mail vers
-         une validation encore en route n'est pas un lien mort. */
-      const chargees = session.projets.every((p) => magasin.lire(K.validations(p.id)) !== undefined || magasin.erreur(K.validations(p.id)));
-      if (chargees) {
-        const v = validations.find((x) => x.id === ouvert);
-        ouvert = null;
-        if (v) ouvrirValidation(v, env, projets).then(() => naviguer('/valider', { remplacer: true }));
-        else { toast('Cette validation n\'existe plus.', 'erreur'); naviguer('/valider', { remplacer: true }); }
-      }
-    }
-  };
-
-  const gestes = sur(sortie, 'click', '[data-action="ouvrir"], [data-action="voir-plus"]', (el) => {
-    if (el.dataset.action === 'voir-plus') { limitePassees += 20; rendre(); return; }
-    const projets = magasin.lire(K.projets) || session.projets;
-    const v = agreger(session, G.validations).find((x) => x.id === el.dataset.id);
-    if (v) ouvrirValidation(v, env, projets);
-  });
-
-  /* Premier dessin avant l'affichage, les suivants regroupés : la page
-     n'apparaît qu'une fois, sans squelette quand la donnée est déjà là. */
-  const cles = [K.projets, ...session.projets.flatMap((p) => [K.validations(p.id), K.tickets(p.id), K.documents(p.id), K.taches(p.id), K.blocages(p.id)])];
-  const planifier = magasin.dessinateur(rendre, 40, cles);
-  cles.forEach((c) => lot.sur(c, planifier));
-  planifier();
-  return () => { planifier.arreter(); gestes(); lot.fin(); };
-};
-
-void joursAvant;

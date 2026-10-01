@@ -274,6 +274,36 @@ svg[stroke-width="1.8"] { stroke-width: 1.6; }
 .lat-sous-lien:hover { border-left: 0; }
 .lat-sous-lien.actif { border-left: 0; background: var(--actif); }
 
+/* Un repère à la place des chiffres (« aucun forfait en cours ») : l'icône
+   seule, fine, sans fond, dans le gris des totaux. */
+.lat-lien .lat-repere { display: inline-grid; place-items: center; width: 18px; height: 18px; color: var(--encre-3); }
+.lat-lien .lat-repere svg { width: 14px; height: 14px; color: currentColor; stroke-width: 1.5; }
+.lat-lien.actif .lat-repere svg, .lat-lien:hover .lat-repere svg { color: currentColor; }
+
+/* Une campagne de tests en cours : l'entrée dit « ça tourne ». Un reflet
+   passe lentement sur le libellé, l'icône respire au même rythme. Rien ne
+   clignote ; l'entrée ouverte reste calme, on y est déjà. */
+.lat-lien--en-cours:not(.actif) > .tronque {
+  background: linear-gradient(100deg, var(--encre) 0%, var(--encre) 38%, var(--bleu) 50%, var(--encre) 62%, var(--encre) 100%);
+  background-size: 260% 100%; background-position: 100% 0;
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+  animation: lat-reflet 2.6s cubic-bezier(.45, 0, .55, 1) infinite;
+}
+.lat-lien--en-cours:not(.actif) > svg {
+  transform-origin: 50% 50%;
+  animation: lat-souffle 2.6s cubic-bezier(.45, 0, .55, 1) infinite;
+}
+@keyframes lat-reflet { from { background-position: 100% 0; } to { background-position: 0% 0; } }
+@keyframes lat-souffle {
+  0%, 100% { transform: scale(1); color: var(--encre-2); }
+  50% { transform: scale(1.12); color: var(--bleu); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lat-lien--en-cours:not(.actif) > .tronque { animation: none; background: none; -webkit-text-fill-color: currentColor; color: inherit; }
+  .lat-lien--en-cours:not(.actif) > svg { animation: none; }
+}
+
 .lat-pied { padding: 8px 14px 14px; border-top: 0; background: transparent; }
 /* Le choix de l'apparence, en bas du rail. */
 .theme-rail { display: flex; padding: 3px; gap: 2px; margin: 4px 10px 8px; border-radius: 9px; background: var(--segments); }
