@@ -1534,7 +1534,7 @@ html.accueil-ouvert { overflow: hidden; }
 @media (max-width: 520px) { .piece--vignette img { width: 100%; height: auto; aspect-ratio: 4 / 3; } }
 
 /* ==========================================================================
-   23.    Le coffre-fort d'un projet (vues/coffre.js). Des fonds, pas de traits :
+   23. Le coffre-fort d'un projet (vues/coffre.js). Des fonds, pas de traits :
    chaque accès est un bloc posé sur le fond doux, la valeur en chasse fixe.
    ========================================================================== */
 .coffre-chapeau { margin: 0 0 var(--e-4); max-width: 66ch; }
