@@ -496,7 +496,7 @@ const majEntree = (chemin, champs, masque) => ({
   const rolesC = (champ(await lire('projets/atelier'), 'roles').mapValue || {}).fields || {};
   await poser('projets/atelier', { roles: { mapValue: { fields: { ...rolesC, [uidCamille]: S('collaborateur') } } } }, ['roles']);
   await attendre(async () => !(await pc.$('[data-coffre-etat]')), 10000);
-  verifier(!(await pc.$('[data-coffre-etat]')) && !/Coffre-fort/.test(await pc.textContent('#onglets-projet').catch(() => '')), 'l onglet disparaît en direct, et le coffre avec');
+  verifier(await attendre(async () => !(await pc.$('[data-coffre-etat]')) && !(await pc.$('#lat-corps a[data-chemin="/projets/atelier/coffre"]')), 10000), 'l entrée Coffre-fort disparaît en direct de l arbre du projet, et le coffre avec');
   verifier(!(await pc.content()).includes(IDENTIFIANT), 'plus rien en clair dans sa page');
   verifier(await statutLecture('coffres/atelier', await jetonPour(CAMILLE)) === 403, 'et les règles la refusent');
   await page.waitForSelector('[data-coffre-bandeau]', { timeout: 10000 }).catch(() => {});

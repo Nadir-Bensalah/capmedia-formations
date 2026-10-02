@@ -1701,3 +1701,110 @@ a.coffre-lien:hover { color: var(--accent); }
 .ecran-texte .accueil-telecharger { margin-top: 18px; }
 .accueil-telecharger .btn { height: 44px; padding: 0 22px; font-size: 15px; }
 @media (prefers-reduced-motion: reduce) { .accueil-mascotte { animation: none; } }
+
+/* ==========================================================================
+   17. Le ménage du Hub (02/10/2026) : l'arbre des projets, le retour, le
+   pavé « En attente de vous » qu'on replie ou qu'on range, la tenue des
+   délais lisible par tous.
+   ========================================================================== */
+
+/* --- Le retour, dans la barre haute, sur toutes les pages sauf l'accueil */
+.btn-retour { flex: none; gap: 6px; padding: 0 10px 0 6px; margin-right: 6px; color: var(--encre-2); }
+.btn-retour svg { width: 16px; height: 16px; }
+.btn-retour[hidden] { display: none; }
+@media (max-width: 640px) { .btn-retour span { display: none; } .btn-retour { padding: 0 8px; } }
+
+/* --- L'arbre d'un projet, dans le rail -----------------------------------
+   Le projet, puis ses entrées reliées par des traits fins et arrondis, le
+   coude des réponses d'une conversation : la couleur des traits du thème,
+   rien de vif. Les branches glissent à l'ouverture. */
+.lat-arbre { position: relative; }
+.lat-arbre-tete { display: flex; align-items: center; gap: 2px; }
+.lat-arbre-tete .lat-projet { flex: 1; min-width: 0; }
+.lat-projet.lat-projet--courant { font-weight: 500; }
+.lat-arbre-bascule {
+  flex: none; display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 7px;
+  color: var(--encre-3); background: none; border: 0; cursor: pointer;
+  transition: background .18s var(--courbe), color .18s var(--courbe);
+}
+.lat-arbre-bascule:hover { background: var(--survol); color: var(--encre); }
+.lat-arbre-bascule:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--anneau, rgba(0, 102, 204, .3)); }
+.lat-arbre-bascule svg { width: 15px; height: 15px; transform: rotate(-90deg); transition: transform .25s var(--courbe); }
+.lat-arbre.deplie .lat-arbre-bascule svg { transform: none; }
+.lat-arbre-branches { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .28s var(--courbe); }
+.lat-arbre.deplie .lat-arbre-branches { grid-template-rows: 1fr; }
+.lat-arbre-branches > ul { min-height: 0; overflow: hidden; margin: 0; padding: 0; list-style: none; }
+.lat-branche { position: relative; padding-left: 31px; }
+.lat-branche::before {
+  content: ''; position: absolute; left: 19px; top: -4px; width: 12px; height: calc(50% + 4px);
+  border-left: 1.5px solid var(--trait-fort); border-bottom: 1.5px solid var(--trait-fort);
+  border-bottom-left-radius: 9px; pointer-events: none;
+}
+.lat-branche:not(:last-child)::after {
+  content: ''; position: absolute; left: 19px; top: 0; bottom: 0;
+  border-left: 1.5px solid var(--trait-fort); pointer-events: none;
+}
+.lat-branche .lat-lien { padding: 6px 10px; font-size: 14px; color: var(--encre-2); }
+.lat-branche .lat-lien:hover, .lat-branche .lat-lien.actif { color: var(--encre); }
+.lat-branche .lat-lien svg { width: 16px; height: 16px; }
+@media (prefers-reduced-motion: reduce) {
+  .lat-arbre-branches, .lat-arbre-bascule svg { transition: none; }
+}
+
+/* --- Le pavé « En attente de vous » : replier, fermer, réafficher ------- */
+.attente-tete { flex-wrap: wrap; row-gap: 6px; }
+.attente-tete .attente-titre { min-width: 0; }
+.attente-gestes { margin-left: auto; display: inline-flex; gap: 2px; }
+.attente-gestes .btn { gap: 5px; padding: 0 10px; color: var(--encre-2); font-weight: 500; }
+.attente-gestes .btn svg { width: 14px; height: 14px; color: currentColor; }
+.attente-gestes .btn:hover { color: var(--encre); background: color-mix(in srgb, var(--blanc) 45%, transparent); }
+:root[data-theme="dark"] .attente-gestes .btn:hover { background: rgba(255, 255, 255, .06); }
+.attente--repliee { padding-block: 10px; }
+.attente--fantome { box-shadow: var(--ombre-survol); }
+.pave-range {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 12px 16px; border-radius: 12px; background: var(--fond-2);
+}
+/* La cible qui reçoit le pavé s'allume un instant. */
+.pave-recu { animation: pave-recu .9s var(--courbe); }
+@keyframes pave-recu {
+  0% { background: var(--ambre-clair); }
+  100% { background: transparent; }
+}
+@media (prefers-reduced-motion: reduce) { .pave-recu { animation: none; background: var(--ambre-clair); } }
+
+/* --- Messages, sur l'accueil, avec le nombre de non lus ----------------- */
+.btn-messages .badge { margin-left: 2px; }
+
+/* --- Un fichier montré par la recherche -------------------------------- */
+.fichier--montre { background: var(--bleu-clair); transition: background .6s var(--courbe); }
+
+/* --- La tenue des délais ------------------------------------------------
+   Trois faits en gros (la date, ce qui reste, si elle tient), deux jauges
+   qui se lisent ensemble (le temps écoulé, le travail fait), puis ce qui
+   peut la faire bouger. La couleur ne va qu'au verdict et aux jauges. */
+.delais { gap: 22px; }
+.delais-faits { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 28px; }
+.delais-fait { min-width: 0; }
+.delais-valeur { margin-top: 6px; font: 600 22px/1.2 var(--titre); letter-spacing: -.02em; color: var(--encre); text-wrap: balance; }
+.delais-valeur::first-letter { text-transform: uppercase; }
+.delais-valeur--vert { color: var(--vert); }
+.delais-valeur--ambre { color: var(--ambre); }
+.delais-valeur--rouge { color: var(--rouge); }
+.delais-valeur--gris { color: var(--encre-3); }
+.delais-nuance { margin-top: 4px; font: 400 13px/1.4 var(--police); color: var(--encre-3); }
+.delais-jauges { display: grid; gap: 14px; padding-top: 18px; border-top: 1px solid var(--trait-clair); }
+.delais-jauge-tete { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 6px; font: 400 13px var(--police); color: var(--encre-2); }
+.delais-jauge-tete .nb { font: 500 12px var(--mono); color: var(--encre); }
+.delais-piste { height: 8px; border-radius: 999px; background: var(--trait-fin); overflow: hidden; }
+.delais-piste > i { display: block; height: 100%; border-radius: 999px; transition: width .6s var(--ressort); }
+.delais-piste--temps { background: var(--encre-3); }
+.delais-piste--vert { background: var(--vert); }
+.delais-piste--ambre { background: var(--ambre); }
+.delais-lecture { font: 400 13.5px/1.45 var(--police); color: var(--encre-2); }
+.delais-risques, .delais-reports { padding-top: 18px; border-top: 1px solid var(--trait-clair); }
+.delais-liste { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+.delais-liste li { display: flex; align-items: baseline; gap: 8px; font: 400 14px/1.45 var(--police); color: var(--encre); }
+.delais-liste .puce { flex: none; }
+@media (max-width: 700px) { .delais-faits { grid-template-columns: minmax(0, 1fr); } }
+@media (prefers-reduced-motion: reduce) { .delais-piste > i { transition: none; } }

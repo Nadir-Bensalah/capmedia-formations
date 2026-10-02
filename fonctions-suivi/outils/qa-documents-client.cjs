@@ -1,14 +1,15 @@
 /* ==========================================================================
-   CAPMEDIA CLIENT HUB · la page Documents du client, éprouvée dans le
-   navigateur
+   CAPMEDIA CLIENT HUB · la page Fichiers du client (ex-Documents),
+   éprouvée dans le navigateur
 
-   La page Documents porte TOUS les documents du client : les fichiers des
-   projets, et pour le responsable ses factures, devis et avoirs, avec la
-   date, le projet, le montant HT et TTC, l'état. La ligne d'une pièce, sa
-   fiche et son téléchargement (par suiviPiece, sans aperçu) sont ceux de
-   « Devis et factures ». Un collaborateur qui n'est pas responsable ne
-   voit pas la finance. Le badge de la barre compte ce que la page montre.
-   Un seul dessin à l'arrivée, sans clé qui traîne.
+   Depuis le ménage du 02/10/2026 (jamais la même information à deux
+   endroits), la page « Fichiers » d'un projet ne porte QUE ses fichiers :
+   maquettes, contrats, captures. Les factures, devis et avoirs vivent
+   dans « Devis et factures », et seulement là : la ligne d'une pièce, sa
+   fiche et son téléchargement (par suiviPiece, sans aperçu) y sont
+   éprouvés. On y arrive par l'entrée Fichiers de l'arbre du projet, dont
+   le chiffre compte ce que la page montre. Un collaborateur qui n'est pas
+   responsable ne voit pas la finance. Un seul dessin à l'arrivée.
 
    Banc : émulateurs (Functions et Storage compris), site local, semer-suivi.
    La suite pose ses pièces par REST, les retire à la fin, et rend à Léa
@@ -59,7 +60,7 @@ const releverPage = (p) => p.evaluate(() => ({
   sections: [...document.querySelectorAll('.page section[data-rayon]')].map((el) => el.dataset.rayon),
   genres: [...document.querySelectorAll('.page [data-genre]')].map((el) => el.dataset.genre),
   texte: (document.querySelector('.page') || {}).innerText || '',
-  badge: (() => { const l = document.querySelector('.lat-lien[data-chemin="/documents"]'); const c = l && l.querySelector('.compte'); return c ? Number(c.textContent.trim()) : 0; })(),
+  badge: (() => { const l = document.querySelector('.lat-lien[data-chemin="/fichiers"]'); const c = l && l.querySelector('.compte'); return c ? Number(c.textContent.trim()) : 0; })(),
 }));
 
 /* La sonde du rebond : combien d'images peignent du contenu dans #vue. */
@@ -98,68 +99,46 @@ const nettoyer = async () => { for (const c of PIECES) await retirer(c); };
   console.log('\n== La responsable : un seul dessin à l arrivée');
   await sonder(page);
   /* La connexion a ses propres attentes (l'accueil) : on ne relève que ce
-     qui arrive une fois sur Documents. */
+     qui arrive une fois sur Fichiers. */
   await pause(2000); magasinLent.length = 0; await page.evaluate(() => { window.__sondeDoc.ev = []; });
-  await page.evaluate(() => { location.hash = '#/documents'; });
-  await page.waitForSelector('[data-action="ouvrir"][data-id="f-doc-ttc"]', { timeout: 20000 }); await pause(1500);
+  await page.click('#lat-corps a[data-chemin="/fichiers"][data-projet="atelier"]');
+  await page.waitForSelector('.page .fichier[data-id="fic-maquettes"]', { timeout: 20000 }); await pause(1500);
   const rebond = await page.evaluate(() => { const s = window.__sondeDoc; return { contenus: new Set(s.ev.filter((e) => !e.squelette).map((e) => e.image)).size, images: s.ev.map((e) => `${e.image}${e.squelette ? 's' : ''}`).join(',') }; });
   verifier(rebond.contenus === 1, 'la page peint son contenu une seule fois', JSON.stringify(rebond));
   verifier(magasinLent.length === 0, 'aucune clé du magasin qui traîne', magasinLent.join(' | '));
 
-  console.log('\n== La responsable : tous ses documents, rangés par genre');
+  console.log('\n== La responsable : les fichiers du projet, et rien d autre');
   const r = await releverPage(page);
-  verifier(['factures', 'devis', 'avoirs', 'fichiers'].every((g) => r.sections.includes(g)), 'une section par genre : Factures, Devis, Avoirs, Fichiers du projet', r.sections.join(','));
-  verifier(['f-doc-ttc', 'f-acompte', 'f-v11', 'd-qa', 'a-doc-avoir'].every((id) => r.pieces.includes(id)), 'les factures, le devis et l avoir sont là', r.pieces.join(','));
-  verifier(!r.pieces.includes('f-doc-archive') && !r.pieces.includes('d-doc-brouillon'), 'ni la pièce archivée, ni le brouillon');
-  verifier(!r.pieces.includes('f-boutique'), 'ni la pièce d un autre client');
+  verifier(/#\/fichiers\?projet=atelier$/.test(page.url()), 'l entrée Fichiers de l arbre mène à la page du projet', page.url());
+  verifier((await page.textContent('.page h1')).trim() === 'Fichiers', 'la page s appelle « Fichiers »');
   verifier(r.fichiers.includes('fic-maquettes') && r.fichiers.includes('fic-contrat') && !r.fichiers.includes('fic-archi'), 'les fichiers du projet, sans le fichier interne', r.fichiers.join(','));
-  verifier(new Set(r.pieces).size === r.pieces.length, 'aucune pièce en double');
-  const ligneTtc = await page.$eval('[data-action="ouvrir"][data-id="f-doc-ttc"]', (el) => el.closest('.ligne').innerText);
-  verifier(/1\s200,00\s€\sTTC/.test(ligneTtc) && /1\s000,00\s€\sHT/.test(ligneTtc), 'la facture dit son montant TTC et son HT', ligneTtc.replace(/\s+/g, ' '));
-  verifier(/À payer/.test(ligneTtc), 'et son état « À payer »');
-  verifier(/Atelier/i.test(ligneTtc) && /\d{1,2}\s\S+/.test(ligneTtc), 'le projet et la date', ligneTtc.replace(/\s+/g, ' '));
-  const ligneV11 = await page.$eval('[data-action="ouvrir"][data-id="f-v11"]', (el) => el.closest('.ligne').innerText);
-  verifier(/Payée/.test(ligneV11) && /4\s200,00\s€\sHT/.test(ligneV11), 'une facture sans TVA se lit « HT », état « Payée »', ligneV11.replace(/\s+/g, ' '));
-  const ligneDevis = await page.$eval('[data-action="ouvrir"][data-id="d-qa"]', (el) => el.closest('.ligne').innerText);
-  verifier(/À votre décision/.test(ligneDevis), 'le devis dit « À votre décision »');
-  const ligneAvoir = await page.$eval('section[data-rayon="avoirs"]', (el) => el.innerText);
-  verifier(/A-DOC-01/.test(ligneAvoir) && /Avoir/.test(ligneAvoir), 'l avoir est rangé dans « Avoirs »');
+  verifier(r.pieces.length === 0 && !/F-DOC-TTC|A-DOC-01|D-2026|F-2026/.test(r.texte), 'aucune facture, aucun devis, aucun avoir : ils sont dans « Devis et factures »', r.pieces.join(','));
+  verifier(!r.genres.some((g) => ['factures', 'devis', 'avoirs'].includes(g)) && !r.sections.some((g) => ['factures', 'devis', 'avoirs'].includes(g)), 'ni filtre ni section de pièces', `${r.genres.join(',')} ${r.sections.join(',')}`);
+  verifier(/Devis et factures/.test(await page.textContent('.page .chapo')), 'le chapeau dit où sont les devis et les factures');
   verifier(!/\bnull\b|\bundefined\b|NaN/.test(r.texte), 'jamais « null », « undefined » ni « NaN » à l écran');
-  verifier(!/\u2014/.test(r.texte), 'aucun tiret cadratin');
-
-  console.log('\n== Le badge de la barre compte ce que la page montre');
-  verifier(r.badge === r.pieces.length + r.fichiers.length, 'badge Documents = pièces + fichiers affichés', `badge ${r.badge}, page ${r.pieces.length} + ${r.fichiers.length}`);
-
-  console.log('\n== Les filtres par genre');
-  await page.click('[data-genre="factures"]'); await pause(400);
-  let f = await releverPage(page);
-  verifier(f.fichiers.length === 0 && f.pieces.includes('f-doc-ttc') && !f.pieces.includes('d-qa') && !f.pieces.includes('a-doc-avoir'), 'Factures : les factures seules', f.pieces.join(','));
-  await page.click('[data-genre="devis"]'); await pause(400);
-  f = await releverPage(page);
-  verifier(f.fichiers.length === 0 && f.pieces.length >= 1 && f.pieces.every((id) => id.startsWith('d-')), 'Devis : les devis seuls', f.pieces.join(','));
-  await page.click('[data-genre="fichiers"]'); await pause(400);
-  f = await releverPage(page);
-  verifier(f.pieces.length === 0 && f.fichiers.length >= 2, 'Fichiers du projet : les fichiers seuls');
-  verifier(Boolean(await page.$('[data-cat=""]')), 'et leurs catégories se proposent');
-  await page.click('[data-genre=""]'); await pause(400);
-  await page.fill('#recherche-doc', 'F-DOC'); await pause(400);
-  f = await releverPage(page);
-  verifier(f.pieces.length === 1 && f.pieces[0] === 'f-doc-ttc' && f.fichiers.length === 0, 'la recherche trouve une pièce par son numéro', f.pieces.join(','));
+  verifier(!/—/.test(r.texte), 'aucun tiret cadratin');
+  verifier(r.badge === r.fichiers.length, 'le chiffre de l entrée Fichiers = les fichiers affichés', `badge ${r.badge}, fichiers ${r.fichiers.length}`);
+  verifier(Boolean(await page.$('[data-cat=""]')), 'les catégories se proposent');
+  await page.fill('#recherche-doc', 'maquettes'); await pause(400);
+  const f = await releverPage(page);
+  verifier(f.fichiers.length === 1 && f.fichiers[0] === 'fic-maquettes', 'la recherche trouve un fichier par son nom', f.fichiers.join(','));
   await page.fill('#recherche-doc', ''); await pause(400);
 
-  console.log('\n== Télécharger : le PDF par le serveur, sans aperçu');
+  console.log('\n== Les pièces, à leur seule place : « Devis et factures »');
+  await page.click('#lat-corps a[data-chemin="/finances"][data-projet="atelier"]');
+  await page.waitForSelector('[data-action="ouvrir"][data-id="f-doc-ttc"]', { timeout: 20000 }); await pause(1200);
+  const rf = await releverPage(page);
+  verifier(['f-doc-ttc', 'f-acompte', 'f-v11', 'd-qa', 'a-doc-avoir'].every((id) => rf.pieces.includes(id)), 'les factures, le devis et l avoir sont là', rf.pieces.join(','));
+  verifier(!rf.pieces.includes('f-doc-archive') && !rf.pieces.includes('d-doc-brouillon') && !rf.pieces.includes('f-boutique'), 'ni l archivée, ni le brouillon, ni la pièce d un autre client');
+  const ligneTtc = await page.$eval('[data-action="ouvrir"][data-id="f-doc-ttc"]', (el) => el.closest('.ligne').innerText);
+  verifier(/1\s200,00\s€/.test(ligneTtc) && /À payer/.test(ligneTtc), 'la facture dit son montant et son état « À payer »', ligneTtc.replace(/\s+/g, ' '));
   const [t1] = await Promise.all([page.waitForEvent('download', { timeout: 15000 }).catch(() => null), page.click('[data-telecharger="f-doc-ttc"]')]);
   verifier(t1 && t1.suggestedFilename() === 'F-DOC-TTC.pdf', 'un clic, le PDF se pose sous son nom', t1 ? t1.suggestedFilename() : '(rien)');
-  verifier(ctx.pages().length === 1, 'sans nouvel onglet');
-  verifier(!(await page.$('.modale-corps')), 'sans ouvrir la fiche');
-  verifier(!(await page.$('[data-voir], [data-voir-piece], .feuille--apercu')), 'aucun aperçu');
-
-  console.log('\n== La fiche : celle de « Devis et factures »');
+  verifier(ctx.pages().length === 1 && !(await page.$('[data-voir], [data-voir-piece], .feuille--apercu')), 'sans nouvel onglet, sans aperçu');
   await page.click('[data-action="ouvrir"][data-id="f-doc-ttc"]');
   await page.waitForSelector('.modale-corps', { timeout: 10000 }); await pause(400);
   const fiche = await page.textContent('.voile');
   verifier(/Facture F-DOC-TTC/.test(fiche) && /Hors taxes/.test(fiche) && /TTC/.test(fiche), 'la fiche de la facture s ouvre, HT et TTC');
-  verifier(Boolean(await page.$('[data-telecharger-piece]')) && Boolean(await page.$('[data-declarer]')), 'avec « Télécharger le PDF » et « J ai réglé cette facture »');
   await page.keyboard.press('Escape'); await pause(500);
   verifier(erreurs.length === 0, `aucune erreur de page ${erreurs.join(' | ')}`);
 
@@ -172,15 +151,12 @@ const nettoyer = async () => { for (const c of PIECES) await retirer(c); };
   const erreursLea = []; pageLea.on('pageerror', (e) => erreursLea.push(e.message.slice(0, 160)));
   try {
     await connecter(pageLea, 'lea.essai@exemple.test');
-    await pageLea.evaluate(() => { location.hash = '#/documents'; });
+    await pageLea.evaluate(() => { location.hash = '#/fichiers?projet=boutique'; });
     await pageLea.waitForSelector('#recherche-doc', { timeout: 20000 }); await pause(1500);
     const rl = await releverPage(pageLea);
-    verifier(rl.pieces.length === 0, 'aucune pièce comptable sur sa page', rl.pieces.join(','));
-    verifier(!/F-2026-030|Acompte cadrage/.test(rl.texte), 'la facture de Boutique n apparaît nulle part');
-    verifier(!rl.genres.some((g) => ['factures', 'devis', 'avoirs'].includes(g)), 'pas de filtre Factures, Devis ou Avoirs', rl.genres.join(','));
-    verifier(!/devis|factures/i.test((await pageLea.textContent('.page .chapo')) || ''), 'le chapeau ne lui parle pas de devis ni de factures');
-    verifier(rl.badge === rl.fichiers.length, 'son badge compte ses fichiers seuls', `badge ${rl.badge}, fichiers ${rl.fichiers.length}`);
-    verifier(!(await pageLea.$('.lat-lien[data-chemin="/finances"]')), 'et l entrée « Devis et factures » lui reste cachée');
+    verifier(rl.pieces.length === 0 && !/F-2026-030|Acompte cadrage/.test(rl.texte), 'aucune pièce comptable sur sa page Fichiers', rl.pieces.join(','));
+    verifier(rl.badge === rl.fichiers.length, 'son chiffre compte ses fichiers seuls', `badge ${rl.badge}, fichiers ${rl.fichiers.length}`);
+    verifier(!(await pageLea.$('.lat-lien[data-chemin="/finances"]')), 'et l entrée « Devis et factures » n est pas dans son arbre');
     verifier(!/\bnull\b|\bundefined\b/.test(rl.texte), 'jamais « null » ni « undefined »');
     verifier(erreursLea.length === 0, `aucune erreur de page ${erreursLea.join(' | ')}`);
   } finally {

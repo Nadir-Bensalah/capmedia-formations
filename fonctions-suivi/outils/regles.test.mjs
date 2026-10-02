@@ -175,6 +175,13 @@ await doit('Camille écrit son profil', setDoc(doc(camille(), `profils/${CAMILLE
 await refuse("Camille n'écrit pas le profil de Léa", setDoc(doc(camille(), `profils/${LEA}`), { nom: 'x' }));
 await doit('Camille consigne ses premiers pas dans son profil', setDoc(doc(camille(), `profils/${CAMILLE}`), { accueil: new Date() }, { merge: true }));
 await refuse('mais pas n importe quoi à la place d une date', setDoc(doc(camille(), `profils/${CAMILLE}`), { accueil: 'oui' }, { merge: true }));
+/* Le pavé « En attente de vous » replié ou fermé (ménage du 02/10/2026). */
+await doit('Camille ferme le pavé de son accueil', setDoc(doc(camille(), `profils/${CAMILLE}`), { pavesAttente: { accueil: 'ferme' } }, { merge: true }));
+await doit('et replie celui d un projet', setDoc(doc(camille(), `profils/${CAMILLE}`), { pavesAttente: { projets: { atelier: 'replie' } } }, { merge: true }));
+await refuse('mais pas un état inventé', setDoc(doc(camille(), `profils/${CAMILLE}`), { pavesAttente: { accueil: 'cache' } }, { merge: true }));
+await refuse('ni une autre clé dans le choix', setDoc(doc(camille(), `profils/${CAMILLE}`), { pavesAttente: { role: 'admin' } }, { merge: true }));
+await refuse('ni autre chose qu une carte', setDoc(doc(camille(), `profils/${CAMILLE}`), { pavesAttente: 'ferme' }, { merge: true }));
+await refuse("Camille ne range pas le pavé de Léa", setDoc(doc(camille(), `profils/${LEA}`), { pavesAttente: { accueil: 'ferme' } }, { merge: true }));
 await doit('Léa décrit un nouveau projet', addDoc(collection(lea(), 'demandesProjet'), { organisation: 'boutique', par: { uid: LEA, nom: 'Léa', email: 'lea.essai@exemple.test' }, titre: 'Appli', idee: 'x', objectifs: '', type: 'autre', plateformes: [], budget: '', delai: '', description: '', fonctionnalites: '', exemples: '', liens: '', pieces: [], statut: 'nouvelle', projet: null, cree: serverTimestamp(), maj: serverTimestamp() }));
 await refuse("Camille ne lit pas la demande de projet de Léa", getDoc(doc(camille(), 'demandesProjet/dp1')));
 

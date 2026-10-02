@@ -13,6 +13,7 @@ import { icone, ligne, vide, squelette, titrePage, sur, modale, toast, valider, 
 import * as magasin from '../magasin.js';
 import { K, G, agreger, reunionAVenir, ecrire } from '../donnees.js';
 import { filAriane } from '../coquille.js';
+import { courant } from '../routeur.js';
 import { editer } from './editeurs.js';
 
 const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
@@ -448,7 +449,7 @@ export const brancherCalendrier = (sortie, env, lire) => {
       return ouvrirDetail(el.dataset.evt);
     }
     if (el.dataset.ics) return agenda(el.dataset.ics);
-    if (el.dataset.demanderRdv !== undefined) return demanderRendezVous(env, { date: el.dataset.demanderRdv });
+    if (el.dataset.demanderRdv !== undefined) return demanderRendezVous(env, { date: el.dataset.demanderRdv, pid: String((courant().requete || {}).projet || '') });
     if (el.dataset.action === 'detail') return ouvrirDetail(el.dataset.evt);
     return null;
   });
@@ -494,6 +495,10 @@ export const vue = async (ctx, env) => {
     etat.evenements = evenementsDe(session, {
       projets, reunions: agreger(session, G.reunions), jalons, taches: agreger(session, G.taches), documents: agreger(session, G.documents), releases: agreger(session, G.releases), validations: agreger(session, G.validations), tickets: agreger(session, G.tickets),
     });
+    /* Arrivé par l'arbre d'un projet (?projet=<p>) : le calendrier de ce
+       projet seulement. */
+    const filtre = !equipe && ctx.requete && ctx.requete.projet ? ctx.requete.projet : '';
+    if (filtre) etat.evenements = etat.evenements.filter((e) => !e.pid || e.pid === filtre);
     const evenements = etat.evenements;
     const aVenir = evenements.filter((e) => e.aVenir).slice(0, 12);
     const reunionsAVenir = evenements.filter((e) => e.reunion && e.aVenir);

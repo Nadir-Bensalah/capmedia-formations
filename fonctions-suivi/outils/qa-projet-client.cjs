@@ -81,10 +81,11 @@ const remettre = async () => {
   const tenue = await page.$eval('#tenue-delais', (el) => el.textContent).catch(() => '');
   verifier(/Aucune date de livraison n'est fixée pour l'instant/.test(tenue), 'la section « Tenue des délais » reste et dit qu aucune date n est fixée', tenue.trim().slice(0, 120));
   verifier((await page.$$('a[data-partie]')).length > 0, 'les cartes « Les parties du projet » mènent à la brique');
-  const onglets = await page.$$eval('#onglets-projet .onglet', (els) => els.map((e) => e.textContent.trim()));
+  /* Les sections du projet sont dans son arbre, dans le rail (02/10/2026). */
+  const onglets = await page.$$eval('#lat-corps .lat-arbre[data-arbre="atelier"] .lat-branche .tronque', (els) => els.map((e) => e.textContent.trim()));
   const scenarios = ((await lire('projets/atelier/scenarios?pageSize=5')).documents || []).length;
   const campagnes = ((await lire('projets/atelier/campagnes?pageSize=5')).documents || []).length;
-  verifier(onglets.some((t) => /^Tests/.test(t)) === Boolean(scenarios || campagnes), `l onglet Tests ${scenarios || campagnes ? 'est là, des scénarios existent' : 'est absent, aucun scénario ni campagne'}`, onglets.join(' | '));
+  verifier(onglets.some((t) => /^Tests/.test(t)) === Boolean(scenarios || campagnes), `l entrée Tests ${scenarios || campagnes ? 'est là, des scénarios existent' : 'est absente, aucun scénario ni campagne'}`, onglets.join(' | '));
 
   console.log('\n== 17 : « Une question sur cette étape » ouvre la bulle, sans quitter la page');
   await page.evaluate(() => { location.hash = '#/projets/atelier/etapes'; });

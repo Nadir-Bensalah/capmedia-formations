@@ -89,6 +89,9 @@ export const vue = async (ctx, env) => {
     /* Il reste plus ancien tant que la fenêtre en direct est pleine et que
        le début de la conversation n'a pas été atteint. */
     const resteAvant = !historique.debutAtteint && (historique.messages.length > 0 || recents.length >= FENETRE_MESSAGES);
+    /* La liste des conversations, à gauche : chez le client qui arrive par
+       l'arbre d'un projet (#/messages/<p>), elle répéterait le rail. */
+    const avecListe = liste.length > 1 && (equipe || !ctx.params.pid);
     const brouillon = composeur ? composeur.value : brouillonAdresse;
     const lu = luJusqua();
     const miens = messages.filter((m) => m.de && m.de.uid === uid);
@@ -108,8 +111,8 @@ export const vue = async (ctx, env) => {
 
     sortie.innerHTML = `<div class="page">
       <div class="page-tete"><div><h1>Messages</h1><p class="chapo">${equipe ? 'Une conversation par projet, avec le client.' : 'Une conversation par projet, directement avec Capmedia. Pour une anomalie ou une demande précise, préférez une demande : elle est suivie jusqu\'au bout.'}</p></div></div>
-      ${liste.length ? `<div class="grille" style="grid-template-columns:${liste.length > 1 ? 'minmax(0,280px) minmax(0,1fr)' : 'minmax(0,1fr)'}">
-        ${liste.length > 1 ? `<div class="liste" style="align-self:start">${liste.map((p) => { const nb = nonLusProjet(messagesDuProjet(p.id), profil, p.id, uid); const dernier = messagesDuProjet(p.id).slice(-1)[0]; return `
+      ${liste.length ? `<div class="grille" style="grid-template-columns:${avecListe ? 'minmax(0,280px) minmax(0,1fr)' : 'minmax(0,1fr)'}">
+        ${avecListe ? `<div class="liste" style="align-self:start">${liste.map((p) => { const nb = nonLusProjet(messagesDuProjet(p.id), profil, p.id, uid); const dernier = messagesDuProjet(p.id).slice(-1)[0]; return `
           <a class="ligne${p.id === pid ? ' actif' : ''}${nb ? ' non-lu' : ''}" href="#/messages/${echapper(p.id)}" style="${p.id === pid ? 'background:var(--fond-2)' : ''}">
             ${avatarProjet(p)}
             <span class="ligne-corps"><span class="ligne-titre">${echapper(p.nom)}</span><span class="ligne-sous tronque" style="display:block">${dernier ? echapper(`${dernier.de && dernier.de.cote === 'equipe' ? 'Capmedia' : (dernier.de || {}).nom || ''} : ${String(dernier.texte || '').trim() || ((dernier.pieces || []).length > 1 ? `${dernier.pieces.length} pièces jointes` : 'Pièce jointe')}`) : 'Aucun message'}</span></span>

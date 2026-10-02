@@ -7,7 +7,7 @@
    l'accusé « Lu le JJ/MM à HH:MM », « En faire une demande » seulement sur
    les messages d'en face, des pièces sans texte ; « Télécharger » qui
    télécharge sous le nom du fichier, la version affichée, le libellé de
-   catégorie unique, retirer son propre fichier, le tri des Documents ; la
+   catégorie unique, retirer son propre fichier, le tri des Fichiers ; la
    fiche d'anomalie qui propose « En faire une demande » ; les
    notifications d'anomalie et de campagne ; la validation « Bon pour
    sortie » créée par le serveur à la clôture d'une campagne.
@@ -170,6 +170,7 @@ let page = null;
   verifier(await page.$eval('#fil', (el) => { const m = [...el.querySelectorAll('.message--moi')].pop(); return Boolean(m) && !m.querySelector('.message-corps') && Boolean(m.querySelector('.pieces .piece')); }), 'l écran montre les pièces seules, sans bulle de texte');
 
   console.log('\n== Les fichiers : télécharger, la version, le libellé, retirer le sien');
+  /* L'ancienne adresse de l'onglet Fichiers mène à la page Fichiers du projet. */
   await aller(page, '#/projets/atelier/fichiers');
   await page.waitForSelector('.fichier[data-id="qa-mien"]', { timeout: 15000 });
   const carte = await page.textContent('.fichier[data-id="qa-mien"]');
@@ -194,8 +195,8 @@ let page = null;
   await pause(1200);
   verifier(!(await page.$('.fichier[data-id="qa-mien"]')), 'la carte a disparu de l écran');
 
-  console.log('\n== Les Documents : le tri');
-  await aller(page, '#/documents');
+  console.log('\n== Les Fichiers : le tri');
+  await aller(page, '#/fichiers?projet=atelier');
   await page.waitForSelector('#tri-doc', { timeout: 15000 });
   verifier(true, 'un tri « Plus récents / Plus anciens / Nom »');
   await page.selectOption('#tri-doc', 'nom');
