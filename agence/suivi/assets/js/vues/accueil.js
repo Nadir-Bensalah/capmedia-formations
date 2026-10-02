@@ -13,7 +13,7 @@ import { naviguer } from '../routeur.js';
 import * as magasin from '../magasin.js';
 import { K, G, agreger, enAttenteDeVous, progressionProjet, jalonCourant, prochaineReunion, resteAPayer, depuisVisite, nonLusProjet, risquesProjet, messagesDuProjet } from '../donnees.js';
 import { filAriane } from '../coquille.js';
-import { echeance } from '../noyau.js';
+import { echeance, lienReunion } from '../noyau.js';
 import { monterNotesClient } from './notes-client.js';
 
 const iconeActivite = {
@@ -235,7 +235,7 @@ export const vue = async (ctx, env) => {
             ${reunion ? `
               <p class="t-titre-3" style="margin-top:8px">${echapper(reunion.titre)}</p>
               <p class="t-petit t-2" style="margin-top:4px">${echapper(dateHeure(reunion.date))}${reunion.duree ? ` · ${reunion.duree} min` : ''}</p>
-              <div class="rang" style="margin-top:12px;gap:6px">${reunion.lien ? `<a class="btn btn-secondaire btn-petit" href="${echapper(reunion.lien)}" target="_blank" rel="noopener">${icone('video')} Rejoindre</a>` : ''}<button class="btn btn-doux btn-petit" type="button" data-ics-reunion="${echapper(reunion.id)}" data-astuce="Le fichier .ics de cette réunion">${icone('calendrier')} Ajouter à mon agenda</button></div>
+              <div class="rang" style="margin-top:12px;gap:6px">${lienReunion(reunion) ? `<a class="btn btn-secondaire btn-petit" href="${echapper(lienReunion(reunion))}" target="_blank" rel="noopener">${icone('video')} Rejoindre</a>` : ''}<button class="btn btn-doux btn-petit" type="button" data-ics-reunion="${echapper(reunion.id)}" data-astuce="Le fichier .ics de cette réunion">${icone('calendrier')} Ajouter à mon agenda</button></div>
               <p style="margin-top:10px"><a class="t-petit" href="#/projets/${echapper(reunion.projet)}/reunions/${echapper(reunion.id)}">Ordre du jour et historique</a></p>`
             : `<p class="t-petit t-2" style="margin-top:8px">Aucune réunion programmée.</p><p style="margin-top:8px"><button class="lien t-petit" type="button" data-raccourci="creneau" style="background:none;border:0;padding:0;cursor:pointer">Demander un créneau</button></p>`}
           </div>

@@ -14,6 +14,7 @@
    Banc : émulateurs, site local, semer-suivi. */
 require('./lib/garde-banc.cjs');
 const { chromium } = require('@playwright/test');
+const { jetonPour } = require('./lib/session-banc.cjs');
 const PROJET = 'capmedia-1f90d'; const SITE = 'http://127.0.0.1:8787';
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 const prop = { Authorization: 'Bearer owner' };
@@ -321,6 +322,32 @@ const nettoyer = async () => {
   verifier(await attendre(async () => !(await page.$('#cal-forme-rdv')), 8000), 'le formulaire se referme');
   await remettre();
   verifier(await attendre(async () => !(await page.$('[data-raccourci="creneau"]')) && /Point hebdomadaire|Point calendrier du banc/.test(await page.textContent('.page')), 15000), 'les réunions remises à leur date, la carte reprend la prochaine réunion');
+
+  console.log('\n== Un lien de réunion hors https:// ne devient jamais un lien cliquable');
+  const LIEN_BON = 'https://meet.google.com/cal-banc-xyz';
+  const jC = await jetonPour('camille.essai@exemple.test'); const jL = await jetonPour('lea.essai@exemple.test');
+  const majLien = async (entetes, lien) => (await fetch(`${bdd('reunions/re-cal')}?updateMask.fieldPaths=lien`, { method: 'PATCH', headers: { ...entetes, 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: { lien: S(lien) } }) })).status;
+  verifier(await majLien({ Authorization: `Bearer ${jC}` }, 'javascript:alert(1)') === 403, 'la cliente ne change pas le lien d une réunion (403, vrai jeton)');
+  verifier((await fetch(bdd('reunions/re-cal'), { headers: { Authorization: `Bearer ${jL}` } })).status === 403, 'une cliente d un autre projet ne lit pas la réunion (403)');
+  /* Les « Rejoindre » de trois écrans : la fenêtre du jour, la liste des
+     réunions du projet, la fiche de la réunion. */
+  const rejoindre = async () => page.$$eval('a', (as) => as.filter((a) => /Rejoindre/.test(a.textContent)).map((a) => a.getAttribute('href') || ''));
+  const ecrans = async () => {
+    const vus = [];
+    await aller(page, '#/calendrier', '.calendrier'); await cliquerJour(page, ISO2); vus.push(...await rejoindre()); await fermerTout(page);
+    await aller(page, '#/projets/atelier/reunions', '.page'); vus.push(...await rejoindre());
+    await aller(page, '#/projets/atelier/reunions/re-cal', '.page'); await pause(800); vus.push(...await rejoindre()); await fermerTout(page);
+    return vus;
+  };
+  for (const piege of ['javascript:alert(document.domain)', 'data:text/html,<script>alert(1)</script>', 'http://meet.exemple.test/en-clair', ' https://meet.google.com/espace-devant']) {
+    await majLien(prop, piege); await pause(1200);
+    const vus = await ecrans();
+    const sur = piege.startsWith(' ') ? vus.every((h) => /^https:\/\//.test(h)) : !vus.some((h) => h === piege || /^(javascript|data|http):/i.test(h));
+    verifier(sur && vus.every((h) => /^https:\/\/\S+$/.test(h)), `lien « ${piege.trim().slice(0, 24)} » : aucun « Rejoindre » ne le porte, seuls des https:// restent`, vus.join(' , '));
+  }
+  await majLien(prop, LIEN_BON); await pause(1200);
+  const bons = await ecrans();
+  verifier(bons.filter((h) => h === LIEN_BON).length >= 3, 'le lien https:// revient sur les trois écrans', bons.join(' , '));
 
   verifier(erreurs.length === 0, `aucune erreur de page ${erreurs.join(' | ')}`);
   await nav.close();

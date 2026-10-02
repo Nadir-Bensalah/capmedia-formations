@@ -20,7 +20,7 @@
 
 import {
   echapper, dateCourte, dateHeure, pluriel, montantHT, montantTTC, enMarkdown, enParagraphes,
-  FAMILLES_SUGGESTION, STATUTS_SUGGESTION, PUBLICATIONS_SUGGESTION, SUGGESTION_CLIENT_AGIT, PLATEFORMES, STATUTS_DEVIS,
+  estResponsable, OUVERTS, FAMILLES_SUGGESTION, STATUTS_SUGGESTION, PUBLICATIONS_SUGGESTION, SUGGESTION_CLIENT_AGIT, PLATEFORMES, STATUTS_DEVIS,
 } from '../noyau.js';
 import { icone, pastille, pucePlateforme, vide, fait, modale, confirmer, toast, sur, menu, agir, encart, brancherPieces } from '../ui.js';
 import { ecrire } from '../donnees.js';
@@ -33,6 +33,20 @@ const ouvrirBulle = (pid, texte) => document.dispatchEvent(new CustomEvent('bull
 /* --- Ce qu'on lit ------------------------------------------------------- */
 
 export const estPubliee = (s) => Boolean(s) && s.publication === 'publiee';
+
+/** La réponse engage le client : elle est au responsable du projet. À
+    défaut de responsable sur le projet, un membre répond tant que la
+    réponse est vide ou déjà la sienne. Même règle que firestore.rules. */
+export const peutRepondre = (s, { pid, env }) => {
+  if (!s || env.role === 'equipe' || !SUGGESTION_CLIENT_AGIT.includes(s.statut || 'proposee')) return false;
+  const uid = env.session.utilisateur.uid;
+  const projet = (env.session.projets || []).find((p) => p.id === pid);
+  if (!projet) return false;
+  const roles = projet.roles || {};
+  if (roles[uid] === 'responsable') return true;
+  if (Object.values(roles).includes('responsable')) return false;
+  return !s.reponse || s.reponse.par === uid;
+};
 const parOrdre = (a, b) => (a.ordre || 0) - (b.ordre || 0) || String(a.titre || '').localeCompare(String(b.titre || ''));
 export const trierSuggestions = (liste = []) => liste.slice().sort(parOrdre);
 
@@ -55,13 +69,16 @@ export const suggestionALaUne = (liste = []) => {
 /* Le prix d'une suggestion, dit avec sa mention. Sans TVA, un seul chiffre. */
 const ttcDe = (s) => Math.round(s.prix * (1 + (Number(s.tva) || 0) / 100) * 100) / 100;
 const aUnPrix = (s) => typeof s.prix === 'number' && Number.isFinite(s.prix);
-const prixHtml = (s) => {
-  if (!aUnPrix(s)) return '';
+/* Le prix est de la finance : l'équipe et le responsable du projet le
+   lisent, un collaborateur non (comme le devis joint). */
+const voitPrix = ({ pid, env }) => env.role === 'equipe' || estResponsable(env.session, pid);
+const prixHtml = (s, c) => {
+  if (!aUnPrix(s) || !voitPrix(c)) return '';
   if (!(Number(s.tva) || 0)) return echapper(montantHT(s.prix));
   return `${echapper(montantHT(s.prix))} <span class="t-3">· ${echapper(montantTTC(ttcDe(s)))}</span>`;
 };
-const prixTexte = (s) => {
-  if (!aUnPrix(s)) return '';
+const prixTexte = (s, c) => {
+  if (!aUnPrix(s) || !voitPrix(c)) return '';
   return (Number(s.tva) || 0) ? `${montantHT(s.prix)} · ${montantTTC(ttcDe(s))}` : montantHT(s.prix);
 };
 
@@ -101,7 +118,7 @@ const carte = (s, d, { pid, env }) => {
   const uid = env.session.utilisateur.uid;
   const neuve = !equipe && !((s.vues || {})[uid]);
   const plateformes = (s.plateformes || []).filter((p) => PLATEFORMES[p]);
-  const peutAgir = !equipe && SUGGESTION_CLIENT_AGIT.includes(s.statut || 'proposee');
+  const peutAgir = peutRepondre(s, { pid, env });
   const interesse = Boolean(s.reponse && s.reponse.choix === 'interesse');
   return `<article class="sugg${s.statut === 'retiree' ? ' sugg--retiree' : ''}${!estPubliee(s) ? ' sugg--brouillon' : ''}" data-suggestion="${echapper(s.id)}" data-famille="${echapper(s.famille || 'developpement')}">
     ${visuelHtml(s)}
@@ -114,7 +131,7 @@ const carte = (s, d, { pid, env }) => {
       <div class="rang sugg-faits">
         ${plateformes.map((p) => pucePlateforme(p, { court: true })).join('')}
         ${s.duree ? `<span class="puce"><i></i>${echapper(s.duree)}</span>` : ''}
-        ${prixHtml(s) ? `<span class="sugg-prix">${prixHtml(s)}</span>` : ''}
+        ${prixHtml(s, { pid, env }) ? `<span class="sugg-prix">${prixHtml(s, { pid, env })}</span>` : ''}
         ${s.devis ? '<span class="puce puce--bleu"><i></i>Devis joint</span>' : ''}
         ${equipe && s.aLaUne ? '<span class="etiquette">À la une</span>' : ''}
       </div>
@@ -136,8 +153,11 @@ const carte = (s, d, { pid, env }) => {
 export const ongletSuggestions = (d, { pid, env }) => {
   const equipe = env.role === 'equipe';
   const toutes = trierSuggestions(d.suggestions || []).filter((s) => equipe || estPubliee(s));
-  const filtre = filtreCourant(pid);
   const presentes = Object.keys(PLATEFORMES).filter((p) => toutes.some((s) => (s.plateformes || []).includes(p)));
+  /* Un filtre retenu qui n'a plus de bouton (la barre disparaît sous deux
+     plateformes) ne doit pas cacher des suggestions sans moyen de l'ôter. */
+  const f = filtreCourant(pid);
+  const filtre = presentes.length > 1 && presentes.includes(f) ? f : '';
   const liste = toutes.filter((s) => !filtre || !(s.plateformes || []).length || (s.plateformes || []).includes(filtre));
   const groupes = Object.entries(FAMILLES_SUGGESTION).map(([cle, f]) => ({ cle, f, items: liste.filter((s) => (s.famille || 'developpement') === cle) }));
   const aLEtude = toutes.filter((s) => s.statut === 'a-l-etude');
@@ -185,7 +205,7 @@ export const apercuSuggestionHtml = (d, { pid, env }) => {
         <p class="surtitre">${echapper((FAMILLES_SUGGESTION[s.famille] || FAMILLES_SUGGESTION.developpement).court)}</p>
         <button class="sugg-titre" type="button" data-action="ouvrir-suggestion" data-id="${echapper(s.id)}" style="margin-top:4px">${echapper(s.titre)}</button>
         ${s.resume ? `<p class="sugg-resume">${echapper(s.resume)}</p>` : ''}
-        <div class="rang sugg-faits">${(s.plateformes || []).filter((p) => PLATEFORMES[p]).map((p) => pucePlateforme(p, { court: true })).join('')}${prixHtml(s) ? `<span class="sugg-prix">${prixHtml(s)}</span>` : ''}${pastilleEtat(s, false)}</div>
+        <div class="rang sugg-faits">${(s.plateformes || []).filter((p) => PLATEFORMES[p]).map((p) => pucePlateforme(p, { court: true })).join('')}${prixHtml(s, { pid, env }) ? `<span class="sugg-prix">${prixHtml(s, { pid, env })}</span>` : ''}${pastilleEtat(s, false)}</div>
         <div class="rang sugg-pied"><a class="btn btn-secondaire btn-petit" href="#/projets/${echapper(pid)}/suggestions">${icone('ampoule')} Lire la suggestion</a></div>
       </div>
     </article>
@@ -200,8 +220,9 @@ export const ouvrirSuggestion = (s, d, { pid, env }) => {
   const equipe = env.role === 'equipe';
   const devis = devisDe(s, d);
   const plateformes = (s.plateformes || []).filter((p) => PLATEFORMES[p]);
-  const peutAgir = !equipe && SUGGESTION_CLIENT_AGIT.includes(s.statut || 'proposee');
+  const peutAgir = peutRepondre(s, { pid, env });
   const r = s.reponse || {};
+  const deLui = !equipe && r.par === env.session.utilisateur.uid;
   const interesse = r.choix === 'interesse';
   const decline = r.choix === 'pas-interesse';
   const demande = r.demande ? (d.tickets || []).find((t) => t.id === r.demande) : null;
@@ -221,21 +242,22 @@ export const ouvrirSuggestion = (s, d, { pid, env }) => {
       ${s.benefice ? `<div style="margin-top:20px">${encart(`<strong>Ce que vous y gagnez</strong><div class="prose" style="margin-top:6px">${enParagraphes(s.benefice)}</div>`, 'ok', 'trend')}</div>` : ''}
       <dl class="faits" style="margin-top:20px">
         ${fait('Durée estimée', echapper(s.duree || ''))}
-        ${fait('Prix', prixTexte(s) ? echapper(prixTexte(s)) : '')}
+        ${fait('Prix', prixTexte(s, { pid, env }) ? echapper(prixTexte(s, { pid, env })) : '')}
         ${fait('Devis', devis ? `<a href="#/finances/${echapper(devis.id)}" data-voir-devis>${echapper(devis.numero || 'Devis')}</a>${devis.libelle ? ` <span class="t-3">· ${echapper(devis.libelle)}</span>` : ''} ${pastille(STATUTS_DEVIS, devis.statut || 'brouillon')}` : (s.devis && !equipe ? '<span class="t-3">Un devis accompagne cette suggestion : le responsable du projet le trouve dans « Devis et factures ».</span>' : ''))}
-        ${fait(equipe ? 'Côté client' : 'Votre réponse', r.choix ? (interesse
-    ? `${equipe ? `${echapper(r.nom || 'Le client')} s'y intéresse` : 'Ça vous intéresse'}${r.le ? ` depuis le ${echapper(dateCourte(r.le))}` : ''}${demande ? ` · <a href="#/projets/${echapper(pid)}/demandes/${echapper(demande.id)}">${echapper(demande.numero || 'voir la demande')}</a>` : ''}`
-    : `${equipe ? `${echapper(r.nom || 'Le client')} a décliné` : 'Pas pour le moment'}${r.le ? ` · ${echapper(dateHeure(r.le))}` : ''}${r.raison ? `<br><span class="t-3">« ${echapper(r.raison)} »</span>` : ''}`) : '')}
+        ${fait(equipe ? 'Côté client' : (deLui ? 'Votre réponse' : 'Réponse du projet'), r.choix ? (interesse
+    ? `${!deLui ? `${echapper(r.nom || 'Le client')} s'y intéresse` : 'Ça vous intéresse'}${r.le ? ` depuis le ${echapper(dateCourte(r.le))}` : ''}${demande ? ` · <a href="#/projets/${echapper(pid)}/demandes/${echapper(demande.id)}">${echapper(demande.numero || 'voir la demande')}</a>` : ''}`
+    : `${!deLui ? `${echapper(r.nom || 'Le client')} a décliné` : 'Pas pour le moment'}${r.le ? ` · ${echapper(dateHeure(r.le))}` : ''}${r.raison ? `<br><span class="t-3">« ${echapper(r.raison)} »</span>` : ''}`) : '')}
         ${equipe ? fait('Feuille de route', jalon ? `<a href="#/projets/${echapper(pid)}/etapes">${echapper(jalon.titre)}</a>` : '') : ''}
         ${equipe ? fait('Publiée le', s.publieLe ? echapper(dateCourte(s.publieLe)) : '') : ''}
         ${equipe ? fait('Vue par le client', nbVues ? echapper(pluriel(nbVues, 'personne')) : '') : ''}
       </dl>
+      ${!equipe && !peutAgir && SUGGESTION_CLIENT_AGIT.includes(s.statut || 'proposee') ? `<p class="t-petit t-3" style="margin-top:16px" data-reponse-reservee>C'est le responsable du projet qui répond à cette suggestion. Une question ? Posez-la.</p>` : ''}
       ${!equipe && s.statut === 'acceptee' ? `<div style="margin-top:20px">${encart('<strong>C\'est décidé.</strong> Cette amélioration a sa place dans la feuille de route : vous la suivez comme les autres étapes.', 'ok', 'check')}</div>` : ''}
       ${!equipe && s.statut === 'livree' ? `<div style="margin-top:20px">${encart('<strong>C\'est dans votre application.</strong> Cette amélioration est livrée.', 'ok', 'check')}</div>` : ''}
       ${!equipe && interesse && s.statut === 'a-l-etude' ? `<div style="margin-top:20px">${encart(`<strong>Nous revenons vers vous.</strong> Une demande est ouverte à votre nom${demande ? ` (<a href="#/projets/${echapper(pid)}/demandes/${echapper(demande.id)}">${echapper(demande.numero || 'la voir')}</a>)` : ''} : c'est là que la suite se passe, devis compris.`, 'info', 'info')}</div>` : ''}`,
     pied: equipe
       ? `<button class="btn btn-danger" type="button" data-suppr>Supprimer</button><span class="pousse"></span><button class="btn btn-secondaire" type="button" data-fermer>Fermer</button><button class="btn btn-principal" type="button" data-editer>Modifier</button>`
-      : `${peutAgir && !decline ? '<button class="btn btn-doux" type="button" data-pas-interesse>Pas intéressé</button>' : ''}${peutAgir && decline ? '<button class="btn btn-doux" type="button" data-revenir>Revenir sur mon choix</button>' : ''}<button class="btn btn-secondaire" type="button" data-question>${icone('messages')} Poser une question</button><span class="pousse"></span>${devis && devis.fichier && devis.fichier.chemin ? `<button class="btn btn-secondaire" type="button" data-telecharger-devis>${icone('telecharger')} Le devis</button>` : ''}${peutAgir && !interesse ? `<button class="btn btn-principal" type="button" data-interesse>${icone('check')} Ça m'intéresse</button>` : '<button class="btn btn-principal" type="button" data-fermer>Fermer</button>'}`,
+      : `${peutAgir && !decline && !interesse ? '<button class="btn btn-doux" type="button" data-pas-interesse>Pas intéressé</button>' : ''}${peutAgir && decline ? '<button class="btn btn-doux" type="button" data-revenir>Revenir sur mon choix</button>' : ''}<button class="btn btn-secondaire" type="button" data-question>${icone('messages')} Poser une question</button><span class="pousse"></span>${devis && devis.fichier && devis.fichier.chemin ? `<button class="btn btn-secondaire" type="button" data-telecharger-devis>${icone('telecharger')} Le devis</button>` : ''}${peutAgir && !interesse ? `<button class="btn btn-principal" type="button" data-interesse>${icone('check')} Ça m'intéresse</button>` : '<button class="btn btn-principal" type="button" data-fermer>Fermer</button>'}`,
   });
   brancherPieces(m.el);
   sur(m.el, 'click', '[data-editer]', () => { m.fermer(); editer('suggestion', env, { pid, fiche: s }); });
@@ -265,9 +287,13 @@ const interesser = async (s, d, { pid, env }, bouton) => {
   if (!ok) return false;
   const plateforme = (s.plateformes || []).filter((p) => PLATEFORMES[p]);
   const composant = plateforme.length === 1 ? ((d.composants || []).find((c) => c.type === plateforme[0]) || {}).id || '' : '';
-  const description = [`Je suis intéressé(e) par la suggestion « ${s.titre} ».`, s.resume || '', prixTexte(s) ? `Prix indiqué : ${prixTexte(s)}.` : ''].filter(Boolean).join('\n\n').slice(0, 6000);
+  const description = [`Je suis intéressé(e) par la suggestion « ${s.titre} ».`, s.resume || '', prixTexte(s, { pid, env }) ? `Prix indiqué : ${prixTexte(s, { pid, env })}.` : ''].filter(Boolean).join('\n\n').slice(0, 6000);
+  /* Une demande encore ouverte, déjà née de cette suggestion (un premier
+     « Ça m'intéresse » dont la réponse a été effacée), est reprise : jamais
+     une seconde. */
+  const deja = (d.tickets || []).find((t) => t.suggestion === s.id && OUVERTS.includes(t.statut));
   return agir(bouton, async () => {
-    const tid = await ecrire.creerDemande(env.session, pid, {
+    const tid = deja ? deja.id : await ecrire.creerDemande(env.session, pid, {
       titre: `Suggestion : ${s.titre}`.slice(0, 120), description,
       type: (s.famille || 'developpement') === 'developpement' ? 'fonctionnalite' : 'demande',
       urgence: 'important', plateforme: plateforme.length === 1 ? plateforme[0] : '', composant, suggestion: s.id,
@@ -342,7 +368,7 @@ export const gesteSuggestion = async (el, d, { pid, env }) => {
   const s = (d.suggestions || []).find((x) => x.id === el.dataset.id);
   if (!s) return true;
   if (action === 'ouvrir-suggestion') { ouvrirSuggestion(s, d, { pid, env }); return true; }
-  if (action === 'suggestion-interesse') { await interesser(s, d, { pid, env }, el); return true; }
+  if (action === 'suggestion-interesse') { if (peutRepondre(s, { pid, env })) await interesser(s, d, { pid, env }, el); return true; }
   if (!equipe) return true;
   if (action === 'suggestion-publier') {
     const oui = !estPubliee(s);

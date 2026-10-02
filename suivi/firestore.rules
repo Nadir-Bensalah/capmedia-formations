@@ -1512,9 +1512,21 @@ service cloud.firestore {
       // droit de voir sa profondeur. Le testeur n'y a rien à faire.
       // Les suggestions d'amélioration de Capmedia. L'équipe écrit tout ;
       // le client membre ne lit que les publiées, et ne touche qu'à sa
-      // réponse (intéressé ou non, avec l'état qui va avec) et à sa marque
-      // « vue » : jamais le prix, le texte ni la publication.
+      // marque « vue » ; la réponse (intéressé ou non, avec l'état qui va
+      // avec) engage le client : elle est au responsable du projet. Jamais
+      // le prix, le texte ni la publication.
       match /suggestions/{suggestionId} {
+        // Qui peut poser ou changer la réponse : le responsable du projet.
+        // À défaut de responsable sur le projet, un membre, tant que la
+        // réponse est vide ou déjà la sienne : personne n'écrase la réponse
+        // d'un autre.
+        function peutRepondreSuggestion() {
+          return responsableDuProjet(projetId)
+            || (membreDuProjet(projetId)
+                && !('responsable' in ficheProjet(projetId).get('roles', {}).values())
+                && (resource.data.get('reponse', null) == null
+                    || resource.data.reponse.get('par', '') == moi()));
+        }
         function suggestionValide(d) {
           return d.keys().hasOnly(['famille', 'titre', 'resume', 'texte', 'benefice', 'plateformes', 'duree', 'prix', 'tva', 'devis', 'visuel',
                                    'statut', 'publication', 'publieLe', 'ordre', 'aLaUne', 'reponse', 'jalon', 'vues', 'cree', 'maj'])
@@ -1545,10 +1557,12 @@ service cloud.firestore {
         allow update: if membreDuProjet(projetId)
           && resource.data.publication == 'publiee'
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['vues'])
-          && request.resource.data.vues.diff(resource.data.vues).affectedKeys().hasOnly([moi()]);
-        // Le client répond : intéressé (à l'étude) ou non (déclinée), ou
-        // revient sur son choix (proposée). Rien d'autre ne change.
+          && request.resource.data.vues.diff(resource.data.vues).affectedKeys().hasOnly([moi()])
+          && request.resource.data.vues[moi()] == request.time;
+        // Le responsable répond : intéressé (à l'étude) ou non (déclinée),
+        // ou revient sur son choix (proposée). Rien d'autre ne change.
         allow update: if membreDuProjet(projetId)
+          && peutRepondreSuggestion()
           && resource.data.publication == 'publiee'
           && resource.data.statut in ['proposee', 'a-l-etude', 'refusee']
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statut', 'reponse', 'maj'])

@@ -265,12 +265,27 @@ export const monterNotesClient = (sortie, env) => {
    depuis un message de la conversation.
    ========================================================================== */
 
+/** Qui a partagé la note : le nom vient de l'annuaire des interlocuteurs
+    du projet (le miroir « personnesClient » de la fiche, ou les
+    interlocuteurs quand la page les a chargés), retrouvé par uid, comme
+    pour le coffre. Jamais du champ « nom » du document : le client
+    l'écrit lui-même et pourrait y mettre n'importe quel nom. */
+export const nomAuteurNote = (n) => {
+  if (!n || !n.uid || !n.projet) return 'Un client';
+  const projet = (magasin.lire(K.projet(n.projet)) || (magasin.lire(K.projets) || []).find((p) => p.id === n.projet) || {});
+  const trouve = [
+    ...(Array.isArray(projet.personnesClient) ? projet.personnesClient : []),
+    ...(magasin.lire(K.interlocuteurs(n.projet)) || []),
+  ].find((x) => x && x.uid === n.uid && x.nom);
+  return trouve ? trouve.nom : 'Un client';
+};
+
 export const notesPartageesHtml = (notes, { nomProjet = () => '', carte = true, limite = 8 } = {}) => {
   const liste = (notes || []).slice(0, limite);
   if (!liste.length) return '';
   const corps = liste.map((n) => `<div class="note-partagee" data-note="${echapper(n.id)}">
     <p class="note-client-texte">${avecLiens(n.texte || '')}</p>
-    <p class="t-micro t-3" style="margin-top:4px">${echapper([n.nom || 'Le client', carte ? nomProjet(n.projet) : '', dateHeure(n.maj || n.cree)].filter(Boolean).join(' · '))}</p>
+    <p class="t-micro t-3" style="margin-top:4px">${echapper([nomAuteurNote(n), carte ? nomProjet(n.projet) : '', dateHeure(n.maj || n.cree)].filter(Boolean).join(' · '))}</p>
     <p style="margin-top:6px"><button class="btn btn-doux btn-petit" type="button" data-note-demande="${echapper(n.id)}">${icone('sparkle')} En faire une demande</button></p>
   </div>`).join('');
   const reste = (notes || []).length > limite ? `<p class="t-micro t-3" style="margin-top:10px">et ${(notes || []).length - limite} de plus${carte ? ', à lire sur chaque projet' : ''}</p>` : '';
@@ -281,5 +296,5 @@ export const notesPartageesHtml = (notes, { nomProjet = () => '', carte = true, 
 /** Le geste « En faire une demande » : `lireNotes()` rend la liste du moment. Renvoie la fonction qui le retire. */
 export const gesteNoteDemande = (sortie, lireNotes) => sur(sortie, 'click', '[data-note-demande]', (el) => {
   const n = (lireNotes() || []).find((x) => x.id === el.dataset.noteDemande);
-  if (n && n.projet) demandeDepuisMessage(el, { texte: n.texte || '', de: { nom: n.nom || 'Le client' } }, n.projet);
+  if (n && n.projet) demandeDepuisMessage(el, { texte: n.texte || '', de: { nom: nomAuteurNote(n) } }, n.projet);
 });

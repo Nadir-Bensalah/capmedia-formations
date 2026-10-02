@@ -8,7 +8,7 @@
    élément et la légende sont ici.
    ========================================================================== */
 
-import { echapper, enDate, dateCourte, dateLongue, dateISO, dateHeureISO, heure, joursAvant, parDateAsc, FACTURES_DUES, libellePlateforme, pluriel, STATUTS_RELEASE } from '../noyau.js';
+import { echapper, lienReunion, enDate, dateCourte, dateLongue, dateISO, dateHeureISO, heure, joursAvant, parDateAsc, FACTURES_DUES, libellePlateforme, pluriel, STATUTS_RELEASE } from '../noyau.js';
 import { icone, ligne, vide, squelette, titrePage, sur, modale, toast, valider, obligatoire, longueurMax, agir, lireForme } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K, G, agreger, reunionAVenir, ecrire } from '../donnees.js';
@@ -47,7 +47,7 @@ export const evenementICS = (r, nomProjet = '') => {
     `DTEND:${horodateICS(fin)}`,
     `SUMMARY:${echapperICS(nomProjet ? `${r.titre || 'Réunion'} · ${nomProjet}` : (r.titre || 'Réunion'))}`,
     r.lieu ? `LOCATION:${echapperICS(r.lieu)}` : '',
-    r.lien ? `URL:${echapperICS(r.lien)}` : '',
+    lienReunion(r) ? `URL:${echapperICS(lienReunion(r))}` : '',
     description ? `DESCRIPTION:${echapperICS(description)}` : '',
     'END:VEVENT',
   ].filter(Boolean).join('\r\n');
@@ -262,7 +262,7 @@ const elementDuJour = (e, { equipe }) => `
       ${e.aFaire ? `<p class="cal-item-faire">${echapper(e.aFaire)}</p>` : ''}
       <p class="cal-item-actions">
         <a class="btn btn-secondaire btn-petit" href="#${echapper(e.chemin)}" data-fiche>${e.nature === 'rdv' ? 'Voir la demande' : 'Ouvrir la fiche'}</a>
-        ${e.reunion && e.aVenir && e.reunion.lien ? `<a class="btn btn-doux btn-petit" href="${echapper(e.reunion.lien)}" target="_blank" rel="noopener">${icone('video')} Rejoindre</a>` : ''}
+        ${e.reunion && e.aVenir && lienReunion(e.reunion) ? `<a class="btn btn-doux btn-petit" href="${echapper(lienReunion(e.reunion))}" target="_blank" rel="noopener">${icone('video')} Rejoindre</a>` : ''}
         ${e.reunion && e.aVenir ? `<button class="btn btn-doux btn-petit" type="button" data-ics="${echapper(e.id)}">${icone('calendrier')} Ajouter à mon agenda</button>` : ''}
         ${equipe && e.nature === 'rdv' ? `<button class="btn btn-principal btn-petit" type="button" data-programmer="${echapper(e.id)}">Programmer ce rendez-vous</button>` : ''}
       </p>
@@ -300,7 +300,7 @@ const ouvrirElement = (e, { equipe }) => {
   const m = modale({
     titre: e.titre, sousTitre: [e.retard ? `${e.genre} en retard` : e.genre, e.projet].filter(Boolean).join(' · '), scenario: true,
     corps: `<p class="fs-etat"><span class="cal-genre ${echapper(e.ton)}">${icone(e.icone)}${echapper(e.genre)}</span></p>${blocs}`,
-    pied: `${r && e.aVenir && r.lien ? `<a class="btn btn-secondaire" href="${echapper(r.lien)}" target="_blank" rel="noopener">${icone('video')} Rejoindre</a>` : ''}
+    pied: `${r && e.aVenir && lienReunion(r) ? `<a class="btn btn-secondaire" href="${echapper(lienReunion(r))}" target="_blank" rel="noopener">${icone('video')} Rejoindre</a>` : ''}
       ${r && e.aVenir ? `<button class="btn btn-secondaire" type="button" data-ics="${echapper(e.id)}">${icone('calendrier')} Ajouter à mon agenda</button>` : ''}
       ${equipe && e.nature === 'rdv' ? `<button class="btn btn-secondaire" type="button" data-programmer="${echapper(e.id)}">Programmer ce rendez-vous</button>` : ''}
       <a class="btn btn-principal" href="#${echapper(e.chemin)}" data-fiche>${e.nature === 'rdv' ? 'Voir la demande' : 'Ouvrir la fiche'}</a>`,

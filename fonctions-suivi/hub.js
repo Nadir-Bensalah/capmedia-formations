@@ -109,6 +109,9 @@ async function audit(action, details) {
 
 const LIEN = (chemin) => `${courriels.BASE}hub#${chemin}`;
 const LIEN_ADMIN = (chemin) => `${courriels.BASE}cockpit#${chemin}`;
+/* Le lien d'une visioconférence ne part dans un e-mail (bouton, href) que
+   s'il commence par https:// : ni javascript:, ni data:, ni http en clair. */
+const lienVisioSur = (l) => { const t = String(l || '').trim(); return /^https:\/\/\S+$/i.test(t) ? t : ''; };
 const nomProjet = (p) => ((p && p.nom) || '');
 const auteurDe = (doc, defaut = 'equipe') => ((doc && doc.par) ? { uid: doc.par.uid, nom: doc.par.nom, cote: doc.par.cote || defaut } : null);
 
@@ -290,12 +293,12 @@ exports.hubReunionEcrite = onDocumentWritten({ region: REGION, document: 'reunio
     await activite({ projet: apres.projet, type: 'reunion', texte: `a programmé la réunion « ${apres.titre} » le ${dateTexte}`, par: auteurDe(apres), lien, visibilite });
     if (visibilite === 'client') {
       await notifierClients(projet, 'reunion', { type: 'reunion', titre: 'Réunion programmée', texte: `${apres.titre} · ${dateTexte}`, lien: `#${lien}`, projet: apres.projet });
-      await ecrireAuxClients(projet, 'reunion', 'reunion', { projetNom: nomProjet(projet), titre: apres.titre, date: dateTexte, duree: apres.duree, lienVisio: apres.lien, ordreDuJour: apres.ordreDuJour, lien: LIEN(lien) });
+      await ecrireAuxClients(projet, 'reunion', 'reunion', { projetNom: nomProjet(projet), titre: apres.titre, date: dateTexte, duree: apres.duree, lienVisio: lienVisioSur(apres.lien), ordreDuJour: apres.ordreDuJour, lien: LIEN(lien) });
     }
   } else if (dateChangee && visibilite === 'client') {
     await activite({ projet: apres.projet, type: 'reunion', texte: `a déplacé la réunion « ${apres.titre} » au ${dateTexte}`, par: auteurDe(apres), lien, visibilite });
     await notifierClients(projet, 'reunion', { type: 'reunion', titre: 'Réunion déplacée', texte: `${apres.titre} · ${dateTexte}`, lien: `#${lien}`, projet: apres.projet });
-    await ecrireAuxClients(projet, 'reunion', 'reunion', { projetNom: nomProjet(projet), titre: apres.titre, date: dateTexte, duree: apres.duree, lienVisio: apres.lien, ordreDuJour: apres.ordreDuJour, lien: LIEN(lien), deplacee: true });
+    await ecrireAuxClients(projet, 'reunion', 'reunion', { projetNom: nomProjet(projet), titre: apres.titre, date: dateTexte, duree: apres.duree, lienVisio: lienVisioSur(apres.lien), ordreDuJour: apres.ordreDuJour, lien: LIEN(lien), deplacee: true });
   } else if (avant && !avant.compteRendu && apres.compteRendu && visibilite === 'client') {
     await activite({ projet: apres.projet, type: 'reunion', texte: `a publié le compte rendu de « ${apres.titre} »`, par: auteurDe(apres), lien, visibilite });
     await notifierClients(projet, 'reunion', { type: 'reunion', titre: 'Compte rendu disponible', texte: apres.titre, lien: `#${lien}`, projet: apres.projet });
@@ -1363,7 +1366,7 @@ async function rappelerLesReunions(maintenant = new Date()) {
       lien: `#${lien}`, projet: r.projet,
     });
     await ecrireAuxClients(projet, 'reunion-rappel', 'reunion-rappel', {
-      projetNom: nomProjet(projet), titre: r.titre, date: dateTexte, heure, duree: r.duree, lieu: r.lieu, lienVisio: r.lien, ordreDuJour: r.ordreDuJour, lien: LIEN(lien),
+      projetNom: nomProjet(projet), titre: r.titre, date: dateTexte, heure, duree: r.duree, lieu: r.lieu, lienVisio: lienVisioSur(r.lien), ordreDuJour: r.ordreDuJour, lien: LIEN(lien),
     });
     bilan.envoyes += 1;
   }

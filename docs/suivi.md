@@ -1401,6 +1401,16 @@ Les pièces de la conversation passent désormais par la fonction
 - `GET ?chemin=projets/<p>/messages/<objet>` : même vérification, puis
   le fichier est remis tel quel. Aucun autre chemin n'est servi.
 
+Depuis la revue de sécurité du 02/10/2026 : toute réponse en texte des
+deux fonctions de pièces part en `text/plain` avec `nosniff` (un refus
+recopie le nom du fichier, qui ne doit jamais devenir du HTML) ; et un
+plafond de dépôts par personne et par jour (UTC) borne l'envoi : 200
+fichiers ou 1 Go, le premier atteint, compteur côté serveur dans
+`depotsPieces/{uid}_{AAAA-MM-JJ}` (fermé aux règles, réservé dans une
+transaction avant l'écriture, rendu si elle échoue). Au-delà : 429 et une
+phrase claire (« ... vous pourrez en joindre d'autres demain »), trace
+`piece-message.plafond`.
+
 Chaque refus laisse une trace (`piece-message.refusee`). Côté page :
 `envoyerPiece` (noyau.js) aiguille tout dépôt vers `projets/{p}/messages`
 au serveur, et `brancherPieces` (ui.js) lit ces pièces par
@@ -1669,7 +1679,12 @@ lit, pas même Capmedia (collection `notesClient`, règle « uid == moi() »).
 la bulle de conversation, précédée de « Note partagée : ». « Reprendre » la
 rend privée ; le message déjà envoyé reste. Côté Cockpit : bloc « Notes
 partagées par le client » sur l'accueil et sur l'aperçu du projet, avec
-« En faire une demande ». Code : vues/notes-client.js. Épreuve : qa-notes.cjs.
+« En faire une demande ». Le nom affiché sous une note partagée vient de
+l'annuaire des interlocuteurs du projet (miroir `personnesClient`, ou les
+interlocuteurs chargés), retrouvé par `uid`, jamais du champ `nom` du
+document que le client écrit lui-même ; hors annuaire : « Un client »
+(revue de sécurité du 02/10/2026). Code : vues/notes-client.js
+(`nomAuteurNote`). Épreuve : qa-notes.cjs.
 
 ## 32. Les suggestions d'amélioration (01/10/2026)
 
@@ -1685,5 +1700,12 @@ réversible), ou pose une question dans la bulle. L'équipe crée, modifie,
 duplique, ordonne, publie, met à la une (aperçu du projet), et pose
 l'étape dans la feuille de route quand c'est accepté. Données :
 `projets/{pid}/suggestions`, règles : équipe en écriture, client limité à
-`vues.<uid>` et à sa réponse. Code : vues/suggestions.js, éditeur
-« suggestion » dans editeurs.js. Épreuve : qa-suggestions.cjs.
+`vues.<uid>` (datée par le serveur : `vues[moi()] == request.time`) et à la
+réponse. Depuis la revue de sécurité du 02/10/2026, la réponse engage le
+client : seul le responsable du projet la pose ou la change ; à défaut de
+responsable sur le projet, un membre répond tant que la réponse est vide
+ou déjà la sienne. L'écran suit la même règle (`peutRepondre`) et ne montre
+le prix HT et TTC qu'à l'équipe et au responsable. Un second « Ça
+m'intéresse » reprend la demande encore ouverte au lieu d'en créer une
+autre. Code : vues/suggestions.js, éditeur « suggestion » dans
+editeurs.js. Épreuve : qa-suggestions.cjs.

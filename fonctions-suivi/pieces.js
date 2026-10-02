@@ -11,13 +11,18 @@
    ========================================================================== */
 
 const { onRequest } = require('firebase-functions/v2/https');
-const { getFirestore } = require('firebase-admin/firestore');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getStorage } = require('firebase-admin/storage');
 const acces = require('./acces');
 const { audit } = require('./commun');
 
 const bdd = getFirestore();
 const REGION = 'europe-west1';
+
+/* Toute réponse en texte part en text/plain, jamais en text/html (le
+   défaut d'Express pour une chaîne) : un message qui recopie le nom d'un
+   fichier ne peut pas devenir une page qui exécute ce nom. */
+const texte = (res, code, message) => res.status(code).type('text/plain; charset=utf-8').set('X-Content-Type-Options', 'nosniff').send(message);
 
 /* Qui peut lire cette pièce : la finance de l'équipe, ou le responsable du
    projet. La même règle que le stockage, écrite une seule fois ici. */
@@ -36,23 +41,23 @@ async function peutLire(qui, document) {
    d'arriver au code). */
 exports.suiviPiece = onRequest({ region: REGION, cors: true, secrets: [], invoker: 'public' }, async (req, res) => {
   if (req.method === 'OPTIONS') return res.status(204).send('');
-  if (req.method !== 'GET') return res.status(405).send('Method Not Allowed');
+  if (req.method !== 'GET') return texte(res, 405, 'Method Not Allowed');
   let qui;
-  try { qui = await acces.identifier(req); } catch (err) { return res.status(err.code || 401).send(err.message || 'Connexion requise.'); }
+  try { qui = await acces.identifier(req); } catch (err) { return texte(res, err.code || 401, err.message || 'Connexion requise.'); }
   const id = String(req.query.document || '').trim();
-  if (!id) return res.status(400).send('document requis');
+  if (!id) return texte(res, 400, 'document requis');
   const d = await bdd.doc(`documents/${id}`).get();
-  if (!d.exists) return res.status(404).send('Pièce inconnue.');
+  if (!d.exists) return texte(res, 404, 'Pièce inconnue.');
   const document = d.data();
-  if (document.statut === 'brouillon' || document.archive === true) return res.status(404).send('Pièce inconnue.');
-  if (!document.fichier || !document.fichier.chemin) return res.status(404).send('Cette pièce n\'a pas de PDF.');
+  if (document.statut === 'brouillon' || document.archive === true) return texte(res, 404, 'Pièce inconnue.');
+  if (!document.fichier || !document.fichier.chemin) return texte(res, 404, 'Cette pièce n\'a pas de PDF.');
   if (!(await peutLire(qui, document))) {
     await audit('piece.refusee', { document: id, uid: qui.uid, email: qui.email });
-    return res.status(403).send('Cette pièce ne vous est pas ouverte.');
+    return texte(res, 403, 'Cette pièce ne vous est pas ouverte.');
   }
   const fichier = getStorage().bucket().file(String(document.fichier.chemin));
   const [existe] = await fichier.exists();
-  if (!existe) return res.status(404).send('Le PDF n\'est plus là. Prévenez-nous.');
+  if (!existe) return texte(res, 404, 'Le PDF n\'est plus là. Prévenez-nous.');
   const nom = String(document.fichier.nom || `${document.numero || 'piece'}.pdf`).replace(/[^\w.\- ]+/g, '_');
   res.set('Content-Type', 'application/pdf');
   res.set('Content-Disposition', `attachment; filename="${nom}"`);
@@ -60,7 +65,7 @@ exports.suiviPiece = onRequest({ region: REGION, cors: true, secrets: [], invoke
   await audit('piece.telechargee', { document: id, numero: document.numero || '', uid: qui.uid, email: qui.email, cote: qui.fiche ? 'equipe' : 'client' });
   return new Promise((resoudre) => {
     fichier.createReadStream()
-      .on('error', (err) => { console.error('Pièce illisible', err); if (!res.headersSent) res.status(500).send('Le PDF n\'a pas pu être lu.'); resoudre(); })
+      .on('error', (err) => { console.error('Pièce illisible', err); if (!res.headersSent) texte(res, 500, 'Le PDF n\'a pas pu être lu.'); resoudre(); })
       .on('end', resoudre)
       .pipe(res);
   });
@@ -104,48 +109,93 @@ async function peutEchanger(qui, projetId) {
   return Array.isArray(membres) && membres.includes(qui.uid);
 }
 
+/* Le plafond de dépôt, par personne et par jour (UTC) : 200 fichiers ou
+   1 Go, le premier atteint. Le compteur vit dans Firestore, sous
+   depotsPieces/{uid}_{AAAA-MM-JJ}, que les règles ferment à tout le
+   monde (match /{document=**}) : seul ce serveur l'écrit. Le dépôt est
+   réservé dans une transaction AVANT l'écriture du fichier, et rendu si
+   l'écriture échoue : deux envois simultanés ne passent pas à deux sous le
+   plafond. */
+const PLAFOND_FICHIERS_JOUR = 200;
+const PLAFOND_OCTETS_JOUR = 1024 * 1024 * 1024;
+const refDepotsDuJour = (uid) => bdd.doc(`depotsPieces/${uid}_${new Date().toISOString().slice(0, 10)}`);
+
+/** Réserve un dépôt de `taille` octets. Rend null si c'est accordé, sinon le message à afficher. */
+async function reserverDepot(uid, taille) {
+  const ref = refDepotsDuJour(uid);
+  return bdd.runTransaction(async (t) => {
+    const d = await t.get(ref);
+    const brut = d.exists ? d.data() : {};
+    const fichiers = Number(brut.fichiers || 0);
+    const octets = Number(brut.octets || 0);
+    if (fichiers + 1 > PLAFOND_FICHIERS_JOUR) {
+      return `Vous avez déjà envoyé ${PLAFOND_FICHIERS_JOUR} fichiers aujourd'hui, le maximum pour une journée. Vous pourrez en joindre d'autres demain ; en attendant, écrivez-nous si c'est urgent.`;
+    }
+    if (octets + taille > PLAFOND_OCTETS_JOUR) {
+      return 'Vous avez déjà envoyé près de 1 Go de fichiers aujourd\'hui, le maximum pour une journée. Vous pourrez en joindre d\'autres demain ; en attendant, écrivez-nous si c\'est urgent.';
+    }
+    t.set(ref, { uid, fichiers: fichiers + 1, octets: octets + taille, maj: FieldValue.serverTimestamp() }, { merge: true });
+    return null;
+  });
+}
+
+/** Rend un dépôt réservé dont le fichier n'a pas pu être écrit. */
+const rendreDepot = (uid, taille) => refDepotsDuJour(uid)
+  .set({ fichiers: FieldValue.increment(-1), octets: FieldValue.increment(-taille) }, { merge: true })
+  .catch((err) => console.error('Dépôt non rendu', err));
+
 const nomPropre = (nom) => String(nom || 'fichier').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w.-]+/g, '_').replace(/^\.+/, '').slice(-120) || 'fichier';
 
 exports.suiviPieceMessage = onRequest({ region: REGION, cors: true, secrets: [], invoker: 'public', memory: '512MiB' }, async (req, res) => {
   if (req.method === 'OPTIONS') return res.status(204).send('');
-  if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).send('Method Not Allowed');
+  if (req.method !== 'GET' && req.method !== 'POST') return texte(res, 405, 'Method Not Allowed');
   let qui;
-  try { qui = await acces.identifier(req); } catch (err) { return res.status(err.code || 401).send(err.message || 'Connexion requise.'); }
+  try { qui = await acces.identifier(req); } catch (err) { return texte(res, err.code || 401, err.message || 'Connexion requise.'); }
   res.set('Cache-Control', 'private, no-store');
   try {
     if (req.method === 'POST') {
       const projetId = String(req.query.projet || '').trim();
       const type = String(req.query.type || '').trim().toLowerCase();
       const nom = String(req.query.nom || '').trim();
-      if (!PROJET_VALIDE.test(projetId)) return res.status(400).send('Projet inconnu.');
+      if (!PROJET_VALIDE.test(projetId)) return texte(res, 400, 'Projet inconnu.');
       if (!(await peutEchanger(qui, projetId))) {
         await audit('piece-message.refusee', { projet: projetId, geste: 'envoi', uid: qui.uid, email: qui.email });
-        return res.status(403).send('Vous ne pouvez pas joindre de fichier à cette conversation.');
+        return texte(res, 403, 'Vous ne pouvez pas joindre de fichier à cette conversation.');
       }
-      if (!TYPES_MESSAGE.test(type)) return res.status(400).send(`« ${nom || 'Ce fichier'} » : ce type de fichier n'est pas accepté.`);
+      if (!TYPES_MESSAGE.test(type)) return texte(res, 400, `« ${nom || 'Ce fichier'} » : ce type de fichier n'est pas accepté.`);
       const corps = Buffer.isBuffer(req.rawBody) ? req.rawBody : (Buffer.isBuffer(req.body) ? req.body : null);
-      if (!corps || !corps.length) return res.status(400).send('Le fichier est vide.');
+      if (!corps || !corps.length) return texte(res, 400, 'Le fichier est vide.');
       const plafond = type.startsWith('video/') ? MAX_VIDEO_MESSAGE : MAX_MESSAGE;
-      if (corps.length > plafond) return res.status(413).send(`« ${nom || 'Ce fichier'} » dépasse ${Math.round(plafond / 1024 / 1024)} Mo.`);
+      if (corps.length > plafond) return texte(res, 413, `« ${nom || 'Ce fichier'} » dépasse ${Math.round(plafond / 1024 / 1024)} Mo.`);
+      const refus = await reserverDepot(qui.uid, corps.length);
+      if (refus) {
+        await audit('piece-message.plafond', { projet: projetId, uid: qui.uid, email: qui.email, taille: corps.length });
+        return texte(res, 429, refus);
+      }
       const chemin = `projets/${projetId}/messages/${Date.now()}-${nomPropre(nom)}`;
-      await getStorage().bucket().file(chemin).save(corps, {
-        resumable: false,
-        contentType: type,
-        metadata: { metadata: { par: qui.uid, cote: qui.fiche ? 'equipe' : 'client' } },
-      });
+      try {
+        await getStorage().bucket().file(chemin).save(corps, {
+          resumable: false,
+          contentType: type,
+          metadata: { metadata: { par: qui.uid, cote: qui.fiche ? 'equipe' : 'client' } },
+        });
+      } catch (err) {
+        await rendreDepot(qui.uid, corps.length);
+        throw err;
+      }
       return res.status(200).json({ nom: nom || nomPropre(nom), chemin, taille: corps.length, type });
     }
 
     const chemin = String(req.query.chemin || '').trim();
     const m = CHEMIN_MESSAGE.exec(chemin);
-    if (!m) return res.status(400).send('Ce fichier n\'est pas une pièce de conversation.');
+    if (!m) return texte(res, 400, 'Ce fichier n\'est pas une pièce de conversation.');
     if (!(await peutEchanger(qui, m[1]))) {
       await audit('piece-message.refusee', { projet: m[1], geste: 'lecture', chemin, uid: qui.uid, email: qui.email });
-      return res.status(403).send('Ce fichier ne vous est pas ouvert.');
+      return texte(res, 403, 'Ce fichier ne vous est pas ouvert.');
     }
     const fichier = getStorage().bucket().file(chemin);
     const [existe] = await fichier.exists();
-    if (!existe) return res.status(404).send('Ce fichier n\'est plus là.');
+    if (!existe) return texte(res, 404, 'Ce fichier n\'est plus là.');
     const [meta] = await fichier.getMetadata();
     /* Le type servi est relu contre la liste fermée : un fichier déposé
        avant elle, ou par un autre chemin, sort en octets bruts. */
@@ -154,13 +204,13 @@ exports.suiviPieceMessage = onRequest({ region: REGION, cors: true, secrets: [],
     res.set('Content-Disposition', `attachment; filename="${m[2]}"`);
     return new Promise((resoudre) => {
       fichier.createReadStream()
-        .on('error', (err) => { console.error('Pièce de message illisible', err); if (!res.headersSent) res.status(500).send('Le fichier n\'a pas pu être lu. Réessayez.'); resoudre(); })
+        .on('error', (err) => { console.error('Pièce de message illisible', err); if (!res.headersSent) texte(res, 500, 'Le fichier n\'a pas pu être lu. Réessayez.'); resoudre(); })
         .on('end', resoudre)
         .pipe(res);
     });
   } catch (err) {
     console.error('Pièce de message', err);
-    if (!res.headersSent) return res.status(500).send('Le fichier n\'a pas pu être traité. Réessayez dans un instant.');
+    if (!res.headersSent) return texte(res, 500, 'Le fichier n\'a pas pu être traité. Réessayez dans un instant.');
     return undefined;
   }
 });

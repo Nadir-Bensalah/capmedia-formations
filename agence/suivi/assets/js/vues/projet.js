@@ -6,6 +6,7 @@
    ========================================================================== */
 
 import { friseDevis, devisAvecEtapes, brancherFrise } from './frise.js';
+import { lienReunion } from '../noyau.js';
 import {
   echapper, dateCourte, dateHeure, depuis, heure, montant, pluriel, joursAvant, echeance as calcEcheance, enParagraphes, avecLiens, parDateDesc, parDateAsc, borner,
   STATUTS_PROJET, STATUTS_COMPOSANT, TYPES_COMPOSANT, STATUTS_ETAPE, STATUTS_TACHE, PRIORITES, STATUTS, TYPES, URGENCES, OUVERTS, ATTEND_CLIENT,
@@ -454,7 +455,7 @@ const trouver = (d, genre, id) => {
   if (genre === 'scenario') return (d.scenarios || []).find((x) => x.ref === id);
   return ({
     composant: d.composants, jalon: d.jalons, lien: d.liens, tache: d.taches, release: d.releases, reunion: d.reunions, note: d.notes, blocage: d.blocages, fichier: d.fichiers,
-    campagne: d.campagnes,
+    campagne: d.campagnes, suggestion: d.suggestions,
   }[genre] || []).find((x) => x.id === id);
 };
 
@@ -690,7 +691,7 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
       <aside class="pile" style="gap:var(--e-5)">
         <div class="carte carte--creuse">
           <p class="surtitre">Prochaine réunion</p>
-          ${reunion ? `<p class="t-titre-3" style="margin-top:8px"><button class="lien" type="button" data-action="ouvrir-reunion" data-id="${echapper(reunion.id)}" style="font:inherit;text-align:left">${echapper(reunion.titre)}</button></p><p class="t-petit t-2" style="margin-top:4px">${echapper(dateHeure(reunion.date))}</p><div class="rang" style="margin-top:12px;gap:6px">${reunion.lien ? `<a class="btn btn-secondaire btn-petit" href="${echapper(reunion.lien)}" target="_blank" rel="noopener">${icone('video')} Rejoindre</a>` : ''}<button class="btn btn-doux btn-petit" type="button" data-action="ouvrir-reunion" data-id="${echapper(reunion.id)}">Ordre du jour</button></div>` : `<p class="t-petit t-2" style="margin-top:8px">Aucune réunion programmée.</p>${equipe ? boutonNouveau(env, 'reunion', 'Programmer') : `<button class="btn btn-doux btn-petit" type="button" style="margin-top:8px" data-action="ecrire-bulle" data-texte="Je souhaite un créneau pour ">${icone('messages')} Demander un créneau</button>`}`}
+          ${reunion ? `<p class="t-titre-3" style="margin-top:8px"><button class="lien" type="button" data-action="ouvrir-reunion" data-id="${echapper(reunion.id)}" style="font:inherit;text-align:left">${echapper(reunion.titre)}</button></p><p class="t-petit t-2" style="margin-top:4px">${echapper(dateHeure(reunion.date))}</p><div class="rang" style="margin-top:12px;gap:6px">${lienReunion(reunion) ? `<a class="btn btn-secondaire btn-petit" href="${echapper(lienReunion(reunion))}" target="_blank" rel="noopener">${icone('video')} Rejoindre</a>` : ''}<button class="btn btn-doux btn-petit" type="button" data-action="ouvrir-reunion" data-id="${echapper(reunion.id)}">Ordre du jour</button></div>` : `<p class="t-petit t-2" style="margin-top:8px">Aucune réunion programmée.</p>${equipe ? boutonNouveau(env, 'reunion', 'Programmer') : `<button class="btn btn-doux btn-petit" type="button" style="margin-top:8px" data-action="ecrire-bulle" data-texte="Je souhaite un créneau pour ">${icone('messages')} Demander un créneau</button>`}`}
         </div>
         <div class="carte carte--creuse">
           <p class="surtitre">Échéances</p>
@@ -1245,7 +1246,7 @@ const reunions = (d, { env, pid }) => {
   const bloc = (r) => ligne({
     icone: 'reunions', ton: reunionAVenir(r) ? 'bleu' : '',
     titre: echapper(r.titre), sous: `${echapper(dateHeure(r.date))}${r.duree ? ` · ${r.duree} min` : ''}${(r.participants || []).length ? ` · ${echapper(r.participants.map((p) => p.nom || p.email).join(', '))}` : ''}${r.visibilite === 'interne' ? ' · Interne' : ''}`,
-    fin: `${r.lien && reunionAVenir(r) ? `<a class="btn btn-secondaire btn-petit" href="${echapper(r.lien)}" target="_blank" rel="noopener" data-sans-propagation>${icone('video')} Rejoindre</a>` : ''}${r.compteRendu ? '<span class="etiquette">Compte rendu</span>' : ''}`,
+    fin: `${lienReunion(r) && reunionAVenir(r) ? `<a class="btn btn-secondaire btn-petit" href="${echapper(lienReunion(r))}" target="_blank" rel="noopener" data-sans-propagation>${icone('video')} Rejoindre</a>` : ''}${r.compteRendu ? '<span class="etiquette">Compte rendu</span>' : ''}`,
     action: 'ouvrir-reunion', attrs: `data-id="${echapper(r.id)}"`,
   });
   return `
@@ -1270,7 +1271,7 @@ const ouvrirReunion = (r, d, { pid, env }) => {
     titre: r.titre, sousTitre: `${dateHeure(r.date)}${r.duree ? ` · ${r.duree} min` : ''}${aVenir ? '' : ' · passée'}`, feuille: true,
     corps: `
       <div class="rang" style="gap:8px">
-        ${r.lien && aVenir ? `<a class="btn btn-principal" href="${echapper(r.lien)}" target="_blank" rel="noopener">${icone('video')} Rejoindre la réunion</a>` : ''}
+        ${lienReunion(r) && aVenir ? `<a class="btn btn-principal" href="${echapper(lienReunion(r))}" target="_blank" rel="noopener">${icone('video')} Rejoindre la réunion</a>` : ''}
         ${aVenir ? `<button class="btn btn-secondaire" type="button" data-ics>${icone('calendrier')} Ajouter à mon agenda</button>` : ''}
       </div>
       ${r.lieu ? `<div style="margin-top:20px"><p class="surtitre">Lieu</p><p class="t-petit" style="margin-top:6px">${echapper(r.lieu)}</p></div>` : ''}

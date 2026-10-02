@@ -65,7 +65,7 @@ const envoyer = async (email, projet, nom, type, corps) => {
   const r = await fetch(`${PORTE}?projet=${encodeURIComponent(projet)}&nom=${encodeURIComponent(nom)}&type=${encodeURIComponent(type)}`, { method: 'POST', headers: { ...(await entete(email)), 'Content-Type': 'application/octet-stream' }, body: corps });
   const texte = await r.text();
   let json = null; try { json = JSON.parse(texte); } catch (e) { /* un refus en clair */ }
-  return { code: r.status, json, texte };
+  return { code: r.status, json, texte, type: r.headers.get('content-type') || '', nosniff: r.headers.get('x-content-type-options') || '' };
 };
 const lirePiece = async (email, chemin) => {
   const r = await fetch(`${PORTE}?chemin=${encodeURIComponent(chemin)}`, { headers: await entete(email) });
@@ -172,6 +172,42 @@ const erreursAffichees = async (p) => p.$$eval('.toast--erreur span', (els) => e
   verifier(gros.code === 413 && /10 Mo/.test(gros.texte), 'une image de plus de 10 Mo est refusée', `${gros.code} ${gros.texte}`);
   const projetFaux = await envoyer('camille.essai@exemple.test', 'atelier/../boutique', 'x.png', 'image/png', PNG);
   verifier(projetFaux.code === 400, 'un identifiant de projet bricolé est refusé');
+
+  console.log('\n== Le serveur : un refus est du texte brut, jamais une page');
+  const piege = await envoyer('camille.essai@exemple.test', 'atelier', '<img src=x onerror=alert(1)>.exe', 'application/x-msdownload', PNG);
+  verifier(piege.code === 400 && /^text\/plain/.test(piege.type) && piege.nosniff === 'nosniff', 'un refus qui recopie le nom du fichier part en text/plain, nosniff', `${piege.code} ${piege.type} ${piege.nosniff}`);
+  const piegeLecture = await lirePiece('lea.essai@exemple.test', cheminPhotoClient);
+  verifier(/^text\/plain/.test(piegeLecture.type), 'un refus de lecture aussi', piegeLecture.type);
+  const sansJeton = await fetch(`${PORTE}?chemin=x`);
+  verifier(/^text\/plain/.test(sansJeton.headers.get('content-type') || ''), 'et le refus sans session aussi', sansJeton.headers.get('content-type') || '');
+
+  console.log('\n== Le serveur : un plafond de dépôts par personne et par jour');
+  const uidCamille = (await admin.auth().getUserByEmail('camille.essai@exemple.test')).uid;
+  const compteur = admin.firestore().doc(`depotsPieces/${uidCamille}_${new Date().toISOString().slice(0, 10)}`);
+  const lu = (await compteur.get()).data() || {};
+  verifier(lu.fichiers === 2 && lu.octets === PNG.length + PDF.length, 'le serveur compte les dépôts acceptés de la journée, et eux seuls', JSON.stringify({ fichiers: lu.fichiers, octets: lu.octets }));
+  const jC = await jetonPour('camille.essai@exemple.test');
+  const statutDoc = async (methode, jeton) => (await fetch(`http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/documents/depotsPieces/${uidCamille}_${new Date().toISOString().slice(0, 10)}${methode === 'PATCH' ? '?updateMask.fieldPaths=fichiers' : ''}`, { method: methode, headers: { Authorization: `Bearer ${jeton}`, 'Content-Type': 'application/json' }, ...(methode === 'PATCH' ? { body: JSON.stringify({ fields: { fichiers: { integerValue: '0' } } }) } : {}) })).status;
+  verifier(await statutDoc('GET', jC) === 403 && await statutDoc('PATCH', jC) === 403, 'la cliente ne lit ni ne remet à zéro son compteur (403)');
+  await compteur.set({ fichiers: 200 }, { merge: true });
+  const avantPlafond = (await seau.getFiles({ prefix: 'projets/atelier/messages/' }))[0].length;
+  const trop = await envoyer('camille.essai@exemple.test', 'atelier', 'un-de-trop.png', 'image/png', PNG);
+  verifier(trop.code === 429 && /200 fichiers/.test(trop.texte) && /demain/.test(trop.texte) && enClair(trop.texte), 'au 201e fichier du jour : refusé, avec un message clair', `${trop.code} ${trop.texte}`);
+  verifier(/^text\/plain/.test(trop.type), 'en texte brut');
+  verifier((await seau.getFiles({ prefix: 'projets/atelier/messages/' }))[0].length === avantPlafond, 'et rien n est écrit dans le stockage');
+  await compteur.set({ fichiers: 3, octets: 1024 * 1024 * 1024 - 10 }, { merge: true });
+  const tropLourd = await envoyer('camille.essai@exemple.test', 'atelier', 'lourd.png', 'image/png', PNG);
+  verifier(tropLourd.code === 429 && /1 Go/.test(tropLourd.texte), 'au-delà de 1 Go dans la journée : refusé aussi', `${tropLourd.code} ${tropLourd.texte}`);
+  const autre = await envoyer('agent.essai@exemple.test', 'atelier', 'equipe-libre.png', 'image/png', PNG);
+  verifier(autre.code === 200, 'le plafond est par personne : l équipe dépose toujours');
+  await compteur.delete();
+  const repris = await envoyer('camille.essai@exemple.test', 'atelier', 'apres-plafond.png', 'image/png', PNG);
+  verifier(repris.code === 200, 'le compteur remis (le jour suivant), la cliente dépose de nouveau');
+  await compteur.delete();
+  await vider('audit');
+  await envoyer('lea.essai@exemple.test', 'atelier', 'intrus.png', 'image/png', PNG);
+  await lirePiece('lea.essai@exemple.test', cheminPhotoClient);
+
   const traces = await docs('audit?pageSize=200');
   verifier(traces.some((t) => str(t, 'action') === 'piece-message.refusee' && str(t, 'geste') === 'envoi') && traces.some((t) => str(t, 'action') === 'piece-message.refusee' && str(t, 'geste') === 'lecture'), 'chaque refus laisse une trace');
 

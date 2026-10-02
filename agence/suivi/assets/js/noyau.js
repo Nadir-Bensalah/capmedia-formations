@@ -1021,6 +1021,14 @@ export const echapper = (valeur) => String(valeur ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
+/** Le lien d'une réunion, s'il peut aller dans un href : une adresse
+    https://, rien d'autre (ni javascript:, ni data:, ni http en clair).
+    Sinon une chaîne vide, et le bouton « Rejoindre » ne se dessine pas. */
+export const lienReunion = (r) => {
+  const l = String((r && r.lien) || '').trim();
+  return /^https:\/\/[^\s]+$/i.test(l) ? l : '';
+};
+
 /** Texte libre rendu avec ses retours à la ligne, sans HTML injecté. */
 export const enParagraphes = (texte) => echapper(texte)
   .split(/\n{2,}/).map((bloc) => `<p>${bloc.replace(/\n/g, '<br>')}</p>`).join('');
