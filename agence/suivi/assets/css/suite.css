@@ -1657,9 +1657,10 @@ a.coffre-lien:hover { color: var(--accent); }
    d'une case dit qui fait le scénario, aux couleurs de la page du plan :
    violet, humain et robot ; bleu, robot seul. Il ne touche pas au signe
    du centre, qui dit le résultat. */
-/* Un défaut connu : un rouge éteint, avec son propre signe (•), pour ne
-   jamais se lire comme un cassé. */
-:root { --case-connu: color-mix(in srgb, var(--case-casse) 45%, var(--case-na)); }
+/* Un défaut connu : le même rouge qu'un cassé (choix de Nadir, 02/10), avec
+   son propre signe (•) au lieu de la croix, pour ne pas se lire comme un
+   cassé. */
+:root { --case-connu: var(--case-casse); }
 .tb-case[data-e="connu"], .tb-puce[data-e="connu"] { background: var(--case-connu); }
 .tb-case[data-qui]::after { content: ""; position: absolute; top: -2px; right: -2px; width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--blanc); }
 .tb-case[data-qui="violet"]::after { background: var(--violet-desk); }
