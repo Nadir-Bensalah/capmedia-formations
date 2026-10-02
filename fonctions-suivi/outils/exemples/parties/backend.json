@@ -1,0 +1,26 @@
+{
+  "id": "backend",
+  "nom": "Firebase",
+  "sousTitre": "Le moteur de l'application : comptes, données, abonnements et e-mails",
+  "resume": "Firebase est la partie invisible qui fait tourner l'Atelier : les comptes, les réservations, les paiements confirmés et les e-mails envoyés aux élèves.",
+  "statut": "en-cours",
+  "etatActuel": "Au 1er octobre 2026, tout tourne en Europe ; les règles d'accès ont été revues le 25 septembre.",
+  "chiffres": [
+    { "valeur": "44", "libelle": "fonctions serveur" },
+    { "valeur": "Europe", "libelle": "région des données" }
+  ],
+  "fonctions": [
+    "Créer et protéger les comptes des élèves",
+    "Enregistrer les réservations et les synchroniser sur chaque appareil",
+    "Envoyer les e-mails de confirmation et de rappel"
+  ],
+  "hebergement": "Google Firebase, région Europe (Belgique).",
+  "technologies": [
+    { "nom": "Cloud Functions", "role": "les traitements côté serveur" },
+    { "nom": "Firestore", "role": "la base de données synchronisée" }
+  ],
+  "historique": [
+    { "date": "2026-07-01", "titre": "Bascule en région Europe" },
+    { "date": "2026-09-25", "titre": "Règles d'accès revues", "detail": "Chaque élève ne lit que ses propres données." }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+ "id": "mauvaise-date",
+ "nom": "Date",
+ "historique": [
+  {
+   "date": "30/09/2026",
+   "titre": "Une date mal écrite"
+  }
+ ],
+ "liens": [
+  {
+   "libelle": "Piège",
+   "url": "javascript:alert(1)"
+  }
+ ]
+}

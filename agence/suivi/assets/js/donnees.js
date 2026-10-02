@@ -15,8 +15,10 @@ import {
   nomAffiche, enDate, parDateDesc, parDateAsc, joursAvant, borner, age, retard, dateCourte,
   OUVERTS, ATTEND_CLIENT, ATTEND_EQUIPE, FACTURES_DUES, PROJETS_ACTIFS, CATEGORIES_CLIENT, projetEstActif, devisADecider, statutPiece,
   statutProjet, pluriel, verdictDelai, NIVEAUX_SCENARIO, STATUTS_PIECE_VISIBLES, startAfter, peut, onSnapshot, writeBatch, runTransaction,
+  STATUTS_RELEASE,
 } from './noyau.js';
 import * as magasin from './magasin.js';
+import { datePartie } from './partie-format.js';
 
 /* ==========================================================================
    1. Les clés du magasin
@@ -1226,6 +1228,29 @@ export const etatVersions = (releases = [], cle, composant = null) => {
     disponible: derniere(siennes.filter((r) => r.statut === 'disponible')),
     enRoute: derniere(siennes.filter((r) => ['test', 'soumise', 'revue'].includes(r.statut))),
   };
+};
+
+/* La version en ligne et celle en préparation d'une partie. La fiche de
+   la partie fait foi quand l'équipe l'a remplie (versionEnLigne,
+   versionEnPreparation) ; sinon les versions réelles (releases) ; sinon
+   les anciens champs version et versionPrep. Chaque morceau est une
+   chaîne, vide quand on ne sait pas : jamais « undefined » à l'écran. */
+export const versionsPartie = (releases = [], cle, composant = null) => {
+  const v = etatVersions(releases, cle, composant);
+  const c = composant || {};
+  const vl = c.versionEnLigne || {};
+  const vp = c.versionEnPreparation || {};
+  let enLigne = null;
+  if (vl.numero) enLigne = { numero: String(vl.numero), quand: datePartie(vl.date), ou: String(vl.ou || '') };
+  else if (v.disponible && v.disponible.version) enLigne = { numero: String(v.disponible.version), quand: dateCourte(v.disponible.date), ou: '' };
+  else if (c.version) enLigne = { numero: String(c.version), quand: '', ou: String(c.environnement || '') };
+  let prep = null;
+  if (vp.numero) prep = { numero: String(vp.numero), etat: String(vp.etat || '') };
+  else if (v.enRoute && v.enRoute.version) {
+    const statut = ((STATUTS_RELEASE[v.enRoute.statut] || {}).libelle || 'En test');
+    prep = { numero: String(v.enRoute.version), etat: [statut, dateCourte(v.enRoute.date) ? `depuis le ${dateCourte(v.enRoute.date)}` : '', v.enRoute.build ? `build ${v.enRoute.build}` : ''].filter(Boolean).join(' · ') };
+  } else if (c.versionPrep) prep = { numero: String(c.versionPrep), etat: '' };
+  return { ...v, enLigne, prep };
 };
 
 /** L'activité arrivée après une date, sans les gestes de la personne

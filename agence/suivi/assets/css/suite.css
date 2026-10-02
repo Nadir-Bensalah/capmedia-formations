@@ -1808,3 +1808,115 @@ a.coffre-lien:hover { color: var(--accent); }
 .delais-liste .puce { flex: none; }
 @media (max-width: 700px) { .delais-faits { grid-template-columns: minmax(0, 1fr); } }
 @media (prefers-reduced-motion: reduce) { .delais-piste > i { transition: none; } }
+
+/* ==========================================================================
+   25. La page d'une partie (vues/brique.js) et les cartes des plateformes
+   en tête d'un projet. Des fonds et des retraits, jamais de liseré ni de
+   trait de couleur : le repère vient de la structure (les numéros en
+   chasse fixe, les années de la frise, les blocs sur fond doux).
+   ========================================================================== */
+.partie-tete {
+  padding: 26px 28px 24px; border-radius: var(--r-carte); background: var(--blanc);
+  box-shadow: var(--ombre-sm), 0 0 0 1px var(--lisere-carte);
+}
+.partie-tete-haut { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 20px; align-items: start; }
+.partie-tuile {
+  display: grid; place-items: center; width: 64px; height: 64px; border-radius: 18px;
+  background: var(--eleve); box-shadow: inset 0 0 0 1px var(--trait-clair); color: var(--encre-2);
+}
+.partie-tuile svg { width: 30px; height: 30px; }
+.partie-tete--bleu .partie-tuile { color: var(--accent); }
+.partie-tete--vert .partie-tuile { color: var(--ok); }
+.partie-tete--ambre .partie-tuile { color: var(--attention); }
+.partie-tete--rouge .partie-tuile { color: var(--alerte); }
+.partie-tete--violet .partie-tuile { color: var(--violet); }
+.partie-titres { min-width: 0; }
+.partie-titres .surtitre { margin: 0 0 6px; }
+.partie-titres .surtitre a { color: inherit; }
+.partie-titres h1 { margin: 0; font: var(--t-titre-1); letter-spacing: -.028em; text-wrap: balance; overflow-wrap: anywhere; }
+.partie-sous-titre { margin: 8px 0 0; max-width: 62ch; font: 400 16px/1.5 var(--police); color: var(--encre-2); text-wrap: pretty; }
+.partie-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: 420px; }
+.partie-versions { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 22px; }
+.partie-version { min-width: 0; padding: 14px 16px; border-radius: 14px; background: var(--fond-2); }
+.partie-version-quoi { margin: 0; font: 500 11px/1.3 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--encre-3); }
+.partie-version-num { margin: 6px 0 0; font: 600 24px/1.1 var(--titre); letter-spacing: -.02em; font-variant-numeric: tabular-nums; color: var(--encre); overflow-wrap: anywhere; }
+.partie-version-statut { margin: 8px 0 0; min-height: 26px; display: flex; align-items: center; }
+.partie-version-nuance { margin: 5px 0 0; font: 400 13px/1.45 var(--police); color: var(--encre-2); overflow-wrap: anywhere; }
+.partie-version-nuance:empty { display: none; }
+.partie-liens { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.partie-liens .btn svg { width: 14px; height: 14px; }
+.partie-a-completer {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 14px 18px;
+  border-radius: 14px; background: var(--fond-2); font: 400 13.5px/1.4 var(--police); color: var(--encre-2);
+}
+.partie-a-completer p { margin: 0; }
+.partie-a-completer strong { font-weight: 600; color: var(--encre); }
+.page > .partie-chiffres + .partie-geste { margin-top: 6px; }
+.partie-geste { display: flex; justify-content: flex-end; }
+.partie-section .section-tete { margin-bottom: 14px; }
+.partie-resume { max-width: 76ch; font: 400 16px/1.6 var(--police); color: var(--encre); }
+.partie-resume p + p { margin-top: 10px; }
+.partie-fonctions {
+  list-style: none; margin: 18px 0 0; padding: 0;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 28px;
+}
+.partie-fonctions li, .partie-etapes li {
+  display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: baseline; gap: 6px;
+  padding: 8px 0; font: 400 14.5px/1.5 var(--police); color: var(--encre); overflow-wrap: anywhere;
+}
+.partie-index { font: 500 12px var(--mono); color: var(--encre-3); font-variant-numeric: tabular-nums; }
+.partie-lead { margin: 0; max-width: 70ch; font: 400 15.5px/1.6 var(--police); color: var(--encre); }
+.partie-bloc { margin-top: 18px; }
+.partie-bloc-titre { margin: 0 0 6px; font: 500 11px/1.3 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--encre-3); }
+.partie-etapes { list-style: none; margin: 0; padding: 0; }
+.partie-etapes li { padding: 6px 0; font-size: 14px; }
+.partie-attention { padding: 14px 16px; border-radius: 12px; background: var(--ambre-clair); }
+.partie-attention .partie-bloc-titre { color: var(--ambre); }
+.partie-attention ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; font: 400 14px/1.5 var(--police); color: var(--encre); }
+.partie-texte { margin: 0; font: 400 14px/1.55 var(--police); color: var(--encre); }
+.partie-technos { margin: 0; display: grid; gap: 2px; }
+.partie-technos > div { display: grid; grid-template-columns: minmax(120px, 34%) minmax(0, 1fr); gap: 4px 16px; padding: 9px 12px; margin: 0 -12px; border-radius: 10px; }
+.partie-technos > div:nth-child(odd) { background: var(--fond-2); }
+.partie-technos dt { font: 600 14px/1.45 var(--police); color: var(--encre); overflow-wrap: anywhere; }
+.partie-technos dd { margin: 0; font: 400 13.5px/1.5 var(--police); color: var(--encre-2); overflow-wrap: anywhere; }
+.partie-frise-annee + .partie-frise-annee { margin-top: 18px; }
+.partie-frise-an { margin: 0 0 6px; font: 600 13px/1.3 var(--mono); letter-spacing: .06em; color: var(--encre-3); font-variant-numeric: tabular-nums; }
+.partie-frise { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.partie-frise-item { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 16px; padding: 10px 12px; margin: 0 -12px; border-radius: 10px; }
+.partie-frise-item:first-child { background: var(--fond-2); }
+.partie-frise-date { font: 500 12.5px/1.6 var(--mono); color: var(--encre-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.partie-frise-titre { margin: 0; font: 600 14.5px/1.45 var(--police); color: var(--encre); overflow-wrap: anywhere; }
+.partie-frise-detail { margin: 3px 0 0; font: 400 13.5px/1.5 var(--police); color: var(--encre-2); overflow-wrap: anywhere; }
+.partie-frise-suite { margin-top: 14px; }
+.partie-frise-suite > summary { font: 400 13.5px var(--police); color: var(--encre-2); }
+.partie-frise-suite[open] > summary { margin-bottom: 12px; }
+@media (max-width: 900px) {
+  .partie-tete-haut { grid-template-columns: 52px minmax(0, 1fr); }
+  .partie-tuile { width: 52px; height: 52px; border-radius: 15px; }
+  .partie-actions { grid-column: 1 / -1; justify-content: flex-start; max-width: none; }
+  .partie-fonctions { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .partie-tete { padding: 20px 18px; }
+  .partie-titres h1 { font-size: 26px; }
+  .partie-technos > div, .partie-frise-item { grid-template-columns: 1fr; gap: 2px; }
+}
+
+/* Les cartes des plateformes : le nom entier, les deux versions lisibles
+   en entier (plus de points de suspension), toutes de la même hauteur.
+   Les boutons passent sous le texte, qui garde toute la largeur. */
+.cartes-plateformes { grid-auto-rows: 1fr; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.carte-plateforme { grid-template-columns: 36px minmax(0, 1fr); grid-template-rows: 1fr auto; align-items: start; row-gap: 10px; }
+.carte-plateforme-tuile { grid-row: 1; }
+.carte-plateforme-corps { grid-column: 2; grid-row: 1; color: inherit; text-decoration: none; gap: 2px; }
+.carte-plateforme-corps:hover { text-decoration: none; }
+.carte-plateforme-nom { overflow-wrap: anywhere; line-height: 1.3; }
+.carte-plateforme-etat { white-space: normal; overflow: visible; text-overflow: clip; font: 400 12.5px/1.4 var(--police); color: var(--encre-2); }
+.carte-plateforme-etat b { font-weight: 600; color: var(--encre); font-variant-numeric: tabular-nums; }
+.carte-plateforme-quoi { color: var(--encre-3); }
+.carte-plateforme-gestes { grid-column: 2; grid-row: 2; display: flex; flex-wrap: wrap; gap: 4px; }
+.carte-plateforme-fleche { grid-column: 2; grid-row: 2; justify-self: end; }
+@media (prefers-reduced-motion: reduce) {
+  .carte-plateforme, .carte-plateforme-tuile, .carte-plateforme-fleche { transition: none; }
+  .carte-plateforme:hover, .carte-plateforme:hover .carte-plateforme-tuile { transform: none; }
+}

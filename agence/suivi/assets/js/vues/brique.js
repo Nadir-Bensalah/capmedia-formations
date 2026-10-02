@@ -7,6 +7,12 @@
    les étapes de la feuille de route qui la concernent, les tâches, les
    demandes, les points bloquants, les décisions, les fichiers, les
    adresses et le journal. Le client la lit, l'équipe la modifie.
+
+   En tête, la fiche de la partie (partie-format.js) : un en-tête avec ses
+   versions et ses liens, les chiffres clés, ce qu'elle fait, où elle en
+   est, son histoire datée, comment elle est faite. Une section sans
+   donnée ne se dessine pas ; l'équipe voit ce qui reste à rédiger et
+   corrige chaque section depuis le Cockpit (partie-editeur.js).
    ========================================================================== */
 
 import {
@@ -19,9 +25,11 @@ import {
   ligne, vide, squelette, titrePage, metrique, sur, fichierHtml, encart, chronoItem, brancherPieces,
 } from '../ui.js';
 import * as magasin from '../magasin.js';
-import { K, abonnerProjet, trierEtapes } from '../donnees.js';
+import { K, abonnerProjet, trierEtapes, versionsPartie } from '../donnees.js';
 import { filAriane } from '../coquille.js';
 import { editer, supprimer } from './editeurs.js';
+import { editerPartie, SECTIONS_PARTIE } from './partie-editeur.js';
+import { trierHistorique, datePartie, URL_PARTIE } from '../partie-format.js';
 
 const lire = (pid) => ({
   projet: magasin.lire(K.projet(pid)),
@@ -112,51 +120,142 @@ export const vue = async (ctx, env) => {
 
     const publiees = versions.filter((v) => v.statut === 'disponible');
     const derniere = publiees[0] || versions[0] || null;
-    const enRoute = versions.find((v) => ['test', 'soumise', 'revue'].includes(v.statut)) || null;
 
-    sortie.innerHTML = `<div class="page">
-      <header class="page-tete page-tete--projet">
-        <div class="rang" style="gap:16px;align-items:flex-start;min-width:0">
-          <span class="brique-icone${ton ? ` brique-icone--${ton}` : ''}">${icone(nomIcone)}</span>
-          <div style="min-width:0">
-            <p class="surtitre"><a href="#/projets/${echapper(pid)}">${echapper(d.projet.nom)}</a> · ${echapper(TYPES_COMPOSANT[cle] || (fiche ? fiche.libelle : ''))}</p>
-            <h1 style="margin-top:2px">${echapper(titre)}</h1>
-            <div class="rang tete-suivi">
-              ${composant ? pastille(STATUTS_COMPOSANT, composant.statut || 'en-cours') : '<span class="etiquette">Pas encore suivie</span>'}
-              ${fiche ? pucePlateforme(cle) : ''}
-              ${/* La version se lit sur les versions réelles, pas sur un
-                    champ de la partie : la dernière disponible, et la
-                    dernière en route. */ ''}
-              ${derniere && derniere.statut === 'disponible' ? `<span class="puce">${icone('releases')} ${echapper(derniere.version || '')} disponible${dateCourte(derniere.date) ? ` depuis le ${echapper(dateCourte(derniere.date))}` : ''}</span>` : ''}
-              ${enRoute ? `<span class="puce">${icone('sparkle')} ${echapper(enRoute.version || '')} ${echapper(((STATUTS_RELEASE[enRoute.statut] || {}).libelle || 'en test').toLowerCase())}${enRoute.build ? ` · build ${echapper(enRoute.build)}` : ''}</span>` : ''}
-              ${composant && composant.environnement ? `<span class="puce">${icone('serveur')} ${echapper(composant.environnement)}</span>` : ''}
-              ${composant && composant.responsable && (d.equipe.find((m) => m.id === composant.responsable) || {}).nom ? `<span class="puce">${icone('utilisateur')} ${echapper((d.equipe.find((m) => m.id === composant.responsable) || {}).nom)}</span>` : ''}
-            </div>
+    /* La fiche de la partie, lue par le client (partie-format.js). Chaque
+       section ne se dessine que si sa donnée existe ; l'équipe voit en
+       plus, à part, la liste de ce qui reste à rédiger. */
+    const c = composant || {};
+    const vp = versionsPartie(d.releases, cle, composant);
+    const chiffres = (Array.isArray(c.chiffres) ? c.chiffres : []).filter((x) => x && x.valeur && x.libelle);
+    const fonctions = (Array.isArray(c.fonctions) ? c.fonctions : []).filter(Boolean);
+    const etapesSuivantes = (Array.isArray(c.prochainesEtapes) ? c.prochainesEtapes : []).filter(Boolean);
+    const attention = (Array.isArray(c.pointsAttention) ? c.pointsAttention : []).filter(Boolean);
+    const technologies = (Array.isArray(c.technologies) ? c.technologies : []).filter((x) => x && x.nom);
+    const historique = trierHistorique(c.historique).filter((h) => h.titre);
+    const liensPartie = (Array.isArray(c.liens) ? c.liens : []).filter((l) => l && l.libelle && URL_PARTIE.test(String(l.url || '')));
+    const resume = c.resume || c.description || '';
+    const ceQuElleFait = Boolean(resume || fonctions.length);
+    const ouEnEst = Boolean(c.etatActuel || etapesSuivantes.length || attention.length);
+    const commentFaite = Boolean(technologies.length || c.hebergement || (c.techno || []).length);
+    const adresseEnPlus = adresse && /^https:\/\//i.test(adresse) && !liensPartie.some((l) => l.url === adresse) ? adresse : '';
+    const modifier = (section, libelle = 'Modifier') => (equipe && composant
+      ? `<button class="btn btn-fantome btn-petit" type="button" data-action="editer-partie" data-section-edit="${section}">${icone('edit')} ${libelle}</button>`
+      : '');
+    const manquent = composant ? [
+      !c.sousTitre && 'entete',
+      !chiffres.length && 'chiffres',
+      !ceQuElleFait && 'fonctions',
+      !ouEnEst && 'etat',
+      !historique.length && 'historique',
+      !technologies.length && !c.hebergement && 'fabrication',
+    ].filter(Boolean) : [];
+
+    /* L'historique en frise, rangé par année, du plus récent au plus
+       ancien. Au-delà de huit entrées, le reste se déplie. */
+    const frise = (liste) => {
+      const parAnnee = [];
+      liste.forEach((h) => {
+        const annee = h.date.slice(0, 4);
+        const groupe = parAnnee.find((g) => g.annee === annee);
+        if (groupe) groupe.items.push(h); else parAnnee.push({ annee, items: [h] });
+      });
+      return parAnnee.map((g) => `<div class="partie-frise-annee">
+        <p class="partie-frise-an">${echapper(g.annee)}</p>
+        <ol class="partie-frise">${g.items.map((h) => `<li class="partie-frise-item">
+          <time class="partie-frise-date" datetime="${echapper(h.date)}">${echapper(datePartie(h.date, { court: true }).replace(/\s\d{4}$/, ''))}</time>
+          <div class="partie-frise-corps"><p class="partie-frise-titre">${echapper(h.titre)}</p>${h.detail ? `<p class="partie-frise-detail">${echapper(h.detail)}</p>` : ''}</div>
+        </li>`).join('')}</ol>
+      </div>`).join('');
+    };
+
+    const versionBloc = (quoi, numero, nuance, cleBloc) => `<div class="partie-version" data-version="${cleBloc}">
+      <p class="partie-version-quoi">${echapper(quoi)}</p>
+      <p class="partie-version-num">${numero ? echapper(numero) : '-'}</p>
+      <p class="partie-version-nuance">${echapper(nuance || '')}</p>
+    </div>`;
+
+    sortie.innerHTML = `<div class="page page-partie" data-partie-page="${echapper(composant ? composant.id : cle)}">
+      <header class="partie-tete partie-tete--${echapper(ton || 'gris')}" data-section="entete">
+        <div class="partie-tete-haut">
+          <span class="partie-tuile">${icone(nomIcone)}</span>
+          <div class="partie-titres">
+            <p class="surtitre"><a href="#/projets/${echapper(pid)}">${echapper(d.projet.nom)}</a> · ${echapper(TYPES_COMPOSANT[cle] || (fiche ? fiche.libelle : 'Partie du projet'))}</p>
+            <h1>${echapper(titre)}</h1>
+            ${c.sousTitre ? `<p class="partie-sous-titre">${echapper(c.sousTitre)}</p>` : ''}
+          </div>
+          <div class="actions partie-actions">
+            ${modifier('entete', 'L\'en-tête')}
+            ${equipe && composant ? `<button class="btn btn-secondaire btn-petit" type="button" data-action="editer" data-genre="composant" data-id="${echapper(composant.id)}">${icone('edit')} Réglages</button>` : ''}
+            ${equipe && composant ? `<button class="btn btn-secondaire btn-petit" type="button" data-action="editer" data-genre="technique" data-id="${echapper(composant.id)}">${icone('code')} Fiche technique</button>` : ''}
+            ${equipe ? `<button class="btn btn-principal btn-petit" type="button" data-action="nouveau" data-genre="release" data-defaut='${echapper(JSON.stringify({ plateforme: cle, composant: composant ? composant.id : '' }))}'>${icone('plus')} Nouvelle version</button>` : ''}
+            ${equipe && !composant ? `<button class="btn btn-principal btn-petit" type="button" data-action="nouveau" data-genre="composant" data-defaut='${echapper(JSON.stringify({ type: cle, nom: fiche ? fiche.libelle : '' }))}'>${icone('plus')} Suivre cette partie</button>` : ''}
           </div>
         </div>
-        <div class="actions">
-          ${adresse ? `<a class="btn btn-secondaire" href="${echapper(adresse)}" target="_blank" rel="noopener noreferrer">${icone('externe')} Ouvrir</a>` : ''}
-          ${equipe && composant ? `<button class="btn btn-secondaire" type="button" data-action="editer" data-genre="composant" data-id="${echapper(composant.id)}">${icone('edit')} Modifier</button>` : ''}
-          ${equipe && composant ? `<button class="btn btn-secondaire" type="button" data-action="editer" data-genre="technique" data-id="${echapper(composant.id)}">${icone('code')} Fiche technique</button>` : ''}
-          ${equipe ? `<button class="btn btn-principal" type="button" data-action="nouveau" data-genre="release" data-defaut='${echapper(JSON.stringify({ plateforme: cle, composant: composant ? composant.id : '' }))}'>${icone('plus')} Nouvelle version</button>` : ''}
-          ${equipe && !composant ? `<button class="btn btn-principal" type="button" data-action="nouveau" data-genre="composant" data-defaut='${echapper(JSON.stringify({ type: cle, nom: fiche ? fiche.libelle : '' }))}'>${icone('plus')} Suivre cette partie</button>` : ''}
+        <div class="partie-versions">
+          <div class="partie-version" data-version="statut">
+            <p class="partie-version-quoi">Statut</p>
+            <p class="partie-version-statut">${composant ? pastille(STATUTS_COMPOSANT, c.statut || 'en-cours') : '<span class="etiquette">Pas encore suivie</span>'}</p>
+            <p class="partie-version-nuance">${composant && dateCourte(c.maj) ? `mis à jour le ${echapper(dateCourte(c.maj))}` : ''}</p>
+          </div>
+          ${vp.enLigne ? versionBloc('En ligne', vp.enLigne.numero, [vp.enLigne.quand && `depuis le ${vp.enLigne.quand}`, vp.enLigne.ou].filter(Boolean).join(' · '), 'en-ligne') : ''}
+          ${vp.prep ? versionBloc('En préparation', vp.prep.numero, vp.prep.etat, 'preparation') : ''}
         </div>
+        ${liensPartie.length || adresseEnPlus ? `<div class="partie-liens">
+          ${liensPartie.map((l) => `<a class="btn btn-secondaire" href="${echapper(l.url)}" target="_blank" rel="noopener noreferrer" data-lien-partie>${echapper(l.libelle)} ${icone('externe')}</a>`).join('')}
+          ${adresseEnPlus ? `<a class="btn btn-secondaire" href="${echapper(adresseEnPlus)}" target="_blank" rel="noopener noreferrer">Ouvrir ${icone('externe')}</a>` : ''}
+        </div>` : ''}
       </header>
 
-      ${composant && composant.description ? `<div class="carte carte--serree" style="margin-bottom:var(--e-5)"><div class="prose">${enParagraphes(composant.description)}</div></div>` : ''}
+      ${equipe && composant && manquent.length ? `<div class="partie-a-completer" data-section="a-completer">
+        <p><strong>Encore vide, invisible pour le client :</strong></p>
+        <div class="rang" style="gap:6px">${manquent.map((m) => `<button class="btn btn-doux btn-petit" type="button" data-action="editer-partie" data-section-edit="${m}">${icone('plus')} ${echapper(SECTIONS_PARTIE[m])}</button>`).join('')}</div>
+      </div>` : ''}
 
-      <div class="metriques">
-        ${composant ? metrique(`${borner(composant.progression)} %`, 'Avancement de la partie', { nuance: dateCourte(composant.maj) ? `au ${dateCourte(composant.maj)}` : '' }) : metrique('Pas encore suivie', 'Avancement')}
+      ${chiffres.length ? `<div class="metriques partie-chiffres" data-section="chiffres">${chiffres.map((x) => metrique(x.valeur, x.libelle)).join('')}</div>
+      ${equipe ? `<div class="partie-geste">${modifier('chiffres', 'Les chiffres')}</div>` : ''}` : ''}
+
+      ${ceQuElleFait ? `<section class="section partie-section" data-section="fonctions">
+        <div class="section-tete"><h2>Ce que fait cette partie</h2>${modifier('fonctions')}</div>
+        ${resume ? `<div class="partie-resume">${enParagraphes(resume)}</div>` : ''}
+        ${fonctions.length ? `<ol class="partie-fonctions">${fonctions.map((f, i) => `<li><span class="partie-index">${String(i + 1).padStart(2, '0')}</span><span>${echapper(f)}</span></li>`).join('')}</ol>` : ''}
+      </section>` : ''}
+
+      ${ouEnEst || commentFaite ? `<div class="${ouEnEst && commentFaite ? 'grille grille-2 ' : ''}section partie-duo">
+        ${ouEnEst ? `<section class="partie-section" data-section="etat">
+          <div class="section-tete"><h2>Où on en est</h2>${modifier('etat')}</div>
+          ${c.etatActuel ? `<p class="partie-lead">${echapper(c.etatActuel)}</p>` : ''}
+          ${etapesSuivantes.length ? `<div class="partie-bloc" data-bloc="prochaines-etapes">
+            <p class="partie-bloc-titre">Les prochaines étapes</p>
+            <ol class="partie-etapes">${etapesSuivantes.map((e, i) => `<li><span class="partie-index">${i + 1}</span><span>${echapper(e)}</span></li>`).join('')}</ol>
+          </div>` : ''}
+          ${attention.length ? `<div class="partie-bloc partie-attention" data-bloc="points-attention">
+            <p class="partie-bloc-titre">${attention.length > 1 ? 'Points d\'attention' : 'Point d\'attention'}</p>
+            <ul>${attention.map((a) => `<li>${echapper(a)}</li>`).join('')}</ul>
+          </div>` : ''}
+        </section>` : ''}
+        ${commentFaite ? `<section class="partie-section" data-section="fabrication">
+          <div class="section-tete"><h2>Comment elle est faite</h2>${modifier('fabrication')}</div>
+          ${technologies.length ? `<dl class="partie-technos">${technologies.map((t) => `<div><dt>${echapper(t.nom)}</dt>${t.role ? `<dd>${echapper(t.role)}</dd>` : ''}</div>`).join('')}</dl>`
+            : `<div class="rang" style="gap:6px">${(c.techno || []).map((t) => `<span class="etiquette">${echapper(t)}</span>`).join('')}</div>`}
+          ${c.hebergement ? `<div class="partie-bloc" data-bloc="hebergement"><p class="partie-bloc-titre">Où elle vit</p><p class="partie-texte">${echapper(c.hebergement)}</p></div>` : ''}
+        </section>` : ''}
+      </div>` : ''}
+
+      ${historique.length ? `<section class="section partie-section" data-section="historique">
+        <div class="section-tete"><h2>Son histoire <span class="compte-section">${historique.length}</span></h2>${modifier('historique')}</div>
+        ${frise(historique.slice(0, 8))}
+        ${historique.length > 8 ? `<details class="depliant partie-frise-suite"><summary>Voir les ${historique.length - 8} étapes plus anciennes</summary>${frise(historique.slice(8))}</details>` : ''}
+      </section>` : ''}
+
+      <div class="metriques partie-suivi" data-section="suivi">
+        ${composant ? metrique(`${borner(composant.progression)} %`, 'Avancement de la partie', { nuance: dateCourte(composant.maj) ? `le ${dateCourte(composant.maj)}` : '' }) : metrique('Pas encore suivie', 'Avancement')}
         ${metrique(publiees.length, 'Versions publiées', { nuance: versions.length > publiees.length ? `${versions.length - publiees.length} en cours` : '' })}
         ${metrique(ouvertes.length, 'Tâches ouvertes', { nuance: `${taches.length} au total` })}
         ${metrique(demandesOuvertes.length, 'Demandes ouvertes', { ton: demandesOuvertes.length ? 'accent' : '' })}
         ${metrique(blocages.length, 'Points bloquants', { ton: blocages.length ? 'rouge' : '' })}
-        ${metrique(fichiers.length, 'Fichiers')}
       </div>
 
-      ${composant && (composant.techno || []).length ? `<div class="rang" style="margin-top:var(--e-5);gap:6px">${(composant.techno || []).map((t) => `<span class="etiquette">${echapper(t)}</span>`).join('')}</div>` : ''}
-
-      ${equipe && tec.alertes && tec.alertes.length ? `<section class="section">
+      ${equipe && tec.alertes && tec.alertes.length ? `<section class="section" data-section="alertes">
         <div class="section-tete"><h2>À mettre à jour <span class="compte-section compte-section--vif">${tec.alertes.length}</span></h2>${equipe ? lienFiche : ''}</div>
         <div class="liste">${tec.alertes.map((a) => ligne({
           icone: a.gravite === 'critique' ? 'alerte' : a.gravite === 'attention' ? 'horloge' : 'info',
@@ -216,7 +315,7 @@ export const vue = async (ctx, env) => {
         })).join('')}</div>` : '<p class="t-petit t-3">Rien ne bloque cette partie.</p>'}
       </section>` : ''}
 
-      <section class="section">
+      ${versions.length || equipe ? `<section class="section" data-section="versions">
         <div class="section-tete"><h2>Les versions ${versions.length ? `<span class="compte-section">${versions.length}</span>` : ''}</h2>${derniere && derniere.version ? `<span class="t-petit t-3">Dernière : ${echapper(derniere.version)}</span>` : ''}</div>
         ${versions.length ? `<div class="chrono">${versions.map((r) => `
           <article class="chrono-item">
@@ -237,8 +336,8 @@ export const vue = async (ctx, env) => {
               </div>` : ''}
             </div>
           </article>`).join('')}</div>`
-        : vide({ icone: 'releases', titre: 'Aucune version enregistrée', texte: equipe ? 'Chaque livraison notée ici devient l\'historique de la brique.' : 'Les livraisons apparaîtront ici, avec ce qui change à chaque fois.', compact: true })}
-      </section>
+        : vide({ icone: 'releases', titre: 'Aucune version enregistrée', texte: 'Chaque livraison notée ici devient l\'historique de la brique.', compact: true })}
+      </section>` : ''}
 
       ${jalons.length ? `<section class="section">
         <div class="section-tete"><h2>Les étapes qui la concernent <span class="compte-section">${jalons.length}</span></h2><a class="lien" href="#/projets/${echapper(pid)}/etapes">La feuille de route</a></div>
@@ -250,7 +349,7 @@ export const vue = async (ctx, env) => {
         })).join('')}</div>
       </section>` : ''}
 
-      <section class="section">
+      ${taches.length || equipe ? `<section class="section" data-section="taches">
         <div class="section-tete"><h2>Les tâches ${taches.length ? `<span class="compte-section">${ouvertes.length}</span>` : ''}</h2>${equipe ? `<button class="btn btn-secondaire btn-petit" type="button" data-action="nouveau" data-genre="tache" data-defaut='${echapper(JSON.stringify({ composant: composant ? composant.id : '' }))}'>${icone('plus')} Nouvelle tâche</button>` : ''}</div>
         ${taches.length ? `<div class="liste">${taches.map((t) => ligne({
           href: `#/projets/${echapper(pid)}/taches/${echapper(t.id)}`,
@@ -259,16 +358,16 @@ export const vue = async (ctx, env) => {
           sous: echapper([dateCourte(t.echeance) ? `échéance ${dateCourte(t.echeance)}` : '', t.estimation].filter(Boolean).join(' · ')),
           fin: `${puce(PRIORITES, t.priorite || 'normale')}${pastille(STATUTS_TACHE, t.statut || 'a-faire', { client: !equipe })}`,
         })).join('')}</div>` : vide({ icone: 'taches', titre: 'Aucune tâche sur cette brique', compact: true })}
-      </section>
+      </section>` : ''}
 
-      <section class="section">
+      <section class="section" data-section="demandes">
         <div class="section-tete"><h2>Les demandes ${demandes.length ? `<span class="compte-section">${demandesOuvertes.length}</span>` : ''}</h2><a class="lien" href="#/projets/${echapper(pid)}/nouvelle-demande">Nouvelle demande</a></div>
         ${demandes.length ? `<div class="liste">${demandes.map((t) => ligne({
           href: `#/projets/${echapper(pid)}/demandes/${echapper(t.id)}`,
           icone: 'demandes', titre: echapper(t.titre),
           sous: echapper([t.numero, t.version ? `version ${t.version}` : '', OUVERTS.includes(t.statut) ? `ouverte depuis ${age(t.cree)}` : `close ${depuis(t.maj)}`].filter(Boolean).join(' · ')),
           fin: pastille(STATUTS, t.statut, { client: !equipe }),
-        })).join('')}</div>` : vide({ icone: 'demandes', titre: 'Aucune demande sur cette partie', compact: true })}
+        })).join('')}</div>` : '<p class="t-petit t-3">Aucune demande sur cette partie. Une question, un souhait : écrivez-nous.</p>'}
       </section>
 
       ${notes.length || equipe ? `<section class="section">
@@ -280,19 +379,19 @@ export const vue = async (ctx, env) => {
         })).join('')}</div>` : '<p class="t-petit t-3">Aucune décision rattachée à cette partie pour l\'instant.</p>'}
       </section>` : ''}
 
-      <div class="grille grille-2 section">
-        <section>
+      ${fichiers.length || liens.length || equipe ? `<div class="${(fichiers.length && liens.length) || equipe ? 'grille grille-2 ' : ''}section">
+        ${fichiers.length || equipe ? `<section data-section="fichiers">
           <div class="section-tete"><h3>Les fichiers ${fichiers.length ? `<span class="compte-section">${fichiers.length}</span>` : ''}</h3></div>
           ${fichiers.length ? `<div class="liste">${fichiers.map((f) => fichierHtml(f)).join('')}</div>` : vide({ icone: 'fichiers', titre: 'Aucun fichier', compact: true })}
-        </section>
-        <section>
+        </section>` : ''}
+        ${liens.length || equipe ? `<section data-section="adresses">
           <div class="section-tete"><h3>Les adresses ${liens.length ? `<span class="compte-section">${liens.length}</span>` : ''}</h3></div>
           ${liens.length ? `<div class="liste">${liens.map((l) => `<a class="lien-env" href="${echapper(l.url)}" target="_blank" rel="noopener noreferrer">
             <span class="ligne-icone">${icone('liens')}</span>
             <span><span class="ligne-titre">${echapper(l.nom)}</span><span class="ligne-sous tronque" style="display:block">${echapper([(CATEGORIES_LIEN[l.categorie] || ''), l.environnement].filter(Boolean).join(' · '))}</span></span>
             <span class="t-3">${icone('externe')}</span></a>`).join('')}</div>` : vide({ icone: 'liens', titre: 'Aucune adresse', compact: true })}
-        </section>
-      </div>
+        </section>` : ''}
+      </div>` : ''}
 
       ${journal.length ? `<section class="section">
         <div class="section-tete"><h3>Le journal</h3><a class="lien" href="#/projets/${echapper(pid)}/activite">Tout le projet</a></div>
@@ -315,6 +414,10 @@ export const vue = async (ctx, env) => {
     const trouver = (g, id) => ({
       composant: d.composants, release: d.releases, note: d.notes, blocage: d.blocages, tache: d.taches,
     }[g] || []).find((x) => x.id === id);
+    if (action === 'editer-partie') {
+      const { composant } = resoudre(d, cid);
+      return editerPartie(env, { pid, composant, section: el.dataset.sectionEdit });
+    }
     if (action === 'nouveau') {
       let defaut = {};
       try { defaut = JSON.parse(el.dataset.defaut || '{}'); } catch (e) { defaut = {}; }
@@ -340,4 +443,4 @@ export const vue = async (ctx, env) => {
   };
 };
 
-void avatar; void encart; void joursAvant; void pluriel;
+void avatar; void encart; void joursAvant; void pluriel; void pucePlateforme;

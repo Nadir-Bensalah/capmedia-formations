@@ -20,7 +20,7 @@ import {
   verdictHtml, anneauOuPas, progressionOuPas, copier, reglerBarreOnglets,
 } from '../ui.js';
 import * as magasin from '../magasin.js';
-import { K, ecrire, nouvelId, interneDuProjet, abonnerProjet, progressionProjet, jalonCourant, jalonSuivant, prochaineReunion, reunionAVenir, etatVersions, activiteDepuis, enAttenteDeVous, peutRepondreValidation, parStatut, risquesProjet, MODES_PROGRESSION, trierEtapes, phasesTriees, notesPartageesDuProjet } from '../donnees.js';
+import { K, ecrire, nouvelId, interneDuProjet, abonnerProjet, progressionProjet, jalonCourant, jalonSuivant, prochaineReunion, reunionAVenir, activiteDepuis, versionsPartie, enAttenteDeVous, peutRepondreValidation, parStatut, risquesProjet, MODES_PROGRESSION, trierEtapes, phasesTriees, notesPartageesDuProjet } from '../donnees.js';
 import { filAriane } from '../coquille.js';
 import { notesPartageesHtml, gesteNoteDemande } from './notes-client.js';
 import { naviguer } from '../routeur.js';
@@ -426,33 +426,42 @@ const cartesPlateformes = (projet, d, pid) => {
   return `<div class="cartes-plateformes" role="list">${cles.map((cle) => {
     const f = PLATEFORMES[cle];
     const c = d.composants.find((x) => x.type === (f.composant || cle)) || null;
-    const v = etatVersions(d.releases, cle, c);
+    /* Le nom vient de la partie quand elle existe (« Firebase » plutôt que
+       « Serveur ») ; la plateforme ne donne que l'icône et la couleur. */
+    const nom = (c && String(c.nom || '').trim()) || f.libelle;
+    const v = versionsPartie(d.releases, cle, c);
+    /* Deux lignes courtes, lisibles en entier : le numéro, rien d'autre.
+       Le détail (date, état chez Apple) est sur la page de la partie, et
+       dans l'infobulle. Plus de texte coupé par des points de suspension. */
     const lignes = [];
-    if (v.disponible) lignes.push(`${v.disponible.version || ''} disponible${dateCourte(v.disponible.date) ? ` depuis le ${dateCourte(v.disponible.date)}` : ''}`.trim());
-    if (v.enRoute) lignes.push(`${v.enRoute.version || ''} ${((STATUTS_RELEASE[v.enRoute.statut] || {}).libelle || 'en test').toLowerCase()}${dateCourte(v.enRoute.date) ? ` depuis le ${dateCourte(v.enRoute.date)}` : ''}${v.enRoute.build ? ` · build ${v.enRoute.build}` : ''}`.trim());
-    if (!lignes.length) lignes.push(c ? ((STATUTS_COMPOSANT[c.statut || 'en-cours'] || {}).libelle || 'En cours') : 'Pas encore suivie');
+    if (v.enLigne) lignes.push({ quoi: 'En ligne', num: v.enLigne.numero, detail: [v.enLigne.quand && `depuis le ${v.enLigne.quand}`, v.enLigne.ou].filter(Boolean).join(' · ') });
+    if (v.prep) lignes.push({ quoi: 'En préparation', num: v.prep.numero, detail: v.prep.etat });
+    const etat = !lignes.length ? (c ? ((STATUTS_COMPOSANT[c.statut || 'en-cours'] || {}).libelle || 'En cours') : 'Pas encore suivie') : '';
     const store = v.disponible && v.disponible.liens && v.disponible.liens.store;
     const test = v.enRoute && v.enRoute.liens && v.enRoute.liens.test;
     /* L'adresse publique de la partie (fiche du store, site en ligne,
        tableau de bord) : l'éditeur promettait qu'elle rendait la carte
-       cliquable, et la carte ne la lisait pas. Seul un lien web est suivi. */
-    const publique = !store && c && /^https:\/\//i.test(String(c.lien || '')) ? c.lien : '';
+       cliquable, et la carte ne la lisait pas. Seul un lien web est suivi.
+       À défaut, le premier lien de la fiche de la partie. */
+    const premierLien = c && Array.isArray(c.liens) ? (c.liens.find((l) => l && /^https:\/\//i.test(String(l.url || ''))) || {}).url : '';
+    const publique = !store && c ? (/^https:\/\//i.test(String(c.lien || '')) ? c.lien : (premierLien || '')) : '';
     const surStore = cle === 'ios' || cle === 'android';
     const href = `#/projets/${echapper(pid)}/brique/${echapper(c ? c.id : `p-${cle}`)}`;
     /* Les boutons ne vivent pas dans le lien : un lien dans un lien n'est
        pas permis, et le navigateur l'éjecterait. */
-    return `<div class="carte-plateforme carte-plateforme--${f.voile}" role="listitem" data-plateforme="${echapper(cle)}" style="grid-template-columns:36px minmax(0,1fr) auto">
-      <a class="carte-plateforme-tuile" href="${href}" aria-label="${echapper(`Ouvrir la page ${f.libelle}`)}">${icone(f.icone)}</a>
-      <a class="carte-plateforme-corps" href="${href}" style="color:inherit;text-decoration:none" data-astuce="${echapper(`Ouvrir la page ${f.libelle}`)}">
-        <span class="carte-plateforme-nom">${echapper(f.libelle)}</span>
-        ${lignes.map((l) => `<span class="carte-plateforme-etat">${echapper(l)}</span>`).join('')}
+    const boutons = [
+      store ? `<a class="btn btn-doux btn-petit" href="${echapper(store)}" target="_blank" rel="noopener" data-astuce="Ouvrir dans le store">${icone('externe')} Store</a>` : '',
+      test ? `<a class="btn btn-doux btn-petit" href="${echapper(test)}" target="_blank" rel="noopener" data-astuce="Version de test">${icone('externe')} Test</a>` : '',
+      publique ? `<a class="btn btn-doux btn-petit" href="${echapper(publique)}" target="_blank" rel="noopener" data-astuce="${surStore ? 'Ouvrir dans le store' : 'Ouvrir le site'}">${icone('externe')} ${surStore ? 'Store' : 'Ouvrir'}</a>` : '',
+    ].filter(Boolean);
+    return `<div class="carte-plateforme carte-plateforme--${f.voile}" role="listitem" data-plateforme="${echapper(cle)}">
+      <a class="carte-plateforme-tuile" href="${href}" aria-label="${echapper(`Ouvrir la page ${nom}`)}">${icone(f.icone)}</a>
+      <a class="carte-plateforme-corps" href="${href}" data-astuce="${echapper(`Ouvrir la page ${nom}`)}">
+        <span class="carte-plateforme-nom">${echapper(nom)}</span>
+        ${lignes.map((l) => `<span class="carte-plateforme-etat"${l.detail ? ` title="${echapper(l.detail)}"` : ''}><span class="carte-plateforme-quoi">${echapper(l.quoi)}</span> <b>${echapper(l.num)}</b></span>`).join('')}
+        ${etat ? `<span class="carte-plateforme-etat">${echapper(etat)}</span>` : ''}
       </a>
-      <span class="rang" style="gap:4px;flex-wrap:nowrap">
-        ${store ? `<a class="btn btn-doux btn-petit" href="${echapper(store)}" target="_blank" rel="noopener" data-astuce="Ouvrir dans le store">${icone('externe')} Store</a>` : ''}
-        ${test ? `<a class="btn btn-doux btn-petit" href="${echapper(test)}" target="_blank" rel="noopener" data-astuce="Version de test">${icone('externe')} Test</a>` : ''}
-        ${publique ? `<a class="btn btn-doux btn-petit" href="${echapper(publique)}" target="_blank" rel="noopener" data-astuce="${surStore ? 'Ouvrir dans le store' : 'Ouvrir le site'}">${icone('externe')} ${surStore ? 'Store' : 'Ouvrir'}</a>` : ''}
-        ${!store && !test && !publique ? `<a class="carte-plateforme-fleche" href="${href}" aria-hidden="true" tabindex="-1">${icone('fleche')}</a>` : ''}
-      </span>
+      ${boutons.length ? `<span class="carte-plateforme-gestes">${boutons.join('')}</span>` : `<a class="carte-plateforme-fleche" href="${href}" aria-hidden="true" tabindex="-1">${icone('fleche')}</a>`}
     </div>`;
   }).join('')}</div>`;
 };
@@ -696,6 +705,7 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
         <div class="rang-espace"><p class="t-corps-fort rang" style="gap:8px">${iconePlateforme(c.type) ? `<span class="ligne-icone ligne-icone--${tonPlateforme(c.type)}" style="width:28px;height:28px;border-radius:8px">${icone(iconePlateforme(c.type))}</span>` : ''}${echapper(c.nom)}</p>${pastille(STATUTS_COMPOSANT, c.statut || 'en-cours')}</div>
         <div class="rang-espace t-micro t-3" style="margin:10px 0 6px"><span>${echapper(TYPES_COMPOSANT[c.type] || c.type || '')}</span><span>avancement de la partie${dateCourte(c.maj) ? ` · ${echapper(dateCourte(c.maj))}` : ''}</span></div>
         ${progression(c.progression, borner(c.progression) >= 100 ? 'vert' : '')}
+        ${c.sousTitre ? `<p class="t-petit t-2" style="margin-top:10px">${echapper(c.sousTitre)}</p>` : ''}
         ${c.environnement ? `<p class="t-micro t-3" style="margin-top:8px">${echapper(c.environnement)}</p>` : ''}
       </a>`).join('')}</div>
     </section>` : (equipe ? `<section class="section"><div class="section-tete"><h2>Les parties du projet</h2>${boutonNouveau(env, 'composant', 'Ajouter une partie')}</div>${vide({ icone: 'composants', titre: 'Aucune partie', texte: 'Découpez le projet : iPhone, Android, web, serveur...', compact: true })}</section>` : '')}

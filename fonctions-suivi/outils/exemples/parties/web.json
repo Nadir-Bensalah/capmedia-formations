@@ -1,0 +1,6 @@
+{
+  "id": "web",
+  "nom": "Application web",
+  "sousTitre": "L'Atelier dans le navigateur, pour réserver depuis un ordinateur",
+  "resume": "La version web reprend l'essentiel de l'application mobile, pour ceux qui préfèrent un grand écran."
+}

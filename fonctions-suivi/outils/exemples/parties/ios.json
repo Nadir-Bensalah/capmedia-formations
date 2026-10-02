@@ -1,0 +1,48 @@
+{
+  "id": "ios",
+  "nom": "Application iPhone",
+  "sousTitre": "Atelier sur l'App Store : réservations, ateliers et paiement, dans la poche",
+  "resume": "L'application iPhone permet aux élèves de l'Atelier de réserver un cours, de payer et de suivre leurs ateliers.\n\nElle partage son code avec l'application Android et ses données avec le site : un même compte retrouve tout, sur chaque appareil.",
+  "statut": "en-validation",
+  "etatActuel": "Au 1er octobre 2026, la version 1.1.2 est en ligne. La 1.1.3 est en validation chez Apple depuis le 30 septembre.",
+  "versionEnLigne": { "numero": "1.1.2", "date": "2026-09-10", "ou": "App Store" },
+  "versionEnPreparation": { "numero": "1.1.3", "etat": "En validation chez Apple depuis le 30 septembre 2026" },
+  "liens": [
+    { "libelle": "Voir sur l'App Store", "url": "https://apps.apple.com/app/id1234567890" },
+    { "libelle": "Version de test", "url": "https://testflight.apple.com/join/exemple" }
+  ],
+  "chiffres": [
+    { "valeur": "1.1.2", "libelle": "version en ligne" },
+    { "valeur": "6", "libelle": "langues" },
+    { "valeur": "iOS 15.1", "libelle": "version minimale" },
+    { "valeur": "42", "libelle": "écrans" }
+  ],
+  "fonctions": [
+    "Réserver un cours en trois touches",
+    "Payer par carte ou avec Apple Pay",
+    "Recevoir un rappel la veille de chaque atelier",
+    "Retrouver ses factures",
+    "Suivre ses progrès d'atelier en atelier",
+    "Écrire à l'animateur depuis l'application"
+  ],
+  "hebergement": "Distribuée par l'App Store ; les données vivent dans le Firebase du projet, en Europe.",
+  "technologies": [
+    { "nom": "React Native", "role": "une seule base de code pour iPhone et Android" },
+    { "nom": "Firebase", "role": "comptes, données synchronisées et notifications" },
+    { "nom": "Stripe", "role": "paiements sécurisés" }
+  ],
+  "historique": [
+    { "date": "2026-09-30", "titre": "Version 1.1.3 envoyée à Apple", "detail": "Rappels fiabilisés et traductions complétées." },
+    { "date": "2026-09-10", "titre": "Version 1.1.2 publiée", "detail": "Les réservations se lisent page par page, sans plafond." },
+    { "date": "2026-08-07", "titre": "Première version sur l'App Store" },
+    { "date": "2026-07-20", "titre": "Audit fonctionnel complet", "detail": "Suppression du compte depuis l'app et états d'erreur sur chaque écran." },
+    { "date": "2025-07-27", "titre": "Début du développement" }
+  ],
+  "prochainesEtapes": [
+    "Publication de la 1.1.3 dès la validation d'Apple",
+    "Campagne de tests avec six testeurs indépendants"
+  ],
+  "pointsAttention": [
+    "Une adaptation technique demandée par Apple est à prévoir avant la version suivante."
+  ]
+}

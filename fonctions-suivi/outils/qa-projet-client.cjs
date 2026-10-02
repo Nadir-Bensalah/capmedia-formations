@@ -66,9 +66,13 @@ const remettre = async () => {
   console.log('\n== 15 et 18 : les cartes plateformes lisent les versions réelles');
   await page.evaluate(() => { location.hash = '#/projets/atelier'; });
   await page.waitForSelector('[data-plateforme="android"]', { timeout: 20000 }); await pause(800);
+  /* La carte dit le numéro en entier (« En ligne 1.4.1 », « En préparation
+     1.4.2 ») ; la date et le build passent dans l'infobulle et sur la page
+     de la partie : le texte n'est plus coupé (02/10/2026). */
   const carte = await page.$eval('[data-plateforme="android"]', (el) => el.textContent.replace(/\s+/g, ' '));
-  verifier(/1\.4\.1 disponible depuis le \d{1,2}(\/\d{2}| \S+)/.test(carte), 'Android : « 1.4.1 disponible depuis le … »', carte.trim().slice(0, 160));
-  verifier(/1\.4\.2 en test depuis le \d{1,2}(\/\d{2}| \S+)/.test(carte) && /build 87/.test(carte), 'Android : « 1.4.2 en test depuis le … · build 87 »', carte.trim().slice(0, 160));
+  const bulles = await page.$$eval('[data-plateforme="android"] .carte-plateforme-etat[title]', (l) => l.map((e) => e.getAttribute('title')));
+  verifier(/En ligne 1\.4\.1/.test(carte) && /^depuis le \d{1,2}(\/\d{2}| \S+)/.test(bulles[0] || ''), 'Android : « En ligne 1.4.1 », daté dans l infobulle', `${carte.trim().slice(0, 160)} | ${bulles.join(' | ')}`);
+  verifier(/En préparation 1\.4\.2/.test(carte) && /^En test · depuis le \d{1,2}(\/\d{2}| \S+)/.test(bulles[1] || '') && /build 87/.test(bulles[1] || ''), 'Android : « En préparation 1.4.2 », « en test depuis le … · build 87 » dans l infobulle', `${carte.trim().slice(0, 160)} | ${bulles.join(' | ')}`);
   verifier(Boolean(await page.$('[data-plateforme="android"] a[href*="play.google.com/store"]')) && Boolean(await page.$('[data-plateforme="android"] a[href*="internaltest"]')), 'les boutons « Store » et « Test » sont là');
   const brut = await page.$eval('.cartes-plateformes', (el) => el.textContent);
   verifier(!/\bios\b|\bandroid\b/.test(brut), 'aucune clé brute de plateforme sur les cartes');
