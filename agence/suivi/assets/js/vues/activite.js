@@ -15,8 +15,8 @@ import { activiteHtml } from './accueil.js';
    fil ne s'affiche pas en filtre. */
 const NATURES = {
   tache: 'Tâches', jalon: 'Étapes', release: 'Versions', fichier: 'Fichiers', reunion: 'Réunions',
-  validation: 'Validations', demande: 'Demandes', message: 'Messages', devis: 'Devis', facture: 'Factures',
-  paiement: 'Paiements', note: 'Décisions', blocage: 'Points bloquants', projet: 'Projet', maintenance: 'Maintenance', test: 'Tests',
+  validation: 'Validations', demande: 'Tickets', message: 'Messages', devis: 'Devis', facture: 'Factures',
+  paiement: 'Paiements', note: 'Notes', blocage: 'Points bloquants', projet: 'Projet', maintenance: 'Maintenance', test: 'Campagne de tests',
 };
 const PAGE = 50;
 

@@ -224,7 +224,7 @@ export const monterBulle = ({ pid, env }) => {
   };
 
   const unMessage = (m) => `<div class="bulle-message" data-msg="${echapper(m.id || '')}">${messageHtml(m, { moi: uid })}${vientDEnFace(m, { uid, equipe })
-    ? `<button class="bulle-action" type="button" data-transformer="${echapper(m.id || '')}" aria-label="En faire une demande" data-astuce="En faire une demande">${icone('sparkle')}</button>`
+    ? `<button class="bulle-action" type="button" data-transformer="${echapper(m.id || '')}" aria-label="${equipe ? 'En faire une demande' : 'En faire un ticket'}" data-astuce="${equipe ? 'En faire une demande' : 'En faire un ticket'}">${icone('sparkle')}</button>`
     : ''}</div>`;
 
   const rendreFil = () => {

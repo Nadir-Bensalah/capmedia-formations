@@ -105,7 +105,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   const nav2=await chromium.launch();
   const cl=await (await nav2.newContext({viewport:{width:1500,height:1100}})).newPage();
   await connecter(cl,'camille.essai@exemple.test');
-  await aller(cl,'/tests?projet=atelier',null,'Tests');
+  await aller(cl,'/tests?projet=atelier',null,'Campagne de tests');
   await pause(1400);
   const lc = await cl.$('[data-action="ouvrir-campagne"]');
   if (lc) { await lc.click(); await pause(1300);

@@ -417,7 +417,7 @@ export const vue = async (ctx, env) => {
 
     const liste = projets();
     const projet = liste.find((p) => p.id === pid);
-    filAriane([{ libelle: 'Tests', chemin: pid ? `/tests?projet=${pid}` : '/tests' }, { libelle: 'Ce qui va être testé' }]);
+    filAriane([{ libelle: equipe ? 'Tests' : 'Campagne de tests', chemin: pid ? `/tests?projet=${pid}` : '/tests' }, { libelle: 'Ce qui va être testé' }]);
     const selecteur = (equipe || liste.length > 1) ? `<select class="select" id="plan-projet" style="width:auto" aria-label="Projet">
         ${pid ? '' : '<option value="">Choisir un projet</option>'}
         ${liste.map((p) => `<option value="${echapper(p.id)}"${p.id === pid ? ' selected' : ''}>${echapper(p.nom || TIRET)}</option>`).join('')}

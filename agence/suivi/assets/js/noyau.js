@@ -345,6 +345,25 @@ export const TYPES_PROJET = {
   'autre':              'Autre',
 };
 
+/* Le type d'un projet tel qu'on le dit au client. Le champ « type » ne
+   connaît qu'une famille (« Application mobile ») : un projet qui a des
+   plateformes web ET mobiles se dit « Application web et mobile ». On le
+   déduit de ses plateformes et de ses parties ; sans elles, le champ. */
+const MOBILES = ['ios', 'android'];
+const WEBS = ['web', 'admin'];
+export const typeProjetAffiche = (projet, composants = []) => {
+  if (!projet) return '';
+  const cles = new Set([...(projet.plateformes || []), ...(composants || []).map((c) => c && c.type)].filter(Boolean));
+  const mobile = MOBILES.some((c) => cles.has(c));
+  const web = WEBS.some((c) => cles.has(c));
+  if (mobile && web) return 'Application web et mobile';
+  const brut = TYPES_PROJET[projet.type] || TYPES_COMPOSANT[projet.type] || '';
+  if (brut) return brut;
+  if (mobile) return 'Application mobile';
+  if (web) return 'Application web';
+  return '';
+};
+
 export const TYPES_COMPOSANT = {
   'ios':            'Application iOS',
   'android':        'Application Android',

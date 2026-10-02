@@ -201,7 +201,7 @@ const aller = async (page, hash, sel, titre) => {
   /* Le titre « Tests » arrive avant les sections, qui se montent après
      la lecture des données. Attendre le titre seul faisait lire une page
      encore vide : on attend la section elle-même. */
-  await aller(cl, '/tests?projet=atelier&onglet=automatises', '#regles', 'Tests');
+  await aller(cl, '/tests?projet=atelier&onglet=automatises', '#regles', 'Campagne de tests');
   await pause(1600);
   const c = await cl.evaluate(() => ({
     voit: /Robots qui vérifient les calculs/.test(document.body.innerText),

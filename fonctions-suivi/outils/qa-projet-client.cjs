@@ -89,7 +89,7 @@ const remettre = async () => {
   const onglets = await page.$$eval('#lat-corps .lat-arbre[data-arbre="atelier"] .lat-branche .tronque', (els) => els.map((e) => e.textContent.trim()));
   const scenarios = ((await lire('projets/atelier/scenarios?pageSize=5')).documents || []).length;
   const campagnes = ((await lire('projets/atelier/campagnes?pageSize=5')).documents || []).length;
-  verifier(onglets.some((t) => /^Tests/.test(t)) === Boolean(scenarios || campagnes), `l entrée Tests ${scenarios || campagnes ? 'est là, des scénarios existent' : 'est absente, aucun scénario ni campagne'}`, onglets.join(' | '));
+  verifier(onglets.some((t) => /^Campagne de tests/.test(t)) === Boolean(scenarios || campagnes), `l entrée Campagne de tests ${scenarios || campagnes ? 'est là, des scénarios existent' : 'est absente, aucun scénario ni campagne'}`, onglets.join(' | '));
 
   console.log('\n== 17 : « Une question sur cette étape » ouvre la bulle, sans quitter la page');
   await page.evaluate(() => { location.hash = '#/projets/atelier/etapes'; });
@@ -108,6 +108,9 @@ const remettre = async () => {
   await page.evaluate(() => { location.hash = '#/calendrier'; });
   await page.waitForSelector('.calendrier', { timeout: 20000 }); await pause(800);
   verifier(Boolean(await page.$('a.evt[href*="/reunions/re-demain"]')), 'l événement de la grille mène à la fiche de la réunion');
+  /* La bulle de discussion est sur toutes les pages (02/10) : on amène le
+     bouton au milieu de l'écran, comme on le ferait, pour qu'elle ne le couvre pas. */
+  await page.$eval('[data-ics="re-demain"]', (b) => b.scrollIntoView({ block: 'center' })); await pause(300);
   const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 10000 }), page.click('[data-ics="re-demain"]')]);
   const ics = fs.readFileSync(await dl.path(), 'utf8');
   verifier(/\.ics$/.test(dl.suggestedFilename()), 'un fichier .ics se télécharge depuis le calendrier', dl.suggestedFilename());
