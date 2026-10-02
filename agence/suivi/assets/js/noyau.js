@@ -361,6 +361,8 @@ export const STATUTS_COMPOSANT = {
   'a-venir':  { libelle: 'À venir',  voile: 'gris' },
   'en-cours': { libelle: 'En cours', voile: 'bleu' },
   'en-test':  { libelle: 'En test',  voile: 'violet' },
+  /* Soumise au magasin d'applications, en attente de sa validation. */
+  'en-validation': { libelle: 'En validation', voile: 'violet' },
   'livre':    { libelle: 'Livré',    voile: 'vert' },
   'en-pause': { libelle: 'En pause', voile: 'ambre' },
 };

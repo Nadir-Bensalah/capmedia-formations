@@ -136,6 +136,39 @@ service cloud.firestore {
       return valeur is string && valeur.size() > 0 && valeur.size() <= max;
     }
 
+    // La fiche d'une partie du projet (composants/{id}), lue par le client.
+    function texteAbsentOuBorne(d, champ, max) {
+      return !(champ in d) || texteBorne(d[champ], max);
+    }
+    function listeAbsenteOuBornee(d, champ, max) {
+      return !(champ in d) || (d[champ] is list && d[champ].size() <= max);
+    }
+    function ficheDePartieBornee(d) {
+      return texteAbsentOuBorne(d, 'nom', 120)
+        && texteAbsentOuBorne(d, 'sousTitre', 160)
+        && texteAbsentOuBorne(d, 'resume', 1500)
+        && texteAbsentOuBorne(d, 'etatActuel', 800)
+        && texteAbsentOuBorne(d, 'hebergement', 400)
+        && (!('versionEnLigne' in d) || d.versionEnLigne == null
+            || (d.versionEnLigne is map
+                && d.versionEnLigne.keys().hasOnly(['numero', 'date', 'ou'])
+                && texteAbsentOuBorne(d.versionEnLigne, 'numero', 30)
+                && texteAbsentOuBorne(d.versionEnLigne, 'date', 10)
+                && texteAbsentOuBorne(d.versionEnLigne, 'ou', 60)))
+        && (!('versionEnPreparation' in d) || d.versionEnPreparation == null
+            || (d.versionEnPreparation is map
+                && d.versionEnPreparation.keys().hasOnly(['numero', 'etat'])
+                && texteAbsentOuBorne(d.versionEnPreparation, 'numero', 30)
+                && texteAbsentOuBorne(d.versionEnPreparation, 'etat', 200)))
+        && listeAbsenteOuBornee(d, 'liens', 8)
+        && listeAbsenteOuBornee(d, 'chiffres', 8)
+        && listeAbsenteOuBornee(d, 'fonctions', 20)
+        && listeAbsenteOuBornee(d, 'technologies', 20)
+        && listeAbsenteOuBornee(d, 'historique', 30)
+        && listeAbsenteOuBornee(d, 'prochainesEtapes', 12)
+        && listeAbsenteOuBornee(d, 'pointsAttention', 10);
+    }
+
     // La demande d'un forfait de maintenance, écrite par le client : qui,
     // quoi, à quel rythme, quand. Rien d'autre ne passe par lui.
     function demandeDeForfait(d) {
@@ -375,12 +408,20 @@ service cloud.firestore {
       // empêche seulement qu'il revienne. Une ancienne fiche qui le porte
       // encore (avant migrer-technique.mjs) reste modifiable, sans qu'on
       // puisse en changer le contenu.
+      //
+      // La fiche de la partie (sous-titre, résumé, état, versions, liens,
+      // chiffres, fonctions, hébergement, technologies, historique,
+      // prochaines étapes, points d'attention) est bornée : chaque texte a
+      // sa longueur, chaque liste son nombre d'éléments, chaque version ses
+      // seules clés. Mêmes bornes que assets/js/partie-format.js.
       match /composants/{composantId} {
         allow read:   if accesProjet(projetId);
-        allow create: if equipeSurProjet(projetId) && !('technique' in request.resource.data);
+        allow create: if equipeSurProjet(projetId) && !('technique' in request.resource.data)
+          && ficheDePartieBornee(request.resource.data);
         allow update: if equipeSurProjet(projetId)
           && !request.resource.data.diff(resource.data).addedKeys().hasAny(['technique'])
-          && !request.resource.data.diff(resource.data).changedKeys().hasAny(['technique']);
+          && !request.resource.data.diff(resource.data).changedKeys().hasAny(['technique'])
+          && ficheDePartieBornee(request.resource.data);
         allow delete: if equipeSurProjet(projetId);
       }
 

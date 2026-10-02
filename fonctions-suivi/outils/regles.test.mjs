@@ -129,6 +129,29 @@ await refuse('Camille ne lit pas une note interne de demande', getDoc(doc(camill
 await doit('Camille lit un message public de demande', getDoc(doc(camille(), 'tickets/t1/messages/m-public')));
 await doit("L'équipe lit tout, interne compris", getDoc(doc(equipe(), 'taches/t-interne')));
 
+console.log('\n== La fiche d\'une partie : lue par le client, bornée, écrite par l\'équipe');
+const ficheIos = {
+  sousTitre: 'Atelier sur l App Store', resume: 'Deux phrases.', etatActuel: 'En validation.', hebergement: 'Firebase, Europe.',
+  versionEnLigne: { numero: '1.1.2', date: '2026-09-10', ou: 'App Store' }, versionEnPreparation: { numero: '1.1.3', etat: 'Chez Apple' },
+  liens: [{ libelle: 'App Store', url: 'https://apps.apple.com/app/id1' }], chiffres: [{ valeur: '6', libelle: 'langues' }],
+  fonctions: ['Réserver'], technologies: [{ nom: 'React Native', role: 'une base de code' }],
+  historique: [{ date: '2026-09-10', titre: 'Version 1.1.2', detail: '' }], prochainesEtapes: ['Publier'], pointsAttention: [],
+};
+await doit("L'équipe pose la fiche d'une partie", updateDoc(doc(equipe(), 'projets/atelier/composants/ios'), ficheIos));
+await doit('Camille la lit', getDoc(doc(camille(), 'projets/atelier/composants/ios')));
+await refuse("Camille ne l'écrit pas", updateDoc(doc(camille(), 'projets/atelier/composants/ios'), { sousTitre: 'Piraté' }));
+await refuse('Léa ne la lit pas', getDoc(doc(lea(), 'projets/atelier/composants/ios')));
+await refuse('un sous-titre de 161 caractères est refusé', updateDoc(doc(equipe(), 'projets/atelier/composants/ios'), { sousTitre: 'x'.repeat(161) }));
+await refuse('un résumé de 1 501 caractères aussi', updateDoc(doc(equipe(), 'projets/atelier/composants/ios'), { resume: 'x'.repeat(1501) }));
+await refuse('un état actuel qui n est pas un texte aussi', updateDoc(doc(equipe(), 'projets/atelier/composants/ios'), { etatActuel: 12 }));
+await refuse('trente et une dates d historique aussi', updateDoc(doc(equipe(), 'projets/atelier/composants/ios'), { historique: Array.from({ length: 31 }, () => ({ date: '2026-01-01', titre: 'x' })) }));
+await refuse('vingt et une fonctions aussi', updateDoc(doc(equipe(), 'projets/atelier/composants/ios'), { fonctions: Array.from({ length: 21 }, () => 'x') }));
+await refuse('une version en ligne avec une clé inconnue aussi', updateDoc(doc(equipe(), 'projets/atelier/composants/ios'), { versionEnLigne: { numero: '1', pirate: 'x' } }));
+await refuse('un numéro de version de 31 caractères aussi', updateDoc(doc(equipe(), 'projets/atelier/composants/ios'), { versionEnPreparation: { numero: 'x'.repeat(31) } }));
+await doit('une version effacée (null) passe', updateDoc(doc(equipe(), 'projets/atelier/composants/ios'), { versionEnPreparation: null }));
+await refuse('une partie créée trop bavarde est refusée', setDoc(doc(equipe(), 'projets/atelier/composants/neuve'), { nom: 'Neuve', resume: 'x'.repeat(1501) }));
+await doit('une partie créée bien formée passe', setDoc(doc(equipe(), 'projets/atelier/composants/neuve'), { nom: 'Neuve', ...ficheIos }));
+
 console.log('\n== La fiche technique reste côté équipe');
 await doit("L'équipe écrit une fiche technique", setDoc(doc(equipe(), 'projets/atelier/technique/ios'), { lignes: 100, acces: [{ nom: 'App Store Connect', compte: 'capmedia' }] }));
 await doit("L'équipe relit la fiche technique", getDoc(doc(equipe(), 'projets/atelier/technique/ios')));
