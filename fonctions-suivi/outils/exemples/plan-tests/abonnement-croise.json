@@ -1,0 +1,76 @@
+{
+  "id": "abonnement-croise",
+  "groupe": "transverse",
+  "ordre": 37,
+  "titre": "Un abonnement pris sur une plateforme, reconnu sur les autres",
+  "resume": "Payer une fois, en profiter partout : sur le web, l'iPhone et Android.",
+  "plateformes": [
+    "ios",
+    "android",
+    "web"
+  ],
+  "aspects": {
+    "fonctionnel": [
+      {
+        "id": "abonnement-croise-f-001",
+        "titre": "Abonnement pris sur le web, reconnu sur mobile",
+        "etapes": "Prendre Premium sur le site web, puis ouvrir l'app sur le téléphone avec le même compte.",
+        "attendu": "L'app affiche Premium sans rien racheter.",
+        "plateformes": [
+          "ios",
+          "android",
+          "web"
+        ],
+        "type": "normal",
+        "priorite": "haute",
+        "refs": []
+      },
+      {
+        "id": "abonnement-croise-f-002",
+        "titre": "Abonnement pris sur iPhone, reconnu sur le web",
+        "etapes": "Prendre Premium sur l'iPhone, puis se connecter au site web.",
+        "attendu": "Le site affiche Premium.",
+        "plateformes": [
+          "ios",
+          "web"
+        ],
+        "type": "normal",
+        "priorite": "haute",
+        "refs": []
+      }
+    ],
+    "technique": [
+      {
+        "id": "abonnement-croise-t-001",
+        "titre": "Abonnement expiré pendant que l'app est ouverte",
+        "etapes": "Laisser expirer l'abonnement, l'app ouverte.",
+        "attendu": "L'app repasse en gratuit à la prochaine ouverture, sans plantage.",
+        "plateformes": [
+          "ios",
+          "android",
+          "web"
+        ],
+        "type": "limite",
+        "priorite": "moyenne",
+        "refs": []
+      }
+    ],
+    "ux": [],
+    "securite": [
+      {
+        "id": "abonnement-croise-s-001",
+        "titre": "Un compte ne récupère pas l'abonnement d'un autre",
+        "etapes": "Se connecter avec un autre compte sur le même téléphone.",
+        "attendu": "Le second compte reste en gratuit.",
+        "plateformes": [
+          "ios",
+          "android",
+          "web"
+        ],
+        "type": "normal",
+        "priorite": "haute",
+        "refs": []
+      }
+    ]
+  }
+}

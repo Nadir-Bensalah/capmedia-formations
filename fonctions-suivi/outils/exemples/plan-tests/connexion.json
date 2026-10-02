@@ -1,0 +1,105 @@
+{
+  "id": "connexion",
+  "groupe": "demarrage",
+  "ordre": 4,
+  "titre": "Connexion, mot de passe oublié, déconnexion",
+  "resume": "Entrer dans son compte, retrouver l'accès quand on a oublié son mot de passe, et en sortir proprement.",
+  "plateformes": [
+    "ios",
+    "android",
+    "web"
+  ],
+  "aspects": {
+    "fonctionnel": [
+      {
+        "id": "connexion-f-001",
+        "titre": "Se connecter avec une adresse et un mot de passe justes",
+        "etapes": "Ouvrir l'app, saisir son adresse et son mot de passe, valider.",
+        "attendu": "L'accueil s'ouvre sur son compte.",
+        "plateformes": [
+          "ios",
+          "android",
+          "web"
+        ],
+        "type": "normal",
+        "priorite": "haute",
+        "refs": []
+      },
+      {
+        "id": "connexion-f-002",
+        "titre": "Mot de passe faux trois fois de suite",
+        "etapes": "Saisir trois fois un mauvais mot de passe.",
+        "attendu": "Un message clair à chaque essai, et aucune entrée dans le compte.",
+        "plateformes": [
+          "ios",
+          "android",
+          "web"
+        ],
+        "type": "erreur",
+        "priorite": "haute",
+        "refs": []
+      },
+      {
+        "id": "connexion-f-003",
+        "titre": "Demander un nouveau mot de passe",
+        "etapes": "Appuyer sur « Mot de passe oublié », saisir son adresse.",
+        "attendu": "Un courriel arrive en moins d'une minute avec un lien valable.",
+        "plateformes": [
+          "ios",
+          "android",
+          "web"
+        ],
+        "type": "normal",
+        "priorite": "moyenne",
+        "refs": []
+      }
+    ],
+    "technique": [
+      {
+        "id": "connexion-t-001",
+        "titre": "Se connecter sans réseau",
+        "etapes": "Couper le réseau puis valider la connexion.",
+        "attendu": "Un message dit que le réseau manque, l'app ne se fige pas.",
+        "plateformes": [
+          "ios",
+          "android",
+          "web"
+        ],
+        "type": "erreur",
+        "priorite": "moyenne",
+        "refs": []
+      }
+    ],
+    "ux": [
+      {
+        "id": "connexion-u-001",
+        "titre": "Le clavier ne cache pas le bouton",
+        "etapes": "Sur un petit écran, ouvrir le clavier dans le champ du mot de passe.",
+        "attendu": "Le bouton de validation reste visible.",
+        "plateformes": [
+          "ios",
+          "android"
+        ],
+        "type": "limite",
+        "priorite": "basse",
+        "refs": []
+      }
+    ],
+    "securite": [
+      {
+        "id": "connexion-s-001",
+        "titre": "Après déconnexion, plus rien ne reste à l'écran",
+        "etapes": "Se déconnecter puis revenir en arrière.",
+        "attendu": "L'écran de connexion s'affiche, aucune donnée du compte n'est visible.",
+        "plateformes": [
+          "ios",
+          "android",
+          "web"
+        ],
+        "type": "normal",
+        "priorite": "haute",
+        "refs": []
+      }
+    ]
+  }
+}

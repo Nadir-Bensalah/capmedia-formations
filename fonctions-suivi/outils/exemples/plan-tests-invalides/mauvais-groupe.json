@@ -1,0 +1,31 @@
+{
+  "id": "mauvais-groupe",
+  "groupe": "divers",
+  "ordre": 0,
+  "titre": "Titre — avec cadratin",
+  "resume": "",
+  "plateformes": [
+    "ios",
+    "windows"
+  ],
+  "aspects": {
+    "fonctionnel": [
+      {
+        "id": "x-f-1",
+        "titre": "",
+        "etapes": "a",
+        "attendu": "b",
+        "plateformes": [
+          "ios"
+        ],
+        "type": "bizarre",
+        "priorite": "urgente",
+        "refs": [
+          "pas une ref"
+        ]
+      }
+    ],
+    "technique": [],
+    "ux": []
+  }
+}

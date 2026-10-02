@@ -120,7 +120,7 @@ export const vue = async (ctx, env) => {
   sortie.innerHTML = `<div class="page">${squelette('page', 6)}</div>`;
 
   const cles = [K.projet(pid), K.composants(pid), K.jalons(pid), K.liens(pid), K.taches(pid), K.tickets(pid), K.validations(pid), K.fichiers(pid), K.releases(pid), K.reunions(pid), K.notes(pid), K.blocages(pid), K.documents(pid), K.paiements(pid), K.montants(pid), K.activite(pid), K.equipe,
-    K.scenarios(pid), K.campagnes(pid), K.anomalies(pid), K.suggestions(pid), ...(env.role === 'equipe' ? [K.projetsInternes, K.interlocuteurs(pid), K.notesPartagees] : [])];
+    K.scenarios(pid), K.planPresentation(pid), K.campagnes(pid), K.anomalies(pid), K.suggestions(pid), ...(env.role === 'equipe' ? [K.projetsInternes, K.interlocuteurs(pid), K.notesPartagees] : [])];
   abonnerProjet(lot, pid, env.role);
 
   /* Une fiche ouverte par son adresse : une tâche (taches/:tid), une
@@ -511,7 +511,10 @@ const tests = (d, { pid, env }) => {
       <div><h2>Tests</h2><p class="chapo">${equipe
     ? `${pluriel(scenarios.length, 'scénario', 'scénarios')}, soit ${passages} passages sur mobile par campagne complète.`
     : `Votre application est testée par de vraies personnes avant chaque sortie : ${pluriel(scenarios.length, 'scénario', 'scénarios')} à dérouler${enCours.length ? `, ${pluriel(enCours.length, 'campagne en cours', 'campagnes en cours')}` : ''}.`}</p></div>
-      <a class="btn btn-principal btn-petit" href="#/tests?projet=${echapper(pid)}">${icone('bug')} ${equipe ? 'Ouvrir la console' : 'Voir les tests'}</a>
+      <div class="rang" style="gap:8px">
+        ${equipe || magasin.lire(K.planPresentation(pid)) ? `<a class="btn btn-secondaire btn-petit" href="#/tests/plan?projet=${echapper(pid)}" data-plan-tests>${icone('liste')} Ce qui va être testé</a>` : ''}
+        <a class="btn btn-principal btn-petit" href="#/tests?projet=${echapper(pid)}">${icone('bug')} ${equipe ? 'Ouvrir la console' : 'Voir les tests'}</a>
+      </div>
     </div>
 
     <div class="rang chiffres-tests">

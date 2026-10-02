@@ -1576,3 +1576,66 @@ a.coffre-lien:hover { color: var(--accent); }
 .coffre-bandeau { margin-bottom: var(--e-4); }
 .coffre-bandeau p { margin: 0; }
 .coffre-renouveler { margin-top: var(--e-5); max-width: 66ch; }
+
+/* ==========================================================================
+   24. Ce qui va être testé (vues/plan-tests.js). Le plan de tests d'un
+   projet : une présentation, des chiffres, un sommaire, puis les sections.
+   Des fonds et des retraits, jamais de liseré : un scénario est un bloc
+   posé sur le fond doux, sa référence en chasse fixe.
+   ========================================================================== */
+.plan-intro { padding: 24px 26px; }
+.plan-intro-texte { margin: 0; max-width: 74ch; font: 400 16px/1.6 var(--police); color: var(--encre); }
+.plan-aspects { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 22px; }
+.plan-aspect-carte { min-width: 0; padding: 16px 18px; border-radius: 14px; background: var(--fond-2); }
+.plan-aspect-n { margin: 8px 0 6px; font: 600 26px/1.1 var(--titre); letter-spacing: -.02em; font-variant-numeric: tabular-nums; color: var(--encre); }
+.plan-aspect-phrase { margin: 0; font: 400 13.5px/1.5 var(--police); color: var(--encre-2); }
+.plan-plateformes-texte { margin: 18px 0 0; max-width: 74ch; font: 400 14px/1.55 var(--police); color: var(--encre-2); }
+.plan-chiffres { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+.plan-filtres { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.plan-filtres .plan-recherche { flex: 1 1 220px; min-width: 0; max-width: 360px; }
+.plan-resultat { font: 400 13px var(--police); color: var(--encre-3); }
+.plan-sommaire { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 22px; padding: 22px 24px; }
+.plan-sommaire ol { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 1px; }
+.plan-sommaire a {
+  display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: baseline; gap: 8px;
+  margin: 0 -8px; padding: 5px 8px; border-radius: 8px;
+  font: 400 13.5px/1.35 var(--police); color: var(--encre); text-decoration: none;
+}
+.plan-sommaire a:hover { background: var(--survol); text-decoration: none; }
+.plan-sommaire .num, .plan-sommaire .n { font: 400 11.5px var(--mono); color: var(--encre-3); font-variant-numeric: tabular-nums; }
+.plan-sommaire a.plan-sommaire-vide { color: var(--encre-3); }
+#plan-filtrable > * + * { margin-top: 18px; }
+.plan-groupe { margin-top: 34px; scroll-margin-top: 80px; }
+.plan-section { scroll-margin-top: 80px; }
+.plan-section .section-tete { align-items: flex-start; gap: 18px; margin-bottom: 0; }
+.plan-section-titre { min-width: 0; }
+.plan-section-titre h2 { margin-top: 6px; }
+.plan-section .chapo { margin: 6px 0 0; max-width: 74ch; font: 400 14.5px/1.5 var(--police); color: var(--encre-2); }
+.plan-section-gestes { flex: none; gap: 8px; }
+.plan-compteurs { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 12px 0 0; font: 400 13px/1.5 var(--police); color: var(--encre-2); }
+.plan-compteurs b { font-weight: 600; color: var(--encre); font-variant-numeric: tabular-nums; }
+.plan-corps { display: grid; gap: 24px; margin-top: 20px; }
+.plan-aspect-tete { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.plan-aspect-tete .bloc-tete { margin: 0; }
+.plan-aspect-vide { margin: 0; font: 400 13.5px var(--police); color: var(--encre-3); }
+.plan-scenarios { display: grid; gap: 8px; }
+.plan-scenario { min-width: 0; padding: 14px 16px; border-radius: 12px; background: var(--fond-2); }
+.plan-scenario-tete { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+.plan-scenario-tete .ref { flex: none; font-size: 11.5px; color: var(--encre-3); }
+.plan-scenario-tete h4 { flex: 1; min-width: 0; margin: 0; font: 600 14.5px/1.4 var(--police); color: var(--encre); overflow-wrap: anywhere; }
+.plan-scenario .boutons-edition { flex: none; gap: 2px; align-self: center; }
+.plan-scenario-detail { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 24px; margin: 10px 0 0; }
+.plan-scenario-detail dt { font: 500 10.5px/1.3 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--encre-3); }
+.plan-scenario-detail dd { margin: 4px 0 0; font: 400 13.5px/1.55 var(--police); color: var(--encre-2); overflow-wrap: anywhere; }
+.plan-scenario-pied { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin-top: 12px; font: 400 12.5px/1.4 var(--police); color: var(--encre-2); }
+.plan-scenario-pied .puce { font-size: 12.5px; }
+.plan-refs .ref { font-size: 12px; }
+@media (max-width: 960px) {
+  .plan-aspects, .plan-sommaire { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  .plan-intro { padding: 20px 18px; }
+  .plan-aspects, .plan-sommaire, .plan-scenario-detail { grid-template-columns: 1fr; }
+  .plan-section .section-tete { flex-direction: column; }
+  .plan-filtres .plan-recherche { max-width: none; flex-basis: 100%; }
+}
