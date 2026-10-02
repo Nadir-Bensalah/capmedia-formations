@@ -2464,27 +2464,55 @@ input, select, textarea { font: inherit; color: inherit; }
 }
 
 
-/* Les suggestions d'amélioration : des cartes posées sur le fond doux, le
-   titre en bouton, les faits (plateformes, prix) en bas. La « une » de
-   l'aperçu reprend la même carte, en plus large. */
-.sugg-groupe + .sugg-groupe { margin-top: 28px; }
-.sugg-groupe-tete { margin: 0 0 12px; }
-.sugg-liste { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
-.sugg { display: flex; gap: 12px; padding: 16px; border-radius: 12px; background: var(--fond-2); min-width: 0; }
-.sugg--brouillon { opacity: .72; }
-.sugg--retiree { opacity: .55; }
-.sugg--une { background: var(--fond-2); margin-bottom: 20px; }
-.sugg-corps { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 8px; }
-.sugg-titre { font: inherit; font-weight: 600; text-align: left; background: none; border: 0; padding: 0; color: inherit; cursor: pointer; line-height: 1.3; }
-.sugg-titre:hover { text-decoration: underline; }
-.sugg-resume { margin: 0; color: var(--encre-2); }
-.sugg-faits { gap: 8px; flex-wrap: wrap; align-items: center; }
-.sugg-prix { font-weight: 600; font-variant-numeric: tabular-nums; }
-.sugg-pied { gap: 8px; flex-wrap: wrap; align-items: center; margin-top: auto; }
-.sugg-visuel { display: block; border-radius: 8px; overflow: hidden; flex: none; width: 96px; height: 72px; background: var(--fond-3, var(--fond-2)); }
-.sugg-visuel img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.sugg-visuel--grand { width: 100%; height: auto; aspect-ratio: 16 / 9; }
-.sugg-texte { margin-top: 12px; }
-.sugg-texte h2, .sugg-texte h3 { font-size: 1.05em; margin: 16px 0 6px; }
-.sugg-texte ul, .sugg-texte ol { padding-left: 20px; }
-@media (max-width: 720px) { .sugg-liste { grid-template-columns: 1fr; } }
+
+/* ==========================================================================
+   Les axes d'évolution (vues/evolutions.js)
+   Une ligne par axe : la case, le texte, les repères, et les gestes qui
+   n'apparaissent qu'une fois la ligne cochée. Les repères tiennent à la
+   forme (mot en capitales fines, jauge à trois marches), sans pictogramme.
+   ========================================================================== */
+.axes-bloc + .axes-bloc { margin-top: 16px; }
+.axes-compteur { font: 500 12.5px/1.4 var(--mono, var(--police-mono)); color: var(--encre-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.axes-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.axe { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 0 12px; padding: 12px; margin: 0 -12px; border-radius: 10px; transition: background var(--vite); }
+.axe.est-cochee { background: var(--fond-2); }
+.axe--equipe { grid-template-columns: 28px minmax(0, 1fr) auto; align-items: start; }
+.axe--brouillon .axe-titre, .axe--brouillon .axe-texte { color: var(--encre-3); }
+.axe-case { display: grid; place-items: start center; padding-top: 2px; }
+.axe-case input { width: 18px; height: 18px; margin: 0; cursor: pointer; accent-color: var(--encre); }
+.axe-coche { width: 16px; height: 16px; margin-top: 2px; border-radius: 4px; box-shadow: inset 0 0 0 1.5px var(--trait-fort, var(--trait)); }
+.axe-coche.pleine { background: var(--encre); box-shadow: none; }
+.axe-rang { font: 500 12px/1.9 var(--mono, var(--police-mono)); color: var(--encre-3); font-variant-numeric: tabular-nums; text-align: center; }
+.axe-corps { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.axe-titre { margin: 0; font: var(--t-corps-fort); font-weight: 600; color: var(--encre); cursor: pointer; overflow-wrap: anywhere; }
+p.axe-titre { cursor: default; }
+.axe-texte { margin: 0; font: var(--t-petit); color: var(--encre-2); overflow-wrap: anywhere; }
+.axe-reperes { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 4px; font: 500 12px/1.4 var(--police); color: var(--encre-3); }
+.axe-apport { text-transform: uppercase; letter-spacing: .06em; font-size: 11px; font-weight: 600; color: var(--encre-2); }
+.axe-ampleur { display: inline-flex; align-items: center; gap: 6px; }
+.axe-marches { display: inline-flex; align-items: flex-end; gap: 2px; height: 12px; }
+.axe-marches i { width: 4px; border-radius: 1px; background: var(--trait-fort, var(--trait)); }
+.axe-marches i:nth-child(1) { height: 5px; }
+.axe-marches i:nth-child(2) { height: 8px; }
+.axe-marches i:nth-child(3) { height: 12px; }
+.axe-marches i.pleine { background: var(--encre-2); }
+.axe-etat { color: var(--ok); font-weight: 600; }
+.axe-prix { color: var(--encre); font-weight: 600; font-variant-numeric: tabular-nums; }
+.axe-detail { margin-top: 4px; font: var(--t-petit); color: var(--encre-2); }
+.axe-detail > summary { cursor: pointer; color: var(--encre-2); width: fit-content; }
+.axe-detail .prose { margin-top: 6px; }
+.axe-gestes { display: none; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.est-cochee .axe-gestes { display: flex; animation: axe-gestes .22s var(--ressort, ease-out) both; }
+@keyframes axe-gestes { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+.axe-fait { margin: 6px 0 0; font: var(--t-petit); color: var(--encre-2); }
+.axe-gestes .axe-fait { margin: 0 0 0 4px; }
+.axe-pilotage { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.axe-ecrire { font: inherit; color: var(--encre); background: none; border: 0; padding: 0; text-decoration: underline; cursor: pointer; }
+@media (max-width: 720px) {
+  .axe--equipe { grid-template-columns: 28px minmax(0, 1fr); }
+  .axe-pilotage { grid-column: 2; align-items: flex-start; margin-top: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .axe { transition: none; }
+  .est-cochee .axe-gestes { animation: none; }
+}

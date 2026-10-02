@@ -800,12 +800,15 @@ service cloud.firestore {
                  // Une demande de rendez-vous, posée depuis le calendrier.
                  'rendezVous',
                  // La suggestion de Capmedia dont la demande est née.
-                 'suggestion'
+                 'suggestion',
+                 // L'axe d'évolution dont la demande est née (« On en parle »).
+                 'axe'
                ])
             && rendezVousValide()
             // Une demande née d'une anomalie de test porte son identifiant.
             && (!('anomalie' in request.resource.data) || texteBorne(request.resource.data.anomalie, 80))
             && (!('suggestion' in request.resource.data) || texteBorne(request.resource.data.suggestion, 80))
+            && (!('axe' in request.resource.data) || texteBorne(request.resource.data.axe, 80))
             && (!('suite' in request.resource.data) || request.resource.data.suite == null || request.resource.data.suite is string)
             && request.resource.data.numero == null
             && request.resource.data.statut == 'nouveau'
@@ -1686,6 +1689,69 @@ service cloud.firestore {
                 && texteBorne(request.resource.data.reponse.demande, 80)
                 && request.resource.data.reponse.le == request.time)
           );
+      }
+
+      // Les axes d'évolution : les pistes de croissance proposées par
+      // Capmedia, rangées par plateforme. Ils remplacent les suggestions.
+      // L'équipe écrit tout, dans les bornes ; le client membre ne lit que
+      // les publiés ; sa réponse (intéressé, à prévoir, on en parle) engage
+      // le client : elle est au responsable du projet, ou, à défaut de
+      // responsable, au premier membre qui répond. Jamais le texte, l'état,
+      // la publication ni l'ordre. Le prix vit dans montants/axe-<id>.
+      match /axes/{axeId} {
+        function peutRepondreAxe() {
+          return responsableDuProjet(projetId)
+            || (membreDuProjet(projetId)
+                && !('responsable' in ficheProjet(projetId).get('roles', {}).values())
+                && (resource.data.get('reponse', null) == null
+                    || resource.data.reponse.get('par', '') == moi()));
+        }
+        function axeValide(d) {
+          return d.keys().hasOnly(['plateforme', 'titre', 'description', 'detail', 'apport', 'ampleur', 'etat', 'publication', 'publieLe',
+                                   'ordre', 'devis', 'reponse', 'origine', 'cree', 'maj', 'editeLe', 'importeLe'])
+              && d.plateforme in ['ios', 'android', 'web', 'admin', 'backend', 'landing', 'general']
+              && texteRequis(d.titre, 120)
+              && texteBorne(d.description, 400)
+              && texteBorne(d.get('detail', ''), 4000)
+              && d.apport in ['', 'engagement', 'revenus', 'fidelite', 'image', 'securite', 'confort']
+              && d.ampleur in ['', 'petit', 'moyen', 'grand']
+              && d.etat in ['propose', 'prevu', 'livre']
+              && d.publication in ['brouillon', 'publiee']
+              && d.ordre is number
+              && texteBorne(d.get('devis', ''), 80)
+              && (d.get('reponse', null) == null || d.reponse is map);
+        }
+        allow read: if equipeSurProjet(projetId)
+          || (membreDuProjet(projetId) && resource.data.publication == 'publiee');
+        allow create, update: if equipeSurProjet(projetId) && axeValide(request.resource.data);
+        allow delete: if equipeSurProjet(projetId);
+        // Le client pose, change ou retire sa réponse, datée par le serveur.
+        // Rien d'autre ne bouge.
+        allow update: if membreDuProjet(projetId)
+          && peutRepondreAxe()
+          && resource.data.publication == 'publiee'
+          && resource.data.etat in ['propose', 'prevu']
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reponse', 'maj'])
+          && request.resource.data.maj == request.time
+          && (request.resource.data.reponse == null
+              || (request.resource.data.reponse is map
+                  && request.resource.data.reponse.keys().hasOnly(['par', 'nom', 'choix', 'demande', 'le'])
+                  && request.resource.data.reponse.par == moi()
+                  && texteBorne(request.resource.data.reponse.nom, 120)
+                  && request.resource.data.reponse.choix in ['interesse', 'a-prevoir', 'en-parler']
+                  && texteBorne(request.resource.data.reponse.get('demande', ''), 80)
+                  && request.resource.data.reponse.le == request.time));
+      }
+
+      // L'introduction de la page des axes : un texte, écrit par l'équipe,
+      // lu par tout le projet.
+      match /axesIntro/{texteId} {
+        allow read: if accesProjet(projetId);
+        allow create, update: if equipeSurProjet(projetId)
+          && texteId == 'texte'
+          && request.resource.data.keys().hasOnly(['texte', 'maj'])
+          && texteBorne(request.resource.data.texte, 1000);
+        allow delete: if equipeSurProjet(projetId);
       }
 
       match /regles/{regleId} {

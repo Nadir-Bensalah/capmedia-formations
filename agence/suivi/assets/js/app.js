@@ -26,7 +26,7 @@ import * as planTests from './vues/plan-tests.js';
 import * as tableau from './vues/tableau.js';
 import * as finances from './vues/finances.js';
 import * as documents from './vues/documents.js';
-import { estPubliee as suggestionPubliee } from './vues/suggestions.js';
+import * as evolutions from './vues/evolutions.js';
 import * as maintenance from './vues/maintenance.js';
 import * as parametres from './vues/parametres.js';
 import * as nouveauProjet from './vues/nouveau-projet.js';
@@ -171,7 +171,7 @@ const entreesProjet = (p, { attente, nonLusP }) => {
   const scenarios = lireP(K.scenarios).filter((x) => x.actif !== false).length;
   const parcours = lireP(K.parcours).filter((x) => x.actif !== false).length;
   const campagnes = lireP(K.campagnes).filter((c) => c.statut === 'en-cours').length;
-  const suggestions = lireP(K.suggestions).filter(suggestionPubliee).length;
+  const axes = lireP(K.axes).filter(evolutions.estPublie).length;
   const reunions = lireP(K.reunions).filter((r) => joursAvant(r.date) >= 0).length;
   const forfait = lireP(K.maintenance).some((x) => x.id === 'contrat' && x.statut === 'actif');
   const maintenanceConnue = magasin.lire(K.maintenance(pid)) !== undefined || Boolean(magasin.erreur(K.maintenance(pid)));
@@ -191,7 +191,7 @@ const entreesProjet = (p, { attente, nonLusP }) => {
     { chemin: '/fichiers', lien: `/fichiers?projet=${pid}`, libelle: 'Fichiers', icone: 'fichiers', projet: pid, compte: { total: fichiers.length } },
     ...(liens.length ? [{ chemin: `${base}/liens`, libelle: 'Ressources', icone: 'liens', projet: pid, compte: { total: liens.length } }] : []),
     ...(notes.length ? [{ chemin: `${base}/notes`, libelle: 'Décisions', icone: 'note', projet: pid, compte: { total: notes.length } }] : []),
-    ...(suggestions ? [{ chemin: `${base}/suggestions`, libelle: 'Suggestions', icone: 'ampoule', projet: pid }] : []),
+    ...(axes ? [{ chemin: `${base}/evolutions`, libelle: 'Axes d\'évolution', icone: 'ampoule', projet: pid }] : []),
     /* La finance et le coffre sont au responsable. */
     ...(responsable ? [{ chemin: '/finances', lien: `/finances?projet=${pid}`, libelle: 'Devis et factures', icone: 'finances', projet: pid, compte: { total: argent, neuf: argent } }] : []),
     {
@@ -241,7 +241,7 @@ const construireNavigation = () => {
 
 let minuteurNav = null;
 const planifierNav = () => { clearTimeout(minuteurNav); minuteurNav = setTimeout(construireNavigation, 80); };
-[K.projets, K.profil, K.demandesProjet, ...session.projets.flatMap((p) => [K.tickets(p.id), K.validations(p.id), K.documents(p.id), K.fichiers(p.id), K.taches(p.id), K.blocages(p.id), K.messages(p.id), K.maintenance(p.id), K.scenarios(p.id), K.parcours(p.id), K.campagnes(p.id), K.releases(p.id), K.liens(p.id), K.notes(p.id), K.suggestions(p.id), K.reunions(p.id)])]
+[K.projets, K.profil, K.demandesProjet, ...session.projets.flatMap((p) => [K.tickets(p.id), K.validations(p.id), K.documents(p.id), K.fichiers(p.id), K.taches(p.id), K.blocages(p.id), K.messages(p.id), K.maintenance(p.id), K.scenarios(p.id), K.parcours(p.id), K.campagnes(p.id), K.releases(p.id), K.liens(p.id), K.notes(p.id), K.axes(p.id), K.reunions(p.id)])]
   .forEach((cle) => magasin.sur(cle, planifierNav));
 construireNavigation();
 surChangement(construireNavigation);
@@ -320,6 +320,9 @@ definir([
   /* Les fichiers d'un projet vivent sur la page Fichiers, filtrée sur lui :
      les anciennes adresses (lettres, notifications) y mènent. */
   { chemin: '/projets/:id/fichiers', vue: (ctx) => { naviguer(`/fichiers?projet=${encodeURIComponent(ctx.params.id)}${ctx.requete && ctx.requete.f ? `&f=${encodeURIComponent(ctx.requete.f)}` : ''}`, { remplacer: true }); } },
+  /* Les axes d'évolution, qui remplacent les suggestions : l'ancienne adresse y mène. */
+  { chemin: '/projets/:id/evolutions', vue: (ctx) => evolutions.vue(ctx, env) },
+  { chemin: '/projets/:id/suggestions', vue: (ctx) => { naviguer(`/projets/${ctx.params.id}/evolutions`, { remplacer: true }); } },
   { chemin: '/projets/:id/:onglet', cle: (c) => `projet:${c.params.id}`, vue: (ctx) => projet.vue({ ...ctx, onglet: ctx.params.onglet }, env) },
   { chemin: '/demandes', vue: (ctx) => demandes.vue(ctx, env) },
   { chemin: '/messages', vue: (ctx) => messages.vue(ctx, env) },

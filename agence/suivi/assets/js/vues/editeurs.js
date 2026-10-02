@@ -14,7 +14,6 @@ import {
   ETATS_PARCOURS, OUTILS_PARCOURS, FAMILLES_REGLE, ETATS_REGLE,
   GRAVITES_ANOMALIE, STATUTS_ANOMALIE,
   STATUTS_MAINTENANCE, RECONDUCTIONS_MAINTENANCE, STATUTS_SEQUENCE, STATUTS_JOURNEE, DUREES_JOURNEE, STATUTS_EVOLUTION,
-  FAMILLES_SUGGESTION, STATUTS_SUGGESTION, PUBLICATIONS_SUGGESTION,
 } from '../noyau.js';
 import { icone, modale, confirmer, toast, lireForme, valider, obligatoire, longueurMax, urlValide, emailValide, optionsDe, depot, agir, lisible, choixPlateformes } from '../ui.js';
 import { appelServeur } from '../serveur.js';
@@ -1094,51 +1093,6 @@ const editeurs = {
     },
   }),
 
-  /* Une suggestion d'amélioration : ce que Capmedia propose, avec son
-     prix, sa durée et son devis. Brouillon tant que l'équipe ne publie
-     pas : le client ne voit que les publiées. */
-  suggestion: (env, { pid, fiche, defaut = {} }) => feuille({
-    titre: fiche ? 'La suggestion' : 'Nouvelle suggestion', sousTitre: 'Une amélioration proposée au client, en mots simples.',
-    corps: `
-      ${select('famille', 'Famille', Object.fromEntries(Object.entries(FAMILLES_SUGGESTION).map(([k, f]) => [k, f.libelle])), fiche ? fiche.famille : (defaut.famille || 'developpement'))}
-      ${champ('titre', 'Titre', fiche ? fiche.titre : '', { placeholder: 'Widgets iPhone et Android' })}
-      ${zone('resume', 'En deux phrases', fiche ? fiche.resume : '', { lignes: 2, placeholder: 'Ce que ça change pour vos utilisateurs, en une ou deux phrases.' })}
-      ${zone('texte', 'Le détail', fiche ? fiche.texte : '', { facultatif: true, lignes: 6, aide: 'Titres avec ##, listes avec -, **gras**. Rien de technique : le client le lit.' })}
-      ${champ('benefice', 'Le bénéfice attendu', fiche ? fiche.benefice : '', { facultatif: true, placeholder: 'Les utilisateurs ouvrent l\'app sans la chercher.' })}
-      <div class="groupe"><span class="etiquette-champ">Plateformes</span>${choixPlateformes('plateformes', fiche ? (fiche.plateformes || []) : (defaut.plateformes || []))}</div>
-      <div class="forme-rang">
-        ${champ('duree', 'Durée estimée', fiche ? fiche.duree : '', { facultatif: true, placeholder: '3 jours' })}
-        ${champ('prix', 'Prix HT (€)', fiche && typeof fiche.prix === 'number' ? fiche.prix : '', { type: 'number', facultatif: true, attrs: 'min="0" step="1"' })}
-        ${champ('tva', 'TVA (%)', fiche && typeof fiche.tva === 'number' ? fiche.tva : 20, { type: 'number', attrs: 'min="0" max="100" step="0.1"' })}
-      </div>
-      ${select('devis', 'Devis joint', devisDe(pid), fiche ? fiche.devis : '', { vide: 'Aucun', aide: 'Le client trouve le lien vers son devis dans la fiche de la suggestion.' })}
-      <div class="forme-rang">
-        ${select('statut', 'État', Object.fromEntries(Object.entries(STATUTS_SUGGESTION).map(([k, f]) => [k, f.libelle])), fiche ? fiche.statut : 'proposee')}
-        ${select('publication', 'Publication', Object.fromEntries(Object.entries(PUBLICATIONS_SUGGESTION).map(([k, f]) => [k, f.libelle])), fiche ? fiche.publication : 'brouillon', { aide: 'Publiée : le client la voit dans son onglet Suggestions.' })}
-      </div>
-      <div class="forme-rang">
-        ${champ('ordre', 'Ordre', fiche ? (fiche.ordre || 0) : (defaut.ordre || 0), { type: 'number', attrs: 'min="0" step="1"' })}
-        <label class="case" style="align-self:end"><input type="checkbox" name="aLaUne" value="1"${fiche && fiche.aLaUne ? ' checked' : ''}> Mise en avant sur l'aperçu</label>
-      </div>`,
-    regles: { titre: obligatoire(), resume: (v) => obligatoire()(v) || longueurMax(400)(v), texte: longueurMax(8000), benefice: longueurMax(400), duree: longueurMax(80) },
-    enregistrer: async (d) => {
-      const prix = d.prix === '' || d.prix === undefined ? null : Number(d.prix);
-      const donnees = {
-        famille: d.famille, titre: d.titre, resume: d.resume, texte: d.texte || '', benefice: d.benefice || '',
-        plateformes: Array.isArray(d.plateformes) ? d.plateformes : (d.plateformes ? [d.plateformes] : []),
-        duree: d.duree || '', prix: Number.isFinite(prix) ? prix : null, tva: Number.isFinite(Number(d.tva)) ? Number(d.tva) : 20,
-        devis: d.devis || '', statut: d.statut, publication: d.publication, ordre: Number(d.ordre) || 0, aLaUne: Boolean(d.aLaUne),
-      };
-      if (fiche) {
-        /* Publier depuis l'éditeur date la publication, comme le bouton. */
-        if (donnees.publication === 'publiee' && fiche.publication !== 'publiee') donnees.publieLe = horodatage();
-        if (donnees.publication !== 'publiee') donnees.publieLe = null;
-        await ecrire.majSuggestion(pid, fiche.id, donnees);
-      } else await ecrire.creerSuggestion(pid, donnees);
-      toast(fiche ? 'Suggestion mise à jour.' : (donnees.publication === 'publiee' ? 'Suggestion publiée : le client la voit.' : 'Suggestion enregistrée en brouillon.'));
-    },
-  }),
-
   lien: (env, { pid, fiche }) => feuille({
     titre: fiche ? 'Le lien' : 'Nouveau lien', sousTitre: 'Un environnement, un dépôt, une maquette.',
     corps: `
@@ -1408,35 +1362,12 @@ export const supprimer = async (genre, env, { pid, fiche, libelle }) => {
     else if (genre === 'scenario') await ecrire.supprimerScenario(pid, fiche.ref);
     else if (genre === 'campagne') await ecrire.supprimerCampagne(pid, fiche.id);
     else if (genre === 'parcours') await ecrire.supprimerParcours(pid, fiche.ref);
-    else if (genre === 'suggestion') await ecrire.supprimerSuggestion(pid, fiche.id);
     toast('Supprimé.');
     return true;
   } catch (e) { toast(lisible(e), 'erreur'); return false; }
 };
 
 void longueurMax; void enDate; void TYPES_CHANGEMENT;
-
-/* Une suggestion acceptée prend sa place dans la feuille de route : une
-   étape, rattachée au devis joint quand il existe, avec son montant si on
-   gère la finance. Proposé, jamais imposé. */
-export const proposerEtapeDepuisSuggestion = async (env, { pid, fiche, jalons = [] }) => {
-  const ok = await confirmer({
-    titre: 'Poser cette suggestion dans la feuille de route ?',
-    texte: `Une étape « ${fiche.titre} » sera créée, à venir${fiche.devis ? ', rattachée au devis joint' : ''}. Le client la verra dans sa feuille de route.`,
-    ok: 'Créer l\'étape',
-  });
-  if (!ok) return false;
-  return agir(null, async () => {
-    const ordre = jalons.reduce((m, j) => Math.max(m, Number(j.ordre) || 0), 0) + 1;
-    const j = await ecrire.creerJalon(pid, {
-      titre: fiche.titre, description: fiche.resume || '', phase: 'Améliorations', statut: 'a-venir', progression: 0, ordre,
-      debut: null, fin: null, devis: fiche.devis || '', visibilite: 'client',
-    });
-    const jid = j && j.id;
-    if (jid && typeof fiche.prix === 'number' && peut(env.session, 'finance.gerer', pid)) await ecrire.poserMontant(pid, `jalon-${jid}`, fiche.prix);
-    if (jid) await ecrire.majSuggestion(pid, fiche.id, { jalon: jid, statut: 'acceptee' });
-  }, 'Étape créée dans la feuille de route.');
-};
 
 /* Les briques d'un éditeur, pour les écrans qui portent leurs propres
    formulaires (le plan de tests) : la même feuille, les mêmes champs, le
