@@ -109,8 +109,10 @@ const statutEnBase=async(id)=>((((await lire(`projets/atelier/jalons/${id}`))||{
   verifier(c.cases===0,'sans aucune case à cocher');
   verifier(await cl.evaluate(()=>document.querySelectorAll('#etage-devis [data-statut-etape], #etage-devis [data-editer-etape]').length)===0,'ni statut à changer, ni crayon');
   verifier(c.coches===5,'avec une coche par ligne');
-  await aller(cl,'/projets/atelier/etapes','.frise');
-  verifier(await cl.evaluate(()=>document.querySelectorAll('.frise').length)>=1 && await cl.evaluate(()=>document.querySelectorAll('.frise input').length)===0,'et sur sa feuille de route, sans case non plus');
+  /* Depuis le 02/10/2026, la feuille de route du client ne répète plus le
+     devis ligne par ligne : ses étapes y restent, la frise non. */
+  await aller(cl,'/projets/atelier/etapes','.route');
+  verifier(await cl.evaluate(()=>document.querySelectorAll('.frise').length===0 && !/ligne par ligne/.test(document.getElementById('vue').textContent)),'sa feuille de route ne répète plus le devis ligne par ligne');
 
   console.log('\n'+(soucis.length?`${soucis.length} ÉCART(S)`:'tout est conforme'));
   console.log('Erreurs JS :', err.length?err.slice(0,3).join(' | '):'aucune');

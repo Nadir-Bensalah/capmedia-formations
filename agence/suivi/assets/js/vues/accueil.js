@@ -15,6 +15,7 @@ import { K, G, agreger, enAttenteDeVous, progressionProjet, jalonCourant, procha
 import { filAriane } from '../coquille.js';
 import { echeance, lienReunion } from '../noyau.js';
 import { monterNotesClient } from './notes-client.js';
+import { etatPave, paveHtml, brancherPaves } from '../pave-attente.js';
 
 const iconeActivite = {
   suggestion: 'ampoule',
@@ -143,7 +144,7 @@ export const vue = async (ctx, env) => {
       if (de('release').length) parts.push([versSection('release', 'releases'), `${icone('releases')} ${pluriel(de('release').length, 'nouvelle version', 'nouvelles versions')}`]);
       if (de('message').length) parts.push(['#/messages', `${icone('messages')} ${pluriel(de('message').length, 'message')}`]);
       if (de('validation').length) parts.push(['#/demandes', `${icone('valider')} ${pluriel(de('validation').length, 'validation')}`]);
-      if (de('fichier').length) parts.push(['#/documents', `${icone('fichiers')} ${pluriel(de('fichier').length, 'fichier')}`]);
+      if (de('fichier').length) { const pids = [...new Set(de('fichier').map((a) => a.projet).filter(Boolean))]; parts.push([pids.length === 1 ? `#/fichiers?projet=${echapper(pids[0])}` : '#/activite', `${icone('fichiers')} ${pluriel(de('fichier').length, 'fichier')}`]); }
       if (!parts.length) parts.push(['#/activite', `${icone('activite')} ${pluriel(depuisPassage.length, 'mouvement')}`]);
       return `<div class="encart encart--info" id="depuis-visite" style="margin-bottom:var(--e-6)"><div><strong>Depuis votre dernière visite</strong><span class="rang" style="margin-top:6px;gap:16px">${parts.map(([href, p]) => `<a class="rang" style="gap:6px;color:inherit" href="${href}">${p}</a>`).join('')}</span></div></div>`;
     })() : '';
@@ -160,24 +161,28 @@ export const vue = async (ctx, env) => {
         <div class="actions">
           ${projets.length > 1 ? `<button class="btn btn-principal" type="button" data-raccourci="nouvelle-demande">${icone('plus')} Nouvelle demande</button>`
             : projets[0] ? `<a class="btn btn-principal" href="#/projets/${echapper(projets[0].id)}/nouvelle-demande">${icone('plus')} Nouvelle demande</a>` : ''}
-          ${projets.length > 1 ? `<button class="btn btn-secondaire" type="button" data-raccourci="message">${icone('messages')} Message</button>`
-            : `<a class="btn btn-secondaire" href="#/messages${projets[0] ? `/${echapper(projets[0].id)}` : ''}">${icone('messages')} Message</a>`}
+          ${/* Messages, avec le nombre de messages reçus et pas encore lus :
+                le même compte que la conversation (profil.lus), qui retombe
+                dès qu'on les a lus. */ ''}
+          ${(() => {
+            const badge = nonLus ? `<span class="badge badge--vif" id="badge-messages" aria-hidden="true">${nonLus > 99 ? '99+' : nonLus}</span>` : '';
+            const etiquette = `Messages${nonLus ? `, ${pluriel(nonLus, 'message non lu', 'messages non lus')}` : ''}`;
+            return projets.length > 1
+              ? `<button class="btn btn-secondaire btn-messages" type="button" data-raccourci="message" aria-label="${echapper(etiquette)}">${icone('messages')} Messages${badge}</button>`
+              : `<a class="btn btn-secondaire btn-messages" href="#/messages${projets[0] ? `/${echapper(projets[0].id)}` : ''}" data-raccourci-lien="messages" aria-label="${echapper(etiquette)}">${icone('messages')} Messages${badge}</a>`;
+          })()}
         </div>
       </div>
 
       ${resumeDepuis}
 
-      ${attente.length ? `
-      <section class="section" style="margin-top:0">
-        <div class="attente">
-          <p class="attente-tete">${icone('alerte')} En attente de vous <span class="badge badge--vif" style="margin-left:4px">${attente.length}</span></p>
-          <div class="liste" style="margin-top:8px">
+      ${attente.length ? paveHtml({
+        cle: 'accueil', etat: etatPave('accueil'), nombre: attente.length, rangement: 'Le ranger dans Demandes',
+        corps: `<div class="liste" style="margin-top:8px">
             ${attente.slice(0, 6).map((a) => ligne({ href: `#${a.chemin}`, icone: a.icone, ton: a.ton, titre: echapper(a.titre), sous: echapper(a.sous) })).join('')}
-            ${attente.length > 6 ? `<p class="t-petit" style="margin-top:8px"><a href="#/demandes">${echapper(pluriel(attente.length - 6, 'autre point', 'autres points'))} à voir</a></p>` : ''}
           </div>
-          ${attente.length > 6 ? `<p style="margin-top:8px"><a class="t-petit t-fort" href="#/demandes">Tout voir (${attente.length})</a></p>` : ''}
-        </div>
-      </section>` : ''}
+          ${attente.length > 6 ? `<p style="margin-top:8px"><a class="t-petit t-fort" href="#/demandes">Tout voir (${attente.length})</a></p>` : ''}`,
+      }) : ''}
 
       <section class="section">
         <div class="section-tete"><h2>Vos projets</h2>${projets.length ? '<a class="lien" href="#/nouveau-projet">Demander un nouveau projet</a>' : ''}</div>
@@ -270,6 +275,9 @@ export const vue = async (ctx, env) => {
      lequel avant d'y aller. « Demander un créneau » ouvre le formulaire de
      rendez-vous du calendrier, qui porte lui-même le choix du projet : à
      un seul projet, il arrive prérempli. */
+  /* Le pavé « En attente de vous » : replier, fermer (il se range dans
+     Demandes), et la page suit le choix de la personne (son profil). */
+  const gestesPaves = brancherPaves(sortie, env);
   const gestes = sur(sortie, 'click', '[data-raccourci]', async (el) => {
     const projets = (magasin.lire(K.projets) || session.projets).filter((p) => !p.archive);
     const cible = el.dataset.raccourci;
@@ -292,5 +300,5 @@ export const vue = async (ctx, env) => {
   cles.forEach((c) => lot.sur(c, planifier));
   planifier();
   void enDate; void echeanceHtml; void echeance; void depuis;
-  return () => { clearTimeout(garde); planifier.arreter(); gestes(); gesteIcs(); notes.fin(); lot.fin(); };
+  return () => { clearTimeout(garde); planifier.arreter(); gestes(); gestesPaves(); gesteIcs(); notes.fin(); lot.fin(); };
 };

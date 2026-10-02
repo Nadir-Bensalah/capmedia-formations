@@ -268,7 +268,10 @@ export const vue = async (ctx, env) => {
   sortie.innerHTML = `<div class="page">${squelette('page', 5)}</div>`;
   let ouvert = ctx.params.did || null;
   /* Le filtre par projet, quand le client en a plusieurs. */
-  const etat = { projet: '' };
+  /* Arrivé par l'arbre d'un projet (?projet=<p>) : ce projet seulement, le
+     choix du projet se fait dans le rail. */
+  const projetFixe = String((ctx.requete || {}).projet || '');
+  const etat = { projet: projetFixe };
 
   const rendre = () => {
     const projets = magasin.lire(K.projets) || session.projets;
@@ -305,7 +308,7 @@ export const vue = async (ctx, env) => {
     const ligneDoc = (d) => lignePiece(d, nomProjet);
 
     sortie.innerHTML = `<div class="page">
-      <div class="page-tete"><div><h1>Devis et factures</h1><p class="chapo">Tout ce qui a été émis pour vos projets. Un devis accepté ici vaut accord.</p></div>${miens.length > 1 ? `<div class="actions"><label class="etiquette-champ" for="filtre-projet" style="margin:0">Projet</label><select class="select" id="filtre-projet" style="width:auto"><option value="">Tous vos projets</option>${miens.map((p) => `<option value="${echapper(p.id)}"${etat.projet === p.id ? ' selected' : ''}>${echapper(p.nom)}</option>`).join('')}</select></div>` : ''}</div>
+      <div class="page-tete"><div><h1>Devis et factures</h1><p class="chapo">Tout ce qui a été émis pour vos projets. Un devis accepté ici vaut accord.</p></div>${miens.length > 1 && !projetFixe ? `<div class="actions"><label class="etiquette-champ" for="filtre-projet" style="margin:0">Projet</label><select class="select" id="filtre-projet" style="width:auto"><option value="">Tous vos projets</option>${miens.map((p) => `<option value="${echapper(p.id)}"${etat.projet === p.id ? ' selected' : ''}>${echapper(p.nom)}</option>`).join('')}</select></div>` : ''}</div>
       <div class="metriques">
         ${metrique(montantTTC(du) || `${montant(0)} TTC`, 'Reste à payer', { ton: du > 0 ? 'ambre' : 'vert', nuance: dues.length ? `${dues.length} facture${dues.length > 1 ? 's' : ''}` : 'Rien en attente' })}
         ${metrique(aDecider.length, 'Devis à décider', { ton: aDecider.length ? 'ambre' : '' })}
@@ -325,7 +328,7 @@ export const vue = async (ctx, env) => {
       const d = tousDocuments.find((x) => x.id === ouvert);
       if (d) {
         ouvert = null;
-        ouvrirDocument(d, env, { projets, paiements: agreger(session, G.paiements), documents: tousDocuments }).then(() => naviguer('/finances', { remplacer: true }));
+        ouvrirDocument(d, env, { projets, paiements: agreger(session, G.paiements), documents: tousDocuments }).then(() => naviguer(`/finances${projetFixe ? `?projet=${encodeURIComponent(projetFixe)}` : ''}`, { remplacer: true }));
       } else if (miens.every((p) => magasin.chargee(K.documents(p.id)))) {
         /* Tout est arrivé et la pièce n'y est pas : fermée, archivée ou
            inconnue. Le dire vaut mieux qu'une page qui ne réagit pas. */

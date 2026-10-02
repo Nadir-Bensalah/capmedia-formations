@@ -82,6 +82,7 @@ export const monterCoquille = ({ session, role, groupes, sortie }) => {
         <header class="haut" id="haut">
           <button class="btn-icone btn-menu" type="button" id="bouton-menu" aria-label="Ouvrir la navigation" aria-controls="lat" aria-expanded="false">${icone('menu')}</button>
           <button class="btn-icone btn-deplier" type="button" id="bouton-deplier" aria-label="Déplier la navigation" data-astuce="Déplier">${icone('hub')}</button>
+          ${role === 'client' ? `<button class="btn btn-fantome btn-petit btn-retour" type="button" id="bouton-retour" hidden>${icone('retour')}<span>Retour</span></button>` : ''}
           <nav class="ariane" id="ariane" aria-label="Fil d'Ariane"></nav>
           <div class="fin">
             ${suite ? '' : recherche}
@@ -96,6 +97,7 @@ export const monterCoquille = ({ session, role, groupes, sortie }) => {
   rendreNavigation();
   brancherTiroir();
   brancherHaut();
+  if (role === 'client') brancherRetour();
   brancherCompte();
   brancherNotifications();
   brancherPalette();
@@ -141,22 +143,91 @@ const repereHtml = (repere) => {
   return `<span class="comptes"><span class="lat-repere" role="img" aria-label="${echapper(repere.texte)}" data-astuce="${echapper(repere.texte)}">${icone(repere.icone || 'aucun')}</span></span>`;
 };
 
+/* L'arbre d'un projet, dans le rail du client : le projet (son écusson,
+   son nom, son chevron) et, dessous, reliées par des traits fins et
+   arrondis comme les réponses d'une conversation, SES entrées. Déplié par
+   défaut quand il n'y a qu'un projet en cours, replié sinon ; chaque projet
+   se déplie et se replie au clic, et le choix se retient par personne sur
+   cet appareil. Replié, le projet porte la somme de ce qui attend. */
+const CLE_ARBRE = () => `suivi:arbre:${(contexte.session && contexte.session.utilisateur && contexte.session.utilisateur.uid) || ''}`;
+const lireArbre = () => { try { return JSON.parse(localStorage.getItem(CLE_ARBRE()) || '{}') || {}; } catch (e) { return {}; } };
+const ecrireArbre = (etat) => { try { localStorage.setItem(CLE_ARBRE(), JSON.stringify(etat)); } catch (e) { /* stockage refusé */ } };
+const arbreDeplie = (it) => { const e = lireArbre(); return typeof e[it.arbre] === 'boolean' ? e[it.arbre] : Boolean(it.deplieParDefaut); };
+/** Déplie (ou replie) un projet de l'arbre et retient le choix. */
+export const deplierArbre = (id, oui = true) => {
+  const e = lireArbre();
+  if (e[id] === oui) return;
+  e[id] = oui; ecrireArbre(e);
+  const bloc = document.querySelector(`#lat-corps .lat-arbre[data-arbre="${CSS.escape(id)}"]`);
+  if (bloc) basculerBloc(bloc, oui);
+};
+const basculerBloc = (bloc, oui) => {
+  bloc.classList.toggle('deplie', oui);
+  const bouton = bloc.querySelector('.lat-arbre-bascule');
+  if (bouton) { bouton.setAttribute('aria-expanded', String(oui)); bouton.setAttribute('aria-label', `${oui ? 'Replier' : 'Déplier'} ${bouton.dataset.nom || ''}`.trim()); }
+  const branches = bloc.querySelector('.lat-arbre-branches');
+  if (branches) branches.inert = !oui;
+  /* Le chiffre du projet : la somme quand il est replié, rien quand ses
+     entrées le portent. Le bloc n'est pas redessiné : ses branches glissent. */
+  const it = contexte.groupes.flatMap((g) => g.items).find((x) => x.arbre === bloc.dataset.arbre);
+  const ligneProjet = bloc.querySelector('.lat-projet');
+  if (it && ligneProjet) {
+    const ancien = ligneProjet.querySelector(':scope > .comptes');
+    if (ancien) ancien.remove();
+    const neuf = compteHtml(oui ? null : it.compteReplie);
+    if (neuf) ligneProjet.insertAdjacentHTML('beforeend', neuf);
+  }
+  railRendu = htmlNavigation();
+};
+
+const lienHtml = (it, classe = '') => `
+        <a class="lat-lien${classe}${it.sous ? ' lat-sous-lien' : ''}${it.enCours ? ' lat-lien--en-cours' : ''}" href="#${echapper(it.lien || it.chemin)}" data-chemin="${echapper(it.chemin)}"${it.projet ? ` data-projet="${echapper(it.projet)}"` : ''}${it.exact ? ' data-exact' : ''}>
+          ${it.ecusson || (it.icone ? icone(it.icone) : '')}<span class="tronque">${echapper(it.libelle)}</span>${it.enCours ? `<span class="sr-only">, ${echapper(it.enCours)}</span>` : ''}${compteHtml(typeof it.compte === 'function' ? it.compte() : it.compte)}${repereHtml(it.repere)}
+        </a>`;
+
+const arbreHtml = (it) => {
+  const ouvert = arbreDeplie(it);
+  const id = `arbre-${String(it.arbre).replace(/[^\w-]/g, '-')}`;
+  return `
+    <div class="lat-arbre${ouvert ? ' deplie' : ''}" data-arbre="${echapper(it.arbre)}">
+      <div class="lat-arbre-tete">
+        ${lienHtml({ ...it, compte: ouvert ? null : it.compteReplie }, ' lat-projet')}
+        <button class="lat-arbre-bascule" type="button" data-bascule-arbre="${echapper(it.arbre)}" data-nom="${echapper(it.libelle)}" aria-expanded="${ouvert}" aria-controls="${id}" aria-label="${ouvert ? 'Replier' : 'Déplier'} ${echapper(it.libelle)}">${icone('chevron')}</button>
+      </div>
+      <div class="lat-arbre-branches" id="${id}"${ouvert ? '' : ' inert'}>
+        <ul role="list">${it.enfants.map((e) => `<li class="lat-branche">${lienHtml(e)}</li>`).join('')}</ul>
+      </div>
+    </div>`;
+};
+
+const htmlNavigation = () => contexte.groupes.map((g) => `
+    <div class="lat-groupe">
+      ${g.titre ? `<p class="lat-titre">${echapper(g.titre)}</p>` : ''}
+      ${g.items.map((it) => (it.enfants ? arbreHtml(it) : lienHtml(it))).join('')}
+    </div>`).join('');
+
 /* Le rail ne se réécrit que s'il change vraiment. Chaque page le
    redemandait, et réécrire les mêmes lignes les faisait toutes rejouer
    leur entrée : le rail entier tressautait à chaque clic. */
 let railRendu = '';
+let arbreBranche = false;
 export const rendreNavigation = () => {
   const corps = $('#lat-corps');
   if (!corps) return;
-  const html = contexte.groupes.map((g) => `
-    <div class="lat-groupe">
-      ${g.titre ? `<p class="lat-titre">${echapper(g.titre)}</p>` : ''}
-      ${g.items.map((it) => `
-        <a class="lat-lien${it.sous ? ' lat-sous-lien' : ''}${it.enCours ? ' lat-lien--en-cours' : ''}" href="#${echapper(it.lien || it.chemin)}" data-chemin="${echapper(it.chemin)}"${it.exact ? ' data-exact' : ''}>
-          ${it.ecusson || (it.icone ? icone(it.icone) : '')}<span class="tronque">${echapper(it.libelle)}</span>${it.enCours ? `<span class="sr-only">, ${echapper(it.enCours)}</span>` : ''}${compteHtml(typeof it.compte === 'function' ? it.compte() : it.compte)}${repereHtml(it.repere)}
-        </a>`).join('')}
-    </div>`).join('');
+  const html = htmlNavigation();
   if (html !== railRendu) { corps.innerHTML = html; railRendu = html; }
+  if (!arbreBranche) {
+    arbreBranche = true;
+    corps.addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-bascule-arbre]');
+      if (!b) return;
+      ev.preventDefault();
+      const bloc = b.closest('.lat-arbre');
+      const oui = !bloc.classList.contains('deplie');
+      const e = lireArbre(); e[b.dataset.basculeArbre] = oui; ecrireArbre(e);
+      basculerBloc(bloc, oui);
+    });
+  }
   marquerActif();
 };
 
@@ -187,13 +258,31 @@ export const definirRoleProjet = (texte) => {
   el.textContent = texte || '';
 };
 
+/* Le projet de l'adresse courante : /projets/{p}/..., /messages/{p}, ou
+   « ?projet= » d'une page filtrée sur un projet (calendrier, tests...). */
+export const projetDeLAdresse = (route = courant()) => {
+  const c = route.chemin || '';
+  const m = /^\/(?:projets|messages)\/([^/]+)/.exec(c);
+  if (m) return m[1];
+  return (route.requete && route.requete.projet) || '';
+};
+
 const marquerActif = () => {
-  const c = courant().chemin;
+  const route = courant();
+  const c = route.chemin;
+  const projet = projetDeLAdresse(route);
   let meilleur = null;
   $$('#lat-corps .lat-lien').forEach((a) => {
-    a.classList.remove('actif');
+    a.classList.remove('actif', 'lat-projet--courant');
     a.removeAttribute('aria-current');
+    /* La ligne d'un projet qui a ses entrées dessous ne s'allume pas : c'est
+       l'entrée qui le fait. Elle dit seulement « vous êtes dans ce projet ». */
+    if (a.classList.contains('lat-projet')) {
+      if (projet && a.dataset.chemin === `/projets/${projet}`) a.classList.add('lat-projet--courant');
+      return;
+    }
     const chemin = a.dataset.chemin;
+    if (a.dataset.projet && a.dataset.projet !== projet) return;
     const correspond = a.hasAttribute('data-exact') ? c === chemin : (c === chemin || c.startsWith(`${chemin}/`));
     if (correspond && (!meilleur || chemin.length > meilleur.dataset.chemin.length)) meilleur = a;
   });
@@ -207,9 +296,16 @@ const marquerActif = () => {
 };
 
 /** Le fil d'Ariane : [{libelle, chemin?}]. Le dernier est la page courante. */
-export const filAriane = (items) => {
+let retoucheAriane = null;
+/** L'espace peut compléter chaque fil (le Hub y met l'accueil et le projet). */
+export const definirRetoucheAriane = (fn) => { retoucheAriane = fn; };
+let filCourant = [];
+export const filAriane = (brut) => {
   const fil = $('#ariane');
   if (!fil) return;
+  const items = retoucheAriane ? (retoucheAriane(brut) || brut) : brut;
+  filCourant = items;
+  majRetour();
   fil.innerHTML = items.map((it, i) => {
     const dernier = i === items.length - 1;
     const texte = `<span class="${dernier ? 'courant' : ''} tronque">${echapper(it.libelle)}</span>`;
@@ -252,6 +348,43 @@ const brancherTiroir = () => {
   try { if (localStorage.getItem(CLE_PLIEE) === '1') coq.classList.add('pliee'); } catch (e) { /* rien */ }
   $('#bouton-plier').addEventListener('click', () => plier(true));
   $('#bouton-deplier').addEventListener('click', () => plier(false));
+};
+
+/* Le retour, sur toutes les pages du client sauf l'accueil. Il revient à
+   la page d'avant quand on l'a vue dans cette visite ; sinon (une adresse
+   ouverte depuis un e-mail, un favori), il remonte d'un cran dans le fil
+   d'Ariane, et au pire à l'accueil. Jamais hors de l'espace. */
+const pile = [];
+const adresseDe = (route) => {
+  const q = Object.entries(route.requete || {}).map(([k, v]) => `${k}=${v}`).join('&');
+  return `${route.chemin}${q ? `?${q}` : ''}`;
+};
+const parentDuFil = () => {
+  const avant = filCourant.slice(0, -1).filter((it) => it.chemin);
+  return avant.length ? avant[avant.length - 1].chemin : '/';
+};
+const majRetour = () => {
+  const b = document.getElementById('bouton-retour');
+  if (!b) return;
+  const ici = courant().chemin || '/';
+  b.hidden = ici === '/';
+  const versLAccueil = pile.length < 2 && parentDuFil() === '/';
+  b.setAttribute('aria-label', versLAccueil ? 'Retour à l\'accueil' : 'Retour à la page précédente');
+};
+const brancherRetour = () => {
+  surChangement((route) => {
+    const ici = adresseDe(route);
+    if (pile[pile.length - 1] === ici) { majRetour(); return; }
+    if (pile.length > 1 && pile[pile.length - 2] === ici) pile.pop();
+    else if (route.remplace && pile.length) pile[pile.length - 1] = ici;
+    else { pile.push(ici); if (pile.length > 60) pile.shift(); }
+    majRetour();
+  });
+  $('#bouton-retour').addEventListener('click', () => {
+    if (pile.length > 1) { history.back(); return; }
+    const parent = parentDuFil();
+    naviguer(parent && parent !== courant().chemin ? parent : '/');
+  });
 };
 
 const brancherHaut = () => {

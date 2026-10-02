@@ -17,6 +17,7 @@ import { filAriane } from '../coquille.js';
 import { naviguer } from '../routeur.js';
 import { choisirProjet } from './accueil.js';
 import { ouvrirValidation } from './valider.js';
+import { etatPave, reafficherHtml, brancherPaves } from '../pave-attente.js';
 
 const CLE_FILTRE = 'suivi:filtre-demandes:*';
 const CLE_PROJET = 'suivi:filtre-demandes-projet:*';
@@ -69,6 +70,7 @@ export const vue = async (ctx, env) => {
           icone: 'valider', ton: 'violet', titre: echapper(v.titre), sous: `${echapper(TYPES_VALIDATION[v.type] || 'Validation')} · ${echapper(nomDe(v.projet))} · ${echapper(depuis(v.cree))}${v.echeance ? ` ${echeanceHtml(echeance(v.echeance))}` : ''}`,
           fin: '<span class="btn btn-principal btn-petit">Examiner</span>', action: 'ouvrir-validation', attrs: `data-id="${echapper(v.id)}"`,
         })).join('')}${autres.map((a) => ligne({ href: `#${a.chemin}`, icone: a.icone, ton: a.ton, titre: echapper(a.titre), sous: echapper(a.sous) })).join('')}</div>` : ''}
+        ${etatPave('accueil') === 'ferme' ? `<div style="margin-top:12px">${reafficherHtml({ cle: 'accueil', texte: 'Le bloc « En attente de vous » est rangé ici au lieu de votre accueil.', bouton: 'Réafficher sur l\'accueil' })}</div>` : ''}
       </section>`;
     const blocPassees = passees.length ? `<section class="section" id="validations-passees"><div class="section-tete"><h2>Validations passées</h2></div><div class="liste">${passees.slice(0, limitePassees).map((v) => ligne({
         /* Une validation annulée n'a été ni approuvée ni contestée : icône
@@ -146,10 +148,13 @@ export const vue = async (ctx, env) => {
   const cles = [K.projets, ...session.projets.flatMap((p) => [K.tickets(p.id), K.validations(p.id), K.documents(p.id), K.taches(p.id), K.blocages(p.id)])];
   const planifier = magasin.dessinateur(rendre, 40, cles);
   cles.forEach((c) => lot.sur(c, planifier));
+  /* Le choix du pavé de l'accueil (fermé : le bouton pour le réafficher). */
+  lot.sur(K.profil, planifier);
+  const gestesPaves = brancherPaves(sortie, env);
   /* Un projet ouvert après le montage amène ses demandes sur une clé que la
      vue ne connaissait pas : on l'écoute dès qu'il apparaît. */
   const suivis = new Set(session.projets.map((p) => p.id));
   lot.sur(K.projets, (liste) => (liste || []).forEach((p) => { if (!suivis.has(p.id)) { suivis.add(p.id); lot.sur(K.tickets(p.id), planifier); } }));
   planifier();
-  return () => { planifier.arreter(); gestes(); lot.fin(); };
+  return () => { planifier.arreter(); gestes(); gestesPaves(); lot.fin(); };
 };

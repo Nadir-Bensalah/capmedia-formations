@@ -42,7 +42,7 @@ prealables() {
       node outils/semer-parcours-2.mjs atelier --vrai
       node outils/semer-regles.mjs atelier --vrai
       node outils/semer-robot-banc.mjs atelier ;;
-    qa-devis-frise)
+    qa-devis-frise|qa-menage-hub)
       node outils/semer-etapes-devis.mjs atelier d-qa --vrai ;;
     qa-espace-testeur)
       node outils/semer-campagne.mjs "$PLAN_DE_TESTS" ;;

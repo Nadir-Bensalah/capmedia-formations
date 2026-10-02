@@ -172,6 +172,13 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Le choix du pavé « En attente de vous » (profils/{uid}.pavesAttente).
+    function pavesAttenteValides(p) {
+      return p is map && p.keys().hasOnly(['accueil', 'projets'])
+        && (!('accueil' in p) || p.accueil in ['ouvert', 'replie', 'ferme'])
+        && (!('projets' in p) || (p.projets is map && p.projets.size() <= 100));
+    }
+
     // Le profil d'une personne : le sien, et rien d'autre. Les champs sont
     // bornés pour qu'un profil ne devienne pas un fourre-tout.
     match /profils/{uid} {
@@ -187,9 +194,15 @@ service cloud.firestore {
              'email',
              // La date de ses premiers pas (l'accueil du Hub) : l'équipe
              // sait qui a fait le tour de son espace.
-             'accueil'
+             'accueil',
+             // Le pavé « En attente de vous » replié ou fermé, sur l'accueil
+             // et sur l'aperçu de chaque projet : le choix suit la personne
+             // sur tous ses appareils. { accueil: 'ouvert' | 'replie' |
+             // 'ferme', projets: { <projet>: idem } }
+             'pavesAttente'
            ])
         && (!('accueil' in request.resource.data) || request.resource.data.accueil is timestamp)
+        && (!('pavesAttente' in request.resource.data) || pavesAttenteValides(request.resource.data.pavesAttente))
         && (!('email' in request.resource.data) || request.resource.data.email == monEmail())
         && (!('nom' in request.resource.data) || texteBorne(request.resource.data.nom, 120))
         && (!('telephone' in request.resource.data) || texteBorne(request.resource.data.telephone, 40))

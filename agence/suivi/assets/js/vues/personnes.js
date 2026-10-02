@@ -1,5 +1,6 @@
 /* ==========================================================================
-   « Les personnes » d'un projet. Rien ne disait au client qui est qui : le
+   « Les personnes » d'un projet (« Collaborateurs sur ce projet » chez le
+   client, depuis le 02/10/2026). Rien ne disait au client qui est qui : le
    nom du responsable Capmedia dans l'en-tête, des prénoms sur les étapes,
    et jamais son propre rôle. Cette section, dans l'aperçu, répond aux deux
    questions : qui, chez Capmedia, et qui, de son côté, avec le rôle de
@@ -57,7 +58,7 @@ export const personnesHtml = (projet, env, d = {}) => {
   const responsable = !equipe && estResponsable(env.session, projet);
 
   return `<section class="section" id="personnes">
-    <div class="section-tete"><h2>Les personnes</h2>${responsable ? `<button class="btn btn-secondaire btn-petit" type="button" data-action="inviter-collegue" data-projet="${echapper(pid)}" data-emails="${projet.emailsClient === 'coupes' ? 'coupes' : 'actifs'}">${icone('plus')} Inviter un collègue</button>` : ''}</div>
+    <div class="section-tete"><h2>${equipe ? 'Les personnes' : 'Collaborateurs sur ce projet'}</h2>${responsable ? `<button class="btn btn-secondaire btn-petit" type="button" data-action="inviter-collegue" data-projet="${echapper(pid)}" data-emails="${projet.emailsClient === 'coupes' ? 'coupes' : 'actifs'}">${icone('plus')} Inviter un collègue</button>` : ''}</div>
     <div class="grille grille-2" style="gap:var(--e-4)">
       <div class="carte carte--creuse">
         <p class="surtitre">Chez Capmedia</p>

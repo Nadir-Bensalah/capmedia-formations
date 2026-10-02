@@ -24,6 +24,10 @@ let sortie = null;
 let generation = 0;
 const ecouteurs = new Set();
 let routeCourante = { chemin: '/', params: {}, requete: {} };
+/* Vrai le temps d'un rendu demandé par naviguer(..., { remplacer: true }) :
+   la page remplace la précédente dans l'historique au lieu de s'y ajouter.
+   Le bouton Retour de l'espace client (coquille.js) le lit. */
+let remplacement = false;
 
 const compiler = (chemin) => {
   const cles = [];
@@ -81,6 +85,8 @@ const arriver = (monter) => {
 
 const rendre = async () => {
   const { chemin, requete } = lireHash();
+  const remplace = remplacement;
+  remplacement = false;
   const trouve = trouver(chemin);
   if (!trouve) {
     if (chemin !== routeDefaut) { naviguer(routeDefaut, { remplacer: true }); return; }
@@ -92,7 +98,7 @@ const rendre = async () => {
   const cle = typeof trouve.route.cle === 'function' ? trouve.route.cle({ chemin, params: trouve.params, requete }) : null;
   const mien = (generation += 1);
   if (cle && cle === cleCourante && typeof majEnPlace === 'function') {
-    routeCourante = { chemin, params: trouve.params, requete };
+    routeCourante = { chemin, params: trouve.params, requete, remplace };
     ecouteurs.forEach((fn) => { try { fn(routeCourante); } catch (e) { console.error(e); } });
     try { majEnPlace({ ...routeCourante, sortie }); } catch (e) { console.error('[routeur] mise a jour en place', e); }
     return;
@@ -105,7 +111,7 @@ const rendre = async () => {
   nettoyage = null;
   majEnPlace = null;
   cleCourante = cle;
-  routeCourante = { chemin, params: trouve.params, requete };
+  routeCourante = { chemin, params: trouve.params, requete, remplace };
   ecouteurs.forEach((fn) => { try { fn(routeCourante); } catch (e) { console.error(e); } });
   try {
     const rendu = await arriver(() => {
@@ -153,9 +159,8 @@ export const demarrer = () => {
 
 export const naviguer = (chemin, { remplacer = false } = {}) => {
   const cible = `#${chemin}`;
-  if (remplacer) history.replaceState(null, '', cible);
-  else location.hash = chemin;
-  if (remplacer) rendre();
+  if (remplacer) { history.replaceState(null, '', cible); remplacement = true; rendre(); return; }
+  location.hash = chemin;
 };
 
 export const rafraichir = () => rendre();

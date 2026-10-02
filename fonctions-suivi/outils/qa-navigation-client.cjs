@@ -1,5 +1,6 @@
 /* Se repérer dans le Hub, à un et à plusieurs projets, avec son rôle
-   (brief D, 27/09/2026), éprouvé dans le navigateur : « Les personnes » et
+   (brief D, 27/09/2026), éprouvé dans le navigateur : « Les personnes »
+   (« Collaborateurs sur ce projet » chez le client depuis le 02/10) et
    le rôle de Camille, l'invitation d'un collègue (le document
    interlocuteur, le miroir « personnesClient », la notification équipe),
    « Demandes » du rail, la notification qui porte le nom du projet et
@@ -91,7 +92,7 @@ const nettoyer = async () => {
   verifier(await attendre(async () => (await personnesClient('atelier')).some((p) => p.uid === uid && p.role === 'responsable')), 'le serveur tient le miroir « personnesClient » (Camille, responsable)');
   await aller(page, '#/projets/atelier', '#personnes');
   const personnes = await page.textContent('#personnes');
-  verifier(/Les personnes/.test(personnes) && /Chez Capmedia/.test(personnes) && /De votre côté/.test(personnes), 'la section « Les personnes » est dans l aperçu');
+  verifier(/Collaborateurs sur ce projet/.test(personnes) && /Chez Capmedia/.test(personnes) && /De votre côté/.test(personnes), 'la section « Collaborateurs sur ce projet » est dans l aperçu');
   verifier(/Camille Martin/.test(personnes) && /\(vous\)/.test(personnes) && /Responsable/.test(personnes), 'Camille s y voit, responsable, avec « vous »');
   verifier(/Le responsable engage votre société/.test(personnes), 'le rôle est expliqué en une ligne');
   verifier(/Alex Durand/.test(personnes), 'le responsable Capmedia est nommé (annuaire)');
@@ -116,10 +117,9 @@ const nettoyer = async () => {
   const refusAgent = await appelAdmin('inviterCollegue', { projet: 'atelier', nom: 'X', email: 'x.essai@exemple.test' });
   verifier(refusAgent.code === 403, 'l équipe passe par « Accès client », pas par cette action (403)');
 
-  console.log('\n== « Demandes » du rail, tous projets');
-  verifier(Boolean(await page.$('#lat-corps a[data-chemin="/demandes"]')), 'le rail a une entrée « Demandes »');
-  await page.click('#lat-corps a[data-chemin="/demandes"]');
-  await page.waitForSelector('.page h1', { timeout: 20000 }); await pause(1000);
+  console.log('\n== « Demandes », tous projets (la page reste, l entrée vit dans l arbre de chaque projet)');
+  verifier(!(await page.$('#lat-corps a[data-chemin="/demandes"]')) && Boolean(await page.$('#lat-corps a[data-chemin="/projets/atelier/demandes"]')), 'le rail porte « Demandes » sous le projet, plus en entrée globale');
+  await aller(page, '#/demandes', '.page h1');
   const pageDemandes = await page.textContent('.page');
   verifier(/ATELIER-004/.test(pageDemandes) || /notifications arrivent deux fois/.test(pageDemandes), 'elle liste les demandes d Atelier', pageDemandes.trim().slice(0, 100));
   /* Une suite passée avant a pu déplacer cette demande : on la remet « à valider ». */
@@ -127,19 +127,19 @@ const nettoyer = async () => {
   await page.click('[data-filtre="moi"]'); await pause(500);
   verifier(/anniversaires reste incomplète/.test(await page.textContent('.page')), 'le filtre « À vous » ne garde que ce qui attend Camille');
 
-  console.log('\n== La barre latérale, resserrée');
+  console.log('\n== La barre latérale : l arbre du projet');
   await aller(page, '#/projets/atelier', '.page-tete--projet');
-  const sousProjet = await page.$$eval('#lat-corps .lat-lien', (as) => as.filter((a) => /^\/projets\/atelier\//.test(a.dataset.chemin || '')).map((a) => a.dataset.chemin));
-  verifier(sousProjet.length === 0 && Boolean(await page.$('#lat-corps a[data-chemin="/projets/atelier"]')), 'sous le projet ouvert, plus aucune sous-entrée (ses onglets suffisent), le projet reste', sousProjet.join(' '));
+  const sousProjet = await page.$$eval('#lat-corps .lat-arbre[data-arbre="atelier"] .lat-branche .lat-lien', (as) => as.map((a) => a.dataset.chemin));
+  verifier(sousProjet.includes('/projets/atelier/demandes') && Boolean(await page.$('#lat-corps a[data-chemin="/projets/atelier"]')) && !(await page.$('#onglets-projet')), 'les sections du projet sont dans son arbre, plus en onglets ; le projet reste', sousProjet.join(' '));
   verifier(Boolean(await page.$('#lat-corps a[data-chemin="/projets/atelier"] .avatar-projet')), 'avec son écusson');
   const chemins = (await page.$$eval('#lat-corps .lat-lien', (as) => as.map((a) => a.dataset.chemin))).filter((c) => c !== '/nouveaux-projets');
-  verifier(chemins.indexOf('/nouveau-projet') > 0 && chemins.indexOf('/nouveau-projet') === chemins.indexOf('/parametres') - 1 && chemins.indexOf('/nouveau-projet') > chemins.indexOf('/documents'), '« Demander un projet » est en bas, juste avant « Paramètres »', chemins.join(' '));
-  verifier(!chemins.includes('/valider') && chemins.filter((c) => c === '/demandes').length === 1, '« En attente de vous » et « Demandes » ne font qu une entrée', chemins.join(' '));
-  await aller(page, '#/demandes', '#en-attente');
-  const lignesAttente = (await page.$$('#en-attente .ligne')).length;
-  const rougeDemandes = await page.$eval('#lat-corps a[data-chemin="/demandes"] .compte.vif', (el) => Number(el.textContent)).catch(() => 0);
-  verifier(lignesAttente > 0 && rougeDemandes === lignesAttente, 'le rouge de « Demandes » compte tout ce qui attend Camille', `${rougeDemandes} pour ${lignesAttente} point(s)`);
-  const repere = '#lat-corps a[data-chemin="/maintenance"] .lat-repere';
+  verifier(chemins.indexOf('/nouveau-projet') > 0 && chemins.indexOf('/nouveau-projet') === chemins.indexOf('/parametres') - 1 && chemins.indexOf('/nouveau-projet') > chemins.indexOf('/fichiers'), '« Demander un projet » est en bas, juste avant « Paramètres »', chemins.join(' '));
+  verifier(!chemins.includes('/valider') && chemins.filter((c) => c === '/projets/atelier/demandes').length === 1, '« En attente de vous » et « Demandes » ne font qu une entrée', chemins.join(' '));
+  await aller(page, '#/projets/atelier/demandes', '#en-attente-projet');
+  const lignesAttente = (await page.$$('#en-attente-projet .ligne')).length;
+  const rougeDemandes = await page.$eval('#lat-corps a[data-chemin="/projets/atelier/demandes"] .compte.vif', (el) => Number(el.textContent)).catch(() => 0);
+  verifier(lignesAttente > 0 && rougeDemandes === lignesAttente, 'le rouge de « Demandes » compte ce qui attend Camille sur le projet', `${rougeDemandes} pour ${lignesAttente} point(s)`);
+  const repere = '#lat-corps a[data-chemin="/maintenance"][data-projet="atelier"] .lat-repere';
   verifier(await attendre(async () => Boolean(await page.$(repere))), 'sans forfait, un repère « rien en cours » à droite de Maintenance');
   const etiquette = await page.$eval(repere, (el) => ({ label: el.getAttribute('aria-label'), astuce: el.getAttribute('data-astuce'), role: el.getAttribute('role'), fond: getComputedStyle(el).backgroundColor, svg: Boolean(el.querySelector('svg')) })).catch(() => ({}));
   verifier(etiquette.label === 'Aucun forfait de maintenance en cours' && etiquette.astuce === etiquette.label && etiquette.role === 'img' && etiquette.svg, 'nommé et en infobulle : « Aucun forfait de maintenance en cours »', JSON.stringify(etiquette));
@@ -148,7 +148,7 @@ const nettoyer = async () => {
   verifier(await attendre(async () => !(await page.$(repere))), 'un forfait actif : le repère s en va, sans recharger');
   await effacer('projets/atelier/maintenance/contrat');
   verifier(await attendre(async () => Boolean(await page.$(repere))), 'le forfait retiré : il revient');
-  const tests = '#lat-corps a[data-chemin="/tests"]';
+  const tests = '#lat-corps a[data-chemin="/tests"][data-projet="atelier"]';
   /* Les campagnes déjà ouvertes par les semis passent « en préparation » le
      temps du contrôle (ce statut ne déclenche rien côté serveur) : on part
      d'un rail sans campagne en cours. */
