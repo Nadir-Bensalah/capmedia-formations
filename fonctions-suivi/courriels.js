@@ -1095,7 +1095,9 @@ function code(v) {
       titre: 'Votre code de connexion',
       intro: `Saisissez ce code dans la page de connexion, sur l'appareil où vous venez de le demander.\n\n`
         + `Il est valable ${minutes} minutes et ne sert qu'une fois.`,
-      faits: [['Code', chiffres.split('').join(' ')]],
+      /* Les six chiffres collés, sans espace : un double-clic ou un appui long
+         les sélectionne d'un coup, et le collage arrive entier. */
+      faits: [['Code', chiffres]],
       note: "Si vous n'avez rien demandé, ignorez ce message : sans ce code, personne n'entre. Ne le transmettez à personne, nous ne vous le demanderons jamais.",
     }),
   };
