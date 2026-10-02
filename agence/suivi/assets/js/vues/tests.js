@@ -697,7 +697,7 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAU
     ${camp.length ? `<div class="liste">${camp.map((c) => ligne({
       icone: 'bug', ton: c.statut === 'close' ? 'vert' : c.statut === 'en-cours' ? 'bleu' : '',
       titre: echapper(c.titre || 'Campagne'),
-      sous: `${(c.scenarios || []).length ? pluriel((c.scenarios || []).length, 'vérification', 'vérifications') : 'aucune vérification'} · ${(c.testeurs || []).length ? pluriel((c.testeurs || []).length, 'testeur', 'testeurs') : 'aucun testeur'}${c.debut ? ` · ${echapper(dateCourte(c.debut))}` : ''}`,
+      sous: `${(c.scenarios || []).length ? pluriel((c.scenarios || []).length, 'vérification', 'vérifications') : 'aucune vérification'} · ${(c.testeurs || []).length ? pluriel((c.testeurs || []).length, 'testeur', 'testeurs') : 'aucun testeur'}${dateCourte(c.debut) ? ` · ${echapper(dateCourte(c.debut))}` : ''}`,
       fin: `${pastille(STATUTS_CAMPAGNE, c.statut || 'preparation')}${equipe ? `<span class="rang boutons-edition"><button class="btn-icone" type="button" data-editer-campagne="${echapper(c.id)}" aria-label="Modifier" data-astuce="Modifier">${icone('edit')}</button></span>` : ''}`,
       action: 'ouvrir-campagne', attrs: `data-id="${echapper(c.id)}"`,
     })).join('')}</div>`
@@ -800,7 +800,7 @@ const ouvrirAnomalie = (a, { equipe, pid, env, scenarios }) => {
         ${temoins.length ? `<div class="liste liste--serree">${temoins.map((t) => ligne({
           icone: 'utilisateur', ton: 'ambre',
           titre: `${echapper((PLATEFORMES_TEST[t.plateforme] || {}).libelle || t.plateforme || 'Plateforme inconnue')}${t.appareil ? ` · ${echapper(t.appareil)}` : ''}`,
-          sous: `${t.le ? `${echapper(dateHeure(t.le))} · ` : ''}${echapper(t.commentaire || 'Sans commentaire')}`,
+          sous: `${dateHeure(t.le) ? `${echapper(dateHeure(t.le))} · ` : ''}${echapper(t.commentaire || 'Sans commentaire')}`,
           fin: (t.preuves || []).map((c, i) => `<button class="btn btn-doux btn-petit" type="button" data-piece="${echapper(c)}">${icone('image')} Preuve ${i + 1}</button>`).join(''),
         })).join('')}</div>` : `<p class="aide">Posée à la main, sans échec de testeur derrière.</p>`}
       </div>`,
@@ -1148,7 +1148,7 @@ const resultatsHtml = (c, { dedans, nommer }) => {
             icone: x.resultat === 'ko' ? 'alerte' : x.resultat === 'ok' ? 'check' : 'moins',
             ton: x.resultat === 'ko' ? 'rouge' : x.resultat === 'ok' ? 'vert' : '',
             titre: `${echapper(qui.nom)} · ${echapper((PLATEFORMES_TEST[x.plateforme] || {}).libelle || x.plateforme || '')}${appareil ? ` · ${echapper(appareil)}` : ''}`,
-            sous: `${x.le ? `${echapper(dateHeure(x.le))} · ` : ''}${echapper(x.commentaire || (x.resultat === 'ok' ? 'Comme prévu' : 'Sans commentaire'))}${qui.traits ? ` · <span class="t-3">${echapper(qui.traits)}</span>` : ''}`,
+            sous: `${dateHeure(x.le) ? `${echapper(dateHeure(x.le))} · ` : ''}${echapper(x.commentaire || (x.resultat === 'ok' ? 'Comme prévu' : 'Sans commentaire'))}${qui.traits ? ` · <span class="t-3">${echapper(qui.traits)}</span>` : ''}`,
             fin: `${pastille(RESULTATS_PASSAGE, x.resultat || 'na')}${(x.preuves || []).map((ch, i) => `<button class="btn btn-doux btn-petit" type="button" data-piece="${echapper(ch)}">${icone('image')} Preuve ${i + 1}</button>`).join('')}`,
           });
         }).join('')}</div>

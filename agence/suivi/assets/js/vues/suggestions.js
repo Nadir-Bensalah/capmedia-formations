@@ -83,8 +83,8 @@ const ligneClient = (s, d, pid) => {
   const r = s.reponse || {};
   if (!r.choix) return '';
   const demande = r.demande ? (d.tickets || []).find((t) => t.id === r.demande) : null;
-  if (r.choix === 'interesse') return `${echapper(r.nom || 'Le client')} s'y intéresse${r.le ? ` depuis le ${echapper(dateCourte(r.le))}` : ''}${demande ? ` · <a href="#/projets/${echapper(pid)}/demandes/${echapper(demande.id)}">${echapper(demande.numero || 'voir la demande')}</a>` : ''}`;
-  return `${echapper(r.nom || 'Le client')} a décliné${r.le ? ` le ${echapper(dateCourte(r.le))}` : ''}${r.raison ? ` : « ${echapper(r.raison)} »` : ''}`;
+  if (r.choix === 'interesse') return `${echapper(r.nom || 'Le client')} s'y intéresse${dateCourte(r.le) ? ` depuis le ${echapper(dateCourte(r.le))}` : ''}${demande ? ` · <a href="#/projets/${echapper(pid)}/demandes/${echapper(demande.id)}">${echapper(demande.numero || 'voir la demande')}</a>` : ''}`;
+  return `${echapper(r.nom || 'Le client')} a décliné${dateCourte(r.le) ? ` le ${echapper(dateCourte(r.le))}` : ''}${r.raison ? ` : « ${echapper(r.raison)} »` : ''}`;
 };
 
 /* ==========================================================================
@@ -224,8 +224,8 @@ export const ouvrirSuggestion = (s, d, { pid, env }) => {
         ${fait('Prix', prixTexte(s) ? echapper(prixTexte(s)) : '')}
         ${fait('Devis', devis ? `<a href="#/finances/${echapper(devis.id)}" data-voir-devis>${echapper(devis.numero || 'Devis')}</a>${devis.libelle ? ` <span class="t-3">· ${echapper(devis.libelle)}</span>` : ''} ${pastille(STATUTS_DEVIS, devis.statut || 'brouillon')}` : (s.devis && !equipe ? '<span class="t-3">Un devis accompagne cette suggestion : le responsable du projet le trouve dans « Devis et factures ».</span>' : ''))}
         ${fait(equipe ? 'Côté client' : 'Votre réponse', r.choix ? (interesse
-    ? `${equipe ? `${echapper(r.nom || 'Le client')} s'y intéresse` : 'Ça vous intéresse'}${r.le ? ` depuis le ${echapper(dateCourte(r.le))}` : ''}${demande ? ` · <a href="#/projets/${echapper(pid)}/demandes/${echapper(demande.id)}">${echapper(demande.numero || 'voir la demande')}</a>` : ''}`
-    : `${equipe ? `${echapper(r.nom || 'Le client')} a décliné` : 'Pas pour le moment'}${r.le ? ` · ${echapper(dateHeure(r.le))}` : ''}${r.raison ? `<br><span class="t-3">« ${echapper(r.raison)} »</span>` : ''}`) : '')}
+    ? `${equipe ? `${echapper(r.nom || 'Le client')} s'y intéresse` : 'Ça vous intéresse'}${dateCourte(r.le) ? ` depuis le ${echapper(dateCourte(r.le))}` : ''}${demande ? ` · <a href="#/projets/${echapper(pid)}/demandes/${echapper(demande.id)}">${echapper(demande.numero || 'voir la demande')}</a>` : ''}`
+    : `${equipe ? `${echapper(r.nom || 'Le client')} a décliné` : 'Pas pour le moment'}${dateHeure(r.le) ? ` · ${echapper(dateHeure(r.le))}` : ''}${r.raison ? `<br><span class="t-3">« ${echapper(r.raison)} »</span>` : ''}`) : '')}
         ${equipe ? fait('Feuille de route', jalon ? `<a href="#/projets/${echapper(pid)}/etapes">${echapper(jalon.titre)}</a>` : '') : ''}
         ${equipe ? fait('Publiée le', s.publieLe ? echapper(dateCourte(s.publieLe)) : '') : ''}
         ${equipe ? fait('Vue par le client', nbVues ? echapper(pluriel(nbVues, 'personne')) : '') : ''}

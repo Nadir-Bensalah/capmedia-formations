@@ -12,8 +12,10 @@
    ========================================================================== */
 
 import { echapper, estResponsable, ROLES_CLIENT } from '../noyau.js';
-import { icone, avatar, pastilleTexte, modale, agir, lireForme, valider, obligatoire, emailValide, toast, sur } from '../ui.js';
+import { icone, avatar, pastilleTexte, modale, agir, lireForme, valider, obligatoire, emailValide, toast, sur, copier } from '../ui.js';
 import { appelServeur } from '../serveur.js';
+import * as magasin from '../magasin.js';
+import { K } from '../donnees.js';
 
 const nomEquipe = (equipe, uid) => ((equipe.find((e) => e.id === uid) || {}).nom || '');
 
@@ -55,7 +57,7 @@ export const personnesHtml = (projet, env, d = {}) => {
   const responsable = !equipe && estResponsable(env.session, projet);
 
   return `<section class="section" id="personnes">
-    <div class="section-tete"><h2>Les personnes</h2>${responsable ? `<button class="btn btn-secondaire btn-petit" type="button" data-action="inviter-collegue" data-projet="${echapper(pid)}">${icone('plus')} Inviter un collègue</button>` : ''}</div>
+    <div class="section-tete"><h2>Les personnes</h2>${responsable ? `<button class="btn btn-secondaire btn-petit" type="button" data-action="inviter-collegue" data-projet="${echapper(pid)}" data-emails="${projet.emailsClient === 'coupes' ? 'coupes' : 'actifs'}">${icone('plus')} Inviter un collègue</button>` : ''}</div>
     <div class="grille grille-2" style="gap:var(--e-4)">
       <div class="carte carte--creuse">
         <p class="surtitre">Chez Capmedia</p>
@@ -76,9 +78,34 @@ export const personnesHtml = (projet, env, d = {}) => {
    le serveur ajoute un collaborateur (jamais un autre responsable depuis
    l'écran du client). Branché une fois sur le document : l'aperçu du
    projet ne connaît pas ce geste, et n'a pas à le connaître.
+
+   Quand les e-mails du projet sont coupés, aucune invitation ne part : la
+   fenêtre le dit avant, et après l'ajout elle donne le lien d'invitation à
+   copier. Ce lien ne fait que pré-remplir l'adresse : il n'ouvre rien sans
+   le code reçu à cette adresse, que le serveur envoie toujours.
    -------------------------------------------------------------------------- */
 
-const inviterCollegue = (pid) => {
+/* Le lien d'invitation, à transmettre soi-même. */
+const montrerLien = (lien, nom, coupes) => {
+  const m = modale({
+    titre: 'Envoyez-lui ce lien',
+    sousTitre: `${nom ? `${nom} est ajouté` : 'Votre collègue est ajouté'} au projet, mais aucun e-mail n'est parti${coupes ? " : les e-mails de ce projet sont suspendus pour l'instant" : ''}.`,
+    corps: `<div class="groupe">
+        <label class="etiquette-champ" for="co-lien">Son lien d'invitation</label>
+        <input class="champ" id="co-lien" readonly value="${echapper(lien)}">
+        <p class="aide">Transmettez-le par le moyen de votre choix. Il est valable quatorze jours et ne fait que préparer sa connexion : il entre ensuite avec un code à six chiffres envoyé à son adresse.</p>
+      </div>`,
+    pied: '<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button><button class="btn btn-principal" type="button" data-copier>Copier le lien</button>',
+  });
+  m.el.querySelector('[data-copier]').addEventListener('click', () => copier(lien));
+  return m.fin;
+};
+
+const inviterCollegue = (pid, emails = 'actifs') => {
+  /* L'état du projet à l'instant du clic, pas celui du dernier dessin de
+     la section : les e-mails peuvent avoir été coupés ou rouverts entre-temps. */
+  const projet = magasin.lire(K.projet(pid));
+  const coupes = projet ? projet.emailsClient === 'coupes' : emails === 'coupes';
   const m = modale({
     titre: 'Inviter un collègue',
     sousTitre: 'Il rejoint ce projet comme collaborateur : il suit, échange et pose des demandes. Les devis et les factures restent à vous.',
@@ -87,7 +114,9 @@ const inviterCollegue = (pid) => {
         <div class="groupe"><label class="etiquette-champ" for="co-nom">Nom</label><input class="champ" id="co-nom" name="nom" maxlength="120" autocomplete="off"></div>
         <div class="groupe"><label class="etiquette-champ" for="co-email">Adresse e-mail</label><input class="champ" id="co-email" name="email" type="email" autocomplete="off"></div>
       </div>
-      <p class="aide">Il reçoit une invitation par e-mail, puis se connecte avec un code, comme vous.</p>
+      <p class="aide">${coupes
+    ? "Les e-mails de ce projet sont suspendus pour l'instant : aucune invitation ne partira seule. Une fois votre collègue ajouté, vous aurez son lien d'invitation à copier et à lui envoyer ; il se connectera ensuite avec un code, comme vous."
+    : 'Il reçoit une invitation par e-mail, puis se connecte avec un code, comme vous.'}</p>
     </form>`,
     pied: '<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button><button class="btn btn-principal" type="submit" form="f-collegue">Inviter</button>',
   });
@@ -98,8 +127,10 @@ const inviterCollegue = (pid) => {
     let r = null;
     if (await agir(m.pied.querySelector('[type="submit"]'), async () => { r = await appelServeur('inviterCollegue', { projet: pid, nom: f.nom, email: f.email }); })) {
       m.fermer(true);
-      const etat = r && r.invitation ? r.invitation.etat : '';
-      toast(etat === 'envoyee' ? 'Invitation envoyée à votre collègue.' : 'Collègue ajouté. Capmedia lui transmettra son invitation.');
+      const inv = (r && r.invitation) || {};
+      if (inv.etat === 'envoyee') toast('Invitation envoyée à votre collègue.');
+      else if (inv.lien) montrerLien(inv.lien, String(f.nom || '').trim(), coupes);
+      else toast('Votre collègue a déjà accès à ce projet : il se connecte avec son adresse et un code.');
     }
   });
   return m.fin;
@@ -109,6 +140,6 @@ let branche = false;
 export const brancherPersonnes = () => {
   if (branche) return;
   branche = true;
-  sur(document, 'click', '[data-action="inviter-collegue"]', (el) => { inviterCollegue(el.dataset.projet); });
+  sur(document, 'click', '[data-action="inviter-collegue"]', (el) => { inviterCollegue(el.dataset.projet, el.dataset.emails); });
 };
 brancherPersonnes();

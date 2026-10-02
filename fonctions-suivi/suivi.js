@@ -856,7 +856,10 @@ async function envoyerParBrevo(cle, courriel, destinataires) {
     method: 'POST',
     headers: {
       'api-key': cle,
-      'content-type': 'application/json',
+      /* Le corps est du JSON en UTF-8 ; Brevo encode lui-même l'objet dans
+         l'en-tête du courriel (RFC 2047) et pose le jeu de caractères des
+         deux corps. Rien n'est transcodé ici : les accents passent tels quels. */
+      'content-type': 'application/json; charset=utf-8',
       'accept': 'application/json',
     },
     body: JSON.stringify(charge),

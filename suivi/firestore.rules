@@ -356,9 +356,19 @@ service cloud.firestore {
         allow write:  if false;
       }
 
+      // Une partie du projet est lue par le client : rien de technique ne
+      // s'y pose (comptes, accès, dépendances vont dans technique/, juste
+      // en dessous). Une règle ne masque pas un champ à la lecture : elle
+      // empêche seulement qu'il revienne. Une ancienne fiche qui le porte
+      // encore (avant migrer-technique.mjs) reste modifiable, sans qu'on
+      // puisse en changer le contenu.
       match /composants/{composantId} {
         allow read:   if accesProjet(projetId);
-        allow write:  if equipeSurProjet(projetId);
+        allow create: if equipeSurProjet(projetId) && !('technique' in request.resource.data);
+        allow update: if equipeSurProjet(projetId)
+          && !request.resource.data.diff(resource.data).addedKeys().hasAny(['technique'])
+          && !request.resource.data.diff(resource.data).changedKeys().hasAny(['technique']);
+        allow delete: if equipeSurProjet(projetId);
       }
 
       // La fiche technique d'une brique : comptes, accès, dépendances et

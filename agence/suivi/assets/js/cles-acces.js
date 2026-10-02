@@ -174,7 +174,7 @@ export const ouvrirClesAcces = async () => {
     try { cles = await listerCles(); } catch (e) { zone.innerHTML = `<p class="aide">${echapper(e.message)}</p>`; return; }
     zone.innerHTML = cles.length ? `<div class="liste liste--serree">${cles.map((c) => `
       <div class="rang" style="justify-content:space-between;padding:10px 12px;border-radius:10px;background:var(--fond-2)" data-cle="${echapper(c.id)}">
-        <span><b>${echapper(c.appareil || 'Appareil')}</b><br><span class="t-micro t-3">ajoutée le ${echapper(dateCourte(c.cree))}${c.dernier ? ` · utilisée le ${echapper(dateCourte(c.dernier))}` : ' · jamais utilisée'}${c.sauvegardee ? ' · synchronisée' : ''}</span></span>
+        <span><b>${echapper(c.appareil || 'Appareil')}</b><br><span class="t-micro t-3">ajoutée le ${echapper(dateCourte(c.cree))}${dateCourte(c.dernier) ? ` · utilisée le ${echapper(dateCourte(c.dernier))}` : ' · jamais utilisée'}${c.sauvegardee ? ' · synchronisée' : ''}</span></span>
         <button class="btn btn-fantome btn-petit" type="button" data-retirer-cle="${echapper(c.id)}">Retirer</button>
       </div>`).join('')}</div>
       <p class="aide" style="margin-top:10px">Une clé retirée ne rouvre plus rien, même depuis l'appareil qui la porte. Le code par e-mail reste toujours possible.</p>`

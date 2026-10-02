@@ -460,7 +460,7 @@ const bandeauSuivi = (t, { equipe, release, nomEquipe, evenements, tickets = [],
       <div><dt>Dernier mouvement</dt><dd>${echapper((dernier && age(dernier.date)) || age(t.maj) || age(t.cree))}</dd></div>
       <div><dt>Suivie par</dt><dd>${echapper(suivie)}</dd></div>
       <div><dt>Livrée dans</dt><dd>${release
-        ? `${echapper([release.plateforme && (PLATEFORMES[release.plateforme] || {}).libelle, release.version].filter(Boolean).join(' '))} <span class="t-3">· ${echapper((STATUTS_RELEASE[release.statut] || {}).libelle || '')}${release.date ? ` ${dateCourte(release.date)}` : ''}</span>`
+        ? `${echapper([release.plateforme && (PLATEFORMES[release.plateforme] || {}).libelle, release.version].filter(Boolean).join(' '))} <span class="t-3">· ${echapper((STATUTS_RELEASE[release.statut] || {}).libelle || '')}${dateCourte(release.date) ? ` ${dateCourte(release.date)}` : ''}</span>`
         : '<span class="t-3">version pas encore fixée</span>'}</dd></div>
     </dl>
     ${t.qualification === 'hors-perimetre' || t.qualification === 'a-chiffrer' ? `<p class="suivi-demande-note">${t.qualification === 'a-chiffrer' ? 'Cette demande sera chiffrée.' : 'Cette demande sort du périmètre prévu.'} ${t.devis ? `Le devis <a href="#/finances/${echapper(t.devis)}">est disponible</a>.` : 'Un devis vous sera proposé avant tout développement.'}</p>` : ''}

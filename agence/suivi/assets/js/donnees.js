@@ -1227,7 +1227,7 @@ export const enAttenteDeVous = ({ projets = [], tickets = [], validations = [], 
     genre: 'devis', projet: d.projet, icone: 'receipt', ton: 'bleu', titre: d.libelle, sous: `Devis à décider, envoyé il y a ${age(d.date)} · ${nomProjet(d.projet)}`, chemin: `/finances/${d.id}`, date: d.date,
   }));
   documents.filter((d) => d.type === 'facture' && FACTURES_DUES.includes(d.statut) && !d.archive).forEach((d) => items.push({
-    genre: 'facture', projet: d.projet, icone: 'euro', ton: statutPiece(d) === 'en-retard' ? 'rouge' : 'ambre', titre: d.libelle, sous: `Facture à régler${retard(d.echeance) ? `, en retard de ${retard(d.echeance)}` : d.echeance ? `, échéance ${dateCourte(d.echeance)}` : ''} · ${nomProjet(d.projet)}`, chemin: `/finances/${d.id}`, date: d.echeance || d.date,
+    genre: 'facture', projet: d.projet, icone: 'euro', ton: statutPiece(d) === 'en-retard' ? 'rouge' : 'ambre', titre: d.libelle, sous: `Facture à régler${retard(d.echeance) ? `, en retard de ${retard(d.echeance)}` : dateCourte(d.echeance) ? `, échéance ${dateCourte(d.echeance)}` : ''} · ${nomProjet(d.projet)}`, chemin: `/finances/${d.id}`, date: d.echeance || d.date,
   }));
   taches.filter((t) => t.statut === 'attente-client' && !t.archive).forEach((t) => items.push({
     genre: 'tache', projet: t.projet, icone: 'taches', ton: 'ambre', titre: t.titre, sous: `Nous attendons votre retour${retard(t.echeance) ? `, en retard de ${retard(t.echeance)}` : ''} · ${nomProjet(t.projet)}`, chemin: `/projets/${t.projet}/taches/${t.id}`, date: t.echeance || t.maj,

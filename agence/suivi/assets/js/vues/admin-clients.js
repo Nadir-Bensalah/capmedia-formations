@@ -89,7 +89,7 @@ export const detail = async (ctx, env) => {
     const totalPaye = paiements.reduce((s, p) => s + (Number(p.montant) || 0), 0);
     const contacts = o.contacts || [];
     const profils = magasin.lire(K.profilsClients) || [];
-    const premiersPas = (c) => { const pr = c.uid ? profils.find((x) => x.id === c.uid) : null; return pr && pr.accueil ? `<span class="pastille pastille--vert">Premiers pas faits · ${echapper(dateCourte(pr.accueil))}</span>` : (estAdmin(env.session) && c.uid ? '<span class="t-micro t-3">premiers pas à faire</span>' : ''); };
+    const premiersPas = (c) => { const pr = c.uid ? profils.find((x) => x.id === c.uid) : null; return pr && dateCourte(pr.accueil) ? `<span class="pastille pastille--vert">Premiers pas faits · ${echapper(dateCourte(pr.accueil))}</span>` : (estAdmin(env.session) && c.uid ? '<span class="t-micro t-3">premiers pas à faire</span>' : ''); };
     titrePage(o.entreprise || o.nom);
     filAriane([{ libelle: 'Clients', chemin: '/clients' }, { libelle: o.entreprise || o.nom }]);
     sortie.innerHTML = `<div class="page">
