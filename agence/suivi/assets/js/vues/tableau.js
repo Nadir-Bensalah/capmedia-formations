@@ -34,7 +34,7 @@ import { K, profilsTesteurs } from '../donnees.js';
 import { editer } from './editeurs.js';
 import { nommeur } from './tests.js';
 import { appelServeur, URL_SUIVI } from '../serveur.js';
-import { tableauHumain, tableauMachine, tableauPlan, verdictParcours, rythme, ETATS_CASE } from '../verdicts.js';
+import { tableauHumain, tableauHumainPlan, tableauMachine, tableauPlan, verdictParcours, rythme, ETATS_CASE } from '../verdicts.js';
 import { barreHtml, famillesHtml } from '../grille.js';
 import { ordonnerSections, GROUPES_PLAN, QUI_PLAN } from './plan-tests.js';
 
@@ -113,6 +113,24 @@ const pourquoiPlan = (c, plateforme) => {
   }
 };
 
+/* Pourquoi cette couleur, pour un scénario du plan fait par un humain. */
+const pourquoiHumainPlan = (c, plateforme) => {
+  if (c.etat === 'nonteste') return `Pas encore testé par un humain${plateforme ? ` sur ${libellePlateforme(plateforme)}` : ''}.`;
+  const nomPlat = (p) => (p ? libellePlateforme(p) : 'sans plateforme');
+  const dapres = c.origines.filter((o) => o.etat === c.etat).map((o) => o.cle);
+  const enEchec = plateforme ? [] : c.parPlateforme.filter((p) => ['casse', 'fragile'].includes(p.etat)).map((p) => nomPlat(p.plateforme));
+  const ou = enEchec.length ? ` sur ${enEchec.join(', ')}` : '';
+  const reste = c.manquent.length ? ` Pas encore testé sur ${c.manquent.map(nomPlat).join(', ')}.` : '';
+  const plusieurs = c.origines.length > 1 ? ' Plusieurs scénarios rendent un résultat : le plus mauvais l\'emporte.' : '';
+  switch (c.etat) {
+    case 'casse': return `En échec${ou}, d'après ${dapres.join(', ')} : le défaut est reproduit, ou l'anomalie qualifiée grave.${plusieurs}${reste}`;
+    case 'fragile': return `Un échec${ou}, d'après ${dapres.join(', ')}, pas encore qualifié ou jugé mineur.${plusieurs}${reste}`;
+    case 'cours': return c.revoir ? 'Corrigé par l\'équipe, en attente d\'être rejoué.' : `Testé sur ${Array.from(new Set(c.passages.map((p) => nomPlat(p.plateforme)))).join(', ')}.${reste}`;
+    case 'na': return `Tous les passages disent sans objet.${reste}`;
+    default: return `Tous les résultats rendus sont bons, d'après ${dapres.join(', ')}.${plusieurs}`;
+  }
+};
+
 const CLE_DEPLIE = 'suivi:tableau-deplie';
 /* Les énoncés portent leurs mots forts entre doubles astérisques. */
 const gras = (t) => echapper(t || '').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
@@ -130,7 +148,8 @@ const lireDeplie = () => { try { return localStorage.getItem(CLE_DEPLIE) === '1'
 const surPlateforme = (x, plateforme) => !plateforme || !(x.plateformes || []).length || x.plateformes.includes(plateforme);
 
 /* La marque de chaque case du plan : qui fait le scénario, avec les
-   couleurs de la page du plan (violet : humain et robot, bleu : robot seul). */
+   couleurs de la page du plan (violet : humain et robot, bleu : robot seul,
+   vert : humain seul). */
 const marquer = (t) => {
   t.familles.forEach((f) => f.cases.forEach((c) => {
     if (c.qui && QUI_PLAN[c.qui]) c.marque = { ton: QUI_PLAN[c.qui].ton, libelle: QUI_PLAN[c.qui].court };
@@ -265,13 +284,16 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
     const passages = campagne ? (magasin.lire(K.passages(campagne.id)) || []) : [];
     /* Le filtre de plateforme de la page vaut aussi pour les deux lignes
        d'avancement : sans lui, « Web » montrait les chiffres de l'iPhone. */
-    const th = campagne ? tableauHumain({
+    /* Avec un plan, les deux onglets se rangent par ses sections ; sans
+       plan, ils gardent leurs familles (bloc des scénarios, puis outil). */
+    const sections = sectionsDuPlan(pid);
+    const th = sections.length ? marquer(tableauHumainPlan({
+      sections, scenarios: d.scenarios.filter((s) => projetDe(s) === pid), campagne, passages,
+      anomalies: d.anomalies.filter((a) => projetDe(a) === pid), plateforme: etat.plateforme,
+    })) : campagne ? tableauHumain({
       scenarios: d.scenarios.filter((s) => projetDe(s) === pid), campagne, passages,
       anomalies: d.anomalies.filter((a) => projetDe(a) === pid), plateforme: etat.plateforme, blocs: BLOCS_SCENARIO, trous: equipe,
     }) : null;
-    /* Avec un plan, l'onglet des robots se range par ses sections ; sans
-       plan, il garde ses familles (bloc des scénarios, puis outil). */
-    const sections = sectionsDuPlan(pid);
     const tm = sections.length ? marquer(tableauPlan({
       sections, parcours: d.parcours.filter((x) => projetDe(x) === pid), regles: d.regles.filter((x) => projetDe(x) === pid), plateforme: etat.plateforme,
     })) : tableauMachine({
@@ -280,13 +302,14 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
     });
 
     /* Le rythme de la campagne, en mots. */
-    const r = campagne ? rythme({ debut: enDate(campagne.debut), fin: enDate(campagne.fin), faits: th.faits, attendus: th.attendus }) : null;
+    const r = campagne && th ? rythme({ debut: enDate(campagne.debut), fin: enDate(campagne.fin), faits: th.faits, attendus: th.attendus }) : null;
     const datesFausses = campagne && enDate(campagne.debut) && enDate(campagne.fin) && enDate(campagne.fin) < enDate(campagne.debut);
-    const metaHumain = campagne ? [
-      echapper(campagne.titre || 'Campagne'),
-      (STATUTS_CAMPAGNE[campagne.statut] || {}).libelle || '',
+    const metaHumain = campagne || (th && th.plan) ? [
+      campagne ? echapper(campagne.titre || 'Campagne') : 'Aucune campagne pour ce projet',
+      campagne ? (STATUTS_CAMPAGNE[campagne.statut] || {}).libelle || '' : '',
       `${th.faits} vérifications faites sur ${th.attendus}`,
-      (campagne.testeurs || []).length ? pluriel((campagne.testeurs || []).length, 'testeur', 'testeurs') : 'aucun testeur',
+      th.plan && th.horsPlan ? `${th.horsPlan} hors plan, montrés à part` : '',
+      !campagne ? '' : (campagne.testeurs || []).length ? pluriel((campagne.testeurs || []).length, 'testeur', 'testeurs') : 'aucun testeur',
       r && r.avant ? `commence dans ${pluriel(r.avant, 'jour', 'jours')}` : '',
       r && !r.avant ? `jour ${r.jour} sur ${r.jours}` : '',
       r && !r.avant && r.reste !== null && r.reste > 0 ? `reste ≈ ${r.reste} j au rythme actuel` : '',
@@ -316,6 +339,10 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
       ${t && t.total ? barreHtml(t) : '<div class="tb-barre"></div>'}
       ${aide ? `<p class="tb-ligne-aide">${aide}</p>` : ''}
     </div>`;
+    /* D'où viennent les chiffres des humains, en une phrase. */
+    const aideHumain = th && th.plan
+      ? `Chaque scénario du plan fait par un humain compte une fois, coloré par le plus mauvais résultat des testeurs de la campagne : celui des scénarios qu'il reprend (TA-01…), ou celui rendu sur lui-même. Il est fait quand toutes ses plateformes ont un résultat, ou dès qu'un échec y est relevé${th.horsPlan ? ' ; les scénarios testés hors plan se montrent à part, sans compter' : ''}.`
+      : '';
     /* D'où viennent les chiffres des robots, en une phrase. */
     const aideMachine = tm.plan
       ? `Chaque scénario du plan fait par un robot compte une fois, coloré par le plus mauvais résultat de ses tests${tm.regles ? ' ; les règles de calcul s\'ajoutent au compte' : ''}${tm.horsPlan ? ' ; les tests hors plan se montrent à part, sans compter' : ''}.`
@@ -353,14 +380,14 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
         <div class="tb-resume-tete">
           <div><p class="surtitre">Où en sont les tests${projetChoisi() ? '' : ` · ${echapper(nom)}`}</p><h2 class="tb-titre">Avancement</h2></div>
         </div>
-        ${ligneResume('Testeurs humains', metaHumain, th, pcHumain)}
+        ${ligneResume('Testeurs humains', metaHumain, th, pcHumain, aideHumain)}
         ${ligneResume('Tests par robot', metaMachine, tm, pcMachine, aideMachine)}
         ${direct}
         <button type="button" class="tb-deplier" data-deplier aria-expanded="${etat.deplie}">${icone('chevron')} ${etat.deplie ? 'Replier le tableau' : `Déployer le tableau${combien ? ` · ${combien}` : ''}`}</button>
       </div>
       ${etat.deplie ? `${controles}${etat.voie === 'machine' ? voieMachine(d, pid, tm, execs) : voieHumains(d, pid, campagne, th, passages, nommer, maintenant, presents)}` : ''}
     </div>`;
-    dernier = { d, pid, campagne, tm };
+    dernier = { d, pid, campagne, tm, th };
     animerBarres(pid);
 
     const selC = sortie.querySelector('#tb-campagne');
@@ -371,6 +398,16 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
      Les tests humains
      ------------------------------------------------------------------------ */
   const voieHumains = (d, pid, campagne, thToutes, passages, nommer, maintenant, presents) => {
+    /* Avec un plan : ses sections, une case par scénario fait par un humain.
+       Une case s'anime quand un testeur est sur un scénario qu'elle reprend. */
+    if (thToutes && thToutes.plan) {
+      const ouverts = new Set(presents.map((p) => p.scenario).filter(Boolean));
+      const vivants = new Set(thToutes.familles.flatMap((f) => f.cases)
+        .filter((c) => (c.sources || [c.ref]).some((r) => ouverts.has(r))).map((c) => c.cle || c.ref));
+      return `${campagne ? '' : `<p class="aide">Aucune campagne pour ce projet : les cases s'allumeront avec les résultats des testeurs.${equipe ? ' Créez-la dans la section Campagnes ci-dessous.' : ''}</p>`}
+      ${planHtml(thToutes, vivants, 'humains')}
+      ${equipe && campagne ? personnesHtml(d, pid, campagne, passages, nommer, maintenant) : ''}`;
+    }
     if (!campagne) {
       return `<p class="aide">Aucune campagne pour ce projet.${equipe ? ' Créez-la dans la section Campagnes ci-dessous.' : ''}</p>`;
     }
@@ -414,29 +451,44 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
      ------------------------------------------------------------------------ */
   const voieMachine = (d, pid, t, execs) => {
     const vivants = new Set(t.familles.flatMap((f) => f.cases).filter((c) => c.etat === 'tourne').map((c) => c.cle || c.ref));
-    if (t.plan) return `${planHtml(t, vivants)}${equipe ? robotsHtml(pid, execs) : ''}`;
+    if (t.plan) return `${planHtml(t, vivants, 'machine')}${equipe ? robotsHtml(pid, execs) : ''}`;
     return `${t.total ? famillesHtml(t, { mode: 'machine', vivants }) : vide({ icone: 'code', titre: 'Aucun test par robot', texte: equipe ? 'Déclarez vos parcours dans l\'onglet Tests par robot, ci-dessous, puis branchez un robot : chaque résultat s\'allumera ici en direct.' : 'Les tests automatisés apparaîtront ici.', compact: true })}
     ${equipe ? robotsHtml(pid, execs) : ''}`;
   };
 
   /* Les cartes du plan : ses sections, groupe par groupe, dans l'ordre de
-     « Ce qui va être testé » ; puis les règles et ce qui reste hors plan. */
-  const planHtml = (t, vivants) => {
+     « Ce qui va être testé » ; puis ce qui reste hors plan (et, chez les
+     robots, les règles). Le même dessin pour les deux onglets : seuls les
+     mots et le point de couleur changent. */
+  const MOTS_PLAN = {
+    machine: {
+      autres: 'Autres tests par robot', qui: 'pour les robots', seul: 'humain',
+      hors: 'Tests robot rattachés à aucun scénario du plan. Leurs résultats restent ici, sans compter dans l\'avancement.',
+    },
+    humains: {
+      autres: 'Autres résultats des testeurs', qui: 'pour les humains', seul: 'robot',
+      hors: 'Scénarios testés par des humains que ne reprend aucun scénario du plan. Leurs résultats restent ici, sans compter dans l\'avancement.',
+    },
+  };
+  const planHtml = (t, vivants, voie) => {
+    const mots = MOTS_PLAN[voie];
+    const mode = voie === 'machine' ? 'machine' : (equipe ? 'equipe' : 'client');
     const plat = etat.plateforme ? ` sur ${libellePlateforme(etat.plateforme)}` : '';
-    const groupes = [...GROUPES_PLAN, { cle: 'autres', libelle: 'Autres tests par robot' }];
+    const groupes = [...GROUPES_PLAN, { cle: 'autres', libelle: mots.autres }];
     const blocs = groupes.map((g) => {
       const familles = t.familles.filter((f) => (g.cle === 'autres' ? !f.section : f.section && f.groupe === g.cle))
-        .map((f) => (f.section && !f.cases.length ? { ...f, note: `Aucun scénario pour les robots${plat} dans cette section.` }
-          : f.horsPlan ? { ...f, note: 'Tests robot rattachés à aucun scénario du plan. Leurs résultats restent ici, sans compter dans l\'avancement.' } : f));
+        .map((f) => (f.section && !f.cases.length ? { ...f, note: `Aucun scénario ${mots.qui}${plat} dans cette section.` }
+          : f.horsPlan ? { ...f, note: mots.hors } : f));
       if (!familles.length) return '';
-      return `<div class="tb-groupe" data-groupe="${echapper(g.cle)}"><p class="tb-section-titre">${echapper(g.libelle)}</p>${famillesHtml({ ...t, familles }, { mode: 'machine', vivants })}</div>`;
+      return `<div class="tb-groupe" data-groupe="${echapper(g.cle)}"><p class="tb-section-titre">${echapper(g.libelle)}</p>${famillesHtml({ ...t, familles }, { mode, vivants })}</div>`;
     }).join('');
     /* Les sections hors des quatre groupes connus (un plan plus récent que
        ce code) ne disparaissent pas : elles ferment la liste du plan. */
     const connus = new Set(GROUPES_PLAN.map((g) => g.cle));
     const egarees = t.familles.filter((f) => f.section && !connus.has(f.groupe));
-    const legende = `<p class="plan-qui tb-qui"><span class="plan-qui-violet"><i aria-hidden="true"></i><b>${t.qui['les-deux']}</b> ${echapper(QUI_PLAN['les-deux'].court)}</span><span class="plan-qui-bleu"><i aria-hidden="true"></i><b>${t.qui.robot}</b> ${echapper(QUI_PLAN.robot.court)}</span><span class="tb-qui-aide">Le point dans le coin d'une case dit qui fait le scénario. Un scénario fait par un humain seul n'a pas de case ici.</span></p>`;
-    return `${legende}${blocs}${egarees.length ? `<div class="tb-groupe"><p class="tb-section-titre">Autres sections du plan</p>${famillesHtml({ ...t, familles: egarees }, { mode: 'machine', vivants })}</div>` : ''}`;
+    const point = (q) => `<span class="plan-qui-${QUI_PLAN[q].ton}"><i aria-hidden="true"></i><b>${t.qui[q]}</b> ${echapper(QUI_PLAN[q].court)}</span>`;
+    const legende = `<p class="plan-qui tb-qui">${point('les-deux')}${point(voie === 'machine' ? 'robot' : 'humain')}<span class="tb-qui-aide">Le point dans le coin d'une case dit qui fait le scénario. Un scénario fait par un ${mots.seul} seul n'a pas de case ici.</span></p>`;
+    return `${legende}${blocs}${egarees.length ? `<div class="tb-groupe"><p class="tb-section-titre">Autres sections du plan</p>${famillesHtml({ ...t, familles: egarees }, { mode, vivants })}</div>` : ''}`;
   };
 
   const robotsHtml = (pid, execs) => {
@@ -467,7 +519,10 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
       passages: magasin.lire(K.passages(campagne.id)) || [], anomalies: d.anomalies.filter((a) => projetDe(a) === pid),
       plateforme: etat.plateforme, blocs: BLOCS_SCENARIO, trous: equipe,
     });
-    const c = t.familles.flatMap((f) => f.cases).find((x) => x.ref === ref);
+    /* Un scénario hors plan qui n'est plus dans la campagne : sa case vient
+       du tableau du plan. */
+    const c = t.familles.flatMap((f) => f.cases).find((x) => x.ref === ref)
+      || (dernier.th && dernier.th.plan ? dernier.th.familles.flatMap((f) => f.cases).find((x) => x.horsPlan && x.ref === ref) : null);
     if (!c) return;
     /* L'énoncé, mot pour mot : ce que le testeur a lu. */
     const sc = d.scenarios.find((x) => x.ref === ref && projetDe(x) === pid) || {};
@@ -500,6 +555,63 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
         </div>
         ${c.anomalies.length ? `<div class="fs-bloc"><p class="fs-bloc-sur">Anomalies</p><div class="tb-sessions">${c.anomalies.map((a) => `<div class="tb-passage">
           <p>${echapper(a.titre || 'Anomalie')}${Number(a.retours) ? ' · <span class="tb-rouge">revenue</span>' : ''}</p>
+          <div class="rang">${pastille(STATUTS_ANOMALIE, a.statut || 'nouvelle')}${pastille(GRAVITES_ANOMALIE, a.gravite || 'important')}${equipe ? `<button class="btn btn-secondaire btn-petit" type="button" data-qualifier="${echapper(a.id)}">Qualifier</button>` : ''}</div>
+        </div>`).join('')}</div></div>` : ''}`,
+      pied: '<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>',
+    });
+    brancherPieces(m.el);
+    sur(m.el, 'click', '[data-qualifier]', async (el) => {
+      const a = c.anomalies.find((x) => x.id === el.dataset.qualifier);
+      m.fermer();
+      if (a) await editer('anomalie', env, { pid, fiche: a });
+    });
+  };
+
+  /* Une case humaine du plan : le scénario, et tout ce que les testeurs en
+     ont rendu, d'où que ça vienne (scénario repris, ou le scénario du plan
+     lui-même). */
+  const ouvrirCaseHumainePlan = (cle) => {
+    const { d, pid, campagne, th } = dernier || {};
+    const c = th && th.plan ? th.familles.flatMap((f) => f.cases).find((x) => x.cle === cle) : null;
+    if (!c) return;
+    const sc = c.scenario;
+    const section = (sectionsDuPlan(pid).find((s) => s.id === c.section) || {});
+    const e = ETATS_CASE[c.etat] || {};
+    const qui = QUI_PLAN[sc.qui] || {};
+    const texte = (t) => echapper(String(t || '').trim()).replace(/\n/g, '<br>');
+    const nommer = nommeur(d, { equipe, pid });
+    const titres = new Map(d.scenarios.filter((s) => projetDe(s) === pid).map((s) => [s.ref, s.titre || '']));
+    const refs = (sc.refs || []).filter(Boolean);
+    const presents = equipe && campagne ? (magasin.lire(K.presences) || []).filter((p) => estLa(p) && p.campagne === campagne.id && c.sources.includes(p.scenario)) : [];
+    const passages = c.passages.slice().sort((a, b) => (enDate(b.le) || 0) - (enDate(a.le) || 0));
+    const plateformeDe = (p) => (p ? libellePlateforme(p) : 'Sans plateforme');
+    const m = modale({
+      titre: sc.titre || sc.id, scenario: true,
+      sousTitre: `${sc.id}${section.titre ? ` · ${section.titre}` : ''}`,
+      corps: `
+        <p class="tb-pourquoi"><strong>${echapper(e.libelle || c.etat)}${etat.plateforme ? ` sur ${echapper(libellePlateforme(etat.plateforme))}` : ''}.</strong> ${echapper(pourquoiHumainPlan(c, etat.plateforme))}</p>
+        <p class="tb-plan-qui"><span class="plan-qui-puce plan-qui-${echapper(qui.ton || 'vert')}"><i aria-hidden="true"></i>${echapper(qui.libelle || '')}</span><span>${echapper((sc.plateformes || []).map(libellePlateforme).join(', ') || '–')}</span></p>
+        ${refs.length ? `<p class="aide tb-plan-refs">Reprend les résultats de ${refs.map((r) => `<span class="ref"${titres.get(r) ? ` data-astuce="${echapper(titres.get(r))}"` : ''}>${echapper(r)}</span>`).join(', ')}.</p>` : ''}
+        ${c.revoir ? '<section class="fs-bloc fs-bloc--alerte"><p class="fs-bloc-sur">À rejouer</p><p>Une correction attend d\'être rejouée par le testeur qui avait trouvé le défaut.</p></section>' : ''}
+        ${sc.etapes ? `<section class="fs-bloc"><p class="fs-bloc-sur">Les étapes</p><p>${texte(sc.etapes)}</p></section>` : ''}
+        ${sc.attendu ? `<section class="fs-bloc fs-bloc--attendu"><p class="fs-bloc-sur">Ce qui doit se passer</p><p>${texte(sc.attendu)}</p></section>` : ''}
+        ${c.passages.length && c.parPlateforme.length ? `<div class="fs-bloc"><p class="fs-bloc-sur">Par plateforme</p><div class="tb-sessions">${c.parPlateforme.map((p) => `<div class="tb-passage">
+          <div><p><strong>${echapper(plateformeDe(p.plateforme))}</strong></p><p class="aide">${p.origines.length ? `D'après ${listeRefs(p.origines.map((o) => o.cle))}` : 'Pas encore testé par un humain sur cette plateforme.'}</p></div>
+          <div class="rang">${etatCaseHtml(p.etat)}</div>
+        </div>`).join('')}</div></div>` : ''}
+        <div class="fs-bloc"><p class="fs-bloc-sur">Les résultats des testeurs</p>
+          ${passages.length ? `<div class="tb-sessions">${passages.map((p) => {
+    const appareil = (p.contexte || {}).appareil || (p.contexte || {}).plateforme;
+    const ici = presents.some((x) => x.id === p.testeur);
+    return `<div class="tb-passage">
+            <div><p><strong>${echapper(nommer(p.testeur).nom)}</strong>${p.plateforme ? ` · ${echapper(libellePlateforme(p.plateforme))}` : ''}${appareil ? ` · ${echapper(appareil)}` : ''}${ici ? ' · <span class="tb-bleu">l\'a ouvert en ce moment</span>' : ''}</p>
+              <p class="aide">${[p.le ? echapper(dateHeure(p.le)) : '', p.commentaire ? echapper(p.commentaire) : '', p.aRevoir ? 'corrigé, à rejouer' : '', p.origine !== sc.id ? `Repris de <span class="ref">${echapper(p.origine)}</span>` : ''].filter(Boolean).join(' · ')}</p></div>
+            <div class="rang">${pastille(RESULTATS_PASSAGE, p.resultat)}${(p.preuves || []).map((ch, i) => `<button class="btn btn-doux btn-petit" type="button" data-piece="${echapper(ch)}">${icone('image')} Preuve ${i + 1}</button>`).join('')}</div>
+          </div>`;
+  }).join('')}</div>` : `<p>Pas encore testé par un humain${etat.plateforme ? ` sur ${echapper(libellePlateforme(etat.plateforme))}` : ''}.</p>`}
+        </div>
+        ${c.anomalies.length ? `<div class="fs-bloc"><p class="fs-bloc-sur">Anomalies</p><div class="tb-sessions">${c.anomalies.map((a) => `<div class="tb-passage">
+          <p>${echapper(a.titre || 'Anomalie')}${a.scenario && a.scenario !== sc.id ? ` · <span class="ref">${echapper(a.scenario)}</span>` : ''}${Number(a.retours) ? ' · <span class="tb-rouge">revenue</span>' : ''}</p>
           <div class="rang">${pastille(STATUTS_ANOMALIE, a.statut || 'nouvelle')}${pastille(GRAVITES_ANOMALIE, a.gravite || 'important')}${equipe ? `<button class="btn btn-secondaire btn-petit" type="button" data-qualifier="${echapper(a.id)}">Qualifier</button>` : ''}</div>
         </div>`).join('')}</div></div>` : ''}`,
       pied: '<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>',
@@ -647,7 +759,10 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
     }
     if (el.dataset.voie) { etat.voie = el.dataset.voie; memoire.voie = etat.voie; rendre(true); return; }
     if (el.dataset.case) {
-      if (etat.voie !== 'machine') ouvrirCaseHumaine(el.dataset.case);
+      if (etat.voie !== 'machine') {
+        if (el.dataset.case.startsWith('plan:')) ouvrirCaseHumainePlan(el.dataset.case);
+        else ouvrirCaseHumaine(el.dataset.case);
+      }
       else if (el.dataset.case.startsWith('plan:')) await ouvrirCasePlan(el.dataset.case);
       else await ouvrirCaseMachine(el.dataset.case);
       return;
