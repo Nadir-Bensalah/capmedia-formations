@@ -280,7 +280,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   const nav2=await chromium.launch();
   const cl=await (await nav2.newContext({viewport:{width:1500,height:1100}})).newPage();
   await connecter(cl,'camille.essai@exemple.test');
-  await aller(cl,'/tests?projet=atelier&onglet=automatises',null,'Tests');
+  await aller(cl,'/tests?projet=atelier&onglet=automatises',null,'Campagne de tests');
   await pause(1500);
   /* Le catalogue est replié pour lui aussi : chercher une référence dans
      le texte visible ne prouverait rien. On déplie, comme il le ferait. */

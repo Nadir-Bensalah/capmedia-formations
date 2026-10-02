@@ -118,7 +118,7 @@ const nettoyer = async () => {
   verifier(refusAgent.code === 403, 'l équipe passe par « Accès client », pas par cette action (403)');
 
   console.log('\n== « Demandes », tous projets (la page reste, l entrée vit dans l arbre de chaque projet)');
-  verifier(!(await page.$('#lat-corps a[data-chemin="/demandes"]')) && Boolean(await page.$('#lat-corps a[data-chemin="/projets/atelier/demandes"]')), 'le rail porte « Demandes » sous le projet, plus en entrée globale');
+  verifier(!(await page.$('#lat-corps a[data-chemin="/demandes"]')) && Boolean(await page.$('#lat-corps a[data-chemin="/projets/atelier/demandes"]')), 'le rail porte « Tickets » sous le projet, plus en entrée globale');
   await aller(page, '#/demandes', '.page h1');
   const pageDemandes = await page.textContent('.page');
   verifier(/ATELIER-004/.test(pageDemandes) || /notifications arrivent deux fois/.test(pageDemandes), 'elle liste les demandes d Atelier', pageDemandes.trim().slice(0, 100));
@@ -155,9 +155,9 @@ const nettoyer = async () => {
   const ouvertes = ((await lire('projets/atelier/campagnes?pageSize=50')).documents || []).filter((d) => str(d, 'statut') === 'en-cours').map((d) => d.name.split('/').pop());
   for (const id of ouvertes) await poser(`projets/atelier/campagnes/${id}`, { statut: S('preparation') }, ['statut']);
   await poser('projets/atelier/scenarios/s-barre', { titre: S('Scénario du banc (barre)'), actif: B(true), cree: T(new Date()), maj: T(new Date()) });
-  verifier(await attendre(async () => Boolean(await page.$(tests)) && !(await page.$(`${tests}.lat-lien--en-cours`))), 'aucune campagne en cours : l entrée Tests est immobile');
+  verifier(await attendre(async () => Boolean(await page.$(tests)) && !(await page.$(`${tests}.lat-lien--en-cours`))), 'aucune campagne en cours : l entrée Campagne de tests est immobile');
   await poser('projets/atelier/campagnes/c-barre', { titre: S('Campagne du banc (barre)'), statut: S('en-cours'), scenarios: L([]), testeurs: L([]), cree: T(new Date()), maj: T(new Date()) });
-  verifier(await attendre(async () => Boolean(await page.$(`${tests}.lat-lien--en-cours`))), 'une campagne en cours : l entrée Tests s anime, sans recharger');
+  verifier(await attendre(async () => Boolean(await page.$(`${tests}.lat-lien--en-cours`))), 'une campagne en cours : l entrée Campagne de tests s anime, sans recharger');
   /* Lu d'un seul geste dans la page : le rail se redessine souvent, une
      poignée gardée entre deux allers-retours peut viser une ligne remplacée. */
   const anim = await page.evaluate((sel) => { const a = document.querySelector(sel); return ({ texte: getComputedStyle(a.querySelector('.tronque')).animationName, icone: getComputedStyle(a.querySelector('svg')).animationName, duree: getComputedStyle(a.querySelector('.tronque')).animationDuration, boucle: getComputedStyle(a.querySelector('.tronque')).animationIterationCount, dit: (a.querySelector('.sr-only') || {}).textContent || '' }); }, tests).catch(() => ({}));
@@ -220,7 +220,7 @@ const nettoyer = async () => {
   await aller(page, '#/', '[data-raccourci="nouvelle-demande"]');
   await page.click('[data-raccourci="nouvelle-demande"]');
   await page.waitForSelector('#choix-p', { timeout: 10000 });
-  verifier(Boolean(await page.$('#choix-p')), 'la fenêtre « Pour quel projet ? » s ouvre sur « Nouvelle demande »');
+  verifier(Boolean(await page.$('#choix-p')), 'la fenêtre « Pour quel projet ? » s ouvre sur « Nouveau ticket »');
   await page.selectOption('#choix-p', SECOND); await page.click('[data-ok]');
   await page.waitForURL(new RegExp(`/projets/${SECOND}/nouvelle-demande`), { timeout: 10000 }).catch(() => {});
   verifier(new RegExp(`#/projets/${SECOND}/nouvelle-demande`).test(page.url()), 'et mène au projet choisi');

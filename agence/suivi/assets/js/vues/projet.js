@@ -12,7 +12,7 @@ import {
   STATUTS_PROJET, STATUTS_COMPOSANT, TYPES_COMPOSANT, STATUTS_ETAPE, STATUTS_TACHE, PRIORITES, STATUTS, TYPES, URGENCES, OUVERTS, ATTEND_CLIENT,
   CATEGORIES_FICHIER, CATEGORIES_CLIENT, CATEGORIES_LIEN, STATUTS_RELEASE, TYPES_CHANGEMENT, TYPES_NOTE, SANTES, STATUTS_VALIDATION, QUALIFICATIONS, statutProjet, PLATEFORMES, nomsContacts, contactsProjet, PORTEES_DEVIS, age,
   verdictDelai, reportsDe, dateOrigine, MOTIFS_REPORT, dateLongue, enDate,
-  STATUTS_CAMPAGNE, STATUTS_ANOMALIE, peut, libellePlateforme, estResponsable
+  STATUTS_CAMPAGNE, STATUTS_ANOMALIE, peut, libellePlateforme, estResponsable, typeProjetAffiche
 } from '../noyau.js';
 import {
   icone, pastille, pastilleTexte, puce, pucePlateforme, iconePlateforme, tonPlateforme, avatarProjet, avatar, progression, anneau, ligne, vide, fait, chronoItem, parJour, squelette, titrePage,
@@ -25,7 +25,6 @@ import { filAriane } from '../coquille.js';
 import { notesPartageesHtml, gesteNoteDemande } from './notes-client.js';
 import { naviguer } from '../routeur.js';
 import { editer, supprimer } from './editeurs.js';
-import { ongletSuggestions, apercuSuggestionHtml, gesteSuggestion, marquerVues, compteOnglet as compteSuggestions, estPubliee as suggestionPubliee } from './suggestions.js';
 import { appelServeur } from '../serveur.js';
 import { activiteHtml } from './accueil.js';
 import { basculerAFaire } from './admin-a-faire.js';
@@ -47,24 +46,38 @@ const demonterCoffre = () => { if (moduleCoffre) moduleCoffre.then((m) => m.demo
    un onglet qui ouvre sur du vide inquiète plus qu'il n'informe. */
 const ONGLETS = [
   { cle: 'apercu', libelle: 'Aperçu', icone: 'accueil' },
-  { cle: 'etapes', libelle: 'Feuille de route', icone: 'route' },
+  { cle: 'etapes', libelle: 'Feuille de route', libelleClient: 'Planning', icone: 'route' },
   { cle: 'taches', libelle: 'Tâches', icone: 'taches' },
-  { cle: 'demandes', libelle: 'Demandes', icone: 'demandes' },
+  { cle: 'demandes', libelle: 'Demandes', libelleClient: 'Tickets', icone: 'demandes' },
   { cle: 'fichiers', libelle: 'Fichiers', icone: 'fichiers' },
   { cle: 'releases', libelle: 'Versions', icone: 'releases' },
   { cle: 'liens', libelle: 'Ressources', icone: 'liens' },
-  /* Ce que Capmedia propose : le client ne voit l'onglet que s'il y a une suggestion publiée. */
-  { cle: 'suggestions', libelle: 'Suggestions', icone: 'ampoule' },
+  /* Les axes d'évolution ont leur page (vues/evolutions.js) : l'onglet y mène. */
+  { cle: 'evolutions', libelle: 'Axes d\'évolution', icone: 'ampoule' },
   /* Les accès du client, chiffrés : l'équipe et le responsable seuls. */
   { cle: 'coffre', libelle: 'Coffre-fort', icone: 'cadenas' },
   { cle: 'reunions', libelle: 'Réunions', icone: 'reunions' },
-  { cle: 'notes', libelle: 'Décisions', icone: 'note' },
-  { cle: 'tests', libelle: 'Tests', icone: 'check' },
+  /* « Notes » vit sur sa propre page (vues/notes-projet.js, route
+     /projets/:id/notes) : l'onglet y mène. */
+  { cle: 'notes', libelle: 'Notes', icone: 'note' },
+  { cle: 'tests', libelle: 'Tests', libelleClient: 'Campagne de tests', icone: 'check' },
   { cle: 'activite', libelle: 'Activité', icone: 'activite' },
+  /* Le marketing d'un projet : la page est encore vide. L'équipe voit
+     l'onglet, marqué « À venir » ; le client ne le voit pas tant qu'il n'y
+     a rien dedans (marketing.js, aDuContenu). */
+  { cle: 'marketing', libelle: 'Marketing', icone: 'trend', equipeSeule: true },
 ];
-const ongletsVisibles = (d, equipe, env) => ONGLETS.filter((o) => (o.cle !== 'tests' || equipe || (d && (d.scenarios.length || d.campagnes.length)))
+/* Le nom d'une section dans les mots du client (Planning, Tickets...) ;
+   l'équipe garde les siens. */
+const libelleOnglet = (o, equipe) => (!equipe && o.libelleClient) || o.libelle;
+/* Chez le client, les versions vivent dans la page de chaque plateforme
+   (brique.js), les suggestions dans « Axes d'évolution », les décisions
+   dans « Notes » (app.js en tient les adresses) : plus d'onglet pour eux. */
+const HORS_CLIENT = ['releases', 'suggestions', 'notes'];
+const ongletsVisibles = (d, equipe, env) => ONGLETS.filter((o) => (equipe || (!o.equipeSeule && !HORS_CLIENT.includes(o.cle)))
+  && (o.cle !== 'tests' || equipe || (d && (d.scenarios.length || d.campagnes.length)))
   && (o.cle !== 'coffre' || (env && voitLeCoffre(env, d && d.projet)))
-  && (o.cle !== 'suggestions' || equipe || (d && (d.suggestions || []).some(suggestionPubliee))));
+  && (o.cle !== 'evolutions' || equipe));
 
 /* La conversation vit en bulle, montée pour toutes les pages d'un projet
    par un module global. Depuis une fiche, on lui passe un début de
@@ -95,7 +108,6 @@ const lireTout = (pid) => ({
   /* Les notes que le client a partagées (équipe seule : un client n'a
      jamais cette clé, la liste est vide chez lui). */
   notesPartagees: notesPartageesDuProjet(pid),
-  suggestions: magasin.lire(K.suggestions(pid)) || [],
 });
 
 const nomEquipe = (equipe, uid) => ((equipe.find((e) => e.id === uid) || {}).nom || '');
@@ -122,7 +134,7 @@ export const vue = async (ctx, env) => {
   sortie.innerHTML = `<div class="page">${squelette('page', 6)}</div>`;
 
   const cles = [K.projet(pid), K.composants(pid), K.jalons(pid), K.liens(pid), K.taches(pid), K.tickets(pid), K.validations(pid), K.fichiers(pid), K.releases(pid), K.reunions(pid), K.notes(pid), K.blocages(pid), K.documents(pid), K.paiements(pid), K.montants(pid), K.activite(pid), K.equipe,
-    K.scenarios(pid), K.planPresentation(pid), K.campagnes(pid), K.anomalies(pid), K.suggestions(pid), ...(env.role === 'equipe' ? [K.projetsInternes, K.interlocuteurs(pid), K.notesPartagees] : [])];
+    K.scenarios(pid), K.planPresentation(pid), K.campagnes(pid), K.anomalies(pid), ...(env.role === 'equipe' ? [K.projetsInternes, K.interlocuteurs(pid), K.notesPartagees] : [])];
   abonnerProjet(lot, pid, env.role);
 
   /* Une fiche ouverte par son adresse : une tâche (taches/:tid), une
@@ -160,7 +172,7 @@ export const vue = async (ctx, env) => {
     titrePage(projet.nom);
     const onglets = ongletsVisibles(d, equipe, env);
     if (!onglets.some((o) => o.cle === onglet) && ONGLETS.some((o) => o.cle === onglet)) onglet = 'apercu';
-    filAriane([{ libelle: equipe ? 'Projets' : 'Accueil', chemin: equipe ? '/projets' : '/' }, { libelle: projet.nom, chemin: `/projets/${pid}` }, ...(onglet !== 'apercu' ? [{ libelle: (ONGLETS.find((o) => o.cle === onglet) || { libelle: onglet === 'acces' ? 'Accès client' : 'Les parties' }).libelle }] : [])]);
+    filAriane([{ libelle: equipe ? 'Projets' : 'Accueil', chemin: equipe ? '/projets' : '/' }, { libelle: projet.nom, chemin: `/projets/${pid}` }, ...(onglet !== 'apercu' ? [{ libelle: libelleOnglet(ONGLETS.find((o) => o.cle === onglet) || { libelle: onglet === 'acces' ? 'Accès client' : 'Les parties' }, equipe) }] : [])]);
 
     const prog = progressionProjet(projet, d.jalons, { composants: d.composants, taches: d.taches });
     const risques = risquesProjet({ jalons: d.jalons, blocages: d.blocages, taches: d.taches, tickets: d.tickets });
@@ -176,7 +188,7 @@ export const vue = async (ctx, env) => {
       reunions: d.reunions.filter(reunionAVenir).length,
       notes: d.notes.length,
       tests: d.scenarios.length,
-      suggestions: compteSuggestions(d.suggestions, env),
+      marketing: equipe ? 'À venir' : '',
     };
 
     sortie.innerHTML = `<div class="page">
@@ -184,7 +196,7 @@ export const vue = async (ctx, env) => {
         <div class="rang" style="gap:16px;align-items:flex-start;min-width:0">
           ${avatarProjet(projet, 'grand')}
           <div style="min-width:0">
-            <p class="surtitre">${echapper([projet.ref, projet.interne ? 'Mon projet' : ((projet.client || {}).entreprise || nomsContacts(projet)), projet.type && ({ ...TYPES_COMPOSANT, ...{ 'application-mobile': 'Application mobile', 'site-vitrine': 'Site vitrine', 'e-commerce': 'E-commerce', 'saas': 'SaaS' } })[projet.type]].filter(Boolean).join(' · '))}</p>
+            <p class="surtitre">${echapper([projet.ref, projet.interne ? 'Mon projet' : ((projet.client || {}).entreprise || nomsContacts(projet)), typeProjetAffiche(projet, d.composants)].filter(Boolean).join(' · '))}</p>
             <h1 style="margin-top:2px">${echapper(projet.nom)}</h1>
             <div class="rang tete-suivi">
               ${pastille(STATUTS_PROJET, statutProjet(projet))}
@@ -200,7 +212,7 @@ export const vue = async (ctx, env) => {
         </div>
         <div class="actions">
           ${equipe ? `<button class="btn btn-secondaire" type="button" data-action="editer-projet">${icone('edit')} Modifier</button>` : ''}
-          <a class="btn btn-principal" href="#/projets/${echapper(pid)}/nouvelle-demande">${icone('plus')} Nouvelle demande</a>
+          <a class="btn btn-principal" href="#/projets/${echapper(pid)}/nouvelle-demande">${icone('plus')} ${equipe ? 'Nouvelle demande' : 'Nouveau ticket'}</a>
           ${equipe ? `<button class="btn-icone" type="button" data-action="menu-projet" aria-label="Plus">${icone('points')}</button>` : ''}
         </div>
       </header>
@@ -221,7 +233,6 @@ export const vue = async (ctx, env) => {
     if (equipe) reglerOnglets(sortie);
     /* Le coffre garde sa zone d'un dessin à l'autre ; quitter l'onglet le
        verrouille et coupe ses écoutes. */
-    if (onglet === 'suggestions') marquerVues(d, { pid, env });
     if (onglet === 'coffre') {
       chargerCoffre().then((m) => { if (onglet === 'coffre') m.monterCoffre(sortie.querySelector('#coffre-zone'), { pid, env, projet }); })
         .catch(() => toast('Le coffre-fort n\'a pas pu se charger. Rechargez la page.', 'erreur'));
@@ -259,7 +270,6 @@ export const vue = async (ctx, env) => {
     const action = el.dataset.action;
     const id = el.dataset.id;
     if (action === 'editer-projet') return editer('projet', env, { pid, fiche: d.projet });
-    if (await gesteSuggestion(el, d, { pid, env })) return null;
     if (await gesteAcces(el, d, { pid, env })) return null;
     if (action === 'ouvrir-au-client') {
       const personnes = (d.interlocuteurs || []).filter((i) => i.statut === 'actif');
@@ -358,12 +368,11 @@ export const vue = async (ctx, env) => {
     el.dataset.action = 'menu-fichier'; el.dataset.id = el.dataset.menuFichier; el.click();
   });
   // Les filtres et les bascules d'affichage se souviennent, puis redessinent.
-  const gestesFiltres = sur(sortie, 'click', '[data-vue-taches], [data-filtre-demandes], [data-filtre-fichiers], [data-filtre-suggestions]', (el) => {
+  const gestesFiltres = sur(sortie, 'click', '[data-vue-taches], [data-filtre-demandes], [data-filtre-fichiers]', (el) => {
     try {
       if (el.dataset.vueTaches !== undefined) localStorage.setItem('suivi:taches-vue', el.dataset.vueTaches);
       if (el.dataset.filtreDemandes !== undefined) sessionStorage.setItem(`suivi:filtre-demandes:${pid}`, el.dataset.filtreDemandes);
       if (el.dataset.filtreFichiers !== undefined) sessionStorage.setItem(`suivi:filtre-fichiers:${pid}`, el.dataset.filtreFichiers);
-      if (el.dataset.filtreSuggestions !== undefined) sessionStorage.setItem(`suivi:filtre-suggestions:${pid}`, el.dataset.filtreSuggestions);
     } catch (e) { /* stockage refusé */ }
     rendre(true);
   });
@@ -472,7 +481,7 @@ const trouver = (d, genre, id) => {
   if (genre === 'scenario') return (d.scenarios || []).find((x) => x.ref === id);
   return ({
     composant: d.composants, jalon: d.jalons, lien: d.liens, tache: d.taches, release: d.releases, reunion: d.reunions, note: d.notes, blocage: d.blocages, fichier: d.fichiers,
-    campagne: d.campagnes, suggestion: d.suggestions,
+    campagne: d.campagnes,
   }[genre] || []).find((x) => x.id === id);
 };
 
@@ -509,7 +518,7 @@ const tests = (d, { pid, env }) => {
 
   if (!scenarios.length && !campagnes.length) {
     return `<section class="section" style="margin-top:0">
-      <div class="section-tete"><h2>Tests</h2>${boutonNouveau(env, 'scenario', 'Nouveau scénario')}</div>
+      <div class="section-tete"><h2>${equipe ? 'Tests' : 'Campagne de tests'}</h2>${boutonNouveau(env, 'scenario', 'Nouveau scénario')}</div>
       ${vide({ icone: 'bug', titre: 'Aucun scénario', texte: equipe ? 'Écrivez-en un, ou versez un plan de tests existant avec l\'outil d\'import.' : 'Les scénarios de test apparaîtront ici.' })}
     </section>`;
   }
@@ -526,7 +535,7 @@ const tests = (d, { pid, env }) => {
   return `
   <section class="section" style="margin-top:0">
     <div class="section-tete">
-      <div><h2>Tests</h2><p class="chapo">${equipe
+      <div><h2>${equipe ? 'Tests' : 'Campagne de tests'}</h2><p class="chapo">${equipe
     ? `${pluriel(scenarios.length, 'scénario', 'scénarios')}, soit ${passages} passages sur mobile par campagne complète.`
     : `Votre application est testée par de vraies personnes avant chaque sortie : ${pluriel(scenarios.length, 'scénario', 'scénarios')} à dérouler${enCours.length ? `, ${pluriel(enCours.length, 'campagne en cours', 'campagnes en cours')}` : ''}.`}</p></div>
       <div class="rang" style="gap:8px">
@@ -571,7 +580,7 @@ const rendreOnglet = (onglet, d, c) => {
     case 'notes': return notes(d, c);
     case 'tests': return tests(d, c);
     case 'coffre': return '<div id="coffre-zone"></div>';
-    case 'suggestions': return ongletSuggestions(d, c);
+    case 'marketing': return `<section class="section" style="margin-top:0"><div class="section-tete"><h2>Marketing</h2><span class="etiquette">À venir</span></div><p class="t-petit t-2">Cette page est encore vide. Le client ne la voit pas tant qu'elle n'a rien à montrer.</p></section>`;
     case 'activite': return `<section class="section" style="margin-top:0"><div class="section-tete"><h2>Activité du projet</h2></div>${activiteHtml(d.activite.slice(0, 80), { equipe: c.env.role === 'equipe' })}</section>`;
     default: return '';
   }
@@ -609,11 +618,11 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
   const livraison = derniereRelease
     ? `${libellePlateforme(derniereRelease.plateforme)} ${derniereRelease.version || ''}`.trim() + (dateCourte(derniereRelease.date) ? ` · le ${dateCourte(derniereRelease.date)}` : '')
     : (dernierTermine ? dernierTermine.titre : 'Rien encore');
-  /* Le pavé du client peut être replié ou fermé (rangé dans Demandes). */
+  /* Le pavé du client peut être replié ou fermé (rangé dans Tickets). */
   const clePave = `projet:${pid}`;
   const etatP = equipe ? 'ouvert' : etatPave(clePave);
   const paveVisible = attente.length > 0 && etatP !== 'ferme';
-  const attenduTexte = attente.length ? `${pluriel(attente.length, 'point', 'points')}, ${paveVisible ? 'voir ci-dessus' : 'rangés dans Demandes'}` : 'Rien';
+  const attenduTexte = attente.length ? `${pluriel(attente.length, 'point', 'points')}, ${paveVisible ? 'voir ci-dessus' : 'rangés dans Tickets'}` : 'Rien';
   const sourceProgression = prog.valeur === null
     ? 'Rien ne permet encore de la calculer'
     : `${MODES_PROGRESSION[prog.mode] || ''}${prog.mode === 'manuel' && (projet.progression || {}).le ? ` le ${dateCourte(projet.progression.le)}` : ''}`;
@@ -640,13 +649,11 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
     return `<section class="section" style="margin-top:0"><div class="encart encart--info" id="depuis-visite">${icone('info')}<div><strong>Depuis votre dernière visite</strong><span class="rang" style="margin-top:6px;gap:16px">${parts.join('')}</span></div></div></section>`;
   })() : '';
 
-  const suggestionHtml = apercuSuggestionHtml(d, { pid, env });
   /* Le premier bloc de la page colle à l'en-tête ; les suivants gardent
      leur respiration. */
-  const rienAuDessus = !resumeDepuis && !suggestionHtml;
+  const rienAuDessus = !resumeDepuis;
   return `
     ${resumeDepuis}
-    ${suggestionHtml}
 
     ${blocagesOuverts.length ? `<section class="section" id="points-bloquants"${rienAuDessus ? ' style="margin-top:0"' : ''}>
       <div class="section-tete"><h2>Points bloquants</h2>${boutonNouveau(env, 'blocage', 'Signaler')}</div>
@@ -697,7 +704,7 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
     ${personnesHtml({ id: pid, ...projet }, env, d)}
 
     ${d.composants.length ? `<section class="section">
-      <div class="section-tete"><h2>Les parties du projet <span class="compte-section">${d.composants.length}</span></h2><a class="lien" href="#/projets/${echapper(pid)}/${equipe ? 'composants' : 'etapes'}">${equipe ? 'Gérer' : 'Feuille de route'}</a></div>
+      <div class="section-tete"><h2>Les parties du projet <span class="compte-section">${d.composants.length}</span></h2><a class="lien" href="#/projets/${echapper(pid)}/${equipe ? 'composants' : 'etapes'}">${equipe ? 'Gérer' : 'Planning'}</a></div>
       ${/* Chaque carte mène à la page de la brique. La barre s'appelle
             « avancement de la partie », datée quand on sait de quand elle
             date : ce n'est pas la progression du projet, dite ailleurs. */ ''}
@@ -713,8 +720,8 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
     <div class="grille grille-tiers section">
       <div class="pile" style="gap:var(--e-7)">
         <section>
-          <div class="section-tete"><h2>Feuille de route</h2><a class="lien" href="#/projets/${echapper(pid)}/etapes">Tout voir</a></div>
-          ${d.jalons.length ? `<div class="route">${trierEtapes(d.jalons).slice(0, 6).map((j) => phaseHtml(j)).join('')}</div>` : vide({ icone: 'route', titre: 'Pas encore de feuille de route', texte: equipe ? 'Posez les étapes du projet.' : 'Elle apparaîtra ici dès que les étapes seront posées.', compact: true, action: boutonNouveau(env, 'jalon', 'Première étape') })}
+          <div class="section-tete"><h2>${equipe ? 'Feuille de route' : 'Planning'}</h2><a class="lien" href="#/projets/${echapper(pid)}/etapes">Tout voir</a></div>
+          ${d.jalons.length ? `<div class="route">${trierEtapes(d.jalons).slice(0, 6).map((j) => phaseHtml(j)).join('')}</div>` : vide({ icone: 'route', titre: equipe ? 'Pas encore de feuille de route' : 'Pas encore de planning', texte: equipe ? 'Posez les étapes du projet.' : 'Elle apparaîtra ici dès que les étapes seront posées.', compact: true, action: boutonNouveau(env, 'jalon', 'Première étape') })}
         </section>
         <section>
           <div class="section-tete"><h2>Activité récente</h2><a class="lien" href="#/projets/${echapper(pid)}/activite">Tout voir</a></div>
@@ -732,9 +739,9 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
         </div>
         ${validationsAttente.length ? `<div class="carte carte--creuse"><p class="surtitre">Validations</p><div class="pile" style="margin-top:10px;gap:8px">${validationsAttente.map((v) => `<button class="rang" type="button" style="gap:10px;text-align:left" data-action="ouvrir-validation" data-id="${echapper(v.id)}"><span class="ligne-icone ligne-icone--violet" style="width:28px;height:28px;border-radius:8px">${icone('valider')}</span><span class="t-petit t-fort">${echapper(v.titre)}</span></button>`).join('')}</div></div>` : ''}
         <div class="carte carte--creuse">
-          <p class="surtitre">Demandes</p>
-          <p class="t-petit" style="margin-top:8px">${pluriel(ouverts.length, 'demande ouverte', 'demandes ouvertes')}${ouverts.filter((t) => ATTEND_CLIENT.includes(t.statut)).length ? `, ${ouverts.filter((t) => ATTEND_CLIENT.includes(t.statut)).length} de votre côté` : ''}</p>
-          <p style="margin-top:8px"><a class="t-petit" href="#/projets/${echapper(pid)}/demandes">Voir les demandes</a></p>
+          <p class="surtitre">${equipe ? 'Demandes' : 'Tickets'}</p>
+          <p class="t-petit" style="margin-top:8px">${equipe ? pluriel(ouverts.length, 'demande ouverte', 'demandes ouvertes') : pluriel(ouverts.length, 'ticket ouvert', 'tickets ouverts')}${ouverts.filter((t) => ATTEND_CLIENT.includes(t.statut)).length ? `, ${ouverts.filter((t) => ATTEND_CLIENT.includes(t.statut)).length} de votre côté` : ''}</p>
+          <p style="margin-top:8px"><a class="t-petit" href="#/projets/${echapper(pid)}/demandes">${equipe ? 'Voir les demandes' : 'Voir les tickets'}</a></p>
         </div>
       </aside>
     </div>`;
@@ -880,7 +887,11 @@ const tenueDesDelais = (d, { pid, env, delai, risques, prog }) => {
 
       ${risques.length ? `<div class="delais-risques">
         <p class="surtitre">Ce qui peut retarder la livraison</p>
-        <ul class="delais-liste">${risques.map((r) => `<li><span class="puce puce--ambre"><i aria-hidden="true"></i></span><span>${/demandes? en attente de votre réponse/.test(r) ? `<a href="#/projets/${echapper(pid)}/demandes?filtre=pour-vous">${echapper(r)}</a>` : echapper(r)}</span></li>`).join('')}</ul>
+        <ul class="delais-liste">${risques.map((brut) => {
+          /* Le client dit « ticket » (02/10) ; le calcul, partagé, garde « demande ». */
+          const r = env.role === 'equipe' ? brut : brut.replace(/\bdemande(s?) en attente/, 'ticket$1 en attente');
+          return `<li><span class="puce puce--ambre"><i aria-hidden="true"></i></span><span>${/(demandes?|tickets?) en attente de votre réponse/.test(r) ? `<a href="#/projets/${echapper(pid)}/demandes?filtre=pour-vous">${echapper(r)}</a>` : echapper(r)}</span></li>`;
+        }).join('')}</ul>
         ${etapesEnRetard.length ? `<p class="t-micro" style="margin-top:8px"><a href="#/projets/${echapper(pid)}/etapes">Voir les étapes concernées</a></p>` : ''}
       </div>` : ''}
 
@@ -1040,7 +1051,7 @@ const etapes = (d, { env, pid }) => {
     ${frises}
   </section>` : ''}
   <section class="section" style="${frises ? '' : 'margin-top:0'}">
-    <div class="section-tete"><h2>Feuille de route</h2>${boutonNouveau(env, 'jalon', 'Nouvelle étape', { ordre: d.jalons.length + 1 })}</div>
+    <div class="section-tete"><h2>${env.role === 'equipe' ? 'Feuille de route' : 'Planning'}</h2>${boutonNouveau(env, 'jalon', 'Nouvelle étape', { ordre: d.jalons.length + 1 })}</div>
     ${d.jalons.length ? `<div class="route" style="margin-bottom:var(--e-6)">${trierEtapes(d.jalons).map(phaseHtml).join('')}</div>
     ${phases.map((p) => `<div class="section" style="margin-top:var(--e-5)">
       <p class="surtitre" style="margin-bottom:8px">${echapper(p.nom)}</p>
@@ -1214,9 +1225,9 @@ const demandes = (d, { env, pid, attente = [] }) => {
   return `
   ${blocAttente}
   <section class="section"${equipe ? ' style="margin-top:0"' : ''} id="demandes-projet">
-    <div class="section-tete"><h2>${equipe ? 'Demandes' : `Demandes ${echapper(d.projet.nom || '')}`}</h2><a class="btn btn-principal btn-petit" href="#/projets/${echapper(pid)}/nouvelle-demande">${icone('plus')} Nouvelle demande</a></div>
+    <div class="section-tete"><h2>${equipe ? 'Demandes' : `Tickets ${echapper(d.projet.nom || '')}`}</h2><a class="btn btn-principal btn-petit" href="#/projets/${echapper(pid)}/nouvelle-demande">${icone('plus')} ${equipe ? 'Nouvelle demande' : 'Nouveau ticket'}</a></div>
     <div class="filtres" style="margin-bottom:16px">
-      ${[['ouvertes', 'Ouvertes'], ['moi', equipe ? 'Côté client' : 'Pour vous'], ['terminees', 'Terminées'], ['toutes', 'Toutes']].map(([cle, lib]) => `<button class="filtre${filtre === cle ? ' actif' : ''}" type="button" data-filtre-demandes="${cle}">${lib}<span class="compte">${groupes[cle].length}</span></button>`).join('')}
+      ${(equipe ? [['ouvertes', 'Ouvertes'], ['moi', 'Côté client'], ['terminees', 'Terminées'], ['toutes', 'Toutes']] : [['ouvertes', 'Ouverts'], ['moi', 'Pour vous'], ['terminees', 'Terminés'], ['toutes', 'Tous']]).map(([cle, lib]) => `<button class="filtre${filtre === cle ? ' actif' : ''}" type="button" data-filtre-demandes="${cle}">${lib}<span class="compte">${groupes[cle].length}</span></button>`).join('')}
     </div>
     ${liste.length ? `<div class="liste">${liste.map((t) => ligne({
       href: `#/projets/${echapper(pid)}/demandes/${echapper(t.id)}`,
@@ -1224,7 +1235,7 @@ const demandes = (d, { env, pid, attente = [] }) => {
       ton: tonPlateforme(t.plateforme) || (ATTEND_CLIENT.includes(t.statut) ? 'ambre' : t.statut === 'resolu' ? 'vert' : ''),
       nonLu: nonLu(t) && OUVERTS.includes(t.statut),
       titre: `${t.numero ? `<span class="t-mono t-3" style="font-weight:400">${echapper(t.numero)}</span> ` : ''}${echapper(t.titre)}`,
-      sous: `${echapper((TYPES[t.type] || {}).libelle || t.type)} · ${puce(URGENCES, t.urgence || 'important')} · ${echapper(OUVERTS.includes(t.statut) ? `ouverte depuis ${age(t.cree)}` : `close ${depuis(t.maj)}`)}${t.qualification ? ` · ${pastille(QUALIFICATIONS, t.qualification)}` : ''}`,
+      sous: `${echapper((TYPES[t.type] || {}).libelle || t.type)} · ${puce(URGENCES, t.urgence || 'important')} · ${echapper(OUVERTS.includes(t.statut) ? `${equipe ? 'ouverte' : 'ouvert'} depuis ${age(t.cree)}` : `${equipe ? 'close' : 'clos'} ${depuis(t.maj)}`)}${t.qualification ? ` · ${pastille(QUALIFICATIONS, t.qualification)}` : ''}`,
       fin: `${(() => {
         /* Qui l'a en main. C'est la question que le client posait par
            message, faute de lire la réponse quelque part. */
@@ -1234,7 +1245,7 @@ const demandes = (d, { env, pid, attente = [] }) => {
         return '';
       })()}${pastille(STATUTS, t.statut, { client: !equipe })}`,
     })).join('')}</div>`
-    : vide({ icone: 'demandes', titre: filtre === 'ouvertes' ? 'Aucune demande en cours' : 'Rien ici', texte: filtre === 'ouvertes' ? 'Tout semble en ordre pour le moment.' : '', action: `<a class="btn btn-secondaire" href="#/projets/${echapper(pid)}/nouvelle-demande">Créer une demande</a>` })}
+    : vide({ icone: 'demandes', titre: filtre === 'ouvertes' ? (equipe ? 'Aucune demande en cours' : 'Aucun ticket en cours') : 'Rien ici', texte: filtre === 'ouvertes' ? 'Tout semble en ordre pour le moment.' : '', action: `<a class="btn btn-secondaire" href="#/projets/${echapper(pid)}/nouvelle-demande">${equipe ? 'Créer une demande' : 'Créer un ticket'}</a>` })}
   </section>`;
 };
 

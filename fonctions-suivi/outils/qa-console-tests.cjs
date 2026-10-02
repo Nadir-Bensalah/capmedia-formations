@@ -212,8 +212,8 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   const cl=await (await nav2.newContext({viewport:{width:1500,height:1100}})).newPage();
   await connecter(cl,'camille.essai@exemple.test');
   const latC = await cl.evaluate(()=>[...document.querySelectorAll('.lat a')].map(a=>a.textContent.trim().split('\n')[0]));
-  verifier(latC.some(x=>/^Tests/.test(x)),'le client a aussi l\'entrée Tests',latC.join(' / '));
-  await aller(cl,'/tests','.section-tete h2','Tests');
+  verifier(latC.some(x=>/^Campagne de tests/.test(x)),'le client a aussi l\'entrée Campagne de tests',latC.join(' / '));
+  await aller(cl,'/tests','.section-tete h2','Campagne de tests');
   await pause(1200);
   const c = await cl.evaluate(()=>({
     selecteur: !!document.querySelector('#f-projet'),
@@ -238,14 +238,14 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
     verifier(!fuite,'et rien du projet d\'un autre client');
   }
 
-  await aller(cl,'/tests?projet=atelier&onglet=bibliotheque','[data-plier-scenarios]','Tests');
+  await aller(cl,'/tests?projet=atelier&onglet=bibliotheque','[data-plier-scenarios]','Campagne de tests');
   await cl.waitForSelector('.tb-resume .tb-ligne',{timeout:15000}).catch(()=>{});
   await pause(1000);
   const cp = await cl.evaluate(()=>({
     scenarios: document.querySelectorAll('.scenario').length,
     avancement: document.querySelectorAll('.tb-resume .tb-ligne').length,
   }));
-  await aller(cl,'/tests?projet=atelier','#testeurs','Tests');
+  await aller(cl,'/tests?projet=atelier','#testeurs','Campagne de tests');
   await pause(1000);
   verifier(cp.scenarios===nScen,`il voit les ${nScen} scénarios de son projet`,`${cp.scenarios} vus`);
 

@@ -9,7 +9,7 @@
 
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
-import { doc, getDoc, getDocs, setDoc, updateDoc, addDoc, deleteDoc, collection, collectionGroup, query, where, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, getDocs, setDoc, updateDoc, addDoc, deleteDoc, collection, collectionGroup, query, where, serverTimestamp, Timestamp, writeBatch } from 'firebase/firestore';
 
 const PROJET = process.env.GCLOUD_PROJECT || 'capmedia-1f90d';
 const env = await initializeTestEnvironment({
@@ -928,6 +928,137 @@ await doit('Camille ouvre une demande qui en poursuit une autre', addDoc(collect
 await doit('ou sans suite', addDoc(collection(camille(), 'tickets'), demandeSuite({ suite: null })));
 await refuse('mais une suite est un identifiant, pas un nombre', addDoc(collection(camille(), 'tickets'), demandeSuite({ suite: 12 })));
 await refuse('et elle n écrit pas « suivant » elle-même', addDoc(collection(camille(), 'tickets'), demandeSuite({ suivant: 't1' })));
+
+/* La page Notes d'un projet : des propositions « à valider ». L'équipe
+   propose et rédige ; un membre du projet propose à son nom ; seul le
+   responsable valide (la proposition devient une décision datée par le
+   serveur, à son nom) ou refuse avec un motif. Personne ne réécrit la
+   réponse ; le texte d'une décision actée reste à l'équipe. */
+console.log('\n== Notes : propositions, validation, décisions');
+const COLIN = 'uid-colin';
+const colin = () => env.authenticatedContext(COLIN, jeton(COLIN, 'colin.essai@exemple.test')).firestore();
+await env.withSecurityRulesDisabled(async (ctx) => {
+  const b = ctx.firestore();
+  await setDoc(doc(b, 'projets/atelier-notes'), { nom: 'Atelier notes', ref: 'ATN', membres: [CAMILLE, COLIN], roles: { [CAMILLE]: 'responsable', [COLIN]: 'collaborateur' }, organisation: 'atelier-nord', statut: 'en-cours', compteur: 0, ouvert: true });
+  const ilYa = Timestamp.fromDate(new Date(Date.now() - 3 * 86400000));
+  const prop = (titre) => ({ projet: 'atelier-notes', type: 'proposition', etat: 'a-valider', origine: 'equipe', visibilite: 'client', titre, contenu: '', date: ilYa, cree: ilYa, maj: ilYa, par: { uid: AGENT, nom: 'Alex Durand' } });
+  await setDoc(doc(b, 'notes/p-a'), prop('Garder la connexion par e-mail'));
+  await setDoc(doc(b, 'notes/p-b'), prop('Retirer l export PDF'));
+  await setDoc(doc(b, 'notes/p-c'), prop('Une seule langue en V1'));
+  await setDoc(doc(b, 'notes/d-ancienne'), { projet: 'atelier-notes', type: 'decision', titre: 'Conserver Stripe', contenu: 'x', date: ilYa, visibilite: 'client', cree: ilYa, maj: ilYa, par: { uid: AGENT, nom: 'Alex Durand' } });
+});
+const propClient = (uid, extra = {}) => ({ projet: 'atelier-notes', type: 'proposition', etat: 'a-valider', origine: 'client', visibilite: 'client', titre: 'Un mode sombre', contenu: 'Le soir surtout.', par: { uid, nom: 'Moi', cote: 'client' }, date: serverTimestamp(), cree: serverTimestamp(), maj: serverTimestamp(), ...extra });
+const reponseNote = (etat, extra = {}) => ({ etat, reponse: { par: CAMILLE, nom: 'Camille', date: serverTimestamp(), motif: '', ...extra }, maj: serverTimestamp() });
+
+await doit('L équipe propose à la validation (visible du client)', addDoc(collection(equipe(), 'notes'), { projet: 'atelier-notes', type: 'proposition', etat: 'a-valider', origine: 'equipe', visibilite: 'client', titre: 'Un widget', date: serverTimestamp(), cree: serverTimestamp(), maj: serverTimestamp() }));
+await refuse('mais pas une proposition interne', addDoc(collection(equipe(), 'notes'), { projet: 'atelier-notes', type: 'proposition', etat: 'a-valider', origine: 'equipe', visibilite: 'interne', titre: 'x' }));
+await refuse('ni une proposition déjà « validée »', addDoc(collection(equipe(), 'notes'), { projet: 'atelier-notes', type: 'proposition', etat: 'validee', origine: 'equipe', visibilite: 'client', titre: 'x' }));
+await refuse('ni une réponse du client toute faite', addDoc(collection(equipe(), 'notes'), { projet: 'atelier-notes', type: 'decision', visibilite: 'client', titre: 'x', reponse: { par: CAMILLE, nom: 'Camille', date: serverTimestamp(), motif: '' } }));
+await doit('L équipe consigne toujours une décision', addDoc(collection(equipe(), 'notes'), { projet: 'atelier-notes', type: 'decision', visibilite: 'client', titre: 'Garder iOS 16', date: serverTimestamp(), cree: serverTimestamp(), maj: serverTimestamp() }));
+
+await doit('Camille propose à son nom', setDoc(doc(camille(), 'notes/c-camille'), propClient(CAMILLE)));
+await doit('Colin, collaborateur, propose aussi', setDoc(doc(colin(), 'notes/c-colin'), propClient(COLIN)));
+await refuse('Camille ne propose pas au nom de Colin', setDoc(doc(camille(), 'notes/c-usurpe'), propClient(COLIN)));
+await refuse('ni une proposition déjà validée', setDoc(doc(camille(), 'notes/c-validee'), propClient(CAMILLE, { etat: 'validee' })));
+await refuse('ni une décision directe', setDoc(doc(camille(), 'notes/c-decision'), propClient(CAMILLE, { type: 'decision' })));
+await refuse('ni une note interne', setDoc(doc(camille(), 'notes/c-interne'), propClient(CAMILLE, { visibilite: 'interne' })));
+await refuse('ni une proposition « de l équipe »', setDoc(doc(camille(), 'notes/c-equipe'), propClient(CAMILLE, { origine: 'equipe' })));
+await refuse('ni avec une date choisie', setDoc(doc(camille(), 'notes/c-datee'), propClient(CAMILLE, { date: Timestamp.fromDate(new Date(2020, 0, 1)) })));
+await refuse('ni un titre de cent soixante et un caractères', setDoc(doc(camille(), 'notes/c-long'), propClient(CAMILLE, { titre: 'x'.repeat(161) })));
+await refuse('ni avec une réponse déjà posée', setDoc(doc(camille(), 'notes/c-rep'), propClient(CAMILLE, { reponse: { par: CAMILLE, nom: 'C', date: serverTimestamp(), motif: '' } })));
+await refuse('Léa ne propose rien sur un projet qui n est pas le sien', setDoc(doc(lea(), 'notes/c-lea'), propClient(LEA)));
+await refuse('un testeur non plus', setDoc(doc(karim(), 'notes/c-karim'), propClient(KARIM)));
+await doit('Camille lit la proposition de l équipe', getDoc(doc(camille(), 'notes/p-a')));
+await refuse('Léa ne la lit pas', getDoc(doc(lea(), 'notes/p-a')));
+
+await refuse('Colin, collaborateur, ne valide pas', updateDoc(doc(colin(), 'notes/p-a'), { ...reponseNote('validee'), reponse: { par: COLIN, nom: 'Colin', date: serverTimestamp(), motif: '' } }));
+await refuse('Léa ne valide pas', updateDoc(doc(lea(), 'notes/p-a'), { ...reponseNote('validee'), reponse: { par: LEA, nom: 'Léa', date: serverTimestamp(), motif: '' } }));
+await refuse('Camille ne valide pas au nom de Colin', updateDoc(doc(camille(), 'notes/p-a'), { ...reponseNote('validee'), reponse: { par: COLIN, nom: 'Colin', date: serverTimestamp(), motif: '' } }));
+await refuse('ni avec une date choisie', updateDoc(doc(camille(), 'notes/p-a'), reponseNote('validee', { date: Timestamp.fromDate(new Date(2020, 0, 1)) })));
+await refuse('ni en changeant le titre au passage', updateDoc(doc(camille(), 'notes/p-a'), { ...reponseNote('validee'), titre: 'Autre chose' }));
+await refuse('ni vers un autre état', updateDoc(doc(camille(), 'notes/p-a'), reponseNote('a-valider')));
+await doit('Camille, responsable, valide : c est une décision datée à son nom', updateDoc(doc(camille(), 'notes/p-a'), reponseNote('validee')));
+await refuse('mais pas deux fois', updateDoc(doc(camille(), 'notes/p-a'), reponseNote('refusee', { motif: 'Finalement non' })));
+await refuse('et elle ne réécrit pas la décision', updateDoc(doc(camille(), 'notes/p-a'), { titre: 'Autre', maj: serverTimestamp() }));
+await refuse('Camille ne refuse pas sans un mot', updateDoc(doc(camille(), 'notes/p-b'), reponseNote('refusee')));
+await refuse('ni avec un motif de mille et un caractères', updateDoc(doc(camille(), 'notes/p-b'), reponseNote('refusee', { motif: 'x'.repeat(1001) })));
+await doit('Camille refuse avec un motif', updateDoc(doc(camille(), 'notes/p-b'), reponseNote('refusee', { motif: 'Nos clients l utilisent.' })));
+await refuse('Camille ne répond pas sur une décision consignée par l équipe', updateDoc(doc(camille(), 'notes/d-ancienne'), reponseNote('validee')));
+
+await doit('L équipe corrige le texte d une décision validée', updateDoc(doc(equipe(), 'notes/p-a'), { titre: 'Garder la connexion par e-mail seule', maj: serverTimestamp() }));
+await refuse('mais ne réécrit pas qui a validé', updateDoc(doc(equipe(), 'notes/p-a'), { 'reponse.par': AGENT }));
+await refuse('ni ne remet la décision « à valider »', updateDoc(doc(equipe(), 'notes/p-a'), { etat: 'a-valider' }));
+await refuse('ni ne valide à la place du client', updateDoc(doc(equipe(), 'notes/p-c'), { etat: 'validee', reponse: { par: CAMILLE, nom: 'Camille', date: serverTimestamp(), motif: '' } }));
+await refuse('ni ne rend interne une proposition qui attend', updateDoc(doc(equipe(), 'notes/p-c'), { visibilite: 'interne' }));
+await doit('L équipe corrige une proposition qui attend', updateDoc(doc(equipe(), 'notes/p-c'), { titre: 'Une seule langue, le français, en V1', maj: serverTimestamp() }));
+
+await refuse('Camille ne retire pas une proposition de l équipe', deleteDoc(doc(camille(), 'notes/p-c')));
+await refuse('ni la proposition de Colin', deleteDoc(doc(camille(), 'notes/c-colin')));
+await refuse('ni une décision', deleteDoc(doc(camille(), 'notes/p-a')));
+await doit('Colin retire sa proposition tant qu elle attend', deleteDoc(doc(colin(), 'notes/c-colin')));
+await doit('L équipe retire une proposition', deleteDoc(doc(equipe(), 'notes/p-c')));
+/* Une idée du carnet passe dans « À valider » : la proposition naît, la note part, d'une seule écriture. */
+await doit('Camille garde une idée dans son carnet', setDoc(doc(camille(), 'notesClient/idee-1'), { uid: CAMILLE, nom: 'Camille', projet: 'atelier-notes', texte: 'Un mode sombre', epinglee: false, partagee: false, cree: serverTimestamp(), maj: serverTimestamp() }));
+await doit('et la propose à la validation (la note quitte le carnet)', (async () => {
+  const db = camille();
+  const b = writeBatch(db);
+  b.set(doc(db, 'notes/c-idee'), propClient(CAMILLE, { titre: 'Un mode sombre' }));
+  b.delete(doc(db, 'notesClient/idee-1'));
+  await b.commit();
+})());
+await doit('Camille garde une autre idée, privée', setDoc(doc(camille(), 'notesClient/idee-2'), { uid: CAMILLE, nom: 'Camille', projet: 'atelier-notes', texte: 'Privé', epinglee: false, partagee: false, cree: serverTimestamp(), maj: serverTimestamp() }));
+await refuse('l équipe ne lit pas une note privée du carnet', getDoc(doc(equipe(), 'notesClient/idee-2')));
+console.log('\n== Les axes d évolution');
+const axe = (o = {}) => ({ plateforme: 'ios', titre: 'Widgets', description: 'Vos tâches sans ouvrir l app.', detail: '', apport: 'engagement', ampleur: 'moyen', etat: 'propose', publication: 'publiee', publieLe: null, ordre: 1, devis: '', reponse: null, cree: serverTimestamp(), maj: serverTimestamp(), ...o });
+await env.withSecurityRulesDisabled(async (ctx) => {
+  const b = ctx.firestore();
+  await setDoc(doc(b, 'projets/atelier/axes/a-pub'), axe());
+  await setDoc(doc(b, 'projets/atelier/axes/a-brouillon'), axe({ publication: 'brouillon', titre: 'Dynamic Island' }));
+  await setDoc(doc(b, 'projets/atelier/axes/a-livre'), axe({ etat: 'livre', titre: 'Mode sombre' }));
+  await setDoc(doc(b, 'projets/atelier/axesIntro/texte'), { texte: 'Nos pistes.', maj: serverTimestamp() });
+  /* Un projet à deux : Léa responsable, Camille collaboratrice. */
+  await setDoc(doc(b, 'projets/duo'), { nom: 'Duo', ref: 'DUO', membres: [CAMILLE, LEA], roles: { [LEA]: 'responsable', [CAMILLE]: 'collaborateur' }, statut: 'en-cours', compteur: 0, ouvert: true });
+  await setDoc(doc(b, 'projets/duo/axes/d1'), axe());
+});
+const reponseAxe = (choix, o = {}) => ({ reponse: { par: CAMILLE, nom: 'Camille', choix, demande: '', le: serverTimestamp(), ...o }, maj: serverTimestamp() });
+await doit('L équipe crée un axe dans les bornes', setDoc(doc(equipe(), 'projets/atelier/axes/a-neuf'), axe({ plateforme: 'general' })));
+await refuse('mais pas sur une plateforme inconnue', setDoc(doc(equipe(), 'projets/atelier/axes/a-x'), axe({ plateforme: 'montre' })));
+await refuse('ni sans titre', setDoc(doc(equipe(), 'projets/atelier/axes/a-x'), axe({ titre: '' })));
+await refuse('ni avec un champ inconnu', setDoc(doc(equipe(), 'projets/atelier/axes/a-x'), axe({ prix: 1200 })));
+await refuse('ni avec une ampleur inconnue', setDoc(doc(equipe(), 'projets/atelier/axes/a-x'), axe({ ampleur: 'immense' })));
+await doit('L équipe change l ordre et l état', updateDoc(doc(equipe(), 'projets/atelier/axes/a-neuf'), { ordre: 4, etat: 'prevu', maj: serverTimestamp() }));
+await doit('Camille lit un axe publié', getDoc(doc(camille(), 'projets/atelier/axes/a-pub')));
+await refuse('mais pas un brouillon', getDoc(doc(camille(), 'projets/atelier/axes/a-brouillon')));
+await doit('Camille liste les axes publiés', getDocs(query(collection(camille(), 'projets/atelier/axes'), where('publication', '==', 'publiee'))));
+await refuse('mais pas tous les axes', getDocs(collection(camille(), 'projets/atelier/axes')));
+await refuse('Léa ne lit pas les axes de Atelier', getDoc(doc(lea(), 'projets/atelier/axes/a-pub')));
+await refuse('Camille ne crée pas d axe', setDoc(doc(camille(), 'projets/atelier/axes/a-cliente'), axe()));
+await refuse('ni ne réécrit le titre', updateDoc(doc(camille(), 'projets/atelier/axes/a-pub'), { titre: 'Autre', maj: serverTimestamp() }));
+await refuse('ni ne publie un brouillon', updateDoc(doc(camille(), 'projets/atelier/axes/a-brouillon'), { publication: 'publiee', maj: serverTimestamp() }));
+await refuse('ni ne supprime un axe', deleteDoc(doc(camille(), 'projets/atelier/axes/a-pub')));
+await doit('Camille, responsable, dit « Ça m intéresse »', updateDoc(doc(camille(), 'projets/atelier/axes/a-pub'), reponseAxe('interesse')));
+await doit('puis « À prévoir »', updateDoc(doc(camille(), 'projets/atelier/axes/a-pub'), reponseAxe('a-prevoir')));
+await doit('puis « On en parle », avec sa demande', updateDoc(doc(camille(), 'projets/atelier/axes/a-pub'), reponseAxe('en-parler', { demande: 't1' })));
+await doit('et décoche : sa réponse s efface', updateDoc(doc(camille(), 'projets/atelier/axes/a-pub'), { reponse: null, maj: serverTimestamp() }));
+await refuse('un choix inconnu est refusé', updateDoc(doc(camille(), 'projets/atelier/axes/a-pub'), reponseAxe('pas-interesse')));
+await refuse('une réponse au nom d un autre aussi', updateDoc(doc(camille(), 'projets/atelier/axes/a-pub'), reponseAxe('interesse', { par: LEA })));
+await refuse('une date choisie par le client aussi', updateDoc(doc(camille(), 'projets/atelier/axes/a-pub'), reponseAxe('interesse', { le: Timestamp.fromDate(new Date('2020-01-01')) })));
+await refuse('une clé de trop dans la réponse aussi', updateDoc(doc(camille(), 'projets/atelier/axes/a-pub'), reponseAxe('interesse', { prix: 1 })));
+await refuse('répondre en touchant l ordre aussi', updateDoc(doc(camille(), 'projets/atelier/axes/a-pub'), { ...reponseAxe('interesse'), ordre: 0 }));
+await refuse('pas de réponse sur un axe déjà en place', updateDoc(doc(camille(), 'projets/atelier/axes/a-livre'), reponseAxe('interesse')));
+await refuse('ni sur un brouillon', updateDoc(doc(camille(), 'projets/atelier/axes/a-brouillon'), reponseAxe('interesse')));
+await refuse('Camille, collaboratrice sur Duo, lit sans répondre', updateDoc(doc(camille(), 'projets/duo/axes/d1'), reponseAxe('interesse')));
+await doit('elle lit pourtant l axe publié de Duo', getDoc(doc(camille(), 'projets/duo/axes/d1')));
+await doit('Léa, responsable de Duo, répond', updateDoc(doc(lea(), 'projets/duo/axes/d1'), { reponse: { par: LEA, nom: 'Léa', choix: 'interesse', demande: '', le: serverTimestamp() }, maj: serverTimestamp() }));
+await refuse('Camille n efface pas la réponse de sa responsable', updateDoc(doc(camille(), 'projets/duo/axes/d1'), { reponse: null, maj: serverTimestamp() }));
+await doit('Camille lit l introduction des axes', getDoc(doc(camille(), 'projets/atelier/axesIntro/texte')));
+await refuse('mais ne l écrit pas', setDoc(doc(camille(), 'projets/atelier/axesIntro/texte'), { texte: 'Moi', maj: serverTimestamp() }));
+await refuse('Léa ne la lit pas', getDoc(doc(lea(), 'projets/atelier/axesIntro/texte')));
+await doit('L équipe écrit l introduction', setDoc(doc(equipe(), 'projets/atelier/axesIntro/texte'), { texte: 'Nos pistes pour vous.', maj: serverTimestamp() }));
+await refuse('mais pas de mille et un caractères', setDoc(doc(equipe(), 'projets/atelier/axesIntro/texte'), { texte: 'x'.repeat(1001), maj: serverTimestamp() }));
+await refuse('ni sous un autre nom de document', setDoc(doc(equipe(), 'projets/atelier/axesIntro/autre'), { texte: 'x', maj: serverTimestamp() }));
+await doit('Camille ouvre une demande née d un axe', addDoc(collection(camille(), 'tickets'), demandeSuite({ axe: 'a-pub' })));
+await refuse('mais l identifiant de l axe reste borné', addDoc(collection(camille(), 'tickets'), demandeSuite({ axe: 'x'.repeat(81) })));
 
 console.log(`\n${ok} contrôle(s) conforme(s)${ecarts.length ? `, ${ecarts.length} ÉCART(S) :\n  - ${ecarts.join('\n  - ')}` : ''}`);
 await env.cleanup();

@@ -18,6 +18,13 @@
      const notes = monterNotesClient(sortie, env);
      ... `${notes.html()}` ... ; notes.apres();
      fin : notes.fin();
+
+   Sur la page Notes d'un projet, le même carnet, réduit à ce projet :
+   monterNotesClient(sortie, env, { projet, proposer }). La note y naît
+   rattachée au projet, et chacune porte « Proposer à la validation »
+   (`proposer(note)`), qui la fait passer dans « À valider ». L'accueil
+   garde le carnet entier ; la page Notes est l'endroit complet d'un
+   projet (ses notes, ses idées, ce qui attend, ce qui est décidé).
    ========================================================================== */
 
 import { echapper, avecLiens, dateHeure, enDate } from '../noyau.js';
@@ -34,12 +41,15 @@ const modifiee = (n) => {
   return Boolean(c && m) && m.getTime() - c.getTime() > 60000;
 };
 
-export const monterNotesClient = (sortie, env) => {
+export const monterNotesClient = (sortie, env, { projet: projetFixe = '', proposer = null } = {}) => {
   const { session } = env;
+  /* L'identifiant du bloc : un par page, pour que le redessin local
+     retrouve le sien. */
+  const BLOC = projetFixe ? 'notes-idees' : 'vos-notes';
   const etat = {
     ouvert: false,          /* le champ « Noter une idée » est déplié */
     brouillon: '',          /* ce qui s'y écrit */
-    projetChoisi: '',       /* le projet rattaché à la note en cours d'écriture */
+    projetChoisi: projetFixe, /* le projet rattaché à la note en cours d'écriture */
     edition: null,          /* { id, texte } : la note qu'on modifie en place */
     focus: null,            /* 'nouvelle' ou l'identifiant de la note en édition */
     curseur: null,          /* [début, fin] de la sélection, pour la reposer */
@@ -47,7 +57,7 @@ export const monterNotesClient = (sortie, env) => {
 
   const projets = () => (magasin.lire(K.projets) || session.projets || []).filter((p) => p && !p.archive);
   const nomProjet = (pid) => ((projets().find((p) => p.id === pid) || {}).nom || '');
-  const notes = () => trierNotes(magasin.lire(K.notesClient) || []);
+  const notes = () => trierNotes((magasin.lire(K.notesClient) || []).filter((n) => !projetFixe || n.projet === projetFixe));
   const trouver = (id) => notes().find((n) => n.id === id) || null;
 
   /* --- Le dessin --------------------------------------------------------- */
@@ -66,7 +76,7 @@ export const monterNotesClient = (sortie, env) => {
       <textarea class="zone" data-note-champ="${echapper(cle)}" rows="3" maxlength="${LIMITE_TEXTE}" placeholder="Une idée, une remarque, une question à ne pas oublier" aria-label="Votre note. Entrée enregistre, Maj+Entrée va à la ligne.">${echapper(texte)}</textarea>
       <div class="rang-espace notes-forme-pied">
         <div class="rang" style="gap:10px">
-          ${verrouProjet ? `<span class="t-micro t-2">${echapper(nomProjet(projet))}</span>` : selecteurProjet(cle, projet)}
+          ${projetFixe ? '' : (verrouProjet ? `<span class="t-micro t-2">${echapper(nomProjet(projet))}</span>` : selecteurProjet(cle, projet))}
           <span class="t-micro t-3">Entrée pour enregistrer, Maj+Entrée pour une nouvelle ligne.</span>
         </div>
         <div class="rang" style="gap:6px">
@@ -86,12 +96,13 @@ export const monterNotesClient = (sortie, env) => {
       <div class="note-client-pied">
         <span class="note-client-etat">${n.partagee ? `${icone('utilisateurs')}Partagée avec Capmedia` : `${icone('cadenas')}Privée`}</span>
         ${n.epinglee ? `<span>${icone('pin')}Épinglée</span>` : ''}
-        ${projet ? `<span>${echapper(projet)}</span>` : ''}
+        ${projet && !projetFixe ? `<a class="note-client-projet" href="#/projets/${echapper(n.projet)}/notes" data-astuce="Les notes, les idées et les décisions de ce projet">${echapper(projet)}</a>` : ''}
         <span>${echapper(dateHeure(n.cree))}${modifiee(n) ? ', modifiée' : ''}</span>
         ${enEdition ? '' : `<span class="note-client-gestes">
           ${n.partagee
             ? `<button class="btn btn-fantome btn-petit" type="button" data-note-geste="reprendre" data-note-id="${echapper(n.id)}">Reprendre</button>`
             : `<button class="btn btn-fantome btn-petit" type="button" data-note-geste="partager" data-note-id="${echapper(n.id)}">Partager avec Capmedia</button>`}
+          ${proposer ? `<button class="btn btn-doux btn-petit" type="button" data-note-geste="proposer" data-note-id="${echapper(n.id)}" data-astuce="Elle quitte votre carnet et attend la validation du responsable du projet">Proposer à la validation</button>` : ''}
           <button class="btn-icone" type="button" data-note-geste="menu" data-note-id="${echapper(n.id)}" aria-label="Plus d'actions sur cette note" data-astuce="Modifier, épingler, supprimer">${icone('points')}</button>
         </span>`}
       </div>
@@ -100,7 +111,16 @@ export const monterNotesClient = (sortie, env) => {
 
   const html = () => {
     const liste = notes();
-    return `<section class="section" id="vos-notes" aria-label="Vos notes">
+    if (projetFixe) {
+      return `<div id="${BLOC}">
+        <p class="t-petit t-2 notes-explication">Vos notes restent privées : personne d'autre ne les lit, pas même Capmedia. Partagez-en une pour qu'on en parle, ou proposez une idée à la validation : elle passe dans « À valider ».</p>
+        <div class="notes-saisie">${etat.ouvert
+          ? forme('nouvelle', etat.brouillon, projetFixe, { nouvelle: true })
+          : `<button class="notes-amorce" type="button" data-note-geste="ouvrir">${icone('edit')}Noter une idée…</button>`}</div>
+        ${liste.length ? `<div class="notes-liste">${liste.map(uneNote).join('')}</div>` : ''}
+      </div>`;
+    }
+    return `<section class="section" id="${BLOC}" aria-label="Vos notes">
       <div class="section-tete"><h2>Vos notes${liste.length ? ` <span class="compte-section">${liste.length}</span>` : ''}</h2></div>
       <p class="t-petit t-2 notes-explication">Un carnet pour vous : ce que vous notez ici reste privé, personne d'autre ne le lit, pas même Capmedia. Vous choisissez, note par note, ce que vous partagez avec nous.</p>
       <div class="notes-saisie">${etat.ouvert
@@ -126,7 +146,7 @@ export const monterNotesClient = (sortie, env) => {
   /* Un changement d'état local (déplier, modifier, annuler) redessine le
      bloc seul : la page n'a pas bougé, elle n'a pas à se refaire. */
   const redessiner = () => {
-    const bloc = sortie.querySelector('#vos-notes');
+    const bloc = sortie.querySelector(`#${BLOC}`);
     if (!bloc) return;
     const neuf = document.createElement('div');
     neuf.innerHTML = html();
@@ -136,7 +156,7 @@ export const monterNotesClient = (sortie, env) => {
 
   /* --- Les gestes ------------------------------------------------------- */
 
-  const fermerNouvelle = () => { etat.ouvert = false; etat.brouillon = ''; etat.projetChoisi = ''; if (etat.focus === 'nouvelle') { etat.focus = null; etat.curseur = null; } };
+  const fermerNouvelle = () => { etat.ouvert = false; etat.brouillon = ''; etat.projetChoisi = projetFixe; if (etat.focus === 'nouvelle') { etat.focus = null; etat.curseur = null; } };
   const fermerEdition = () => { if (etat.edition && etat.focus === etat.edition.id) { etat.focus = null; etat.curseur = null; } etat.edition = null; };
 
   const enregistrerNouvelle = async (bouton) => {
@@ -227,6 +247,7 @@ export const monterNotesClient = (sortie, env) => {
     if (geste === 'partager') partager(n);
     else if (geste === 'reprendre') reprendre(n);
     else if (geste === 'menu') ouvrirMenu(el, n);
+    else if (geste === 'proposer' && proposer) proposer(n, el);
   }));
   retraits.push(sur(sortie, 'submit', '[data-note-forme]', (el, ev) => {
     ev.preventDefault();
@@ -280,7 +301,7 @@ export const nomAuteurNote = (n) => {
   return trouve ? trouve.nom : 'Un client';
 };
 
-export const notesPartageesHtml = (notes, { nomProjet = () => '', carte = true, limite = 8 } = {}) => {
+export const notesPartageesHtml = (notes, { nomProjet = () => '', carte = true, limite = 8, nu = false } = {}) => {
   const liste = (notes || []).slice(0, limite);
   if (!liste.length) return '';
   const corps = liste.map((n) => `<div class="note-partagee" data-note="${echapper(n.id)}">
@@ -289,6 +310,8 @@ export const notesPartageesHtml = (notes, { nomProjet = () => '', carte = true, 
     <p style="margin-top:6px"><button class="btn btn-doux btn-petit" type="button" data-note-demande="${echapper(n.id)}">${icone('sparkle')} En faire une demande</button></p>
   </div>`).join('');
   const reste = (notes || []).length > limite ? `<p class="t-micro t-3" style="margin-top:10px">et ${(notes || []).length - limite} de plus${carte ? ', à lire sur chaque projet' : ''}</p>` : '';
+  /* « nu » : la liste seule, sous un intitulé posé par la page (page Notes). */
+  if (nu) return `<div class="pile" id="notes-partagees" style="gap:12px">${corps}</div>${reste}`;
   if (carte) return `<div class="carte carte--creuse" id="notes-partagees"><p class="surtitre">Notes partagées par le client</p><div class="pile" style="margin-top:10px;gap:12px">${corps}</div>${reste}</div>`;
   return `<section class="section" id="notes-partagees"><div class="section-tete"><h2>Notes partagées par le client <span class="compte-section">${(notes || []).length}</span></h2></div><p class="t-petit t-2" style="margin-bottom:10px">Le client les a aussi postées dans la conversation du projet.</p><div class="pile" style="gap:12px">${corps}</div>${reste}</section>`;
 };

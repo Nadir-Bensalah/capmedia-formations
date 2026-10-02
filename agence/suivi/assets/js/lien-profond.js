@@ -43,7 +43,7 @@ export const resolveur = (collection, versChemin, { titre = 'Introuvable', texte
 };
 
 /** La demande désignée par un lien : la même route dans le hub et le cockpit. */
-export const resoudreDemande = resolveur('tickets', (id, t) => (t.projet ? `/projets/${t.projet}/demandes/${id}` : ''), { titre: 'Demande introuvable' });
+export const resoudreDemande = resolveur('tickets', (id, t) => (t.projet ? `/projets/${t.projet}/demandes/${id}` : ''), { titre: 'Ticket introuvable' });
 
 /* La traduction d'une destination après connexion vit dans retour.js, sans
    dépendance : la porte de connexion l'importe sans charger l'interface. */

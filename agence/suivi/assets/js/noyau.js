@@ -283,32 +283,6 @@ export const STATUTS_EVOLUTION = {
   'refusee':   { libelle: 'Écartée',   voile: 'gris',  ordre: 5, aide: 'On ne la fera pas, et on a dit pourquoi.' },
 };
 
-/* --- Les suggestions d'amélioration --------------------------------------
-   Ce que Capmedia propose au client, sans qu'il l'ait demandé : une
-   fonctionnalité qu'on peut développer (widgets, Dynamic Island) ou un
-   conseil à mettre en place (une page d'aide, une relance par e-mail).
-   Deux familles, un état visible des deux côtés, et le client y répond. */
-export const FAMILLES_SUGGESTION = {
-  'developpement': { libelle: 'Ce que Capmedia peut faire pour vous', court: 'Développement', aide: 'Une évolution que nous développons pour vous, avec son prix et sa durée.' },
-  'conseil':       { libelle: "Ce qu'on vous conseille de mettre en place", court: 'Conseil', aide: 'Un conseil, à mettre en place de votre côté ou avec nous.' },
-};
-export const STATUTS_SUGGESTION = {
-  'proposee':  { libelle: 'Proposée',   voile: 'bleu',  ordre: 1, client: 'Proposée',   aide: 'Capmedia la propose. Rien n\'est décidé.' },
-  'a-l-etude': { libelle: "À l'étude",  voile: 'ambre', ordre: 2, client: "À l'étude",  aide: 'Le client s\'y intéresse : une demande est ouverte.' },
-  'acceptee':  { libelle: 'Acceptée',   voile: 'vert',  ordre: 3, client: 'Acceptée',   aide: 'On la fera. Elle a sa place dans la feuille de route.' },
-  'livree':    { libelle: 'Livrée',     voile: 'vert',  ordre: 4, client: 'Livrée',     aide: 'Elle est dans l\'application.' },
-  'refusee':   { libelle: 'Déclinée',   voile: 'gris',  ordre: 5, client: 'Pas pour le moment', aide: 'Le client n\'en veut pas, ou pas maintenant.' },
-  'retiree':   { libelle: 'Retirée',    voile: 'gris',  ordre: 6, client: 'Retirée',    aide: 'Capmedia l\'a retirée : elle n\'a plus lieu d\'être.' },
-};
-export const PUBLICATIONS_SUGGESTION = {
-  'brouillon': { libelle: 'Brouillon', voile: 'gris', aide: 'Le client ne la voit pas.' },
-  'publiee':   { libelle: 'Publiée',   voile: 'vert', aide: 'Le client la voit dans son onglet Suggestions.' },
-};
-/* Les états où le client a encore la main : il peut dire qu'il est
-   intéressé, ou ne pas l'être, ou revenir sur son choix. Les règles
-   disent la même liste. */
-export const SUGGESTION_CLIENT_AGIT = ['proposee', 'a-l-etude', 'refusee'];
-
 /* Le nombre de jours, dit en français : « 1,5 jour », « une demi-journée ». */
 export const joursEnClair = (n) => {
   const v = Number(n) || 0;
@@ -343,6 +317,25 @@ export const TYPES_PROJET = {
   'maintenance':        'Maintenance',
   'marketing':          'Marketing',
   'autre':              'Autre',
+};
+
+/* Le type d'un projet tel qu'on le dit au client. Le champ « type » ne
+   connaît qu'une famille (« Application mobile ») : un projet qui a des
+   plateformes web ET mobiles se dit « Application web et mobile ». On le
+   déduit de ses plateformes et de ses parties ; sans elles, le champ. */
+const MOBILES = ['ios', 'android'];
+const WEBS = ['web', 'admin'];
+export const typeProjetAffiche = (projet, composants = []) => {
+  if (!projet) return '';
+  const cles = new Set([...(projet.plateformes || []), ...(composants || []).map((c) => c && c.type)].filter(Boolean));
+  const mobile = MOBILES.some((c) => cles.has(c));
+  const web = WEBS.some((c) => cles.has(c));
+  if (mobile && web) return 'Application web et mobile';
+  const brut = TYPES_PROJET[projet.type] || TYPES_COMPOSANT[projet.type] || '';
+  if (brut) return brut;
+  if (mobile) return 'Application mobile';
+  if (web) return 'Application web';
+  return '';
 };
 
 export const TYPES_COMPOSANT = {
@@ -733,6 +726,8 @@ export const TYPES_NOTE = {
   'idee':        { libelle: 'Idée',            voile: 'vert' },
   'risque':      { libelle: 'Risque',          voile: 'rouge' },
   'reunion':     { libelle: 'Note de réunion', voile: 'gris' },
+  /* À valider par le client (page Notes) : validée, elle devient une décision. */
+  'proposition': { libelle: 'Proposition à valider', voile: 'ambre' },
 };
 
 /* --- Les pièces comptables ---------------------------------------------- */

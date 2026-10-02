@@ -251,7 +251,7 @@ export const vue = async (ctx, env) => {
         ${composant ? metrique(`${borner(composant.progression)} %`, 'Avancement de la partie', { nuance: dateCourte(composant.maj) ? `le ${dateCourte(composant.maj)}` : '' }) : metrique('Pas encore suivie', 'Avancement')}
         ${metrique(publiees.length, 'Versions publiées', { nuance: versions.length > publiees.length ? `${versions.length - publiees.length} en cours` : '' })}
         ${metrique(ouvertes.length, 'Tâches ouvertes', { nuance: `${taches.length} au total` })}
-        ${metrique(demandesOuvertes.length, 'Demandes ouvertes', { ton: demandesOuvertes.length ? 'accent' : '' })}
+        ${metrique(demandesOuvertes.length, equipe ? 'Demandes ouvertes' : 'Tickets ouverts', { ton: demandesOuvertes.length ? 'accent' : '' })}
         ${metrique(blocages.length, 'Points bloquants', { ton: blocages.length ? 'rouge' : '' })}
       </div>
 
@@ -328,7 +328,7 @@ export const vue = async (ctx, env) => {
                 </div>
                 <div class="rang">${pastille(STATUTS_RELEASE, r.statut || 'developpement')}${equipe ? boutons('release', r.id, r.version) : ''}</div>
               </div>
-              <p class="t-micro t-3" style="margin-top:4px">${echapper([r.date ? dateCourte(r.date) : '', r.visibilite === 'interne' ? 'Interne' : ''].filter(Boolean).join(' · '))}</p>
+              <p class="t-micro t-3" style="margin-top:4px">${echapper([r.statut === 'disponible' ? (dateCourte(r.date) ? `Publiée le ${dateCourte(r.date)}` : 'Publiée, date non renseignée') : dateCourte(r.date), r.build ? `build ${r.build}` : '', r.visibilite === 'interne' ? 'Interne' : ''].filter(Boolean).join(' · '))}</p>
               ${(r.notes || []).length ? `<ul class="notes-version">${(r.notes || []).map((n) => `<li><span class="puce puce--${(TYPES_CHANGEMENT[n.type] || {}).voile || 'gris'}"><i></i>${echapper((TYPES_CHANGEMENT[n.type] || {}).libelle || n.type || '')}</span> ${echapper(n.texte || '')}</li>`).join('')}</ul>` : ''}
               ${(r.liens && (r.liens.store || r.liens.test)) ? `<div class="rang" style="margin-top:10px;gap:8px">
                 ${r.liens.store ? `<a class="btn btn-fantome btn-petit" href="${echapper(r.liens.store)}" target="_blank" rel="noopener noreferrer">${icone('externe')} Sur le store</a>` : ''}
@@ -361,13 +361,13 @@ export const vue = async (ctx, env) => {
       </section>` : ''}
 
       <section class="section" data-section="demandes">
-        <div class="section-tete"><h2>Les demandes ${demandes.length ? `<span class="compte-section">${demandesOuvertes.length}</span>` : ''}</h2><a class="lien" href="#/projets/${echapper(pid)}/nouvelle-demande">Nouvelle demande</a></div>
+        <div class="section-tete"><h2>${equipe ? 'Les demandes' : 'Les tickets'} ${demandes.length ? `<span class="compte-section">${demandesOuvertes.length}</span>` : ''}</h2><a class="lien" href="#/projets/${echapper(pid)}/nouvelle-demande">${equipe ? 'Nouvelle demande' : 'Nouveau ticket'}</a></div>
         ${demandes.length ? `<div class="liste">${demandes.map((t) => ligne({
           href: `#/projets/${echapper(pid)}/demandes/${echapper(t.id)}`,
           icone: 'demandes', titre: echapper(t.titre),
-          sous: echapper([t.numero, t.version ? `version ${t.version}` : '', OUVERTS.includes(t.statut) ? `ouverte depuis ${age(t.cree)}` : `close ${depuis(t.maj)}`].filter(Boolean).join(' · ')),
+          sous: echapper([t.numero, t.version ? `version ${t.version}` : '', OUVERTS.includes(t.statut) ? `${equipe ? 'ouverte' : 'ouvert'} depuis ${age(t.cree)}` : `${equipe ? 'close' : 'clos'} ${depuis(t.maj)}`].filter(Boolean).join(' · ')),
           fin: pastille(STATUTS, t.statut, { client: !equipe }),
-        })).join('')}</div>` : '<p class="t-petit t-3">Aucune demande sur cette partie. Une question, un souhait : écrivez-nous.</p>'}
+        })).join('')}</div>` : `<p class="t-petit t-3">${equipe ? 'Aucune demande' : 'Aucun ticket'} sur cette partie. Une question, un souhait : écrivez-nous.</p>`}
       </section>
 
       ${notes.length || equipe ? `<section class="section">
