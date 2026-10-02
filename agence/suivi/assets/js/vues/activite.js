@@ -16,7 +16,7 @@ import { activiteHtml } from './accueil.js';
 const NATURES = {
   tache: 'Tâches', jalon: 'Étapes', release: 'Versions', fichier: 'Fichiers', reunion: 'Réunions',
   validation: 'Validations', demande: 'Demandes', message: 'Messages', devis: 'Devis', facture: 'Factures',
-  paiement: 'Paiements', note: 'Décisions', blocage: 'Points bloquants', projet: 'Projet', maintenance: 'Maintenance', test: 'Tests',
+  paiement: 'Paiements', note: 'Notes', blocage: 'Points bloquants', projet: 'Projet', maintenance: 'Maintenance', test: 'Tests',
 };
 const PAGE = 50;
 

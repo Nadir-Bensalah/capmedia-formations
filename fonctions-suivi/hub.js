@@ -369,11 +369,18 @@ async function marquerLuesParLien(uids, lien, { saufTitre = '' } = {}) {
 exports.hubNoteCreee = onDocumentCreated({ region: REGION, document: 'notes/{noteId}' }, async (evenement) => {
   const n = evenement.data && evenement.data.data();
   if (!n) return;
-  const libelles = { decision: 'a consigné une décision', information: 'a noté une information', idee: 'a noté une idée', risque: 'a signalé un risque', reunion: 'a ajouté une note de réunion' };
+  const libelles = { decision: 'a consigné une décision', information: 'a noté une information', idee: 'a noté une idée', risque: 'a signalé un risque', reunion: 'a ajouté une note de réunion', proposition: 'a proposé à la validation' };
   await activite({ projet: n.projet, type: 'note', texte: `${libelles[n.type] || 'a ajouté une note'} : « ${n.titre} »`, par: auteurDe(n), lien: `/projets/${n.projet}/notes`, visibilite: n.visibilite === 'interne' ? 'interne' : 'client' });
   if (n.type === 'decision' && n.visibilite !== 'interne') {
     const projet = await lireProjet(n.projet);
     await notifierClients(projet, 'note', { type: 'note', titre: 'Décision consignée', texte: n.titre, lien: `#/projets/${n.projet}/notes`, projet: n.projet });
+  }
+  /* Une proposition de l'équipe attend la réponse du client : il est
+     prévenu. Celle d'un client prévient l'équipe par la conversation
+     (écrite par la page Notes, hubMessageProjet). */
+  if (n.etat === 'a-valider' && n.origine === 'equipe') {
+    const projet = await lireProjet(n.projet);
+    await notifierClients(projet, 'note', { type: 'note', titre: 'Une proposition attend votre validation', texte: n.titre, lien: `#/projets/${n.projet}/notes`, projet: n.projet });
   }
 });
 

@@ -1005,15 +1005,67 @@ export const ecrire = {
 
   async creerNote(session, pid, d) {
     const par = auteurDe(session);
+    /* Une proposition de l'équipe attend la réponse du client : elle naît
+       « à valider », et se lit forcément du client (les règles l'exigent). */
+    const proposition = d.type === 'proposition';
     const ref = await addDoc(col('notes'), nettoyer({
       projet: pid, composant: d.composant || '', plateforme: d.plateforme || '',
       type: d.type || 'information', titre: d.titre, contenu: d.contenu || '',
       contexte: d.contexte || '', impact: d.impact || '', decidePar: d.decidePar || '',
-      date: dateOuNull(d.date) || Timestamp.now(), visibilite: d.visibilite || 'client',
+      date: dateOuNull(d.date) || Timestamp.now(), visibilite: proposition ? 'client' : (d.visibilite || 'client'),
+      ...(proposition ? { etat: 'a-valider', origine: 'equipe' } : {}),
       cree: serverTimestamp(), maj: serverTimestamp(), par: { uid: par.uid, nom: par.nom },
     }));
     return ref.id;
   },
+
+  /* --- Les propositions « à valider » (page Notes d'un projet) -------- */
+  /* Un membre du projet propose : la forme est celle que les règles
+     attendent (propositionDuClient), datée par le serveur. L'équipe est
+     prévenue par la conversation du projet, comme pour une note
+     partagée : le message suit hubMessageProjet (notification et lettre
+     à l'équipe), sans fonction serveur de plus. */
+  propositionClient(session, pid, { titre, contenu = '' }) {
+    const par = auteurDe(session);
+    return {
+      projet: pid, type: 'proposition', etat: 'a-valider', origine: 'client', visibilite: 'client',
+      titre: String(titre || '').trim().slice(0, 160), contenu: String(contenu || '').trim().slice(0, 4000),
+      par: { uid: par.uid, nom: String(par.nom || '').slice(0, 120), cote: 'client' },
+      date: serverTimestamp(), cree: serverTimestamp(), maj: serverTimestamp(),
+    };
+  },
+  async proposerAValider(session, pid, d) {
+    const ref = await addDoc(col('notes'), ecrire.propositionClient(session, pid, d));
+    await ecrire.messageProjet(session, pid, `Proposé à la validation : « ${String(d.titre || '').trim()} »`.slice(0, 6000)).catch(() => {});
+    return ref.id;
+  },
+  /* Une idée du carnet passe dans « À valider » d'un geste : la
+     proposition naît et la note quitte le carnet, dans la même écriture.
+     L'idée n'existe ainsi jamais deux fois. */
+  async proposerIdee(session, note, pid, d) {
+    const lot = writeBatch(bdd);
+    const ref = doc(col('notes'));
+    lot.set(ref, ecrire.propositionClient(session, pid, d));
+    lot.delete(doc(bdd, 'notesClient', note.id));
+    await lot.commit();
+    await ecrire.messageProjet(session, pid, `Proposé à la validation : « ${String(d.titre || '').trim()} »`.slice(0, 6000)).catch(() => {});
+    return ref.id;
+  },
+  /* La réponse du responsable : valider (la proposition devient une
+     décision, datée par le serveur, à son nom) ou refuser avec un motif.
+     Les règles (reponseDuResponsable) ne laissent bouger que ces champs. */
+  async repondreProposition(session, note, { valider, motif = '' }) {
+    const par = auteurDe(session);
+    await updateDoc(doc(bdd, 'notes', note.id), {
+      etat: valider ? 'validee' : 'refusee',
+      reponse: { par: par.uid, nom: String(par.nom || '').slice(0, 120), date: serverTimestamp(), motif: String(motif || '').trim().slice(0, 1000) },
+      maj: serverTimestamp(),
+    });
+    const titre = String(note.titre || '').trim();
+    const texte = valider ? `Validé : « ${titre} ». C'est désormais une décision du projet.` : `Refusé : « ${titre} ». ${String(motif || '').trim()}`;
+    await ecrire.messageProjet(session, note.projet, texte.slice(0, 6000)).catch(() => {});
+  },
+  retirerProposition: (id) => deleteDoc(doc(bdd, 'notes', id)),
   majNote: (nid, d) => updateDoc(doc(bdd, 'notes', nid), nettoyer({ ...d, maj: serverTimestamp() })),
   supprimerNote: (nid) => deleteDoc(doc(bdd, 'notes', nid)),
 

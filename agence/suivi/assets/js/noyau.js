@@ -733,6 +733,8 @@ export const TYPES_NOTE = {
   'idee':        { libelle: 'Idée',            voile: 'vert' },
   'risque':      { libelle: 'Risque',          voile: 'rouge' },
   'reunion':     { libelle: 'Note de réunion', voile: 'gris' },
+  /* À valider par le client (page Notes) : validée, elle devient une décision. */
+  'proposition': { libelle: 'Proposition à valider', voile: 'ambre' },
 };
 
 /* --- Les pièces comptables ---------------------------------------------- */

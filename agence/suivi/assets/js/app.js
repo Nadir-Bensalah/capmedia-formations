@@ -15,6 +15,7 @@ import { ouvrirAccueil, accueilVu, marquerAccueilVu } from './accueil-client.js'
 
 import * as accueil from './vues/accueil.js';
 import * as projet from './vues/projet.js';
+import * as notesProjet from './vues/notes-projet.js';
 import * as demande from './vues/demande.js';
 import { resoudreDemande } from './lien-profond.js';
 import * as brique from './vues/brique.js';
@@ -291,7 +292,7 @@ enregistrerRecherche((terme) => {
   des(G.validations).filter((v) => v.statut === 'en-attente').forEach((v) => items.push({ groupe: 'Validations', libelle: v.titre, sous: nomProjet(v.projet), icone: 'valider', chemin: `/valider/${v.id}` }));
   des(G.taches).forEach((t) => items.push({ groupe: 'Tâches', libelle: t.titre, sous: nomProjet(t.projet), icone: 'taches', chemin: `/projets/${t.projet}/taches/${t.id}` }));
   des(G.fichiers).forEach((f) => items.push({ groupe: 'Fichiers', libelle: f.nom, sous: nomProjet(f.projet), icone: 'fichiers', chemin: `/fichiers?projet=${encodeURIComponent(f.projet)}&f=${encodeURIComponent(f.id)}` }));
-  parProjet(K.notes).forEach((n) => items.push({ groupe: 'Décisions', libelle: n.titre || '', sous: nomProjet(n.projet), icone: 'note', chemin: `/projets/${n.projet}/notes` }));
+  parProjet(K.notes).forEach((n) => items.push({ groupe: 'Notes', libelle: n.titre || '', sous: nomProjet(n.projet), icone: 'note', chemin: `/projets/${n.projet}/notes` }));
   parProjet(K.liens).forEach((l) => items.push({ groupe: 'Ressources', libelle: l.nom || l.url || '', sous: `${nomProjet(l.projet)} · ${l.url || ''}`, icone: 'liens', action: () => { if (l.url) window.open(l.url, '_blank', 'noopener'); } }));
   des(G.documents).forEach((d) => items.push({ groupe: 'Devis et factures', libelle: `${d.numero || ''} ${d.libelle || ''}`.trim(), sous: nomProjet(d.projet), icone: 'receipt', chemin: `/finances/${d.id}` }));
   des(G.reunions).forEach((r) => items.push({ groupe: 'Réunions', libelle: r.titre, sous: nomProjet(r.projet), icone: 'reunions', chemin: `/projets/${r.projet}/reunions/${r.id}` }));
@@ -320,6 +321,8 @@ definir([
   /* Les fichiers d'un projet vivent sur la page Fichiers, filtrée sur lui :
      les anciennes adresses (lettres, notifications) y mènent. */
   { chemin: '/projets/:id/fichiers', vue: (ctx) => { naviguer(`/fichiers?projet=${encodeURIComponent(ctx.params.id)}${ctx.requete && ctx.requete.f ? `&f=${encodeURIComponent(ctx.requete.f)}` : ''}`, { remplacer: true }); } },
+  /* Notes : à valider, décisions, notes et idées (vues/notes-projet.js). */
+  { chemin: '/projets/:id/notes', vue: (ctx) => notesProjet.vue(ctx, env) },
   { chemin: '/projets/:id/:onglet', cle: (c) => `projet:${c.params.id}`, vue: (ctx) => projet.vue({ ...ctx, onglet: ctx.params.onglet }, env) },
   { chemin: '/demandes', vue: (ctx) => demandes.vue(ctx, env) },
   { chemin: '/messages', vue: (ctx) => messages.vue(ctx, env) },
