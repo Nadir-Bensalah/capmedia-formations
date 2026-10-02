@@ -84,10 +84,13 @@ const TIRET = '–';
 const estPresentation = (d) => d.id === 'presentation' || d.genre === 'presentation';
 const rangGroupe = (g) => { const i = GROUPES_PLAN.findIndex((x) => x.cle === g); return i < 0 ? 99 : i; };
 
-const sectionsDe = (pid) => (magasin.lire(K.planTests(pid)) || [])
-  .filter((d) => !estPresentation(d) && d.aspects)
+/* Les sections dans l'ordre de la page : groupe, puis numéro. Le tableau
+   des tests (onglet des robots) range ses cartes avec la même fonction. */
+export const ordonnerSections = (documents) => (documents || [])
+  .filter((d) => d && !estPresentation(d) && d.aspects)
   .slice()
   .sort((a, b) => rangGroupe(a.groupe) - rangGroupe(b.groupe) || (Number(a.ordre) || 0) - (Number(b.ordre) || 0));
+const sectionsDe = (pid) => ordonnerSections(magasin.lire(K.planTests(pid)));
 
 const presentationDe = (pid) => (magasin.lire(K.planTests(pid)) || []).find(estPresentation) || {};
 
@@ -278,10 +281,12 @@ const editerScenario = (env, pid, section, { aspect, fiche = null }) => feuille(
       ${choix('priorite', 'Priorité', Object.fromEntries(Object.entries(PRIORITES_PLAN).map(([k, x]) => [k, x.court])), fiche ? fiche.priorite : 'moyenne')}
     </div>
     ${choix('qui', 'Qui le teste', Object.fromEntries(QUI_ORDRE.map((q) => [q, QUI_PLAN[q].libelle])), fiche && QUI_PLAN[fiche.qui] ? fiche.qui : 'les-deux', { aide: 'Humain et robot : le robot le rejoue à chaque version, un humain le fait au moins une fois sur un vrai appareil.' })}
-    ${champ('refs', 'Déjà couvert par', fiche ? (fiche.refs || []).join(', ') : '', { facultatif: true, placeholder: 'TA-12, CC-03', aide: 'Les références des scénarios de la bibliothèque qui couvrent déjà ce cas, séparées par des virgules.' })}`,
+    ${champ('refs', 'Déjà couvert par', fiche ? (fiche.refs || []).join(', ') : '', { facultatif: true, placeholder: 'TA-12, CC-03', aide: 'Les références des scénarios de la bibliothèque qui couvrent déjà ce cas, séparées par des virgules.' })}
+    ${champ('parcours', 'Tests robot rattachés', fiche ? (fiche.parcours || []).join(', ') : '', { facultatif: true, placeholder: 'TA-01, TW-03', aide: 'Les références des tests robot qui vérifient ce scénario, séparées par des virgules. Leur dernier résultat colore la case du scénario dans le tableau des tests.' })}`,
   regles: {
     titre: texteValide(300), etapes: texteValide(3000), attendu: texteValide(2000),
     refs: (v) => (String(v || '').split(',').map((x) => x.trim()).filter(Boolean).every((x) => /^[A-Za-z0-9-]{1,20}$/.test(x)) ? '' : 'Des références séparées par des virgules, par exemple TA-12, CC-03.'),
+    parcours: (v) => (String(v || '').split(',').map((x) => x.trim()).filter(Boolean).every((x) => /^[A-Za-z0-9_.-]{1,40}$/.test(x)) ? '' : 'Des références de tests robot séparées par des virgules, par exemple TA-01, TW-03.'),
   },
   enregistrer: async (d) => {
     const plateformes = Array.isArray(d.plateformes) ? d.plateformes : (d.plateformes ? [d.plateformes] : []);
@@ -292,6 +297,8 @@ const editerScenario = (env, pid, section, { aspect, fiche = null }) => feuille(
       priorite: PRIORITES_PLAN[d.priorite] ? d.priorite : 'moyenne',
       qui: QUI_PLAN[d.qui] ? d.qui : 'les-deux',
       refs: String(d.refs || '').split(',').map((x) => x.trim().toUpperCase()).filter(Boolean),
+      /* Les tests robot rattachés : sans doublon, dans l'ordre donné. */
+      parcours: [...new Set(String(d.parcours || '').split(',').map((x) => x.trim()).filter(Boolean))],
     };
     const id = await ecrire.enregistrerScenarioPlan(pid, section.id, env.session.utilisateur.uid, { ancien: fiche ? fiche.id : '', aspect: d.aspect, scenario });
     toast(fiche ? (fiche.id === id ? 'Scénario enregistré.' : `Scénario déplacé, désormais ${id}.`) : `${id} ajouté.`);

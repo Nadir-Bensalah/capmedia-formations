@@ -34,8 +34,9 @@ import { K, profilsTesteurs } from '../donnees.js';
 import { editer } from './editeurs.js';
 import { nommeur } from './tests.js';
 import { appelServeur, URL_SUIVI } from '../serveur.js';
-import { tableauHumain, tableauMachine, rythme, ETATS_CASE } from '../verdicts.js';
+import { tableauHumain, tableauMachine, tableauPlan, verdictParcours, rythme, ETATS_CASE } from '../verdicts.js';
 import { barreHtml, famillesHtml } from '../grille.js';
+import { ordonnerSections, GROUPES_PLAN, QUI_PLAN } from './plan-tests.js';
 
 /* Un testeur est « là » si son dernier signe a moins de 75 secondes : il
    en envoie un toutes les 30, et un réseau lent en perd un. */
@@ -85,6 +86,33 @@ const pourquoi = (c) => {
   }
 };
 
+/* Les sections du plan de tests d'un projet, dans l'ordre de la page
+   « Ce qui va être testé ». Vide : le projet n'a pas de plan, et l'onglet
+   des robots garde ses familles d'avant. */
+const sectionsDuPlan = (pid) => (pid ? ordonnerSections(magasin.lire(K.planTests(pid))) : []);
+const listeRefs = (refs) => refs.map((r) => `<span class="ref">${echapper(r)}</span>`).join(', ');
+const libellePlateforme = (p) => (PLATEFORMES_TEST[p] || {}).libelle || p;
+const etatCaseHtml = (etat) => `<span class="tb-etat-case"><i class="tb-puce" data-e="${echapper(etat)}" aria-hidden="true"></i>${echapper((ETATS_CASE[etat] || {}).libelle || etat)}</span>`;
+
+/* Pourquoi cette couleur, pour un scénario du plan. */
+const pourquoiPlan = (c, plateforme) => {
+  if (!c.rattaches.length) return 'Pas encore de test robot écrit.';
+  const ici = c.rattaches.filter((x) => surPlateforme(x, plateforme));
+  const de = (etat) => ici.filter((x) => verdictParcours(x) === etat).map((x) => x.ref);
+  const manquent = c.parPlateforme.filter((p) => !p.parcours.length && (!plateforme || p.plateforme === plateforme)).map((p) => libellePlateforme(p.plateforme));
+  const plusieurs = ici.length > 1 ? ' Plusieurs tests : le plus mauvais résultat l\'emporte.' : '';
+  switch (c.etat) {
+    case 'casse': return `${de('casse').join(', ')} en échec au dernier passage.${plusieurs}`;
+    case 'fragile': return `${de('fragile').join(', ')} au vert seulement après un nouvel essai : un test instable n'apprend rien.${plusieurs}`;
+    case 'connu': return `${de('connu').join(', ')} en échec sur un défaut déjà connu de l'équipe : ${de('connu').length > 1 ? 'ils passeront' : 'il passera'} au vert quand il sera corrigé.${plusieurs}`;
+    case 'tourne': return 'Un test robot rattaché tourne en ce moment.';
+    case 'jamais': return `${de('jamais').join(', ')} jamais lancé${de('jamais').length > 1 ? 's' : ''} : rien n'est encore prouvé.`;
+    case 'suspendu': return `${de('suspendu').join(', ')} suspendu${de('suspendu').length > 1 ? 's' : ''} pour l'instant.`;
+    case 'aecrire': return manquent.length ? `Pas encore de test robot sur ${manquent.join(', ')}.` : `${de('aecrire').join(', ')} encore à écrire.`;
+    default: return `Le dernier résultat de ${ici.length > 1 ? 'chaque test robot rattaché' : 'son test robot'} est au vert.`;
+  }
+};
+
 const CLE_DEPLIE = 'suivi:tableau-deplie';
 /* Les énoncés portent leurs mots forts entre doubles astérisques. */
 const gras = (t) => echapper(t || '').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
@@ -100,6 +128,15 @@ const lireDeplie = () => { try { return localStorage.getItem(CLE_DEPLIE) === '1'
  */
 /* Même règle que la page Tests : sans plateforme déclarée, partout. */
 const surPlateforme = (x, plateforme) => !plateforme || !(x.plateformes || []).length || x.plateformes.includes(plateforme);
+
+/* La marque de chaque case du plan : qui fait le scénario, avec les
+   couleurs de la page du plan (violet : humain et robot, bleu : robot seul). */
+const marquer = (t) => {
+  t.familles.forEach((f) => f.cases.forEach((c) => {
+    if (c.qui && QUI_PLAN[c.qui]) c.marque = { ton: QUI_PLAN[c.qui].ton, libelle: QUI_PLAN[c.qui].court };
+  }));
+  return t;
+};
 
 export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme: plateformeChoisie = () => '' } = {}) => {
   const equipe = env.role === 'equipe';
@@ -196,6 +233,9 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
     const camps = pid ? campagnesDe(d, pid) : [];
     const campagne = camps.find((c) => c.id === etat.campagne) || camps[0] || null;
     if (campagne) suivre(K.passages(campagne.id), () => collection(bdd, 'projets', pid, 'campagnes', campagne.id, 'passages'));
+    /* Le plan de tests du projet range l'onglet des robots, et ses chiffres
+       en haut : on l'attend avec le reste. */
+    if (pid) suivre(K.planTests(pid), () => collection(bdd, 'projets', pid, 'planTests'));
     if (equipe && pid) suivre(K.executions(pid), () => query(collection(bdd, 'projets', pid, 'executions'), orderBy('debut', 'desc'), limit(8)));
     if (equipe && campagne) {
       (campagne.testeurs || []).forEach((uid) => suivre(K.sessions(uid), () => query(collection(bdd, 'presences', uid, 'sessions'), orderBy('debut', 'desc'), limit(60))));
@@ -216,6 +256,10 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
     empreinte = sceau;
 
     if (!pid) { sortie.innerHTML = ''; dernier = null; return; }
+    /* Le plan d'un projet qu'on vient de choisir est encore en route : on
+       garde le dessin d'avant un instant plutôt que de peindre l'ancienne
+       grille puis la nouvelle. Son arrivée redessine. */
+    if (magasin.enRoute(K.planTests(pid)) && sortie.childElementCount) { empreinte = ''; return; }
 
     const nom = (d.projets.find((p) => p.id === pid) || {}).nom || '';
     const passages = campagne ? (magasin.lire(K.passages(campagne.id)) || []) : [];
@@ -225,7 +269,12 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
       scenarios: d.scenarios.filter((s) => projetDe(s) === pid), campagne, passages,
       anomalies: d.anomalies.filter((a) => projetDe(a) === pid), plateforme: etat.plateforme, blocs: BLOCS_SCENARIO, trous: equipe,
     }) : null;
-    const tm = tableauMachine({
+    /* Avec un plan, l'onglet des robots se range par ses sections ; sans
+       plan, il garde ses familles (bloc des scénarios, puis outil). */
+    const sections = sectionsDuPlan(pid);
+    const tm = sections.length ? marquer(tableauPlan({
+      sections, parcours: d.parcours.filter((x) => projetDe(x) === pid), regles: d.regles.filter((x) => projetDe(x) === pid), plateforme: etat.plateforme,
+    })) : tableauMachine({
       parcours: d.parcours.filter((x) => projetDe(x) === pid && surPlateforme(x, etat.plateforme)), regles: d.regles.filter((x) => projetDe(x) === pid),
       scenarios: d.scenarios.filter((s) => projetDe(s) === pid), blocs: BLOCS_SCENARIO, outils: OUTILS_PARCOURS,
     });
@@ -249,17 +298,28 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
        ceux qui utilisent l'app comme un humain, ceux qui vérifient un calcul. */
     const nApp = d.parcours.filter((x) => x.actif !== false && projetDe(x) === pid && surPlateforme(x, etat.plateforme)).length;
     const nCalculs = d.regles.filter((x) => x.actif !== false && projetDe(x) === pid).length;
-    const metaMachine = tm.total
+    const metaMachine = tm.plan
+      ? [`${tm.compte.ok} réussis sur ${tm.total}`,
+        `${pluriel(tm.scenarios, 'scénario du plan', 'scénarios du plan')}${tm.regles ? `, ${pluriel(tm.regles, 'règle sur les calculs', 'règles sur les calculs')}` : ''}`,
+        tm.horsPlan ? `${tm.horsPlan} hors plan, montrés à part` : '',
+        tm.tournent ? `<span class="tb-bleu">${pluriel(tm.tournent, 'test', 'tests')} en exécution</span>` : '',
+        derniers.length ? `dernier résultat ${echapper(depuis(derniers[0]))}` : 'jamais exécutés'].filter(Boolean).join(' · ')
+      : tm.total
       ? [`${tm.compte.ok} réussis sur ${tm.total}`, nApp && nCalculs ? `${nApp} dans l'app, ${nCalculs} sur les calculs` : '', tm.tournent ? `<span class="tb-bleu">${pluriel(tm.tournent, 'test', 'tests')} en exécution</span>` : '', derniers.length ? `dernier résultat ${echapper(depuis(derniers[0]))}` : 'jamais exécutés'].filter(Boolean).join(' · ')
       : 'Aucun test par robot pour l\'instant';
 
-    const ligneResume = (nomLigne, meta, t, pc) => `<div class="tb-ligne">
+    const ligneResume = (nomLigne, meta, t, pc, aide = '') => `<div class="tb-ligne">
       <div class="tb-ligne-tete">
         <div><span class="tb-ligne-nom">${nomLigne}</span><span class="tb-ligne-meta">${meta}</span></div>
         <b class="tb-ligne-pc">${pc}<small> %</small></b>
       </div>
       ${t && t.total ? barreHtml(t) : '<div class="tb-barre"></div>'}
+      ${aide ? `<p class="tb-ligne-aide">${aide}</p>` : ''}
     </div>`;
+    /* D'où viennent les chiffres des robots, en une phrase. */
+    const aideMachine = tm.plan
+      ? `Chaque scénario du plan fait par un robot compte une fois, coloré par le plus mauvais résultat de ses tests${tm.regles ? ' ; les règles de calcul s\'ajoutent au compte' : ''}${tm.horsPlan ? ' ; les tests hors plan se montrent à part, sans compter' : ''}.`
+      : '';
 
     const maintenant = Date.now();
     const nommer = nommeur(d, { equipe, pid });
@@ -294,13 +354,13 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
           <div><p class="surtitre">Où en sont les tests${projetChoisi() ? '' : ` · ${echapper(nom)}`}</p><h2 class="tb-titre">Avancement</h2></div>
         </div>
         ${ligneResume('Testeurs humains', metaHumain, th, pcHumain)}
-        ${ligneResume('Tests par robot', metaMachine, tm, pcMachine)}
+        ${ligneResume('Tests par robot', metaMachine, tm, pcMachine, aideMachine)}
         ${direct}
         <button type="button" class="tb-deplier" data-deplier aria-expanded="${etat.deplie}">${icone('chevron')} ${etat.deplie ? 'Replier le tableau' : `Déployer le tableau${combien ? ` · ${combien}` : ''}`}</button>
       </div>
       ${etat.deplie ? `${controles}${etat.voie === 'machine' ? voieMachine(d, pid, tm, execs) : voieHumains(d, pid, campagne, th, passages, nommer, maintenant, presents)}` : ''}
     </div>`;
-    dernier = { d, pid, campagne };
+    dernier = { d, pid, campagne, tm };
     animerBarres(pid);
 
     const selC = sortie.querySelector('#tb-campagne');
@@ -353,9 +413,30 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
      Les tests automatisés
      ------------------------------------------------------------------------ */
   const voieMachine = (d, pid, t, execs) => {
-    const vivants = new Set(t.familles.flatMap((f) => f.cases).filter((c) => c.etat === 'tourne').map((c) => c.ref));
+    const vivants = new Set(t.familles.flatMap((f) => f.cases).filter((c) => c.etat === 'tourne').map((c) => c.cle || c.ref));
+    if (t.plan) return `${planHtml(t, vivants)}${equipe ? robotsHtml(pid, execs) : ''}`;
     return `${t.total ? famillesHtml(t, { mode: 'machine', vivants }) : vide({ icone: 'code', titre: 'Aucun test par robot', texte: equipe ? 'Déclarez vos parcours dans l\'onglet Tests par robot, ci-dessous, puis branchez un robot : chaque résultat s\'allumera ici en direct.' : 'Les tests automatisés apparaîtront ici.', compact: true })}
     ${equipe ? robotsHtml(pid, execs) : ''}`;
+  };
+
+  /* Les cartes du plan : ses sections, groupe par groupe, dans l'ordre de
+     « Ce qui va être testé » ; puis les règles et ce qui reste hors plan. */
+  const planHtml = (t, vivants) => {
+    const plat = etat.plateforme ? ` sur ${libellePlateforme(etat.plateforme)}` : '';
+    const groupes = [...GROUPES_PLAN, { cle: 'autres', libelle: 'Autres tests par robot' }];
+    const blocs = groupes.map((g) => {
+      const familles = t.familles.filter((f) => (g.cle === 'autres' ? !f.section : f.section && f.groupe === g.cle))
+        .map((f) => (f.section && !f.cases.length ? { ...f, note: `Aucun scénario pour les robots${plat} dans cette section.` }
+          : f.horsPlan ? { ...f, note: 'Tests robot rattachés à aucun scénario du plan. Leurs résultats restent ici, sans compter dans l\'avancement.' } : f));
+      if (!familles.length) return '';
+      return `<div class="tb-groupe" data-groupe="${echapper(g.cle)}"><p class="tb-section-titre">${echapper(g.libelle)}</p>${famillesHtml({ ...t, familles }, { mode: 'machine', vivants })}</div>`;
+    }).join('');
+    /* Les sections hors des quatre groupes connus (un plan plus récent que
+       ce code) ne disparaissent pas : elles ferment la liste du plan. */
+    const connus = new Set(GROUPES_PLAN.map((g) => g.cle));
+    const egarees = t.familles.filter((f) => f.section && !connus.has(f.groupe));
+    const legende = `<p class="plan-qui tb-qui"><span class="plan-qui-violet"><i aria-hidden="true"></i><b>${t.qui['les-deux']}</b> ${echapper(QUI_PLAN['les-deux'].court)}</span><span class="plan-qui-bleu"><i aria-hidden="true"></i><b>${t.qui.robot}</b> ${echapper(QUI_PLAN.robot.court)}</span><span class="tb-qui-aide">Le point dans le coin d'une case dit qui fait le scénario. Un scénario fait par un humain seul n'a pas de case ici.</span></p>`;
+    return `${legende}${blocs}${egarees.length ? `<div class="tb-groupe"><p class="tb-section-titre">Autres sections du plan</p>${famillesHtml({ ...t, familles: egarees }, { mode: 'machine', vivants })}</div>` : ''}`;
   };
 
   const robotsHtml = (pid, execs) => {
@@ -448,8 +529,9 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
       titre: x.titre || x.ref, scenario: true,
       sousTitre: `${x.ref} · ${regle ? 'Règle métier' : `${(OUTILS_PARCOURS[x.outil] || {}).libelle || x.outil || ''}${(x.plateformes || []).length ? ` · ${(x.plateformes || []).map((p) => (PLATEFORMES_TEST[p] || {}).court || p).join(', ')}` : ''}`}`,
       corps: `
-        <p class="tb-pourquoi"><strong>${echapper(e.libelle || c.etat)}.</strong> ${dateHeure(der.le) ? `Dernier résultat ${echapper(dateHeure(der.le))}${der.duree ? `, en ${echapper(String(der.duree))} s` : ''}.` : 'Jamais exécuté.'}${x.etat === 'instable' ? ' Passé au vert après un nouvel essai : un parcours instable n\'apprend rien, il faut le fiabiliser.' : ''}</p>
+        <p class="tb-pourquoi"><strong>${echapper(e.libelle || c.etat)}.</strong> ${dateHeure(der.le) ? `Dernier résultat ${echapper(dateHeure(der.le))}${der.duree ? `, en ${echapper(String(der.duree))} s` : ''}.` : 'Jamais exécuté.'}${x.etat === 'instable' ? ' Passé au vert après un nouvel essai : un parcours instable n\'apprend rien, il faut le fiabiliser.' : ''}${c.etat === 'connu' ? ' Il échoue sur un défaut déjà connu de l\'équipe : il passera au vert quand ce défaut sera corrigé.' : ''}</p>
         ${(x.scenarios || []).length ? `<p class="aide">Couvre ${(x.scenarios || []).map((r) => `<span class="ref">${echapper(r)}</span>`).join(', ')}.</p>` : ''}
+        ${planDuParcours(pid, ref).length ? `<p class="aide">Vérifie dans le plan ${planDuParcours(pid, ref).map((sc) => `<span class="ref">${echapper(sc.id)}</span> ${echapper(sc.titre || '')}`).join(', ')}.</p>` : ''}
         ${!regle ? `<p class="aide">${x.mutation ? 'Contre-épreuve faite : on a cassé l\'app exprès, ce robot l\'a vu.' : 'Contre-épreuve à faire : on n\'a pas encore vérifié que ce robot repère une vraie panne.'}</p>` : ''}
         ${detail ? `<div class="fs-bloc"><p class="fs-bloc-sur">Ce que le robot a fait, et ce qu'il a trouvé</p>
           <p>${detail.message ? echapper(detail.message) : 'Aucun message.'}</p>
@@ -457,6 +539,51 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
       pied: `<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>${equipe && !regle ? '<button class="btn btn-principal" type="button" data-modifier>Modifier</button>' : ''}`,
     });
     sur(m.el, 'click', '[data-modifier]', async () => { m.fermer(); await editer('parcours', env, { pid, fiche: x }); });
+  };
+
+  /* Les scénarios du plan (faits par un robot) auxquels un test est rattaché. */
+  const planDuParcours = (pid, ref) => sectionsDuPlan(pid)
+    .flatMap((s) => ['fonctionnel', 'technique', 'ux', 'securite'].flatMap((a) => (s.aspects || {})[a] || []))
+    .filter((sc) => sc && ['robot', 'les-deux'].includes(sc.qui) && (sc.parcours || []).includes(ref));
+
+  /* Une case du plan : la fiche du test s'il n'y en a qu'un, sinon celle
+     du scénario, avec ses tests et leur résultat. */
+  const ouvrirCasePlan = async (cle) => {
+    const { pid, tm } = dernier || {};
+    const c = tm && tm.plan ? tm.familles.flatMap((f) => f.cases).find((x) => x.cle === cle) : null;
+    if (!c) return;
+    if (c.rattaches.length === 1) { await ouvrirCaseMachine(c.rattaches[0].ref); return; }
+    const sc = c.scenario;
+    const section = (sectionsDuPlan(pid).find((s) => s.id === c.section) || {});
+    const e = ETATS_CASE[c.etat] || {};
+    const qui = QUI_PLAN[sc.qui] || {};
+    const texte = (t) => echapper(String(t || '').trim()).replace(/\n/g, '<br>');
+    const m = modale({
+      titre: sc.titre || sc.id, scenario: true,
+      sousTitre: `${sc.id}${section.titre ? ` · ${section.titre}` : ''}`,
+      corps: `
+        <p class="tb-pourquoi"><strong>${echapper(e.libelle || c.etat)}${etat.plateforme ? ` sur ${echapper(libellePlateforme(etat.plateforme))}` : ''}.</strong> ${echapper(pourquoiPlan(c, etat.plateforme))}</p>
+        <p class="tb-plan-qui"><span class="plan-qui-puce plan-qui-${echapper(qui.ton || 'bleu')}"><i aria-hidden="true"></i>${echapper(qui.libelle || '')}</span><span>${echapper((sc.plateformes || []).map(libellePlateforme).join(', ') || '–')}</span></p>
+        ${sc.etapes ? `<section class="fs-bloc"><p class="fs-bloc-sur">Les étapes</p><p>${texte(sc.etapes)}</p></section>` : ''}
+        ${sc.attendu ? `<section class="fs-bloc fs-bloc--attendu"><p class="fs-bloc-sur">Ce qui doit se passer</p><p>${texte(sc.attendu)}</p></section>` : ''}
+        ${c.rattaches.length && c.parPlateforme.length ? `<div class="fs-bloc"><p class="fs-bloc-sur">Par plateforme</p><div class="tb-sessions">${c.parPlateforme.map((p) => `<div class="tb-passage">
+          <div><p><strong>${echapper(libellePlateforme(p.plateforme))}</strong></p><p class="aide">${p.parcours.length ? listeRefs(p.parcours) : 'Pas encore de test robot sur cette plateforme.'}</p></div>
+          <div class="rang">${etatCaseHtml(p.etat)}</div>
+        </div>`).join('')}</div></div>` : ''}
+        <div class="fs-bloc"><p class="fs-bloc-sur">Les tests robot</p>
+          ${c.rattaches.length ? `<div class="tb-sessions">${c.rattaches.map((x) => {
+    const der = x.dernier || {};
+    return `<div class="tb-passage">
+            <div><p><strong>${echapper(x.ref)}</strong>${x.titre ? ` · ${echapper(x.titre)}` : ''}</p>
+              <p class="aide">${echapper([(OUTILS_PARCOURS[x.outil] || {}).libelle || x.outil || '', (x.plateformes || []).map(libellePlateforme).join(', '), dateHeure(der.le) ? `dernier résultat ${dateHeure(der.le)}` : 'jamais exécuté'].filter(Boolean).join(' · '))}</p></div>
+            <div class="rang">${etatCaseHtml(verdictParcours(x))}<button class="btn btn-doux btn-petit" type="button" data-ouvrir-parcours="${echapper(x.ref)}">Voir</button></div>
+          </div>`;
+  }).join('')}</div>` : '<p>Pas encore de test robot écrit.</p>'}
+          ${equipe && c.inconnus.length ? `<p class="aide">Introuvable${c.inconnus.length > 1 ? 's' : ''} parmi les tests robot actifs du projet : ${listeRefs(c.inconnus)}.</p>` : ''}
+        </div>`,
+      pied: '<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>',
+    });
+    sur(m.el, 'click', '[data-ouvrir-parcours]', async (el) => { m.fermer(); await ouvrirCaseMachine(el.dataset.ouvrirParcours); });
   };
 
   const ouvrirPersonne = (uid) => {
@@ -519,7 +646,12 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
       return;
     }
     if (el.dataset.voie) { etat.voie = el.dataset.voie; memoire.voie = etat.voie; rendre(true); return; }
-    if (el.dataset.case) { if (etat.voie === 'machine') await ouvrirCaseMachine(el.dataset.case); else ouvrirCaseHumaine(el.dataset.case); return; }
+    if (el.dataset.case) {
+      if (etat.voie !== 'machine') ouvrirCaseHumaine(el.dataset.case);
+      else if (el.dataset.case.startsWith('plan:')) await ouvrirCasePlan(el.dataset.case);
+      else await ouvrirCaseMachine(el.dataset.case);
+      return;
+    }
     if (el.dataset.personne) { ouvrirPersonne(el.dataset.personne); return; }
     if (el.dataset.robotNeuf) { await brancherRobot(el.dataset.robotNeuf); return; }
     if (el.dataset.revoquer) {
