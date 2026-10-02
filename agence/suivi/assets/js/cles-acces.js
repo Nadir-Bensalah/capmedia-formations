@@ -9,10 +9,10 @@
    la feuille « ouvrirClesAcces() » qui liste, ajoute et retire.
    ========================================================================== */
 
-import { auth, surEmulateur, echapper } from './noyau.js';
+import { auth, surEmulateur, FONCTIONS_EMULATEUR, echapper } from './noyau.js';
 
 const PORTE = surEmulateur
-  ? 'http://127.0.0.1:5001/capmedia-1f90d/europe-west1/suiviConnexion'
+  ? `${FONCTIONS_EMULATEUR}/capmedia-1f90d/europe-west1/suiviConnexion`
   : 'https://europe-west1-capmedia-1f90d.cloudfunctions.net/suiviConnexion';
 
 /* Le navigateur sait-il faire ? Sans WebAuthn, rien n'est proposé. */

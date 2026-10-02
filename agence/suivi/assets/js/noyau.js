@@ -47,28 +47,43 @@ export const bdd = getFirestore(app);
 export const stockage = getStorage(app);
 
 /* Banc d'essai local. Deux verrous : la machine doit être la machine de
-   développement, et le branchement doit être demandé explicitement. */
+   développement, et le branchement doit être demandé explicitement.
+   Le drapeau porte le numéro du banc : « ?emul » ou « ?emul=1 » vise le
+   banc 1 (ports historiques), « ?emul=2 » le second banc, dont chaque port
+   est décalé de 10000 (Firestore 18080, Auth 19099, Functions 15001,
+   Storage 19199). Un « ?emul » sans numéro garde celui déjà retenu par ce
+   navigateur, sinon le déduit du port du site (18787 : banc 2). */
 const surPosteLocal = ['127.0.0.1', 'localhost', '::1'].includes(location.hostname);
-const emulationDemandee = () => {
+const numeroValide = (v) => (/^[1-5]$/.test(String(v || '')) ? Number(v) : 0);
+const bancDemande = () => {
   try {
-    if (new URLSearchParams(location.search).has('emul')) {
-      localStorage.setItem('suivi:emul', '1');
-      return true;
+    const params = new URLSearchParams(location.search);
+    const retenu = numeroValide(localStorage.getItem('suivi:emul'));
+    if (params.has('emul')) {
+      const n = numeroValide(params.get('emul')) || retenu
+        || Math.min(5, Math.floor(Number(location.port || 0) / 10000) + 1);
+      localStorage.setItem('suivi:emul', String(n));
+      return n;
     }
-    return localStorage.getItem('suivi:emul') === '1';
-  } catch (e) { return false; }
+    return retenu;
+  } catch (e) { return 0; }
 };
 
-export const surEmulateur = surPosteLocal && emulationDemandee();
+const numeroBanc = surPosteLocal ? bancDemande() : 0;
+export const surEmulateur = numeroBanc > 0;
+/* Le décalage des ports du banc visé (0 pour le banc 1). */
+const DECALAGE_BANC = surEmulateur ? (numeroBanc - 1) * 10000 : 0;
+/* Les fonctions sur l'émulateur : http://127.0.0.1:5001 sur le banc 1. */
+export const FONCTIONS_EMULATEUR = `http://127.0.0.1:${5001 + DECALAGE_BANC}`;
 
 if (surEmulateur) {
   const { connectAuthEmulator } = await import('https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js');
   const { connectFirestoreEmulator } = await import('https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js');
   const { connectStorageEmulator } = await import('https://www.gstatic.com/firebasejs/10.13.2/firebase-storage.js');
-  connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
-  connectFirestoreEmulator(bdd, '127.0.0.1', 8080);
-  connectStorageEmulator(stockage, '127.0.0.1', 9199);
-  console.info('[suivi] branché sur les émulateurs locaux');
+  connectAuthEmulator(auth, `http://127.0.0.1:${9099 + DECALAGE_BANC}`, { disableWarnings: true });
+  connectFirestoreEmulator(bdd, '127.0.0.1', 8080 + DECALAGE_BANC);
+  connectStorageEmulator(stockage, '127.0.0.1', 9199 + DECALAGE_BANC);
+  console.info(`[suivi] branché sur les émulateurs locaux (banc ${numeroBanc})`);
 }
 
 export {
@@ -1328,7 +1343,7 @@ const CHEMIN_MESSAGE = /^projets\/[^/]+\/messages\/[^/]+$/;
 const TAILLE_MAX_VIDEO_MESSAGE = 30 * 1024 * 1024;
 const PROJET_FIREBASE = (config && config.projectId) || 'capmedia-1f90d';
 const URL_PIECE_MESSAGE = surEmulateur
-  ? `http://127.0.0.1:5001/${PROJET_FIREBASE}/europe-west1/suiviPieceMessage`
+  ? `${FONCTIONS_EMULATEUR}/${PROJET_FIREBASE}/europe-west1/suiviPieceMessage`
   : `https://europe-west1-${PROJET_FIREBASE}.cloudfunctions.net/suiviPieceMessage`;
 
 /** Le chemin est-il celui d'une pièce de conversation ? */

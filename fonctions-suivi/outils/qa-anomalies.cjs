@@ -1,4 +1,4 @@
-require('./lib/garde-banc.cjs');
+require('./lib/garde-banc.cjs'); const BANC = require('./lib/ports-banc.cjs');
 const { lireRest } = require('./lib/rest-banc.cjs');
 /* ==========================================================================
    CAPMEDIA CLIENT HUB · les anomalies, à la main et depuis un KO
@@ -15,12 +15,12 @@ const { lireRest } = require('./lib/rest-banc.cjs');
       affecté à DI-06 et DI-07 : voir qa-affectation)
    ========================================================================== */
 const { chromium } = require('@playwright/test');
-const PROJET='capmedia-1f90d', SITE='http://127.0.0.1:8787';
+const PROJET='capmedia-1f90d', SITE=BANC.site;
 const pause=(ms)=>new Promise(r=>setTimeout(r,ms));
 const prop={Authorization:'Bearer owner'};
-const bdd=(c)=>`http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
+const bdd=(c)=>`${BANC.firestore}/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
 const lire=async(c)=>lireRest(bdd(c),prop);
-const vider=async(col)=>{const j=await lire(`${col}?pageSize=300`);for(const d of (j&&j.documents)||[])await fetch(`http://127.0.0.1:8080/v1/${d.name}`,{method:'DELETE',headers:prop});};
+const vider=async(col)=>{const j=await lire(`${col}?pageSize=300`);for(const d of (j&&j.documents)||[])await fetch(`${BANC.firestore}/v1/${d.name}`,{method:'DELETE',headers:prop});};
 const poser=async(chemin,fields)=>fetch(bdd(chemin),{method:'PATCH',headers:{...prop,'Content-Type':'application/json'},body:JSON.stringify({fields})});
 const dernierCode=async(e)=>{for(let i=0;i<40;i++){const j=await lire('envois?pageSize=100');const p=((j&&j.documents)||[]).filter(d=>{const a=((((d.fields||{}).a||{}).arrayValue)||{}).values||[];return a.some(x=>((((x.mapValue||{}).fields||{}).email)||{}).stringValue===e);});if(p.length){p.sort((x,y)=>new Date(((y.fields.cree||{}).timestampValue)||0)-new Date(((x.fields.cree||{}).timestampValue)||0));const v=(((p[0].fields.variables||{}).mapValue||{}).fields)||{};if(v.code&&v.code.stringValue)return v.code.stringValue;}await pause(300);}return'';};
 const connecter=async(page,email)=>{await vider('envois');await vider('connexions');await vider('connexionsIp');
@@ -48,7 +48,7 @@ const str=(d,k)=>champ(d,k).stringValue||'';
     testeurs:{arrayValue:{values:[{stringValue:'uid-karim'},{stringValue:'uid-sonia'}]}},
     scenarios:{arrayValue:{values:[{stringValue:'DI-06'},{stringValue:'DI-07'}]}},
     maj:{timestampValue:new Date().toISOString()}});
-  if(cid){ for(const p of ['uid-karim__DI-06','uid-sonia__DI-06','uid-karim__DI-07']) await fetch(`http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/documents/projets/atelier/campagnes/${cid}/passages/${p}`,{method:'DELETE',headers:prop}).catch(()=>{}); }
+  if(cid){ for(const p of ['uid-karim__DI-06','uid-sonia__DI-06','uid-karim__DI-07']) await fetch(`${BANC.firestore}/v1/projects/${PROJET}/databases/(default)/documents/projets/atelier/campagnes/${cid}/passages/${p}`,{method:'DELETE',headers:prop}).catch(()=>{}); }
 
   const nav=await chromium.launch();
   const page=await (await nav.newContext({viewport:{width:1500,height:1100}})).newPage();

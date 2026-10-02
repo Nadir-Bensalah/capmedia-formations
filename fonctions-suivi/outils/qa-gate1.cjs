@@ -1,4 +1,4 @@
-require('./lib/garde-banc.cjs');
+require('./lib/garde-banc.cjs'); const BANC = require('./lib/ports-banc.cjs');
 const { lireRest } = require('./lib/rest-banc.cjs');
 /* ==========================================================================
    CAPMEDIA CLIENT HUB · Release Gate 1, dans un vrai navigateur
@@ -18,19 +18,19 @@ const { lireRest } = require('./lib/rest-banc.cjs');
      node fonctions-suivi/outils/qa-gate1.cjs
    ========================================================================== */
 const { chromium } = require('@playwright/test');
-const PROJET = 'capmedia-1f90d', SITE = 'http://127.0.0.1:8787';
+const PROJET = 'capmedia-1f90d', SITE = BANC.site;
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 const prop = { Authorization: 'Bearer owner' };
 const RACINE = `projects/${PROJET}/databases/(default)/documents`;
-const bdd = (c) => `http://127.0.0.1:8080/v1/${RACINE}/${c}`;
+const bdd = (c) => `${BANC.firestore}/v1/${RACINE}/${c}`;
 const lire = async (c) => lireRest(bdd(c), prop);
-const vider = async (col) => { const j = await lire(`${col}?pageSize=300`); for (const d of (j && j.documents) || []) await fetch(`http://127.0.0.1:8080/v1/${d.name}`, { method: 'DELETE', headers: prop }); };
+const vider = async (col) => { const j = await lire(`${col}?pageSize=300`); for (const d of (j && j.documents) || []) await fetch(`${BANC.firestore}/v1/${d.name}`, { method: 'DELETE', headers: prop }); };
 const str = (d, k) => ((((d || {}).fields || {})[k]) || {}).stringValue || '';
 const soucis = []; const ok = (m) => console.log('  ok     ' + m); const dire = (m) => { soucis.push(m); console.log('  ÉCART  ' + m); };
 const verifier = (c, b, m) => (c ? ok(b) : dire(m ? `${b} · ${m}` : b));
 const attendre = async (fn, n = 30, ms = 500) => { for (let i = 0; i < n; i++) { const v = await fn(); if (v) return v; await pause(ms); } return null; };
 const requete = async (collection, filtres) => {
-  const r = await fetch(`http://127.0.0.1:8080/v1/${RACINE}:runQuery`, { method: 'POST', headers: { ...prop, 'Content-Type': 'application/json' },
+  const r = await fetch(`${BANC.firestore}/v1/${RACINE}:runQuery`, { method: 'POST', headers: { ...prop, 'Content-Type': 'application/json' },
     body: JSON.stringify({ structuredQuery: { from: [{ collectionId: collection }], where: { compositeFilter: { op: 'AND', filters: filtres.map(([f, v]) => ({ fieldFilter: { field: { fieldPath: f }, op: 'EQUAL', value: { stringValue: v } } })) } } } }) });
   return ((await r.json()) || []).filter((x) => x.document).map((x) => x.document);
 };
@@ -73,7 +73,7 @@ const semerConversation = async (pid) => {
         date: { timestampValue: new Date(debut + i * 60000).toISOString() },
       } } });
     }
-    await fetch(`http://127.0.0.1:8080/v1/${RACINE}:commit`, { method: 'POST', headers: { ...prop, 'Content-Type': 'application/json' }, body: JSON.stringify({ writes }) });
+    await fetch(`${BANC.firestore}/v1/${RACINE}:commit`, { method: 'POST', headers: { ...prop, 'Content-Type': 'application/json' }, body: JSON.stringify({ writes }) });
   }
 };
 /* Les numéros des messages d'essai à l'écran, dans l'ordre du fil. */
@@ -112,7 +112,7 @@ const verifierConversation = async (page, qui) => {
   const fuites = [];
   const contexte = async () => {
     const ctx = await nav.newContext({ viewport: { width: 1440, height: 900 } });
-    await ctx.addInitScript(() => { try { localStorage.setItem('suivi:emul', '1'); } catch (e) { /* rien */ } });
+    await ctx.addInitScript((n) => { try { localStorage.setItem('suivi:emul', n); } catch (e) { /* rien */ } }, String(BANC.numero));
     await ctx.route(PRODUCTION, (route) => { fuites.push(route.request().url()); route.abort(); });
     const page = await ctx.newPage();
     /* « session absente » et « redirection » sont les arrêts voulus d'un espace qui renvoie ailleurs. */

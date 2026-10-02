@@ -16,10 +16,11 @@
      await appelAdmin('ajouterEquipe', { ... }, { email: 'autre.admin@exemple.test' });
    ========================================================================== */
 
+const BANC = require('./ports-banc.cjs');
 const PROJET = process.env.GCLOUD_PROJECT || 'capmedia-1f90d';
-const HOTE_AUTH = process.env.FIREBASE_AUTH_EMULATOR_HOST || '127.0.0.1:9099';
+const HOTE_AUTH = BANC.authHote;
 const AUTH = `http://${HOTE_AUTH}`;
-const FONCTIONS = `http://127.0.0.1:5001/${PROJET}/europe-west1`;
+const FONCTIONS = `${BANC.fonctions}/${PROJET}/europe-west1`;
 /* L'administrateur du jeu de données (semer-suivi.mjs). */
 const ADMIN_BANC = process.env.ADMIN_BANC || 'agent.essai@exemple.test';
 

@@ -9,8 +9,8 @@
       (Firestore, Auth, Functions, Storage, hub) et que le site local
       répond : sinon la suite ne démarre pas (sortie 2) ;
    2. chaque contexte de navigateur reçoit d'avance le branchement du banc
-      (`suivi:emul`) : une page ouverte sans « ?emul » ne part plus sur le
-      vrai projet ;
+      (`suivi:emul`, qui porte le numéro du banc) : une page ouverte sans
+      « ?emul » ne part plus sur le vrai projet ;
    3. toute requête vers un service Firebase ou Google Cloud de production
       est coupée AVANT de partir, et la suite échoue aussitôt (sortie 3),
       en nommant l'adresse visée.
@@ -18,8 +18,10 @@
    Pourquoi : le 24/09/2026, un contexte neuf sans « ?emul » a envoyé trois
    demandes de code à la fonction de connexion de production.
 
-   Réglages (variables d'environnement) : BANC_SITE (défaut
-   http://127.0.0.1:8787), BANC_SANS_SITE=1 pour une suite sans site.
+   Réglages (variables d'environnement) : BANC_NUMERO (1 par défaut, 2
+   pour le second banc : voir lib/ports-banc.cjs), BANC_SITE (défaut
+   http://127.0.0.1:8787 sur le banc 1), BANC_SANS_SITE=1 pour une suite
+   sans site.
    ========================================================================== */
 
 const { execFileSync } = require('node:child_process');
@@ -30,14 +32,15 @@ const PRODUCTION = /^https?:\/\/([^/]*\.)?(cloudfunctions\.net|firestore\.google
 exports.PRODUCTION = PRODUCTION;
 exports.estProduction = (url) => PRODUCTION.test(String(url || ''));
 
+const BANC = require('./ports-banc.cjs');
 const ATTENDUS = [
-  ['Firestore', process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080', '/'],
-  ['Auth', process.env.FIREBASE_AUTH_EMULATOR_HOST || '127.0.0.1:9099', '/'],
-  ['Functions', '127.0.0.1:5001', '/'],
-  ['Storage', process.env.FIREBASE_STORAGE_EMULATOR_HOST || '127.0.0.1:9199', '/'],
-  ['hub des émulateurs', process.env.FIREBASE_EMULATOR_HUB || '127.0.0.1:4400', '/emulators'],
+  ['Firestore', BANC.firestoreHote, '/'],
+  ['Auth', BANC.authHote, '/'],
+  ['Functions', BANC.fonctionsHote, '/'],
+  ['Storage', BANC.stockageHote, '/'],
+  ['hub des émulateurs', BANC.hubHote, '/emulators'],
 ];
-const SITE = process.env.BANC_SITE || 'http://127.0.0.1:8787';
+const SITE = BANC.site;
 
 /* Le contrôle de démarrage, SYNCHRONE : la suite n'a encore rien fait. */
 const verifierEmulateurs = () => {
@@ -86,7 +89,7 @@ process.on('exit', (code) => {
 const garderContexte = async (ctx) => {
   ctx.pages().forEach(relever);
   ctx.on('page', relever);
-  await ctx.addInitScript(() => { try { localStorage.setItem('suivi:emul', '1'); } catch (e) { /* stockage refusé */ } });
+  await ctx.addInitScript((n) => { try { localStorage.setItem('suivi:emul', n); } catch (e) { /* stockage refusé */ } }, String(BANC.numero));
   await ctx.route(PRODUCTION, (route) => { const url = route.request().url(); route.abort('blockedbyclient').catch(() => {}); fuite(url, 'navigateur'); });
   ctx.on('request', (r) => { if (PRODUCTION.test(r.url())) fuite(r.url(), 'navigateur, requête vue'); });
   return ctx;

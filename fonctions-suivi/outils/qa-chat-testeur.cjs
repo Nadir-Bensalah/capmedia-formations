@@ -9,15 +9,15 @@
 
    Banc : émulateurs, site local, semer-suivi puis semer-campagne.
    ========================================================================== */
-require('./lib/garde-banc.cjs');
+require('./lib/garde-banc.cjs'); const BANC = require('./lib/ports-banc.cjs');
 const { chromium } = require('@playwright/test');
 const { lireRest } = require('./lib/rest-banc.cjs');
-const PROJET = 'capmedia-1f90d'; const SITE = process.env.BANC_SITE || 'http://127.0.0.1:8787';
+const PROJET = 'capmedia-1f90d'; const SITE = process.env.BANC_SITE || BANC.site;
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 const prop = { Authorization: 'Bearer owner' };
-const bdd = (c) => `http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
+const bdd = (c) => `${BANC.firestore}/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
 const lire = async (c) => lireRest(bdd(c), prop);
-const vider = async (col) => { const j = await lire(`${col}?pageSize=300`); for (const d of (j && j.documents) || []) await fetch(`http://127.0.0.1:8080/v1/${d.name}`, { method: 'DELETE', headers: prop }); };
+const vider = async (col) => { const j = await lire(`${col}?pageSize=300`); for (const d of (j && j.documents) || []) await fetch(`${BANC.firestore}/v1/${d.name}`, { method: 'DELETE', headers: prop }); };
 const champ = (d, n) => (((d || {}).fields || {})[n]) || {};
 const str = (d, n) => champ(d, n).stringValue || '';
 const attendre = async (fn, n = 40, ms = 500) => { for (let i = 0; i < n; i += 1) { if (await fn()) return true; await pause(ms); } return false; };

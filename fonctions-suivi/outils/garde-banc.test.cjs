@@ -45,9 +45,9 @@ r = lancer(PAGE(`await page.goto('about:blank'); await page.evaluate(() => fetch
 verifier('une page qui appelle une fonction de production arrête la suite', r.code === 3 && /cloudfunctions\.net/.test(r.sortie) && !/LA SUITE A CONTINUÉ/.test(r.sortie), r.sortie);
 r = lancer(`fetch('https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode').catch(() => {}); setTimeout(() => { console.log('LA SUITE A CONTINUÉ'); process.exit(0); }, 2000);`);
 verifier('un fetch Node vers la production arrête la suite', r.code === 3 && !/LA SUITE A CONTINUÉ/.test(r.sortie), r.sortie);
-r = lancer(PAGE(`const vers = []; page.on('request', (q) => vers.push(new URL(q.url()).host)); await page.goto('${process.env.BANC_SITE || 'http://127.0.0.1:8787'}/suivi/hub', { waitUntil: 'domcontentloaded' }); await page.waitForTimeout(6000); const emul = await page.evaluate(() => localStorage.getItem('suivi:emul')); console.log('EMUL=' + emul); console.log('HOTES=' + [...new Set(vers)].join(','))`));
+r = lancer(PAGE(`const vers = []; page.on('request', (q) => vers.push(new URL(q.url()).host)); await page.goto('${require('./lib/ports-banc.cjs').site}/suivi/hub', { waitUntil: 'domcontentloaded' }); await page.waitForTimeout(6000); const emul = await page.evaluate(() => localStorage.getItem('suivi:emul')); console.log('EMUL=' + emul); console.log('HOTES=' + [...new Set(vers)].join(','))`));
 const hotes = ((r.sortie.match(/HOTES=(.*)/) || [])[1] || '').split(',').filter(Boolean);
-verifier('une page du Hub ouverte sans « ?emul » est branchée sur le banc', r.code === 0 && /EMUL=1/.test(r.sortie), r.sortie);
+verifier('une page du Hub ouverte sans « ?emul » est branchée sur le banc', r.code === 0 && new RegExp(`EMUL=${require('./lib/ports-banc.cjs').numero}`).test(r.sortie), r.sortie);
 verifier('et ne parle qu aux émulateurs et au site local', hotes.length > 0 && hotes.every((h) => /^(127\.0\.0\.1|localhost)(:\d+)?$|gstatic\.com$|googleapis\.com$/.test(h)) && !hotes.some((h) => /firestore\.googleapis|identitytoolkit|securetoken|cloudfunctions/.test(h)), hotes.join(', '));
 
 console.log('\n== Chaque suite navigateur charge la garde');
