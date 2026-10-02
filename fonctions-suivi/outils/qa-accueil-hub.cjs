@@ -35,26 +35,26 @@ let page = null;
 
   console.log('\n== La première fois : l accueil du Hub');
   verifier((await page.getAttribute('html', 'data-theme')) === 'dark', 'le Hub est sombre par défaut');
-  verifier(await page.$('.accueil-logo .feuille--4'), 'la marque en quatre feuilles est au centre');
-  verifier(/Bienvenue, Camille/.test(await page.textContent('.accueil-porte h1')), 'la porte dit bienvenue au prénom');
+  verifier(await page.$('.accueil-porte .accueil-mascotte'), 'la mascotte du Hub est au centre de la porte');
+  verifier(/Bienvenue Atelier Nord/.test(await page.textContent('.accueil-porte h1')), 'la porte dit bienvenue au nom de sa société');
+  verifier(/un espace pensé pour vous/.test(await page.textContent('.accueil-porte .texte')), 'avec la phrase courte');
   verifier(/Capmedia\s*Hub/.test(await page.textContent('.accueil-marque')), 'et nomme Capmedia Hub');
+  await pause(2600); await page.screenshot({ path: process.env.CAPTURES ? `${process.env.CAPTURES}/accueil-1-porte.png` : '/tmp/accueil-1-porte.png' });
   await page.waitForSelector('.lat-lien[href="#/projets/atelier"]', { state: 'attached', timeout: 20000 });
-  await page.click('[data-accueil="commencer"]'); await page.waitForSelector('.accueil-guide'); await pause(500);
-  verifier(/Atelier Nord/.test(await page.textContent('.ecran.actif')), 'Commencer ouvre le premier écran, au nom de sa société');
-  await page.click('[data-accueil="suivant"]'); await pause(700);
-  const projets = await page.$$eval('.ecran.actif .projets-accueil li', (l) => l.map((x) => x.textContent));
-  verifier(projets.length >= 1 && projets.some((x) => /Atelier/.test(x)), `le deuxième écran liste ses projets tels qu ils sont (${projets.length})`);
-  verifier(await page.$('.ecran.actif .projets-accueil .pastille'), 'avec leur état');
-  /* L'écran des tests n'est là que si le client a des scénarios ou des
-     parcours, qui arrivent un peu après la porte : on attend que le rail
-     les connaisse avant de compter. */
-  const attendu = (await page.waitForSelector('a[href="#/tests"]', { timeout: 8000, state: 'attached' }).catch(() => null)) ? 7 : 6;
-  await pause(600);
+  await page.click('[data-accueil="commencer"]'); await page.waitForSelector('.accueil-guide'); await pause(900);
+  verifier(await page.$('.ecran.actif .accueil-appli-icone'), 'le premier écran montre l icône de son projet en grand');
+  verifier(/Atelier/.test(await page.textContent('.ecran.actif .accueil-appli-nom') || ''), 'avec son nom');
+  await page.screenshot({ path: process.env.CAPTURES ? `${process.env.CAPTURES}/accueil-2-projet.png` : '/tmp/accueil-2-projet.png' });
+  await page.click('[data-accueil="suivant"]'); await pause(900);
+  const lien = await page.getAttribute('.ecran.actif .accueil-telecharger a', 'href').catch(() => null);
+  verifier(lien && /capmedia-hub-mac\.dmg$/.test(lien), `sur un Mac, l écran suivant propose l application pour Mac (${lien})`);
+  await page.screenshot({ path: process.env.CAPTURES ? `${process.env.CAPTURES}/accueil-3-application.png` : '/tmp/accueil-3-application.png' });
   let n = 2;
-  while (await page.$('[data-accueil="suivant"]')) { await page.click('[data-accueil="suivant"]'); n += 1; await pause(350); if (n > 12) break; }
-  /* L'écran des tests n'est là que si le client a des scénarios (même règle que l'entrée Tests du rail). */
-  verifier(n === attendu, `${attendu === 7 ? 'sept' : 'six'} écrans en tout (${n})`);
-  verifier(/Vos projets vous attendent/.test(await page.textContent('.ecran.actif')), 'le dernier sait qu elle a des projets');
+  while (await page.$('[data-accueil="suivant"]')) { await page.click('[data-accueil="suivant"]'); n += 1; await pause(500); if (n > 12) break; }
+  verifier(n === 3, `trois écrans après la porte, sans tests ni écrans retirés (${n})`);
+  verifier(/Tout est prêt/.test(await page.textContent('.ecran.actif')) && await page.$('.ecran.actif .accueil-mascotte--fin'), 'le dernier dit que tout est prêt, avec sa mascotte');
+  await pause(500);
+  await page.screenshot({ path: process.env.CAPTURES ? `${process.env.CAPTURES}/accueil-4-fin.png` : '/tmp/accueil-4-fin.png' });
   await page.click('[data-accueil="fin"]'); await pause(900);
   verifier(!(await page.$('.accueil')), 'C est parti efface l accueil');
   verifier(await page.isVisible('#vue .page'), 'et son espace est là');
@@ -62,6 +62,16 @@ let page = null;
   verifier(Boolean((((await profil()) || {}).fields || {}).accueil), 'les premiers pas sont consignés dans son profil');
   await page.reload(); await page.waitForSelector('#vue .page'); await pause(1200);
   verifier(!(await page.$('.accueil')), 'et ils ne reviennent pas à la visite suivante');
+  {
+    await vider('envois'); await vider('connexions'); await vider('connexionsIp');
+    const autre = await (await nav.newContext({ colorScheme: 'dark' })).newPage();
+    await autre.goto((process.env.BANC_SITE || BANC.site) + '/suivi/?emul', { waitUntil: 'domcontentloaded' });
+    await autre.waitForSelector('#forme:not(.masque)'); await autre.fill('#email', CAMILLE); await autre.click('#envoyer');
+    await autre.waitForSelector('#forme-code:not(.masque)'); await autre.fill('#code', await code(CAMILLE));
+    await autre.waitForURL(/hub/); await autre.waitForSelector('#vue .page', { timeout: 20000 }); await pause(2500);
+    verifier(!(await autre.$('.accueil')), 'sur un autre appareil (navigateur neuf), l accueil déjà fait ne revient pas');
+    await autre.context().close();
+  }
 
   console.log('\n== À la demande');
   await page.click('#bouton-compte'); await pause(300);
