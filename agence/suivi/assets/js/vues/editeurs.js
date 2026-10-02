@@ -1263,7 +1263,7 @@ const editeurs = {
     titre: fiche ? 'La note' : 'Nouvelle note', sousTitre: 'Une décision, une information, un risque : ce qui ne doit pas se perdre.',
     corps: `
       <div class="forme-rang">
-        ${select('type', 'Nature', TYPES_NOTE, fiche ? fiche.type : 'decision')}
+        ${select('type', 'Nature', TYPES_NOTE, fiche ? fiche.type : (defaut.type || 'decision'))}
         ${champ('date', 'Date', fiche ? dateISO(fiche.date) : dateISO(new Date()), { type: 'date' })}
       </div>
       ${champ('titre', 'Titre', fiche ? fiche.titre : '', { placeholder: 'Conserver Stripe pour les paiements' })}

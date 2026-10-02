@@ -12,6 +12,7 @@ import * as adminAccueil from './vues/admin-accueil.js';
 import * as adminClients from './vues/admin-clients.js';
 import * as adminProjets from './vues/admin-projets.js';
 import * as projet from './vues/projet.js';
+import * as notesProjet from './vues/notes-projet.js';
 import * as demande from './vues/demande.js';
 import { resoudreDemande } from './lien-profond.js';
 import * as brique from './vues/brique.js';
@@ -210,6 +211,7 @@ definir([
   { chemin: '/projets/:id/reunions/:rid', cle: (c) => `projet:${c.params.id}`, vue: (ctx) => projet.vue({ ...ctx, onglet: 'reunions' }, env) },
   { chemin: '/projets/:id/releases/:rid', cle: (c) => `projet:${c.params.id}`, vue: (ctx) => projet.vue({ ...ctx, onglet: 'releases' }, env) },
   { chemin: '/projets/:id/brique/:cid', vue: (ctx) => brique.vue(ctx, env) },
+  { chemin: '/projets/:id/notes', vue: (ctx) => notesProjet.vue(ctx, env) },
   { chemin: '/projets/:id/:onglet', cle: (c) => `projet:${c.params.id}`, vue: (ctx) => projet.vue({ ...ctx, onglet: ctx.params.onglet }, env) },
   { chemin: '/nouveaux-projets', vue: (ctx) => nouveauProjet.liste(ctx, env) },
   { chemin: '/nouveaux-projets/:id', vue: (ctx) => nouveauProjet.detail(ctx, env) },

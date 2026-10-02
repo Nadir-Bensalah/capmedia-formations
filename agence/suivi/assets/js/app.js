@@ -15,6 +15,7 @@ import { ouvrirAccueil, accueilVu, marquerAccueilVu } from './accueil-client.js'
 
 import * as accueil from './vues/accueil.js';
 import * as projet from './vues/projet.js';
+import * as notesProjet from './vues/notes-projet.js';
 import * as demande from './vues/demande.js';
 import { resoudreDemande } from './lien-profond.js';
 import * as brique from './vues/brique.js';
@@ -35,7 +36,6 @@ import * as demandesProjet from './vues/demandes-projet.js';
 /* Trois pages nouvelles de l'arbre d'un projet. Notes et Axes d'évolution
    sont construites par d'autres lots (ici, une page « À venir » tient
    l'adresse) ; Marketing reste masquée au client tant qu'elle est vide. */
-import * as notesProjet from './vues/notes-projet.js';
 import * as evolutions from './vues/evolutions.js';
 import * as marketing from './vues/marketing.js';
 

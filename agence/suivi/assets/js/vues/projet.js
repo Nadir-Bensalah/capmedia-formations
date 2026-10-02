@@ -58,7 +58,9 @@ const ONGLETS = [
   /* Les accès du client, chiffrés : l'équipe et le responsable seuls. */
   { cle: 'coffre', libelle: 'Coffre-fort', icone: 'cadenas' },
   { cle: 'reunions', libelle: 'Réunions', icone: 'reunions' },
-  { cle: 'notes', libelle: 'Décisions', libelleClient: 'Notes', icone: 'note' },
+  /* « Notes » vit sur sa propre page (vues/notes-projet.js, route
+     /projets/:id/notes) : l'onglet y mène. */
+  { cle: 'notes', libelle: 'Notes', icone: 'note' },
   { cle: 'tests', libelle: 'Tests', libelleClient: 'Campagne de tests', icone: 'check' },
   { cle: 'activite', libelle: 'Activité', icone: 'activite' },
   /* Le marketing d'un projet : la page est encore vide. L'équipe voit
