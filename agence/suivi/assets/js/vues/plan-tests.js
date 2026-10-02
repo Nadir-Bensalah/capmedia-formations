@@ -95,6 +95,18 @@ const presentationDe = (pid) => (magasin.lire(K.planTests(pid)) || []).find(estP
    « sécurité ». */
 const plat = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
+/* Qui fait le scénario : un humain seul, un robot seul, ou les deux (le robot
+   le rejoue à chaque version, un humain le fait au moins une fois sur un vrai
+   appareil). Les couleurs sont celles que Nadir a choisies. */
+export const QUI_PLAN = {
+  humain:     { libelle: 'Humain seul', court: 'humain seul', ton: 'vert' },
+  robot:      { libelle: 'Robot seul', court: 'robot seul', ton: 'bleu' },
+  'les-deux': { libelle: 'Humain et robot', court: 'humain et robot', ton: 'violet' },
+};
+const QUI_ORDRE = ['humain', 'les-deux', 'robot'];
+const compterQui = (liste) => Object.fromEntries(QUI_ORDRE.map((q) => [q, liste.filter((x) => x.qui === q).length]));
+const quiHtml = (n, classe = '') => `<p class="plan-qui${classe ? ` ${classe}` : ''}">${QUI_ORDRE.map((q) => `<span class="plan-qui-${QUI_PLAN[q].ton}"><i aria-hidden="true"></i><b>${n[q]}</b> ${echapper(QUI_PLAN[q].court)}</span>`).join('')}</p>`;
+
 const scenariosDe = (section, aspect) => ((section.aspects || {})[aspect] || []).filter(Boolean);
 
 const garder = (s, aspect, f, sectionTrouvee) => (!f.plateforme || (s.plateformes || []).includes(f.plateforme))
@@ -139,6 +151,7 @@ const scenarioHtml = (s, { section, equipe, refsConnues }) => {
       <div><dt>Résultat attendu</dt><dd>${texteMultiligne(s.attendu)}</dd></div>
     </dl>
     <div class="plan-scenario-pied">
+      ${QUI_PLAN[s.qui] ? `<span class="plan-qui-puce plan-qui-${QUI_PLAN[s.qui].ton}"><i aria-hidden="true"></i>${echapper(QUI_PLAN[s.qui].libelle)}</span>` : ''}
       <span class="puce${prio && prio.ton ? ` puce--${prio.ton}` : ''}"><i aria-hidden="true"></i>${echapper(prio ? prio.libelle : 'Priorité non précisée')}</span>
       <span>${echapper(type ? type.libelle : TIRET)}</span>
       <span>${echapper(listePlateformes(s.plateformes))}</span>
@@ -264,6 +277,7 @@ const editerScenario = (env, pid, section, { aspect, fiche = null }) => feuille(
       ${choix('type', 'Type', Object.fromEntries(Object.entries(TYPES_PLAN).map(([k, x]) => [k, x.libelle])), fiche ? fiche.type : 'normal')}
       ${choix('priorite', 'Priorité', Object.fromEntries(Object.entries(PRIORITES_PLAN).map(([k, x]) => [k, x.court])), fiche ? fiche.priorite : 'moyenne')}
     </div>
+    ${choix('qui', 'Qui le teste', Object.fromEntries(QUI_ORDRE.map((q) => [q, QUI_PLAN[q].libelle])), fiche && QUI_PLAN[fiche.qui] ? fiche.qui : 'les-deux', { aide: 'Humain et robot : le robot le rejoue à chaque version, un humain le fait au moins une fois sur un vrai appareil.' })}
     ${champ('refs', 'Déjà couvert par', fiche ? (fiche.refs || []).join(', ') : '', { facultatif: true, placeholder: 'TA-12, CC-03', aide: 'Les références des scénarios de la bibliothèque qui couvrent déjà ce cas, séparées par des virgules.' })}`,
   regles: {
     titre: texteValide(300), etapes: texteValide(3000), attendu: texteValide(2000),
@@ -276,6 +290,7 @@ const editerScenario = (env, pid, section, { aspect, fiche = null }) => feuille(
       titre: d.titre, etapes: d.etapes, attendu: d.attendu, plateformes,
       type: TYPES_PLAN[d.type] ? d.type : 'normal',
       priorite: PRIORITES_PLAN[d.priorite] ? d.priorite : 'moyenne',
+      qui: QUI_PLAN[d.qui] ? d.qui : 'les-deux',
       refs: String(d.refs || '').split(',').map((x) => x.trim().toUpperCase()).filter(Boolean),
     };
     const id = await ecrire.enregistrerScenarioPlan(pid, section.id, env.session.utilisateur.uid, { ancien: fiche ? fiche.id : '', aspect: d.aspect, scenario });
@@ -440,6 +455,9 @@ export const vue = async (ctx, env) => {
     const fPlat = { plateforme: etat.plateforme, aspect: '', priorite: '', q: '' };
     const comptes = Object.fromEntries(ASPECTS_PLAN.map((a) => [a, sections.reduce((t, s) => t + scenariosDe(s, a).filter((x) => !fPlat.plateforme || (x.plateformes || []).includes(fPlat.plateforme)).length, 0)]));
     const total = ASPECTS_PLAN.reduce((t, a) => t + comptes[a], 0);
+    const quiAspect = Object.fromEntries(ASPECTS_PLAN.map((a) => [a, compterQui(sections.flatMap((x) => scenariosDe(x, a)).filter((x) => !fPlat.plateforme || (x.plateformes || []).includes(fPlat.plateforme)))]));
+    const quiTotal = Object.fromEntries(QUI_ORDRE.map((q) => [q, ASPECTS_PLAN.reduce((t, a) => t + quiAspect[a][q], 0)]));
+    const classes = QUI_ORDRE.reduce((t, q) => t + quiTotal[q], 0);
     const tous = sections.flatMap((s) => ASPECTS_PLAN.flatMap((a) => scenariosDe(s, a)));
     const parPlateforme = (p) => tous.filter((x) => (x.plateformes || []).includes(p)).length;
     const hautes = tous.filter((x) => x.priorite === 'haute' && (!etat.plateforme || (x.plateformes || []).includes(etat.plateforme))).length;
@@ -454,8 +472,13 @@ export const vue = async (ctx, env) => {
             <p class="etage-sur">${echapper(ASPECTS[a].libelle)}</p>
             <p class="plan-aspect-n">${comptes[a]}</p>
             <p class="plan-aspect-phrase">${echapper(((pres.aspects || {})[a]) || ASPECTS[a].phrase)}</p>
+            ${classes ? quiHtml(quiAspect[a]) : ''}
           </div>`).join('')}
         </div>
+        ${classes ? `<div class="plan-qui-bilan">
+          <p class="plan-qui-bilan-ligne"><span class="plan-qui-vert"><i aria-hidden="true"></i></span>À faire par des humains : <b>${quiTotal.humain + quiTotal['les-deux']}</b> scénarios, dont <b>${quiTotal['les-deux']}</b> aussi rejoués par un robot.</p>
+          <p class="plan-qui-bilan-ligne"><span class="plan-qui-bleu"><i aria-hidden="true"></i></span>Faits par des robots : <b>${quiTotal.robot + quiTotal['les-deux']}</b> scénarios, dont <b>${quiTotal['les-deux']}</b> aussi faits par un humain.</p>
+        </div>` : ''}
         <p class="plan-plateformes-texte">${texteMultiligne(pres.plateformes || PLATEFORMES_DEFAUT)}</p>
       </section>
 

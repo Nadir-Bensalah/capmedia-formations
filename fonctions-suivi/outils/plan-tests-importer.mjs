@@ -63,7 +63,8 @@ const PLATEFORMES = ['ios', 'android', 'web'];
 const TYPES = ['normal', 'limite', 'erreur'];
 const PRIORITES = ['haute', 'moyenne', 'basse'];
 const CLES_SECTION = ['id', 'groupe', 'ordre', 'titre', 'resume', 'plateformes', 'aspects'];
-const CLES_SCENARIO = ['id', 'titre', 'etapes', 'attendu', 'plateformes', 'type', 'priorite', 'refs'];
+const CLES_SCENARIO = ['id', 'titre', 'etapes', 'attendu', 'plateformes', 'type', 'priorite', 'refs', 'qui'];
+const QUI = ['humain', 'robot', 'les-deux'];
 const REF = /^[A-Z]{2}-R?\d{1,3}$/;
 const CADRATIN = '—';
 /* Un document Firestore pèse au plus 1 Mio : on garde une marge. */
@@ -147,6 +148,7 @@ export const validerSection = (s, { attenduId = '', reference = null, refsConnue
         if (hors.length) avis.push(`${ou} : plateforme ${hors.join(', ')} absente de la section`);
       }
       if (!TYPES.includes(x.type)) erreurs.push(`${ou} : type ${JSON.stringify(x.type)} inconnu (permis : ${TYPES.join(', ')})`);
+      if (x.qui !== undefined && !QUI.includes(x.qui)) erreurs.push(`${ou} : qui ${JSON.stringify(x.qui)} inconnu (permis : ${QUI.join(', ')})`);
       if (!PRIORITES.includes(x.priorite)) erreurs.push(`${ou} : priorite ${JSON.stringify(x.priorite)} inconnue (permis : ${PRIORITES.join(', ')})`);
       if (!Array.isArray(x.refs)) erreurs.push(`${ou} : refs, une liste est attendue (vide si aucune)`);
       else {
@@ -183,7 +185,7 @@ const versDocument = (s) => ({
   plateformes: s.plateformes,
   aspects: Object.fromEntries(ASPECTS.map((a) => [a, (s.aspects[a] || []).map((x) => ({
     id: x.id, titre: x.titre.trim(), etapes: x.etapes.trim(), attendu: x.attendu.trim(),
-    plateformes: x.plateformes, type: x.type, priorite: x.priorite, refs: x.refs,
+    plateformes: x.plateformes, type: x.type, priorite: x.priorite, refs: x.refs, ...(x.qui ? { qui: x.qui } : {}),
   }))])),
 });
 
