@@ -1941,3 +1941,8 @@ a.coffre-lien:hover { color: var(--accent); }
 .lat-lien .lat-marqueur { display: inline-flex; align-items: center; gap: 3px; font: 500 11.5px var(--police); letter-spacing: 0; color: var(--encre-3); white-space: nowrap; }
 .lat-lien .lat-marqueur svg { width: 12px; height: 12px; color: currentColor; stroke-width: 1.8; }
 .lat-lien .lat-marqueur--vert, .lat-lien .lat-marqueur--vert svg, .lat-lien.actif .lat-marqueur--vert svg, .lat-lien:hover .lat-marqueur--vert svg { color: var(--vert); }
+
+/* La bulle de discussion flotte en bas à droite sur toutes les pages du
+   client : la page garde de la place en bas pour qu'aucun bouton ne passe
+   dessous (le bouton « Agenda » du calendrier y disparaissait). */
+body:has(.bulle) #vue .page { padding-bottom: 104px; }
