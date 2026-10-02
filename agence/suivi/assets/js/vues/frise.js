@@ -65,8 +65,8 @@ export const friseDevis = (devis, jalons, { equipe, pid }) => {
           <span class="frise-libelle">${echapper(j.titre)}</span>
           ${j.fin || j.description || j.faiteLe ? `<span class="frise-detail">${[
             j.statut === 'termine'
-              ? (j.faiteLe ? `faite le ${dateCourte(j.faiteLe)}` : (j.fin ? `prévue le ${dateCourte(j.fin)}` : ''))
-              : (j.fin ? `prévue le ${dateCourte(j.fin)}` : ''),
+              ? (dateCourte(j.faiteLe) ? `faite le ${dateCourte(j.faiteLe)}` : (dateCourte(j.fin) ? `prévue le ${dateCourte(j.fin)}` : ''))
+              : (dateCourte(j.fin) ? `prévue le ${dateCourte(j.fin)}` : ''),
             j.description,
           ].filter(Boolean).map(echapper).join(' · ')}</span>` : ''}
         </span>

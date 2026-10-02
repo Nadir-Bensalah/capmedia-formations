@@ -16,7 +16,7 @@
    ========================================================================== */
 
 import {
-  auth, session, $, echapper, quitter, surEmulateur, signOut, effacerSecretsLocaux,
+  auth, session, $, echapper, quitter, surEmulateur, FONCTIONS_EMULATEUR, signOut, effacerSecretsLocaux,
   isSignInWithEmailLink, signInWithEmailLink, sendSignInLinkToEmail,
 } from './js/noyau.js';
 
@@ -25,7 +25,7 @@ import { traduireRetour } from './js/retour.js';
 import { tenterConnexion } from './js/cles-acces.js';
 
 const PORTE = surEmulateur
-  ? 'http://127.0.0.1:5001/capmedia-1f90d/europe-west1/suiviConnexion'
+  ? `${FONCTIONS_EMULATEUR}/capmedia-1f90d/europe-west1/suiviConnexion`
   : 'https://europe-west1-capmedia-1f90d.cloudfunctions.net/suiviConnexion';
 
 const CLE_EMAIL = 'suivi:email';

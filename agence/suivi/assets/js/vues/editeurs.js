@@ -1437,3 +1437,8 @@ export const proposerEtapeDepuisSuggestion = async (env, { pid, fiche, jalons = 
     if (jid) await ecrire.majSuggestion(pid, fiche.id, { jalon: jid, statut: 'acceptee' });
   }, 'Étape créée dans la feuille de route.');
 };
+
+/* Les briques d'un éditeur, pour les écrans qui portent leurs propres
+   formulaires (le plan de tests) : la même feuille, les mêmes champs, le
+   même contrat de fermeture. */
+export { feuille, champ, zone, select as choix };

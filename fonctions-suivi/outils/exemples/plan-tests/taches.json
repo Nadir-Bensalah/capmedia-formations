@@ -1,0 +1,240 @@
+{
+  "id": "taches",
+  "groupe": "fonctionnalites",
+  "ordre": 17,
+  "titre": "Tâches",
+  "resume": "Les tâches simples, les sous-tâches et les tâches répétées, dans les vues jour, semaine et mois.",
+  "plateformes": [
+    "ios",
+    "android",
+    "web"
+  ],
+  "aspects": {
+    "fonctionnel": [
+      {
+        "id": "taches-f-001",
+        "titre": "Créer une tâche simple pour aujourd'hui",
+        "etapes": "Ouvrir Tâches, appuyer sur plus, écrire un titre, enregistrer.",
+        "attendu": "La tâche apparaît aujourd'hui, en haut de la liste.",
+        "plateformes": [
+          "ios",
+          "android",
+          "web"
+        ],
+        "type": "normal",
+        "priorite": "haute",
+        "refs": [
+          "TA-01"
+        ]
+      },
+      {
+        "id": "taches-f-002",
+        "titre": "Créer une tâche pour un lundi du mois prochain",
+        "etapes": "Choisir la date du premier lundi du mois prochain, enregistrer.",
+        "attendu": "La tâche apparaît ce lundi-là dans les vues jour, semaine et mois, et pas avant.",
+        "plateformes": [
+          "ios",
+          "android",
+          "web"
+        ],
+        "type": "normal",
+        "priorite": "haute",
+        "refs": [
+          "TA-12"
+        ]
+      },
+      {
+        "id": "taches-f-003",
+        "titre": "Titre très long",
+        "etapes": "Saisir un titre de 300 caractères.",
+        "attendu": "Le titre est coupé proprement dans la liste et entier dans la fiche.",
+        "plateformes": [
+          "ios",
+          "android",
+          "web"
+        ],
+        "type": "limite",
+        "priorite": "basse",
+        "refs": []
+      },
+      {
+        "id": "taches-f-004",
+        "titre": "Titre avec émojis et accents",
+        "etapes": "Saisir « Réunion 🎉 l'équipe ».",
+        "attendu": "Le titre s'affiche tel quel partout.",
+        "plateformes": [
+          "ios",
+          "android",
+          "web"
+        ],
+        "type": "limite",
+        "priorite": "basse",
+        "refs": []
+      },
+      {
+        "id": "taches-f-005",
+        "titre": "Double appui sur Enregistrer",
+        "etapes": "Appuyer deux fois très vite sur Enregistrer.",
+        "attendu": "Une seule tâche est créée.",
+        "plateformes": [
+          "ios",
+          "android",
+          "web"
+        ],
+        "type": "limite",
+        "priorite": "moyenne",
+        "refs": []
+      },
+      {
+        "id": "taches-f-006",
+        "titre": "Tâche récurrente chaque mardi",
+        "etapes": "Créer une tâche répétée chaque mardi pendant deux mois.",
+        "attendu": "Elle apparaît chaque mardi, et seulement le mardi.",
+        "plateformes": [
+          "ios",
+          "android",
+          "web"
+        ],
+        "type": "normal",
+        "priorite": "haute",
+        "refs": [
+          "TA-18"
+        ]
+      },
+      {
+        "id": "taches-f-007",
+        "titre": "Cocher une tâche de la veille",
+        "etapes": "Revenir à hier, cocher une tâche.",
+        "attendu": "La tâche reste cochée après un rafraîchissement.",
+        "plateformes": [
+          "ios",
+          "android",
+          "web"
+        ],
+        "type": "normal",
+        "priorite": "haute",
+        "refs": []
+      },
+      {
+        "id": "taches-f-008",
+        "titre": "Supprimer puis annuler",
+        "etapes": "Supprimer une tâche puis appuyer sur Annuler.",
+        "attendu": "La tâche revient à sa place, avec ses sous-tâches.",
+        "plateformes": [
+          "ios",
+          "android",
+          "web"
+        ],
+        "type": "normal",
+        "priorite": "moyenne",
+        "refs": []
+      },
+      {
+        "id": "taches-f-009",
+        "titre": "Limite de la version gratuite",
+        "etapes": "Sur un compte gratuit, créer une tâche de plus que la limite.",
+        "attendu": "Un message propose Premium, rien n'est perdu.",
+        "plateformes": [
+          "ios",
+          "android",
+          "web"
+        ],
+        "type": "erreur",
+        "priorite": "moyenne",
+        "refs": []
+      }
+    ],
+    "technique": [
+      {
+        "id": "taches-t-001",
+        "titre": "Mille tâches sur le compte",
+        "etapes": "Ouvrir la semaine sur un compte de plus de mille tâches.",
+        "attendu": "La semaine s'affiche en moins de deux secondes, sans tâche manquante.",
+        "plateformes": [
+          "ios",
+          "android",
+          "web"
+        ],
+        "type": "normal",
+        "priorite": "haute",
+        "refs": [
+          "CC-01"
+        ]
+      },
+      {
+        "id": "taches-t-002",
+        "titre": "Réseau coupé pendant l'enregistrement",
+        "etapes": "Couper le réseau au moment d'enregistrer.",
+        "attendu": "La tâche est gardée et part dès le retour du réseau.",
+        "plateformes": [
+          "ios",
+          "android",
+          "web"
+        ],
+        "type": "erreur",
+        "priorite": "moyenne",
+        "refs": []
+      }
+    ],
+    "ux": [
+      {
+        "id": "taches-u-001",
+        "titre": "Liste vide",
+        "etapes": "Ouvrir un jour sans tâche.",
+        "attendu": "Un message simple invite à en créer une.",
+        "plateformes": [
+          "ios",
+          "android",
+          "web"
+        ],
+        "type": "normal",
+        "priorite": "basse",
+        "refs": []
+      },
+      {
+        "id": "taches-u-002",
+        "titre": "Thème sombre",
+        "etapes": "Passer en thème sombre et ouvrir la liste.",
+        "attendu": "Tout reste lisible, aucun texte noir sur fond noir.",
+        "plateformes": [
+          "ios",
+          "android",
+          "web"
+        ],
+        "type": "normal",
+        "priorite": "basse",
+        "refs": []
+      }
+    ],
+    "securite": [
+      {
+        "id": "taches-s-001",
+        "titre": "Un autre compte ne voit pas mes tâches",
+        "etapes": "Se connecter avec un second compte.",
+        "attendu": "Aucune tâche du premier compte n'apparaît.",
+        "plateformes": [
+          "ios",
+          "android",
+          "web"
+        ],
+        "type": "normal",
+        "priorite": "haute",
+        "refs": []
+      },
+      {
+        "id": "taches-s-002",
+        "titre": "Saisie piégée dans le titre",
+        "etapes": "Saisir un titre qui contient du code.",
+        "attendu": "Le texte s'affiche tel quel, rien ne s'exécute.",
+        "plateformes": [
+          "ios",
+          "android",
+          "web"
+        ],
+        "type": "erreur",
+        "priorite": "moyenne",
+        "refs": []
+      }
+    ]
+  }
+}

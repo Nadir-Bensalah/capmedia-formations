@@ -18,6 +18,7 @@ import * as brique from './vues/brique.js';
 import * as adminDemandes from './vues/admin-demandes.js';
 import * as adminTaches from './vues/admin-taches.js';
 import * as tests from './vues/tests.js';
+import * as planTests from './vues/plan-tests.js';
 import * as tableau from './vues/tableau.js';
 import * as adminPlanning from './vues/admin-planning.js';
 import * as messages from './vues/messages.js';
@@ -215,6 +216,9 @@ definir([
   { chemin: '/demandes', vue: (ctx) => adminDemandes.vue(ctx, env) },
   { chemin: '/taches', vue: (ctx) => adminTaches.vue(ctx, env) },
   { chemin: '/tests', cle: () => 'tests', vue: (ctx) => tests.vue(ctx, env) },
+  /* Ce qui va être testé : le plan de tests d'un projet, section par
+     section. La même page des deux côtés ; l'équipe y corrige. */
+  { chemin: '/tests/plan', cle: () => 'plan-tests', vue: (ctx) => planTests.vue(ctx, env) },
   /* Le tableau vit dans Tests : ses anciennes adresses y mènent. */
   { chemin: '/tests/tableau', vue: (ctx) => tableau.ancienne(ctx) },
   { chemin: '/tableau', vue: (ctx) => tableau.ancienne(ctx) },

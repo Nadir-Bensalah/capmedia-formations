@@ -697,7 +697,7 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAU
     ${camp.length ? `<div class="liste">${camp.map((c) => ligne({
       icone: 'bug', ton: c.statut === 'close' ? 'vert' : c.statut === 'en-cours' ? 'bleu' : '',
       titre: echapper(c.titre || 'Campagne'),
-      sous: `${(c.scenarios || []).length ? pluriel((c.scenarios || []).length, 'vérification', 'vérifications') : 'aucune vérification'} · ${(c.testeurs || []).length ? pluriel((c.testeurs || []).length, 'testeur', 'testeurs') : 'aucun testeur'}${c.debut ? ` · ${echapper(dateCourte(c.debut))}` : ''}`,
+      sous: `${(c.scenarios || []).length ? pluriel((c.scenarios || []).length, 'vérification', 'vérifications') : 'aucune vérification'} · ${(c.testeurs || []).length ? pluriel((c.testeurs || []).length, 'testeur', 'testeurs') : 'aucun testeur'}${dateCourte(c.debut) ? ` · ${echapper(dateCourte(c.debut))}` : ''}`,
       fin: `${pastille(STATUTS_CAMPAGNE, c.statut || 'preparation')}${equipe ? `<span class="rang boutons-edition"><button class="btn-icone" type="button" data-editer-campagne="${echapper(c.id)}" aria-label="Modifier" data-astuce="Modifier">${icone('edit')}</button></span>` : ''}`,
       action: 'ouvrir-campagne', attrs: `data-id="${echapper(c.id)}"`,
     })).join('')}</div>`
@@ -800,7 +800,7 @@ const ouvrirAnomalie = (a, { equipe, pid, env, scenarios }) => {
         ${temoins.length ? `<div class="liste liste--serree">${temoins.map((t) => ligne({
           icone: 'utilisateur', ton: 'ambre',
           titre: `${echapper((PLATEFORMES_TEST[t.plateforme] || {}).libelle || t.plateforme || 'Plateforme inconnue')}${t.appareil ? ` · ${echapper(t.appareil)}` : ''}`,
-          sous: `${t.le ? `${echapper(dateHeure(t.le))} · ` : ''}${echapper(t.commentaire || 'Sans commentaire')}`,
+          sous: `${dateHeure(t.le) ? `${echapper(dateHeure(t.le))} · ` : ''}${echapper(t.commentaire || 'Sans commentaire')}`,
           fin: (t.preuves || []).map((c, i) => `<button class="btn btn-doux btn-petit" type="button" data-piece="${echapper(c)}">${icone('image')} Preuve ${i + 1}</button>`).join(''),
         })).join('')}</div>` : `<p class="aide">Posée à la main, sans échec de testeur derrière.</p>`}
       </div>`,
@@ -1148,7 +1148,7 @@ const resultatsHtml = (c, { dedans, nommer }) => {
             icone: x.resultat === 'ko' ? 'alerte' : x.resultat === 'ok' ? 'check' : 'moins',
             ton: x.resultat === 'ko' ? 'rouge' : x.resultat === 'ok' ? 'vert' : '',
             titre: `${echapper(qui.nom)} · ${echapper((PLATEFORMES_TEST[x.plateforme] || {}).libelle || x.plateforme || '')}${appareil ? ` · ${echapper(appareil)}` : ''}`,
-            sous: `${x.le ? `${echapper(dateHeure(x.le))} · ` : ''}${echapper(x.commentaire || (x.resultat === 'ok' ? 'Comme prévu' : 'Sans commentaire'))}${qui.traits ? ` · <span class="t-3">${echapper(qui.traits)}</span>` : ''}`,
+            sous: `${dateHeure(x.le) ? `${echapper(dateHeure(x.le))} · ` : ''}${echapper(x.commentaire || (x.resultat === 'ok' ? 'Comme prévu' : 'Sans commentaire'))}${qui.traits ? ` · <span class="t-3">${echapper(qui.traits)}</span>` : ''}`,
             fin: `${pastille(RESULTATS_PASSAGE, x.resultat || 'na')}${(x.preuves || []).map((ch, i) => `<button class="btn btn-doux btn-petit" type="button" data-piece="${echapper(ch)}">${icone('image')} Preuve ${i + 1}</button>`).join('')}`,
           });
         }).join('')}</div>
@@ -1327,7 +1327,7 @@ export const vue = async (ctx, env) => {
     ...(env.role === 'equipe'
       ? [K.projets, K.scenariosTous, K.campagnesToutes, K.anomaliesToutes, K.parcoursTous, K.reglesToutes, K.documentsTous, K.jalonsTous, K.montantsTous, K.testeurs, K.profils]
       : [K.projets, ...(magasin.lire(K.projets) || (env.session || {}).projets || [])
-          .flatMap((p) => [K.scenarios(p.id), K.campagnes(p.id), K.anomalies(p.id), K.parcours(p.id), K.regles(p.id), K.documents(p.id), K.jalons(p.id), K.montants(p.id), K.profilsTesteurs(p.id)])]),
+          .flatMap((p) => [K.scenarios(p.id), K.campagnes(p.id), K.anomalies(p.id), K.parcours(p.id), K.regles(p.id), K.documents(p.id), K.jalons(p.id), K.montants(p.id), K.profilsTesteurs(p.id), K.planPresentation(p.id)])]),
     ...[...campagnesSuivies].flatMap((cid) => [K.appreciations(cid), K.passages(cid)]),
   ];
 
@@ -1370,12 +1370,25 @@ export const vue = async (ctx, env) => {
     const seul = env.role !== 'equipe' && d.projets.length === 1 ? d.projets[0].id : '';
     const pid = projetCourant();
 
+    /* « Ce qui va être testé » : le plan de tests, section par section. En
+       tête de page, avant tout le reste : c'est la première question d'un
+       client (« qu'allez-vous vérifier ? »). L'équipe le voit toujours,
+       elle y écrit ; le client dès que le plan d'un de ses projets existe
+       (sa présentation suffit à le dire), sans quoi il ouvrirait une page
+       vide. */
+    const avecPlan = (id) => Boolean(magasin.lire(K.planPresentation(id)));
+    const pidPlan = pid || (env.role === 'equipe' ? '' : ((d.projets.find((p) => avecPlan(p.id)) || {}).id || ''));
+    const boutonPlan = (env.role === 'equipe' || (pid ? avecPlan(pid) : pidPlan))
+      ? `<a class="btn btn-principal" href="#/tests/plan${pidPlan ? `?projet=${echapper(pidPlan)}` : ''}" data-plan-tests>${icone('liste')} Ce qui va être testé</a>`
+      : '';
+
     sortie.innerHTML = `<div class="page">
       <header class="page-tete">
         <div>
           <h1>Tests</h1>
           <p class="chapo">${pid ? echapper(nomProjet(pid)) : `${pluriel(d.projets.length, 'projet', 'projets')}, ${pluriel(d.scenarios.filter((s) => s.actif !== false).length, 'scénario', 'scénarios')}`}</p>
         </div>
+        ${boutonPlan ? `<div class="actions">${boutonPlan}</div>` : ''}
       </header>
 
       <div class="rang barre-tests">

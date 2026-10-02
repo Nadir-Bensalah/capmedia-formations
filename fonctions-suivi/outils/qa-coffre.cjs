@@ -23,22 +23,23 @@
    autre projet et un inconnu sont refusés par les règles, avec de vrais
    jetons. Camille repassée collaboratrice perd l'onglet et l'accès.
 
-   WebAuthn exige un vrai domaine : la suite parle à http://localhost:8787.
+   WebAuthn exige un vrai domaine : la suite parle à http://localhost:8787
+   (18787 sur le banc 2).
    Banc : émulateurs, site local, semer-suivi.
    ========================================================================== */
-process.env.BANC_SITE = process.env.BANC_SITE || 'http://localhost:8787';
-require('./lib/garde-banc.cjs');
+process.env.BANC_SITE = process.env.BANC_SITE || `http://localhost:${require('./lib/ports-banc.cjs').portSite}`;
+require('./lib/garde-banc.cjs'); const BANC = require('./lib/ports-banc.cjs');
 const { chromium } = require('@playwright/test');
 const { lireRest } = require('./lib/rest-banc.cjs');
 const { jetonPour } = require('./lib/session-banc.cjs');
 const PROJET = 'capmedia-1f90d'; const SITE = process.env.BANC_SITE;
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 const prop = { Authorization: 'Bearer owner' };
-const RACINE = `http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/documents`;
+const RACINE = `${BANC.firestore}/v1/projects/${PROJET}/databases/(default)/documents`;
 const bdd = (c) => `${RACINE}/${c}`;
 const nomDoc = (c) => `projects/${PROJET}/databases/(default)/documents/${c}`;
 const lire = async (c) => lireRest(bdd(c), prop);
-const vider = async (col) => { const j = await lire(`${col}?pageSize=300`); for (const d of (j && j.documents) || []) await fetch(`http://127.0.0.1:8080/v1/${d.name}`, { method: 'DELETE', headers: prop }); };
+const vider = async (col) => { const j = await lire(`${col}?pageSize=300`); for (const d of (j && j.documents) || []) await fetch(`${BANC.firestore}/v1/${d.name}`, { method: 'DELETE', headers: prop }); };
 const champ = (d, n) => (((d || {}).fields || {})[n]) || {};
 const str = (d, n) => champ(d, n).stringValue || '';
 const S = (v) => ({ stringValue: String(v) });
@@ -57,10 +58,10 @@ const connecter = async (page, email) => {
 };
 const aller = async (page, chemin) => { await page.evaluate((c) => { location.hash = c; }, chemin); await pause(700); };
 const etatCoffre = async (page, attendu, ms = 20000) => page.waitForSelector(`[data-coffre-etat="${attendu}"]`, { timeout: ms }).then(() => true).catch(() => false);
-const uidDe = async (email) => { const r = await fetch(`http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/projects/${PROJET}/accounts:lookup`, { method: 'POST', headers: { ...prop, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: [email] }) }); const j = await r.json(); return ((j.users || [])[0] || {}).localId || ''; };
+const uidDe = async (email) => { const r = await fetch(`${BANC.auth}/identitytoolkit.googleapis.com/v1/projects/${PROJET}/accounts:lookup`, { method: 'POST', headers: { ...prop, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: [email] }) }); const j = await r.json(); return ((j.users || [])[0] || {}).localId || ''; };
 const ouvrirCompte = async (email) => {
   if (await uidDe(email)) return uidDe(email);
-  const r = await fetch('http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signUp?key=cle-du-banc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: `Banc-${Date.now()}-x`, returnSecureToken: true }) });
+  const r = await fetch(BANC.auth + '/identitytoolkit.googleapis.com/v1/accounts:signUp?key=cle-du-banc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: `Banc-${Date.now()}-x`, returnSecureToken: true }) });
   return ((await r.json()) || {}).localId || '';
 };
 /* Le statut HTTP d'une lecture ou d'une écriture au nom de quelqu'un : les

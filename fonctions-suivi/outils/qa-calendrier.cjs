@@ -12,15 +12,15 @@
    « Demander un créneau » de l'accueil ouvre ce même formulaire, projet
    prérempli. Un seul dessin à l'arrivée, aucune erreur de page.
    Banc : émulateurs, site local, semer-suivi. */
-require('./lib/garde-banc.cjs');
+require('./lib/garde-banc.cjs'); const BANC = require('./lib/ports-banc.cjs');
 const { chromium } = require('@playwright/test');
 const { jetonPour } = require('./lib/session-banc.cjs');
-const PROJET = 'capmedia-1f90d'; const SITE = 'http://127.0.0.1:8787';
+const PROJET = 'capmedia-1f90d'; const SITE = BANC.site;
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 const prop = { Authorization: 'Bearer owner' };
-const bdd = (c) => `http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
+const bdd = (c) => `${BANC.firestore}/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
 const lire = async (c) => (await fetch(bdd(c), { headers: prop })).json();
-const vider = async (col) => { const j = await lire(`${col}?pageSize=300`); for (const d of (j && j.documents) || []) await fetch(`http://127.0.0.1:8080/v1/${d.name}`, { method: 'DELETE', headers: prop }); };
+const vider = async (col) => { const j = await lire(`${col}?pageSize=300`); for (const d of (j && j.documents) || []) await fetch(`${BANC.firestore}/v1/${d.name}`, { method: 'DELETE', headers: prop }); };
 const S = (v) => ({ stringValue: String(v) }); const T = (d) => ({ timestampValue: d.toISOString() }); const N = (v) => ({ integerValue: String(v) });
 const L = (valeurs) => ({ arrayValue: { values: valeurs } }); const M = (fields) => ({ mapValue: { fields } });
 const poser = async (chemin, fields) => fetch(bdd(chemin), { method: 'PATCH', headers: { ...prop, 'Content-Type': 'application/json' }, body: JSON.stringify({ fields }) });
@@ -54,7 +54,7 @@ const SUJET = 'Point calendrier du banc';
 let page = null; let equipe = null; let ticketId = '';
 /* Les réunions reculées le temps d'un contrôle, à remettre à leur date. */
 let reculees = [];
-const dater = (d, date) => fetch(`http://127.0.0.1:8080/v1/${d.name}?updateMask.fieldPaths=date`, { method: 'PATCH', headers: { ...prop, 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: { date: T(date) } }) });
+const dater = (d, date) => fetch(`${BANC.firestore}/v1/${d.name}?updateMask.fieldPaths=date`, { method: 'PATCH', headers: { ...prop, 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: { date: T(date) } }) });
 const remettre = async () => { for (const d of reculees) await dater(d, new Date(champ(d, 'date').timestampValue)); reculees = []; };
 
 /* Une case s'ouvre d'un clic sur son numéro (le bouton qui couvre la case
@@ -77,10 +77,10 @@ const nettoyer = async () => {
   await effacer('reunions/re-cal').catch(() => {});
   await effacer('projets/atelier/jalons/cal-etape').catch(() => {});
   for (const d of ((await lire('tickets?pageSize=300')).documents || [])) {
-    if (((champ(d, 'rendezVous').mapValue || {}).fields)) await fetch(`http://127.0.0.1:8080/v1/${d.name}`, { method: 'DELETE', headers: prop });
+    if (((champ(d, 'rendezVous').mapValue || {}).fields)) await fetch(`${BANC.firestore}/v1/${d.name}`, { method: 'DELETE', headers: prop });
   }
   for (const d of ((await lire('reunions?pageSize=300')).documents || [])) {
-    if (str(d, 'ticket')) await fetch(`http://127.0.0.1:8080/v1/${d.name}`, { method: 'DELETE', headers: prop });
+    if (str(d, 'ticket')) await fetch(`${BANC.firestore}/v1/${d.name}`, { method: 'DELETE', headers: prop });
   }
 };
 

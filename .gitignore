@@ -43,3 +43,7 @@ pubsub-debug.log
 fonctions-suivi/outils/donnees-locales/
 fonctions-suivi/qa/
 paquet-academy/
+
+# Les configurations des bancs supplémentaires, générées par
+# fonctions-suivi/outils/config-banc.cjs depuis firebase.suivi.json.
+firebase.suivi.banc*.json

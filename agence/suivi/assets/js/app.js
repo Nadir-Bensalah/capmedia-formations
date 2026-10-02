@@ -22,6 +22,7 @@ import * as messages from './vues/messages.js';
 import * as calendrier from './vues/calendrier.js';
 import * as activite from './vues/activite.js';
 import * as tests from './vues/tests.js';
+import * as planTests from './vues/plan-tests.js';
 import * as tableau from './vues/tableau.js';
 import * as finances from './vues/finances.js';
 import * as documents from './vues/documents.js';
@@ -274,6 +275,9 @@ definir([
   { chemin: '/valider/:vid', vue: (ctx) => demandes.vue(ctx, env) },
   { chemin: '/calendrier', vue: (ctx) => calendrier.vue(ctx, env) },
   { chemin: '/tests', cle: () => 'tests', vue: (ctx) => tests.vue(ctx, env) },
+  /* Ce qui va être testé : le plan de tests d'un projet, section par
+     section. La même page des deux côtés ; l'équipe y corrige. */
+  { chemin: '/tests/plan', cle: () => 'plan-tests', vue: (ctx) => planTests.vue(ctx, env) },
   { chemin: '/tests/tableau', vue: (ctx) => tableau.ancienne(ctx) },
   { chemin: '/tableau', vue: (ctx) => tableau.ancienne(ctx) },
   { chemin: '/finances', vue: (ctx) => finances.vue(ctx, env) },

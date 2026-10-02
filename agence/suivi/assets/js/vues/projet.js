@@ -121,7 +121,7 @@ export const vue = async (ctx, env) => {
   sortie.innerHTML = `<div class="page">${squelette('page', 6)}</div>`;
 
   const cles = [K.projet(pid), K.composants(pid), K.jalons(pid), K.liens(pid), K.taches(pid), K.tickets(pid), K.validations(pid), K.fichiers(pid), K.releases(pid), K.reunions(pid), K.notes(pid), K.blocages(pid), K.documents(pid), K.paiements(pid), K.montants(pid), K.activite(pid), K.equipe,
-    K.scenarios(pid), K.campagnes(pid), K.anomalies(pid), K.suggestions(pid), ...(env.role === 'equipe' ? [K.projetsInternes, K.interlocuteurs(pid), K.notesPartagees] : [])];
+    K.scenarios(pid), K.planPresentation(pid), K.campagnes(pid), K.anomalies(pid), K.suggestions(pid), ...(env.role === 'equipe' ? [K.projetsInternes, K.interlocuteurs(pid), K.notesPartagees] : [])];
   abonnerProjet(lot, pid, env.role);
 
   /* Une fiche ouverte par son adresse : une tâche (taches/:tid), une
@@ -191,7 +191,7 @@ export const vue = async (ctx, env) => {
               ${equipe && projet.aFaire && !projet.archive ? `<a class="etiquette etiquette--lien" href="#/a-faire/${echapper(pid)}">${icone('ampoule')} Projet à faire</a>` : ''}
               ${equipe && !projet.interne && nomsContacts(projet) ? `<span class="puce">${icone('utilisateurs')} ${echapper(nomsContacts(projet))}</span>` : ''}
               ${equipe && interneDuProjet(pid).sante && interneDuProjet(pid).sante !== 'ok' ? pastille(SANTES, interneDuProjet(pid).sante) : ''}
-              ${projet.cible ? `<span class="puce">${icone('cible')} Livraison visée ${echapper(dateCourte(projet.cible))}</span>${verdictHtml(delai)}` : ''}
+              ${dateCourte(projet.cible) ? `<span class="puce">${icone('cible')} Livraison visée ${echapper(dateCourte(projet.cible))}</span>${verdictHtml(delai)}` : ''}
               ${projet.responsable ? `<span class="puce">${icone('utilisateur')} ${echapper(nomEquipe(d.equipe, projet.responsable) || 'Capmedia')}</span>` : ''}
               <span class="puce t-3">${icone('horloge')} ${d.activite[0] ? `Dernière activité ${echapper(depuis(d.activite[0].date))}` : 'Pas encore d\'activité'}</span>
             </div>
@@ -420,8 +420,8 @@ const cartesPlateformes = (projet, d, pid) => {
     const c = d.composants.find((x) => x.type === (f.composant || cle)) || null;
     const v = etatVersions(d.releases, cle, c);
     const lignes = [];
-    if (v.disponible) lignes.push(`${v.disponible.version || ''} disponible${v.disponible.date ? ` depuis le ${dateCourte(v.disponible.date)}` : ''}`.trim());
-    if (v.enRoute) lignes.push(`${v.enRoute.version || ''} ${((STATUTS_RELEASE[v.enRoute.statut] || {}).libelle || 'en test').toLowerCase()}${v.enRoute.date ? ` depuis le ${dateCourte(v.enRoute.date)}` : ''}${v.enRoute.build ? ` · build ${v.enRoute.build}` : ''}`.trim());
+    if (v.disponible) lignes.push(`${v.disponible.version || ''} disponible${dateCourte(v.disponible.date) ? ` depuis le ${dateCourte(v.disponible.date)}` : ''}`.trim());
+    if (v.enRoute) lignes.push(`${v.enRoute.version || ''} ${((STATUTS_RELEASE[v.enRoute.statut] || {}).libelle || 'en test').toLowerCase()}${dateCourte(v.enRoute.date) ? ` depuis le ${dateCourte(v.enRoute.date)}` : ''}${v.enRoute.build ? ` · build ${v.enRoute.build}` : ''}`.trim());
     if (!lignes.length) lignes.push(c ? ((STATUTS_COMPOSANT[c.statut || 'en-cours'] || {}).libelle || 'En cours') : 'Pas encore suivie');
     const store = v.disponible && v.disponible.liens && v.disponible.liens.store;
     const test = v.enRoute && v.enRoute.liens && v.enRoute.liens.test;
@@ -512,7 +512,10 @@ const tests = (d, { pid, env }) => {
       <div><h2>Tests</h2><p class="chapo">${equipe
     ? `${pluriel(scenarios.length, 'scénario', 'scénarios')}, soit ${passages} passages sur mobile par campagne complète.`
     : `Votre application est testée par de vraies personnes avant chaque sortie : ${pluriel(scenarios.length, 'scénario', 'scénarios')} à dérouler${enCours.length ? `, ${pluriel(enCours.length, 'campagne en cours', 'campagnes en cours')}` : ''}.`}</p></div>
-      <a class="btn btn-principal btn-petit" href="#/tests?projet=${echapper(pid)}">${icone('bug')} ${equipe ? 'Ouvrir la console' : 'Voir les tests'}</a>
+      <div class="rang" style="gap:8px">
+        ${equipe || magasin.lire(K.planPresentation(pid)) ? `<a class="btn btn-secondaire btn-petit" href="#/tests/plan?projet=${echapper(pid)}" data-plan-tests>${icone('liste')} Ce qui va être testé</a>` : ''}
+        <a class="btn btn-principal btn-petit" href="#/tests?projet=${echapper(pid)}">${icone('bug')} ${equipe ? 'Ouvrir la console' : 'Voir les tests'}</a>
+      </div>
     </div>
 
     <div class="rang chiffres-tests">
@@ -530,7 +533,7 @@ const tests = (d, { pid, env }) => {
     ${enCours.length ? `<div class="liste" style="margin-top:16px">${enCours.map((c) => ligne({
       href: `#/tests?projet=${echapper(pid)}`, icone: 'bug', ton: 'bleu',
       titre: echapper(c.titre || 'Campagne'),
-      sous: `${(c.testeurs || []).length ? pluriel((c.testeurs || []).length, 'testeur', 'testeurs') : (equipe ? 'aucun testeur' : 'testeurs en cours d\'affectation')}${c.debut ? ` · depuis le ${echapper(dateCourte(c.debut))}` : ''}`,
+      sous: `${(c.testeurs || []).length ? pluriel((c.testeurs || []).length, 'testeur', 'testeurs') : (equipe ? 'aucun testeur' : 'testeurs en cours d\'affectation')}${dateCourte(c.debut) ? ` · depuis le ${echapper(dateCourte(c.debut))}` : ''}`,
       fin: pastille(STATUTS_CAMPAGNE, c.statut),
     })).join('')}</div>` : ''}
   </section>`;
@@ -587,7 +590,7 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
     ? `<p class="t-micro t-3" style="margin-top:6px">mis à jour le ${echapper(dateCourte(projet.pulseMaj))}${projet.pulsePar ? ` par ${echapper(String(projet.pulsePar).split(' ')[0])}` : ''}</p>`
     : '';
   const livraison = derniereRelease
-    ? `${libellePlateforme(derniereRelease.plateforme)} ${derniereRelease.version || ''}`.trim() + (derniereRelease.date ? ` · le ${dateCourte(derniereRelease.date)}` : '')
+    ? `${libellePlateforme(derniereRelease.plateforme)} ${derniereRelease.version || ''}`.trim() + (dateCourte(derniereRelease.date) ? ` · le ${dateCourte(derniereRelease.date)}` : '')
     : (dernierTermine ? dernierTermine.titre : 'Rien encore');
   const attenduTexte = attente.length ? `${pluriel(attente.length, 'point', 'points')}, voir ci-dessus` : 'Rien';
   const sourceProgression = prog.valeur === null
@@ -657,7 +660,7 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
       <div class="section-tete"><h2>Points bloquants</h2>${boutonNouveau(env, 'blocage', 'Signaler')}</div>
       <div class="pile">${blocagesOuverts.map((b) => `<div class="encart encart--alerte">${icone('alerte')}<div style="flex:1">
         <strong>${equipe ? echapper(b.titre) : `<button class="ligne-titre ligne-titre--bouton" type="button" data-action="ouvrir-blocage" data-id="${echapper(b.id)}" style="font:inherit;padding:0;text-align:left">${echapper(b.titre)}</button>`}</strong>${b.description ? ` · ${echapper(b.description)}` : ''}
-        <div class="rang t-micro t-3" style="margin-top:6px;gap:12px"><span>${echapper(coteBlocage(b.responsable, equipe))}</span><span>Depuis ${echapper(dateCourte(b.depuis))}</span>${b.echeance ? `<span>Attendu pour le ${echapper(dateCourte(b.echeance))}</span>` : ''}${b.impact ? `<span>Impact : ${echapper(b.impact)}</span>` : ''}${b.signaleFait ? `<span>${equipe ? `Le client dit que c'est fait ${echapper(dateCourte(b.signaleFait.date))}` : `Vous avez dit que c'est fait ${echapper(dateCourte(b.signaleFait.date))}`}</span>` : ''}</div>
+        <div class="rang t-micro t-3" style="margin-top:6px;gap:12px"><span>${echapper(coteBlocage(b.responsable, equipe))}</span><span>${dateCourte(b.depuis) ? `Depuis le ${echapper(dateCourte(b.depuis))}` : 'Depuis : date non renseignée'}</span>${dateCourte(b.echeance) ? `<span>Attendu pour le ${echapper(dateCourte(b.echeance))}</span>` : ''}${b.impact ? `<span>Impact : ${echapper(b.impact)}</span>` : ''}${b.signaleFait ? `<span>${equipe ? `Le client dit que c'est fait ${echapper(dateCourte(b.signaleFait.date))}` : `Vous avez dit que c'est fait ${echapper(dateCourte(b.signaleFait.date))}`}</span>` : ''}</div>
         ${!equipe && b.responsable === 'client' ? `<p class="t-petit" style="margin-top:8px"><button class="btn btn-secondaire btn-petit" type="button" data-action="ouvrir-blocage" data-id="${echapper(b.id)}">Voir ce qu'on attend de vous</button></p>` : ''}
       </div>${equipe ? `<span class="rang" style="gap:2px"><button class="btn btn-petit btn-doux" type="button" data-action="resoudre-blocage" data-id="${echapper(b.id)}">Levé</button>${boutonsEdition(env, 'blocage', b.id, b.titre)}</span>` : ''}</div>`).join('')}</div>
     </section>` : ''}
@@ -671,7 +674,7 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
             date : ce n'est pas la progression du projet, dite ailleurs. */ ''}
       <div class="grille grille-3">${d.composants.map((c) => `<a class="carte carte--serree carte--cliquable" href="#/projets/${echapper(pid)}/brique/${echapper(c.id)}" data-partie="${echapper(c.id)}">
         <div class="rang-espace"><p class="t-corps-fort rang" style="gap:8px">${iconePlateforme(c.type) ? `<span class="ligne-icone ligne-icone--${tonPlateforme(c.type)}" style="width:28px;height:28px;border-radius:8px">${icone(iconePlateforme(c.type))}</span>` : ''}${echapper(c.nom)}</p>${pastille(STATUTS_COMPOSANT, c.statut || 'en-cours')}</div>
-        <div class="rang-espace t-micro t-3" style="margin:10px 0 6px"><span>${echapper(TYPES_COMPOSANT[c.type] || c.type || '')}</span><span>avancement de la partie${c.maj ? ` · ${echapper(dateCourte(c.maj))}` : ''}</span></div>
+        <div class="rang-espace t-micro t-3" style="margin:10px 0 6px"><span>${echapper(TYPES_COMPOSANT[c.type] || c.type || '')}</span><span>avancement de la partie${dateCourte(c.maj) ? ` · ${echapper(dateCourte(c.maj))}` : ''}</span></div>
         ${progression(c.progression, borner(c.progression) >= 100 ? 'vert' : '')}
         ${c.environnement ? `<p class="t-micro t-3" style="margin-top:8px">${echapper(c.environnement)}</p>` : ''}
       </a>`).join('')}</div>
@@ -824,7 +827,7 @@ const phaseHtml = (j) => {
   return `<button class="phase ${classe}" type="button" data-action="ouvrir-etape" data-id="${echapper(j.id)}" data-astuce="Voir le détail">
     <span class="phase-etat"><i aria-hidden="true"></i><span class="t-micro t-3">${echapper((STATUTS_ETAPE[j.statut] || {}).libelle || '')}</span></span>
     <span class="phase-nom">${echapper(j.titre)}</span>
-    <span class="phase-sous">${echapper([j.phase, j.fin ? `fin ${dateCourte(j.fin)}` : ''].filter(Boolean).join(' · '))}${v.cle === 'depasse' ? ` <span class="t-alerte">· dépassée ${echapper(v.detail)}</span>` : ''}</span>
+    <span class="phase-sous">${echapper([j.phase, dateCourte(j.fin) ? `fin ${dateCourte(j.fin)}` : ''].filter(Boolean).join(' · '))}${v.cle === 'depasse' ? ` <span class="t-alerte">· dépassée ${echapper(v.detail)}</span>` : ''}</span>
     ${j.statut !== 'termine' && borner(j.progression) > 0 ? progression(j.progression) : ''}
   </button>`;
 };
@@ -876,7 +879,7 @@ const ouvrirEtape = (j, d, { pid, env }) => {
 
       <dl class="faits" style="margin-top:20px">
         ${fait('Début', j.debut ? echapper(dateLongue(j.debut)) : '')}
-        ${fait('Fin prévue', j.fin ? `${echapper(dateLongue(j.fin))}${decalee ? `<br><span class="t-micro t-3">initialement le ${echapper(dateCourte(origine))}</span>` : ''}` : '')}
+        ${fait('Fin prévue', dateLongue(j.fin) ? `${echapper(dateLongue(j.fin))}${decalee ? `<br><span class="t-micro t-3">initialement le ${echapper(dateCourte(origine))}</span>` : ''}` : '')}
         ${fait('Durée', echapper(duree(j.debut, j.fin)))}
         ${fait('Suivie par', echapper(j.responsable ? (nomEquipe(d.equipe, j.responsable) || 'Capmedia') : ''))}
       </dl>
@@ -997,7 +1000,7 @@ const taches = (d, { env, pid }) => {
     </div>
     ${!liste.length ? vide({ icone: 'taches', titre: 'Aucune tâche visible', texte: equipe ? 'Créez la première tâche du projet.' : 'Les tâches partagées avec vous apparaîtront ici.' })
     : mode === 'kanban' ? `<div class="kanban">${parStatut(liste, STATUTS_TACHE).map((col) => `<div class="kanban-col"><div class="kanban-tete"><span class="puce puce--${col.fiche.voile}"><i></i></span>${echapper(col.fiche.libelle)}<span class="badge">${col.items.length}</span></div>
-      ${col.items.map((t) => `<button class="kanban-carte" type="button" data-action="ouvrir-tache" data-id="${echapper(t.id)}"><p class="titre">${echapper(t.titre)}</p><div class="sous">${puce(PRIORITES, t.priorite || 'normale')}${t.echeance ? `<span>${echapper(dateCourte(t.echeance))}</span>` : ''}${t.assigne ? avatar(nomEquipe(d.equipe, t.assigne) || 'C', { equipe: true, taille: 'petit' }) : ''}</div></button>`).join('')}
+      ${col.items.map((t) => `<button class="kanban-carte" type="button" data-action="ouvrir-tache" data-id="${echapper(t.id)}"><p class="titre">${echapper(t.titre)}</p><div class="sous">${puce(PRIORITES, t.priorite || 'normale')}${dateCourte(t.echeance) ? `<span>${echapper(dateCourte(t.echeance))}</span>` : ''}${t.assigne ? avatar(nomEquipe(d.equipe, t.assigne) || 'C', { equipe: true, taille: 'petit' }) : ''}</div></button>`).join('')}
     </div>`).join('')}</div>`
     : `<div class="liste">${liste.map(ligneTache).join('')}</div>`}
   </section>`;
@@ -1179,7 +1182,7 @@ const releases = (d, { env }) => {
     <div class="section-tete"><h2>Versions et changements</h2>${boutonNouveau(env, 'release', 'Nouvelle version')}</div>
     ${liste.length ? `<div class="pile" style="gap:var(--e-4)">${liste.map((r) => `<div class="carte" data-release="${echapper(r.id)}">
       <div class="rang-espace" style="align-items:flex-start">
-        <div class="rang" style="gap:12px"><span class="ligne-icone${tonPlateforme(r.plateforme) ? ` ligne-icone--${tonPlateforme(r.plateforme)}` : ''}">${icone(iconePlateforme(r.plateforme) || 'releases')}</span><div><p class="t-titre-3 rang" style="gap:8px"><button class="lien" type="button" data-action="ouvrir-release" data-id="${echapper(r.id)}" style="font:inherit;color:inherit">${echapper(`${libellePlateforme(r.plateforme)} ${r.version || ''}`.trim())}</button>${r.titre ? ` <span class="t-2" style="font-weight:400">· ${echapper(r.titre)}</span>` : ''}</p><p class="t-petit t-3" style="margin-top:2px">${echapper([r.statut === 'disponible' ? `Publiée le ${dateCourte(r.date)}` : dateCourte(r.date), r.build && `build ${r.build}`, (d.composants.find((c) => c.id === r.composant) || {}).nom].filter(Boolean).join(' · '))}${r.visibilite === 'interne' ? ' · Interne' : ''}</p></div></div>
+        <div class="rang" style="gap:12px"><span class="ligne-icone${tonPlateforme(r.plateforme) ? ` ligne-icone--${tonPlateforme(r.plateforme)}` : ''}">${icone(iconePlateforme(r.plateforme) || 'releases')}</span><div><p class="t-titre-3 rang" style="gap:8px"><button class="lien" type="button" data-action="ouvrir-release" data-id="${echapper(r.id)}" style="font:inherit;color:inherit">${echapper(`${libellePlateforme(r.plateforme)} ${r.version || ''}`.trim())}</button>${r.titre ? ` <span class="t-2" style="font-weight:400">· ${echapper(r.titre)}</span>` : ''}</p><p class="t-petit t-3" style="margin-top:2px">${echapper([r.statut === 'disponible' ? (dateCourte(r.date) ? `Publiée le ${dateCourte(r.date)}` : 'Publiée, date non renseignée') : dateCourte(r.date), r.build && `build ${r.build}`, (d.composants.find((c) => c.id === r.composant) || {}).nom].filter(Boolean).join(' · '))}${r.visibilite === 'interne' ? ' · Interne' : ''}</p></div></div>
         <div class="rang">${pastille(STATUTS_RELEASE, r.statut || 'developpement')}${env.role === 'equipe' ? `<button class="btn-icone" type="button" data-action="editer" data-genre="release" data-id="${echapper(r.id)}" aria-label="Modifier">${icone('edit')}</button>` : ''}</div>
       </div>
       ${(r.notes || []).length ? `<ul style="margin-top:14px" class="pile" style="gap:6px">${r.notes.map((n) => `<li class="rang" style="gap:10px;align-items:flex-start"><span style="flex:none">${pastille(TYPES_CHANGEMENT, n.type || 'amelioration')}</span><span class="t-petit">${echapper(n.texte)}</span></li>`).join('')}</ul>` : ''}
@@ -1277,7 +1280,7 @@ const ouvrirReunion = (r, d, { pid, env }) => {
       ${r.lieu ? `<div style="margin-top:20px"><p class="surtitre">Lieu</p><p class="t-petit" style="margin-top:6px">${echapper(r.lieu)}</p></div>` : ''}
       ${(r.participants || []).length ? `<div style="margin-top:20px"><p class="surtitre">Participants</p><p class="t-petit" style="margin-top:6px">${echapper(r.participants.map((p) => p.nom || p.email).join(', '))}</p></div>` : ''}
       ${r.ordreDuJour ? `<div style="margin-top:20px"><p class="surtitre">Ordre du jour</p><div class="prose t-corps" style="margin-top:6px">${enParagraphes(r.ordreDuJour)}</div></div>` : ''}
-      ${r.compteRendu ? `<div style="margin-top:20px"><p class="surtitre">Compte rendu${r.compteRenduLe ? ` <span class="t-3" style="text-transform:none;letter-spacing:0">· publié le ${echapper(dateCourte(r.compteRenduLe))}</span>` : ''}</p><div class="prose t-corps" style="margin-top:6px">${avecLiens(r.compteRendu)}</div></div>` : ''}
+      ${r.compteRendu ? `<div style="margin-top:20px"><p class="surtitre">Compte rendu${dateCourte(r.compteRenduLe) ? ` <span class="t-3" style="text-transform:none;letter-spacing:0">· publié le ${echapper(dateCourte(r.compteRenduLe))}</span>` : ''}</p><div class="prose t-corps" style="margin-top:6px">${avecLiens(r.compteRendu)}</div></div>` : ''}
       ${r.decisions ? `<div style="margin-top:20px"><p class="surtitre">Décisions</p><div class="prose t-corps" style="margin-top:6px">${enParagraphes(r.decisions)}</div></div>` : ''}
       ${(r.actions || []).length ? `<div style="margin-top:20px"><p class="surtitre">Actions</p><p class="t-micro t-3" style="margin-top:2px">${equipe ? 'Le client peut cocher ce qui est fait.' : 'Cochez ce que vous avez fait : Capmedia le voit aussitôt.'}</p>${r.actions.map((a, i) => `<label class="coche${a.fait ? ' faite' : ''}"><input type="checkbox" data-action-reunion="${i}" ${a.fait ? 'checked' : ''}><span>${echapper(a.texte)}</span></label>`).join('')}</div>` : ''}
       ${sansContenu ? '<p class="t-petit t-3" style="margin-top:20px">Pas encore de contenu pour cette réunion.</p>' : ''}`,

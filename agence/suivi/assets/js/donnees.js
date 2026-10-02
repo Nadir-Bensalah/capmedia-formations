@@ -14,7 +14,7 @@ import {
   serverTimestamp, arrayUnion, arrayRemove, Timestamp, stockage, refStockage, deleteObject,
   nomAffiche, enDate, parDateDesc, parDateAsc, joursAvant, borner, age, retard, dateCourte,
   OUVERTS, ATTEND_CLIENT, ATTEND_EQUIPE, FACTURES_DUES, PROJETS_ACTIFS, CATEGORIES_CLIENT, projetEstActif, devisADecider, statutPiece,
-  statutProjet, pluriel, verdictDelai, NIVEAUX_SCENARIO, STATUTS_PIECE_VISIBLES, startAfter, peut, onSnapshot, writeBatch,
+  statutProjet, pluriel, verdictDelai, NIVEAUX_SCENARIO, STATUTS_PIECE_VISIBLES, startAfter, peut, onSnapshot, writeBatch, runTransaction,
 } from './noyau.js';
 import * as magasin from './magasin.js';
 
@@ -27,6 +27,11 @@ export const K = {
   composants: (p) => `composants:${p}`,
   jalons: (p) => `jalons:${p}`,
   scenarios: (p) => `scenarios:${p}`,
+  /* Le plan de tests (« ce qui va être testé ») : une section par document,
+     et la présentation de la page, seule lue partout pour savoir si le
+     plan existe (un petit document plutôt qu'une section entière). */
+  planTests: (p) => `plan-tests:${p}`,
+  planPresentation: (p) => `plan-presentation:${p}`,
   campagnes: (p) => `campagnes:${p}`,
   anomalies: (p) => `anomalies:${p}`,
   parcours: (p) => `parcours:${p}`,
@@ -213,6 +218,10 @@ export const abonnerProjet = (lot, pid, role) => {
      a été trouvé. Seuls les passages restent cloisonnés, et ils se lisent
      campagne par campagne, à l'ouverture. */
   lot.abonner(K.scenarios(pid), () => col('projets', pid, 'scenarios'));
+  /* Le plan de tests existe-t-il ? Sa présentation suffit à le dire : le
+     bouton « Ce qui va être testé » n'apparaît chez le client qu'avec elle.
+     Les sections, lourdes, ne se lisent que sur la page du plan. */
+  lot.abonner(K.planPresentation(pid), () => doc(bdd, 'projets', pid, 'planTests', 'presentation'));
   lot.abonner(K.campagnes(pid), () => col('projets', pid, 'campagnes'));
   lot.abonner(K.anomalies(pid), () => col('projets', pid, 'anomalies'));
   lot.abonner(K.parcours(pid), () => col('projets', pid, 'parcours'));
@@ -488,6 +497,22 @@ const dateOuNull = (valeur) => {
    4. Les écritures
    ========================================================================== */
 
+/* Les quatre aspects d'une section du plan de tests, dans l'ordre de la
+   page, et la lettre qui les marque dans l'identifiant d'un scénario
+   (« taches-f-001 » : fonctionnel). */
+export const ASPECTS_PLAN = ['fonctionnel', 'technique', 'ux', 'securite'];
+export const LETTRES_PLAN = { fonctionnel: 'f', technique: 't', ux: 'u', securite: 's' };
+/* Le prochain identifiant libre d'un aspect : le plus grand numéro déjà
+   pris, plus un. Un numéro retiré n'est jamais redonné à un autre cas. */
+export const prochainIdPlan = (sid, aspect, aspects) => {
+  const prefixe = `${sid}-${LETTRES_PLAN[aspect]}-`;
+  const max = ASPECTS_PLAN.flatMap((a) => (aspects[a] || []))
+    .map((x) => String(x.id || ''))
+    .filter((x) => x.startsWith(prefixe))
+    .reduce((m, x) => Math.max(m, Number(x.slice(prefixe.length)) || 0), 0);
+  return `${prefixe}${String(max + 1).padStart(3, '0')}`;
+};
+
 export const ecrire = {
   /* --- Les demandes -------------------------------------------------- */
   async creerDemande(session, pid, d, pieces = []) {
@@ -703,6 +728,54 @@ export const ecrire = {
   scenarioExiste: async (pid, ref) => (await getDoc(doc(bdd, 'projets', pid, 'scenarios', ref))).exists(),
   majScenario: (pid, ref, d) => updateDoc(doc(bdd, 'projets', pid, 'scenarios', ref), nettoyer({ ...d, maj: serverTimestamp() })),
   supprimerScenario: (pid, ref) => deleteDoc(doc(bdd, 'projets', pid, 'scenarios', ref)),
+
+  /* --- Le plan de tests (« ce qui va être testé ») -----------------------
+     Une section porte ses scénarios dans ses quatre aspects. Ajouter,
+     modifier ou retirer un scénario réécrit la liste de son aspect : on le
+     fait dans une transaction, pour que deux personnes qui éditent la même
+     section au même moment ne s'effacent pas l'une l'autre. Chaque
+     écriture dit qui l'a faite et quand : l'outil d'import refuse ensuite
+     d'écraser une section retouchée dans le Cockpit sans qu'on le lui dise. */
+  majSectionPlan: (pid, sid, uid, { titre, resume }) => updateDoc(doc(bdd, 'projets', pid, 'planTests', sid), {
+    titre, resume: resume || '', maj: serverTimestamp(), editeLe: serverTimestamp(), editePar: uid,
+  }),
+  enregistrerPresentationPlan: (pid, uid, { intro, plateformes, aspects }) => setDoc(doc(bdd, 'projets', pid, 'planTests', 'presentation'), {
+    genre: 'presentation', intro: intro || '', plateformes: plateformes || '', aspects: aspects || {},
+    maj: serverTimestamp(), editeLe: serverTimestamp(), editePar: uid,
+  }, { merge: true }),
+  async enregistrerScenarioPlan(pid, sid, uid, { ancien = '', aspect, scenario }) {
+    const ref = doc(bdd, 'projets', pid, 'planTests', sid);
+    let id = ancien;
+    await runTransaction(bdd, async (t) => {
+      const instantane = await t.get(ref);
+      if (!instantane.exists()) throw new Error('Cette section n\'existe plus.');
+      const aspects = { fonctionnel: [], technique: [], ux: [], securite: [], ...(instantane.data().aspects || {}) };
+      let avant = '';
+      if (ancien) {
+        avant = ASPECTS_PLAN.find((a) => (aspects[a] || []).some((x) => x.id === ancien)) || '';
+        if (!avant) throw new Error('Ce scénario a été retiré entre-temps.');
+      }
+      id = ancien && avant === aspect ? ancien : prochainIdPlan(sid, aspect, aspects);
+      const fiche = { ...scenario, id };
+      if (ancien && avant === aspect) aspects[aspect] = aspects[aspect].map((x) => (x.id === ancien ? fiche : x));
+      else {
+        if (ancien) aspects[avant] = aspects[avant].filter((x) => x.id !== ancien);
+        aspects[aspect] = [...(aspects[aspect] || []), fiche];
+      }
+      t.update(ref, { aspects, maj: serverTimestamp(), editeLe: serverTimestamp(), editePar: uid });
+    });
+    return id;
+  },
+  async supprimerScenarioPlan(pid, sid, uid, id) {
+    const ref = doc(bdd, 'projets', pid, 'planTests', sid);
+    await runTransaction(bdd, async (t) => {
+      const instantane = await t.get(ref);
+      if (!instantane.exists()) throw new Error('Cette section n\'existe plus.');
+      const aspects = { fonctionnel: [], technique: [], ux: [], securite: [], ...(instantane.data().aspects || {}) };
+      ASPECTS_PLAN.forEach((a) => { aspects[a] = (aspects[a] || []).filter((x) => x.id !== id); });
+      t.update(ref, { aspects, maj: serverTimestamp(), editeLe: serverTimestamp(), editePar: uid });
+    });
+  },
 
   /* Un parcours porte sa référence comme identifiant, comme un scénario :
      c'est elle que l'outil renvoie dans son rapport, et c'est par elle
@@ -1227,7 +1300,7 @@ export const enAttenteDeVous = ({ projets = [], tickets = [], validations = [], 
     genre: 'devis', projet: d.projet, icone: 'receipt', ton: 'bleu', titre: d.libelle, sous: `Devis à décider, envoyé il y a ${age(d.date)} · ${nomProjet(d.projet)}`, chemin: `/finances/${d.id}`, date: d.date,
   }));
   documents.filter((d) => d.type === 'facture' && FACTURES_DUES.includes(d.statut) && !d.archive).forEach((d) => items.push({
-    genre: 'facture', projet: d.projet, icone: 'euro', ton: statutPiece(d) === 'en-retard' ? 'rouge' : 'ambre', titre: d.libelle, sous: `Facture à régler${retard(d.echeance) ? `, en retard de ${retard(d.echeance)}` : d.echeance ? `, échéance ${dateCourte(d.echeance)}` : ''} · ${nomProjet(d.projet)}`, chemin: `/finances/${d.id}`, date: d.echeance || d.date,
+    genre: 'facture', projet: d.projet, icone: 'euro', ton: statutPiece(d) === 'en-retard' ? 'rouge' : 'ambre', titre: d.libelle, sous: `Facture à régler${retard(d.echeance) ? `, en retard de ${retard(d.echeance)}` : dateCourte(d.echeance) ? `, échéance ${dateCourte(d.echeance)}` : ''} · ${nomProjet(d.projet)}`, chemin: `/finances/${d.id}`, date: d.echeance || d.date,
   }));
   taches.filter((t) => t.statut === 'attente-client' && !t.archive).forEach((t) => items.push({
     genre: 'tache', projet: t.projet, icone: 'taches', ton: 'ambre', titre: t.titre, sous: `Nous attendons votre retour${retard(t.echeance) ? `, en retard de ${retard(t.echeance)}` : ''} · ${nomProjet(t.projet)}`, chemin: `/projets/${t.projet}/taches/${t.id}`, date: t.echeance || t.maj,

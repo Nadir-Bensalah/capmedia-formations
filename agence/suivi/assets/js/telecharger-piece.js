@@ -5,12 +5,12 @@
    de nouvel onglet ni passer par les règles du stockage.
    ========================================================================== */
 
-import { auth, surEmulateur } from './noyau.js';
+import { auth, surEmulateur, FONCTIONS_EMULATEUR } from './noyau.js';
 import { toast } from './ui.js';
 
 const PROJET = (window.AZ_SUIVI && window.AZ_SUIVI.firebase && window.AZ_SUIVI.firebase.projectId) || 'capmedia-1f90d';
 const URL_PIECE = surEmulateur
-  ? `http://127.0.0.1:5001/${PROJET}/europe-west1/suiviPiece`
+  ? `${FONCTIONS_EMULATEUR}/${PROJET}/europe-west1/suiviPiece`
   : `https://europe-west1-${PROJET}.cloudfunctions.net/suiviPiece`;
 
 export const telechargerPiece = async (d) => {

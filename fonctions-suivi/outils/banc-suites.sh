@@ -9,6 +9,8 @@
 #
 #  Émulateurs requis (auth, firestore, functions, storage) et site local sur
 #  8787 ; la garde du banc (lib/garde-banc.cjs) refuse de démarrer sinon.
+#  Second banc : BANC_NUMERO=2 (ports décalés de 10000, site sur 18787,
+#  émulateurs lancés avec la configuration que donne config-banc.cjs 2).
 #
 #    PLAN_DE_TESTS=<plan.md> bash fonctions-suivi/outils/banc-suites.sh <sortie> [suite ...]
 #
@@ -20,7 +22,12 @@ ICI="$(cd "$(dirname "$0")" && pwd)"
 RACINE="$(cd "$ICI/.." && pwd)"
 SORTIE="${1:?Usage : banc-suites.sh <dossier-de-sortie> [suite ...]}"; shift
 : "${PLAN_DE_TESTS:?PLAN_DE_TESTS doit désigner le plan de tests à importer}"
-export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 FIREBASE_STORAGE_EMULATOR_HOST=127.0.0.1:9199
+# Le numéro du banc (1 par défaut, 2 pour le second banc) décale tous les
+# ports de (N - 1) x 10000 : voir lib/ports-banc.cjs.
+export BANC_NUMERO="${BANC_NUMERO:-1}"
+D=$(( (BANC_NUMERO - 1) * 10000 ))
+export FIRESTORE_EMULATOR_HOST=127.0.0.1:$((8080 + D)) FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:$((9099 + D)) FIREBASE_STORAGE_EMULATOR_HOST=127.0.0.1:$((9199 + D))
+export FIREBASE_EMULATOR_HUB=127.0.0.1:$((4400 + D))
 export GCLOUD_PROJECT="${GCLOUD_PROJECT:-capmedia-1f90d}"
 mkdir -p "$SORTIE"
 cd "$RACINE" || exit 2
@@ -50,11 +57,11 @@ prealables() {
 compte() {
   for c in activite envois; do
     curl -s -X POST -H "Authorization: Bearer owner" -H "Content-Type: application/json" \
-      "http://127.0.0.1:8080/v1/projects/$GCLOUD_PROJECT/databases/(default)/documents:runAggregationQuery" \
+      "http://$FIRESTORE_EMULATOR_HOST/v1/projects/$GCLOUD_PROJECT/databases/(default)/documents:runAggregationQuery" \
       -d "{\"structuredAggregationQuery\":{\"structuredQuery\":{\"from\":[{\"collectionId\":\"$c\"}]},\"aggregations\":[{\"alias\":\"n\",\"count\":{}}]}}" | grep -o '"integerValue": *"[0-9]*"'
   done
   curl -s -X POST -H "Authorization: Bearer owner" -H "Content-Type: application/json" \
-    "http://127.0.0.1:8080/v1/projects/$GCLOUD_PROJECT/databases/(default)/documents:runAggregationQuery" \
+    "http://$FIRESTORE_EMULATOR_HOST/v1/projects/$GCLOUD_PROJECT/databases/(default)/documents:runAggregationQuery" \
     -d '{"structuredAggregationQuery":{"structuredQuery":{"from":[{"collectionId":"notifications","allDescendants":true}]},"aggregations":[{"alias":"n","count":{}}]}}' | grep -o '"integerValue": *"[0-9]*"'
 }
 attendreLeCalme() {
@@ -72,8 +79,8 @@ if [ ${#SUITES[@]} -eq 0 ]; then SUITES=($(cd "$ICI" && ls qa-*.cjs | sed 's/\.c
 
 echec=0
 for n in "${SUITES[@]}"; do
-  curl -s -X DELETE "http://127.0.0.1:8080/emulator/v1/projects/$GCLOUD_PROJECT/databases/(default)/documents" >/dev/null
-  curl -s -X DELETE "http://127.0.0.1:9099/emulator/v1/projects/$GCLOUD_PROJECT/accounts" >/dev/null
+  curl -s -X DELETE "http://$FIRESTORE_EMULATOR_HOST/emulator/v1/projects/$GCLOUD_PROJECT/databases/(default)/documents" >/dev/null
+  curl -s -X DELETE "http://$FIREBASE_AUTH_EMULATOR_HOST/emulator/v1/projects/$GCLOUD_PROJECT/accounts" >/dev/null
   {
     node outils/semer-suivi.mjs
     node outils/semer-campagne.mjs "$PLAN_DE_TESTS"

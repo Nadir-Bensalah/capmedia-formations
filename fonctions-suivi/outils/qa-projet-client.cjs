@@ -7,15 +7,15 @@
    page Activité (19), la fiche d'une version par son adresse (15), un lien
    « Accès » avec identifiant copiable (45).
    Banc : émulateurs, site local, semer-suivi. */
-require('./lib/garde-banc.cjs');
+require('./lib/garde-banc.cjs'); const BANC = require('./lib/ports-banc.cjs');
 const { chromium } = require('@playwright/test');
 const fs = require('node:fs');
-const PROJET = 'capmedia-1f90d'; const SITE = 'http://127.0.0.1:8787';
+const PROJET = 'capmedia-1f90d'; const SITE = BANC.site;
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 const prop = { Authorization: 'Bearer owner' };
-const bdd = (c) => `http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
+const bdd = (c) => `${BANC.firestore}/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
 const lire = async (c) => (await fetch(bdd(c), { headers: prop })).json();
-const vider = async (col) => { const j = await lire(`${col}?pageSize=300`); for (const d of (j && j.documents) || []) await fetch(`http://127.0.0.1:8080/v1/${d.name}`, { method: 'DELETE', headers: prop }); };
+const vider = async (col) => { const j = await lire(`${col}?pageSize=300`); for (const d of (j && j.documents) || []) await fetch(`${BANC.firestore}/v1/${d.name}`, { method: 'DELETE', headers: prop }); };
 const S = (v) => ({ stringValue: String(v) }); const T = (d) => ({ timestampValue: d.toISOString() }); const N = (v) => ({ integerValue: String(v) }); const B = (v) => ({ booleanValue: v });
 const M = (fields) => ({ mapValue: { fields } }); const A = (values) => ({ arrayValue: { values } });
 const poser = async (chemin, fields, masque) => fetch(`${bdd(chemin)}${masque ? `?${masque.map((m) => `updateMask.fieldPaths=${m}`).join('&')}` : ''}`, { method: 'PATCH', headers: { ...prop, 'Content-Type': 'application/json' }, body: JSON.stringify({ fields }) });

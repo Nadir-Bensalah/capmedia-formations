@@ -1,4 +1,4 @@
-require('./lib/garde-banc.cjs');
+require('./lib/garde-banc.cjs'); const BANC = require('./lib/ports-banc.cjs');
 const { lireRest } = require('./lib/rest-banc.cjs');
 /* ==========================================================================
    CAPMEDIA CLIENT HUB · la bibliothèque de scénarios à l'épreuve
@@ -23,12 +23,12 @@ const { lireRest } = require('./lib/rest-banc.cjs');
 
 const { chromium } = require('@playwright/test');
 const PROJET = 'capmedia-1f90d';
-const SITE = 'http://127.0.0.1:8787';
+const SITE = BANC.site;
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 const proprietaire = { Authorization: 'Bearer owner' };
-const bdd = (c) => `http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
+const bdd = (c) => `${BANC.firestore}/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
 const lire = async (c) => lireRest(bdd(c), proprietaire);
-const vider = async (col) => { const j = await lire(`${col}?pageSize=300`); for (const d of (j && j.documents) || []) await fetch(`http://127.0.0.1:8080/v1/${d.name}`, { method: 'DELETE', headers: proprietaire }); };
+const vider = async (col) => { const j = await lire(`${col}?pageSize=300`); for (const d of (j && j.documents) || []) await fetch(`${BANC.firestore}/v1/${d.name}`, { method: 'DELETE', headers: proprietaire }); };
 const soucis = []; const ok = (m) => console.log('  ok     ' + m);
 const dire = (m) => { soucis.push(m); console.log('  ÉCART  ' + m); };
 const verifier = (c, bien, mal) => (c ? ok(bien) : dire(mal ? `${bien} · ${mal}` : bien));
@@ -86,7 +86,7 @@ const aller = async (page, hash, attendu) => {
   /* Le projet « boutique » du semis n'a ni scénario ni campagne : c'est le
      seul cas où l'onglet Tests propose encore d'en écrire un. */
   const P = 'boutique';
-  await fetch(`http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/documents/projets/${P}/scenarios/ZZ-01`, { method: 'DELETE', headers: proprietaire });
+  await fetch(`${BANC.firestore}/v1/projects/${PROJET}/databases/(default)/documents/projets/${P}/scenarios/ZZ-01`, { method: 'DELETE', headers: proprietaire });
 
   await connecter(page, 'agent.essai@exemple.test');
   await aller(page, `/projets/${P}/tests`, '[data-action="nouveau"][data-genre="scenario"]');
@@ -176,7 +176,7 @@ const aller = async (page, hash, attendu) => {
   verifier(vueClient.boutonsEdition === 0, 'le client n\'a pas les boutons de modification');
 
   /* Ménage : le scénario d'essai ne reste pas au banc. */
-  await fetch(`http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/documents/projets/${P}/scenarios/ZZ-01`, { method: 'DELETE', headers: proprietaire });
+  await fetch(`${BANC.firestore}/v1/projects/${PROJET}/databases/(default)/documents/projets/${P}/scenarios/ZZ-01`, { method: 'DELETE', headers: proprietaire });
 
   console.log('\n' + (soucis.length ? `${soucis.length} ÉCART(S)` : 'tout est conforme'));
   console.log('Erreurs JS :', erreurs.length ? erreurs.slice(0, 3).join(' | ') : 'aucune');

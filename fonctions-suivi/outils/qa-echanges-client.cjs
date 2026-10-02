@@ -14,17 +14,17 @@
 
    Banc : émulateurs (Functions et Storage compris), site local, semer-suivi.
    ========================================================================== */
-require('./lib/garde-banc.cjs');
+require('./lib/garde-banc.cjs'); const BANC = require('./lib/ports-banc.cjs');
 const { chromium } = require('@playwright/test');
 const { lireRest } = require('./lib/rest-banc.cjs');
 const admin = require('../node_modules/firebase-admin');
-const PROJET = 'capmedia-1f90d'; const SITE = process.env.BANC_SITE || 'http://127.0.0.1:8787';
+const PROJET = 'capmedia-1f90d'; const SITE = process.env.BANC_SITE || BANC.site;
 const SEAU = 'capmedia-1f90d.firebasestorage.app';
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 const prop = { Authorization: 'Bearer owner' };
-const bdd = (c) => `http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
+const bdd = (c) => `${BANC.firestore}/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
 const lire = async (c) => lireRest(bdd(c), prop);
-const vider = async (col) => { const j = await lire(`${col}?pageSize=300`); for (const d of (j && j.documents) || []) await fetch(`http://127.0.0.1:8080/v1/${d.name}`, { method: 'DELETE', headers: prop }); };
+const vider = async (col) => { const j = await lire(`${col}?pageSize=300`); for (const d of (j && j.documents) || []) await fetch(`${BANC.firestore}/v1/${d.name}`, { method: 'DELETE', headers: prop }); };
 const effacer = async (chemin) => fetch(bdd(chemin), { method: 'DELETE', headers: prop }).catch(() => {});
 const S = (v) => ({ stringValue: String(v) }); const T = (d) => ({ timestampValue: d.toISOString() }); const N = (v) => ({ integerValue: String(v) }); const B = (v) => ({ booleanValue: v });
 const L = (valeurs) => ({ arrayValue: { values: valeurs } }); const M = (fields) => ({ mapValue: { fields } });
@@ -44,7 +44,7 @@ const connecter = async (page, email) => {
   await pause(2500);
 };
 const aller = async (page, hash) => { await page.evaluate((h) => { location.hash = h; }, hash); await pause(1500); };
-const uidDe = async (email) => { const r = await fetch(`http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/projects/${PROJET}/accounts:lookup`, { method: 'POST', headers: { ...prop, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: [email] }) }); const j = await r.json(); return ((j.users || [])[0] || {}).localId || ''; };
+const uidDe = async (email) => { const r = await fetch(`${BANC.auth}/identitytoolkit.googleapis.com/v1/projects/${PROJET}/accounts:lookup`, { method: 'POST', headers: { ...prop, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: [email] }) }); const j = await r.json(); return ((j.users || [])[0] || {}).localId || ''; };
 /* Attendre qu'un déclencheur ait écrit : on relit jusqu'à trouver, 30 s au plus. */
 const attendre = async (fn, ms = 30000) => { const fin = Date.now() + ms; while (Date.now() < fin) { const v = await fn(); if (v) return v; await pause(600); } return null; };
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
@@ -68,7 +68,7 @@ let page = null;
   await poser('fichiers/qa-mien', { projet: S('atelier'), composant: S(''), categorie: S('assets'), nom: S('logo-qa.png'), chemin: S(CHEMIN), taille: N(PNG.length), type: S('image/png'), description: S(''), tags: L([]), par: M({ uid: S(uid), nom: S('Camille Martin'), cote: S('client') }), visibilite: S('client'), version: S(''), archive: B(false), cree: T(new Date()) });
   await effacer('projets/atelier/anomalies/qa-ano');
   await effacer('projets/atelier/campagnes/qa-sortie');
-  for (const d of await docs('validations?pageSize=200')) if (str(d, 'type') === 'sortie' && str(d, 'projet') === 'atelier') await fetch(`http://127.0.0.1:8080/v1/${d.name}`, { method: 'DELETE', headers: prop });
+  for (const d of await docs('validations?pageSize=200')) if (str(d, 'type') === 'sortie' && str(d, 'projet') === 'atelier') await fetch(`${BANC.firestore}/v1/${d.name}`, { method: 'DELETE', headers: prop });
   await poser('projets/atelier/scenarios/QA-01', { ref: S('QA-01'), titre: S('Revenir en arrière depuis le profil'), bloc: S('navigation'), niveau: S('socle'), plateformes: L([S('ios'), S('android')]), attendu: S('Le bouton Retour ramène à la liste.'), actif: B(true), ordre: N(1) });
   await vider(`boites/${uid}/notifications`);
   await vider('envois');
@@ -220,7 +220,7 @@ let page = null;
   await page.click('#forme-demande [type="submit"]');
   const ticket = await attendre(async () => (await docs('tickets?pageSize=300')).find((t) => str(t, 'anomalie') === 'qa-ano'), 15000);
   verifier(Boolean(ticket), 'la demande créée garde le lien avec l anomalie');
-  if (ticket) await fetch(`http://127.0.0.1:8080/v1/${ticket.name}`, { method: 'DELETE', headers: prop });
+  if (ticket) await fetch(`${BANC.firestore}/v1/${ticket.name}`, { method: 'DELETE', headers: prop });
 
   console.log('\n== « Bon pour sortie » côté client');
   await aller(page, '#/demandes');

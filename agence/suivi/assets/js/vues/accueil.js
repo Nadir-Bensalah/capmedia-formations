@@ -252,7 +252,7 @@ export const vue = async (ctx, env) => {
             <div class="pile" style="margin-top:10px;gap:8px">${dernieresReleases.map((r) => `
               <a class="rang" style="gap:10px;color:inherit;flex-wrap:nowrap" href="#/projets/${echapper(r.projet)}/releases">
                 <span class="ligne-icone ligne-icone--vert" style="width:30px;height:30px">${icone('releases')}</span>
-                <span style="min-width:0"><span class="t-petit t-fort" style="display:block">${echapper(`${libellePlateforme(r.plateforme)} ${r.version || ''}`.trim())}</span><span class="t-micro t-3">${echapper(dateCourte(r.date))}</span></span>
+                <span style="min-width:0"><span class="t-petit t-fort" style="display:block">${echapper(`${libellePlateforme(r.plateforme)} ${r.version || ''}`.trim())}</span><span class="t-micro t-3">${echapper(dateCourte(r.date) || 'Date non renseignée')}</span></span>
               </a>`).join('')}</div>
           </div>` : ''}
         </aside>

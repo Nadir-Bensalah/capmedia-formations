@@ -9,19 +9,19 @@
 
    Banc : émulateurs (Functions et Storage compris), site local, semer-suivi.
    ========================================================================== */
-require('./lib/garde-banc.cjs');
+require('./lib/garde-banc.cjs'); const BANC = require('./lib/ports-banc.cjs');
 const { chromium } = require('@playwright/test');
 const { lireRest } = require('./lib/rest-banc.cjs');
 const { jetonPour } = require('./lib/session-banc.cjs');
 const admin = require('../node_modules/firebase-admin');
-const PROJET = 'capmedia-1f90d'; const SITE = process.env.BANC_SITE || 'http://127.0.0.1:8787';
+const PROJET = 'capmedia-1f90d'; const SITE = process.env.BANC_SITE || BANC.site;
 const SEAU = 'capmedia-1f90d.firebasestorage.app';
-const PIECE = `http://127.0.0.1:5001/${PROJET}/europe-west1/suiviPiece`;
+const PIECE = `${BANC.fonctions}/${PROJET}/europe-west1/suiviPiece`;
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 const prop = { Authorization: 'Bearer owner' };
-const bdd = (c) => `http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
+const bdd = (c) => `${BANC.firestore}/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
 const lire = async (c) => lireRest(bdd(c), prop);
-const vider = async (col) => { const j = await lire(`${col}?pageSize=300`); for (const d of (j && j.documents) || []) await fetch(`http://127.0.0.1:8080/v1/${d.name}`, { method: 'DELETE', headers: prop }); };
+const vider = async (col) => { const j = await lire(`${col}?pageSize=300`); for (const d of (j && j.documents) || []) await fetch(`${BANC.firestore}/v1/${d.name}`, { method: 'DELETE', headers: prop }); };
 const S = (v) => ({ stringValue: String(v) }); const N = (v) => ({ integerValue: String(v) });
 const poser = async (chemin, fields, masque) => fetch(`${bdd(chemin)}${masque ? `?${masque.map((m) => `updateMask.fieldPaths=${m}`).join('&')}` : ''}`, { method: 'PATCH', headers: { ...prop, 'Content-Type': 'application/json' }, body: JSON.stringify({ fields }) });
 const champ = (d, n) => (((d || {}).fields || {})[n]) || {};

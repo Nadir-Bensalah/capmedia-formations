@@ -1,0 +1,62 @@
+{
+  "id": "notes",
+  "groupe": "fonctionnalites",
+  "ordre": 25,
+  "titre": "Notes rapides",
+  "resume": "Noter une idée en deux secondes, la retrouver, la supprimer.",
+  "plateformes": [
+    "ios",
+    "android",
+    "web"
+  ],
+  "aspects": {
+    "fonctionnel": [
+      {
+        "id": "notes-f-001",
+        "titre": "Écrire une note",
+        "etapes": "Ouvrir Notes, écrire, revenir.",
+        "attendu": "La note est gardée sans bouton à appuyer.",
+        "plateformes": [
+          "ios",
+          "android",
+          "web"
+        ],
+        "type": "normal",
+        "priorite": "moyenne",
+        "refs": []
+      },
+      {
+        "id": "notes-f-002",
+        "titre": "Note vide",
+        "etapes": "Ouvrir une note et revenir sans rien écrire.",
+        "attendu": "Aucune note vide n'est créée.",
+        "plateformes": [
+          "ios",
+          "android",
+          "web"
+        ],
+        "type": "limite",
+        "priorite": "basse",
+        "refs": []
+      }
+    ],
+    "technique": [],
+    "ux": [
+      {
+        "id": "notes-u-001",
+        "titre": "Retour visuel après suppression",
+        "etapes": "Supprimer une note.",
+        "attendu": "Un court message confirme, avec un bouton Annuler.",
+        "plateformes": [
+          "ios",
+          "android",
+          "web"
+        ],
+        "type": "normal",
+        "priorite": "basse",
+        "refs": []
+      }
+    ],
+    "securite": []
+  }
+}

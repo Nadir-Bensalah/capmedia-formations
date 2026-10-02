@@ -47,7 +47,7 @@ export const accesHtml = (d, { pid, env }) => {
         <p class="surtitre">Ouvert au client</p>
         <p class="t-titre-3" style="margin-top:4px">${ouvert ? 'Oui : les interlocuteurs actifs ont accès' : 'Non : personne n\'a accès, rien ne part'}</p>
         <p class="t-petit t-2" style="margin-top:4px">${ouvert
-          ? `Ouvert${projet.ouvertLe ? ` le ${echapper(dateCourte(projet.ouvertLe))}` : ''}. Refermer retire l'accès sans rien supprimer.`
+          ? `Ouvert${dateCourte(projet.ouvertLe) ? ` le ${echapper(dateCourte(projet.ouvertLe))}` : ''}. Refermer retire l'accès sans rien supprimer.`
           : "Tant qu'il est fermé, vous préparez le projet en interne : aucun e-mail, aucune notification, aucune invitation. La première ouverture envoie une lettre par personne, avec un résumé de ce qui l'attend, jamais l'historique."}</p>
       </div>
       ${gererOuverture ? (ouvert
@@ -72,7 +72,7 @@ export const accesHtml = (d, { pid, env }) => {
 
   const lignePersonne = (i) => ligne({
     titre: `<span class="rang" style="gap:10px">${avatar(i.nom || i.email)} ${echapper(i.nom || i.email)} ${pastilleRole(i.role)} ${i.statut === 'actif' ? pastilleInvitation(i) : pastilleTexte('Accès retiré', 'gris')}</span>`,
-    sous: `${echapper(i.email)}${i.statut !== 'actif' && i.retireLe ? ` · retiré le ${echapper(dateCourte(i.retireLe))}` : ''}${i.statut === 'actif' && i.invitation && i.invitation.envoyee ? ` · invitée le ${echapper(dateHeure(i.invitation.envoyee))}` : ''}`,
+    sous: `${echapper(i.email)}${i.statut !== 'actif' && dateCourte(i.retireLe) ? ` · retiré le ${echapper(dateCourte(i.retireLe))}` : ''}${i.statut === 'actif' && i.invitation && dateHeure(i.invitation.envoyee) ? ` · invitée le ${echapper(dateHeure(i.invitation.envoyee))}` : ''}`,
     fin: gererAcces ? `<button class="btn-icone" type="button" data-action="acces-menu" data-cle="${echapper(i.id)}" aria-label="Gérer l'accès de ${echapper(i.nom || i.email)}">${icone('points')}</button>` : '',
     attrs: `data-interlocuteur="${echapper(i.id)}"`,
   });

@@ -1,5 +1,5 @@
 /* Cette suite provoque des violations exprès et fait ses propres comptes. */
-require('./lib/garde-banc.cjs').cspVoulue = true;
+require('./lib/garde-banc.cjs').cspVoulue = true; const BANC = require('./lib/ports-banc.cjs');
 /* ==========================================================================
    CAPMEDIA CLIENT HUB · la politique de sécurité du contenu (CSP)
 
@@ -24,14 +24,14 @@ const fs = require('fs');
 const path = require('path');
 const { lireRest } = require('./lib/rest-banc.cjs');
 
-const PROJET = 'capmedia-1f90d'; const SITE = process.env.BANC_SITE || 'http://127.0.0.1:8787';
+const PROJET = 'capmedia-1f90d'; const SITE = process.env.BANC_SITE || BANC.site;
 const AGENCE = path.resolve(__dirname, '../../agence');
 const SUIVI = path.join(AGENCE, 'suivi');
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 const prop = { Authorization: 'Bearer owner' };
-const bdd = (c) => `http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
+const bdd = (c) => `${BANC.firestore}/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
 const lire = async (c) => lireRest(bdd(c), prop);
-const vider = async (col) => { const j = await lire(`${col}?pageSize=300`); for (const d of (j && j.documents) || []) await fetch(`http://127.0.0.1:8080/v1/${d.name}`, { method: 'DELETE', headers: prop }); };
+const vider = async (col) => { const j = await lire(`${col}?pageSize=300`); for (const d of (j && j.documents) || []) await fetch(`${BANC.firestore}/v1/${d.name}`, { method: 'DELETE', headers: prop }); };
 const champ = (d, n) => (((d || {}).fields || {})[n]) || {};
 const str = (d, n) => champ(d, n).stringValue || '';
 const dernierCode = async (e) => { for (let i = 0; i < 40; i += 1) { const j = await lire('envois?pageSize=200'); const p = ((j && j.documents) || []).filter((d) => str(d, 'modele') === 'code' && ((((d.fields || {}).a || {}).arrayValue || {}).values || []).some((x) => ((((x.mapValue || {}).fields || {}).email) || {}).stringValue === e)); if (p.length) { p.sort((x, y) => new Date(((y.fields.cree || {}).timestampValue) || 0) - new Date(((x.fields.cree || {}).timestampValue) || 0)); const v = (((p[0].fields.variables || {}).mapValue || {}).fields) || {}; if (v.code && v.code.stringValue) return v.code.stringValue; } await pause(300); } return ''; };

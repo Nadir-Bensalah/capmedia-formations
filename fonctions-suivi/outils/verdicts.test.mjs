@@ -16,6 +16,8 @@
 import {
   verdictScenario, verdictTesteur, verdictParcours, tableauHumain,
   tableauTesteur, tableauMachine, rythme, anomalieDeLaCampagne,
+  tableauPlan, verdictScenarioPlan, pireEtat,
+  tableauHumainPlan, verdictHumainPlan, pireHumain,
 } from '../../agence/suivi/assets/js/verdicts.js';
 
 let echecs = 0;
@@ -137,6 +139,133 @@ console.log('\n== Le tableau d un testeur et celui de la machine');
   });
   egal(m.total, 3, 'le parcours inactif n a pas de case');
   egal(m.familles.map((f) => f.libelle).join(' | '), 'Tâches | Jest hors scénario | Règles métier', 'rangés par famille de scénario, puis par outil, puis les règles');
+}
+
+console.log('\n== Le tableau des robots rangé par le plan');
+{
+  egal(pireEtat(['ok', 'casse', 'fragile']), 'casse', 'le pire l emporte : cassé');
+  egal(pireEtat(['ok', 'fragile']), 'fragile', 'un instable passe devant un vert');
+  egal(pireEtat(['ok', 'jamais']), 'jamais', 'un jamais lancé passe devant un vert');
+  egal(pireEtat(['ok', 'aecrire']), 'aecrire', 'une plateforme sans test passe devant un vert');
+  egal(pireEtat([]), 'aecrire', 'rien : à écrire');
+  egal(verdictParcours({ etat: 'rouge', defautConnu: true }), 'connu', 'un rouge sur un défaut connu : défaut connu, pas cassé');
+  egal(verdictParcours({ etat: 'rouge', dernier: { defautConnu: true } }), 'connu', 'la marque peut aussi venir du dernier résultat');
+  egal(verdictParcours({ etat: 'vert', defautConnu: true }), 'ok', 'le défaut corrigé, le test au vert : réussi');
+  egal(verdictParcours({ etat: 'rouge' }), 'casse', 'un rouge sans marque reste cassé');
+  egal(pireEtat(['connu', 'casse']), 'casse', 'un vrai cassé passe devant un défaut connu');
+  egal(pireEtat(['connu', 'fragile']), 'fragile', 'un instable passe devant un défaut connu');
+  egal(pireEtat(['ok', 'connu', 'jamais']), 'connu', 'un défaut connu passe devant un jamais lancé et un vert');
+  egal(tableauPlan({ sections: [], regles: [{ ref: 'RG', etat: 'rouge', defautConnu: true }] }).compte.connu, 1, 'une règle sur un défaut connu se compte comme telle');
+  const pIos = { ref: 'TA-01', plateformes: ['ios'], etat: 'vert' };
+  const pAnd = { ref: 'TA-02', plateformes: ['android'], etat: 'rouge' };
+  const pWeb = { ref: 'TW-01', plateformes: ['web'], etat: 'instable' };
+  const sc = { plateformes: ['ios', 'android', 'web'] };
+  egal(verdictScenarioPlan({ scenario: sc, rattaches: [pIos, pAnd, pWeb] }).etat, 'casse', 'toutes plateformes : le pire des plateformes');
+  egal(verdictScenarioPlan({ scenario: sc, rattaches: [pIos, pAnd, pWeb], plateforme: 'ios' }).etat, 'ok', 'sur iOS : le résultat d iOS');
+  egal(verdictScenarioPlan({ scenario: sc, rattaches: [pIos, pAnd, pWeb], plateforme: 'web' }).etat, 'fragile', 'sur le web : le résultat du web');
+  egal(verdictScenarioPlan({ scenario: sc, rattaches: [pIos] }).etat, 'aecrire', 'vert sur iOS, rien ailleurs : à écrire tant qu une plateforme manque');
+  egal(verdictScenarioPlan({ scenario: sc, rattaches: [pIos], plateforme: 'android' }).etat, 'aecrire', 'sur Android sans test : à écrire');
+  egal(verdictScenarioPlan({ scenario: sc, rattaches: [] }).etat, 'aecrire', 'aucun test rattaché : à écrire');
+  egal(verdictScenarioPlan({ scenario: sc, rattaches: [{ ref: 'X', plateformes: [], etat: 'vert' }] }).etat, 'ok', 'un test sans plateforme déclarée vaut partout');
+  egal(verdictScenarioPlan({ scenario: { plateformes: ['ios'] }, rattaches: [pIos, { ref: 'TA-03', plateformes: ['ios'], etat: 'ecrit' }] }).etat, 'jamais', 'deux tests sur iOS, un jamais lancé : jamais lancé');
+
+  const sections = [
+    { id: 'taches', titre: 'Tâches', groupe: 'fonctionnalites', aspects: {
+      fonctionnel: [
+        { id: 'taches-f-001', qui: 'robot', plateformes: ['ios'], parcours: ['TA-01'] },
+        { id: 'taches-f-002', qui: 'humain', plateformes: ['ios'], parcours: ['TA-09'] },
+        { id: 'taches-f-003', qui: 'les-deux', plateformes: ['ios', 'android'], parcours: ['TA-01', 'TA-02'] },
+      ],
+      technique: [{ id: 'taches-t-001', qui: 'les-deux', plateformes: ['web'], parcours: [] }],
+      ux: [], securite: [] } },
+    { id: 'compte', titre: 'Compte', groupe: 'demarrage', aspects: { fonctionnel: [{ id: 'compte-f-001', qui: 'humain', plateformes: ['ios'] }], technique: [], ux: [], securite: [] } },
+  ];
+  const parcours = [pIos, pAnd, { ref: 'TA-09', plateformes: ['ios'], etat: 'vert' }, { ref: 'HP-01', plateformes: ['web'], etat: 'vert' }, { ref: 'OFF', etat: 'rouge', actif: false }];
+  const t = tableauPlan({ sections, parcours, regles: [{ ref: 'RG-1', etat: 'vert' }] });
+  egal(t.familles.map((f) => f.libelle).join(' | '), 'Tâches | Compte | Règles métier | Hors plan', 'une carte par section, dans l ordre donné, puis les règles et le hors plan');
+  egal(t.familles[0].cases.map((c) => c.ref).join(','), 'taches-f-001,taches-f-003,taches-t-001', 'une case par scénario robot ou humain et robot, aucune pour un humain seul');
+  egal(t.familles[1].cases.length, 0, 'une section sans scénario pour les robots garde sa carte, vide');
+  egal(t.familles[0].cases.map((c) => c.etat).join(','), 'ok,casse,aecrire', 'le statut vient des tests rattachés, le pire l emporte');
+  egal(t.familles[3].cases.map((c) => c.ref).sort().join(','), 'HP-01,TA-09', 'hors plan : les tests actifs que ne vérifie aucun scénario robot');
+  egal(t.total, 4, 'le compte : trois scénarios et une règle, sans le hors plan');
+  egal(t.compte.ok, 2, 'deux réussis (un scénario, une règle)');
+  egal(`${t.qui.robot}/${t.qui['les-deux']}`, '1/2', 'un robot seul, deux humain et robot');
+  const ios = tableauPlan({ sections, parcours, plateforme: 'ios' });
+  egal(ios.familles[0].cases.map((c) => `${c.ref}=${c.etat}`).join(','), 'taches-f-001=ok,taches-f-003=ok', 'sur iOS : les cases d iOS, le résultat d iOS');
+  egal(ios.familles.find((f) => f.horsPlan).cases.map((c) => c.ref).join(','), 'TA-09', 'le hors plan suit le filtre de plateforme');
+}
+
+console.log('\n== Le tableau des humains rangé par le plan');
+{
+  egal(pireHumain(['ok', 'casse', 'fragile']), 'casse', 'le pire l emporte : cassé');
+  egal(pireHumain(['ok', 'fragile']), 'fragile', 'un fragile passe devant un réussi');
+  egal(pireHumain(['ok', 'cours']), 'cours', 'un KO corrigé à rejouer passe devant un réussi');
+  egal(pireHumain(['na', 'ok']), 'ok', 'un réussi et un sans objet : réussi');
+  egal(pireHumain([]), 'nonteste', 'rien : pas encore testé');
+
+  const H = (scenario, testeur, plateforme, resultat, extra = {}) => ({ scenario, testeur, plateforme, resultat, ...extra });
+  const sc = { id: 'taches-f-001', plateformes: ['ios', 'android'], refs: ['TA-01', 'TA-02'] };
+  const vh = (passages, anomalies = [], plateforme = '', s = sc) => verdictHumainPlan({ scenario: s, passages, anomalies, plateforme });
+  egal(vh([]).etat, 'nonteste', 'aucun passage : pas encore testé');
+  egal(vh([H('TA-99', 'u1', 'ios', 'ok')]).etat, 'nonteste', 'un passage sur une référence qu il ne cite pas ne compte pas');
+  egal(vh([H('TA-01', 'u1', 'ios', 'ok'), H('TA-01', 'u2', 'android', 'ok')]).etat, 'ok', 'hérité par refs : réussi sur ses deux plateformes');
+  egal(vh([H('TA-01', 'u1', 'ios', 'ok')]).etat, 'cours', 'réussi sur iOS, rien sur Android : en cours, pas réussi');
+  egal(vh([H('TA-01', 'u1', 'ios', 'ok')]).partiel, true, 'et marqué partiel');
+  egal(vh([H('TA-01', 'u1', 'ios', 'ok')], [], 'ios').etat, 'ok', 'filtré sur iOS : réussi');
+  egal(vh([H('TA-01', 'u1', 'ios', 'ok')], [], 'android').etat, 'nonteste', 'filtré sur Android : pas encore testé');
+  egal(vh([H('taches-f-001', 'u1', 'ios', 'ok'), H('taches-f-001', 'u2', 'android', 'ok')]).etat, 'ok', 'par l identifiant du plan (la répartition de demain) : réussi');
+  egal(vh([H('taches-f-001', 'u1', 'ios', 'ko')]).etat, 'fragile', 'par l identifiant du plan, un KO isolé : fragile, même sans l autre plateforme');
+  egal(vh([H('TA-01', 'u1', 'ios', 'ok'), H('TA-01', 'u3', 'android', 'ok'), H('TA-02', 'u2', 'android', 'ko'), H('TA-02', 'u4', 'android', 'ko')]).etat, 'casse', 'deux origines, l une cassée sur Android : le pire l emporte');
+  egal(vh([H('TA-01', 'u1', 'ios', 'ok'), H('TA-01', 'u3', 'android', 'ok'), H('TA-02', 'u2', 'android', 'ko'), H('TA-02', 'u4', 'android', 'ko')], [], 'ios').etat, 'ok', 'le même, filtré sur iOS : réussi');
+  egal(vh([H('TA-01', 'u1', 'ios', 'ok'), H('taches-f-001', 'u2', 'android', 'ko')]).etat, 'fragile', 'une référence et l identifiant du plan se cumulent, le pire l emporte');
+  egal(vh([H('TA-01', 'u1', 'ios', 'ok'), H('TA-01', 'u2', 'android', 'ok')], [A({ scenario: 'TA-02', gravite: 'critique', plateformes: ['android'] })]).etat, 'casse', 'une anomalie critique ouverte sur une référence citée : cassé');
+  egal(vh([H('TA-01', 'u1', 'ios', 'ok'), H('TA-01', 'u2', 'android', 'ok')], [A({ scenario: 'TA-02', gravite: 'critique', plateformes: ['android'] })], 'ios').etat, 'ok', 'cette anomalie vue sur Android ne peint pas iOS');
+  egal(vh([H('TA-01', 'u1', 'ios', 'ko', { aRevoir: true }), H('TA-01', 'u2', 'android', 'ok')]).etat, 'cours', 'un KO corrigé à rejouer : en cours');
+  egal(vh([H('TA-01', 'u1', 'ios', 'ko'), H('TA-01', 'u2', 'android', 'ko')]).etat, 'casse', 'deux KO, un sur iOS et un sur Android : cassé, comme dans la grille d avant');
+  egal(vh([H('TA-01', 'u1', 'ios', 'ko'), H('TA-01', 'u2', 'android', 'ko')], [], 'ios').etat, 'fragile', 'filtré sur iOS : un échec sur un, fragile');
+  egal(vh([H('TA-01', 'u1', 'ios', 'ok')]).manquent.join(','), 'android', 'il dit quelle plateforme attend encore un humain');
+  egal(vh([H('TA-01', 'u1', 'ios', 'ok'), H('taches-f-001', 'u2', 'ios', 'ko')]).origines.map((o) => `${o.cle}=${o.etat}`).join(','), 'TA-01=ok,taches-f-001=fragile', 'chaque origine garde son verdict');
+  egal(vh([H('TA-01', 'u1', 'ios', 'ko', { aRevoir: true }), H('TA-01', 'u2', 'android', 'ok')]).revoir, true, 'et marqué à revérifier');
+  egal(vh([H('TA-01', 'u1', 'ios', 'na'), H('TA-01', 'u2', 'android', 'na')]).etat, 'na', 'sans objet partout : sans objet');
+  egal(vh([H('TA-01', 'u1', 'web', 'ok')]).parPlateforme.map((p) => `${p.plateforme}=${p.etat}`).join(','), 'ios=nonteste,android=nonteste,web=ok', 'passé sur une plateforme qu il ne déclare pas : le résultat ne se perd pas');
+  egal(vh([H('TA-01', 'u1', 'ios', 'ok'), H('taches-f-001', 'u2', 'ios', 'ok')]).passages.map((p) => p.origine).join(','), 'TA-01,taches-f-001', 'chaque passage garde son origine');
+  egal(vh([], [], '', { id: 'x', plateformes: [], refs: [] }).etat, 'nonteste', 'sans plateforme ni référence : pas encore testé');
+
+  const sections = [
+    { id: 'taches', titre: 'Tâches', groupe: 'fonctionnalites', aspects: {
+      fonctionnel: [
+        { id: 'taches-f-001', qui: 'les-deux', plateformes: ['ios', 'android'], refs: ['TA-01'] },
+        { id: 'taches-f-002', qui: 'robot', plateformes: ['ios'], refs: ['TA-09'] },
+        { id: 'taches-f-003', qui: 'humain', plateformes: ['web'], refs: [] },
+      ],
+      technique: [], ux: [{ id: 'taches-u-001', qui: 'humain', plateformes: ['ios'], refs: ['TA-02'] }], securite: [] } },
+    { id: 'robots', titre: 'Robots', groupe: 'transverse', aspects: { fonctionnel: [{ id: 'robots-f-001', qui: 'robot', plateformes: ['web'], refs: ['TA-03'] }], technique: [], ux: [], securite: [] } },
+  ];
+  const biblio = [{ ref: 'TA-01', titre: 'Créer', ordre: 1 }, { ref: 'TA-02', titre: 'Voir', ordre: 2 }, { ref: 'TA-09', titre: 'Robot', ordre: 9 }, { ref: 'HP-01', titre: 'Hors', ordre: 20 }];
+  const campagne = { id: 'c1', scenarios: ['TA-01', 'TA-02', 'TA-09', 'HP-01'], affectation: { u1: ['TA-01', 'TA-09', 'HP-01'], u2: ['TA-01', 'TA-02'] } };
+  const passages = [
+    H('TA-01', 'u1', 'ios', 'ok'), H('TA-01', 'u2', 'android', 'ok'),
+    H('TA-09', 'u1', 'ios', 'ko'),
+    H('HP-01', 'u1', 'ios', 'ok'),
+    H('taches-f-003', 'u2', 'web', 'ok'),
+  ];
+  const anomalies = [A({ scenario: 'TA-09', temoins: [{ campagne: 'c1' }] }), A({ scenario: 'TA-02', gravite: 'critique', temoins: [{ campagne: 'ancienne' }] })];
+  const t = tableauHumainPlan({ sections, scenarios: biblio, campagne, passages, anomalies });
+  egal(t.familles.map((f) => f.libelle).join(' | '), 'Tâches | Robots | Hors plan', 'une carte par section, dans l ordre donné, puis le hors plan');
+  egal(t.familles[0].cases.map((c) => c.ref).join(','), 'taches-f-001,taches-f-003,taches-u-001', 'une case par scénario humain ou humain et robot, aucune pour un robot seul');
+  egal(t.familles[1].cases.length, 0, 'une section sans scénario pour les humains garde sa carte, vide');
+  egal(t.familles[0].cases.map((c) => c.etat).join(','), 'ok,ok,nonteste', 'hérité par refs, par l identifiant du plan, et pas encore testé');
+  egal(t.familles[0].cases[2].anomalies.length, 0, 'une anomalie d une campagne passée ne peint pas celle-ci');
+  egal(t.familles[2].cases.map((c) => `${c.ref}=${c.etat}`).join(','), 'TA-09=fragile,HP-01=ok', 'hors plan : les références testées que ne reprend aucun scénario humain, avec leur couleur d avant');
+  egal(t.total, 3, 'le compte : les trois cases humaines, sans le hors plan');
+  egal(`${t.faits}/${t.attendus}`, '2/3', 'deux vérifications faites sur trois');
+  egal(`${t.compte.ok}/${t.compte.nonteste}`, '2/1', 'la légende recompte les cases du plan');
+  egal(`${t.qui.humain}/${t.qui['les-deux']}`, '2/1', 'deux humain seul, un humain et robot');
+  const web = tableauHumainPlan({ sections, scenarios: biblio, campagne, passages, anomalies, plateforme: 'web' });
+  egal(web.familles[0].cases.map((c) => `${c.ref}=${c.etat}`).join(','), 'taches-f-003=ok', 'sur le web : les cases du web, le résultat du web');
+  egal(web.familles.some((f) => f.horsPlan), false, 'le hors plan suit le filtre de plateforme');
+  const sansCampagne = tableauHumainPlan({ sections, scenarios: biblio, campagne: null, passages, anomalies });
+  egal(`${sansCampagne.total}/${sansCampagne.compte.nonteste}/${sansCampagne.familles.length}`, '3/3/2', 'sans campagne : les cases du plan, toutes pas encore testées, ni hors plan');
 }
 
 console.log('\n== Le rythme');

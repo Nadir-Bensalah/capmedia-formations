@@ -41,7 +41,13 @@ export const ETATS_CASE = {
   tourne:  { libelle: 'En exécution',  glyphe: '' },
   jamais:  { libelle: 'Jamais lancé',  glyphe: '' },
   aecrire: { libelle: 'À écrire',      glyphe: '' },
+  /* Un test qui échoue exprès sur un défaut déjà connu de l'équipe : il
+     passera au vert quand le défaut sera corrigé. Rouge, mais pas une
+     surprise : il ne se confond pas avec un cassé. */
+  connu:   { libelle: 'Défaut connu',  glyphe: '•' },
   suspendu:{ libelle: 'Suspendu',      glyphe: '–' },
+  /* Un scénario du plan qu'aucun testeur humain n'a encore rendu. */
+  nonteste:{ libelle: 'Pas encore testé', glyphe: '' },
 };
 
 const GRAVES = ['bloquant', 'critique'];
@@ -139,7 +145,7 @@ export const verdictParcours = (p) => {
   if (p.enCours) return 'tourne';
   switch (p.etat) {
     case 'vert': return 'ok';
-    case 'rouge': return 'casse';
+    case 'rouge': return p.defautConnu === true || (p.dernier && p.dernier.defautConnu === true) ? 'connu' : 'casse';
     case 'instable': return 'fragile';
     case 'suspendu': return 'suspendu';
     case 'a-ecrire': return 'aecrire';
@@ -153,7 +159,7 @@ export const verdictParcours = (p) => {
 
 const ORDRE_HUMAIN = ['ok', 'fragile', 'casse', 'cours', 'na', 'vide', 'trou'];
 const ORDRE_TESTEUR = ['ok', 'ko', 'revoir', 'na', 'vide'];
-const ORDRE_MACHINE = ['ok', 'fragile', 'casse', 'tourne', 'suspendu', 'jamais', 'aecrire'];
+const ORDRE_MACHINE = ['ok', 'fragile', 'casse', 'connu', 'tourne', 'suspendu', 'jamais', 'aecrire'];
 
 const compter = (cases, ordre) => {
   const n = {};
@@ -253,7 +259,7 @@ export const tableauMachine = ({ parcours = [], regles = [], scenarios = [], blo
       return { ref: p.ref, titre: p.titre || '', famille: bloc || `outil:${p.outil || 'autre'}`, source: p, etat: verdictParcours(p) };
     });
   regles.filter((r) => r.actif !== false).forEach((r) => {
-    cases.push({ ref: r.ref, titre: r.titre || '', famille: 'regles', source: r, regle: true, etat: verdictParcours({ etat: r.etat }) });
+    cases.push({ ref: r.ref, titre: r.titre || '', famille: 'regles', source: r, regle: true, etat: verdictParcours({ etat: r.etat, defautConnu: r.defautConnu, dernier: r.dernier }) });
   });
   const libelle = (cle) => {
     if (cle === 'regles') return 'Règles métier';
@@ -269,6 +275,305 @@ export const tableauMachine = ({ parcours = [], regles = [], scenarios = [], blo
     attendus: cases.length,
     faits: passes,
     tournent: cases.filter((c) => c.etat === 'tourne').length,
+  };
+};
+
+/* --------------------------------------------------------------------------
+   Le tableau des robots rangé par le plan de tests
+
+   Quand un projet a un plan (« ce qui va être testé »), les cartes des
+   robots sont ses sections, et chaque case un scénario que fait un robot :
+   robot seul, ou humain et robot. Un scénario fait par un humain seul n'a
+   pas de case ici. La couleur vient des tests robot rattachés au scénario
+   (son champ « parcours ») : le dernier résultat de chacun, et le plus
+   mauvais l'emporte. Sans test rattaché : à écrire.
+
+   Rien ne se perd : un test robot rattaché à aucun scénario du plan reste
+   visible, dans une carte « Hors plan », sans compter dans l'avancement.
+   -------------------------------------------------------------------------- */
+
+/* Du plus mauvais au meilleur. Un défaut qu'on découvre passe devant un
+   test instable, qui passe devant un défaut déjà connu. Un test jamais
+   lancé ne prouve rien : il passe devant un test à écrire, qui passe
+   devant un vert. */
+const RANG_PIRE = ['casse', 'fragile', 'connu', 'tourne', 'jamais', 'aecrire', 'suspendu', 'ok'];
+const rangPire = (e) => { const i = RANG_PIRE.indexOf(e); return i < 0 ? RANG_PIRE.indexOf('jamais') : i; };
+
+/** Le plus mauvais de plusieurs états de case ('aecrire' si aucun). */
+export const pireEtat = (etats = []) => (etats.length
+  ? etats.reduce((pire, e) => (rangPire(e) < rangPire(pire) ? e : pire))
+  : 'aecrire');
+
+/* Sans plateforme déclarée, un test vaut partout. */
+const surLaPlateforme = (x, plateforme) => !plateforme || !(x.plateformes || []).length || x.plateformes.includes(plateforme);
+
+export const QUI_ROBOT = ['robot', 'les-deux'];
+const ASPECTS_DU_PLAN = ['fonctionnel', 'technique', 'ux', 'securite'];
+
+/**
+ * Le verdict d'un scénario du plan, d'après ses tests robot rattachés.
+ * Sur une plateforme : les tests qui y tournent, le pire l'emporte, et
+ * aucun test sur cette plateforme, c'est « à écrire ». Toutes plateformes :
+ * le pire des plateformes du scénario.
+ *
+ * @param {Object} scenario    { plateformes }
+ * @param {Array}  rattaches   les parcours rattachés (déjà trouvés, actifs)
+ * @param {string} plateforme  '' pour toutes
+ * @returns {{ etat: string, parPlateforme: Array<{ plateforme, etat, parcours }> }}
+ */
+export const verdictScenarioPlan = ({ scenario = {}, rattaches = [], plateforme = '' }) => {
+  const sur = (p) => rattaches.filter((x) => surLaPlateforme(x, p));
+  const verdictSur = (p) => { const ici = sur(p); return ici.length ? pireEtat(ici.map(verdictParcours)) : 'aecrire'; };
+  const plateformes = (scenario.plateformes || []).filter(Boolean);
+  const parPlateforme = plateformes.map((p) => ({ plateforme: p, etat: verdictSur(p), parcours: sur(p).map((x) => x.ref) }));
+  if (!rattaches.length) return { etat: 'aecrire', parPlateforme };
+  if (plateforme) return { etat: verdictSur(plateforme), parPlateforme };
+  return { etat: plateformes.length ? pireEtat(parPlateforme.map((x) => x.etat)) : pireEtat(rattaches.map(verdictParcours)), parPlateforme };
+};
+
+/**
+ * Le tableau des robots d'un projet qui a un plan.
+ *
+ * @param {Array}  sections    les sections du plan, déjà dans l'ordre de la
+ *                             page « Ce qui va être testé »
+ * @param {Array}  parcours    les parcours du projet (toutes plateformes)
+ * @param {Array}  regles      les règles métier du projet
+ * @param {string} plateforme  '' pour toutes
+ */
+export const tableauPlan = ({ sections = [], parcours = [], regles = [], plateforme = '' }) => {
+  const actifs = parcours.filter((p) => p.actif !== false)
+    .sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
+  const parRef = new Map(actifs.map((p) => [p.ref, p]));
+  /* Les tests rattachés à un scénario que fait un robot, toutes
+     plateformes confondues : ceux-là ont leur place dans le plan. */
+  const dansLePlan = new Set();
+  const familles = sections.map((s) => {
+    const cases = [];
+    ASPECTS_DU_PLAN.forEach((aspect) => ((s.aspects || {})[aspect] || []).forEach((sc) => {
+      if (!sc || !QUI_ROBOT.includes(sc.qui)) return;
+      const refs = (Array.isArray(sc.parcours) ? sc.parcours : []).filter((r) => typeof r === 'string' && r);
+      refs.forEach((r) => dansLePlan.add(r));
+      if (!surLaPlateforme(sc, plateforme)) return;
+      const rattaches = refs.map((r) => parRef.get(r)).filter(Boolean);
+      const v = verdictScenarioPlan({ scenario: sc, rattaches, plateforme });
+      cases.push({
+        ref: sc.id || '', cle: `plan:${sc.id || ''}`, titre: sc.titre || '', qui: sc.qui, aspect, section: s.id,
+        scenario: sc, rattaches, inconnus: refs.filter((r) => !parRef.has(r)), ...v,
+      });
+    }));
+    return { cle: `section:${s.id}`, libelle: s.titre || s.id || 'Section', groupe: s.groupe || '', section: s, cases };
+  });
+
+  const regle = regles.filter((r) => r.actif !== false)
+    .map((r) => ({ ref: r.ref, titre: r.titre || '', source: r, regle: true, etat: verdictParcours({ etat: r.etat, defautConnu: r.defautConnu, dernier: r.dernier }) }));
+  const hors = actifs.filter((p) => !dansLePlan.has(p.ref) && surLaPlateforme(p, plateforme))
+    .map((p) => ({ ref: p.ref, titre: p.titre || '', source: p, etat: verdictParcours(p) }));
+  if (regle.length) familles.push({ cle: 'regles', libelle: 'Règles métier', groupe: 'autres', cases: regle });
+  if (hors.length) familles.push({ cle: 'hors-plan', libelle: 'Hors plan', groupe: 'autres', horsPlan: true, cases: hors });
+
+  /* Ce qui compte dans l'avancement : les scénarios du plan et les règles.
+     Les tests hors plan se montrent, ils ne se comptent pas. */
+  const casesPlan = familles.filter((f) => f.section).flatMap((f) => f.cases);
+  const comptees = [...casesPlan, ...regle];
+  return {
+    familles,
+    compte: compter(comptees, ORDRE_MACHINE),
+    ordre: ORDRE_MACHINE,
+    total: comptees.length,
+    attendus: comptees.length,
+    faits: comptees.filter((c) => ['ok', 'fragile', 'casse'].includes(c.etat)).length,
+    tournent: actifs.filter((p) => p.enCours && surLaPlateforme(p, plateforme)).length,
+    scenarios: casesPlan.length,
+    regles: regle.length,
+    horsPlan: hors.length,
+    qui: { robot: casesPlan.filter((c) => c.qui === 'robot').length, 'les-deux': casesPlan.filter((c) => c.qui === 'les-deux').length },
+    plan: true,
+  };
+};
+
+/* --------------------------------------------------------------------------
+   Le tableau des humains rangé par le plan de tests
+
+   Le pendant de tableauPlan pour les testeurs humains. Les cartes sont les
+   sections du plan, et chaque case un scénario que fait un humain : humain
+   seul, ou humain et robot. Un scénario fait par un robot seul n'a pas de
+   case ici.
+
+   La couleur vient de ce que les testeurs ont rendu dans la campagne, par
+   deux chemins :
+   - aujourd'hui, ils testent les scénarios de la bibliothèque (TA-01…) :
+     un scénario du plan hérite des résultats de ceux que cite son champ
+     « refs » ;
+   - demain, la répartition leur enverra les scénarios du plan eux-mêmes :
+     un passage dont la référence est l'identifiant du scénario du plan
+     (taches-f-001) compte aussi.
+   Chaque origine est jugée comme dans la grille d'avant (verdictScenario :
+   passages, KO corrigés à rejouer, anomalies qualifiées), plateforme par
+   plateforme, et le pire l'emporte. Sans résultat : pas encore testé.
+
+   Rien ne se perd : un scénario de la bibliothèque testé par des humains
+   mais cité par aucun scénario humain du plan reste visible, dans une carte
+   « Hors plan », sans compter dans l'avancement.
+   -------------------------------------------------------------------------- */
+
+export const QUI_HUMAIN = ['humain', 'les-deux'];
+const ORDRE_HUMAIN_PLAN = ['ok', 'fragile', 'casse', 'cours', 'na', 'nonteste'];
+/* Du plus mauvais au meilleur. Un KO corrigé qui attend d'être rejoué
+   (en cours) passe devant un réussi ; un réussi devant un sans objet. */
+const RANG_HUMAIN = ['casse', 'fragile', 'cours', 'ok', 'na', 'nonteste'];
+const rangHumain = (e) => { const i = RANG_HUMAIN.indexOf(e); return i < 0 ? RANG_HUMAIN.indexOf('cours') : i; };
+
+/** Le plus mauvais de plusieurs résultats humains ('nonteste' si aucun). */
+export const pireHumain = (etats = []) => (etats.length
+  ? etats.reduce((pire, e) => (rangHumain(e) < rangHumain(pire) ? e : pire))
+  : 'nonteste');
+
+/* Ce qui compte comme une vérification faite : un verdict rendu, pas un
+   scénario commencé sur une partie de ses plateformes. */
+const TRANCHES = ['ok', 'fragile', 'casse', 'na'];
+
+/* Une anomalie vue sur une plateforme ; posée sans plateforme, partout. */
+const anomalieSur = (a, plateforme) => !plateforme || !(a.plateformes || []).length || a.plateformes.includes(plateforme);
+
+/**
+ * Le verdict humain d'un scénario du plan.
+ *
+ * @param {Object} scenario    { id, plateformes, refs }
+ * @param {Array}  passages    les passages de la campagne (toutes origines)
+ * @param {Array}  anomalies   les anomalies qui comptent pour la campagne
+ * @param {string} plateforme  '' pour toutes
+ * @returns {{ etat, revoir, sources, origines, parPlateforme, passages, anomalies, partiel, manquent }}
+ *   sources : les références lues (refs, puis l'identifiant du plan) ;
+ *   origines : celles qui ont rendu quelque chose, et leur verdict ;
+ *   parPlateforme : [{ plateforme, etat, revoir, origines: [{ cle, etat }] }] ;
+ *   passages : ceux qui comptent, chacun marqué de son origine (« origine ») ;
+ *   partiel, manquent : les plateformes du scénario qu'aucun humain n'a
+ *   encore passées.
+ */
+export const verdictHumainPlan = ({ scenario = {}, passages = [], anomalies = [], plateforme = '' }) => {
+  const refs = (Array.isArray(scenario.refs) ? scenario.refs : []).filter((r) => typeof r === 'string' && r);
+  const sources = Array.from(new Set([...refs, ...(scenario.id ? [scenario.id] : [])]));
+  const dedans = new Set(sources);
+  const siens = passages.filter((p) => dedans.has(p.scenario)).map((p) => ({ ...p, origine: p.scenario }));
+  const anos = anomalies.filter((a) => dedans.has(a.scenario));
+
+  /* Une origine jugée comme dans la grille d'avant, sur une plateforme ou
+     sur toutes ('*') : « vide », rien de rendu. */
+  const jugerOrigine = (cle, p) => {
+    const v = verdictScenario({
+      attendus: null,
+      passages: siens.filter((x) => x.origine === cle && (p === '*' || (x.plateforme || '') === p)),
+      anomalies: anos.filter((a) => a.scenario === cle && (p === '*' || anomalieSur(a, p))),
+    });
+    /* Un KO corrigé n'est plus fait tant qu'on ne l'a pas rejoué : sans
+       nombre attendu, c'est à nous de le dire (la grille d'avant le
+       comptait dans l'affectation). */
+    const etat = v.revoir && (v.etat === 'ok' || v.etat === 'na') ? 'cours' : v.etat;
+    return { cle, etat, revoir: v.revoir };
+  };
+  const juger = (p) => {
+    const origines = sources.map((cle) => jugerOrigine(cle, p)).filter((o) => o.etat !== 'vide' && o.etat !== 'trou');
+    return {
+      plateforme: p === '*' ? '' : p,
+      etat: origines.length ? pireHumain(origines.map((o) => o.etat)) : 'nonteste',
+      revoir: origines.some((o) => o.revoir),
+      origines: origines.map(({ cle, etat }) => ({ cle, etat })),
+    };
+  };
+
+  const declarees = (scenario.plateformes || []).filter(Boolean);
+  if (plateforme) {
+    const ici = juger(plateforme);
+    return {
+      etat: ici.etat, revoir: ici.revoir, sources, origines: ici.origines, parPlateforme: [ici], partiel: false, manquent: [],
+      passages: siens.filter((x) => x.plateforme === plateforme),
+      anomalies: anos.filter((a) => anomalieSur(a, plateforme)),
+    };
+  }
+  /* Toutes plateformes : chaque origine est jugée sur tous ses passages,
+     comme dans la grille d'avant (deux KO, un sur iOS et un sur Android,
+     font un cassé), et le pire l'emporte. Le détail par plateforme sert à
+     la fiche : celles du scénario, et celles où un testeur l'a passé quand
+     même (un résultat ne se perd pas). */
+  const tout = juger('*');
+  const vues = Array.from(new Set(siens.map((x) => x.plateforme || '')));
+  const toutes = [...declarees, ...vues.filter((p) => !declarees.includes(p))];
+  const parPlateforme = toutes.map(juger).filter((x) => x.plateforme || x.etat !== 'nonteste');
+  /* Réussi sur iOS, personne encore sur Android : en cours, pas réussi. Un
+     échec, lui, se dit tout de suite. */
+  const manquent = declarees.filter((p) => !siens.some((x) => x.plateforme === p));
+  const partiel = siens.length > 0 && manquent.length > 0;
+  const etat = partiel && (tout.etat === 'ok' || tout.etat === 'na') ? 'cours' : tout.etat;
+  return { etat, revoir: tout.revoir, sources, origines: tout.origines, partiel, manquent, parPlateforme, passages: siens, anomalies: anos };
+};
+
+/**
+ * Le tableau des humains d'un projet qui a un plan.
+ *
+ * @param {Array}  sections    les sections du plan, dans l'ordre de la page
+ * @param {Array}  scenarios   la bibliothèque du projet (titres du hors plan)
+ * @param {Object} campagne    { id, scenarios, affectation } ; null : aucune
+ * @param {Array}  passages    tous les passages de la campagne
+ * @param {Array}  anomalies   toutes les anomalies du projet
+ * @param {string} plateforme  '' pour toutes
+ */
+export const tableauHumainPlan = ({ sections = [], scenarios = [], campagne = null, passages = [], anomalies = [], plateforme = '' }) => {
+  const camp = campagne || {};
+  const anosCampagne = campagne ? anomalies.filter((a) => anomalieDeLaCampagne(a, camp.id)) : [];
+  const lesPassages = campagne ? passages : [];
+  /* Les références qu'un scénario humain du plan reprend, toutes
+     plateformes confondues : celles-là ont leur place dans le plan. */
+  const reprises = new Set();
+  const familles = sections.map((s) => {
+    const cases = [];
+    ASPECTS_DU_PLAN.forEach((aspect) => ((s.aspects || {})[aspect] || []).forEach((sc) => {
+      if (!sc || !QUI_HUMAIN.includes(sc.qui)) return;
+      (Array.isArray(sc.refs) ? sc.refs : []).forEach((r) => reprises.add(r));
+      if (sc.id) reprises.add(sc.id);
+      if (!surLaPlateforme(sc, plateforme)) return;
+      const v = verdictHumainPlan({ scenario: sc, passages: lesPassages, anomalies: anosCampagne, plateforme });
+      cases.push({ ref: sc.id || '', cle: `plan:${sc.id || ''}`, titre: sc.titre || '', qui: sc.qui, aspect, section: s.id, scenario: sc, ...v });
+    }));
+    return { cle: `section:${s.id}`, libelle: s.titre || s.id || 'Section', groupe: s.groupe || '', section: s, cases };
+  });
+
+  /* Hors plan : ce que des humains ont testé et que rien ne reprend. Lu
+     comme dans la grille d'avant (affectation comprise), pour garder ses
+     couleurs. */
+  const hors = [];
+  if (campagne) {
+    const ici = (p) => !plateforme || p.plateforme === plateforme;
+    const attendusDe = (ref) => Object.values(camp.affectation || {}).filter((refs) => (refs || []).includes(ref)).length;
+    const dansCampagne = new Set(camp.scenarios || []);
+    const parRef = new Map(scenarios.map((s) => [s.ref, s]));
+    const cles = Array.from(new Set(lesPassages.filter(ici).map((p) => p.scenario).filter((r) => r && !reprises.has(r))));
+    const rang = (r) => { const s = parRef.get(r); return s ? (Number(s.ordre) || 0) : Number.MAX_SAFE_INTEGER; };
+    cles.sort((a, b) => rang(a) - rang(b) || String(a).localeCompare(String(b)));
+    cles.forEach((ref) => {
+      const s = parRef.get(ref) || {};
+      const ceux = lesPassages.filter((p) => p.scenario === ref && ici(p));
+      const anos = anosCampagne.filter((a) => a.scenario === ref && anomalieSur(a, plateforme));
+      const attendus = plateforme || !dansCampagne.has(ref) ? null : attendusDe(ref);
+      const v = verdictScenario({ attendus, passages: ceux, anomalies: anos });
+      hors.push({ ref, titre: s.titre || '', bloc: s.bloc, niveau: s.niveau, attendus, passages: ceux, anomalies: anos, horsPlan: true, ...v });
+    });
+  }
+  if (hors.length) familles.push({ cle: 'hors-plan', libelle: 'Hors plan', groupe: 'autres', horsPlan: true, cases: hors });
+
+  /* Ce qui compte dans l'avancement : les scénarios humains du plan. */
+  const casesPlan = familles.filter((f) => f.section).flatMap((f) => f.cases);
+  return {
+    familles,
+    compte: compter(casesPlan, ORDRE_HUMAIN_PLAN),
+    ordre: ORDRE_HUMAIN_PLAN,
+    total: casesPlan.length,
+    attendus: casesPlan.length,
+    faits: casesPlan.filter((c) => TRANCHES.includes(c.etat)).length,
+    commences: casesPlan.filter((c) => c.etat !== 'nonteste').length,
+    scenarios: casesPlan.length,
+    horsPlan: hors.length,
+    qui: { humain: casesPlan.filter((c) => c.qui === 'humain').length, 'les-deux': casesPlan.filter((c) => c.qui === 'les-deux').length },
+    plan: true,
   };
 };
 

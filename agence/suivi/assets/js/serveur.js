@@ -11,11 +11,11 @@
    donnerait un privilège.
    ========================================================================== */
 
-import { surEmulateur, auth } from './noyau.js';
+import { surEmulateur, FONCTIONS_EMULATEUR, auth } from './noyau.js';
 
 const PROJET = (window.AZ_SUIVI && window.AZ_SUIVI.firebase && window.AZ_SUIVI.firebase.projectId) || 'capmedia-1f90d';
 export const URL_SUIVI = surEmulateur
-  ? `http://127.0.0.1:5001/${PROJET}/europe-west1/suiviAdmin`
+  ? `${FONCTIONS_EMULATEUR}/${PROJET}/europe-west1/suiviAdmin`
   : `https://europe-west1-${PROJET}.cloudfunctions.net/suiviAdmin`;
 
 /* L'ancienne clé d'administration a pu rester dans ce navigateur : elle ne
