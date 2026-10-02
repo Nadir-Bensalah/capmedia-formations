@@ -25,6 +25,11 @@
                                Avec --vrai, la bibliothèque du projet visé est
                                lue de toute façon, et une référence inconnue
                                y est signalée.
+     --parcours=<fichier.json> les tests robot existants ({ parcours: [{ ref }] }
+                               ou une liste de références) : un test rattaché
+                               inconnu devient une erreur. Avec --vrai, les
+                               parcours du projet visé sont lus de toute
+                               façon, et la règle est la même.
      --ecraser                 écrase aussi une section retouchée dans le
                                Cockpit depuis le dernier import (sinon elle
                                est laissée telle quelle, et le bilan le dit).
@@ -63,9 +68,12 @@ const PLATEFORMES = ['ios', 'android', 'web'];
 const TYPES = ['normal', 'limite', 'erreur'];
 const PRIORITES = ['haute', 'moyenne', 'basse'];
 const CLES_SECTION = ['id', 'groupe', 'ordre', 'titre', 'resume', 'plateformes', 'aspects'];
-const CLES_SCENARIO = ['id', 'titre', 'etapes', 'attendu', 'plateformes', 'type', 'priorite', 'refs', 'qui'];
+const CLES_SCENARIO = ['id', 'titre', 'etapes', 'attendu', 'plateformes', 'type', 'priorite', 'refs', 'qui', 'parcours'];
 const QUI = ['humain', 'robot', 'les-deux'];
 const REF = /^[A-Z]{2}-R?\d{1,3}$/;
+/* La référence d'un test robot : celle que le robot renvoie dans son
+   rapport, la même borne que la porte des robots (robot.js). */
+const REF_PARCOURS = /^[A-Za-z0-9_.-]{1,40}$/;
 const CADRATIN = '—';
 /* Un document Firestore pèse au plus 1 Mio : on garde une marge. */
 const TAILLE_MAX = 900 * 1024;
@@ -88,11 +96,13 @@ const sousEnsemble = (v, nom, permis, erreurs, { requis = true } = {}) => {
 /**
  * Une section : { id, groupe, ordre, titre, resume, plateformes, aspects }.
  * aspects : { fonctionnel, technique, ux, securite }, chacun une liste de
- * scénarios { id, titre, etapes, attendu, plateformes, type, priorite, refs }.
+ * scénarios { id, titre, etapes, attendu, plateformes, type, priorite, refs,
+ * qui?, parcours? }. `parcours` : les références des tests robot qui
+ * vérifient le scénario (collection parcours du projet), facultatif.
  * L'identifiant d'un scénario est <section>-<f|t|u|s>-<3 chiffres>, la
  * lettre étant celle de son aspect. Rend { erreurs, avis }.
  */
-export const validerSection = (s, { attenduId = '', reference = null, refsConnues = null } = {}) => {
+export const validerSection = (s, { attenduId = '', reference = null, refsConnues = null, parcoursConnus = null } = {}) => {
   const erreurs = [];
   const avis = [];
   if (!s || typeof s !== 'object' || Array.isArray(s)) return { erreurs: ['le fichier ne contient pas un objet'], avis };
@@ -158,6 +168,17 @@ export const validerSection = (s, { attenduId = '', reference = null, refsConnue
         });
         if (new Set(x.refs).size !== x.refs.length) erreurs.push(`${ou} : référence en double`);
       }
+      if (x.parcours !== undefined) {
+        if (!Array.isArray(x.parcours)) erreurs.push(`${ou} : parcours, une liste est attendue`);
+        else {
+          if (x.parcours.length > 100) erreurs.push(`${ou} : parcours, ${x.parcours.length} tests, 100 au plus`);
+          x.parcours.forEach((r) => {
+            if (typeof r !== 'string' || !REF_PARCOURS.test(r)) erreurs.push(`${ou} : test robot ${JSON.stringify(r)} mal formé (par exemple TA-01)`);
+            else if (parcoursConnus && !parcoursConnus.has(r)) erreurs.push(`${ou} : test robot ${r} inconnu des parcours du projet`);
+          });
+          if (new Set(x.parcours).size !== x.parcours.length) erreurs.push(`${ou} : test robot en double`);
+        }
+      }
     });
   }
   const taille = Buffer.byteLength(JSON.stringify(s), 'utf8');
@@ -186,6 +207,7 @@ const versDocument = (s) => ({
   aspects: Object.fromEntries(ASPECTS.map((a) => [a, (s.aspects[a] || []).map((x) => ({
     id: x.id, titre: x.titre.trim(), etapes: x.etapes.trim(), attendu: x.attendu.trim(),
     plateformes: x.plateformes, type: x.type, priorite: x.priorite, refs: x.refs, ...(x.qui ? { qui: x.qui } : {}),
+    ...(Array.isArray(x.parcours) ? { parcours: x.parcours } : {}),
   }))])),
 });
 
@@ -218,6 +240,28 @@ async function main() {
     const j = JSON.parse(readFileSync(valeur('--refs'), 'utf8'));
     refsConnues = new Set((j.scenarios || []).map((x) => x.ref || x._id).filter(Boolean));
   }
+  let parcoursConnus = null;
+  if (valeur('--parcours')) {
+    const j = JSON.parse(readFileSync(valeur('--parcours'), 'utf8'));
+    parcoursConnus = new Set((Array.isArray(j) ? j : (j.parcours || [])).map((x) => (typeof x === 'string' ? x : (x.ref || x._id))).filter(Boolean));
+  }
+
+  /* Avec --vrai, la base est ouverte avant la vérification : les tests
+     robot rattachés aux scénarios doivent exister dans les parcours du
+     projet visé, sinon leur case resterait « à écrire » sans que personne
+     ne sache pourquoi. */
+  let bdd = null;
+  let FieldValue = null;
+  let Timestamp = null;
+  if (VRAI) {
+    const { initializeApp } = await import('firebase-admin/app');
+    const firestore = await import('firebase-admin/firestore');
+    ({ FieldValue, Timestamp } = firestore);
+    initializeApp({ projectId: PROJET_FIREBASE });
+    bdd = firestore.getFirestore();
+    const duProjet = (await bdd.collection(`projets/${PROJET_CIBLE}/parcours`).select('ref').get()).docs.flatMap((d) => [d.id, d.get('ref')]).filter(Boolean);
+    parcoursConnus = new Set([...(parcoursConnus || []), ...duProjet]);
+  }
 
   console.log(VRAI
     ? (SUR_EMULATEUR ? `Émulateur ${process.env.FIRESTORE_EMULATOR_HOST}, projet ${PROJET_FIREBASE} : ÉCRITURE` : `\n!!! Base de PRODUCTION ${PROJET_FIREBASE} : ÉCRITURE !!!\n`)
@@ -236,7 +280,7 @@ async function main() {
       refuses.push({ f, erreurs: [`JSON illisible : ${e.message}`] });
       continue;
     }
-    const { erreurs, avis } = validerSection(s, { attenduId: id, reference, refsConnues });
+    const { erreurs, avis } = validerSection(s, { attenduId: id, reference, refsConnues, parcoursConnus });
     if (erreurs.length) { refuses.push({ f, erreurs }); continue; }
     valides.push({ f, s, avis });
   }
@@ -269,10 +313,6 @@ async function main() {
   }
   if (!valides.length) { console.log('\nRien à verser.'); process.exit(refuses.length ? 1 : 0); }
 
-  const { initializeApp } = await import('firebase-admin/app');
-  const { getFirestore, FieldValue, Timestamp } = await import('firebase-admin/firestore');
-  initializeApp({ projectId: PROJET_FIREBASE });
-  const bdd = getFirestore();
   const col = bdd.collection(`projets/${PROJET_CIBLE}/planTests`);
   const projet = await bdd.doc(`projets/${PROJET_CIBLE}`).get();
   if (!projet.exists) { console.error(`\nLe projet ${PROJET_CIBLE} n'existe pas dans cette base. Rien n'est écrit.`); process.exit(2); }

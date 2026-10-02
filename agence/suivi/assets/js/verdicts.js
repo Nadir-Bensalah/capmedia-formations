@@ -41,6 +41,10 @@ export const ETATS_CASE = {
   tourne:  { libelle: 'En exécution',  glyphe: '' },
   jamais:  { libelle: 'Jamais lancé',  glyphe: '' },
   aecrire: { libelle: 'À écrire',      glyphe: '' },
+  /* Un test qui échoue exprès sur un défaut déjà connu de l'équipe : il
+     passera au vert quand le défaut sera corrigé. Rouge, mais pas une
+     surprise : il ne se confond pas avec un cassé. */
+  connu:   { libelle: 'Défaut connu',  glyphe: '•' },
   suspendu:{ libelle: 'Suspendu',      glyphe: '–' },
 };
 
@@ -139,7 +143,7 @@ export const verdictParcours = (p) => {
   if (p.enCours) return 'tourne';
   switch (p.etat) {
     case 'vert': return 'ok';
-    case 'rouge': return 'casse';
+    case 'rouge': return p.defautConnu === true || (p.dernier && p.dernier.defautConnu === true) ? 'connu' : 'casse';
     case 'instable': return 'fragile';
     case 'suspendu': return 'suspendu';
     case 'a-ecrire': return 'aecrire';
@@ -153,7 +157,7 @@ export const verdictParcours = (p) => {
 
 const ORDRE_HUMAIN = ['ok', 'fragile', 'casse', 'cours', 'na', 'vide', 'trou'];
 const ORDRE_TESTEUR = ['ok', 'ko', 'revoir', 'na', 'vide'];
-const ORDRE_MACHINE = ['ok', 'fragile', 'casse', 'tourne', 'suspendu', 'jamais', 'aecrire'];
+const ORDRE_MACHINE = ['ok', 'fragile', 'casse', 'connu', 'tourne', 'suspendu', 'jamais', 'aecrire'];
 
 const compter = (cases, ordre) => {
   const n = {};
@@ -253,7 +257,7 @@ export const tableauMachine = ({ parcours = [], regles = [], scenarios = [], blo
       return { ref: p.ref, titre: p.titre || '', famille: bloc || `outil:${p.outil || 'autre'}`, source: p, etat: verdictParcours(p) };
     });
   regles.filter((r) => r.actif !== false).forEach((r) => {
-    cases.push({ ref: r.ref, titre: r.titre || '', famille: 'regles', source: r, regle: true, etat: verdictParcours({ etat: r.etat }) });
+    cases.push({ ref: r.ref, titre: r.titre || '', famille: 'regles', source: r, regle: true, etat: verdictParcours({ etat: r.etat, defautConnu: r.defautConnu, dernier: r.dernier }) });
   });
   const libelle = (cle) => {
     if (cle === 'regles') return 'Règles métier';
@@ -269,6 +273,119 @@ export const tableauMachine = ({ parcours = [], regles = [], scenarios = [], blo
     attendus: cases.length,
     faits: passes,
     tournent: cases.filter((c) => c.etat === 'tourne').length,
+  };
+};
+
+/* --------------------------------------------------------------------------
+   Le tableau des robots rangé par le plan de tests
+
+   Quand un projet a un plan (« ce qui va être testé »), les cartes des
+   robots sont ses sections, et chaque case un scénario que fait un robot :
+   robot seul, ou humain et robot. Un scénario fait par un humain seul n'a
+   pas de case ici. La couleur vient des tests robot rattachés au scénario
+   (son champ « parcours ») : le dernier résultat de chacun, et le plus
+   mauvais l'emporte. Sans test rattaché : à écrire.
+
+   Rien ne se perd : un test robot rattaché à aucun scénario du plan reste
+   visible, dans une carte « Hors plan », sans compter dans l'avancement.
+   -------------------------------------------------------------------------- */
+
+/* Du plus mauvais au meilleur. Un défaut qu'on découvre passe devant un
+   test instable, qui passe devant un défaut déjà connu. Un test jamais
+   lancé ne prouve rien : il passe devant un test à écrire, qui passe
+   devant un vert. */
+const RANG_PIRE = ['casse', 'fragile', 'connu', 'tourne', 'jamais', 'aecrire', 'suspendu', 'ok'];
+const rangPire = (e) => { const i = RANG_PIRE.indexOf(e); return i < 0 ? RANG_PIRE.indexOf('jamais') : i; };
+
+/** Le plus mauvais de plusieurs états de case ('aecrire' si aucun). */
+export const pireEtat = (etats = []) => (etats.length
+  ? etats.reduce((pire, e) => (rangPire(e) < rangPire(pire) ? e : pire))
+  : 'aecrire');
+
+/* Sans plateforme déclarée, un test vaut partout. */
+const surLaPlateforme = (x, plateforme) => !plateforme || !(x.plateformes || []).length || x.plateformes.includes(plateforme);
+
+export const QUI_ROBOT = ['robot', 'les-deux'];
+const ASPECTS_DU_PLAN = ['fonctionnel', 'technique', 'ux', 'securite'];
+
+/**
+ * Le verdict d'un scénario du plan, d'après ses tests robot rattachés.
+ * Sur une plateforme : les tests qui y tournent, le pire l'emporte, et
+ * aucun test sur cette plateforme, c'est « à écrire ». Toutes plateformes :
+ * le pire des plateformes du scénario.
+ *
+ * @param {Object} scenario    { plateformes }
+ * @param {Array}  rattaches   les parcours rattachés (déjà trouvés, actifs)
+ * @param {string} plateforme  '' pour toutes
+ * @returns {{ etat: string, parPlateforme: Array<{ plateforme, etat, parcours }> }}
+ */
+export const verdictScenarioPlan = ({ scenario = {}, rattaches = [], plateforme = '' }) => {
+  const sur = (p) => rattaches.filter((x) => surLaPlateforme(x, p));
+  const verdictSur = (p) => { const ici = sur(p); return ici.length ? pireEtat(ici.map(verdictParcours)) : 'aecrire'; };
+  const plateformes = (scenario.plateformes || []).filter(Boolean);
+  const parPlateforme = plateformes.map((p) => ({ plateforme: p, etat: verdictSur(p), parcours: sur(p).map((x) => x.ref) }));
+  if (!rattaches.length) return { etat: 'aecrire', parPlateforme };
+  if (plateforme) return { etat: verdictSur(plateforme), parPlateforme };
+  return { etat: plateformes.length ? pireEtat(parPlateforme.map((x) => x.etat)) : pireEtat(rattaches.map(verdictParcours)), parPlateforme };
+};
+
+/**
+ * Le tableau des robots d'un projet qui a un plan.
+ *
+ * @param {Array}  sections    les sections du plan, déjà dans l'ordre de la
+ *                             page « Ce qui va être testé »
+ * @param {Array}  parcours    les parcours du projet (toutes plateformes)
+ * @param {Array}  regles      les règles métier du projet
+ * @param {string} plateforme  '' pour toutes
+ */
+export const tableauPlan = ({ sections = [], parcours = [], regles = [], plateforme = '' }) => {
+  const actifs = parcours.filter((p) => p.actif !== false)
+    .sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
+  const parRef = new Map(actifs.map((p) => [p.ref, p]));
+  /* Les tests rattachés à un scénario que fait un robot, toutes
+     plateformes confondues : ceux-là ont leur place dans le plan. */
+  const dansLePlan = new Set();
+  const familles = sections.map((s) => {
+    const cases = [];
+    ASPECTS_DU_PLAN.forEach((aspect) => ((s.aspects || {})[aspect] || []).forEach((sc) => {
+      if (!sc || !QUI_ROBOT.includes(sc.qui)) return;
+      const refs = (Array.isArray(sc.parcours) ? sc.parcours : []).filter((r) => typeof r === 'string' && r);
+      refs.forEach((r) => dansLePlan.add(r));
+      if (!surLaPlateforme(sc, plateforme)) return;
+      const rattaches = refs.map((r) => parRef.get(r)).filter(Boolean);
+      const v = verdictScenarioPlan({ scenario: sc, rattaches, plateforme });
+      cases.push({
+        ref: sc.id || '', cle: `plan:${sc.id || ''}`, titre: sc.titre || '', qui: sc.qui, aspect, section: s.id,
+        scenario: sc, rattaches, inconnus: refs.filter((r) => !parRef.has(r)), ...v,
+      });
+    }));
+    return { cle: `section:${s.id}`, libelle: s.titre || s.id || 'Section', groupe: s.groupe || '', section: s, cases };
+  });
+
+  const regle = regles.filter((r) => r.actif !== false)
+    .map((r) => ({ ref: r.ref, titre: r.titre || '', source: r, regle: true, etat: verdictParcours({ etat: r.etat, defautConnu: r.defautConnu, dernier: r.dernier }) }));
+  const hors = actifs.filter((p) => !dansLePlan.has(p.ref) && surLaPlateforme(p, plateforme))
+    .map((p) => ({ ref: p.ref, titre: p.titre || '', source: p, etat: verdictParcours(p) }));
+  if (regle.length) familles.push({ cle: 'regles', libelle: 'Règles métier', groupe: 'autres', cases: regle });
+  if (hors.length) familles.push({ cle: 'hors-plan', libelle: 'Hors plan', groupe: 'autres', horsPlan: true, cases: hors });
+
+  /* Ce qui compte dans l'avancement : les scénarios du plan et les règles.
+     Les tests hors plan se montrent, ils ne se comptent pas. */
+  const casesPlan = familles.filter((f) => f.section).flatMap((f) => f.cases);
+  const comptees = [...casesPlan, ...regle];
+  return {
+    familles,
+    compte: compter(comptees, ORDRE_MACHINE),
+    ordre: ORDRE_MACHINE,
+    total: comptees.length,
+    attendus: comptees.length,
+    faits: comptees.filter((c) => ['ok', 'fragile', 'casse'].includes(c.etat)).length,
+    tournent: actifs.filter((p) => p.enCours && surLaPlateforme(p, plateforme)).length,
+    scenarios: casesPlan.length,
+    regles: regle.length,
+    horsPlan: hors.length,
+    qui: { robot: casesPlan.filter((c) => c.qui === 'robot').length, 'les-deux': casesPlan.filter((c) => c.qui === 'les-deux').length },
+    plan: true,
   };
 };
 

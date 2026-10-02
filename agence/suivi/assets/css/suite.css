@@ -1652,3 +1652,23 @@ a.coffre-lien:hover { color: var(--accent); }
 .plan-qui-bilan { display: grid; gap: 6px; margin-top: 16px; }
 .plan-qui-bilan-ligne { display: flex; align-items: center; gap: 8px; margin: 0; font: 400 14px/1.5 var(--police); color: var(--encre-2); }
 .plan-qui-bilan-ligne b { color: var(--encre); font-variant-numeric: tabular-nums; }
+
+/* Le tableau des robots rangé par le plan. Un petit point dans le coin
+   d'une case dit qui fait le scénario, aux couleurs de la page du plan :
+   violet, humain et robot ; bleu, robot seul. Il ne touche pas au signe
+   du centre, qui dit le résultat. */
+/* Un défaut connu : un rouge éteint, avec son propre signe (•), pour ne
+   jamais se lire comme un cassé. */
+:root { --case-connu: color-mix(in srgb, var(--case-casse) 45%, var(--case-na)); }
+.tb-case[data-e="connu"], .tb-puce[data-e="connu"] { background: var(--case-connu); }
+.tb-case[data-qui]::after { content: ""; position: absolute; top: -2px; right: -2px; width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--blanc); }
+.tb-case[data-qui="violet"]::after { background: var(--violet-desk); }
+.tb-case[data-qui="bleu"]::after { background: var(--bleu); }
+.tb-qui { margin: 0; align-items: center; }
+.tb-qui .tb-qui-aide { color: var(--encre-3); white-space: normal; }
+.tb-groupe { display: grid; gap: 12px; }
+.tb-groupe .tb-section-titre { margin-top: 6px; }
+.tb-famille-note { margin: 0; font: 400 13px/1.45 var(--police); color: var(--encre-3); }
+.tb-ligne-aide { margin: 0; font: 400 13px/1.45 var(--police); color: var(--encre-3); }
+.tb-etat-case { display: inline-flex; align-items: center; gap: 7px; font: 400 13.5px/1.3 var(--police); color: var(--encre-2); white-space: nowrap; }
+.tb-plan-qui { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px; margin: 0 0 4px; font: 400 13.5px/1.4 var(--police); color: var(--encre-3); }
