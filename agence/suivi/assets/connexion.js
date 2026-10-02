@@ -227,8 +227,10 @@ $('#recommencer').addEventListener('click', () => {
 
 /* --- Le code -------------------------------------------------------------- */
 
-/* Les six chiffres, et rien d'autre : un code colle depuis la boite arrive
-   souvent avec des espaces ou un point final. */
+/* Les six chiffres, et rien d'autre : un code collé depuis la boîte arrive
+   souvent avec des espaces ou un point final. Le champ accepte donc plus de
+   six caractères (sinon le navigateur coupait « 1 2 3 4 5 6 » après « 1 2 3 »),
+   et seuls les chiffres restent. */
 champCode.addEventListener('input', () => {
   const propre = champCode.value.replace(/\D/g, '').slice(0, 6);
   if (propre !== champCode.value) champCode.value = propre;
