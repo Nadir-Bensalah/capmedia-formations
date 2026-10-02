@@ -110,6 +110,9 @@ const remettre = async () => {
   verifier(Boolean(await page.$('a.evt[href*="/reunions/re-demain"]')), 'l événement de la grille mène à la fiche de la réunion');
   /* La bulle de discussion est sur toutes les pages (02/10) : on amène le
      bouton au milieu de l'écran, comme on le ferait, pour qu'elle ne le couvre pas. */
+  /* Une conversation restée ouverte dans la bulle couvre la droite de la
+     page : on la referme d'abord, comme le ferait la personne. */
+  if (await page.$('#bulle-panneau:not([hidden])')) { await page.click('#bulle-ouvrir').catch(() => {}); await pause(400); }
   await page.$eval('[data-ics="re-demain"]', (b) => b.scrollIntoView({ block: 'center' })); await pause(300);
   const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 10000 }), page.click('[data-ics="re-demain"]')]);
   const ics = fs.readFileSync(await dl.path(), 'utf8');
