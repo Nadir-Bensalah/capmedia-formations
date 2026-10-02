@@ -74,8 +74,6 @@ const lancerAccueil = ({ demande = false } = {}) => {
   porte = ouvrirAccueil({
     session,
     projets: projetsDuClient,
-    /* L'écran des tests, à la même condition que l'entrée Tests du rail. */
-    avecTests: () => projetsDuClient().some((p) => (magasin.lire(K.scenarios(p.id)) || []).some((x) => x.actif !== false) || (magasin.lire(K.parcours(p.id)) || []).some((x) => x.actif !== false)),
     surFin: () => {
       porte = null;
       marquerAccueilVu(session.utilisateur.uid);

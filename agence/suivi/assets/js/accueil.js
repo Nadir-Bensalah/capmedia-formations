@@ -49,13 +49,16 @@ const duree = (s) => {
  * Ouvre l'accueil par-dessus l'espace.
  *   service : « Test » ou « Hub », à côté de la marque ;
  *   prenom  : celui qu'on salue ;
+ *   titre   : le titre de la porte (sinon « Bienvenue, prénom ») ;
  *   texte   : la phrase de la porte ;
+ *   visuel  : ce qui remplace la marque assemblée sur la porte (le Hub y
+ *             pose sa mascotte) ; classe : une variante de la porte ;
  *   ecrans  : () => [{ cle, visuel, texte }], relue à chaque redessin ;
  *   surFin  : appelé quand la personne a parcouru ou passé l'accueil, pas
  *             quand on le referme en silence.
  * Renvoie { el, redessiner(cle), fermer({ silencieux }), entame }.
  */
-export const ouvrirAccueil = ({ service, prenom = '', texte, ecrans, surFin = null }) => {
+export const ouvrirAccueil = ({ service, prenom = '', titre = '', texte, visuel = '', classe = '', ecrans, surFin = null }) => {
   let etape = 0;
   let entame = false;
   let ferme = false;
@@ -68,10 +71,10 @@ export const ouvrirAccueil = ({ service, prenom = '', texte, ecrans, surFin = nu
   el.setAttribute('aria-modal', 'true');
   el.setAttribute('aria-label', `Bienvenue sur Capmedia ${service}`);
   el.innerHTML = `<div class="accueil-fond" aria-hidden="true"></div>
-    <section class="accueil-porte">
-      ${logoHtml()}
+    <section class="accueil-porte${classe ? ` ${echapper(classe)}` : ''}">
+      ${visuel || logoHtml()}
       <p class="accueil-marque">Capmedia<span>${echapper(service)}</span></p>
-      <h1>Bienvenue${prenom ? `, ${echapper(prenom)}` : ''}</h1>
+      <h1>${titre ? echapper(titre) : `Bienvenue${prenom ? `, ${echapper(prenom)}` : ''}`}</h1>
       <p class="texte">${texte}</p>
       <button class="btn btn-principal" type="button" data-accueil="commencer">Commencer</button>
       <button class="btn btn-fantome btn-petit" type="button" data-accueil="passer">Aller directement à mon espace</button>
