@@ -19,7 +19,7 @@ if (!process.env.FIRESTORE_EMULATOR_HOST) { console.error('Émulateur requis : c
 const PROJET = process.env.GCLOUD_PROJECT || 'capmedia-1f90d';
 const projet = process.argv[2];
 if (!projet) { console.error('Usage : node semer-robot-banc.mjs <projet>'); process.exit(2); }
-const FONCTIONS = `http://127.0.0.1:5001/${PROJET}/europe-west1`;
+const FONCTIONS = `${createRequire(import.meta.url)('./lib/ports-banc.cjs').fonctions}/${PROJET}/europe-west1`;
 /* Le jeton du robot se crée au nom de l'administrateur du banc (Gate 2 :
    plus de clé partagée). */
 import { createRequire } from 'node:module';

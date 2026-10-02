@@ -5,12 +5,12 @@
    compte, vus par Camille (semer-suivi.mjs, dont le semis dit qu'elle a
    déjà fait ses premiers pas : la suite efface d'abord cette trace).
    ========================================================================== */
-require('./lib/garde-banc.cjs');
+require('./lib/garde-banc.cjs'); const BANC = require('./lib/ports-banc.cjs');
 const { chromium } = require('@playwright/test');
-const BDD = 'http://127.0.0.1:8080/v1/projects/capmedia-1f90d/databases/(default)/documents';
+const BDD = BANC.firestore + '/v1/projects/capmedia-1f90d/databases/(default)/documents';
 const prop = { Authorization: 'Bearer owner' };
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
-const vider = async (c) => { const j = await (await fetch(`${BDD}/${c}?pageSize=300`, { headers: prop })).json(); for (const d of (j.documents || [])) await fetch(`http://127.0.0.1:8080/v1/${d.name}`, { method: 'DELETE', headers: prop }); };
+const vider = async (c) => { const j = await (await fetch(`${BDD}/${c}?pageSize=300`, { headers: prop })).json(); for (const d of (j.documents || [])) await fetch(`${BANC.firestore}/v1/${d.name}`, { method: 'DELETE', headers: prop }); };
 const code = async (e) => { for (let i = 0; i < 40; i += 1) { const j = await (await fetch(`${BDD}/envois?pageSize=200`, { headers: prop })).json(); const d = (j.documents || []).filter((x) => (x.fields.modele || {}).stringValue === 'code' && JSON.stringify(x.fields.a).includes(e)).sort((a, b) => new Date(b.fields.cree.timestampValue) - new Date(a.fields.cree.timestampValue))[0]; if (d) return d.fields.variables.mapValue.fields.code.stringValue; await pause(300); } return ''; };
 const CAMILLE = 'camille.essai@exemple.test';
 /* Le profil de Camille, par son adresse. */
@@ -25,10 +25,10 @@ let page = null;
   await vider('connexions'); await vider('connexionsIp');
   /* Une cliente qui n'a jamais fait ses premiers pas : on efface la trace du semis. */
   const p0 = await profil();
-  if (p0) await fetch(`http://127.0.0.1:8080/v1/${p0.name}?updateMask.fieldPaths=accueil`, { method: 'PATCH', headers: { ...prop, 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: {} }) });
+  if (p0) await fetch(`${BANC.firestore}/v1/${p0.name}?updateMask.fieldPaths=accueil`, { method: 'PATCH', headers: { ...prop, 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: {} }) });
   verifier(p0 && !(((await profil()) || {}).fields || {}).accueil, 'le profil de Camille ne porte plus de premiers pas');
 
-  await page.goto((process.env.BANC_SITE || 'http://127.0.0.1:8787') + '/suivi/?emul', { waitUntil: 'domcontentloaded' });
+  await page.goto((process.env.BANC_SITE || BANC.site) + '/suivi/?emul', { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#forme:not(.masque)'); await page.fill('#email', CAMILLE); await page.click('#envoyer');
   await page.waitForSelector('#forme-code:not(.masque)'); await page.fill('#code', await code(CAMILLE));
   await page.waitForURL(/hub/); await page.waitForSelector('.accueil-porte', { timeout: 20000 });

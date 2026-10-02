@@ -25,9 +25,10 @@ const SUR_BANC = process.env.FUNCTIONS_EMULATOR === 'true' && Boolean(process.en
 
 /* Le domaine et l'origine : le site en production, le banc en local. Une
    adresse IP ne peut pas être un domaine WebAuthn : le banc se sert par
-   « localhost ». */
+   « localhost » (8787 et 8788 sur le banc 1, 18787 et 18788 sur le
+   banc 2). */
 const RP = SUR_BANC
-  ? { nom: 'Capmedia (banc)', id: 'localhost', origines: ['http://localhost:8787', 'http://localhost:8788'] }
+  ? { nom: 'Capmedia (banc)', id: 'localhost', origines: ['http://localhost:8787', 'http://localhost:8788', 'http://localhost:18787', 'http://localhost:18788'] }
   : { nom: 'Capmedia', id: 'capmedia.app', origines: ['https://capmedia.app'] };
 
 const VIE_DEFI = 2 * 60 * 1000;

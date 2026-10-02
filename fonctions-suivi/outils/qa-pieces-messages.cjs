@@ -19,20 +19,20 @@
 
    Banc : émulateurs (Functions et Storage compris), site local, semer-suivi.
    ========================================================================== */
-require('./lib/garde-banc.cjs');
+require('./lib/garde-banc.cjs'); const BANC = require('./lib/ports-banc.cjs');
 const { chromium } = require('@playwright/test');
 const { lireRest } = require('./lib/rest-banc.cjs');
 const { jetonPour } = require('./lib/session-banc.cjs');
 const admin = require('../node_modules/firebase-admin');
-const PROJET = 'capmedia-1f90d'; const SITE = process.env.BANC_SITE || 'http://127.0.0.1:8787';
+const PROJET = 'capmedia-1f90d'; const SITE = process.env.BANC_SITE || BANC.site;
 const SEAU = 'capmedia-1f90d.firebasestorage.app';
-const PORTE = `http://127.0.0.1:5001/${PROJET}/europe-west1/suiviPieceMessage`;
+const PORTE = `${BANC.fonctions}/${PROJET}/europe-west1/suiviPieceMessage`;
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 const prop = { Authorization: 'Bearer owner' };
-const bdd = (c) => `http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
+const bdd = (c) => `${BANC.firestore}/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
 const lire = async (c) => lireRest(bdd(c), prop);
 const docs = async (c) => (((await lire(c)) || {}).documents || []);
-const vider = async (col) => { for (const d of await docs(`${col}?pageSize=300`)) await fetch(`http://127.0.0.1:8080/v1/${d.name}`, { method: 'DELETE', headers: prop }); };
+const vider = async (col) => { for (const d of await docs(`${col}?pageSize=300`)) await fetch(`${BANC.firestore}/v1/${d.name}`, { method: 'DELETE', headers: prop }); };
 const champ = (d, n) => (((d || {}).fields || {})[n]) || {};
 const str = (d, n) => champ(d, n).stringValue || '';
 const piecesDe = (m) => ((champ(m, 'pieces').arrayValue || {}).values || []).map((v) => { const f = (v.mapValue || {}).fields || {}; return { nom: (f.nom || {}).stringValue, chemin: (f.chemin || {}).stringValue, type: (f.type || {}).stringValue }; });

@@ -167,8 +167,8 @@ const carteForfait = (contrat, { equipe, pid, sequences, journees, evolutions })
       <div>
         <h3 class="forfait-titre">${echapper(contrat.formule || 'Forfait de maintenance')}</h3>
         <p class="forfait-sous">${[
-          contrat.debut ? `depuis le <b>${echapper(dateCourte(contrat.debut))}</b>` : '',
-          contrat.fin ? `${contrat.statut === 'termine' ? 'jusqu\'au' : 'prochaine échéance le'} <b>${echapper(dateCourte(contrat.fin))}</b>` : '',
+          dateCourte(contrat.debut) ? `depuis le <b>${echapper(dateCourte(contrat.debut))}</b>` : '',
+          dateCourte(contrat.fin) ? `${contrat.statut === 'termine' ? 'jusqu\'au' : 'prochaine échéance le'} <b>${echapper(dateCourte(contrat.fin))}</b>` : '',
           contrat.reconduction ? `reconduit ${echapper((RECONDUCTIONS_MAINTENANCE[contrat.reconduction] || {}).libelle || '').toLowerCase()}` : '',
         ].filter(Boolean).join(' · ') || 'Les dates seront précisées avec la proposition.'}</p>
       </div>
@@ -196,7 +196,7 @@ const demandeHtml = (contrat, { equipe, pid, finance }) => {
   const attend = contrat.statut === 'demande';
   return `<div class="carte carte--creuse" id="demande" style="margin-top:20px">
     <span class="etiquette-champ">${attend ? 'La demande, en attente d\'une proposition' : 'La demande d\'origine'}</span>
-    <blockquote class="citation" style="margin-top:8px">${echapper(dm.message || 'Sans message.')}<cite>${echapper((dm.par || {}).nom || 'Le client')}${dm.le ? `, le ${echapper(dateHeure(dm.le))}` : ''}${dm.rythme ? ` · rythme souhaité : ${echapper(dm.rythme)}` : ''}</cite></blockquote>
+    <blockquote class="citation" style="margin-top:8px">${echapper(dm.message || 'Sans message.')}<cite>${echapper((dm.par || {}).nom || 'Le client')}${dateHeure(dm.le) ? `, le ${echapper(dateHeure(dm.le))}` : ''}${dm.rythme ? ` · rythme souhaité : ${echapper(dm.rythme)}` : ''}</cite></blockquote>
     ${attend ? (equipe
       ? `<div class="rang" style="margin-top:14px;gap:10px;flex-wrap:wrap"><button class="btn btn-principal btn-petit" type="button" data-configurer-forfait="${echapper(pid)}">${icone('edit')} Répondre par une proposition</button><span class="aide">Les modalités, le prix, les jours : dès que c'est enregistré en « proposition envoyée », le client le lit.</span></div>`
       : `<div class="rang" style="margin-top:14px;gap:10px;flex-wrap:wrap"><button class="btn btn-secondaire btn-petit" type="button" data-modifier-demande="${echapper(pid)}">${icone('edit')} Modifier ma demande</button><span class="aide">Nous préparons une proposition : les modalités, le prix, les jours. Vous la lirez ici${finance ? ', et le devis vous attendra dans « Devis et factures »' : ''}.</span></div>`) : ''}
@@ -237,7 +237,7 @@ const sequenceHtml = (sq, { equipe, pid, contrat, journees }) => {
     <div class="frise-tete">
       <div>
         <p class="frise-titre">${echapper(sq.titre || 'Séquence')}</p>
-        <p class="frise-sous">${[sq.debut ? `du ${echapper(dateCourte(sq.debut))}` : '', sq.fin ? `au ${echapper(dateCourte(sq.fin))}` : ''].filter(Boolean).join(' ')}${sq.debut || sq.fin ? ' · ' : ''}<b>${enClair(faits)}</b> ${faits > 1 ? 'jours travaillés' : 'jour travaillé'}${prevus ? ` sur <b>${enClair(prevus)}</b> ${prevus > 1 ? 'prévus' : 'prévu'}` : ''}${sq.note ? ` · ${echapper(sq.note)}` : ''}</p>
+        <p class="frise-sous">${[dateCourte(sq.debut) ? `du ${echapper(dateCourte(sq.debut))}` : '', dateCourte(sq.fin) ? `au ${echapper(dateCourte(sq.fin))}` : ''].filter(Boolean).join(' ')}${dateCourte(sq.debut) || dateCourte(sq.fin) ? ' · ' : ''}<b>${enClair(faits)}</b> ${faits > 1 ? 'jours travaillés' : 'jour travaillé'}${prevus ? ` sur <b>${enClair(prevus)}</b> ${prevus > 1 ? 'prévus' : 'prévu'}` : ''}${sq.note ? ` · ${echapper(sq.note)}` : ''}</p>
       </div>
       <span class="frise-fin">${equipe
         ? `<button class="frise-statut" type="button" data-statut-sequence="${echapper(sq.id)}" aria-label="Changer le statut" data-astuce="Changer le statut">${pastille(STATUTS_SEQUENCE, sq.statut || 'a-venir')}${icone('chevron')}</button><button class="btn-icone" type="button" data-editer-sequence="${echapper(sq.id)}" aria-label="Modifier la séquence" data-astuce="Modifier">${icone('edit')}</button>`

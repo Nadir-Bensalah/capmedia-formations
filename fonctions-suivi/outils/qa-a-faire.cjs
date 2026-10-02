@@ -1,4 +1,4 @@
-require('./lib/garde-banc.cjs');
+require('./lib/garde-banc.cjs'); const BANC = require('./lib/ports-banc.cjs');
 const { lireRest } = require('./lib/rest-banc.cjs');
 /* ==========================================================================
    CAPMEDIA CLIENT HUB · les projets à faire
@@ -17,12 +17,12 @@ const { lireRest } = require('./lib/rest-banc.cjs');
      node fonctions-suivi/outils/qa-a-faire.cjs
    ========================================================================== */
 const { chromium } = require('@playwright/test');
-const PROJET='capmedia-1f90d', SITE='http://127.0.0.1:8787';
+const PROJET='capmedia-1f90d', SITE=BANC.site;
 const pause=(ms)=>new Promise(r=>setTimeout(r,ms));
 const prop={Authorization:'Bearer owner'};
-const bdd=(c)=>`http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
+const bdd=(c)=>`${BANC.firestore}/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
 const lire=async(c)=>lireRest(bdd(c),prop);
-const vider=async(col)=>{const j=await lire(`${col}?pageSize=300`);for(const d of (j&&j.documents)||[])await fetch(`http://127.0.0.1:8080/v1/${d.name}`,{method:'DELETE',headers:prop});};
+const vider=async(col)=>{const j=await lire(`${col}?pageSize=300`);for(const d of (j&&j.documents)||[])await fetch(`${BANC.firestore}/v1/${d.name}`,{method:'DELETE',headers:prop});};
 const poser=async(chemin,fields,masque)=>fetch(bdd(chemin)+(masque?`?${masque.map(m=>`updateMask.fieldPaths=${m}`).join('&')}`:''),{method:'PATCH',headers:{...prop,'Content-Type':'application/json'},body:JSON.stringify({fields})});
 const S=(v)=>({stringValue:String(v)}), B=(v)=>({booleanValue:v});
 const champ=(d,k)=>(((d||{}).fields||{})[k]||{});

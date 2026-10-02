@@ -29,7 +29,7 @@ const require = createRequire(import.meta.url);
 const PROJET = process.env.PROJET_FIREBASE || process.env.GCLOUD_PROJECT || 'capmedia-1f90d';
 const EMULATEUR = Boolean(process.env.FIREBASE_AUTH_EMULATOR_HOST);
 const FONCTIONS = process.env.FONCTIONS_SUIVI
-  || (EMULATEUR ? `http://127.0.0.1:5001/${PROJET}/europe-west1` : `https://europe-west1-${PROJET}.cloudfunctions.net`);
+  || (EMULATEUR ? `${require('./ports-banc.cjs').fonctions}/${PROJET}/europe-west1` : `https://europe-west1-${PROJET}.cloudfunctions.net`);
 
 /* La clé web publique du Hub, lue dans la configuration du site : elle ne
    protège rien (ce sont les règles et le serveur), elle désigne le projet. */

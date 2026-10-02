@@ -1,4 +1,4 @@
-require('./lib/garde-banc.cjs');
+require('./lib/garde-banc.cjs'); const BANC = require('./lib/ports-banc.cjs');
 const { remplirFiche } = require('./lib/fiche-banc.cjs');
 /* ==========================================================================
    CAPMEDIA CLIENT HUB · la Gate 2, de bout en bout, dans de vrais navigateurs
@@ -22,9 +22,9 @@ const { chromium } = require('@playwright/test');
 const crypto = require('node:crypto');
 const { appelAdmin, uidDe } = require('./lib/session-banc.cjs');
 
-const PROJET = 'capmedia-1f90d', SITE = 'http://127.0.0.1:8787';
+const PROJET = 'capmedia-1f90d', SITE = BANC.site;
 const OWNER = { Authorization: 'Bearer owner', 'Content-Type': 'application/json' };
-const DB = `http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/documents`;
+const DB = `${BANC.firestore}/v1/projects/${PROJET}/databases/(default)/documents`;
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 const soucis = []; const ok = (m) => console.log('  ok     ' + m); const dire = (m) => { soucis.push(m); console.log('  ÉCART  ' + m); };
 const verifier = (c, b, m) => (c ? ok(b) : dire(m ? `${b} · ${String(m).slice(0, 200)}` : b));

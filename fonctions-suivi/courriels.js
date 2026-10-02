@@ -622,7 +622,7 @@ function ferme(v) {
     ...rendreGabarit({
       titre: 'Votre demande est fermée',
       intro: `La demande${numero ? ` ${numero}` : ''}${valeurTexte(v.titre) ? `, « ${valeurTexte(v.titre)} »` : ''} est close. `
-        + 'Il reste consultable dans votre espace, avec tout son historique.\n\n'
+        + 'Elle reste consultable dans votre espace, avec tout son historique.\n\n'
         + 'Une demande fermée ne se rouvre pas. Si le sujet revient, ouvrez une nouvelle demande : nous y retrouverons le contexte.',
       faits: [
         ['Demande', numero],
@@ -785,7 +785,7 @@ function reglementDeclare(v) {
 
 
 /* ==========================================================================
-   5. Les modeles du hub : taches, versions, fichiers, reunions, validations,
+   5. Les modèles du hub : tâches, versions, fichiers, réunions, validations,
    conversation, qualification, nouveaux projets
    ========================================================================== */
 
@@ -867,7 +867,7 @@ function fichier(v) {
     objet: versEquipe ? `${projet} · Fichier reçu de ${valeurTexte(v.par)}` : `${projet ? `${projet} · ` : ''}Nouveau fichier disponible`,
     ...rendreGabarit({
       titre: versEquipe ? 'Un client a déposé un fichier' : 'Un nouveau fichier vous attend',
-      intro: versEquipe ? `${valeurTexte(v.par)} a déposé un fichier sur ${projet}.` : `Bonjour,\n\nUn fichier vient d'être ajoute a votre espace${projet ? ` ${projet}` : ''}.`,
+      intro: versEquipe ? `${valeurTexte(v.par)} a déposé un fichier sur ${projet}.` : `Bonjour,\n\nUn fichier vient d'être ajouté à votre espace${projet ? ` ${projet}` : ''}.`,
       faits: [['Fichier', valeurTexte(v.nom)], ['Catégorie', valeurTexte(v.categorie)]],
       bouton: { libelle: 'Ouvrir les fichiers', url: valeurTexte(v.lien) || lienEspace() },
     }),
@@ -912,7 +912,7 @@ function validationDemandee(v) {
     ...rendreGabarit({
       titre: 'Votre validation est attendue',
       intro: `Bonjour,\n\nNous avons besoin de votre accord pour continuer.`,
-      faits: [['A valider', valeurTexte(v.titre)], ['Ce qu\'il faut regarder', valeurTexte(v.description)]],
+      faits: [['À valider', valeurTexte(v.titre)], ['Ce qu\'il faut regarder', valeurTexte(v.description)]],
       bouton: { libelle: 'Examiner et répondre', url: valeurTexte(v.lien) || lienEspace() },
       note: 'Vous pouvez approuver, ou demander des modifications en un commentaire.',
     }),
@@ -922,11 +922,11 @@ function validationDemandee(v) {
 function validationReponse(v) {
   const approuvee = v.statut === 'approuvee';
   return {
-    objet: `${valeurTexte(v.projetNom)} · ${approuvee ? 'Validation approuvee' : 'Modifications demandees'} : ${valeurTexte(v.titre)}`,
+    objet: `${valeurTexte(v.projetNom) ? `${valeurTexte(v.projetNom)} · ` : ''}${approuvee ? 'Validation approuvée' : 'Modifications demandées'} : ${valeurTexte(v.titre)}`,
     ...rendreGabarit({
-      titre: approuvee ? 'Validation approuvee' : 'Modifications demandees',
-      intro: `${valeurTexte(v.par) || 'Le client'} a repondu sur « ${valeurTexte(v.titre)} ».`,
-      faits: [['Réponse', approuvee ? 'Approuvee' : 'Modifications demandees'], ['Commentaire', valeurTexte(v.commentaire)]],
+      titre: approuvee ? 'Validation approuvée' : 'Modifications demandées',
+      intro: `${valeurTexte(v.par) || 'Le client'} a répondu sur « ${valeurTexte(v.titre)} ».`,
+      faits: [['Réponse', approuvee ? 'Approuvée' : 'Modifications demandées'], ['Commentaire', valeurTexte(v.commentaire)]],
       bouton: { libelle: 'Ouvrir dans le cockpit', url: valeurTexte(v.lien) || lienEspace() },
     }),
   };
@@ -1074,10 +1074,10 @@ function relance(v) {
       : `${valeurTexte(v.projet)} : un point attend votre réponse`,
     ...rendreGabarit({
       titre: n > 1 ? `${n} points attendent votre réponse` : 'Un point attend votre réponse',
-      intro: `Bonjour ${valeurTexte(v.par)},\n\nRien d'urgent de notre cote, mais ces points sont bloques tant qu'ils n'ont pas votre retour. Tout se traite depuis votre espace, en quelques minutes.`,
+      intro: `Bonjour ${valeurTexte(v.par)},\n\nRien d'urgent de notre côté, mais ces points sont bloqués tant qu'ils n'ont pas votre retour. Tout se traite depuis votre espace, en quelques minutes.`,
       faits: lignes.slice(0, 8).map((l) => [valeurTexte(l.quoi), valeurTexte(l.detail)]),
       bouton: { libelle: 'Voir ce qui vous attend', url: valeurTexte(v.lien) || lienEspace() },
-      note: "Vous recevez cette lettre une fois par semaine au maximum, et seulement s'il y a quelque chose. Elle s'arrete des que la liste est vide.",
+      note: "Vous recevez cette lettre une fois par semaine au maximum, et seulement s'il y a quelque chose. Elle s'arrête dès que la liste est vide.",
     }),
   };
 }
@@ -1093,15 +1093,15 @@ function code(v) {
     objet: `${chiffres} est votre code de connexion`,
     ...rendreGabarit({
       titre: 'Votre code de connexion',
-      intro: `Saisissez ce code dans la page de connexion, sur l'appareil ou vous venez de le demander.\n\n`
+      intro: `Saisissez ce code dans la page de connexion, sur l'appareil où vous venez de le demander.\n\n`
         + `Il est valable ${minutes} minutes et ne sert qu'une fois.`,
       faits: [['Code', chiffres.split('').join(' ')]],
-      note: "Si vous n'avez rien demande, ignorez ce message : sans ce code, personne n'entre. Ne le transmettez a personne, nous ne vous le demanderons jamais.",
+      note: "Si vous n'avez rien demandé, ignorez ce message : sans ce code, personne n'entre. Ne le transmettez à personne, nous ne vous le demanderons jamais.",
     }),
   };
 }
 
-/* L'alerte d'ouverture d'une session d'equipe : le cockpit voit tous les
+/* L'alerte d'ouverture d'une session d'équipe : le cockpit voit tous les
    projets, une ouverture qu'on n'a pas faite doit se remarquer. */
 function connexionEquipe(v) {
   return {

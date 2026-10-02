@@ -1,4 +1,4 @@
-require('./lib/garde-banc.cjs');
+require('./lib/garde-banc.cjs'); const BANC = require('./lib/ports-banc.cjs');
 const { lireRest } = require('./lib/rest-banc.cjs');
 /* ==========================================================================
    CAPMEDIA CLIENT HUB · les trois espaces, et leurs trois portes
@@ -17,13 +17,13 @@ const { lireRest } = require('./lib/rest-banc.cjs');
    ========================================================================== */
 const { chromium } = require('@playwright/test');
 const fs = require('fs');
-const PROJET='capmedia-1f90d', SITE='http://127.0.0.1:8787';
+const PROJET='capmedia-1f90d', SITE=BANC.site;
 const RACINE=`${__dirname}/../../agence/suivi`;
 const pause=(ms)=>new Promise(r=>setTimeout(r,ms));
 const prop={Authorization:'Bearer owner'};
-const bdd=(c)=>`http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
+const bdd=(c)=>`${BANC.firestore}/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
 const lire=async(c)=>lireRest(bdd(c),prop);
-const vider=async(col)=>{const j=await lire(`${col}?pageSize=300`);for(const d of (j&&j.documents)||[])await fetch(`http://127.0.0.1:8080/v1/${d.name}`,{method:'DELETE',headers:prop});};
+const vider=async(col)=>{const j=await lire(`${col}?pageSize=300`);for(const d of (j&&j.documents)||[])await fetch(`${BANC.firestore}/v1/${d.name}`,{method:'DELETE',headers:prop});};
 const champ=(d,k)=>(((d||{}).fields||{})[k]||{});
 const str=(d,k)=>champ(d,k).stringValue||'';
 const soucis=[];const ok=m=>console.log('  ok     '+m);const dire=m=>{soucis.push(m);console.log('  ÉCART  '+m);};
@@ -195,7 +195,7 @@ const entrer=async(nav,email)=>{
     for (const d of ((j&&j.documents)||[])) {
       const id=d.name.split('/').pop();
       if (str(d,'email')==='karim.essai@exemple.test' && !id.startsWith('uid-')) {
-        await fetch(`http://127.0.0.1:8080/v1/${d.name}`,{method:'DELETE',headers:prop});
+        await fetch(`${BANC.firestore}/v1/${d.name}`,{method:'DELETE',headers:prop});
       }
     }
   }

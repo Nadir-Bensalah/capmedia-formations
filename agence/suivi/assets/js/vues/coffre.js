@@ -342,7 +342,7 @@ const appareilsCourants = () => (etat.appareils || []).filter((a) => etat.meta &
 const appareilsHtml = () => {
   const p = etat.prf;
   const liste = appareilsCourants();
-  const lignes = liste.length ? `<ul class="coffre-appareils">${liste.map((a) => `<li data-appareil="${echapper(a.id)}"><span><span class="t-corps-fort">${echapper(a.appareil || 'Appareil')}</span> <span class="t-3">· ${quiHtml(coteDe(a.uid), a.uid)}${a.cree ? ` · activé le ${echapper(dateCourte(a.cree))}` : ''}</span></span><button class="btn btn-fantome btn-petit" type="button" data-coffre="retirer-appareil" data-id="${echapper(a.id)}">Retirer</button></li>`).join('')}</ul>` : '';
+  const lignes = liste.length ? `<ul class="coffre-appareils">${liste.map((a) => `<li data-appareil="${echapper(a.id)}"><span><span class="t-corps-fort">${echapper(a.appareil || 'Appareil')}</span> <span class="t-3">· ${quiHtml(coteDe(a.uid), a.uid)}${dateCourte(a.cree) ? ` · activé le ${echapper(dateCourte(a.cree))}` : ''}</span></span><button class="btn btn-fantome btn-petit" type="button" data-coffre="retirer-appareil" data-id="${echapper(a.id)}">Retirer</button></li>`).join('')}</ul>` : '';
   let action = '';
   if (!p) action = '<p class="t-petit t-3">Vérification de ce navigateur…</p>';
   else if (p.etat === 'non') action = `<p class="t-petit t-2" data-prf="non">${echapper(p.raison)} La phrase reste la seule clé sur cet appareil.</p>`;

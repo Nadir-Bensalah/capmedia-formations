@@ -448,7 +448,7 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
       titre: x.titre || x.ref, scenario: true,
       sousTitre: `${x.ref} · ${regle ? 'Règle métier' : `${(OUTILS_PARCOURS[x.outil] || {}).libelle || x.outil || ''}${(x.plateformes || []).length ? ` · ${(x.plateformes || []).map((p) => (PLATEFORMES_TEST[p] || {}).court || p).join(', ')}` : ''}`}`,
       corps: `
-        <p class="tb-pourquoi"><strong>${echapper(e.libelle || c.etat)}.</strong> ${der.le ? `Dernier résultat ${echapper(dateHeure(der.le))}${der.duree ? `, en ${echapper(String(der.duree))} s` : ''}.` : 'Jamais exécuté.'}${x.etat === 'instable' ? ' Passé au vert après un nouvel essai : un parcours instable n\'apprend rien, il faut le fiabiliser.' : ''}</p>
+        <p class="tb-pourquoi"><strong>${echapper(e.libelle || c.etat)}.</strong> ${dateHeure(der.le) ? `Dernier résultat ${echapper(dateHeure(der.le))}${der.duree ? `, en ${echapper(String(der.duree))} s` : ''}.` : 'Jamais exécuté.'}${x.etat === 'instable' ? ' Passé au vert après un nouvel essai : un parcours instable n\'apprend rien, il faut le fiabiliser.' : ''}</p>
         ${(x.scenarios || []).length ? `<p class="aide">Couvre ${(x.scenarios || []).map((r) => `<span class="ref">${echapper(r)}</span>`).join(', ')}.</p>` : ''}
         ${!regle ? `<p class="aide">${x.mutation ? 'Contre-épreuve faite : on a cassé l\'app exprès, ce robot l\'a vu.' : 'Contre-épreuve à faire : on n\'a pas encore vérifié que ce robot repère une vraie panne.'}</p>` : ''}
         ${detail ? `<div class="fs-bloc"><p class="fs-bloc-sur">Ce que le robot a fait, et ce qu'il a trouvé</p>

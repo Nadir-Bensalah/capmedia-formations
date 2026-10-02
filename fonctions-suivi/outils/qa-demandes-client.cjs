@@ -9,14 +9,14 @@
    motif d'un refus ; les pièces et l'accusé d'une validation ; une
    validation annulée et un identifiant inconnu.
    Banc : émulateurs, site local, semer-suivi. */
-require('./lib/garde-banc.cjs');
+require('./lib/garde-banc.cjs'); const BANC = require('./lib/ports-banc.cjs');
 const { chromium } = require('@playwright/test');
-const PROJET = 'capmedia-1f90d'; const SITE = 'http://127.0.0.1:8787';
+const PROJET = 'capmedia-1f90d'; const SITE = BANC.site;
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 const prop = { Authorization: 'Bearer owner' };
-const bdd = (c) => `http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
+const bdd = (c) => `${BANC.firestore}/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
 const lire = async (c) => (await fetch(bdd(c), { headers: prop })).json();
-const vider = async (col) => { const j = await lire(`${col}?pageSize=300`); for (const d of (j && j.documents) || []) await fetch(`http://127.0.0.1:8080/v1/${d.name}`, { method: 'DELETE', headers: prop }); };
+const vider = async (col) => { const j = await lire(`${col}?pageSize=300`); for (const d of (j && j.documents) || []) await fetch(`${BANC.firestore}/v1/${d.name}`, { method: 'DELETE', headers: prop }); };
 const S = (v) => ({ stringValue: String(v) }); const T = (d) => ({ timestampValue: d.toISOString() }); const B = (v) => ({ booleanValue: v }); const NUL = { nullValue: null };
 const M = (fields) => ({ mapValue: { fields } }); const L = (values = []) => ({ arrayValue: values.length ? { values } : {} });
 const poser = async (chemin, fields, masque) => fetch(`${bdd(chemin)}${masque ? `?${masque.map((m) => `updateMask.fieldPaths=${m}`).join('&')}` : ''}`, { method: 'PATCH', headers: { ...prop, 'Content-Type': 'application/json' }, body: JSON.stringify({ fields }) });
@@ -38,7 +38,7 @@ const connecter = async (page, email) => {
 const attendreStatut = async (chemin, voulu, ms = 20000) => { const fin = Date.now() + ms; while (Date.now() < fin) { const d = await lire(chemin); if (str(d, 'statut') === voulu) return true; await pause(500); } return false; };
 const attendreChamp = async (chemin, nom, ok = (v) => Object.keys(v).length > 0, ms = 20000) => { const fin = Date.now() + ms; while (Date.now() < fin) { const d = await lire(chemin); if (ok(champ(d, nom))) return true; await pause(500); } return false; };
 const attendreNotification = async (uid, titre, ms = 20000) => { const fin = Date.now() + ms; while (Date.now() < fin) { const j = await lire(`boites/${uid}/notifications?pageSize=200`); const n = ((j && j.documents) || []).find((d) => str(d, 'titre') === titre); if (n) return n; await pause(500); } return null; };
-const uidDe = async (email) => { const r = await fetch(`http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/projects/${PROJET}/accounts:lookup`, { method: 'POST', headers: { ...prop, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: [email] }) }); const j = await r.json(); return ((j.users || [])[0] || {}).localId || ''; };
+const uidDe = async (email) => { const r = await fetch(`${BANC.auth}/identitytoolkit.googleapis.com/v1/projects/${PROJET}/accounts:lookup`, { method: 'POST', headers: { ...prop, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: [email] }) }); const j = await r.json(); return ((j.users || [])[0] || {}).localId || ''; };
 const aller = async (page, hash, selecteur, ms = 20000) => { await page.evaluate((c) => { location.hash = c; }, hash); await page.waitForSelector(selecteur, { timeout: ms }); await pause(600); };
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
 const deposer = async (page, selecteur, nom) => { await page.setInputFiles(selecteur, { name: nom, mimeType: 'image/png', buffer: PNG }); await page.waitForFunction((s) => { const zone = document.querySelector(s).closest('.modale-corps, form, .page'); return zone && zone.querySelector('.piece') && !zone.querySelector('.piece--envoi'); }, selecteur, { timeout: 20000 }); await pause(300); };

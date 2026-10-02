@@ -1,4 +1,4 @@
-require('./lib/garde-banc.cjs');
+require('./lib/garde-banc.cjs'); const BANC = require('./lib/ports-banc.cjs');
 const { lireRest } = require('./lib/rest-banc.cjs');
 /* ==========================================================================
    CAPMEDIA CLIENT HUB · les scénarios de recette
@@ -18,8 +18,8 @@ const { lireRest } = require('./lib/rest-banc.cjs');
 const { chromium } = require('@playwright/test');
 
 const PROJET = process.env.GCLOUD_PROJECT || 'capmedia-1f90d';
-const SITE = 'http://127.0.0.1:8787';
-const ADMIN = 'http://127.0.0.1:5001/capmedia-1f90d/europe-west1/suiviAdmin';
+const SITE = BANC.site;
+const ADMIN = BANC.fonctions + '/capmedia-1f90d/europe-west1/suiviAdmin';
 const SHOTS = process.argv[2] || './qa';
 
 const soucis = [];
@@ -29,13 +29,13 @@ const dire = (m) => { soucis.push(m); console.log(`  ÉCART  ${m}`); };
 const verifier = (c, bien, mal) => (c ? ok(bien) : dire(mal ? `${bien} · ${mal}` : bien));
 const scenario = (n, titre) => console.log(`\n== Scénario ${n} · ${titre}`);
 
-const bdd = (chemin) => `http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/documents/${chemin}`;
+const bdd = (chemin) => `${BANC.firestore}/v1/projects/${PROJET}/databases/(default)/documents/${chemin}`;
 const proprietaire = { Authorization: 'Bearer owner' };
 
 const lire = async (chemin) => lireRest(bdd(chemin), proprietaire);
 const vider = async (collection) => {
   const j = await lire(`${collection}?pageSize=300`);
-  for (const d of (j && j.documents) || []) await fetch(`http://127.0.0.1:8080/v1/${d.name}`, { method: 'DELETE', headers: proprietaire });
+  for (const d of (j && j.documents) || []) await fetch(`${BANC.firestore}/v1/${d.name}`, { method: 'DELETE', headers: proprietaire });
 };
 const champ = (doc, nom) => {
   const f = (doc && doc.fields && doc.fields[nom]) || {};
@@ -170,7 +170,7 @@ const attendre = async (page, motif, secondes = 12) => {
   const restes = await lire('documents?pageSize=300');
   for (const d of ((restes && restes.documents) || [])) {
     if (/^D-QA/.test(((d.fields || {}).numero || {}).stringValue || '')) {
-      await fetch(`http://127.0.0.1:8080/v1/${d.name}`, { method: 'DELETE', headers: proprietaire });
+      await fetch(`${BANC.firestore}/v1/${d.name}`, { method: 'DELETE', headers: proprietaire });
     }
   }
 

@@ -1,4 +1,4 @@
-require('./lib/garde-banc.cjs');
+require('./lib/garde-banc.cjs'); const BANC = require('./lib/ports-banc.cjs');
 const { lireRest } = require('./lib/rest-banc.cjs');
 /* ==========================================================================
    CAPMEDIA CLIENT HUB · l'invitation d'un testeur
@@ -14,12 +14,12 @@ const { lireRest } = require('./lib/rest-banc.cjs');
      node fonctions-suivi/outils/qa-invitation-testeur.cjs
    ========================================================================== */
 const { chromium } = require('@playwright/test');
-const PROJET='capmedia-1f90d', SITE='http://127.0.0.1:8787';
+const PROJET='capmedia-1f90d', SITE=BANC.site;
 const pause=(ms)=>new Promise(r=>setTimeout(r,ms));
 const prop={Authorization:'Bearer owner'};
-const bdd=(c)=>`http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
+const bdd=(c)=>`${BANC.firestore}/v1/projects/${PROJET}/databases/(default)/documents/${c}`;
 const lire=async(c)=>lireRest(bdd(c),prop);
-const vider=async(col)=>{const j=await lire(`${col}?pageSize=300`);for(const d of (j&&j.documents)||[])await fetch(`http://127.0.0.1:8080/v1/${d.name}`,{method:'DELETE',headers:prop});};
+const vider=async(col)=>{const j=await lire(`${col}?pageSize=300`);for(const d of (j&&j.documents)||[])await fetch(`${BANC.firestore}/v1/${d.name}`,{method:'DELETE',headers:prop});};
 const soucis=[];const ok=m=>console.log('  ok     '+m);const dire=m=>{soucis.push(m);console.log('  ÉCART  '+m);};
 const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
 const champ=(d,k)=>(((d||{}).fields||{})[k]||{});
@@ -55,7 +55,7 @@ const poserPassage=async(uid)=>{
   /* Un compte d'essai laissé par une passe précédente fausserait tout. */
   const vivier=await lire('testeurs?pageSize=100');
   for (const d of ((vivier&&vivier.documents)||[])) {
-    if (str(d,'email')===adresse) await fetch(`http://127.0.0.1:8080/v1/${d.name}`,{method:'DELETE',headers:prop});
+    if (str(d,'email')===adresse) await fetch(`${BANC.firestore}/v1/${d.name}`,{method:'DELETE',headers:prop});
   }
 
   console.log("\n== 1 · La lettre part à l'inscription");
@@ -168,7 +168,7 @@ const poserPassage=async(uid)=>{
     const camp=await lire('projets/atelier/campagnes/qa-suppr');
     const encore=(((champ(camp,'testeurs').arrayValue||{}).values)||[]).some(x=>x.stringValue===uid2);
     verifier(!encore,"et il n'est plus dans la campagne");
-    await fetch(`http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/documents/projets/atelier/campagnes/qa-suppr`,{method:'DELETE',headers:prop}).catch(()=>{});
+    await fetch(`${BANC.firestore}/v1/projects/${PROJET}/databases/(default)/documents/projets/atelier/campagnes/qa-suppr`,{method:'DELETE',headers:prop}).catch(()=>{});
   }
 
   console.log("\n== 5 · La fiche du testeur, à l'écran");
@@ -242,7 +242,7 @@ const poserPassage=async(uid)=>{
   /* Ménage : le compte d'essai ne reste pas dans le vivier. */
   {
     const j=await lire('testeurs?pageSize=100');
-    for (const d of ((j&&j.documents)||[])) if (str(d,'email')===adresse) await fetch(`http://127.0.0.1:8080/v1/${d.name}`,{method:'DELETE',headers:prop});
+    for (const d of ((j&&j.documents)||[])) if (str(d,'email')===adresse) await fetch(`${BANC.firestore}/v1/${d.name}`,{method:'DELETE',headers:prop});
   }
 
   console.log(soucis.length?`\n${soucis.length} ÉCART(S)`:'\nqa-invitation-testeur : tout est conforme');

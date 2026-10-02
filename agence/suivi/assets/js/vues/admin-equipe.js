@@ -85,7 +85,7 @@ export const vue = async (ctx, env) => {
         const dernier = actif && e.role === 'admin' && adminsActifs === 1;
         return ligne({
           titre: `<span class="rang" style="gap:10px">${avatar(e.nom || e.email, { equipe: true })} ${echapper(e.nom || e.email)} ${pastilleTexte(nomRole(e.role), e.role === 'admin' ? 'violet' : 'bleu')} ${actif ? pastilleTexte('Actif', 'vert') : pastilleTexte('Désactivé', 'gris')}${dernier ? ` ${pastilleTexte('Dernier administrateur', 'ambre')}` : ''}</span>`,
-          sous: `${echapper(e.email || '')} · ${echapper(portee)}${(e.permissions || []).length ? ` · en plus : ${echapper(e.permissions.map((p) => PERMISSIONS[p] || p).join(', '))}` : ''}${!actif && e.desactiveLe ? ` · désactivé le ${echapper(dateCourte(e.desactiveLe))}` : ''}`,
+          sous: `${echapper(e.email || '')} · ${echapper(portee)}${(e.permissions || []).length ? ` · en plus : ${echapper(e.permissions.map((p) => PERMISSIONS[p] || p).join(', '))}` : ''}${!actif && dateCourte(e.desactiveLe) ? ` · désactivé le ${echapper(dateCourte(e.desactiveLe))}` : ''}`,
           fin: gerer ? `<button class="btn-icone" type="button" data-action="menu" data-uid="${echapper(e.id)}" aria-label="Gérer ${echapper(e.nom || e.email)}">${icone('points')}</button>` : '',
           attrs: `data-membre="${echapper(e.id)}"`,
         });

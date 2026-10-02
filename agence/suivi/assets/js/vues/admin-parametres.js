@@ -25,7 +25,7 @@ const sectionReglement = (session, coordonnees) => {
         <div class="forme-rang">${champ('titulaire', 'Titulaire du compte', c.titulaire, { attrs: 'maxlength="120" placeholder="Capmedia Digital"' })}${champ('banque', 'Banque', c.banque, { attrs: 'maxlength="120"', facultatif: true })}</div>
         <div class="forme-rang">${champ('iban', 'IBAN', c.iban, { attrs: 'maxlength="40" placeholder="FR76 …" autocomplete="off" spellcheck="false"' })}${champ('bic', 'BIC', c.bic, { attrs: 'maxlength="16" autocomplete="off" spellcheck="false"', facultatif: true })}</div>
         <div class="groupe"><label class="etiquette-champ" for="rf-mention">Mention <span class="facultatif">(facultatif)</span></label><textarea class="zone" id="rf-mention" name="mention" rows="2" maxlength="600" placeholder="Merci d'indiquer le numéro de la facture en libellé du virement." ${gere ? '' : 'disabled'}>${echapper(c.mention || '')}</textarea></div>
-        <div class="rang" style="gap:12px;align-items:center">${gere ? '<button class="btn btn-principal" type="submit">Enregistrer</button>' : '<span class="t-petit t-3">Réservé à la finance (permission « finance.gerer »).</span>'}${c.maj ? `<span class="t-micro t-3">Mis à jour le ${echapper(dateHeure(c.maj))}</span>` : ''}</div>
+        <div class="rang" style="gap:12px;align-items:center">${gere ? '<button class="btn btn-principal" type="submit">Enregistrer</button>' : '<span class="t-petit t-3">Réservé à la finance (permission « finance.gerer »).</span>'}${dateHeure(c.maj) ? `<span class="t-micro t-3">Mis à jour le ${echapper(dateHeure(c.maj))}</span>` : ''}</div>
       </form>
     </div>
   </section>`;
