@@ -27,7 +27,7 @@ import * as planTests from './vues/plan-tests.js';
 import * as tableau from './vues/tableau.js';
 import * as finances from './vues/finances.js';
 import * as documents from './vues/documents.js';
-import { estPubliee as suggestionPubliee } from './vues/suggestions.js';
+import * as evolutions from './vues/evolutions.js';
 import * as maintenance from './vues/maintenance.js';
 import * as parametres from './vues/parametres.js';
 import * as nouveauProjet from './vues/nouveau-projet.js';
@@ -36,7 +36,6 @@ import * as demandesProjet from './vues/demandes-projet.js';
 /* Trois pages nouvelles de l'arbre d'un projet. Notes et Axes d'évolution
    sont construites par d'autres lots (ici, une page « À venir » tient
    l'adresse) ; Marketing reste masquée au client tant qu'elle est vide. */
-import * as evolutions from './vues/evolutions.js';
 import * as marketing from './vues/marketing.js';
 
 const session = await exigerSession();
@@ -181,7 +180,7 @@ const entreesProjet = (p, { attente, nonLusP }) => {
   const scenarios = lireP(K.scenarios).filter((x) => x.actif !== false).length;
   const parcours = lireP(K.parcours).filter((x) => x.actif !== false).length;
   const campagnes = lireP(K.campagnes).filter((c) => c.statut === 'en-cours').length;
-  const suggestions = lireP(K.suggestions).filter(suggestionPubliee).length;
+  const axes = lireP(K.axes).filter(evolutions.estPublie).length;
   const reunions = lireP(K.reunions).filter((r) => joursAvant(r.date) >= 0).length;
   const forfait = lireP(K.maintenance).some((x) => x.id === 'contrat' && x.statut === 'actif');
   const maintenanceConnue = magasin.lire(K.maintenance(pid)) !== undefined || Boolean(magasin.erreur(K.maintenance(pid)));
@@ -200,7 +199,7 @@ const entreesProjet = (p, { attente, nonLusP }) => {
       enCours: campagnes ? (campagnes > 1 ? `${campagnes} campagnes de tests en cours` : 'campagne de tests en cours') : '',
     }] : []),
     /* Ce que Capmedia propose pour la suite (les suggestions y sont). */
-    { chemin: `${base}/evolutions`, libelle: 'Axes d\'évolution', icone: 'ampoule', projet: pid, compte: { total: suggestions } },
+    { chemin: `${base}/evolutions`, libelle: 'Axes d\'évolution', icone: 'ampoule', projet: pid, compte: { total: axes } },
     ...(marketing.aDuContenu(p) ? [{ chemin: `${base}/marketing`, libelle: 'Marketing', icone: 'trend', projet: pid }] : []),
     /* Le coffre est au responsable ; il dit qu'il est chiffré. */
     ...(responsable ? [{ chemin: `${base}/coffre`, libelle: 'Coffre-fort', icone: 'cadenas', projet: pid, marque: { texte: 'Chiffré', icone: 'cadenas', ton: 'vert', titre: 'Chiffré de bout en bout : Capmedia ne lit pas son contenu' } }] : []),
@@ -256,7 +255,7 @@ const construireNavigation = () => {
    un squelette de la même hauteur tient la place des projets et de leur
    arbre. Sans lui, les entrées poussaient une à une à mesure que leurs
    données arrivaient, et le rail sautait. */
-const clesDuProjet = (pid) => [K.tickets(pid), K.validations(pid), K.documents(pid), K.fichiers(pid), K.taches(pid), K.blocages(pid), K.messages(pid), K.maintenance(pid), K.scenarios(pid), K.parcours(pid), K.campagnes(pid), K.liens(pid), K.notes(pid), K.suggestions(pid), K.reunions(pid)];
+const clesDuProjet = (pid) => [K.tickets(pid), K.validations(pid), K.documents(pid), K.fichiers(pid), K.taches(pid), K.blocages(pid), K.messages(pid), K.maintenance(pid), K.scenarios(pid), K.parcours(pid), K.campagnes(pid), K.liens(pid), K.notes(pid), K.axes(pid), K.reunions(pid)];
 const clesNavigation = () => [K.projets, K.profil, K.demandesProjet, ...(magasin.lire(K.projets) || session.projets || []).flatMap((p) => clesDuProjet(p.id))];
 const dessinerNav = magasin.dessinateur(construireNavigation, 80, clesNavigation, 4000);
 const ecoutees = new Set();
@@ -376,6 +375,7 @@ definir([
   /* Les fichiers d'un projet vivent sur la page Fichiers, filtrée sur lui :
      les anciennes adresses (lettres, notifications) y mènent. */
   { chemin: '/projets/:id/fichiers', vue: (ctx) => { naviguer(`/fichiers?projet=${encodeURIComponent(ctx.params.id)}${ctx.requete && ctx.requete.f ? `&f=${encodeURIComponent(ctx.requete.f)}` : ''}`, { remplacer: true }); } },
+  /* Les axes d'évolution, qui remplacent les suggestions : l'ancienne adresse y mène. */
   { chemin: '/projets/:id/:onglet', cle: (c) => `projet:${c.params.id}`, vue: (ctx) => projet.vue({ ...ctx, onglet: ctx.params.onglet }, env) },
   { chemin: '/demandes', vue: (ctx) => demandes.vue(ctx, env) },
   { chemin: '/messages', vue: (ctx) => messages.vue(ctx, env) },

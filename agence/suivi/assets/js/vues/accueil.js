@@ -18,7 +18,7 @@ import { monterNotesClient } from './notes-client.js';
 import { etatPave, paveHtml, brancherPaves } from '../pave-attente.js';
 
 const iconeActivite = {
-  suggestion: 'ampoule',
+  suggestion: 'ampoule', axe: 'ampoule',
   'tache': 'taches', 'jalon': 'drapeau', 'release': 'releases', 'fichier': 'fichiers', 'reunion': 'reunions',
   'validation': 'valider', 'demande': 'demandes', 'message': 'messages', 'devis': 'receipt', 'facture': 'euro',
   'paiement': 'paiement', 'note': 'note', 'blocage': 'alerte', 'projet': 'projets', 'maintenance': 'sante', 'test': 'bug',

@@ -1,0 +1,7 @@
+{
+  "intro": "Un texte \u2014 avec un tiret cadratin.",
+  "plateformes": {
+    "ios": [ { "id": "ios-x", "titre": "", "description": "x", "apport": "magie", "ampleur": "immense" } ],
+    "montre": []
+  }
+}

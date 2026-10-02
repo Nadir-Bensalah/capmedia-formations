@@ -1389,3 +1389,38 @@ exports.hubRappelsReunions = onSchedule(
   { region: REGION, schedule: 'every day 17:00', timeZone: 'Europe/Paris' },
   async () => { await rappelerLesReunions(new Date()); },
 );
+
+/* ==========================================================================
+   Les axes d'évolution
+   Le client coche une piste et dit ce qu'il en veut : l'équipe est
+   prévenue dans sa boîte, et le geste reste dans l'activité du projet
+   (qui, quand, quoi). Un axe créé (import, conversion) ne prévient
+   personne : seul un geste sur un axe existant compte.
+   ========================================================================== */
+
+const GESTES_AXE = {
+  interesse: { texte: 's\'intéresse à l\'axe', titre: 'Un axe intéresse le client' },
+  'a-prevoir': { texte: 'veut prévoir l\'axe', titre: 'Le client veut prévoir un axe' },
+  'en-parler': { texte: 'aimerait parler de l\'axe', titre: 'Le client veut parler d\'un axe' },
+};
+const cleReponseAxe = (r) => (r && r.choix ? `${r.par || ''}|${r.choix}|${r.demande || ''}` : '');
+
+exports.hubAxeEcrit = onDocumentWritten({ region: REGION, document: 'projets/{projetId}/axes/{axeId}' }, async (evenement) => {
+  const avant = evenement.data.before.exists ? evenement.data.before.data() : null;
+  const apres = evenement.data.after.exists ? evenement.data.after.data() : null;
+  if (!avant || !apres) return;
+  const ra = avant.reponse || null;
+  const rb = apres.reponse || null;
+  if (cleReponseAxe(ra) === cleReponseAxe(rb)) return;
+  const projetId = evenement.params.projetId;
+  const lien = `/projets/${projetId}/evolutions`;
+  const titre = String(apres.titre || '').slice(0, 120);
+  if (!rb || !GESTES_AXE[rb.choix]) {
+    await activite({ projet: projetId, type: 'axe', texte: `a retiré son choix sur l'axe « ${titre} »`, par: ra && ra.par ? { uid: ra.par, nom: ra.nom || '', cote: 'client' } : null, lien, visibilite: 'interne' });
+    return;
+  }
+  const projet = await lireProjet(projetId);
+  const geste = GESTES_AXE[rb.choix];
+  await activite({ projet: projetId, type: 'axe', texte: `${geste.texte} « ${titre} »`, par: { uid: rb.par || null, nom: rb.nom || '', cote: 'client' }, cible: evenement.params.axeId, lien });
+  await notifierEquipe(projetId, { type: 'axe', titre: geste.titre, texte: `${titre} · ${rb.nom || 'le client'} · ${nomProjet(projet)}`, lien: `#${lien}`, projet: projetId });
+});

@@ -25,7 +25,6 @@ import { filAriane } from '../coquille.js';
 import { notesPartageesHtml, gesteNoteDemande } from './notes-client.js';
 import { naviguer } from '../routeur.js';
 import { editer, supprimer } from './editeurs.js';
-import { ongletSuggestions, apercuSuggestionHtml, gesteSuggestion, marquerVues, compteOnglet as compteSuggestions, estPubliee as suggestionPubliee } from './suggestions.js';
 import { appelServeur } from '../serveur.js';
 import { activiteHtml } from './accueil.js';
 import { basculerAFaire } from './admin-a-faire.js';
@@ -53,8 +52,8 @@ const ONGLETS = [
   { cle: 'fichiers', libelle: 'Fichiers', icone: 'fichiers' },
   { cle: 'releases', libelle: 'Versions', icone: 'releases' },
   { cle: 'liens', libelle: 'Ressources', icone: 'liens' },
-  /* Ce que Capmedia propose : le client ne voit l'onglet que s'il y a une suggestion publiée. */
-  { cle: 'suggestions', libelle: 'Suggestions', icone: 'ampoule' },
+  /* Les axes d'évolution ont leur page (vues/evolutions.js) : l'onglet y mène. */
+  { cle: 'evolutions', libelle: 'Axes d\'évolution', icone: 'ampoule' },
   /* Les accès du client, chiffrés : l'équipe et le responsable seuls. */
   { cle: 'coffre', libelle: 'Coffre-fort', icone: 'cadenas' },
   { cle: 'reunions', libelle: 'Réunions', icone: 'reunions' },
@@ -78,7 +77,7 @@ const HORS_CLIENT = ['releases', 'suggestions', 'notes'];
 const ongletsVisibles = (d, equipe, env) => ONGLETS.filter((o) => (equipe || (!o.equipeSeule && !HORS_CLIENT.includes(o.cle)))
   && (o.cle !== 'tests' || equipe || (d && (d.scenarios.length || d.campagnes.length)))
   && (o.cle !== 'coffre' || (env && voitLeCoffre(env, d && d.projet)))
-  && (o.cle !== 'suggestions' || equipe || (d && (d.suggestions || []).some(suggestionPubliee))));
+  && (o.cle !== 'evolutions' || equipe));
 
 /* La conversation vit en bulle, montée pour toutes les pages d'un projet
    par un module global. Depuis une fiche, on lui passe un début de
@@ -109,7 +108,6 @@ const lireTout = (pid) => ({
   /* Les notes que le client a partagées (équipe seule : un client n'a
      jamais cette clé, la liste est vide chez lui). */
   notesPartagees: notesPartageesDuProjet(pid),
-  suggestions: magasin.lire(K.suggestions(pid)) || [],
 });
 
 const nomEquipe = (equipe, uid) => ((equipe.find((e) => e.id === uid) || {}).nom || '');
@@ -136,7 +134,7 @@ export const vue = async (ctx, env) => {
   sortie.innerHTML = `<div class="page">${squelette('page', 6)}</div>`;
 
   const cles = [K.projet(pid), K.composants(pid), K.jalons(pid), K.liens(pid), K.taches(pid), K.tickets(pid), K.validations(pid), K.fichiers(pid), K.releases(pid), K.reunions(pid), K.notes(pid), K.blocages(pid), K.documents(pid), K.paiements(pid), K.montants(pid), K.activite(pid), K.equipe,
-    K.scenarios(pid), K.planPresentation(pid), K.campagnes(pid), K.anomalies(pid), K.suggestions(pid), ...(env.role === 'equipe' ? [K.projetsInternes, K.interlocuteurs(pid), K.notesPartagees] : [])];
+    K.scenarios(pid), K.planPresentation(pid), K.campagnes(pid), K.anomalies(pid), ...(env.role === 'equipe' ? [K.projetsInternes, K.interlocuteurs(pid), K.notesPartagees] : [])];
   abonnerProjet(lot, pid, env.role);
 
   /* Une fiche ouverte par son adresse : une tâche (taches/:tid), une
@@ -190,7 +188,6 @@ export const vue = async (ctx, env) => {
       reunions: d.reunions.filter(reunionAVenir).length,
       notes: d.notes.length,
       tests: d.scenarios.length,
-      suggestions: compteSuggestions(d.suggestions, env),
       marketing: equipe ? 'À venir' : '',
     };
 
@@ -236,7 +233,6 @@ export const vue = async (ctx, env) => {
     if (equipe) reglerOnglets(sortie);
     /* Le coffre garde sa zone d'un dessin à l'autre ; quitter l'onglet le
        verrouille et coupe ses écoutes. */
-    if (onglet === 'suggestions') marquerVues(d, { pid, env });
     if (onglet === 'coffre') {
       chargerCoffre().then((m) => { if (onglet === 'coffre') m.monterCoffre(sortie.querySelector('#coffre-zone'), { pid, env, projet }); })
         .catch(() => toast('Le coffre-fort n\'a pas pu se charger. Rechargez la page.', 'erreur'));
@@ -274,7 +270,6 @@ export const vue = async (ctx, env) => {
     const action = el.dataset.action;
     const id = el.dataset.id;
     if (action === 'editer-projet') return editer('projet', env, { pid, fiche: d.projet });
-    if (await gesteSuggestion(el, d, { pid, env })) return null;
     if (await gesteAcces(el, d, { pid, env })) return null;
     if (action === 'ouvrir-au-client') {
       const personnes = (d.interlocuteurs || []).filter((i) => i.statut === 'actif');
@@ -373,12 +368,11 @@ export const vue = async (ctx, env) => {
     el.dataset.action = 'menu-fichier'; el.dataset.id = el.dataset.menuFichier; el.click();
   });
   // Les filtres et les bascules d'affichage se souviennent, puis redessinent.
-  const gestesFiltres = sur(sortie, 'click', '[data-vue-taches], [data-filtre-demandes], [data-filtre-fichiers], [data-filtre-suggestions]', (el) => {
+  const gestesFiltres = sur(sortie, 'click', '[data-vue-taches], [data-filtre-demandes], [data-filtre-fichiers]', (el) => {
     try {
       if (el.dataset.vueTaches !== undefined) localStorage.setItem('suivi:taches-vue', el.dataset.vueTaches);
       if (el.dataset.filtreDemandes !== undefined) sessionStorage.setItem(`suivi:filtre-demandes:${pid}`, el.dataset.filtreDemandes);
       if (el.dataset.filtreFichiers !== undefined) sessionStorage.setItem(`suivi:filtre-fichiers:${pid}`, el.dataset.filtreFichiers);
-      if (el.dataset.filtreSuggestions !== undefined) sessionStorage.setItem(`suivi:filtre-suggestions:${pid}`, el.dataset.filtreSuggestions);
     } catch (e) { /* stockage refusé */ }
     rendre(true);
   });
@@ -487,7 +481,7 @@ const trouver = (d, genre, id) => {
   if (genre === 'scenario') return (d.scenarios || []).find((x) => x.ref === id);
   return ({
     composant: d.composants, jalon: d.jalons, lien: d.liens, tache: d.taches, release: d.releases, reunion: d.reunions, note: d.notes, blocage: d.blocages, fichier: d.fichiers,
-    campagne: d.campagnes, suggestion: d.suggestions,
+    campagne: d.campagnes,
   }[genre] || []).find((x) => x.id === id);
 };
 
@@ -586,7 +580,6 @@ const rendreOnglet = (onglet, d, c) => {
     case 'notes': return notes(d, c);
     case 'tests': return tests(d, c);
     case 'coffre': return '<div id="coffre-zone"></div>';
-    case 'suggestions': return ongletSuggestions(d, c);
     case 'marketing': return `<section class="section" style="margin-top:0"><div class="section-tete"><h2>Marketing</h2><span class="etiquette">À venir</span></div><p class="t-petit t-2">Cette page est encore vide. Le client ne la voit pas tant qu'elle n'a rien à montrer.</p></section>`;
     case 'activite': return `<section class="section" style="margin-top:0"><div class="section-tete"><h2>Activité du projet</h2></div>${activiteHtml(d.activite.slice(0, 80), { equipe: c.env.role === 'equipe' })}</section>`;
     default: return '';
@@ -656,13 +649,11 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
     return `<section class="section" style="margin-top:0"><div class="encart encart--info" id="depuis-visite">${icone('info')}<div><strong>Depuis votre dernière visite</strong><span class="rang" style="margin-top:6px;gap:16px">${parts.join('')}</span></div></div></section>`;
   })() : '';
 
-  const suggestionHtml = apercuSuggestionHtml(d, { pid, env });
   /* Le premier bloc de la page colle à l'en-tête ; les suivants gardent
      leur respiration. */
-  const rienAuDessus = !resumeDepuis && !suggestionHtml;
+  const rienAuDessus = !resumeDepuis;
   return `
     ${resumeDepuis}
-    ${suggestionHtml}
 
     ${blocagesOuverts.length ? `<section class="section" id="points-bloquants"${rienAuDessus ? ' style="margin-top:0"' : ''}>
       <div class="section-tete"><h2>Points bloquants</h2>${boutonNouveau(env, 'blocage', 'Signaler')}</div>

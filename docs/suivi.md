@@ -1709,3 +1709,49 @@ le prix HT et TTC qu'à l'équipe et au responsable. Un second « Ça
 m'intéresse » reprend la demande encore ouverte au lieu d'en créer une
 autre. Code : vues/suggestions.js, éditeur « suggestion » dans
 editeurs.js. Épreuve : qa-suggestions.cjs.
+
+> Remplacé le 02/10/2026 par les axes d'évolution (section 33). Les
+> documents `projets/{pid}/suggestions` restent en base, intacts ; la page,
+> l'éditeur et qa-suggestions.cjs sont retirés.
+
+## 33. Les axes d'évolution (02/10/2026)
+
+Page `#/projets/<p>/evolutions` (vues/evolutions.js), qui remplace l'onglet
+Suggestions : une seule page pour la même idée. L'ancienne adresse
+`/projets/<p>/suggestions` y mène. Une intro, puis un bloc par plateforme
+(celles des parties du projet, plus celles où un axe existe, plus
+« Général »). Chaque axe est une ligne : case, titre, une phrase, l'apport
+(engagement, revenus, fidélité, image, sécurité, confort) et l'ampleur
+(jauge à trois marches), un « En savoir plus » facultatif. Un compteur
+discret par plateforme (client : cochés sur total ; équipe : axes,
+réponses, brouillons).
+
+Le client coche une ligne : trois gestes apparaissent, « Ça m'intéresse »,
+« À prévoir », « On en parle ». Le choix est gardé sur l'axe (`reponse` :
+par, nom, choix, demande, le, daté par le serveur) ; « On en parle » ouvre
+en plus une demande à son nom (`tickets.axe`), une seule tant qu'elle est
+ouverte. Décocher retire le choix. Chaque geste prévient l'équipe (fonction
+`hubAxeEcrit` : notification dans la boîte, ligne d'activité). La réponse
+est au responsable du projet (même règle que les suggestions) ; un
+collaborateur lit sans cocher. Le prix d'un axe vit dans
+`projets/{p}/montants/axe-<id>` : seuls l'équipe (finance) et le
+responsable le lisent ; un devis peut être lié.
+
+L'équipe (Cockpit) ajoute, modifie, ordonne, publie ou retire, change
+l'état (proposé, au programme, en place), supprime, écrit l'introduction
+(`projets/{p}/axesIntro/texte`), et lit la réponse sur chaque ligne.
+
+Données : `projets/{p}/axes/{id}`. Règles : l'équipe écrit dans les bornes
+(`axeValide`) ; le client membre ne lit que les publiés et ne touche qu'à
+`reponse` et `maj`, sur un axe publié, proposé ou au programme. Format,
+bornes et validation partagés : agence/suivi/assets/js/axes-format.js.
+
+Import : `fonctions-suivi/outils/axes-importer.mjs <projet> [fichier]`
+(format : ~/ForgeMe-tests/axes-evolution/FORMAT.md). À blanc par défaut ;
+`--vrai` sur l'émulateur ; `--vrai --production` après sauvegarde dans
+~/Capmedia/sauvegardes/axes/. Les axes neufs naissent en brouillon
+(`--publier` pour publier d'office) ; un axe retouché dans le Cockpit
+n'est pas réécrit sans `--ecraser`. `--convertir` fait de chaque
+suggestion l'axe `sugg-<id>` de sa plateforme (« general » si aucune ou
+plusieurs), publié si elle l'était, avec son prix et la réponse
+« intéressé ». Épreuves : qa-axes.cjs, regles.test.mjs (section axes).
