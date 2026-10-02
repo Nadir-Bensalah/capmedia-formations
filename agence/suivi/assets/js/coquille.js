@@ -169,7 +169,7 @@ const basculerBloc = (bloc, oui) => {
   if (branches) branches.inert = !oui;
   /* Le chiffre du projet : la somme quand il est replié, rien quand ses
      entrées le portent. Le bloc n'est pas redessiné : ses branches glissent. */
-  const it = contexte.groupes.flatMap((g) => g.items).find((x) => x.arbre === bloc.dataset.arbre);
+  const it = contexte.groupes.flatMap((g) => g.items || []).find((x) => x.arbre === bloc.dataset.arbre);
   const ligneProjet = bloc.querySelector('.lat-projet');
   if (it && ligneProjet) {
     const ancien = ligneProjet.querySelector(':scope > .comptes');
@@ -180,9 +180,17 @@ const basculerBloc = (bloc, oui) => {
   railRendu = htmlNavigation();
 };
 
+/* Un marqueur écrit, sans fond ni bordure, à la place des chiffres : le
+   coffre-fort dit « Chiffré », en vert, avec son cadenas. Le même principe
+   que le repère de Maintenance, mais avec le mot. */
+const marqueHtml = (marque) => {
+  if (!marque || !marque.texte) return '';
+  return `<span class="comptes"><span class="lat-marqueur${marque.ton ? ` lat-marqueur--${echapper(marque.ton)}` : ''}"${marque.titre ? ` data-astuce="${echapper(marque.titre)}"` : ''}>${marque.icone ? icone(marque.icone) : ''}${echapper(marque.texte)}</span></span>`;
+};
+
 const lienHtml = (it, classe = '') => `
         <a class="lat-lien${classe}${it.sous ? ' lat-sous-lien' : ''}${it.enCours ? ' lat-lien--en-cours' : ''}" href="#${echapper(it.lien || it.chemin)}" data-chemin="${echapper(it.chemin)}"${it.projet ? ` data-projet="${echapper(it.projet)}"` : ''}${it.exact ? ' data-exact' : ''}>
-          ${it.ecusson || (it.icone ? icone(it.icone) : '')}<span class="tronque">${echapper(it.libelle)}</span>${it.enCours ? `<span class="sr-only">, ${echapper(it.enCours)}</span>` : ''}${compteHtml(typeof it.compte === 'function' ? it.compte() : it.compte)}${repereHtml(it.repere)}
+          ${it.ecusson || (it.icone ? icone(it.icone) : '')}<span class="tronque">${echapper(it.libelle)}</span>${it.enCours ? `<span class="sr-only">, ${echapper(it.enCours)}</span>` : ''}${compteHtml(typeof it.compte === 'function' ? it.compte() : it.compte)}${repereHtml(it.repere)}${marqueHtml(it.marque)}
         </a>`;
 
 const arbreHtml = (it) => {
@@ -200,10 +208,22 @@ const arbreHtml = (it) => {
     </div>`;
 };
 
+/* Le squelette du rail, le temps que les projets et leur arbre arrivent :
+   des lignes de la hauteur des vraies (un projet, puis ses entrées sous
+   lui quand il sera déplié), qui chatoient comme les squelettes des pages.
+   Le vrai rail le remplace d'un seul dessin (app.js, magasin.dessinateur). */
+const LARGEURS_OS = [58, 46, 64, 52, 40, 70, 50, 62, 44, 56, 48, 60];
+const squeletteHtml = ({ projets = 1, branches = 0 } = {}) => `
+    <div class="lat-squelette" aria-busy="true" aria-label="Chargement des projets">
+      ${Array.from({ length: projets }, (_, i) => `
+      <div class="lat-os"><span class="os lat-os-pastille"></span><span class="os lat-os-texte" style="width:${LARGEURS_OS[(i * 3) % LARGEURS_OS.length]}%"></span></div>
+      ${i === 0 && branches ? `<ul role="list" class="lat-os-branches">${Array.from({ length: branches }, (__, j) => `<li class="lat-branche"><div class="lat-os"><span class="os lat-os-pastille"></span><span class="os lat-os-texte" style="width:${LARGEURS_OS[j % LARGEURS_OS.length]}%"></span></div></li>`).join('')}</ul>` : ''}`).join('')}
+    </div>`;
+
 const htmlNavigation = () => contexte.groupes.map((g) => `
     <div class="lat-groupe">
       ${g.titre ? `<p class="lat-titre">${echapper(g.titre)}</p>` : ''}
-      ${g.items.map((it) => (it.enfants ? arbreHtml(it) : lienHtml(it))).join('')}
+      ${g.squelette ? squeletteHtml(g.squelette) : g.items.map((it) => (it.enfants ? arbreHtml(it) : lienHtml(it))).join('')}
     </div>`).join('');
 
 /* Le rail ne se réécrit que s'il change vraiment. Chaque page le

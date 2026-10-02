@@ -28,8 +28,8 @@ export const vue = async (ctx, env) => {
   const { session } = env;
   const lot = magasin.lot();
   const sortie = ctx.sortie;
-  titrePage('Demandes');
-  filAriane([{ libelle: 'Demandes' }]);
+  titrePage('Tickets');
+  filAriane([{ libelle: 'Tickets' }]);
   sortie.innerHTML = `<div class="page">${squelette('page', 5)}</div>`;
   const etat = { filtre: lireMemoire(CLE_FILTRE, 'ouvertes'), projet: (ctx.requete && ctx.requete.projet) || lireMemoire(CLE_PROJET, '') };
   /* Une validation dans l'adresse (#/valider/{id}) s'ouvre en fiche dès que
@@ -82,15 +82,15 @@ export const vue = async (ctx, env) => {
 
     sortie.innerHTML = `<div class="page">
       <div class="page-tete">
-        <div><h1>Demandes</h1><p class="chapo">Ce qui attend votre retour, puis ${projets.length > 1 ? 'toutes vos demandes, sur tous vos projets' : 'vos demandes'} : ce qui est chez nous, ce qui attend votre réponse, ce qui est terminé.</p></div>
-        <div class="actions">${projets.length ? `<button class="btn btn-principal" type="button" data-nouvelle-demande>${icone('plus')} Nouvelle demande</button>` : ''}</div>
+        <div><h1>Tickets</h1><p class="chapo">Ce qui attend votre retour, puis ${projets.length > 1 ? 'tous vos tickets, sur tous vos projets' : 'vos tickets'} : ce qui est chez nous, ce qui attend votre réponse, ce qui est terminé.</p></div>
+        <div class="actions">${projets.length ? `<button class="btn btn-principal" type="button" data-nouvelle-demande>${icone('plus')} Nouveau ticket</button>` : ''}</div>
       </div>
       ${blocAttente}
       <section class="section" id="vos-demandes">
-      <div class="section-tete"><h2>Vos demandes</h2></div>
+      <div class="section-tete"><h2>Vos tickets</h2></div>
       <div class="rang" style="margin-bottom:16px;gap:12px;flex-wrap:wrap">
         <div class="filtres">
-          ${[['ouvertes', 'Ouvertes'], ['moi', 'À vous'], ['terminees', 'Terminées'], ['toutes', 'Toutes']].map(([cle, lib]) => `<button class="filtre${etat.filtre === cle ? ' actif' : ''}" type="button" data-filtre="${cle}">${lib}<span class="compte">${groupes[cle].length}</span></button>`).join('')}
+          ${[['ouvertes', 'Ouverts'], ['moi', 'À vous'], ['terminees', 'Terminés'], ['toutes', 'Tous']].map(([cle, lib]) => `<button class="filtre${etat.filtre === cle ? ' actif' : ''}" type="button" data-filtre="${cle}">${lib}<span class="compte">${groupes[cle].length}</span></button>`).join('')}
         </div>
         ${projets.length > 1 ? `<select class="select" id="filtre-projet" style="width:auto;min-width:180px" aria-label="Projet"><option value="">Tous les projets</option>${projets.map((p) => `<option value="${echapper(p.id)}"${etat.projet === p.id ? ' selected' : ''}>${echapper(p.nom)}</option>`).join('')}</select>` : ''}
       </div>
@@ -100,7 +100,7 @@ export const vue = async (ctx, env) => {
         ton: tonPlateforme(t.plateforme) || (ATTEND_CLIENT.includes(t.statut) ? 'ambre' : t.statut === 'resolu' ? 'vert' : ''),
         nonLu: nonLu(t) && OUVERTS.includes(t.statut),
         titre: `${t.numero ? `<span class="t-mono t-3" style="font-weight:400">${echapper(t.numero)}</span> ` : ''}${echapper(t.titre)}`,
-        sous: `${projets.length > 1 ? `${echapper(nomProjet(t.projet))} · ` : ''}${echapper((TYPES[t.type] || {}).libelle || t.type)} · ${puce(URGENCES, t.urgence || 'important')} · ${echapper(OUVERTS.includes(t.statut) ? `ouverte depuis ${age(t.cree)}` : `close ${depuis(t.maj)}`)}${t.qualification ? ` · ${pastille(QUALIFICATIONS, t.qualification)}` : ''}`,
+        sous: `${projets.length > 1 ? `${echapper(nomProjet(t.projet))} · ` : ''}${echapper((TYPES[t.type] || {}).libelle || t.type)} · ${puce(URGENCES, t.urgence || 'important')} · ${echapper(OUVERTS.includes(t.statut) ? `ouvert depuis ${age(t.cree)}` : `clos ${depuis(t.maj)}`)}${t.qualification ? ` · ${pastille(QUALIFICATIONS, t.qualification)}` : ''}`,
         fin: `${(() => {
           const chez = (STATUTS[t.statut] || {}).chez;
           if (chez === 'client') return '<span class="puce puce--ambre"><i></i>À vous</span>';
@@ -108,7 +108,7 @@ export const vue = async (ctx, env) => {
           return '';
         })()}${pastille(STATUTS, t.statut, { client: true })}`,
       })).join('')}</div>`
-      : vide({ icone: 'demandes', titre: etat.filtre === 'ouvertes' ? 'Aucune demande en cours' : 'Rien ici', texte: etat.filtre === 'ouvertes' ? 'Tout semble en ordre pour le moment.' : '', action: projets.length ? '<button class="btn btn-secondaire" type="button" data-nouvelle-demande>Créer une demande</button>' : '' })}
+      : vide({ icone: 'demandes', titre: etat.filtre === 'ouvertes' ? 'Aucun ticket en cours' : 'Rien ici', texte: etat.filtre === 'ouvertes' ? 'Tout semble en ordre pour le moment.' : '', action: projets.length ? '<button class="btn btn-secondaire" type="button" data-nouvelle-demande>Créer un ticket</button>' : '' })}
       </section>
       ${blocPassees}
     </div>`;

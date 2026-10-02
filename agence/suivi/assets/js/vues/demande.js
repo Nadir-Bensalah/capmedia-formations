@@ -44,8 +44,10 @@ export const nouvelle = async (ctx, env) => {
   abonnerProjet(lot, pid, env.role);
   const projet = await magasin.attendre(K.projet(pid)).catch(() => null);
   if (!projet) { sortie.innerHTML = `<div class="page">${vide({ icone: 'projets', titre: 'Projet introuvable' })}</div>`; return () => lot.fin(); }
-  titrePage('Nouvelle demande');
-  filAriane([{ libelle: projet.nom, chemin: `/projets/${pid}` }, { libelle: 'Demandes', chemin: `/projets/${pid}/demandes` }, { libelle: 'Nouvelle demande' }]);
+  /* Le client dit « ticket », l'équipe « demande » (02/10). */
+  const client = env.role !== 'equipe';
+  titrePage(client ? 'Nouveau ticket' : 'Nouvelle demande');
+  filAriane([{ libelle: projet.nom, chemin: `/projets/${pid}` }, { libelle: client ? 'Tickets' : 'Demandes', chemin: `/projets/${pid}/demandes` }, { libelle: client ? 'Nouveau ticket' : 'Nouvelle demande' }]);
   /* « Suite de » : la nouvelle demande poursuit une ancienne (terminée
      depuis plus de sept jours, ou fermée). Le titre est prérempli, le
      type repris, et le serveur relie les deux fiches. */
@@ -77,9 +79,9 @@ export const nouvelle = async (ctx, env) => {
     : Array.from(new Set(composants.map((c) => c.type).filter((t) => PLATEFORMES[t])));
 
   sortie.innerHTML = `<div class="page" style="max-width:820px">
-    <div class="page-tete"><div><p class="surtitre">${echapper(projet.nom)}</p><h1>Nouvelle demande</h1><p class="chapo">Dites-nous ce dont vous avez besoin. Plus c'est précis, plus vite on avance. Vous recevrez un e-mail à chaque étape.</p></div></div>
+    <div class="page-tete"><div><p class="surtitre">${echapper(projet.nom)}</p><h1>${client ? 'Nouveau ticket' : 'Nouvelle demande'}</h1><p class="chapo">Dites-nous ce dont vous avez besoin. Plus c'est précis, plus vite on avance. Vous recevrez un e-mail à chaque étape.</p></div></div>
     ${depuisMessage ? `<div class="encart encart--info" style="margin-bottom:var(--e-5)">${icone('messages')} <span>Reprise d'un message${depuisMessage.auteur ? ` de ${echapper(depuisMessage.auteur)}` : ''}. Relisez, complétez, ajustez le type si besoin.</span></div>` : ''}
-    ${ancienne ? `<div class="encart encart--info" style="margin-bottom:var(--e-5)">${icone('demandes')} <span>Cette demande fait suite à <a href="#/projets/${echapper(pid)}/demandes/${echapper(ancienne.id)}">${echapper(ancienne.numero || 'la demande')} « ${echapper(ancienne.titre)} »</a> : les deux fiches se renverront l'une à l'autre.</span></div>` : ''}
+    ${ancienne ? `<div class="encart encart--info" style="margin-bottom:var(--e-5)">${icone('demandes')} <span>${client ? 'Ce ticket fait suite à' : 'Cette demande fait suite à'} <a href="#/projets/${echapper(pid)}/demandes/${echapper(ancienne.id)}">${echapper(ancienne.numero || (client ? 'le ticket' : 'la demande'))} « ${echapper(ancienne.titre)} »</a> : les deux fiches se renverront l'une à l'autre.</span></div>` : ''}
     <form class="forme" id="forme-demande" novalidate>
       <div class="groupe">
         <span class="etiquette-champ">De quoi s'agit-il ?</span>
@@ -102,7 +104,7 @@ export const nouvelle = async (ctx, env) => {
       </div>
       <div class="groupe" data-champ="version"><label class="etiquette-champ" for="version">Version de l'application <span class="facultatif">(facultatif)</span></label><input class="champ" id="version" name="version" maxlength="40" placeholder="1.4.2"></div>
       <div class="groupe" data-champ="appareil"><label class="etiquette-champ" for="appareil">Appareil, système, navigateur <span class="facultatif">(facultatif)</span></label><input class="champ" id="appareil" name="appareil" maxlength="120" placeholder="iPhone 15, iOS 18 · Chrome sur Mac"></div>
-      <div class="groupe" data-champ="contexte"><label class="etiquette-champ" for="contexte">Contexte <span class="facultatif">(facultatif)</span></label><textarea class="zone" id="contexte" name="contexte" rows="3" maxlength="2000" placeholder="Pourquoi cette demande, pour qui, avec quel objectif.">${echapper(contexteInitial)}</textarea></div>
+      <div class="groupe" data-champ="contexte"><label class="etiquette-champ" for="contexte">Contexte <span class="facultatif">(facultatif)</span></label><textarea class="zone" id="contexte" name="contexte" rows="3" maxlength="2000" placeholder="${client ? 'Pourquoi ce besoin' : 'Pourquoi cette demande'}, pour qui, avec quel objectif.">${echapper(contexteInitial)}</textarea></div>
       <div class="groupe" data-champ="etapes"><label class="etiquette-champ" for="etapes">Étapes pour reproduire <span class="facultatif">(facultatif)</span></label><textarea class="zone" id="etapes" name="etapes" rows="3" maxlength="4000" placeholder="1. J'ouvre l'application&#10;2. Je touche le bouton Compte&#10;3. ..."></textarea></div>
       <div class="forme-rang">
         <div class="groupe" data-champ="attendu"><label class="etiquette-champ" for="attendu"><span data-libelle-attendu>Résultat attendu</span> <span class="facultatif">(facultatif)</span></label><textarea class="zone" id="attendu" name="attendu" rows="3" maxlength="2000" placeholder="Ce qui devrait se passer."></textarea></div>
@@ -110,7 +112,7 @@ export const nouvelle = async (ctx, env) => {
       </div>
       <div class="groupe"><label class="etiquette-champ" for="liens">Liens utiles <span class="facultatif">(facultatif)</span></label><input class="champ" id="liens" name="liens" placeholder="https://..., séparés par des espaces"></div>
       <div class="groupe"><span class="etiquette-champ">Captures, vidéos, documents</span><div id="zone-pieces"></div></div>
-      <div class="forme-pied"><a class="btn btn-secondaire" href="#/projets/${echapper(pid)}/demandes">Annuler</a><button class="btn btn-principal btn-grand" type="submit">Envoyer la demande</button></div>
+      <div class="forme-pied"><a class="btn btn-secondaire" href="#/projets/${echapper(pid)}/demandes">Annuler</a><button class="btn btn-principal btn-grand" type="submit">${client ? 'Envoyer le ticket' : 'Envoyer la demande'}</button></div>
     </form>
   </div>`;
 
@@ -121,7 +123,7 @@ export const nouvelle = async (ctx, env) => {
     const visibles = CHAMPS_PAR_TYPE[type] || CHAMPS_PAR_TYPE.autre;
     sortie.querySelectorAll('[data-champ]').forEach((el) => { el.classList.toggle('masque', !visibles.includes(el.dataset.champ)); });
     const bouton = forme.querySelector('[type="submit"]');
-    bouton.textContent = type === 'bug' ? "Signaler l'anomalie" : type === 'devis' ? 'Demander un devis' : 'Envoyer la demande';
+    bouton.textContent = type === 'bug' ? "Signaler l'anomalie" : type === 'devis' ? 'Demander un devis' : (client ? 'Envoyer le ticket' : 'Envoyer la demande');
     /* « Résultat attendu » et « Ce qui devrait se passer » sont des mots
        d'anomalie : pour une nouvelle fonctionnalité, on demande ce que
        l'application devrait permettre. */
@@ -140,7 +142,7 @@ export const nouvelle = async (ctx, env) => {
     const liensSaisis = (v) => String(v || '').split(/\s+/).filter(Boolean);
     if (!valider(forme, {
       titre: (v) => obligatoire('Donnez un titre.')(v) || longueurMax(120)(v),
-      description: (v) => obligatoire('Décrivez votre demande.')(v) || longueurMax(6000)(v),
+      description: (v) => obligatoire(client ? 'Décrivez votre besoin.' : 'Décrivez votre demande.')(v) || longueurMax(6000)(v),
       liens: (v) => (liensSaisis(v).some((l) => !/^https?:\/\/\S+$/.test(l)) ? 'Une adresse commence par http:// ou https://.' : (liensSaisis(v).length > 10 ? 'Dix liens au maximum.' : '')),
     })) return;
     if (pieces.occupe) { toast('Attendez la fin des envois.', 'erreur'); return; }
@@ -151,7 +153,7 @@ export const nouvelle = async (ctx, env) => {
     await agir(forme.querySelector('[type="submit"]'), async () => {
       const id = await ecrire.creerDemande(env.session, pid, d, pieces.pieces);
       naviguer(`/projets/${pid}/demandes/${id}`);
-    }, 'Demande envoyée. Nous vous répondons vite.');
+    }, client ? 'Ticket envoyé. Nous vous répondons vite.' : 'Demande envoyée. Nous vous répondons vite.');
   });
 
   return () => lot.fin();
@@ -204,7 +206,7 @@ export const detail = async (ctx, env) => {
     const e = magasin.empreinte(cles);
     if (e === derniereEmpreinte) return;
     derniereEmpreinte = e;
-    if (!t || !projet) { sortie.innerHTML = `<div class="page">${vide({ icone: 'demandes', titre: 'Demande introuvable', texte: "Elle a peut-être été archivée, ou vous n'y avez plus accès.", action: `<a class="btn btn-secondaire" href="#/projets/${echapper(pid)}/demandes">Retour aux demandes</a>` })}</div>`; return; }
+    if (!t || !projet) { sortie.innerHTML = `<div class="page">${vide({ icone: 'demandes', titre: equipe ? 'Demande introuvable' : 'Ticket introuvable', texte: equipe ? "Elle a peut-être été archivée, ou vous n'y avez plus accès." : "Il a peut-être été archivé, ou vous n'y avez plus accès.", action: `<a class="btn btn-secondaire" href="#/projets/${echapper(pid)}/demandes">Retour aux demandes</a>` })}</div>`; return; }
     const messages = magasin.lire(K.messagesTicket(tid)) || [];
     const evenements = magasin.lire(K.evenementsTicket(tid)) || [];
     const composants = magasin.lire(K.composants(pid)) || [];
@@ -215,8 +217,8 @@ export const detail = async (ctx, env) => {
     const brouillon = composeur ? composeur.value : '';
     const interneCoche = sortie.querySelector('#mode-interne') ? sortie.querySelector('#mode-interne').checked : false;
 
-    titrePage(`${t.numero || 'Demande'} · ${t.titre}`);
-    filAriane([{ libelle: projet.nom, chemin: `/projets/${pid}` }, { libelle: 'Demandes', chemin: `/projets/${pid}/demandes` }, { libelle: t.numero || t.titre }]);
+    titrePage(`${t.numero || (equipe ? 'Demande' : 'Ticket')} · ${t.titre}`);
+    filAriane([{ libelle: projet.nom, chemin: `/projets/${pid}` }, { libelle: equipe ? 'Demandes' : 'Tickets', chemin: `/projets/${pid}/demandes` }, { libelle: t.numero || t.titre }]);
 
     if (!luMarque && OUVERTS.includes(t.statut)) { luMarque = true; ecrire.marquerLuDemande(tid, equipe ? 'equipe' : 'client', env.session.utilisateur.uid).catch(() => {}); }
 
@@ -240,7 +242,7 @@ export const detail = async (ctx, env) => {
             ${pastille(STATUTS, t.statut, { client: !equipe })}${puce(URGENCES, t.urgence || 'important')}
             ${t.qualification ? pastille(QUALIFICATIONS, t.qualification) : ''}
             ${t.plateforme ? `${pucePlateforme(t.plateforme)}${t.version ? `<span class="puce t-3">version ${echapper(t.version)}</span>` : ''}` : ''}
-            <span class="puce t-3">${icone('horloge')} ouverte ${echapper(depuis(t.cree))}</span>
+            <span class="puce t-3">${icone('horloge')} ${equipe ? 'ouverte' : 'ouvert'} ${echapper(depuis(t.cree))}</span>
           </div>
         </div>
         <div class="actions">
@@ -248,7 +250,7 @@ export const detail = async (ctx, env) => {
           ${!equipe && t.statut === 'a-valider' ? `<button class="btn btn-ok" type="button" data-action="valider">${icone('check')} C'est réglé, je valide</button><button class="btn btn-secondaire" type="button" data-action="pas-regle">Pas tout à fait</button>` : ''}
           ${peutRouvrir ? `<button class="btn btn-secondaire" type="button" data-action="rouvrir">Rouvrir</button>` : ''}
           ${peutRetirer ? `<button class="btn btn-doux" type="button" data-action="retirer">Je n'en ai plus besoin</button>` : ''}
-          ${proposerSuite ? `<a class="btn btn-secondaire" href="${lienSuite}" data-suite>${icone('plus')} Ouvrir une nouvelle demande</a>` : ''}
+          ${proposerSuite ? `<a class="btn btn-secondaire" href="${lienSuite}" data-suite>${icone('plus')} ${equipe ? 'Ouvrir une nouvelle demande' : 'Ouvrir un nouveau ticket'}</a>` : ''}
         </div>
       </header>
 
@@ -283,7 +285,8 @@ export const detail = async (ctx, env) => {
               <textarea class="zone" name="texte" id="texte-message" maxlength="6000" placeholder="${equipe ? 'Votre réponse...' : 'Écrivez ici. Une capture aide souvent plus qu\'un paragraphe.'}">${echapper(brouillon)}</textarea>
               <div id="zone-pieces-message"></div>
               <div class="composer-pied"><span class="t-micro t-3" id="aide-message">${equipe ? 'Ce texte part au client et déclenche un e-mail.' : 'Capmedia est prévenu par e-mail.'}</span><span class="pousse"></span><button class="btn btn-principal" type="submit">${icone('envoyer')} Envoyer</button></div>
-            </form>` : `<p class="t-petit t-3" style="margin-top:14px">Cette demande est ${(STATUTS[t.statut] || {}).libelle ? (STATUTS[t.statut].libelle.toLowerCase()) : 'close'}. ${peutRouvrir ? 'Vous pouvez la rouvrir pendant sept jours.' : (proposerSuite ? `<a href="${lienSuite}">Ouvrez une nouvelle demande</a> si besoin : elle gardera le lien avec celle-ci.` : 'Ouvrez une nouvelle demande si besoin.')}</p>`}
+            </form>` : (equipe ? `<p class="t-petit t-3" style="margin-top:14px">Cette demande est ${(STATUTS[t.statut] || {}).libelle ? (STATUTS[t.statut].libelle.toLowerCase()) : 'close'}. ${peutRouvrir ? 'Vous pouvez la rouvrir pendant sept jours.' : (proposerSuite ? `<a href="${lienSuite}">Ouvrez une nouvelle demande</a> si besoin : elle gardera le lien avec celle-ci.` : 'Ouvrez une nouvelle demande si besoin.')}</p>`
+              : `<p class="t-petit t-3" style="margin-top:14px">Ce ticket est clos. ${peutRouvrir ? 'Vous pouvez le rouvrir pendant sept jours.' : (proposerSuite ? `<a href="${lienSuite}">Ouvrez un nouveau ticket</a> si besoin : il gardera le lien avec celui-ci.` : 'Ouvrez un nouveau ticket si besoin.')}</p>`)}
           </section>
         </div>
         <aside class="pile" style="gap:var(--e-4)">
@@ -300,7 +303,7 @@ export const detail = async (ctx, env) => {
           ${taches.length ? `<div class="carte carte--creuse"><p class="surtitre">Tâches liées</p><div class="pile" style="margin-top:10px;gap:8px">${taches.map((x) => `<a class="rang" style="gap:8px;color:inherit" href="#/projets/${echapper(pid)}/taches/${echapper(x.id)}">${icone(x.statut === 'terminee' ? 'check' : 'taches')}<span class="t-petit">${echapper(x.titre)}</span></a>`).join('')}</div></div>` : ''}
           <div class="carte carte--creuse">
             <p class="surtitre">Tout ce qui lui est arrivé</p>
-            ${evenements.length ? `<div class="chrono" style="margin-top:10px">${evenements.slice().reverse().map((e) => chronoItem({ icone: e.type === 'creation' ? 'plus' : e.type === 'statut' ? 'drapeau' : e.type === 'assignation' ? 'utilisateur' : 'activite', ton: e.apres === 'resolu' ? 'vert' : '', texte: texteEvenement(e, nomEquipe), date: [dateHeure(e.date), age(e.date)].filter(Boolean).join(' · ') })).join('')}</div>` : '<p class="t-petit t-3" style="margin-top:8px">Rien encore.</p>'}
+            ${evenements.length ? `<div class="chrono" style="margin-top:10px">${evenements.slice().reverse().map((e) => chronoItem({ icone: e.type === 'creation' ? 'plus' : e.type === 'statut' ? 'drapeau' : e.type === 'assignation' ? 'utilisateur' : 'activite', ton: e.apres === 'resolu' ? 'vert' : '', texte: texteEvenement(e, nomEquipe, equipe), date: [dateHeure(e.date), age(e.date)].filter(Boolean).join(' · ') })).join('')}</div>` : '<p class="t-petit t-3" style="margin-top:8px">Rien encore.</p>'}
           </div>
         </aside>
       </div>
@@ -340,8 +343,8 @@ export const detail = async (ctx, env) => {
     if (action === 'programmer-rdv') return programmerRendezVous(env, t);
     if (action === 'tache') return editer('tache', env, { pid, defaut: { titre: t.titre, ticket: tid, composant: t.composant || '' } });
     if (action === 'valider') {
-      const ok = await confirmer({ titre: 'Valider cette correction ?', texte: 'La demande passe en terminée. Vous pourrez la rouvrir pendant sept jours.', ok: 'Je valide' });
-      if (ok) await agir(el, () => ecrire.clientValideDemande(tid), 'Merci, la demande est terminée.');
+      const ok = await confirmer({ titre: 'Valider cette correction ?', texte: 'Le ticket passe en terminé. Vous pourrez le rouvrir pendant sept jours.', ok: 'Je valide' });
+      if (ok) await agir(el, () => ecrire.clientValideDemande(tid), 'Merci, le ticket est terminé.');
       return null;
     }
     if (action === 'pas-regle') {
@@ -349,36 +352,36 @@ export const detail = async (ctx, env) => {
          demande repasse chez nous. Avant, ce bouton ne faisait que poser le
          curseur dans le champ de message. */
       demanderMotif({
-        titre: 'Pas tout à fait ?', sousTitre: 'Dites-nous ce qui ne va pas encore : la demande repasse chez Capmedia.',
+        titre: 'Pas tout à fait ?', sousTitre: 'Dites-nous ce qui ne va pas encore : le ticket repasse chez Capmedia.',
         etiquette: 'Ce qui ne va pas encore', placeholder: 'Ce que vous avez essayé, et ce qui se passe.', bouton: 'Renvoyer chez Capmedia', manque: 'Dites-nous ce qui ne va pas encore.',
       }, (bouton, texte) => agir(bouton, async () => {
         await ecrire.messageDemande(env.session, tid, texte);
         await ecrire.clientContesteDemande(tid);
-      }, 'Bien noté : la demande repasse chez nous.'));
+      }, 'Bien noté : le ticket repasse chez nous.'));
       return null;
     }
     if (action === 'rouvrir') {
       /* Rouvrir demande un motif, dans la même fenêtre que « Pas tout à
          fait » : le mot part comme message, puis la demande repasse en cours. */
       demanderMotif({
-        titre: 'Rouvrir cette demande ?', sousTitre: 'Dites-nous ce qui revient : elle repasse en cours et nous sommes prévenus.',
+        titre: equipe ? 'Rouvrir cette demande ?' : 'Rouvrir ce ticket ?', sousTitre: equipe ? 'Dites-nous ce qui revient : elle repasse en cours et nous sommes prévenus.' : 'Dites-nous ce qui revient : il repasse en cours et nous sommes prévenus.',
         etiquette: 'Pourquoi vous la rouvrez', placeholder: 'Ce qui se passe à nouveau, et depuis quand.', bouton: 'Rouvrir', manque: 'Dites-nous pourquoi vous la rouvrez.',
       }, (bouton, texte) => agir(bouton, async () => {
         await ecrire.messageDemande(env.session, tid, texte);
         await ecrire.clientRouvreDemande(tid);
-      }, 'Demande rouverte.'));
+      }, equipe ? 'Demande rouverte.' : 'Ticket rouvert.'));
       return null;
     }
     if (action === 'retirer') {
-      const ok = await confirmer({ titre: 'Retirer cette demande ?', texte: 'Elle passe en annulée et nous sommes prévenus. Vous pourrez toujours en ouvrir une nouvelle.', ok: 'Je n\'en ai plus besoin', danger: true });
-      if (ok) await agir(el, () => ecrire.clientAnnuleDemande(tid), 'Demande retirée.');
+      const ok = await confirmer({ titre: 'Retirer ce ticket ?', texte: 'Il passe en annulé et nous sommes prévenus. Vous pourrez toujours en ouvrir un nouveau.', ok: 'Je n\'en ai plus besoin', danger: true });
+      if (ok) await agir(el, () => ecrire.clientAnnuleDemande(tid), 'Ticket retiré.');
       return null;
     }
     if (action === 'ajouter-piece') {
       /* Une capture arrivée après coup rejoint le signalement, sans passer
          par un message : la fonction existait, aucun écran ne l'appelait. */
       const restantes = Math.max(0, 10 - (t.pieces || []).length);
-      if (!restantes) { toast('Dix pièces au maximum sur une demande.', 'erreur'); return null; }
+      if (!restantes) { toast(`Dix pièces au maximum sur ${equipe ? 'une demande' : 'un ticket'}.`, 'erreur'); return null; }
       const m = modale({
         titre: 'Ajouter une pièce', sousTitre: 'Une capture, une vidéo, un document : elle rejoint le signalement.',
         corps: '<div id="zone-pieces-ajout"></div>',
@@ -463,16 +466,16 @@ const bandeauSuivi = (t, { equipe, release, nomEquipe, evenements, tickets = [],
         ? `${echapper([release.plateforme && (PLATEFORMES[release.plateforme] || {}).libelle, release.version].filter(Boolean).join(' '))} <span class="t-3">· ${echapper((STATUTS_RELEASE[release.statut] || {}).libelle || '')}${dateCourte(release.date) ? ` ${dateCourte(release.date)}` : ''}</span>`
         : '<span class="t-3">version pas encore fixée</span>'}</dd></div>
     </dl>
-    ${t.qualification === 'hors-perimetre' || t.qualification === 'a-chiffrer' ? `<p class="suivi-demande-note">${t.qualification === 'a-chiffrer' ? 'Cette demande sera chiffrée.' : 'Cette demande sort du périmètre prévu.'} ${t.devis ? `Le devis <a href="#/finances/${echapper(t.devis)}">est disponible</a>.` : 'Un devis vous sera proposé avant tout développement.'}</p>` : ''}
+    ${t.qualification === 'hors-perimetre' || t.qualification === 'a-chiffrer' ? `<p class="suivi-demande-note">${t.qualification === 'a-chiffrer' ? (equipe ? 'Cette demande sera chiffrée.' : 'Ce ticket sera chiffré.') : (equipe ? 'Cette demande sort du périmètre prévu.' : 'Ce ticket sort du périmètre prévu.')} ${t.devis ? `Le devis <a href="#/finances/${echapper(t.devis)}">est disponible</a>.` : 'Un devis vous sera proposé avant tout développement.'}</p>` : ''}
     ${t.statut === 'refuse' && t.motifRefus ? `<p class="suivi-demande-note">Pourquoi : ${echapper(t.motifRefus)}</p>` : ''}
     ${t.suite ? `<p class="suivi-demande-note">Suite de <a href="#/projets/${echapper(pid)}/demandes/${echapper(t.suite)}">${echapper(refDe(t.suite))}</a>.</p>` : ''}
     ${t.suivant ? `<p class="suivi-demande-note">Suivie par <a href="#/projets/${echapper(pid)}/demandes/${echapper(t.suivant)}">${echapper(refDe(t.suivant))}</a>.</p>` : ''}
   </section>`;
 };
 
-const texteEvenement = (e, nomEquipe) => {
+const texteEvenement = (e, nomEquipe, equipe = true) => {
   const par = (e.par && e.par.nom) || 'Capmedia';
-  if (e.type === 'creation') return `Demande créée par <strong>${echapper(par)}</strong>`;
+  if (e.type === 'creation') return `${equipe ? 'Demande créée' : 'Ticket créé'} par <strong>${echapper(par)}</strong>`;
   if (e.type === 'statut') return `Statut passé de <strong>${echapper((STATUTS[e.avant] || {}).libelle || e.avant || '')}</strong> à <strong>${echapper((STATUTS[e.apres] || {}).libelle || e.apres || '')}</strong> par ${echapper(par)}`;
   /* Le champ porte un identifiant : on cherche le nom AVANT de se rabattre
      dessus, faute de quoi le client lit un code Firebase. */

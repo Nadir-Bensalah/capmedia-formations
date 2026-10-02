@@ -159,8 +159,8 @@ export const vue = async (ctx, env) => {
             : "Votre espace est prêt. Il s'animera dès qu'un projet y sera rattaché."}</p>
         </div>
         <div class="actions">
-          ${projets.length > 1 ? `<button class="btn btn-principal" type="button" data-raccourci="nouvelle-demande">${icone('plus')} Nouvelle demande</button>`
-            : projets[0] ? `<a class="btn btn-principal" href="#/projets/${echapper(projets[0].id)}/nouvelle-demande">${icone('plus')} Nouvelle demande</a>` : ''}
+          ${projets.length > 1 ? `<button class="btn btn-principal" type="button" data-raccourci="nouvelle-demande">${icone('plus')} Nouveau ticket</button>`
+            : projets[0] ? `<a class="btn btn-principal" href="#/projets/${echapper(projets[0].id)}/nouvelle-demande">${icone('plus')} Nouveau ticket</a>` : ''}
           ${/* Messages, avec le nombre de messages reçus et pas encore lus :
                 le même compte que la conversation (profil.lus), qui retombe
                 dès qu'on les a lus. */ ''}
@@ -177,7 +177,7 @@ export const vue = async (ctx, env) => {
       ${resumeDepuis}
 
       ${attente.length ? paveHtml({
-        cle: 'accueil', etat: etatPave('accueil'), nombre: attente.length, rangement: 'Le ranger dans Demandes',
+        cle: 'accueil', etat: etatPave('accueil'), nombre: attente.length, rangement: 'Le ranger dans Tickets',
         corps: `<div class="liste" style="margin-top:8px">
             ${attente.slice(0, 6).map((a) => ligne({ href: `#${a.chemin}`, icone: a.icone, ton: a.ton, titre: echapper(a.titre), sous: echapper(a.sous) })).join('')}
           </div>
@@ -218,7 +218,7 @@ export const vue = async (ctx, env) => {
                 /* Qui a la main : ce que nous traitons, ce qui attend le client. */
                 const aVous = ouverts.filter((t) => t.projet === p.id && ATTEND_CLIENT.includes(t.statut)).length;
                 const chezNous = ouvertsProjet - aVous;
-                return ouvertsProjet ? `${chezNous} chez nous · ${aVous} à vous` : 'Aucune demande ouverte';
+                return ouvertsProjet ? `${chezNous} chez nous · ${aVous} à vous` : 'Aucun ticket ouvert';
               })()}</span>
               ${attenteProjet ? `<span class="puce puce--ambre"><i></i>${pluriel(attenteProjet, 'point pour vous', 'points pour vous')}</span>` : ''}
             </div>
@@ -255,7 +255,7 @@ export const vue = async (ctx, env) => {
           ${dernieresReleases.length ? `<div class="carte carte--creuse">
             <p class="surtitre">Dernières versions</p>
             <div class="pile" style="margin-top:10px;gap:8px">${dernieresReleases.map((r) => `
-              <a class="rang" style="gap:10px;color:inherit;flex-wrap:nowrap" href="#/projets/${echapper(r.projet)}/releases">
+              <a class="rang" style="gap:10px;color:inherit;flex-wrap:nowrap" href="#/projets/${echapper(r.projet)}/brique/${echapper(r.composant || (r.plateforme ? `p-${r.plateforme}` : ''))}">
                 <span class="ligne-icone ligne-icone--vert" style="width:30px;height:30px">${icone('releases')}</span>
                 <span style="min-width:0"><span class="t-petit t-fort" style="display:block">${echapper(`${libellePlateforme(r.plateforme)} ${r.version || ''}`.trim())}</span><span class="t-micro t-3">${echapper(dateCourte(r.date) || 'Date non renseignée')}</span></span>
               </a>`).join('')}</div>

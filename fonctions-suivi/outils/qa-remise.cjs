@@ -168,10 +168,12 @@ const accents = () => {
   verifier(cartes.every((t) => !/avancement de la partie\s*·\s*(\n|$)/.test(t)), 'carte d\'une partie : pas de « · » suivi de rien');
   verifier(!/\bnull\b|undefined|Invalid Date|NaN/.test(apercu), 'aperçu : ni null, ni undefined, ni date invalide');
 
-  await page.evaluate(() => { location.hash = '#/projets/atelier/releases'; });
-  await page.waitForSelector('[data-action="ouvrir-release"]', { timeout: 30000 }).catch(() => {});
+  /* Les versions vivent dans la page de leur plateforme (02/10) : la 9.9.9
+     est celle du web. */
+  await page.evaluate(() => { location.hash = '#/projets/atelier/brique/web'; });
+  await page.waitForSelector('[data-section="versions"]', { timeout: 30000 }).catch(() => {});
   await pause(1500);
-  const versions = await page.evaluate(() => document.querySelector('#vue').innerText);
+  const versions = await page.evaluate(() => (document.querySelector('[data-section="versions"]') || document.querySelector('#vue')).innerText);
   verifier(versions.includes('Publiée, date non renseignée'), 'version disponible sans date : « Publiée, date non renseignée »');
   verifier(!/Publiée le\s*(·|\n|$)/.test(versions), 'aucun « Publiée le » suivi de rien');
   verifier(!/\bnull\b|undefined|Invalid Date/.test(versions), 'versions : ni null, ni undefined, ni date invalide');

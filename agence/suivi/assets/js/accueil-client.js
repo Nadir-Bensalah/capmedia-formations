@@ -11,7 +11,9 @@
    et l'administrateur voit sur la fiche du client qui a fait ses premiers pas.
    ========================================================================== */
 
-import { echapper, prenom, nomAffiche, TYPES_PROJET } from './noyau.js';
+import { echapper, prenom, nomAffiche, typeProjetAffiche } from './noyau.js';
+import * as magasin from './magasin.js';
+import { K } from './donnees.js';
 import { icone } from './ui.js';
 import { ouvrirAccueil as ouvrirMoteur, accueilVu as vu, marquerAccueilVu as marquer } from './accueil.js';
 import { installable, systemeCourant, lienInstalleur } from './installer.js';
@@ -28,7 +30,9 @@ const initialesDe = (nom) => String(nom || '').split(/\s+/).filter(Boolean).slic
 const iconeProjet = (p) => (p.logo
   ? `<span class="accueil-appli-icone"><img src="${echapper(p.logo)}" alt=""></span>`
   : `<span class="accueil-appli-icone accueil-appli-icone--initiales">${echapper(initialesDe(p.nom))}</span>`);
-const typeDe = (p) => { const t = TYPES_PROJET[p.type]; return typeof t === 'string' ? t : (t && t.libelle) || ''; };
+/* Le type dit « Application web et mobile » quand le projet a les deux :
+   ses plateformes, et ses parties si elles sont déjà là. */
+const typeDe = (p) => typeProjetAffiche(p, magasin.lire(K.composants(p.id)) || []);
 
 /* --------------------------------------------------------------------------
    Les écrans

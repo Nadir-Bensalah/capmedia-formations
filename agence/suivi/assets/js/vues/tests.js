@@ -1299,8 +1299,8 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, nommer }) => {
 export const vue = async (ctx, env) => {
   const lot = magasin.lot();
   const sortie = ctx.sortie;
-  titrePage('Tests');
-  filAriane([{ libelle: 'Tests' }]);
+  titrePage(env.role === 'equipe' ? 'Tests' : 'Campagne de tests');
+  filAriane([{ libelle: env.role === 'equipe' ? 'Tests' : 'Campagne de tests' }]);
   sortie.innerHTML = `<div class="page">${squelette('page', 5)}</div>`;
 
   const etat = {
@@ -1385,7 +1385,7 @@ export const vue = async (ctx, env) => {
     sortie.innerHTML = `<div class="page">
       <header class="page-tete">
         <div>
-          <h1>Tests</h1>
+          <h1>${env.role === 'equipe' ? 'Tests' : 'Campagne de tests'}</h1>
           <p class="chapo">${pid ? echapper(nomProjet(pid)) : `${pluriel(d.projets.length, 'projet', 'projets')}, ${pluriel(d.scenarios.filter((s) => s.actif !== false).length, 'scénario', 'scénarios')}`}</p>
         </div>
         ${boutonPlan ? `<div class="actions">${boutonPlan}</div>` : ''}

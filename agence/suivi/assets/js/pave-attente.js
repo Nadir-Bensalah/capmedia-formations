@@ -163,7 +163,7 @@ export const brancherPaves = (racine, env) => sur(racine, 'click', '[data-pave-g
     await ranger(el.closest('.attente'), cibleDe(cle));
     poser(uid, cle, 'ferme');
     const pid = pidDe(cle);
-    toast(cle === 'accueil' ? 'Rangé dans Demandes. Vous pouvez le réafficher depuis là.' : 'Rangé dans l\'onglet Demandes du projet. Vous pouvez le réafficher depuis là.', 'ok',
+    toast(cle === 'accueil' ? 'Rangé dans Tickets. Vous pouvez le réafficher depuis là.' : 'Rangé dans les tickets du projet. Vous pouvez le réafficher depuis là.', 'ok',
       { libelle: 'Voir', action: () => naviguer(cle === 'accueil' ? '/demandes' : `/projets/${pid}/demandes`), duree: 6000 });
     return;
   }

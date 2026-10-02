@@ -4,7 +4,10 @@
    Une seule bulle à la fois, montée dès que l'adresse est celle d'un
    projet (« /projets/{id}… » : la fiche, une demande, une nouvelle demande,
    une brique, une tâche), démontée dès qu'on en sort, et remplacée quand
-   on passe d'un projet à l'autre. Elle vit hors des vues : changer
+   on passe d'un projet à l'autre. Chez le client (demande de Nadir,
+   02/10), elle est sur TOUTES les pages : hors d'un projet, celle du
+   projet que nomme l'adresse (« /messages/{id} », « ?projet= »), sinon
+   celle que l'espace désigne (projetParDefaut). Elle vit hors des vues : changer
    d'onglet ou de page dans le même projet ne la referme pas et
    n'interrompt pas la frappe.
 
@@ -16,6 +19,7 @@
 
 import { surChangement, courant } from './routeur.js';
 import { monterBulle } from './bulle.js';
+import { projetDeLAdresse } from './coquille.js';
 
 /* Le projet d'une adresse, ou rien. « /nouveaux-projets/{id} » porte aussi
    un id, mais ce n'est pas un projet : on regarde le chemin, pas seulement
@@ -25,8 +29,11 @@ const projetDe = (route) => {
   return String((route.params || {}).id || '');
 };
 
-export const brancherBulle = (env) => {
+/* `projetParDefaut` (le client seul) : le projet de la bulle sur une page
+   qui n'en nomme aucun. Sans lui (le Cockpit), rien ne change. */
+export const brancherBulle = (env, { projetParDefaut = null } = {}) => {
   let bulle = null;
+  const voulu = (route) => projetDe(route) || (projetParDefaut ? (projetDeLAdresse(route || {}) || projetParDefaut() || '') : '');
 
   const poser = (voulu) => {
     if (bulle && bulle.pid === voulu) return;
@@ -41,9 +48,9 @@ export const brancherBulle = (env) => {
     if (bulle) bulle.ouvrirAvec(d.texte || '');
   };
 
-  const arret = surChangement((route) => poser(projetDe(route)));
+  const arret = surChangement((route) => poser(voulu(route)));
   document.addEventListener('bulle:ouvrir', surOuvrir);
-  poser(projetDe(courant()));
+  poser(voulu(courant()));
 
   return {
     fin: () => { arret(); document.removeEventListener('bulle:ouvrir', surOuvrir); poser(''); },

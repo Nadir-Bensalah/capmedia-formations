@@ -1920,3 +1920,24 @@ a.coffre-lien:hover { color: var(--accent); }
   .carte-plateforme, .carte-plateforme-tuile, .carte-plateforme-fleche { transition: none; }
   .carte-plateforme:hover, .carte-plateforme:hover .carte-plateforme-tuile { transform: none; }
 }
+
+/* ==========================================================================
+   18. Le rail du 02/10 (suite) : le squelette des projets, le marqueur
+   « Chiffré » du coffre-fort.
+   ========================================================================== */
+
+/* --- Le squelette : des lignes de la hauteur des vraies entrées ------- */
+.lat-squelette { display: flex; flex-direction: column; gap: 2px; }
+.lat-os { display: flex; align-items: center; gap: 11px; padding: 7px 10px; height: 34px; box-sizing: border-box; }
+.lat-branche .lat-os { padding: 6px 10px; height: 31px; }
+.lat-os .os { border-radius: 5px; }
+.lat-os-pastille { flex: none; width: 18px; height: 18px; }
+.lat-branche .lat-os-pastille { width: 16px; height: 16px; }
+.lat-os-texte { height: 11px; }
+.lat-os-branches { margin: 0; padding: 0; list-style: none; }
+@media (prefers-reduced-motion: reduce) { .lat-os .os { animation: none; } }
+
+/* --- « Chiffré » : un mot et un cadenas, en vert, sans fond ni bordure - */
+.lat-lien .lat-marqueur { display: inline-flex; align-items: center; gap: 3px; font: 500 11.5px var(--police); letter-spacing: 0; color: var(--encre-3); white-space: nowrap; }
+.lat-lien .lat-marqueur svg { width: 12px; height: 12px; color: currentColor; stroke-width: 1.8; }
+.lat-lien .lat-marqueur--vert, .lat-lien .lat-marqueur--vert svg, .lat-lien.actif .lat-marqueur--vert svg, .lat-lien:hover .lat-marqueur--vert svg { color: var(--vert); }
