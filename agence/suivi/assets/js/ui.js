@@ -459,10 +459,15 @@ export const brancherPieces = (racine) => {
     try {
       if (ouvrirMessage) {
         const blob = await lirePieceMessage(cible.dataset.ouvrirPiece);
-        if (onglet && !onglet.closed) {
+        /* Seuls un PDF et une image matricielle s'ouvrent dans un onglet, et
+           sous un type recréé ici : un SVG ou un HTML déguisé ouvert en
+           blob: aurait l'origine du Hub. Tout le reste se télécharge. */
+        const sur = /^(application\/pdf|image\/(png|jpeg|gif|webp|heic|heif))$/.test(blob.type);
+        if (sur && onglet && !onglet.closed) {
           onglet.opener = null;
-          onglet.location.href = URL.createObjectURL(blob);
+          onglet.location.href = URL.createObjectURL(new Blob([blob], { type: blob.type }));
         } else {
+          if (onglet && !onglet.closed) { try { onglet.close(); } catch (err) { /* déjà fermé */ } }
           poserTelechargement(blob, cible.dataset.nom || String(cible.dataset.ouvrirPiece).split('/').pop());
         }
       } else if (cible.dataset.ouvrirPiece) {

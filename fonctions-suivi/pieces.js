@@ -86,7 +86,9 @@ exports.suiviPiece = onRequest({ region: REGION, cors: true, secrets: [], invoke
 /* Les formats et les plafonds du dépôt (noyau.js, storage.rules). Une
    requête vers une fonction ne dépasse pas 32 Mo : une vidéo jointe à un
    message s'arrête donc à 30 Mo. */
-const TYPES_MESSAGE = /^(image\/[\w.+-]+|video\/(mp4|quicktime|webm)|application\/pdf|text\/plain|application\/zip|application\/(msword|vnd\.openxmlformats-officedocument\.(wordprocessingml\.document|spreadsheetml\.sheet|presentationml\.presentation)))$/;
+/* Liste FERMÉE : jamais d'image/svg+xml (un SVG porte du script, et ouvert
+   dans un onglet blob: il aurait l'origine du Hub). */
+const TYPES_MESSAGE = /^(image\/(png|jpeg|gif|webp|heic|heif)|video\/(mp4|quicktime|webm)|application\/pdf|text\/plain|application\/zip|application\/(msword|vnd\.openxmlformats-officedocument\.(wordprocessingml\.document|spreadsheetml\.sheet|presentationml\.presentation)))$/;
 const MAX_MESSAGE = 10 * 1024 * 1024;
 const MAX_VIDEO_MESSAGE = 30 * 1024 * 1024;
 const CHEMIN_MESSAGE = /^projets\/([A-Za-z0-9_-]{1,128})\/messages\/([A-Za-z0-9_.-]{1,300})$/;
@@ -145,7 +147,9 @@ exports.suiviPieceMessage = onRequest({ region: REGION, cors: true, secrets: [],
     const [existe] = await fichier.exists();
     if (!existe) return res.status(404).send('Ce fichier n\'est plus là.');
     const [meta] = await fichier.getMetadata();
-    res.set('Content-Type', meta.contentType || 'application/octet-stream');
+    /* Le type servi est relu contre la liste fermée : un fichier déposé
+       avant elle, ou par un autre chemin, sort en octets bruts. */
+    res.set('Content-Type', TYPES_MESSAGE.test(meta.contentType || '') ? meta.contentType : 'application/octet-stream');
     res.set('X-Content-Type-Options', 'nosniff');
     res.set('Content-Disposition', `attachment; filename="${m[2]}"`);
     return new Promise((resoudre) => {
