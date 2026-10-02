@@ -1639,3 +1639,16 @@ a.coffre-lien:hover { color: var(--accent); }
   .plan-section .section-tete { flex-direction: column; }
   .plan-filtres .plan-recherche { max-width: none; flex-basis: 100%; }
 }
+
+/* Qui teste : humain seul (vert), robot seul (bleu), humain et robot (violet). */
+.plan-qui { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 14px 0 0; font: 400 13px/1.4 var(--police); color: var(--encre-2); }
+.plan-qui span, .plan-qui-puce, .plan-qui-bilan-ligne span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.plan-qui b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.plan-qui i, .plan-qui-puce i, .plan-qui-bilan-ligne i { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.plan-qui-vert b, .plan-qui-puce.plan-qui-vert { color: var(--vert); } .plan-qui-vert i { background: var(--vert); }
+.plan-qui-bleu b, .plan-qui-puce.plan-qui-bleu { color: var(--bleu); } .plan-qui-bleu i { background: var(--bleu); }
+.plan-qui-violet b, .plan-qui-puce.plan-qui-violet { color: var(--violet-desk); } .plan-qui-violet i { background: var(--violet-desk); }
+.plan-qui-puce { font-weight: 500; }
+.plan-qui-bilan { display: grid; gap: 6px; margin-top: 16px; }
+.plan-qui-bilan-ligne { display: flex; align-items: center; gap: 8px; margin: 0; font: 400 14px/1.5 var(--police); color: var(--encre-2); }
+.plan-qui-bilan-ligne b { color: var(--encre); font-variant-numeric: tabular-nums; }
