@@ -1367,6 +1367,49 @@ service cloud.firestore {
         allow write:  if equipeSurProjet(projetId);
       }
 
+      // Le plan de tests : « ce qui va être testé », une section par
+      // document (planTests/{section}), et la présentation de la page
+      // (planTests/presentation). Mêmes lecteurs que la bibliothèque : le
+      // client du projet, l'équipe du projet, le testeur inscrit. L'équipe
+      // seule écrit, sous une forme bornée : l'outil d'import passe par le
+      // serveur, le Cockpit par ces règles, et un champ inconnu est refusé.
+      match /planTests/{sectionId} {
+        function aspectsPlanValides(a) {
+          return a is map
+              && a.keys().hasOnly(['fonctionnel', 'technique', 'ux', 'securite'])
+              && a.get('fonctionnel', []) is list && a.get('technique', []) is list
+              && a.get('ux', []) is list && a.get('securite', []) is list
+              && a.get('fonctionnel', []).size() <= 400 && a.get('technique', []).size() <= 400
+              && a.get('ux', []).size() <= 400 && a.get('securite', []).size() <= 400;
+        }
+        function sectionPlanValide(d) {
+          return d.keys().hasOnly(['id', 'groupe', 'ordre', 'titre', 'resume', 'plateformes', 'aspects', 'maj', 'importeLe', 'editeLe', 'editePar'])
+              && d.id == sectionId
+              && d.groupe in ['demarrage', 'socle', 'fonctionnalites', 'transverse']
+              && d.ordre is int
+              && texteRequis(d.titre, 200)
+              && texteBorne(d.resume, 2000)
+              && d.plateformes is list && d.plateformes.hasOnly(['ios', 'android', 'web'])
+              && aspectsPlanValides(d.aspects);
+        }
+        function presentationPlanValide(d) {
+          return d.keys().hasOnly(['genre', 'intro', 'aspects', 'plateformes', 'maj', 'importeLe', 'editeLe', 'editePar'])
+              && d.genre == 'presentation'
+              && texteBorne(d.get('intro', ''), 3000)
+              && texteBorne(d.get('plateformes', ''), 1000)
+              && d.get('aspects', {}) is map
+              && d.get('aspects', {}).keys().hasOnly(['fonctionnel', 'technique', 'ux', 'securite']);
+        }
+        allow read:   if accesProjet(projetId) || testeurDuProjet(projetId);
+        allow create, update: if equipeSurProjet(projetId)
+                      && request.resource.data.maj == request.time
+                      && request.resource.data.editePar == moi()
+                      && (sectionId == 'presentation'
+                          ? presentationPlanValide(request.resource.data)
+                          : sectionPlanValide(request.resource.data));
+        allow delete: if equipeSurProjet(projetId);
+      }
+
       // Les campagnes. Le testeur lit celles où il figure, et rien d'autre :
       // il ne doit pas déduire du nombre de campagnes ce que fait l'agence
       // pour d'autres clients.
