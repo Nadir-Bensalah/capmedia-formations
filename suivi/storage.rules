@@ -257,8 +257,22 @@ service firebase.storage {
 
     // Les preuves d'un testeur : une capture, une vidéo courte. Il écrit
     // dans SON dossier, et seulement pour une campagne EN COURS où il
-    // figure réellement. L'équipe et le client du projet les lisent.
+    // figure réellement, tant qu'il n'a pas dit « j'ai terminé » et que
+    // l'équipe n'a pas clos son accès (« fins »). L'équipe et le client du
+    // projet les lisent.
     match /campagnes/{projetId}/{campagneId}/{uid}/{fichier=**} {
+      // Une preuve est une capture ou une vidéo, rien d'autre : ni archive,
+      // ni document Office, ni SVG (qui porte du script), que l'équipe et
+      // le client ouvriraient ensuite. 10 Mo une image, 50 Mo une vidéo.
+      function preuveAcceptee() {
+        return (request.resource.size < 10 * 1024 * 1024
+                && request.resource.contentType.matches('image/(png|jpeg|webp|heic|heif)'))
+            || (request.resource.size < 50 * 1024 * 1024
+                && request.resource.contentType.matches('video/(mp4|quicktime|webm)'));
+      }
+      function campagne() {
+        return fiche(/databases/(default)/documents/projets/$(projetId)/campagnes/$(campagneId));
+      }
       allow get:  if jetonEquipe() ? equipeSurProjet(projetId) : surSonProjet(projetId);
       allow list: if equipeSurProjet(projetId);
       // Deux lectures : la fiche du testeur (encore active) et la campagne.
@@ -266,9 +280,11 @@ service firebase.storage {
         && request.auth.uid == uid
         && request.auth.token.get('testeur', false) == true
         && fiche(/databases/(default)/documents/testeurs/$(uid)).get('actif', true) != false
-        && fiche(/databases/(default)/documents/projets/$(projetId)/campagnes/$(campagneId)).statut == 'en-cours'
-        && uid in fiche(/databases/(default)/documents/projets/$(projetId)/campagnes/$(campagneId)).testeurs
-        && fichierAccepte();
+        && campagne().statut == 'en-cours'
+        && uid in campagne().testeurs
+        && !(uid in campagne().get('termines', {}))
+        && (!(uid in campagne().get('fins', {})) || campagne().get('fins', {})[uid] > request.time)
+        && preuveAcceptee();
       allow update, delete: if equipeSurProjet(projetId);
     }
 
@@ -279,10 +295,16 @@ service firebase.storage {
     match /projets/{projetId}/campagnes/{campagneId}/visuels/{fichier=**} {
       // Le testeur d'abord (une lecture, la campagne), le client ensuite
       // (une lecture, le projet) : jamais les deux pour la même personne.
+      // Deux lectures : la fiche du testeur, relue pour ne pas laisser au
+      // retiré l'heure de vie de son jeton, et la campagne, où son accès
+      // ne doit pas être clos.
       function testeurDeLaCampagne() {
         return request.auth != null
           && request.auth.token.get('testeur', false) == true
-          && request.auth.uid in fiche(/databases/(default)/documents/projets/$(projetId)/campagnes/$(campagneId)).get('testeurs', []);
+          && fiche(/databases/(default)/documents/testeurs/$(request.auth.uid)).get('actif', true) != false
+          && request.auth.uid in fiche(/databases/(default)/documents/projets/$(projetId)/campagnes/$(campagneId)).get('testeurs', [])
+          && (!(request.auth.uid in fiche(/databases/(default)/documents/projets/$(projetId)/campagnes/$(campagneId)).get('fins', {}))
+              || fiche(/databases/(default)/documents/projets/$(projetId)/campagnes/$(campagneId)).get('fins', {})[request.auth.uid] > request.time);
       }
       allow get: if jetonEquipe() ? equipeSurProjet(projetId)
         : (request.auth != null && request.auth.token.get('testeur', false) == true
