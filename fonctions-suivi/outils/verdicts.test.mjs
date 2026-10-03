@@ -18,6 +18,7 @@ import {
   tableauTesteur, tableauMachine, rythme, anomalieDeLaCampagne,
   tableauPlan, verdictScenarioPlan, pireEtat,
   tableauHumainPlan, verdictHumainPlan, pireHumain,
+  campagneSurPlan, decouperCle, clePassage, sectionDuScenario, sectionsDesCles, clesDuTesteur, scenariosDuTesteur, affectationPlan, chiffresHumainsDuPlan,
 } from '../../agence/suivi/assets/js/verdicts.js';
 
 let echecs = 0;
@@ -266,6 +267,105 @@ console.log('\n== Le tableau des humains rangé par le plan');
   egal(web.familles.some((f) => f.horsPlan), false, 'le hors plan suit le filtre de plateforme');
   const sansCampagne = tableauHumainPlan({ sections, scenarios: biblio, campagne: null, passages, anomalies });
   egal(`${sansCampagne.total}/${sansCampagne.compte.nonteste}/${sansCampagne.familles.length}`, '3/3/2', 'sans campagne : les cases du plan, toutes pas encore testées, ni hors plan');
+}
+
+console.log('\n== Une campagne sur le plan (modèle du 03/10/2026)');
+{
+  const H = (scenario, testeur, plateforme, resultat, extra = {}) => ({ scenario, testeur, plateforme, resultat, ...extra });
+  egal(campagneSurPlan({ affectation: { u1: { telephone: 'ios', web: true, cles: [], vague: 1 } } }), true, 'une affectation à clés : campagne sur le plan');
+  egal(campagneSurPlan({ plan: true, affectation: {} }), true, 'marquée plan, pas encore répartie : sur le plan');
+  egal(campagneSurPlan({ scenarios: ['TA-01'], affectation: { u1: ['TA-01'] } }), false, 'une affectation en liste de références : campagne d avant');
+  egal(campagneSurPlan(null), false, 'aucune campagne : pas sur le plan');
+  egal(affectationPlan({ affectation: { u1: ['TA-01'] } }, 'u1'), null, 'une affectation d avant n est pas lue comme des clés');
+  egal(clePassage('taches-f-001', 'ios'), 'taches-f-001__ios', 'la clé : scénario puis plateforme');
+  egal(JSON.stringify(decouperCle('taches-f-001__android')), '{"scenario":"taches-f-001","plateforme":"android"}', 'une clé se découpe');
+  egal(decouperCle('taches-f-001__mac'), null, 'une plateforme inconnue : pas une clé');
+  egal(decouperCle('__ios'), null, 'sans scénario : pas une clé');
+  egal(decouperCle('TA-01'), null, 'une référence de la bibliothèque : pas une clé');
+  egal(sectionDuScenario('abonnement-croise-f-001'), 'abonnement-croise', 'la section se lit dans l identifiant, tiret compris');
+  egal(sectionDuScenario('taches-s-012'), 'taches', 'aspect sécurité');
+  egal(sectionDuScenario('TA-01'), '', 'une référence de la bibliothèque n a pas de section');
+  egal(sectionsDesCles(['taches-f-001__ios', 'taches-u-002__web', 'dates-f-001__ios', 'n-importe-quoi']).join(','), 'taches,dates', 'seulement les sections de ses clés, une fois chacune');
+  const camp = { affectation: { u1: { telephone: 'ios', web: true, cles: ['b-f-001__ios', 'b-f-001__ios', 'TA-01', 'a-f-002__web'], vague: 1 } } };
+  egal(clesDuTesteur(camp, 'u1').join(','), 'b-f-001__ios,a-f-002__web', 'ses clés : sans doublon ni clé mal formée');
+  egal(clesDuTesteur(camp, 'u2').length, 0, 'un testeur sans affectation n a rien, pas toute la campagne');
+  egal(clesDuTesteur({ scenarios: ['TA-01'], affectation: { u1: ['TA-01'] } }, 'u1').length, 0, 'une campagne d avant ne donne rien au testeur');
+
+  const SC = (id, qui, plateformes, extra = {}) => ({ id, qui, plateformes, titre: `Titre ${id}`, etapes: `Étapes ${id}`, attendu: `Attendu ${id}`, priorite: 'haute', type: 'normal', refs: [], ...extra });
+  const secs = [
+    { id: 'b', titre: 'Section B', groupe: 'fonctionnalites', ordre: 1, aspects: { fonctionnel: [SC('b-f-001', 'humain', ['ios', 'web']), SC('b-f-002', 'robot', ['ios'])], technique: [], ux: [SC('b-u-001', 'les-deux', ['ios'])], securite: [] } },
+    { id: 'a', titre: 'Section A', groupe: 'demarrage', ordre: 9, aspects: { fonctionnel: [SC('a-f-001', 'humain', ['android']), SC('a-f-002', 'les-deux', ['web', 'ios'])], technique: [], ux: [], securite: [] } },
+  ];
+  const r = scenariosDuTesteur({ sections: secs, cles: ['b-u-001__ios', 'b-f-001__web', 'b-f-001__ios', 'a-f-002__web', 'a-f-002__ios', 'b-f-002__ios', 'a-f-001__ios', 'z-f-001__ios'] });
+  egal(r.scenarios.map((s) => s.ref).join(','), 'a-f-002__ios,a-f-002__web,b-f-001__ios,b-u-001__ios,b-f-001__web', 'rangés par section (groupe du plan), le téléphone avant le web, puis l ordre du plan');
+  egal(r.ecartees.join(','), 'b-f-002__ios,a-f-001__ios,z-f-001__ios', 'écartées et dites : un robot seul, une plateforme non déclarée, un scénario disparu');
+  const premier = r.scenarios[0];
+  egal([premier.id, premier.plateforme, premier.section, premier.blocLibelle, premier.etapes, premier.attendu, premier.priorite].join('|'), 'a-f-002|ios|a|Section A|Étapes a-f-002|Attendu a-f-002|haute', 'chaque ligne porte le scénario, sa plateforme, sa section, ses étapes, l attendu et la priorité');
+
+  /* La grille de l'équipe et du client sur une campagne répartie. */
+  const sections = [
+    { id: 'taches', titre: 'Tâches', groupe: 'fonctionnalites', aspects: {
+      fonctionnel: [
+        { id: 'taches-f-001', qui: 'les-deux', plateformes: ['ios', 'android'], refs: ['TA-01'] },
+        { id: 'taches-f-002', qui: 'humain', plateformes: ['ios', 'web'], refs: [] },
+        { id: 'taches-f-003', qui: 'humain', plateformes: ['android'], refs: [] },
+      ], technique: [], ux: [], securite: [] } },
+  ];
+  const campagne = { id: 'c2', plan: true, affectation: {
+    u1: { telephone: 'ios', web: true, cles: ['taches-f-001__ios', 'taches-f-002__ios', 'taches-f-002__web'], vague: 1 },
+    u2: { telephone: 'ios', web: true, cles: ['taches-f-002__ios', 'taches-f-002__web'], vague: 1 },
+    u3: { telephone: 'android', web: false, cles: ['taches-f-001__android'], vague: 2 },
+  } };
+  const t = (passages, opts = {}) => tableauHumainPlan({ sections, scenarios: [{ ref: 'TA-01', titre: 'Créer', ordre: 1 }], campagne, passages, anomalies: [], ...opts });
+  const etats = (x) => x.familles[0].cases.map((c) => `${c.ref}=${c.etat}`).join(',');
+  egal(etats(t([])), 'taches-f-001=nonteste,taches-f-002=nonteste,taches-f-003=nonteste', 'rien rendu : pas encore testé, chez le client');
+  egal(etats(t([], { trous: true })), 'taches-f-001=nonteste,taches-f-002=nonteste,taches-f-003=trou', 'chez l équipe : le scénario que personne n a reçu se dit non affecté');
+  egal(`${t([]).faits}/${t([]).attendus}`, '0/6', 'l avancement se compte en passages attendus par l affectation');
+  const doublee = tableauHumainPlan({ sections, scenarios: [], campagne: { ...campagne, affectation: { ...campagne.affectation, u3: { ...campagne.affectation.u3, cles: ['taches-f-001__android', 'taches-f-001__android'] } } }, passages: [], anomalies: [] });
+  egal(doublee.attendus, 6, 'une clé posée deux fois chez le même testeur n attend qu un passage');
+  egal(t([]).unite, 'passages', 'et le dit');
+  egal(etats(t([H('TA-01', 'u1', 'ios', 'ok'), H('TA-01', 'u3', 'android', 'ok')])).split(',')[0], 'taches-f-001=nonteste', 'sur le plan, un résultat de la bibliothèque ne colore plus le scénario qui la cite');
+  egal((t([H('TA-01', 'u1', 'ios', 'ok')]).familles.find((f) => f.horsPlan) || { cases: [] }).cases.map((c) => c.ref).join(','), 'TA-01', 'il reste lisible, hors plan');
+  const un = [H('taches-f-001', 'u1', 'ios', 'ok')];
+  egal(etats(t(un)).split(',')[0], 'taches-f-001=cours', 'réussi sur iOS, Android attendu : en cours');
+  egal(etats(t(un, { plateforme: 'android' })).split(',')[0], 'taches-f-001=nonteste', 'un passage iOS ne colore pas la case Android');
+  egal(etats(t(un, { plateforme: 'ios' })).split(',')[0], 'taches-f-001=ok', 'il colore la case iOS');
+  egal(etats(t([...un, H('taches-f-001', 'u3', 'android', 'reussi')])).split(',')[0], 'taches-f-001=ok', 'les deux plateformes rendues, en toutes lettres comme en court : réussi');
+  const deux = [H('taches-f-002', 'u1', 'ios', 'ok')];
+  egal(etats(t(deux, { plateforme: 'ios' })).split(',')[1], 'taches-f-002=cours', 'humain seul : un testeur sur les deux attendus, en cours');
+  egal(etats(t([...deux, H('taches-f-002', 'u2', 'ios', 'ok')], { plateforme: 'ios' })).split(',')[1], 'taches-f-002=ok', 'les deux testeurs : réussi');
+  egal(etats(t([H('taches-f-002', 'u1', 'ios', 'echec')], { plateforme: 'ios' })).split(',')[1], 'taches-f-002=fragile', 'un échec sur deux : fragile');
+  egal(etats(t([H('taches-f-002', 'u1', 'ios', 'ko'), H('taches-f-002', 'u2', 'ios', 'echec')], { plateforme: 'ios' })).split(',')[1], 'taches-f-002=casse', 'deux échecs sur deux : cassé');
+  egal(etats(t([H('taches-f-002', 'u1', 'ios', 'ko', { aRevoir: true }), H('taches-f-002', 'u2', 'ios', 'ok')], { plateforme: 'ios' })).split(',')[1], 'taches-f-002=cours', 'un échec corrigé à rejouer : en cours');
+  const avance = t([H('taches-f-002', 'u1', 'ios', 'ok'), H('taches-f-002', 'u2', 'ios', 'ok'), H('taches-f-002', 'u1', 'web', 'ko', { aRevoir: true })]);
+  egal(`${avance.faits}/${avance.attendus}`, '2/6', 'deux passages faits sur six ; l échec à rejouer n est pas fait');
+  const web = t([H('taches-f-002', 'u1', 'web', 'sans-objet'), H('taches-f-002', 'u2', 'web', 'na')], { plateforme: 'web' });
+  egal(`${etats(web)}|${web.faits}/${web.attendus}`, 'taches-f-002=na|2/2', 'sur le web : sans objet, deux sur deux');
+  const c1 = t(un).familles[0].cases[0];
+  egal(`${c1.herite}|${c1.passages.map((p) => p.origine).join(',')}`, 'false|taches-f-001', 'sur le plan, rien n est hérité');
+}
+
+console.log('\n== Une campagne d avant : l héritage dit');
+{
+  const H = (scenario, testeur, plateforme, resultat) => ({ scenario, testeur, plateforme, resultat });
+  const sc = { id: 'taches-f-001', plateformes: ['ios'], refs: ['TA-01'] };
+  const v = verdictHumainPlan({ scenario: sc, passages: [H('TA-01', 'u1', 'ios', 'ok'), H('taches-f-001', 'u2', 'ios', 'ok')] });
+  egal(`${v.herite}|${v.passages.map((p) => `${p.origine}:${p.herite}`).join(',')}`, 'true|TA-01:true,taches-f-001:false', 'un résultat repris de la bibliothèque est marqué hérité');
+  egal(verdictTesteur({ resultat: 'reussi' }), 'ok', 'chez le testeur aussi, « reussi » se lit réussi');
+  egal(verdictTesteur({ resultat: 'echec', aRevoir: true }), 'revoir', 'et « echec » corrigé : à rejouer');
+}
+
+console.log('\n== Les chiffres d un plan pour la page projet');
+{
+  const sections = [{ id: 's', aspects: { fonctionnel: [
+    { id: 's-f-001', qui: 'humain', plateformes: ['ios', 'android', 'web'] },
+    { id: 's-f-002', qui: 'les-deux', plateformes: ['ios', 'android'] },
+    { id: 's-f-003', qui: 'robot', plateformes: ['ios', 'android', 'web'] },
+  ], technique: [], ux: [{ id: 's-u-001', qui: 'les-deux', plateformes: ['web'] }], securite: [] } }];
+  const c = chiffresHumainsDuPlan(sections);
+  egal(c.scenarios, 3, 'les scénarios faits par un humain, pas ceux d un robot seul');
+  egal(c.mobiles, 2, 'ceux passés sur iPhone et sur Android');
+  egal(c.passages, 9, 'les passages d une campagne complète : 3 × 2 + 2 × 1 + 1 × 1');
 }
 
 console.log('\n== Le rythme');

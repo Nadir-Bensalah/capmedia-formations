@@ -285,6 +285,9 @@ export const abonnerProjet = (lot, pid, role) => {
     : (finance ? surProjet('activite') : query(col('activite'), where('projet', '==', pid), where('visibilite', 'in', ['client', 'interne'])))));
 };
 
+/** Le plan de tests d'un projet, toutes ses sections (lourd : à la demande). */
+export const abonnerPlan = (lot, pid) => lot.abonner(K.planTests(pid), () => col('projets', pid, 'planTests'));
+
 /** Le panier du calculateur des axes, celui de cette personne sur ce projet. */
 export const abonnerPanier = (lot, pid, uid) => lot.abonner(K.panier(pid), () => doc(bdd, 'projets', pid, 'paniers', uid));
 
