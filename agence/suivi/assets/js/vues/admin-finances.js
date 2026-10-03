@@ -10,7 +10,8 @@ import { K, ecrire, resteAPayer, nouvelId, noteDuPaiement } from '../donnees.js'
 import { filAriane } from '../coquille.js';
 import { naviguer } from '../routeur.js';
 import { appelServeur } from '../serveur.js';
-import { ouvrirDocument, joindreFichier, editerLiens } from './finances.js';
+import { ouvrirDocument, joindreFichier, editerLiens, joindreDevis, estDemandePanier } from './finances.js';
+import { estimationCourte } from '../panier.js';
 
 
 const deposer = (env, projets, type) => {
@@ -155,13 +156,15 @@ export const vue = async (ctx, env) => {
     const encaisse = paiements.filter((p) => p.date && (p.date.toDate ? p.date.toDate() : new Date(p.date)).getFullYear() === annee).reduce((s, p) => s + (Number(p.montant) || 0), 0);
     const enRetardNonMarquees = factures.filter((d) => d.statut === 'a-payer' && d.echeance && joursAvant(d.echeance) < 0);
 
-    const ligneDoc = (d) => ligne({ icone: d.type === 'devis' ? 'receipt' : 'euro', ton: d.type === 'devis' ? (['envoye', 'consulte'].includes(d.statut) ? 'ambre' : d.statut === 'accepte' ? 'vert' : '') : (d.statut === 'en-retard' || (d.statut === 'a-payer' && d.echeance && joursAvant(d.echeance) < 0) ? 'rouge' : FACTURES_DUES.includes(d.statut) ? 'ambre' : d.statut === 'payee' ? 'vert' : ''),
+    const ligneDoc = (d) => (estDemandePanier(d) ? ligne({ icone: 'receipt', ton: d.statut === 'demande' ? 'bleu' : '',
+      titre: echapper(d.libelle || 'Demande de devis'), sous: `${echapper(nomProjet(d.projet))} · ${echapper(dateCourte(d.date) || '-')} · demandé par ${echapper((d.par || {}).nom || 'le client')}`,
+      fin: `<span class="nb t-fort">${echapper(estimationCourte(d.photo) || '-')}</span>${pastille(STATUTS_DEVIS, d.statut, { equipe: true })}<button class="btn-icone" type="button" data-menu-doc="${echapper(d.id)}" aria-label="Actions">${icone('points')}</button>`, action: 'ouvrir', attrs: `data-id="${echapper(d.id)}" data-demande-devis` }) : ligne({ icone: d.type === 'devis' ? 'receipt' : 'euro', ton: d.type === 'devis' ? (['envoye', 'consulte'].includes(d.statut) ? 'ambre' : d.statut === 'accepte' ? 'vert' : '') : (d.statut === 'en-retard' || (d.statut === 'a-payer' && d.echeance && joursAvant(d.echeance) < 0) ? 'rouge' : FACTURES_DUES.includes(d.statut) ? 'ambre' : d.statut === 'payee' ? 'vert' : ''),
       titre: `<span class="t-mono t-3" style="font-weight:400">${echapper(d.numero || '')}</span> ${echapper(d.libelle || '')}`, sous: `${echapper(nomProjet(d.projet))} · ${echapper(dateCourte(d.date))}${d.echeance ? ` · ${retard(d.echeance) && d.statut !== 'payee' ? `en retard de ${echapper(retard(d.echeance))}` : `${d.type === 'devis' ? 'expire' : 'échéance'} ${echapper(dateCourte(d.echeance))}`}` : ''}${['envoye', 'consulte'].includes(d.statut) ? ` · envoyé il y a ${echapper(age(d.date))}` : ''}`,
-      fin: `${d.fichier && d.fichier.chemin ? '' : '<span class="etiquette" title="Le client ne peut rien télécharger">Sans PDF</span>'}${(d.liens || []).length ? `<span class="puce puce--bleu"><i></i>${d.liens.length} lien${d.liens.length > 1 ? 's' : ''}</span>` : ''}${d.type === 'facture' && d.reglementDeclare && !d.reglementDeclare.confirme && d.statut !== 'payee' ? '<span class="puce puce--bleu"><i></i>Règlement déclaré</span>' : ''}<span class="nb t-fort">${echapper(montantPiece(d))}</span>${pastille(d.type === 'devis' ? STATUTS_DEVIS : STATUTS_FACTURE, d.statut, { equipe: true })}<button class="btn-icone" type="button" data-menu-doc="${echapper(d.id)}" aria-label="Actions">${icone('points')}</button>`, action: 'ouvrir', attrs: `data-id="${echapper(d.id)}"` });
+      fin: `${d.fichier && d.fichier.chemin ? '' : '<span class="etiquette" title="Le client ne peut rien télécharger">Sans PDF</span>'}${(d.liens || []).length ? `<span class="puce puce--bleu"><i></i>${d.liens.length} lien${d.liens.length > 1 ? 's' : ''}</span>` : ''}${d.type === 'facture' && d.reglementDeclare && !d.reglementDeclare.confirme && d.statut !== 'payee' ? '<span class="puce puce--bleu"><i></i>Règlement déclaré</span>' : ''}<span class="nb t-fort">${echapper(montantPiece(d))}</span>${pastille(d.type === 'devis' ? STATUTS_DEVIS : STATUTS_FACTURE, d.statut, { equipe: true })}<button class="btn-icone" type="button" data-menu-doc="${echapper(d.id)}" aria-label="Actions">${icone('points')}</button>`, action: 'ouvrir', attrs: `data-id="${echapper(d.id)}"` }));
 
     sortie.innerHTML = `<div class="page">
       <div class="page-tete"><div><h1>Finances</h1><p class="chapo">Devis, factures et paiements de tous les projets.</p></div><div class="actions"><select class="select" id="f-projet" style="width:auto"><option value="">Tous les projets</option>${projets.map((p) => `<option value="${echapper(p.id)}" ${etat.projet === p.id ? 'selected' : ''}>${echapper(p.nom)}</option>`).join('')}</select><button class="btn btn-secondaire" type="button" data-deposer="devis">${icone('receipt')} Devis</button><button class="btn btn-principal" type="button" data-deposer="facture">${icone('euro')} Facture</button></div></div>
-      <div class="metriques">${metrique(montantTTC(impaye), 'Impayé', { ton: impaye > 0 ? 'ambre' : 'vert', nuance: dues.length ? pluriel(dues.length, 'facture') : '' })}${metrique(montantHT(factureAnnee), `Facturé ${annee}`)}${metrique(montantTTC(encaisse), `Encaissé ${annee}`, { ton: 'vert' })}${metrique(devis.filter((d) => ['envoye', 'consulte'].includes(d.statut)).length, 'Devis en attente')}</div>
+      <div class="metriques">${metrique(montantTTC(impaye), 'Impayé', { ton: impaye > 0 ? 'ambre' : 'vert', nuance: dues.length ? pluriel(dues.length, 'facture') : '' })}${metrique(montantHT(factureAnnee), `Facturé ${annee}`)}${metrique(montantTTC(encaisse), `Encaissé ${annee}`, { ton: 'vert' })}${metrique(devis.filter((d) => ['envoye', 'consulte'].includes(d.statut)).length, 'Devis en attente', { nuance: devis.some((d) => d.statut === 'demande') ? pluriel(devis.filter((d) => d.statut === 'demande').length, 'demande à chiffrer', 'demandes à chiffrer') : '' })}</div>
       ${enRetardNonMarquees.length ? `<div class="encart encart--attention" style="margin-top:16px">${icone('alerte')}<div>${pluriel(enRetardNonMarquees.length, 'facture a dépassé son échéance', 'factures ont dépassé leur échéance')} sans être marquée${enRetardNonMarquees.length > 1 ? 's' : ''} en retard. <button class="btn btn-petit btn-doux" type="button" data-marquer-retard style="margin-left:8px">Marquer en retard</button></div></div>` : ''}
       <div class="onglets" style="margin-top:24px">${[['factures', 'Factures', factures.length], ['devis', 'Devis', devis.length], ['paiements', 'Paiements', paiements.length]].map(([c, l, n]) => `<button class="onglet${etat.onglet === c ? ' actif' : ''}" type="button" data-onglet="${c}">${l}<span class="badge">${n}</span></button>`).join('')}</div>
       ${etat.onglet === 'factures' ? (factures.length ? `<div class="liste">${factures.map(ligneDoc).join('')}</div>` : vide({ icone: 'euro', titre: 'Aucune facture', compact: true }))
@@ -186,6 +189,13 @@ export const vue = async (ctx, env) => {
       ev.stopPropagation();
       const d = documents.find((x) => x.id === el.dataset.menuDoc);
       if (!d) return;
+      /* Une demande du calculateur : on la chiffre, ou on l'écarte. */
+      if (estDemandePanier(d)) {
+        menu(el, d.statut === 'demande'
+          ? [{ libelle: 'Joindre le devis', icone: 'trombone', action: () => joindreDevis(d) }, '-', { libelle: 'Écarter la demande', icone: 'archive', danger: true, action: () => agir(null, () => appelServeur('statutDevis', { id: d.id, statut: 'annule' }), 'Demande écartée.') }]
+          : [{ libelle: 'Archiver', icone: 'archive', action: () => agir(null, () => appelServeur('archiverDocument', { id: d.id, archive: true }), 'Pièce archivée.') }]);
+        return;
+      }
       const items = d.type === 'facture'
         ? [{ libelle: 'Enregistrer un paiement', icone: 'paiement', action: () => enregistrerPaiement(env, d, projets) }, { titre: 'Statut' }, ...['envoyee', 'a-payer', 'partielle', 'payee', 'en-retard', 'annulee'].map((s) => ({ libelle: STATUTS_FACTURE[s].libelle, cle: `s-${s}`, action: () => agir(null, () => appelServeur('statutFacture', { id: d.id, statut: s }), 'Statut mis à jour.') }))]
         : [{ titre: 'Statut' }, ...['envoye', 'accepte', 'refuse', 'expire', 'annule'].map((s) => ({ libelle: STATUTS_DEVIS[s].equipe || STATUTS_DEVIS[s].libelle, cle: `s-${s}`, action: () => agir(null, () => appelServeur('statutDevis', { id: d.id, statut: s }), 'Statut mis à jour.') }))];

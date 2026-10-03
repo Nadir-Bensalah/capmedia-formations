@@ -734,6 +734,9 @@ export const TYPES_NOTE = {
 
 export const STATUTS_DEVIS = {
   'brouillon': { libelle: 'Brouillon',        voile: 'gris' },
+  /* Demandé par le client depuis le panier des axes d'évolution : une
+     estimation, en attente du vrai devis de l'équipe. */
+  'demande':   { libelle: 'Devis demandé',    voile: 'bleu', equipe: 'À chiffrer' },
   'envoye':    { libelle: 'À votre décision', voile: 'ambre', equipe: 'Envoyé' },
   /* Ouvrir un devis ne vaut pas décision : le client lit toujours « À votre
      décision », l'équipe sait qu'il l'a consulté. */

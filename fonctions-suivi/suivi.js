@@ -514,42 +514,96 @@ exports.suiviDocumentCree = onDocumentCreated(
       console.error(`Document ${evenement.params.documentId} de type inattendu : ${document.type}`);
       return;
     }
-
-    /* Une pièce comptable engage : elle ne part qu'aux responsables du
-       projet, jamais à un collaborateur (voir communication.js). */
-    const projet = await lireProjet(document.projet);
-    const lienPiece = `/finances/${evenement.params.documentId}`;
-    /* Dans le Hub aussi, et aux responsables seulement (l'événement
-       « devis » ou « facture » est réservé au responsable) : sans cette
-       notification, le client ne découvrait la pièce que par la lettre. */
-    await communication.notifierClients(projet, document.type, {
-      type: document.type,
-      titre: document.type === 'devis' ? 'Nouveau devis' : 'Nouvelle facture',
-      texte: `${document.numero || ''} · ${document.libelle || ''}`.replace(/^ · /, ''),
-      lien: `#${lienPiece}`, projet: document.projet,
-    });
-    await communication.ecrireAuxClients(projet, document.type, document.type, {
-      numero: document.numero,
-      libelle: document.libelle,
-      montant: document.montant,
-      /* La lettre annonce le TTC, ce que le client doit vraiment ; le HT
-         reste entre parenthèses. */
-      ttc: typeof document.ttc === 'number' ? document.ttc : (Number(document.montant) || 0) * (1 + (Number(document.tva) || 0) / 100),
-      /* Un devis range sa date de validité dans « expiration », une facture
-         dans « echeance » : la lettre lisait toujours « echeance », donc la
-         ligne « Valable jusqu'au » d'un devis était toujours vide. */
-      echeance: (document.type === 'devis' ? document.expiration : document.echeance) || null,
-      projetNom: nomProjet(projet),
-      clientNom: nomClient(projet),
-      /* La lettre mène à la pièce elle-même, dans « Devis et factures » :
-         la page du projet n'a pas les boutons Accepter et Refuser. */
-      lien: `${courriels.BASE}hub#/finances/${encodeURIComponent(evenement.params.documentId)}`,
-      avecPdf: Boolean(document.fichier && document.fichier.chemin),
-    });
-
-    console.log(`${document.type === 'devis' ? 'Devis' : 'Facture'} ${document.numero || evenement.params.documentId} déposé`);
+    /* Une demande de devis née du calculateur des axes vient du client :
+       c'est l'équipe qu'on prévient (hubDocumentActivite), pas lui. Le
+       client sera prévenu quand le vrai devis y sera joint. */
+    if (document.statut === 'demande') return;
+    await annoncerPiece(document, evenement.params.documentId);
   },
 );
+
+/* « Nouveau devis », « Nouvelle facture » : la boîte et la lettre des
+   responsables du projet. À la création d'une pièce, et quand l'équipe
+   joint le devis d'une demande du calculateur. */
+async function annoncerPiece(document, documentId) {
+  /* Une pièce comptable engage : elle ne part qu'aux responsables du
+     projet, jamais à un collaborateur (voir communication.js). */
+  const projet = await lireProjet(document.projet);
+  const lienPiece = `/finances/${documentId}`;
+  /* Dans le Hub aussi, et aux responsables seulement (l'événement
+     « devis » ou « facture » est réservé au responsable) : sans cette
+     notification, le client ne découvrait la pièce que par la lettre. */
+  await communication.notifierClients(projet, document.type, {
+    type: document.type,
+    titre: document.type === 'devis' ? 'Nouveau devis' : 'Nouvelle facture',
+    texte: `${document.numero || ''} · ${document.libelle || ''}`.replace(/^ · /, ''),
+    lien: `#${lienPiece}`, projet: document.projet,
+  });
+  await communication.ecrireAuxClients(projet, document.type, document.type, {
+    numero: document.numero,
+    libelle: document.libelle,
+    montant: document.montant,
+    /* La lettre annonce le TTC, ce que le client doit vraiment ; le HT
+       reste entre parenthèses. */
+    ttc: typeof document.ttc === 'number' ? document.ttc : (Number(document.montant) || 0) * (1 + (Number(document.tva) || 0) / 100),
+    /* Un devis range sa date de validité dans « expiration », une facture
+       dans « echeance » : la lettre lisait toujours « echeance », donc la
+       ligne « Valable jusqu'au » d'un devis était toujours vide. */
+    echeance: (document.type === 'devis' ? document.expiration : document.echeance) || null,
+    projetNom: nomProjet(projet),
+    clientNom: nomClient(projet),
+    /* La lettre mène à la pièce elle-même, dans « Devis et factures » :
+       la page du projet n'a pas les boutons Accepter et Refuser. */
+    lien: `${courriels.BASE}hub#/finances/${encodeURIComponent(documentId)}`,
+    avecPdf: Boolean(document.fichier && document.fichier.chemin),
+  });
+
+  console.log(`${document.type === 'devis' ? 'Devis' : 'Facture'} ${document.numero || documentId} déposé`);
+}
+
+/* Le devis d'une demande du calculateur est accepté : chaque ligne de la
+   photo devient une étape de la feuille de route, rattachée au devis
+   (les mêmes étapes que « les lignes du devis » du Cockpit), avec sa part
+   du montant HT au prorata des jours ; chaque axe passe « Au programme ».
+   Rejouée, elle ne double rien. */
+async function etapesDuPanier(documentId, devis) {
+  const projetId = devis.projet;
+  const lignes = ((devis.photo || {}).lignes || []).filter((l) => l && l.titre);
+  if (!projetId || !lignes.length) return;
+  const etapes = bdd.collection(`projets/${projetId}/jalons`);
+  const deja = await etapes.get();
+  if (deja.docs.some((j) => j.data().devis === documentId)) return;
+  const totalJours = lignes.reduce((n, l) => n + (Number(l.jours) || 0), 0);
+  const ht = Number(devis.montant);
+  let reste = Number.isFinite(ht) ? Math.round(ht) : null;
+  const avecJours = lignes.filter((l) => Number(l.jours) > 0);
+  const lot = bdd.batch();
+  lignes.forEach((l, k) => {
+    const ref = etapes.doc();
+    lot.set(ref, {
+      projet: projetId, titre: String(l.titre).slice(0, 120), description: '', phase: String(devis.libelle || 'Axes d\'évolution').slice(0, 160),
+      statut: 'a-venir', progression: 0, debut: null, fin: null, composants: [], responsable: '', dependances: [],
+      ordre: deja.size + k + 1, devis: documentId, axe: String(l.axe || ''), reports: [],
+      cree: FieldValue.serverTimestamp(), maj: FieldValue.serverTimestamp(),
+    });
+    /* La part de la ligne : au prorata des jours ; la dernière ligne
+       chiffrée prend l'arrondi, pour que la somme fasse le devis. */
+    if (reste !== null && totalJours > 0 && Number(l.jours) > 0) {
+      const derniere = avecJours[avecJours.length - 1] === l;
+      const part = derniere ? reste : Math.round(ht * (Number(l.jours) / totalJours));
+      reste -= part;
+      lot.set(bdd.doc(`projets/${projetId}/montants/jalon-${ref.id}`), { projet: projetId, montant: part, maj: FieldValue.serverTimestamp() });
+    }
+  });
+  for (const l of lignes) {
+    if (!l.axe) continue;
+    const axe = bdd.doc(`projets/${projetId}/axes/${String(l.axe)}`);
+    // eslint-disable-next-line no-await-in-loop
+    if ((await axe.get()).exists) lot.update(axe, { etat: 'prevu', devis: documentId, maj: FieldValue.serverTimestamp() });
+  }
+  await lot.commit();
+  console.log(`Devis ${devis.numero || documentId} accepté : ${lignes.length} étape(s) posée(s) depuis le calculateur`);
+}
 
 /*
  * Le profil public d'un testeur.
@@ -735,6 +789,13 @@ exports.suiviDocumentModifie = onDocumentUpdated(
     const apres = evenement.data.after.data();
     if (!avant || !apres) return;
 
+    /* L'équipe a joint le devis d'une demande du calculateur : pour le
+       client, c'est un nouveau devis (boîte et lettre). */
+    if (apres.type === 'devis' && avant.statut === 'demande' && apres.statut === 'envoye') {
+      await annoncerPiece(apres, evenement.params.documentId);
+      return;
+    }
+
     /* Seul cas notable : le client répond à un devis qui lui était soumis.
        Les changements de statut d'une facture viennent de nous, nous n'avons
        pas besoin de nous les annoncer. */
@@ -779,6 +840,9 @@ exports.suiviDocumentModifie = onDocumentUpdated(
           await bdd.doc(`projets/${apres.projet}`).update({ statut: 'devis-signe', maj: FieldValue.serverTimestamp() });
         }
       } catch (err) { console.error('Suite du devis non ecrite', err); }
+      if (apres.origine === 'panier' && apres.photo) {
+        try { await etapesDuPanier(evenement.params.documentId, apres); } catch (err) { console.error('Étapes du calculateur non posées', err); }
+      }
     }
     /* La ligne d'activité (« a signé le devis X : le projet démarre » ou
        « a accepté le devis X ») est écrite une seule fois, par
@@ -1483,6 +1547,7 @@ const ACTIONS = {
   classerArbitrageAcces: { permission: 'acces.gerer', projet: (c) => c.id },
   deposerDocument: { permission: 'finance.gerer', projet: (c) => c.projet },
   majDocument: { permission: 'finance.gerer', projet: (c) => projetDuDocument(c.id) },
+  joindreDevis: { permission: 'finance.gerer', projet: (c) => projetDuDocument(c.id) },
   statutDevis: { permission: 'finance.gerer', projet: (c) => projetDuDocument(c.id) },
   archiverDocument: { permission: 'finance.gerer', projet: (c) => projetDuDocument(c.id) },
   statutFacture: { permission: 'finance.gerer', projet: (c) => projetDuDocument(c.id) },
@@ -1860,6 +1925,35 @@ exports.suiviAdmin = onRequest(
         if (!Object.keys(changements).length) return res.status(400).send('rien a changer');
         await refDocument.update(changements);
         return res.status(200).json({ ok: true, changements: Object.keys(changements) });
+      }
+
+      /* --- Joindre le devis d'une demande du calculateur -----------------------
+         La demande du client (statut « demande ») devient le devis : numéro,
+         montant, TVA, validité, PDF fait ailleurs. Elle garde sa photo. Le
+         client la lit « À votre décision » et l'accepte comme tout devis. */
+      if (action === 'joindreDevis') {
+        if (!id) return res.status(400).send('id requis');
+        if (!String(numero || '').trim()) return res.status(400).send('numero requis');
+        const somme = Number(montant);
+        if (!Number.isFinite(somme) || somme < 0) return res.status(400).send('montant requis, en euros hors taxes');
+        const taux = Number(tva) || 0;
+        if (taux < 0 || taux > 100) return res.status(400).send('tva entre 0 et 100');
+        const refDocument = bdd.doc(`documents/${String(id)}`);
+        const doc = await refDocument.get();
+        if (!doc.exists) return res.status(404).send('document inconnu');
+        if (doc.data().type !== 'devis' || doc.data().statut !== 'demande') return res.status(409).send('cette piece n est pas une demande de devis en attente');
+        const enDate = (v) => { if (!v) return null; const d = new Date(v); return Number.isNaN(d.getTime()) ? null : d; };
+        if (echeance && !enDate(echeance)) return res.status(400).send('echeance illisible');
+        await refDocument.update(sansIndefini({
+          numero: String(numero).trim().slice(0, 40),
+          libelle: libelle !== undefined && String(libelle).trim() ? String(libelle).trim().slice(0, 160) : undefined,
+          montant: somme, tva: taux, ttc: Math.round(somme * (1 + taux / 100) * 100) / 100,
+          expiration: enDate(echeance),
+          fichier: fichier && fichier.chemin ? { chemin: String(fichier.chemin).trim(), nom: String(fichier.nom || '').trim(), taille: Number(fichier.taille || 0) || 0 } : null,
+          statut: 'envoye', date: FieldValue.serverTimestamp(), demandeLe: doc.data().date || null,
+          recu: { par: identite.uid, nom: (identite.fiche && identite.fiche.nom) || '', le: FieldValue.serverTimestamp() },
+        }));
+        return res.status(200).json({ ok: true, id: refDocument.id, statut: 'envoye' });
       }
 
       /* --- Changer le statut d'un devis (equipe) ---------------------------- */

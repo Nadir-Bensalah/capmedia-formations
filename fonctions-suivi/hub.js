@@ -459,6 +459,32 @@ exports.hubDocumentActivite = onDocumentWritten({ region: REGION, document: 'doc
   const genre = apres.type === 'devis' ? 'devis' : 'facture';
   const nom = `${apres.numero || ''}`.trim();
   const lien = `/finances/${evenement.params.documentId}`;
+  /* La demande de devis née du calculateur des axes : le client l'envoie,
+     l'équipe est prévenue dans le Cockpit ; il l'annule, elle l'apprend ;
+     l'équipe y joint le devis, c'est un devis déposé. */
+  const photo = apres.photo || {};
+  const nbLignes = (photo.lignes || []).length;
+  const estimation = photo.periode && Number.isFinite(Number(photo.periode.ht)) ? `≈ ${euros(Number(photo.periode.ht))} HT` : '';
+  const parClient = apres.par && apres.par.uid ? { uid: apres.par.uid, nom: apres.par.nom || '', cote: 'client' } : null;
+  if (!avant && apres.statut === 'demande') {
+    const projet = await lireProjet(apres.projet);
+    await activite({ projet: apres.projet, type: 'devis', texte: `a demandé un devis pour ${nbLignes > 1 ? `${nbLignes} axes d'évolution` : 'un axe d\'évolution'}`, par: parClient, lien });
+    await notifierEquipe(apres.projet, { type: 'devis', titre: 'Demande de devis', texte: [`${nbLignes} axe${nbLignes > 1 ? 's' : ''}`, estimation, nomProjet(projet)].filter(Boolean).join(' · '), lien: `#${lien}`, projet: apres.projet });
+    return;
+  }
+  if (avant && avant.statut === 'demande' && apres.statut === 'annule') {
+    const parClientAnnule = apres.annuleLe ? parClient : null;
+    await activite({ projet: apres.projet, type: 'devis', texte: parClientAnnule ? 'a annulé sa demande de devis' : 'a écarté la demande de devis', par: parClientAnnule, lien });
+    if (parClientAnnule) {
+      const projet = await lireProjet(apres.projet);
+      await notifierEquipe(apres.projet, { type: 'devis', titre: 'Demande de devis annulée', texte: [`${nbLignes} axe${nbLignes > 1 ? 's' : ''}`, nomProjet(projet)].filter(Boolean).join(' · '), lien: `#${lien}`, projet: apres.projet });
+    }
+    return;
+  }
+  if (avant && avant.statut === 'demande' && apres.statut === 'envoye') {
+    await activite({ projet: apres.projet, type: 'devis', texte: `a déposé le devis ${nom}, en réponse à la demande`, lien });
+    return;
+  }
   if (!avant) { await activite({ projet: apres.projet, type: genre, texte: `a déposé ${genre === 'devis' ? 'le devis' : 'la facture'} ${nom}`, lien }); return; }
   /* « J'ai réglé cette facture » : le client déclare, le serveur prévient
      l'équipe (boîte du Cockpit et lettre) et l'écrit dans l'activité. La
@@ -1419,6 +1445,10 @@ exports.hubAxeEcrit = onDocumentWritten({ region: REGION, document: 'projets/{pr
     await activite({ projet: projetId, type: 'axe', texte: `a retiré son choix sur l'axe « ${titre} »`, par: ra && ra.par ? { uid: ra.par, nom: ra.nom || '', cote: 'client' } : null, lien, visibilite: 'interne' });
     return;
   }
+  /* Un axe passé « À prévoir » par une demande de devis du calculateur :
+     la demande prévient déjà l'équipe (hubDocumentActivite), une ligne
+     par axe en plus ferait doublon. */
+  if (rb.devis) return;
   const projet = await lireProjet(projetId);
   const geste = GESTES_AXE[rb.choix];
   await activite({ projet: projetId, type: 'axe', texte: `${geste.texte} « ${titre} »`, par: { uid: rb.par || null, nom: rb.nom || '', cote: 'client' }, cible: evenement.params.axeId, lien });

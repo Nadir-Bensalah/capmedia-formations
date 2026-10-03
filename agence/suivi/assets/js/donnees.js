@@ -44,6 +44,9 @@ export const K = {
      à part, lisible des deux côtés. */
   axes: (p) => `axes:${p}`,
   axesIntro: (p) => `axes-intro:${p}`,
+  /* Le panier du calculateur des axes : celui de la personne connectée,
+     sur ce projet (projets/{p}/paniers/{uid}), au responsable seul. */
+  panier: (p) => `panier:${p}`,
   /* Les avis et les passages vivent sous une campagne, pas sous un projet :
      c'est la seule granularité que les règles ouvrent au client. */
   appreciations: (c) => `appreciations:${c}`,
@@ -117,6 +120,9 @@ export const K = {
   /* Les coordonnées de règlement de l'agence (reglages/finance) : un seul
      document, lu par tout le monde, écrit par la finance. */
   reglages: 'reglages:finance',
+  /* La grille de tarifs (reglages/tarifs, voir tarifs.js) : lue par tout
+     le monde, la même partout. */
+  tarifs: 'reglages:tarifs',
   /* Le profil sans nom des testeurs d'un projet. */
   profilsTesteurs: (p) => `profils-testeurs:${p}`,
   /* Les notes des projets à faire, hors des projets : équipe seule. */
@@ -264,6 +270,9 @@ export const abonnerProjet = (lot, pid, role) => {
     : (finance ? surProjet('activite') : query(col('activite'), where('projet', '==', pid), where('visibilite', 'in', ['client', 'interne'])))));
 };
 
+/** Le panier du calculateur des axes, celui de cette personne sur ce projet. */
+export const abonnerPanier = (lot, pid, uid) => lot.abonner(K.panier(pid), () => doc(bdd, 'projets', pid, 'paniers', uid));
+
 /** Les collections globales : tout pour l'équipe, projet par projet pour un client. */
 export const abonnerGlobal = (lot, session) => {
   sessionCourante = session;
@@ -272,6 +281,7 @@ export const abonnerGlobal = (lot, session) => {
   /* Les coordonnées de règlement : le client les lit sur une facture due,
      l'équipe les règle dans les paramètres. Un seul document. */
   lot.abonner(K.reglages, () => doc(bdd, 'reglages', 'finance'));
+  lot.abonner(K.tarifs, () => doc(bdd, 'reglages', 'tarifs'));
   if (equipe && session.equipe.role !== 'admin') {
     abonnerAgent(lot, session);
   } else if (equipe) {
@@ -890,6 +900,41 @@ export const ecrire = {
       maj: serverTimestamp(),
     });
   },
+  /* Le panier du calculateur : la liste des axes retenus, gardée par
+     personne et par projet. Vide, il s'efface. */
+  poserPanier: (session, pid, axes) => {
+    const ref = doc(bdd, 'projets', pid, 'paniers', session.utilisateur.uid);
+    const liste = [...new Set((axes || []).map(String))].slice(0, 40);
+    return liste.length ? setDoc(ref, { axes: liste, maj: serverTimestamp() }) : deleteDoc(ref);
+  },
+  /* « Demander un devis » : d'une seule écriture, la fiche « demande »
+     (avec la photo du panier) naît dans les pièces du projet, chaque axe
+     du panier passe en « À prévoir » (en nommant la demande), et le panier
+     se vide. Rend l'identifiant de la fiche. */
+  async demanderDevis(session, pid, { libelle, photo, axes }) {
+    const par = auteurDe(session);
+    const ref = doc(col('documents'));
+    const b = writeBatch(bdd);
+    b.set(ref, {
+      projet: pid, type: 'devis', statut: 'demande', origine: 'panier',
+      numero: '', libelle: String(libelle || 'Demande de devis').slice(0, 160), description: '', portee: 'complementaire',
+      montant: null, tva: Number(photo.tva) || 0, ttc: null, date: serverTimestamp(), expiration: null, echeance: null,
+      fichier: null, liens: [], reponse: null, archive: false,
+      par: { uid: par.uid, nom: String(par.nom || '').slice(0, 120) },
+      photo,
+    });
+    for (const aid of axes || []) {
+      b.update(doc(bdd, 'projets', pid, 'axes', aid), {
+        reponse: { par: par.uid, nom: String(par.nom || '').slice(0, 120), choix: 'a-prevoir', demande: '', devis: ref.id, le: serverTimestamp() },
+        maj: serverTimestamp(),
+      });
+    }
+    b.delete(doc(bdd, 'projets', pid, 'paniers', par.uid));
+    await b.commit();
+    return ref.id;
+  },
+  /* Le client annule sa demande tant que l'équipe n'y a pas répondu. */
+  annulerDemandeDevis: (did) => updateDoc(doc(bdd, 'documents', did), { statut: 'annule', annuleLe: serverTimestamp() }),
   poserIntroAxes: (pid, texte) => setDoc(doc(bdd, 'projets', pid, 'axesIntro', 'texte'), { texte: String(texte || '').slice(0, 1000), maj: serverTimestamp() }),
 
   creerCampagne: (pid, d) => addDoc(col('projets', pid, 'campagnes'), nettoyer({

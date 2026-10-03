@@ -1222,6 +1222,13 @@ service cloud.firestore {
                     // faut nous en demander un à jour.
                     && (!(resource.data.get('expiration', null) is timestamp)
                         || request.time < resource.data.expiration))
+                // Une demande de devis née du panier des axes : tant que
+                // l'équipe n'y a pas répondu, le client peut l'annuler, et
+                // rien d'autre. La photo du panier ne bouge plus.
+                || (resource.data.statut == 'demande'
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statut', 'annuleLe'])
+                    && request.resource.data.statut == 'annule'
+                    && request.resource.data.annuleLe == request.time)
               ))
           || (resource.data.type == 'facture'
               && resource.data.statut in ['envoyee', 'a-payer', 'partielle', 'en-retard']
@@ -1229,7 +1236,36 @@ service cloud.firestore {
               && reglementDeclareValide(request.resource.data.reglementDeclare))
         );
 
-      allow create, delete: if false;
+      // « Demander un devis » depuis le panier des axes d'évolution : le
+      // responsable crée une fiche « demande », sans numéro, sans montant,
+      // sans PDF, à son nom et datée par le serveur. Elle porte la photo
+      // du panier (lignes, jours, tarifs des deux périodes) : une
+      // estimation, que l'équipe remplace par le vrai devis (joindreDevis,
+      // côté serveur). Toute autre pièce reste l'affaire du serveur.
+      function demandeDePanierValide(d) {
+        return d.keys().hasOnly(['projet', 'type', 'statut', 'origine', 'numero', 'libelle', 'description', 'portee',
+                                 'montant', 'tva', 'ttc', 'date', 'expiration', 'echeance', 'fichier', 'liens',
+                                 'reponse', 'archive', 'par', 'photo'])
+            && d.type == 'devis' && d.statut == 'demande' && d.origine == 'panier'
+            && d.numero == '' && texteRequis(d.libelle, 160) && d.description == ''
+            && d.portee == 'complementaire'
+            && d.montant == null && d.ttc == null && d.expiration == null && d.echeance == null
+            && d.fichier == null && d.reponse == null && d.archive == false
+            && d.liens is list && d.liens.size() == 0
+            && d.tva is number && d.tva >= 0 && d.tva <= 30
+            && d.date == request.time
+            && d.par is map && d.par.keys().hasOnly(['uid', 'nom']) && d.par.uid == moi() && texteBorne(d.par.nom, 120)
+            && d.photo is map && d.photo.keys().hasOnly(['lignes', 'jours', 'long', 'tva', 'periode', 'suivante'])
+            && d.photo.lignes is list && d.photo.lignes.size() > 0 && d.photo.lignes.size() <= 40
+            && d.photo.jours is number && d.photo.jours >= 0 && d.photo.jours <= 4800
+            && d.photo.long is bool
+            && d.photo.periode is map
+            && (d.photo.suivante == null || d.photo.suivante is map);
+      }
+      allow create: if !estEquipe()
+        && responsableDuProjet(request.resource.data.projet)
+        && demandeDePanierValide(request.resource.data);
+      allow delete: if false;
     }
 
     // Les réglages de l'agence. « finance » : les coordonnées de règlement
@@ -1819,12 +1855,24 @@ service cloud.firestore {
           && request.resource.data.maj == request.time
           && (request.resource.data.reponse == null
               || (request.resource.data.reponse is map
-                  && request.resource.data.reponse.keys().hasOnly(['par', 'nom', 'choix', 'demande', 'le'])
+                  && request.resource.data.reponse.keys().hasOnly(['par', 'nom', 'choix', 'demande', 'devis', 'le'])
                   && request.resource.data.reponse.par == moi()
                   && texteBorne(request.resource.data.reponse.nom, 120)
                   && request.resource.data.reponse.choix in ['interesse', 'a-prevoir', 'en-parler']
                   && texteBorne(request.resource.data.reponse.get('demande', ''), 80)
+                  && texteBorne(request.resource.data.reponse.get('devis', ''), 80)
                   && request.resource.data.reponse.le == request.time));
+      }
+
+      // Le panier du calculateur des axes : celui d'une personne, sur ce
+      // projet, gardé pour la retrouver sur tous ses appareils. Le
+      // responsable seul (le prix est de la finance), et le sien seul.
+      match /paniers/{uid} {
+        allow read, delete: if connecte() && moi() == uid && responsableDuProjet(projetId);
+        allow create, update: if connecte() && moi() == uid && responsableDuProjet(projetId)
+          && request.resource.data.keys().hasOnly(['axes', 'maj'])
+          && request.resource.data.axes is list && request.resource.data.axes.size() <= 40
+          && request.resource.data.maj == request.time;
       }
 
       // L'introduction de la page des axes : un texte, écrit par l'équipe,

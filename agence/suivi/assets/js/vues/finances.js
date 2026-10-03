@@ -4,8 +4,9 @@
    qui reste à payer et comment le régler, déclare un règlement.
    ========================================================================== */
 
-import { echapper, dateCourte, dateHeure, dateISO, montant, montantHT, montantTTC, montantPiece, ttcDe, parDateDesc, joursAvant, avecLiens, STATUTS_DEVIS, STATUTS_FACTURE, FACTURES_DUES, MOYENS_PAIEMENT, PORTEES_DEVIS, estResponsable, devisADecider, devisExpire, statutPiece } from '../noyau.js';
-import { icone, pastille, ligne, vide, squelette, titrePage, modale, confirmer, toast, sur, agir, metrique, fait, encart, brancherPieces, depot, lireForme, valider, optionsDe } from '../ui.js';
+import { echapper, dateCourte, dateHeure, dateISO, montant, montantHT, montantTTC, montantPiece, ttcDe, parDateDesc, joursAvant, avecLiens, STATUTS_DEVIS, STATUTS_FACTURE, FACTURES_DUES, MOYENS_PAIEMENT, PORTEES_DEVIS, estResponsable, devisADecider, devisExpire, statutPiece, peut } from '../noyau.js';
+import { icone, pastille, ligne, vide, squelette, titrePage, modale, confirmer, toast, sur, agir, metrique, fait, encart, brancherPieces, depot, lireForme, valider, optionsDe, obligatoire } from '../ui.js';
+import { dessinPhoto, estimationCourte } from '../panier.js';
 import { appelServeur } from '../serveur.js';
 import * as magasin from '../magasin.js';
 import { K, G, agreger, ecrire, resteAPayer } from '../donnees.js';
@@ -65,7 +66,67 @@ const refuserDevis = (env, d, motifPropose = '') => {
   return m.fin;
 };
 
+/* --- La demande de devis née du calculateur des axes ---------------------
+   Une seule fiche, qui change d'état : « Devis demandé » (le client peut
+   l'annuler), puis le vrai devis joint par l'équipe (« À votre
+   décision »), puis accepté ou refusé comme tout devis. Tant qu'elle
+   n'a pas de devis, elle s'ouvre ici, avec la photo du panier. */
+export const estDemandePanier = (d) => Boolean(d) && d.type === 'devis' && (d.statut === 'demande' || (d.origine === 'panier' && d.statut === 'annule' && !d.numero));
+
+/** « Joindre le devis » : le PDF fait ailleurs, son numéro, son montant ;
+    la demande devient un devis à décider chez le client. */
+export const joindreDevis = (d) => {
+  const photo = d.photo || {};
+  const m = modale({
+    titre: 'Joindre le devis', sousTitre: `${(d.par || {}).nom || 'Le client'} · demande du ${dateCourte(d.date) || '-'}`, feuille: true,
+    corps: `<form class="forme" id="f-joindre" novalidate>
+      <div class="forme-rang"><div class="groupe"><label class="etiquette-champ" for="j-numero">Numéro</label><input class="champ" id="j-numero" name="numero" placeholder="D-2026-031"></div><div class="groupe"><label class="etiquette-champ" for="j-echeance">Valable jusqu'au</label><input class="champ" id="j-echeance" name="echeance" type="date"></div></div>
+      <div class="groupe"><label class="etiquette-champ" for="j-libelle">Libellé</label><input class="champ" id="j-libelle" name="libelle" maxlength="160" value="${echapper(d.libelle || '')}"></div>
+      <div class="forme-rang"><div class="groupe"><label class="etiquette-champ" for="j-montant">Montant HT (€)</label><input class="champ" id="j-montant" name="montant" type="number" min="0" step="0.01" value="${photo.periode && Number.isFinite(photo.periode.ht) ? photo.periode.ht : ''}"><p class="aide">L'estimation du client : ${echapper(estimationCourte(photo) || '-')}.</p></div><div class="groupe"><label class="etiquette-champ" for="j-tva">TVA (%)</label><input class="champ" id="j-tva" name="tva" type="number" min="0" step="0.1" value="${Number.isFinite(Number(d.tva)) ? Number(d.tva) : 20}"></div></div>
+      <div class="groupe"><span class="etiquette-champ">Le PDF</span><div id="j-depot"></div></div></form>`,
+    pied: '<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button><button class="btn btn-principal" type="submit" form="f-joindre">Joindre le devis</button>',
+  });
+  const forme = m.el.querySelector('#f-joindre');
+  const boite = depot(m.el.querySelector('#j-depot'), { chemin: `projets/${d.projet}/pieces/${d.id}`, max: 1, texte: 'Déposez le <strong>PDF</strong>.', aide: '' });
+  forme.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!valider(forme, { numero: obligatoire(), libelle: obligatoire(), montant: (v) => (v === null || v < 0 ? 'Un montant est attendu.' : '') })) return;
+    if (boite.occupe) { toast('Attendez la fin de l\'envoi.', 'erreur'); return; }
+    const v = lireForme(forme);
+    const fichier = boite.pieces[0] || null;
+    if (await agir(m.pied.querySelector('[type="submit"]'), () => appelServeur('joindreDevis', { id: d.id, numero: v.numero, libelle: v.libelle, montant: v.montant, tva: v.tva || 0, echeance: v.echeance || null, fichier }), 'Devis joint : le client peut l\'accepter.')) m.fermer(true);
+  });
+  return m.fin;
+};
+
+const ouvrirDemande = (d, env, { projets }) => {
+  const equipe = env.role === 'equipe';
+  const projet = projets.find((p) => p.id === d.projet) || {};
+  const ouverte = d.statut === 'demande';
+  const responsable = !equipe && estResponsable(env.session, projet.id ? projet : d.projet);
+  const chiffrer = equipe && ouverte && peut(env.session, 'finance.gerer', d.projet);
+  const m = modale({
+    titre: equipe ? 'Demande de devis' : 'Devis demandé',
+    sousTitre: `${projet.nom || ''} · ${equipe ? `${(d.par || {}).nom || 'le client'}, ` : ''}le ${dateCourte(d.date) || '-'}`,
+    feuille: true,
+    corps: `<div class="rang" style="margin-bottom:16px">${pastille(STATUTS_DEVIS, d.statut, { equipe })}</div>
+      ${ouverte ? encart(equipe
+    ? '<strong>À chiffrer.</strong> Le client a envoyé son calculateur. Faites le devis, puis « Joindre le devis » : il le reçoit ici, à accepter ou refuser.'
+    : '<strong>Nous préparons votre devis.</strong> Il arrivera ici, à accepter ou refuser. Vous pouvez annuler la demande tant que nous n\'avons pas répondu.', 'info', 'receipt')
+    : encart(`<strong>Demande annulée</strong>${d.annuleLe ? ` le ${echapper(dateHeure(d.annuleLe))}` : ''}.`, 'attention', 'info')}
+      <div class="demande-photo"><p class="surtitre" style="margin-bottom:10px">${equipe ? 'Le calculateur du client' : 'Votre sélection'}, le ${echapper(dateCourte(d.date) || '-')}</p>${dessinPhoto(d.photo)}</div>`,
+    pied: `${responsable && ouverte ? '<button class="btn btn-secondaire" type="button" data-annuler-demande>Annuler la demande</button>' : ''}<span class="pousse"></span><button class="btn ${chiffrer ? 'btn-secondaire' : 'btn-principal'}" type="button" data-fermer>Fermer</button>${chiffrer ? '<button class="btn btn-principal" type="button" data-joindre-devis>Joindre le devis</button>' : ''}`,
+  });
+  sur(m.el, 'click', '[data-annuler-demande]', async (el) => {
+    if (!(await confirmer({ titre: 'Annuler cette demande ?', texte: 'Nous ne préparerons pas ce devis. Les axes restent sur leur page : vous pourrez en redemander un.', ok: 'Annuler la demande', annuler: 'Garder', danger: true }))) return;
+    if (await agir(el, () => ecrire.annulerDemandeDevis(d.id), 'Demande annulée.')) m.fermer(true);
+  });
+  sur(m.el, 'click', '[data-joindre-devis]', async () => { m.fermer(); await joindreDevis(d); });
+  return m.fin;
+};
+
 export const ouvrirDocument = (d, env, { projets, paiements, documents = [] }) => {
+  if (estDemandePanier(d)) return ouvrirDemande(d, env, { projets });
   const equipe = env.role === 'equipe';
   const projet = projets.find((p) => p.id === d.projet) || {};
   const devis = d.type === 'devis';
@@ -128,6 +189,7 @@ export const ouvrirDocument = (d, env, { projets, paiements, documents = [] }) =
           : (equipe ? `<p class="aide" style="margin-top:16px">Ce devis n'a pas encore ses lignes en étapes. <a href="#/projets/${echapper(d.projet)}/etapes">Posez-les dans la feuille de route</a>, avec ce devis en « ligne du devis » : le client les verra se cocher.</p>`
             : `<p class="aide" style="margin-top:16px">Le détail ligne par ligne est dans le PDF, qui fait foi. Ce qui est écrit ici en résume l'objet.</p>`);
       })() : ''}
+      ${devis && d.photo ? `<details class="demande-photo"><summary class="t-petit">${equipe ? 'Le calculateur du client' : 'Votre sélection'}, le ${echapper(dateCourte(d.demandeLe || d.date) || '-')}</summary><div style="margin-top:12px">${dessinPhoto(d.photo)}</div></details>` : ''}
       <dl class="faits" style="margin-top:20px">${fait('Émis le', echapper(dateCourte(d.date) || TIRET))}${fait(devis ? 'Expire le' : 'Échéance', echapper(dateCourte(devis ? d.expiration : d.echeance) || TIRET))}${devis || d.description ? fait('Détail', d.description ? avecLiens(d.description) : echapper(TIRET)) : ''}</dl>
       ${d.reponse ? `<div style="margin-top:20px">${encart(`<strong>${d.statut === 'accepte' ? 'Accepté' : 'Refusé'}</strong> par ${echapper(d.reponse.nom || '')} le ${echapper(dateHeure(d.reponse.date))}${d.reponse.commentaire ? `<div style="margin-top:6px">${avecLiens(d.reponse.commentaire)}</div>` : ''}`, d.statut === 'accepte' ? 'ok' : 'attention', d.statut === 'accepte' ? 'check' : 'info')}</div>` : ''}
       ${(d.liens || []).length ? `<div style="margin-top:20px"><p class="surtitre">À consulter</p><div class="pile" style="margin-top:8px;gap:8px">${d.liens.map((l) => `<a class="lien-env" href="${echapper(l.url)}" target="_blank" rel="noopener"><span class="ligne-icone ligne-icone--bleu">${icone('externe')}</span><span style="min-width:0"><span class="t-corps-fort" style="display:block">${echapper(l.nom)}</span><span class="url" style="display:block">${echapper(l.url.replace(/^https?:\/\//, ''))}</span></span><span class="chevron" style="color:var(--encre-4)">${icone('externe')}</span></a>`).join('')}</div></div>` : ''}
@@ -223,6 +285,7 @@ export const editerLiens = (d) => {
    quand le montant affiché est TTC. */
 export const lignePiece = (d, nomProjet, { detailHT = false } = {}) => {
   const etatPiece = statutPiece(d);
+  const demande = estDemandePanier(d);
   const declare = d.type === 'facture' && d.reglementDeclare && !d.reglementDeclare.confirme && d.statut !== 'payee';
   const ttc = ttcDe(d);
   const ht = Number(d.montant);
@@ -230,10 +293,10 @@ export const lignePiece = (d, nomProjet, { detailHT = false } = {}) => {
   return ligne({
     icone: d.type === 'devis' ? 'receipt' : 'euro', ton: d.type === 'devis' ? (devisADecider(d) ? 'ambre' : d.statut === 'accepte' ? 'vert' : '') : (etatPiece === 'en-retard' ? 'rouge' : FACTURES_DUES.includes(d.statut) ? 'ambre' : d.statut === 'payee' ? 'vert' : ''),
     titre: `${d.numero ? `<span class="t-mono t-3" style="font-weight:400">${echapper(d.numero)}</span> ` : ''}${echapper(d.libelle || '')}`,
-    sous: `${echapper(nomProjet(d.projet) || TIRET)} · ${echapper(dateCourte(d.date) || TIRET)}${avecHT ? ` · ${echapper(montantHT(ht, 2))}` : ''}${d.type === 'facture' && d.echeance && FACTURES_DUES.includes(d.statut) ? ` · échéance ${echapper(dateCourte(d.echeance))}` : ''}${declare ? ' · règlement déclaré, en attente de confirmation' : ''}`,
+    sous: `${echapper(nomProjet(d.projet) || TIRET)} · ${echapper(dateCourte(d.date) || TIRET)}${demande ? ' · estimation du calculateur' : ''}${avecHT ? ` · ${echapper(montantHT(ht, 2))}` : ''}${d.type === 'facture' && d.echeance && FACTURES_DUES.includes(d.statut) ? ` · échéance ${echapper(dateCourte(d.echeance))}` : ''}${declare ? ' · règlement déclaré, en attente de confirmation' : ''}`,
     /* Trois colonnes fixes, alignées d'une ligne à l'autre : le bouton
        Télécharger (ou sa place vide), le montant, le statut. */
-    fin: `${(d.liens || []).length ? `<span class="puce puce--bleu"><i></i>${icone('externe')}</span>` : ''}<span class="piece-fin"><span class="piece-fin-voir">${d.fichier && d.fichier.chemin ? `<button class="btn btn-voir" type="button" data-telecharger="${echapper(d.id)}">${icone('telecharger')} Télécharger</button>` : ''}</span><span class="nb t-fort">${echapper(montantPiece(d, 2) || TIRET)}</span><span class="piece-fin-statut">${pastille(d.type === 'devis' ? STATUTS_DEVIS : STATUTS_FACTURE, etatPiece)}</span></span>`,
+    fin: `${(d.liens || []).length ? `<span class="puce puce--bleu"><i></i>${icone('externe')}</span>` : ''}<span class="piece-fin"><span class="piece-fin-voir">${d.fichier && d.fichier.chemin ? `<button class="btn btn-voir" type="button" data-telecharger="${echapper(d.id)}">${icone('telecharger')} Télécharger</button>` : ''}</span><span class="nb t-fort">${echapper((demande ? estimationCourte(d.photo) : montantPiece(d, 2)) || TIRET)}</span><span class="piece-fin-statut">${pastille(d.type === 'devis' ? STATUTS_DEVIS : STATUTS_FACTURE, etatPiece)}</span></span>`,
     action: 'ouvrir', attrs: `data-id="${echapper(d.id)}"`,
   });
 };
@@ -289,7 +352,9 @@ export const vue = async (ctx, env) => {
     if (etat.projet && !miens.some((p) => p.id === etat.projet)) etat.projet = '';
     const duProjet = (x) => !etat.projet || x.projet === etat.projet;
     /* Un brouillon est une réflexion de l'agence : il ne s'affiche pas. */
-    const tousDocuments = agreger(session, G.documents).filter((d) => !d.archive && d.statut !== 'brouillon');
+    /* Une demande de devis annulée avant toute réponse n'est plus rien pour
+       le client : elle quitte la liste. */
+    const tousDocuments = agreger(session, G.documents).filter((d) => !d.archive && d.statut !== 'brouillon' && !(estDemandePanier(d) && d.statut === 'annule'));
     const documents = tousDocuments.filter(duProjet);
     /* Un paiement annulé n'en est pas un : il ne se montre pas. */
     const paiements = agreger(session, G.paiements).filter((p) => p.statut !== 'annule').filter(duProjet);

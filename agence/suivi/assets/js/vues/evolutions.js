@@ -22,9 +22,10 @@
    ========================================================================== */
 
 import { echapper, dateCourte, pluriel, montantHT, estResponsable, OUVERTS, peut } from '../noyau.js';
-import { icone, pastille, vide, squelette, titrePage, confirmer, toast, sur, menu, agir } from '../ui.js';
+import { icone, pastille, vide, squelette, titrePage, confirmer, toast, sur, menu, agir, modale } from '../ui.js';
 import * as magasin from '../magasin.js';
-import { K, ecrire, abonnerProjet, montantDe, horodatage } from '../donnees.js';
+import { K, ecrire, abonnerProjet, abonnerPanier, montantDe, horodatage } from '../donnees.js';
+import { photoDuPanier, dessinPhoto, libelleDemande, axePanierable, MAX_PANIER } from '../panier.js';
 import { filAriane } from '../coquille.js';
 import { feuille, champ, zone, choix as select } from './editeurs.js';
 import {
@@ -54,6 +55,11 @@ export const peutRepondre = (a, { pid, env }) => {
 
 /* Le prix est de la finance : l'équipe et le responsable du projet. */
 const voitPrix = ({ pid, env }) => env.role === 'equipe' || estResponsable(env.session, pid);
+/* Le calculateur aussi : le responsable seul, côté client (même règle). */
+const avecPanier = ({ pid, env }) => env.role !== 'equipe' && estResponsable(env.session, pid);
+/* Les axes du panier, tels que la page les connaît encore : publiés, et
+   toujours « proposés » ou « au programme ». */
+const idsPanier = (pid) => ((magasin.lire(K.panier(pid)) || {}).axes || []).map(String);
 
 /** Les plateformes de la page : celles des parties du projet, puis celles
     où un axe existe, dans l'ordre de PLATEFORMES_AXE. Côté client, une
@@ -74,6 +80,7 @@ const lireTout = (pid, env) => {
     intro: ((magasin.lire(K.axesIntro(pid)) || {}).texte || '').trim(),
     tickets: magasin.lire(K.tickets(pid)) || [],
     documents: magasin.lire(K.documents(pid)) || [],
+    panier: idsPanier(pid).filter((id) => axes.some((a) => a.id === id && axePanierable(a))),
   };
 };
 
@@ -117,9 +124,11 @@ const ligneClient = (a, d, c, ouverts) => {
   const r = a.reponse && CHOIX_AXE[a.reponse.choix] ? a.reponse : null;
   const peutAgir = peutRepondre(a, c);
   const deLui = r && r.par === c.env.session.utilisateur.uid;
-  const coche = Boolean(r) || (peutAgir && ouverts.has(a.id));
+  const auPanier = d.panier.includes(a.id);
+  const panier = peutAgir && avecPanier(c) && axePanierable(a);
+  const coche = Boolean(r) || (peutAgir && (ouverts.has(a.id) || auPanier));
   const idCase = `axe-case-${a.id}`;
-  return `<li class="axe${coche ? ' est-cochee' : ''}${r ? ' a-choisi' : ''}" data-axe="${echapper(a.id)}">
+  return `<li class="axe${coche ? ' est-cochee' : ''}${r ? ' a-choisi' : ''}${auPanier ? ' est-au-panier' : ''}" data-axe="${echapper(a.id)}">
     <span class="axe-case">${peutAgir
     ? `<input type="checkbox" id="${echapper(idCase)}" data-axe-case="${echapper(a.id)}"${coche ? ' checked' : ''}>`
     : `<span class="axe-coche${r ? ' pleine' : ''}" aria-hidden="true"></span>`}</span>
@@ -130,6 +139,7 @@ const ligneClient = (a, d, c, ouverts) => {
       ${a.detail ? `<details class="axe-detail"><summary>En savoir plus</summary><div class="prose">${echapper(a.detail).split(/\n{2,}/).map((x) => `<p>${x.replace(/\n/g, '<br>')}</p>`).join('')}</div></details>` : ''}
       ${peutAgir ? `<div class="axe-gestes" role="group" aria-label="${echapper(`Que voulez-vous faire de « ${a.titre} » ?`)}">
         ${Object.entries(CHOIX_AXE).map(([cle, f]) => `<button class="btn btn-petit ${r && r.choix === cle ? 'btn-principal' : 'btn-secondaire'}" type="button" data-axe-geste="${echapper(cle)}" data-id="${echapper(a.id)}" aria-pressed="${r && r.choix === cle ? 'true' : 'false'}">${echapper(f.bouton)}</button>`).join('')}
+        ${panier ? `<button class="btn btn-petit ${auPanier ? 'btn-doux' : 'btn-secondaire'} axe-panier" type="button" data-axe-panier="${auPanier ? 'retirer' : 'ajouter'}" data-id="${echapper(a.id)}" aria-pressed="${auPanier ? 'true' : 'false'}">${auPanier ? 'Retirer du calculateur' : 'Ajouter au calculateur'}</button>` : ''}
         ${r ? `<span class="axe-fait" data-axe-fait>${deLui ? phraseReponse(a, d, c, { pourLui: true }) : phraseReponse(a, d, c)}</span>` : ''}
       </div>` : (r ? `<p class="axe-fait" data-axe-fait>${phraseReponse(a, d, c)}</p>` : '')}
     </div>
@@ -176,7 +186,10 @@ const pageHtml = (d, c, ouverts, filtre = '') => {
   const plateformes = plateformesDe(d.composants, d.axes, equipe);
   const parPlateforme = (p) => d.axes.filter((a) => (PLATEFORMES_AXE[a.plateforme] ? a.plateforme : 'general') === p);
   const aucunResponsableIci = !equipe && d.axes.length && !d.axes.some((a) => peutRepondre(a, c)) && d.axes.some((a) => ETATS_AXE_CLIENT_AGIT.includes(a.etat || 'propose'));
-  const tete = `<header class="page-tete">
+  /* Le calculateur reste en haut à droite pendant qu'on descend la page :
+     c'est vers lui que file une ligne ajoutée. */
+  const ancre = avecPanier(c) ? `<div class="panier-ancre"><button class="btn btn-secondaire panier-bouton${d.panier.length ? ' est-plein' : ''}" type="button" data-panier-ouvrir aria-label="${echapper(`Ouvrir le calculateur : ${d.panier.length} axe${d.panier.length > 1 ? 's' : ''}`)}">${icone('panier')}<span>Calculateur</span><span class="panier-compte" data-panier-compte>${d.panier.length}</span></button></div>` : '';
+  const tete = `${ancre}<header class="page-tete">
     <div>
       <p class="surtitre">${echapper(d.projet.nom || '')}</p>
       <h1 style="margin-top:2px">Axes d'évolution</h1>
@@ -189,13 +202,13 @@ const pageHtml = (d, c, ouverts, filtre = '') => {
     </div>` : ''}
   </header>`;
   if (!plateformes.length) {
-    return `<div class="page page-axes">${tete}${vide({ icone: 'ampoule', titre: equipe ? 'Aucun axe pour le moment' : 'Bientôt ici', texte: equipe ? 'Ajoutez un axe, ou versez le fichier du projet avec axes-importer.mjs. Le client le voit une fois publié.' : 'Nos pistes pour faire grandir votre projet apparaîtront ici.' })}</div>`;
+    return `<div class="page page-axes${ancre ? ' page-axes--panier' : ''}">${tete}${vide({ icone: 'ampoule', titre: equipe ? 'Aucun axe pour le moment' : 'Bientôt ici', texte: equipe ? 'Ajoutez un axe, ou versez le fichier du projet avec axes-importer.mjs. Le client le voit une fois publié.' : 'Nos pistes pour faire grandir votre projet apparaîtront ici.' })}</div>`;
   }
   const filtres = plateformes.length > 1 ? `<div class="segments axes-filtre" role="group" aria-label="Plateforme">
       ${[['', 'Tout'], ...plateformes.map((p) => [p, PLATEFORMES_AXE[p].libelle])].map(([cle, lib]) => `<button type="button" class="segment${(filtre || '') === cle ? ' actif' : ''}" data-axe-filtre="${echapper(cle)}" aria-pressed="${(filtre || '') === cle}">${echapper(lib)}</button>`).join('')}
     </div>` : '';
   const visibles = filtre && plateformes.includes(filtre) ? [filtre] : plateformes;
-  return `<div class="page page-axes">${tete}${filtres}
+  return `<div class="page page-axes${ancre ? ' page-axes--panier' : ''}">${tete}${filtres}
     ${visibles.map((p) => {
     const axes = parPlateforme(p);
     return `<section class="section axes-bloc" data-axes-plateforme="${echapper(p)}">
@@ -315,6 +328,81 @@ const deplacer = async (pid, a, axes, sens) => {
   await Promise.all([ecrire.majAxe(pid, voisins[i].id, { ordre: ob }), ecrire.majAxe(pid, voisins[j].id, { ordre: oa })]);
 };
 
+/* --- Le calculateur ------------------------------------------------------- */
+
+const reduit = () => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } };
+
+/* La ligne ajoutée file vers le calculateur : une étiquette à son titre
+   part de la ligne et se pose sur le bouton, qui rebondit une fois. Sans
+   mouvement si le système le demande. */
+const filerVersPanier = (depart, cible, titre) => new Promise((fini) => {
+  if (!depart || !cible || reduit() || typeof document.body.animate !== 'function') { fini(); return; }
+  const a = (depart.querySelector('.axe-titre') || depart).getBoundingClientRect();
+  const b = cible.getBoundingClientRect();
+  const fantome = document.createElement('div');
+  fantome.className = 'panier-fantome';
+  fantome.setAttribute('aria-hidden', 'true');
+  fantome.textContent = titre;
+  fantome.style.left = `${a.left}px`;
+  fantome.style.top = `${a.top}px`;
+  document.body.appendChild(fantome);
+  const f = fantome.getBoundingClientRect();
+  const dx = (b.left + b.width / 2) - (f.left + f.width / 2);
+  const dy = (b.top + b.height / 2) - (f.top + f.height / 2);
+  const anim = fantome.animate([
+    { transform: 'translate(0, 0) scale(1)', opacity: 1 },
+    { transform: `translate(${dx * 0.55}px, ${dy * 0.55 - 24}px) scale(.7)`, opacity: 0.9, offset: 0.55 },
+    { transform: `translate(${dx}px, ${dy}px) scale(.2)`, opacity: 0 },
+  ], { duration: 560, easing: 'cubic-bezier(.4, 0, .2, 1)' });
+  const fin = () => { fantome.remove(); fini(); };
+  anim.onfinish = fin; anim.oncancel = fin;
+});
+const rebondir = (el) => {
+  if (!el || reduit() || typeof el.animate !== 'function') return;
+  el.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.08)' }, { transform: 'scale(1)' }], { duration: 280, easing: 'cubic-bezier(.2, .8, .3, 1)' });
+};
+
+/* La modale du calculateur : les lignes, la somme, et « Demander un
+   devis ». Elle se redessine elle-même quand on retire une ligne. */
+const ouvrirPanier = (c) => {
+  const { pid, env } = c;
+  const lire = () => {
+    const d = lireTout(pid, env);
+    const axes = d.panier.map((id) => d.axes.find((a) => a.id === id)).filter(Boolean);
+    return { d, axes, photo: photoDuPanier({ axes, projet: d.projet, grille: magasin.lire(K.tarifs) }) };
+  };
+  const corpsDe = ({ axes, photo }) => (axes.length
+    ? dessinPhoto(photo, { retirer: true })
+    : '<div class="panier-vide"><p class="t-corps-fort">Votre calculateur est vide.</p><p class="t-petit t-2">Cochez un axe, puis « Ajouter au calculateur » : le temps estimé et le prix s\'additionnent ici.</p></div>');
+  const piedDe = ({ axes }) => `${axes.length ? '<button class="btn btn-fantome" type="button" data-panier-vider>Vider</button>' : ''}<span class="pousse"></span><button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>${axes.length ? '<button class="btn btn-principal" type="button" data-panier-demander>Demander un devis</button>' : ''}`;
+  let etat = lire();
+  const m = modale({ titre: 'Votre calculateur', sousTitre: `${etat.d.projet.nom || ''} · les axes que vous avez retenus`, corps: corpsDe(etat), pied: piedDe(etat), large: true });
+  m.el.classList.add('voile--panier');
+  const redessiner = () => { etat = lire(); m.corps.innerHTML = corpsDe(etat); m.pied.innerHTML = piedDe(etat); };
+  sur(m.el, 'click', '[data-panier-retirer]', async (el) => {
+    const reste = etat.d.panier.filter((id) => id !== el.dataset.panierRetirer);
+    if (await agir(el, () => ecrire.poserPanier(env.session, pid, reste))) redessiner();
+  });
+  sur(m.el, 'click', '[data-panier-vider]', async (el) => {
+    if (!(await confirmer({ titre: 'Vider le calculateur ?', texte: 'Les axes restent sur la page : vous pourrez les ajouter de nouveau.', ok: 'Vider' }))) return;
+    if (await agir(el, () => ecrire.poserPanier(env.session, pid, []), 'Calculateur vidé.')) m.fermer(true);
+  });
+  sur(m.el, 'click', '[data-panier-demander]', async (el) => {
+    const { axes } = lire();
+    if (!axes.length) return;
+    const ok = await confirmer({
+      titre: 'Demander un devis ?',
+      texte: `Nous recevons votre sélection (${axes.length} axe${axes.length > 1 ? 's' : ''}) et vous préparons un devis. Vous suivez la demande dans Devis et factures, et pouvez l'annuler tant que nous n'avons pas répondu.`,
+      ok: 'Demander le devis',
+    });
+    if (!ok) return;
+    /* La photo est prise au moment de l'envoi : ce que le client a vu. */
+    const photo = photoDuPanier({ axes, projet: lire().d.projet, grille: magasin.lire(K.tarifs) });
+    if (await agir(el, () => ecrire.demanderDevis(env.session, pid, { libelle: libelleDemande(photo), photo, axes: axes.map((a) => a.id) }), 'Demande envoyée : vous la suivez dans Devis et factures.')) m.fermer(true);
+  });
+  return m.fin;
+};
+
 /* ==========================================================================
    La vue
    ========================================================================== */
@@ -328,7 +416,9 @@ export const vue = async (ctx, env) => {
   abonnerProjet(lot, pid, env.role);
   const c = { pid, env };
   const finance = voitPrix(c);
-  const cles = [K.projet(pid), K.composants(pid), K.axes(pid), K.axesIntro(pid), K.tickets(pid), ...(finance ? [K.montants(pid), K.documents(pid)] : [])];
+  const calculateur = avecPanier(c);
+  if (calculateur) abonnerPanier(lot, pid, env.session.utilisateur.uid);
+  const cles = [K.projet(pid), K.composants(pid), K.axes(pid), K.axesIntro(pid), K.tickets(pid), ...(finance ? [K.montants(pid), K.documents(pid)] : []), ...(calculateur ? [K.panier(pid)] : [])];
   /* Les lignes cochées sans geste encore : un état d'écran, gardé d'un
      dessin à l'autre. Cocher ne redessine rien : la classe suffit. */
   const ouverts = new Set();
@@ -370,6 +460,9 @@ export const vue = async (ctx, env) => {
     const a = d.axes.find((x) => x.id === id);
     if (!a) return;
     if (el.checked) { ouverts.add(id); if (ligne) ligne.classList.add('est-cochee'); return; }
+    /* Décocher une ligne du calculateur l'en retire aussi : la case dit
+       « je n'en veux plus ». */
+    if (d.panier.includes(id)) await agir(null, () => ecrire.poserPanier(env.session, pid, d.panier.filter((x) => x !== id)));
     if (a.reponse && CHOIX_AXE[a.reponse.choix]) {
       const ok = await confirmer({ titre: 'Retirer votre choix ?', texte: `« ${a.titre} » redevient une simple piste. Vous pourrez la recocher quand vous voudrez.`, ok: 'Retirer' });
       if (!ok) { el.checked = true; return; }
@@ -391,6 +484,25 @@ export const vue = async (ctx, env) => {
     const choix = el.dataset.axeGeste;
     if (!CHOIX_AXE[choix] || (a.reponse && a.reponse.choix === choix)) return;
     await repondre(a, choix, d, c, el);
+  });
+
+  /* Le calculateur : ajouter (la ligne file vers le bouton), retirer, ouvrir. */
+  const gestesPanier = sur(sortie, 'click', '[data-axe-panier], [data-panier-ouvrir]', async (el) => {
+    if (!calculateur) return;
+    if (el.hasAttribute('data-panier-ouvrir')) { ouvrirPanier(c); return; }
+    const d = lireTout(pid, env);
+    const a = d.axes.find((x) => x.id === el.dataset.id);
+    if (!a || !axePanierable(a)) return;
+    if (el.dataset.axePanier === 'retirer') {
+      await agir(el, () => ecrire.poserPanier(env.session, pid, d.panier.filter((x) => x !== a.id)), 'Retiré du calculateur.');
+      return;
+    }
+    if (d.panier.includes(a.id)) return;
+    if (d.panier.length >= MAX_PANIER) { toast(`Le calculateur garde ${MAX_PANIER} axes au plus.`, 'erreur'); return; }
+    el.disabled = true;
+    await filerVersPanier(el.closest('.axe'), sortie.querySelector('[data-panier-ouvrir]'), a.titre);
+    if (await agir(null, () => ecrire.poserPanier(env.session, pid, [...d.panier, a.id]))) rebondir(sortie.querySelector('[data-panier-ouvrir]'));
+    else el.disabled = false;
   });
 
   const gestesEquipe = sur(sortie, 'click', '[data-axe-action]', async (el) => {
@@ -428,7 +540,7 @@ export const vue = async (ctx, env) => {
   });
 
   return {
-    fin: () => { planifier.arreter(); sortie.removeEventListener('change', surCase); gestesClient(); gestesEquipe(); gesteFiltre(); lot.fin(); },
+    fin: () => { planifier.arreter(); sortie.removeEventListener('change', surCase); gestesClient(); gestesPanier(); gestesEquipe(); gesteFiltre(); lot.fin(); },
   };
 };
 
