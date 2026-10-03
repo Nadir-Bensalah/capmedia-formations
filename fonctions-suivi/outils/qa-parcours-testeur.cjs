@@ -67,6 +67,8 @@ let page = null;
   const nav = await chromium.launch();
   const ctx = await nav.newContext({ viewport: { width: 390, height: 844 }, userAgent: IPHONE, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
   page = await ctx.newPage();
+  /* Un geste qui n'aboutit pas est un écart, pas une attente de dix minutes. */
+  page.setDefaultTimeout(12000);
   const erreurs = []; page.on('pageerror', (e) => erreurs.push(e.message.slice(0, 160)));
   const karim = 'karim.testeur@essai.test';
   const passages = `projets/${PID}/campagnes/${CID}/passages`;
@@ -128,6 +130,8 @@ let page = null;
   verifier(new RegExp(`${id(refs[0])} enregistré`).test(await page.textContent('.fs-enchaine').catch(() => '')), 'et confirme le résultat posé');
 
   console.log('\n== Un échec, avec deux captures');
+  /* Sans enchaînement, on ouvre le suivant soi-même : le reste se vérifie quand même. */
+  if (!(await page.$('.modale--scenario'))) { await page.click('[data-continuer]'); await page.waitForSelector('.modale--scenario [data-feuille-poser]'); }
   await page.click('.modale--scenario [data-feuille-poser]:nth-child(2)'); await page.waitForSelector('.t-preuves', { timeout: 10000 });
   const natif = await page.$eval('.t-preuve-fichier', (i) => { const r = i.getBoundingClientRect(); return { multiple: i.multiple, large: r.width > 2 || r.height > 2 }; });
   verifier(natif.multiple && !natif.large, 'le champ fichier du navigateur est caché sous « Ajouter une capture », et accepte plusieurs pièces');
@@ -154,9 +158,13 @@ let page = null;
   for (const ref of refs.slice(2)) await poser(`${passages}/${uid}__${ref}`, { scenario: S(id(ref)), testeur: S(uid), plateforme: S('ios'), resultat: S('reussi'), commentaire: S(''), preuves: L([]), contexte: { mapValue: { fields: {} } }, cree: T(new Date()), maj: T(new Date()) });
   await poser(`${passages}/${uid}__${refs[1]}`, { aRevoir: { booleanValue: true } }, ['aRevoir']);
   await attendre(async () => /À rejouer/i.test(await page.textContent('.t-suite').catch(() => '')), 30, 500);
-  verifier(/À rejouer/i.test(await page.textContent('.t-suite').catch(() => '')) && (await page.getAttribute('[data-continuer]', 'data-continuer')) === refs[1], 'le geste suivant est l échec corrigé, à rejouer');
+  const suiteTexte = await page.textContent('.t-suite', { timeout: 3000 }).catch(() => '');
+  const continuer = await page.$('[data-continuer]');
+  verifier(/À rejouer/i.test(suiteTexte) && continuer && (await continuer.getAttribute('data-continuer')) === refs[1], 'le geste suivant est l échec corrigé, à rejouer');
   verifier(!(await page.$('[data-terminer]')), 'pas de « J ai terminé » tant qu il reste un scénario à rejouer');
-  await page.click('[data-continuer]'); await page.waitForSelector('[data-feuille-poser]', { timeout: 10000 });
+  if (await page.$('[data-continuer]')) await page.click('[data-continuer]');
+  else await page.click(`.tb--testeur [data-case="${refs[1]}"]`);
+  await page.waitForSelector('[data-feuille-poser]', { timeout: 10000 });
   verifier(/Refaites-le/.test(await page.textContent('.modale--scenario')), 'sa feuille demande de le refaire');
   await page.click('[data-feuille-poser]:first-child');
   const fin = await attendre(async () => page.$('[data-terminer]'), 30, 500);
