@@ -543,6 +543,7 @@ async function annoncerPiece(document, documentId) {
     numero: document.numero,
     libelle: document.libelle,
     montant: document.montant,
+    tva: document.tva,
     /* La lettre annonce le TTC, ce que le client doit vraiment ; le HT
        reste entre parenthèses. */
     ttc: typeof document.ttc === 'number' ? document.ttc : (Number(document.montant) || 0) * (1 + (Number(document.tva) || 0) / 100),
@@ -853,6 +854,7 @@ exports.suiviDocumentModifie = onDocumentUpdated(
       numero: apres.numero,
       libelle: apres.libelle,
       montant: apres.montant,
+      tva: apres.tva,
       ttc: typeof apres.ttc === 'number' ? apres.ttc : (Number(apres.montant) || 0) * (1 + (Number(apres.tva) || 0) / 100),
       projetNom: nomProjet(projet),
       clientNom: nomClient(projet),

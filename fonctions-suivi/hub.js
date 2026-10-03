@@ -515,7 +515,7 @@ exports.hubDocumentActivite = onDocumentWritten({ region: REGION, document: 'doc
     const MOYENS = { virement: 'Virement', carte: 'Carte', stripe: 'Stripe', cheque: 'Chèque', especes: 'Espèces', autre: 'Autre' };
     await mettreEnFile('reglement-declare', contactsEquipe(), {
       numero: apres.numero, libelle: apres.libelle, projetNom: nomProjet(projet), par: declare.nom || '',
-      montant: somme, date: declare.date || null, moyen: MOYENS[declare.moyen] || declare.moyen || '', reference: declare.reference || '',
+      montant: somme, tva: apres.tva, date: declare.date || null, moyen: MOYENS[declare.moyen] || declare.moyen || '', reference: declare.reference || '',
       reste, lien: LIEN_ADMIN(lien), cote: 'equipe',
     }, { projet: apres.projet, evenement: 'reglement-declare' });
   }
@@ -1322,15 +1322,15 @@ async function passerLesEcheances(maintenant = new Date()) {
       try { await d.ref.update({ statut: 'en-retard', retardSignale: FieldValue.serverTimestamp() }); } catch (err) { console.error(`Retard non posé sur ${d.id}`, err); continue; }
       /* Sans auteur : c'est le calendrier qui parle, pas quelqu'un. */
       await activite({ projet: x.projet, type: 'facture', texte: `La facture ${nom} est passée en retard (échéance du ${dateFrCourte(x.echeance)})`, par: { uid: null, nom: '', cote: 'equipe' }, lien });
-      await notifierClients(projet, 'facture-retard', { type: 'facture', titre: 'Facture en retard', texte: `${nom} · ${reste.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })} TTC`, lien: `#${lien}`, projet: x.projet });
-      await ecrireAuxClients(projet, 'facture-retard', 'facture-retard', { numero: x.numero, libelle: x.libelle, reste, echeance: x.echeance, projetNom: nomProjet(projet), clientNom: (projet && projet.client && projet.client.nom) || '', lien: LIEN(lien) });
+      await notifierClients(projet, 'facture-retard', { type: 'facture', titre: 'Facture en retard', texte: `${nom} · ${reste.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}${Number(x.tva) > 0 ? ' TTC' : ''}`, lien: `#${lien}`, projet: x.projet });
+      await ecrireAuxClients(projet, 'facture-retard', 'facture-retard', { numero: x.numero, libelle: x.libelle, reste, tva: x.tva, echeance: x.echeance, projetNom: nomProjet(projet), clientNom: (projet && projet.client && projet.client.nom) || '', lien: LIEN(lien) });
       bilan.retards += 1;
     } else if (jours >= 0 && jours <= RAPPEL_AVANT_JOURS && !x.echeanceSignalee && x.statut !== 'en-retard') {
       /* Trois jours avant, un rappel, une fois. */
       const reste = await resteSurFacture(d.id, x);
       try { await d.ref.update({ echeanceSignalee: FieldValue.serverTimestamp() }); } catch (err) { console.error(`Rappel non marqué sur ${d.id}`, err); continue; }
-      await notifierClients(projet, 'facture-echeance', { type: 'facture', titre: `Facture à régler avant le ${dateFrCourte(x.echeance)}`, texte: `${nom} · ${reste.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })} TTC`, lien: `#${lien}`, projet: x.projet });
-      await ecrireAuxClients(projet, 'facture-echeance', 'facture-echeance', { numero: x.numero, libelle: x.libelle, reste, echeance: x.echeance, projetNom: nomProjet(projet), clientNom: (projet && projet.client && projet.client.nom) || '', lien: LIEN(lien) });
+      await notifierClients(projet, 'facture-echeance', { type: 'facture', titre: `Facture à régler avant le ${dateFrCourte(x.echeance)}`, texte: `${nom} · ${reste.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}${Number(x.tva) > 0 ? ' TTC' : ''}`, lien: `#${lien}`, projet: x.projet });
+      await ecrireAuxClients(projet, 'facture-echeance', 'facture-echeance', { numero: x.numero, libelle: x.libelle, reste, tva: x.tva, echeance: x.echeance, projetNom: nomProjet(projet), clientNom: (projet && projet.client && projet.client.nom) || '', lien: LIEN(lien) });
       bilan.rappels += 1;
     }
   }

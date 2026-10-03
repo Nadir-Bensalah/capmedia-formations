@@ -130,6 +130,30 @@ function montantTTC(ttc, ht) {
   return `${chiffres} EUR TTC${detail}`;
 }
 
+/* Capmedia est une micro-entreprise : franchise en base de TVA. Une pièce
+   à TVA 0 n'a qu'un montant, le prix payé, en « € », et la lettre porte la
+   mention légale une fois. Une vraie TVA (> 0) garde HT et TTC. Sans taux
+   connu, on compare TTC et HT ; sans l'un ni l'autre, c'est la franchise,
+   le régime de Capmedia. */
+const MENTION_FRANCHISE = 'TVA non applicable, article 293 B du CGI';
+function franchiseDe(v) {
+  const x = v || {};
+  if (x.tva !== undefined && x.tva !== null && x.tva !== '' && Number.isFinite(Number(x.tva))) return Number(x.tva) <= 0;
+  const ttc = Number(x.ttc); const ht = Number(x.montant);
+  if (x.ttc !== undefined && x.ttc !== null && x.montant !== undefined && x.montant !== null && Number.isFinite(ttc) && Number.isFinite(ht)) return Math.abs(ttc - ht) < 0.01;
+  return true;
+}
+/** Un montant en euros, seul : « 2 875,00 € ». */
+function euros(valeur) {
+  const nombre = Number(valeur);
+  if (!Number.isFinite(nombre)) return '';
+  return `${nombre.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/[\u202f\u00a0]/g, ' ')} €`;
+}
+/** Le montant d'une pièce selon son régime : seul en franchise, TTC sinon. */
+function somme(v, valeur, ht) { return franchiseDe(v) ? euros(valeur) : montantTTC(valeur, ht); }
+/** La ligne de la mention légale, en franchise seulement. */
+function ligneFranchise(v) { return franchiseDe(v) ? ['TVA', MENTION_FRANCHISE] : ['', '']; }
+
 /* ==========================================================================
    2. Les libellés, alignés sur agence/suivi/assets/noyau.js
    ========================================================================== */
@@ -647,7 +671,8 @@ function devis(v) {
       faits: [
         ['Devis', numero],
         ['Objet', valeurTexte(v.libelle)],
-        ['Montant', montantTTC(v.ttc, v.montant)],
+        ['Montant', somme(v, v.ttc, v.montant)],
+        ligneFranchise(v),
         ['Projet', valeurTexte(v.projetNom)],
         ['Valable jusqu\'au', dateFr(v.echeance)],
       ],
@@ -671,8 +696,9 @@ function devisReponse(v) {
       faits: [
         ['Devis', numero],
         ['Objet', valeurTexte(v.libelle)],
-        ['Montant HT', montantHT(v.montant)],
-        ['Montant TTC', montantTTC(v.ttc, v.montant)],
+        ...(franchiseDe(v)
+          ? [['Montant', euros(Number.isFinite(Number(v.ttc)) ? v.ttc : v.montant)], ligneFranchise(v)]
+          : [['Montant HT', montantHT(v.montant)], ['Montant TTC', montantTTC(v.ttc, v.montant)]]),
         ['Projet', valeurTexte(v.projetNom)],
         ['Réponse', accepte ? 'Accepté' : 'Refusé'],
         ['Répondu le', dateFr(v.date)],
@@ -698,7 +724,8 @@ function facture(v) {
       faits: [
         ['Facture', numero],
         ['Objet', valeurTexte(v.libelle)],
-        ['Montant', montantTTC(v.ttc, v.montant)],
+        ['Montant', somme(v, v.ttc, v.montant)],
+        ligneFranchise(v),
         ['Projet', valeurTexte(v.projetNom)],
         ['Échéance', echeance],
       ],
@@ -721,7 +748,8 @@ function factureEcheance(v) {
       faits: [
         ['Facture', numero],
         ['Objet', valeurTexte(v.libelle)],
-        ['Reste à payer', montantTTC(v.reste, v.reste)],
+        ['Reste à payer', somme(v, v.reste, v.reste)],
+        ligneFranchise(v),
         ['Projet', valeurTexte(v.projetNom)],
         ['Échéance', echeance],
       ],
@@ -744,7 +772,8 @@ function factureRetard(v) {
       faits: [
         ['Facture', numero],
         ['Objet', valeurTexte(v.libelle)],
-        ['Reste à payer', montantTTC(v.reste, v.reste)],
+        ['Reste à payer', somme(v, v.reste, v.reste)],
+        ligneFranchise(v),
         ['Projet', valeurTexte(v.projetNom)],
         ['Échéance dépassée', echeance],
       ],
@@ -764,11 +793,12 @@ function reglementDeclare(v) {
       faits: [
         ['Facture', numero],
         ['Objet', valeurTexte(v.libelle)],
-        ['Montant déclaré', montantTTC(v.montant, v.montant)],
+        ['Montant déclaré', somme(v, v.montant, v.montant)],
         ['Réglé le', dateFr(v.date)],
         ['Moyen', valeurTexte(v.moyen)],
         ['Référence', valeurTexte(v.reference)],
-        ['Reste à payer avant ce règlement', montantTTC(v.reste, v.reste)],
+        ['Reste à payer avant ce règlement', somme(v, v.reste, v.reste)],
+        ligneFranchise(v),
       ],
       bouton: { libelle: 'Ouvrir dans le Cockpit', url: valeurTexte(v.lien) || lienEspace() },
     }),
@@ -1017,7 +1047,8 @@ function maintenance(v) {
       faits: [
         ['Projet', projet],
         ['Formule', valeurTexte(v.formule)],
-        Number(v.montant) ? ['Montant', `${montantHT(v.montant)} par ${periode}`] : ['', ''],
+        Number(v.montant) ? ['Montant', `${franchiseDe({ tva: v.tva }) ? euros(v.montant) : montantHT(v.montant)} par ${periode}`] : ['', ''],
+        Number(v.montant) ? ligneFranchise({ tva: v.tva }) : ['', ''],
         Number(v.jours) ? ['Jours de travail', `${valeurTexte(v.jours)} par ${periode}`] : ['', ''],
       ],
       bouton: { libelle: 'Voir la maintenance', url: valeurTexte(v.lien) || lienEspace() },
@@ -1291,6 +1322,8 @@ module.exports = {
   valeurTexte,
   dateFr,
   montantHT,
+  franchiseDe,
+  MENTION_FRANCHISE,
   STATUTS,
   URGENCES,
   TYPES,
