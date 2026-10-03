@@ -722,7 +722,10 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAU
     ${ano.length ? `<div class="liste">${ano.map((a) => ligne({
       icone: 'alerte', ton: (GRAVITES_ANOMALIE[a.gravite] || {}).voile === 'rouge' ? 'rouge' : (GRAVITES_ANOMALIE[a.gravite] || {}).voile === 'ambre' ? 'ambre' : '',
       titre: `${a.scenario ? `${ref(a.scenario)} ` : ''}${echapper(a.titre || 'Anomalie')}${Number(a.retours) ? ' <span class="etiquette">Revenue</span>' : ''}`,
-      sous: `${(a.temoins || a.passages || []).length ? pluriel((a.temoins || a.passages || []).length, 'témoin', 'témoins') : (a.origine === 'equipe' ? 'posée à la main' : '')}${(a.plateformes || []).length ? ` · ${echapper((a.plateformes || []).map((p) => (PLATEFORMES_TEST[p] || {}).court || p).join(', '))}` : ''}${a.description ? ` · ${echapper(String(a.description).slice(0, 70))}` : ''}`,
+      /* Des témoins qui ne peuvent plus rejouer (test terminé, accès clos) :
+         le serveur les note dans « aVerifierEquipe », c'est à l'équipe de
+         vérifier la correction. */
+      sous: `${equipe && (a.aVerifierEquipe || []).length ? `<b data-a-verifier>${echapper(pluriel(a.aVerifierEquipe.length, 'passage à revérifier par l\'équipe', 'passages à revérifier par l\'équipe'))}</b> · ` : ''}${(a.temoins || a.passages || []).length ? pluriel((a.temoins || a.passages || []).length, 'témoin', 'témoins') : (a.origine === 'equipe' ? 'posée à la main' : '')}${(a.plateformes || []).length ? ` · ${echapper((a.plateformes || []).map((p) => (PLATEFORMES_TEST[p] || {}).court || p).join(', '))}` : ''}${a.description ? ` · ${echapper(String(a.description).slice(0, 70))}` : ''}`,
       fin: `${pastille(GRAVITES_ANOMALIE, a.gravite || 'important')}${pastille(STATUTS_ANOMALIE, a.statut || 'nouvelle')}${equipe ? `<span class="rang boutons-edition"><button class="btn-icone" type="button" data-editer-anomalie="${echapper(a.id)}" aria-label="Qualifier" data-astuce="Qualifier">${icone('edit')}</button></span>` : ''}`,
       action: 'ouvrir-anomalie', attrs: `data-id="${echapper(a.id)}"`,
     })).join('')}</div>`

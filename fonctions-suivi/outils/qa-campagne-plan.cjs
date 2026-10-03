@@ -276,6 +276,15 @@ const SECTIONS = [
   verifier(!r.lancement, 'une campagne lancée n\'affiche plus « Prête à lancer ? »');
   await fermer(page);
 
+  console.log('\n== Une correction que l\'équipe doit revérifier');
+  /* Le serveur note dans « aVerifierEquipe » les échecs dont le testeur ne
+     peut plus rejouer (test terminé, accès clos). */
+  await ecrire(`projets/${P}/anomalies/qa-a-verifier`, { titre: 'Rien ne se passe au clic', scenario: 'cp-c-1', statut: 'corrigee', gravite: 'important', origine: 'testeur', temoins: [], passages: [], aVerifierEquipe: [`${cid}/${karim}__cp-c-1__ios`], cree: new Date(), maj: new Date() });
+  await pause(1500);
+  await aller(page, `/tests?projet=${P}`, '#anomalies [data-a-verifier]');
+  const av = await page.evaluate(() => ((document.querySelector('#anomalies [data-a-verifier]') || {}).innerText || ''));
+  verifier(/1 passage à revérifier par l.équipe/.test(av), 'l\'anomalie le dit à l\'équipe dans la liste', av);
+
   console.log('\n== Le client');
   const nav2 = await chromium.launch();
   const cl = await (await nav2.newContext({ viewport: { width: 1500, height: 1100 } })).newPage();
@@ -294,6 +303,8 @@ const SECTIONS = [
   verifier(vc.profils.length === 4 && vc.profils.every((x) => /\d{2}-\d{2} ans/.test(x)), 'le profil se lit une fois, dans la liste des testeurs', vc.profils.join(' | '));
   verifier(!vc.lancer, 'ni rien pour répartir ou lancer');
   verifier(!vc.ident && !/MotDePasse/.test(vc.texte), 'ni les identifiants de test');
+  await fermer(cl);
+  verifier(!(await cl.$('[data-a-verifier]')), 'ni la note de revérification, affaire d\'équipe');
 
   console.log(`\n${soucis.length ? `${soucis.length} ÉCART(S)` : 'tout est conforme'}`);
   console.log('Erreurs JS :', err.length ? err.slice(0, 4).join('\n  ') : 'aucune');
