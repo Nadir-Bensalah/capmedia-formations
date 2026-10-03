@@ -35,6 +35,8 @@ import { filAriane } from '../coquille.js';
 import { monter as monterTableau } from './tableau.js';
 import { ordonnerSections as rangerSections } from './plan-tests.js';
 import { scenariosHumainsDuPlan, estSurLePlan, clesAttendues, vivierPropose, pretALancer, verdictDe, VERDICTS, NOMS_PLATEFORMES } from '../campagne-plan.js';
+/* Les identifiants de test d'un testeur (campagnes/{c}/acces/{uid}). */
+import { doc as docAcces, getDoc as lireAcces, setDoc as poserAcces, serverTimestamp as heureServeur } from '../noyau.js';
 
 /* La mémoire des filtres tient dans l'adresse, pas dans le stockage : un
    lien vers « les anomalies Android de tel projet » doit pouvoir se coller
@@ -1231,6 +1233,25 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
       : '<p class="aide">Ce projet n\'a pas encore de plan de tests, ou la campagne reprend l\'ancienne bibliothèque : modifiez-la pour choisir les sections du plan.</p>'}
   </div>` : '';
 
+  /* Les identifiants de test, un document par testeur
+     (campagnes/{c}/acces/{uid}) : chacun ne lit que les siens, tant que
+     son accès court, et le client ne les lit pas. L'ancien bloc commun de
+     la campagne était lisible de tous : on le montre ici tant qu'il n'est
+     pas vidé, pour le ressaisir testeur par testeur. Équipe seule. */
+  const ancienBloc = String((c.acces || {}).identifiants || '').trim();
+  const identifiantsHtml = equipe && charges.length ? `<div class="groupe" data-identifiants>
+    <span class="etiquette-champ">Identifiants de test, par testeur</span>
+    <p class="aide">Chacun ne lit que les siens, tant que son accès court. Le client ne les voit jamais.</p>
+    ${charges.map((t) => `<label class="etiquette-champ" for="ident-${echapper(t.id)}" style="margin-top:8px">${echapper(t.nom)}</label>
+      <textarea class="champ" id="ident-${echapper(t.id)}" rows="2" maxlength="2000" data-identifiants-de="${echapper(t.id)}" placeholder="test1@exemple.test · MotDePasse1" disabled></textarea>`).join('')}
+    <div class="rang" style="gap:8px;margin-top:10px"><button class="btn btn-secondaire btn-petit" type="button" data-enregistrer-identifiants>Enregistrer les identifiants</button></div>
+    ${ancienBloc ? `<div data-ancien-identifiants style="margin-top:12px">
+      <p class="aide">L'ancien bloc commun, lisible de tous les testeurs et du client. Ressaisissez-le testeur par testeur, puis videz-le.</p>
+      <p class="t-petit" style="white-space:pre-wrap;margin:6px 0;padding:6px 8px;border-radius:8px;background:var(--fond-2)">${echapper(ancienBloc)}</p>
+      <button class="btn btn-fantome btn-petit" type="button" data-vider-ancien>Vider l'ancien bloc</button>
+    </div>` : ''}
+  </div>` : '';
+
   const m = modale({
     titre: c.titre || 'Campagne', sousTitre: `${(STATUTS_CAMPAGNE[c.statut] || {}).libelle || ''} · ${pluriel(dedans.length, 'scénario', 'scénarios')}`,
     feuille: true,
@@ -1275,6 +1296,8 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
           : `<p class="aide">Aucun testeur pour l'instant. ${equipe ? (vivier.length ? 'Choisissez-les ci-dessous.' : 'Le vivier est vide : le serveur seul y inscrit quelqu\'un.') : 'Ils apparaîtront ici dès qu\'ils seront choisis.'}</p>`}
       </div>
 
+      ${identifiantsHtml}
+
       ${resultatsHtml(c, { dedans, nommer })}
 
       ${equipe && vivier.length ? `<div class="groupe">
@@ -1290,6 +1313,39 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
   });
 
   brancherPieces(m.el);
+
+  /* Les identifiants : lus à l'ouverture, écrits seulement s'ils ont
+     changé. Un champ qui n'a pas pu être lu reste fermé : l'écraser à
+     l'aveugle effacerait ce qu'un collègue a posé. */
+  const lus = new Map();
+  const champsIdent = [...m.el.querySelectorAll('[data-identifiants-de]')];
+  champsIdent.forEach(async (z) => {
+    const uid = z.dataset.identifiantsDe;
+    try {
+      const f = await lireAcces(docAcces(bdd, 'projets', pid, 'campagnes', c.id, 'acces', uid));
+      const v = f.exists() ? String((f.data() || {}).identifiants || '') : '';
+      lus.set(uid, v); z.value = v; z.disabled = false;
+    } catch (e) { console.error(e); z.placeholder = 'Illisible pour l\'instant.'; }
+  });
+  const ecrireIdent = m.el.querySelector('[data-enregistrer-identifiants]');
+  if (ecrireIdent) ecrireIdent.addEventListener('click', () => agir(ecrireIdent, async () => {
+    const changes = champsIdent.filter((z) => lus.has(z.dataset.identifiantsDe) && z.value.trim() !== lus.get(z.dataset.identifiantsDe).trim());
+    if (!changes.length) { toast('Rien n\'a changé.'); return; }
+    for (const z of changes) {
+      const uid = z.dataset.identifiantsDe;
+      const v = z.value.trim().slice(0, 2000);
+      await poserAcces(docAcces(bdd, 'projets', pid, 'campagnes', c.id, 'acces', uid), { identifiants: v, maj: heureServeur() });
+      lus.set(uid, v);
+    }
+    toast(changes.length > 1 ? `Identifiants de ${changes.length} testeurs enregistrés.` : 'Identifiants enregistrés.');
+  }));
+  const viderAncien = m.el.querySelector('[data-vider-ancien]');
+  if (viderAncien) viderAncien.addEventListener('click', () => agir(viderAncien, async () => {
+    if (!(await confirmer({ titre: 'Vider l\'ancien bloc ?', texte: 'Les testeurs et le client ne le liront plus. Les identifiants posés testeur par testeur restent.', ok: 'Vider' }))) return;
+    await ecrire.majCampagne(pid, c.id, { 'acces.identifiants': '' });
+    toast('Ancien bloc vidé.');
+    m.fermer(true);
+  }));
 
   /* Lancer : la campagne passe « En cours », le début est daté si rien ne
      l'était. Le serveur prévient le client (hubCampagneEcrite). */

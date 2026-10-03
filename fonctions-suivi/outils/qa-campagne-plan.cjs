@@ -14,7 +14,10 @@ const { lireRest } = require('./lib/rest-banc.cjs');
      ne s'allume que si tout est vrai ;
    - le vivier proposé laisse les testeurs retirés dehors ;
    - les résultats nomment Réussi, Échec, iPhone, et ne répètent pas le
-     profil du testeur ; le client ne lit ni « premiers pas » ni la note.
+     profil du testeur ; le client ne lit ni « premiers pas » ni la note ;
+   - les identifiants de test se posent testeur par testeur
+     (campagnes/{c}/acces/{uid}), la feuille ne réécrit plus l'ancien bloc
+     commun, et la fiche le vide une fois ressaisi.
 
    Banc : émulateurs, site local, semer-suivi, semer-campagne (six
    testeurs, la campagne c-oct d'avant le plan). La suite pose elle-même
@@ -126,6 +129,11 @@ const SECTIONS = [
   const cid = camp ? camp.name.split('/').pop() : '';
   verifier(camp && liste(camp.fields, 'scenarios').join(',') === 'cp-c-1,cp-c-2', 'elle retient les deux scénarios d\'humains de sa section', camp ? liste(camp.fields, 'scenarios').join(',') : '');
 
+  /* Un ancien bloc commun d'identifiants, comme en avaient les campagnes
+     d'avant le 03/10/2026 : la feuille ne doit plus le réécrire. */
+  await ecrire(`projets/${P}/campagnes/${cid}`, { acces: { instructions: 'Créez un compte.', identifiants: 'test1 · MotDePasse1' } }, ['acces']);
+  await pause(1200);
+
   console.log('\n== B1 : modifier ne remet pas tous les scénarios');
   const editer = async (id) => {
     await page.evaluate((i) => { const b = document.querySelector(`[data-editer-campagne="${i}"]`); if (b) b.click(); }, id);
@@ -140,6 +148,8 @@ const SECTIONS = [
   camp = await trouver();
   verifier(camp && liste(camp.fields, 'scenarios').join(',') === 'cp-c-1,cp-c-2', 'changer un lien et un build garde les deux scénarios', camp ? liste(camp.fields, 'scenarios').join(',') : '');
   verifier(camp && texte(((camp.fields.installation || {}).mapValue || {}).fields, 'ios') === 'https://testflight.apple.com/join/BANC', 'et le lien est bien enregistré');
+  const accesApres = camp ? (((camp.fields.acces || {}).mapValue || {}).fields || {}) : {};
+  verifier(texte(accesApres, 'identifiants') === 'test1 · MotDePasse1' && texte(accesApres, 'instructions') === 'Créez un compte.', 'la feuille ne touche pas à l\'ancien bloc d\'identifiants', JSON.stringify(accesApres).slice(0, 160));
 
   /* La campagne d'avant le plan (c-oct, la bibliothèque) : rien de coché,
      un mot pour le dire, et elle garde ses scénarios. */
@@ -206,6 +216,30 @@ const SECTIONS = [
   }));
   verifier(l.lignes.join(',') === 'scenarios:1,repartition:1,installation:0,presentation:1', 'il ne manque plus que le lien Android', l.lignes.join(','));
   verifier(/lien Android/.test(l.detail), 'et la ligne le dit', l.detail);
+
+  console.log('\n== Les identifiants de test, par testeur');
+  const ident = await page.evaluate(() => ({
+    champs: [...document.querySelectorAll('[data-identifiants-de]')].map((z) => z.dataset.identifiantsDe),
+    ancien: ((document.querySelector('[data-ancien-identifiants]') || {}).innerText || ''),
+  }));
+  verifier(ident.champs.length === 4, 'un champ par testeur de la campagne', `${ident.champs.length}`);
+  verifier(/test1 · MotDePasse1/.test(ident.ancien), 'l\'ancien bloc commun est montré, pour le ressaisir', ident.ancien.slice(0, 120));
+  await page.waitForFunction((u) => { const z = document.querySelector(`[data-identifiants-de="${u}"]`); return z && !z.disabled; }, karim, { timeout: 10000 }).catch(() => {});
+  await page.fill(`[data-identifiants-de="${karim}"]`, 'karim@essai.test · MotDePasseK');
+  await page.click('[data-enregistrer-identifiants]'); await pause(1800);
+  const aK = await lire(`projets/${P}/campagnes/${cid}/acces/${karim}`);
+  const aS = await lire(`projets/${P}/campagnes/${cid}/acces/${sonia}`);
+  verifier(aK && texte(aK.fields, 'identifiants') === 'karim@essai.test · MotDePasseK', 'ceux de Karim sont posés dans son document', aK ? texte(aK.fields, 'identifiants') : 'absent');
+  verifier(!aS || !aS.fields, 'un champ resté vide n\'écrit rien chez Sonia');
+  await page.click('[data-vider-ancien]'); await pause(700);
+  await page.click('.voile [data-oui]'); await pause(2000);
+  camp = await trouver();
+  verifier(camp && texte((((camp.fields.acces || {}).mapValue || {}).fields || {}), 'identifiants') === '', 'l\'ancien bloc est vidé');
+  verifier(camp && texte((((camp.fields.acces || {}).mapValue || {}).fields || {}), 'instructions') === 'Créez un compte.', 'les instructions restent');
+  await ouvrir(page, cid);
+  verifier(!(await page.$('[data-ancien-identifiants]')), 'vidé, il n\'est plus montré');
+  const relu = await page.evaluate(async (u) => { for (let i = 0; i < 20; i++) { const z = document.querySelector(`[data-identifiants-de="${u}"]`); if (z && !z.disabled) return z.value; await new Promise((r) => setTimeout(r, 300)); } return null; }, karim);
+  verifier(relu === 'karim@essai.test · MotDePasseK', 'la fiche relit ceux de Karim', `${relu}`);
   await fermer(page);
   await ecrire(`projets/${P}/campagnes/${cid}`, { installation: { ios: 'https://testflight.apple.com/join/BANC', android: 'https://play.google.com/apps/testing/banc', web: '' } }, ['installation']);
   await pause(1500);
@@ -247,13 +281,14 @@ const SECTIONS = [
   await ouvrir(cl, cid);
   const vc = await cl.evaluate(() => {
     const f = document.querySelector('.voile .feuille');
-    return { texte: f ? f.innerText.replace(/\s+/g, ' ') : '', lancer: !!document.querySelector('[data-lancer], [data-lancement], [data-repartir]') };
+    return { texte: f ? f.innerText.replace(/\s+/g, ' ') : '', lancer: !!document.querySelector('[data-lancer], [data-lancement], [data-repartir]'), ident: !!document.querySelector('[data-identifiants], [data-identifiants-de]') };
   });
   verifier(/Testeur \d · iPhone/.test(vc.texte), 'le client lit « Testeur N · iPhone »', vc.texte.slice(0, 200));
   verifier(!/Karim|Marc|Sonia|Ines/.test(vc.texte), 'jamais un prénom');
   verifier(!/premiers pas/i.test(vc.texte), 'ni « premiers pas », jargon interne');
   verifier(!/\d{2}-\d{2} ans|Commerce/.test(vc.texte), 'ni le profil répété dans les résultats', vc.texte.slice(0, 260));
   verifier(!vc.lancer, 'ni rien pour répartir ou lancer');
+  verifier(!vc.ident && !/MotDePasse/.test(vc.texte), 'ni les identifiants de test');
 
   console.log(`\n${soucis.length ? `${soucis.length} ÉCART(S)` : 'tout est conforme'}`);
   console.log('Erreurs JS :', err.length ? err.slice(0, 4).join('\n  ') : 'aucune');

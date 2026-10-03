@@ -568,7 +568,7 @@ const editeurs = {
           ${zone('atouts', 'Points forts', (fiche ? (fiche.atouts || []) : []).join('\n'), { facultatif: true, lignes: 3, placeholder: 'Un par ligne, quatre au plus.', aide: 'Ce que le testeur retient de l\'application avant de l\'ouvrir.' })}
           ${zone('consignes', "Ce qu'on attend d'eux", fiche ? (fiche.consignes || '') : '', { facultatif: true, lignes: 3, placeholder: 'Consignes particulières de la campagne.' })}
           ${zone('acces_instructions', "Pour entrer dans l'application", fiche ? ((fiche.acces || {}).instructions || '') : '', { facultatif: true, lignes: 3, placeholder: "Comment s'inscrire ou se connecter : les étapes, le code d'invitation, ce qu'il faut accepter.", aide: 'Dans « L\'application » de leur espace, avec les identifiants.' })}
-          ${zone('acces_identifiants', 'Identifiants de test', fiche ? ((fiche.acces || {}).identifiants || '') : '', { facultatif: true, lignes: 3, placeholder: 'test1@exemple.test · MotDePasse1\ntest2@exemple.test · MotDePasse2', aide: 'Des comptes de test seulement : le testeur les copie d\'un clic.' })}
+          <p class="aide">Les identifiants de test se posent testeur par testeur, dans la fiche de la campagne : chacun ne lit que les siens.</p>
           <div class="forme-rang">
             ${champ('magasin_ios', 'Fiche App Store', fiche ? ((fiche.magasins || {}).ios || '') : '', { type: 'url', facultatif: true, placeholder: 'https://apps.apple.com/…', aide: 'Après son test, on lui propose d\'y laisser un vrai avis.' })}
             ${champ('magasin_android', 'Fiche Play Store', fiche ? ((fiche.magasins || {}).android || '') : '', { type: 'url', facultatif: true, placeholder: 'https://play.google.com/store/apps/details?id=…' })}
@@ -725,7 +725,10 @@ const editeurs = {
           presentation: (d.presentation || '').trim(),
           atouts,
           consignes: (d.consignes || '').trim(),
-          acces: { instructions: (d.acces_instructions || '').trim().slice(0, 4000), identifiants: (d.acces_identifiants || '').trim().slice(0, 2000) },
+          /* Les instructions seules : les identifiants vivent par testeur
+             (campagnes/{c}/acces/{uid}), et l'ancien bloc commun se vide
+             depuis la fiche de la campagne, une fois ressaisi. */
+          ...(fiche ? { 'acces.instructions': (d.acces_instructions || '').trim().slice(0, 4000) } : { acces: { instructions: (d.acces_instructions || '').trim().slice(0, 4000) } }),
           magasins,
           installation: liens,
           visuels: [...gardes, ...deposes].slice(0, 8),
