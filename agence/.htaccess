@@ -56,6 +56,18 @@ DirectoryIndex index.html index.php
   </FilesMatch>
 </IfModule>
 
+# --- Notifications push de l'espace de suivi ---------------------------------
+# Le manifeste (installer le Hub ou le Cockpit sur l'écran d'accueil d'un
+# iPhone, seule façon d'y recevoir les push) avec son type, et le service
+# des notifications (suivi/sw.js) toujours revalidé : une correction du
+# service doit atteindre les appareils abonnés sans attendre sept jours.
+AddType application/manifest+json .webmanifest
+<IfModule mod_headers.c>
+  <If "%{REQUEST_URI} =~ m#^/suivi/sw\.js$#">
+    Header set Cache-Control "no-cache, must-revalidate"
+  </If>
+</IfModule>
+
 # --- En-têtes de sécurité de l'espace de suivi (/suivi seulement) -----------
 # Le Hub, le Cockpit, l'espace Test et la porte de connexion. Une seule XSS
 # sur cette origine lirait tout ce que la page lit : la politique ne laisse

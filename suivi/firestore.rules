@@ -247,6 +247,35 @@ service cloud.firestore {
         && (!('epingles' in request.resource.data) || (request.resource.data.epingles is list && request.resource.data.epingles.size() <= 50));
     }
 
+    // Les abonnements push d'une personne (notifications des messages,
+    // espace fermé) : un document par appareil, dont l'identifiant est
+    // l'empreinte de l'adresse d'envoi (40 caractères hexadécimaux). Chacun
+    // ne lit, n'écrit et n'efface que les siens, pas même l'administrateur
+    // ceux des autres : le serveur les lit par l'Admin SDK (push.js) et
+    // efface ceux que le service de push dit disparus. Champs fermés :
+    // l'adresse d'envoi (https), les deux clés du navigateur, le nom de
+    // l'appareil, la date du serveur.
+    function abonnementPushValide(d) {
+      return d.keys().hasOnly(['endpoint', 'cles', 'appareil', 'maj'])
+          && d.keys().hasAll(['endpoint', 'cles', 'maj'])
+          && d.endpoint is string && d.endpoint.size() <= 1000
+          && d.endpoint.matches('^https://[^ ]+$')
+          && d.cles is map && d.cles.keys().hasOnly(['p256dh', 'auth']) && d.cles.keys().hasAll(['p256dh', 'auth'])
+          && d.cles.p256dh is string && d.cles.p256dh.size() >= 40 && d.cles.p256dh.size() <= 200
+          && d.cles.p256dh.matches('^[A-Za-z0-9_=-]+$')
+          && d.cles.auth is string && d.cles.auth.size() >= 16 && d.cles.auth.size() <= 64
+          && d.cles.auth.matches('^[A-Za-z0-9_=-]+$')
+          && (!('appareil' in d) || texteBorne(d.appareil, 120))
+          && d.maj == request.time;
+    }
+
+    match /profils/{uid}/pushs/{pushId} {
+      allow read, delete: if connecte() && moi() == uid;
+      allow create, update: if connecte() && moi() == uid
+        && pushId.matches('^[0-9a-f]{40}$')
+        && abonnementPushValide(request.resource.data);
+    }
+
     // Les notes du client (« Vos notes », sur l'accueil du Hub). Un carnet
     // personnel : une note appartient à qui l'a écrite (uid), et personne
     // d'autre ne la lit, pas même l'équipe. Quand le client la partage

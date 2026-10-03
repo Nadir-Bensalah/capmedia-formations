@@ -40,3 +40,6 @@ const pieces = require('./pieces');
 exports.suiviPiece = pieces.suiviPiece;
 /* Les pièces de la conversation du projet : envoyées et remises par le serveur. */
 exports.suiviPieceMessage = pieces.suiviPieceMessage;
+
+/* Les notifications push des messages d'un projet, espace fermé (VAPID). */
+exports.hubPushMessage = require('./push').hubPushMessage;

@@ -1,0 +1,16 @@
+{
+  "id": "./cockpit",
+  "name": "Capmedia Cockpit",
+  "short_name": "Cockpit",
+  "description": "Le pilotage des projets Capmedia.",
+  "lang": "fr",
+  "start_url": "./cockpit",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#111113",
+  "theme_color": "#111113",
+  "icons": [
+    { "src": "assets/img/app-cockpit.png", "sizes": "96x96", "type": "image/png" },
+    { "src": "../assets/img/apple-touch-agence.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}
