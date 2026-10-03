@@ -115,7 +115,7 @@ const sansDefaut = (texte, ou) => {
   verifier(!('tjmLong' in tarifSeme) && !('tjmCourt' in tarifSeme), 'l annonce ne porte aucun prix : ils vivent dans la grille');
   const grilleSemee = await lire('reglages/tarifs');
   const periodesSemees = (((champ(grilleSemee, 'periodes').arrayValue || {}).values) || []).map((v) => v.mapValue.fields).map((f) => `${f.debut.stringValue}:${f.long.integerValue}/${f.court.integerValue}`);
-  verifier(periodesSemees.join(' ') === '2026-01-01:380/420 2027-01-01:420/480' && (champ(grilleSemee, 'seuilMois').integerValue === '3'), 'la grille par défaut est semée : 380 / 420 € HT, puis 420 / 480 € HT au 1er janvier 2027, seuil 3 mois', periodesSemees.join(' '));
+  verifier(periodesSemees.join(' ') === '2026-01-01:380/380 2027-01-01:420/480' && (champ(grilleSemee, 'seuilMois').integerValue === '3'), 'la grille par défaut est semée : 380 € pour tous, puis 420 / 480 € au 1er janvier 2027, seuil 3 mois', periodesSemees.join(' '));
   const encore = semer(['--vrai']);
   verifier(encore.status === 0 && /laissée telle quelle/.test(encore.stdout), 'relancé, il ne réécrit pas l annonce', encore.stdout.slice(-160));
   verifier((await notifAnnonce(uidCamille)).length === 0, 'un brouillon ne prévient personne');
@@ -240,10 +240,11 @@ const sansDefaut = (texte, ou) => {
   verifier(vues.length === 2 && vues[0] === idTarif && vues.includes(idInfo) && !vues.includes('tarif-2027-01'), 'elle lit les deux annonces publiées, l épinglée en haut, pas le brouillon', vues.join(', '));
   verifier(/Tarifs/.test(await page.textContent(`[data-annonce="${idTarif}"] [data-annonce-type]`)) && /À partir du/.test(await page.textContent(`[data-annonce="${idTarif}"] [data-annonce-effet]`)), 'chaque annonce dit son type et sa date d effet');
   const verdict = await page.textContent(`[data-annonce="${idTarif}"] [data-tarif-projet="atelier"]`).catch(() => '');
-  verifier(/projet long/.test(verdict) && /420\s?€ HT/.test(verdict) && Boolean(await page.$(`[data-annonce="${idTarif}"] [data-tarif-projet="atelier"][data-tarif-tjm="420"]`)), 'l encart personnalisé : Atelier, commencé il y a plus de 3 mois, est un projet long à 420 € HT par jour', verdict.trim());
-  verifier(/passe de 380\s?€ HT à 420\s?€ HT/.test(verdict) && Boolean(await page.$(`[data-annonce="${idTarif}"] [data-tarif-projet="atelier"][data-tarif-avant="380"]`)), 'avec l avant et l après la date d effet : de 380 à 420 € HT (grille)');
+  verifier(/projet long/.test(verdict) && /420\s?€/.test(verdict) && Boolean(await page.$(`[data-annonce="${idTarif}"] [data-tarif-projet="atelier"][data-tarif-tjm="420"]`)), 'l encart personnalisé : Atelier, commencé il y a plus de 3 mois, est un projet long à 420 € HT par jour', verdict.trim());
+  verifier(/passe de 380\s?€ à 420\s?€/.test(verdict) && Boolean(await page.$(`[data-annonce="${idTarif}"] [data-tarif-projet="atelier"][data-tarif-avant="380"]`)), 'avec l avant et l après la date d effet : de 380 à 420 € HT (grille)');
   verifier(/\d{4}/.test(verdict) && /commencé le/.test(verdict), 'et dit quand le projet a commencé');
   verifier(await attendre(async () => (await badgeAnnonces(page)) === 0), 'ouvrir la page fait retomber le badge à zéro');
+  verifier(await attendre(async () => ((await page.textContent('#lat-corps .lat-lien[data-chemin="/annonces"] .compte:not(.vif)').catch(() => '')) || '').trim() === '2'), 'le chiffre reste, sans fond : 2 annonces lues');
   verifier(await attendre(async () => Boolean(champ(await lire(`profils/${uidCamille}`), 'annoncesLues').timestampValue)), 'la lecture est gardée dans son profil (annoncesLues)');
   sansDefaut(await page.textContent('.page-annonces'), 'la page des annonces');
   await page.evaluate(() => window.scrollTo(0, 0));
@@ -274,7 +275,7 @@ const sansDefaut = (texte, ou) => {
   const vuesLea = await lea.$$eval('.annonces-liste [data-annonce]', (l) => l.map((a) => a.dataset.annonce));
   verifier(vuesLea.length === 1 && vuesLea[0] === idTarif, 'Léa ne voit que le tarif, pas l annonce d Atelier Nord', vuesLea.join(', '));
   const verdictLea = await lea.textContent(`[data-annonce="${idTarif}"] [data-tarif-projet="boutique"]`).catch(() => '');
-  verifier(/projet court/.test(verdictLea) && /480\s?€ HT/.test(verdictLea) && /début prévu le/.test(verdictLea), 'l encart de Léa : Boutique, récent, est un projet court à 480 € HT par jour', verdictLea.trim());
+  verifier(/projet court/.test(verdictLea) && /480\s?€/.test(verdictLea) && /début prévu le/.test(verdictLea), 'l encart de Léa : Boutique, récent, est un projet court à 480 € HT par jour', verdictLea.trim());
   await ctxLea.close();
   page = await ctxClient.pages()[0];
 
