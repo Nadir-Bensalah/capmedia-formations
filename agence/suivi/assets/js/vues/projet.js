@@ -474,7 +474,7 @@ const cartesPlateformes = (projet, d, pid) => {
     return `<div class="carte-plateforme carte-plateforme--${f.voile}" role="listitem" data-plateforme="${echapper(cle)}">
       <a class="carte-plateforme-tuile" href="${href}" aria-label="${echapper(`Ouvrir la page ${nom}`)}">${icone(f.icone)}</a>
       <a class="carte-plateforme-corps" href="${href}" data-astuce="${echapper(`Ouvrir la page ${nom}`)}">
-        <span class="carte-plateforme-nom">${echapper(nom)}</span>
+        <span class="carte-plateforme-nom"><span class="carte-plateforme-icone" aria-hidden="true">${icone(f.icone)}</span>${echapper(nom)}</span>
         ${lignes.map((l) => `<span class="carte-plateforme-etat carte-plateforme-etat--${l.ton}"${l.detail ? ` title="${echapper(l.detail)}"` : ''}><i aria-hidden="true"></i>${l.num ? `<b>${echapper(l.num)}</b> ` : ''}<span class="carte-plateforme-quoi">${echapper(l.num ? l.quoi : l.quoi.replace(/^./, (x) => x.toUpperCase()))}</span></span>`).join('')}
         ${etat ? `<span class="carte-plateforme-etat">${echapper(etat)}</span>` : ''}
       </a>
