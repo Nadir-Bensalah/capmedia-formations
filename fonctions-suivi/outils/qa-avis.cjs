@@ -87,16 +87,19 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
 
   console.log('\n== Tout dérouler, puis l\'avis complet');
   await page.click('[data-sur="ios"]'); await pause(800);
-  /* Cocher les 43 d'un coup, par la base : l'interface est deja eprouvee
-     ailleurs, ici on veut atteindre l'etat « tout fait ». */
+  /* Cocher tous ses passages d'un coup, par la base : l'interface est
+     deja eprouvee ailleurs, ici on veut atteindre l'etat « tout fait ».
+     Depuis le 03/10/2026, ses passages sont des cles « scenario du plan,
+     plateforme » (affectation.{uid}.cles). */
   const camp = await lire('projets/atelier/campagnes/c-oct');
   const uid = d1 ? d1.name.split('/').pop() : '';
   const aff = (((camp.fields.affectation||{}).mapValue||{}).fields||{})[uid];
-  const refs = ((aff||{}).arrayValue||{}).values||[];
+  const refs = ((((((aff||{}).mapValue||{}).fields||{}).cles||{}).arrayValue||{}).values)||[];
+  verifier(refs.length>0,`son affectation lui confie ${refs.length} passages`);
   for (const r of refs) {
-    const ref = r.stringValue;
-    await fetch(bdd(`projets/atelier/campagnes/c-oct/passages/${uid}__${ref}`), { method:'PATCH', headers:{...prop,'Content-Type':'application/json'},
-      body: JSON.stringify({ fields:{ scenario:{stringValue:ref}, testeur:{stringValue:uid}, plateforme:{stringValue:'ios'}, resultat:{stringValue:'ok'}, commentaire:{stringValue:''}, preuves:{arrayValue:{values:[]}}, contexte:{mapValue:{fields:{}}} } }) });
+    const cle = r.stringValue; const [scen, plat] = cle.split('__');
+    await fetch(bdd(`projets/atelier/campagnes/c-oct/passages/${uid}__${cle}`), { method:'PATCH', headers:{...prop,'Content-Type':'application/json'},
+      body: JSON.stringify({ fields:{ scenario:{stringValue:scen}, testeur:{stringValue:uid}, plateforme:{stringValue:plat}, resultat:{stringValue:'reussi'}, commentaire:{stringValue:''}, preuves:{arrayValue:{values:[]}}, contexte:{mapValue:{fields:{}}}, cree:{timestampValue:new Date().toISOString()}, maj:{timestampValue:new Date().toISOString()} } }) });
   }
   await page.reload({waitUntil:'domcontentloaded'}); await pause(4500);
   const fin = await page.evaluate(()=>({

@@ -106,7 +106,8 @@ let page = null;
   console.log('\n== J ai terminé : la note du test, puis les magasins');
   await page.evaluate(() => { location.hash = '#/'; }); await page.waitForSelector('.tb--testeur [data-case]', { timeout: 10000 });
   const refs = await page.$$eval('.tb--testeur [data-case]', (l) => l.map((c) => c.dataset.case));
-  for (const ref of refs) await poser(`projets/${PID}/campagnes/${CID}/passages/${uid}__${ref}`, { scenario: S(ref), testeur: S(uid), plateforme: S('ios'), resultat: S('ok'), commentaire: S(''), preuves: L([]), contexte: { mapValue: { fields: {} } }, le: T(new Date()) });
+  /* Une case est une clé « scénario du plan, plateforme » (03/10/2026). */
+  for (const ref of refs) { const [scen, plat] = ref.split('__'); await poser(`projets/${PID}/campagnes/${CID}/passages/${uid}__${ref}`, { scenario: S(scen), testeur: S(uid), plateforme: S(plat), resultat: S('reussi'), commentaire: S(''), preuves: L([]), contexte: { mapValue: { fields: {} } }, cree: T(new Date()), maj: T(new Date()) }); }
   await attendre(async () => page.$('[data-terminer]'), 30, 500);
   await page.click('[data-terminer]'); await page.waitForSelector('[data-note-test]', { timeout: 10000 });
   await page.click('[data-valider]'); await pause(400);

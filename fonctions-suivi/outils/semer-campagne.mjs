@@ -7,7 +7,8 @@
    EN COURS sur le plan, et une affectation au modèle commun
    ({ telephone, web, cles, vague }) calculée par la vraie règle
    (repartition.js). Le plan reprend la bibliothèque, une section par
-   bloc et un scénario par référence (même identifiant) : un scénario
+   bloc et un scénario par référence (identifiant du plan, la référence
+   dans « refs ») : un scénario
    doublé (socle, transversal) devient « humain » seul, passé par deux
    testeurs ; les autres « les-deux », passés par un seul.
 
@@ -92,8 +93,11 @@ biblio.forEach((s) => {
       plateformes: ['ios', 'android', 'web'], aspects: { fonctionnel: [], technique: [], ux: [], securite: [] } };
     sections.push(sec);
   }
+  /* L'identifiant suit la forme du plan (« section-f-001 ») : le testeur en
+     déduit la section à lire. La référence de la bibliothèque reste dans
+     « refs ». */
   sec.aspects.fonctionnel.push({
-    id: s.ref, titre: s.titre || s.ref, etapes: s.options || '', attendu: s.attendu || '',
+    id: `${sec.id}-f-${String(sec.aspects.fonctionnel.length + 1).padStart(3, '0')}`, titre: s.titre || s.ref, etapes: s.options || '', attendu: s.attendu || '',
     plateformes: (s.plateformes && s.plateformes.length) ? s.plateformes : ['ios', 'android', 'web'],
     type: 'normal', priorite: s.niveau === 'socle' ? 'haute' : 'moyenne', refs: [s.ref],
     qui: DOUBLES.includes(s.niveau) ? 'humain' : 'les-deux', parcours: [],

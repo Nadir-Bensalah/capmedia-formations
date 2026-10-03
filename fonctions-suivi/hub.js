@@ -1080,10 +1080,14 @@ async function bilanTesteur(pid, cid, uid) {
   ]);
   const compte = { ok: 0, ko: 0, na: 0 };
   const echecs = [];
+  /* Les passages du modèle du 03/10/2026 disent reussi, echec, sans-objet ;
+     ceux d'avant, ok, ko, na. Le bilan compte les deux. */
+  const COURT = { reussi: 'ok', echec: 'ko', 'sans-objet': 'na' };
   for (const d of passages.docs) {
     const p = d.data();
-    if (compte[p.resultat] !== undefined) compte[p.resultat] += 1;
-    if (p.resultat === 'ko') echecs.push({ ref: p.scenario, commentaire: p.commentaire || '', plateforme: p.plateforme || '' });
+    const r = COURT[p.resultat] || p.resultat;
+    if (compte[r] !== undefined) compte[r] += 1;
+    if (r === 'ko') echecs.push({ ref: p.scenario, commentaire: p.commentaire || '', plateforme: p.plateforme || '' });
   }
   const titres = new Map();
   for (const e of echecs.slice(0, 20)) {

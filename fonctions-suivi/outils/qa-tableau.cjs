@@ -80,7 +80,9 @@ const etats=(page)=>page.$$eval('.tb-case',els=>Object.fromEntries(els.map(e=>[e
 const etatDe=async(page,ref)=>(await etats(page))[ref];
 const attendreEtat=(page,ref,voulu,n=30)=>attendre(async()=>((await etatDe(page,ref))===voulu),n,500);
 
-const PID='atelier', CID='qa-tableau';
+const PID='atelier', CID='qa-tableau', CIDP='qa-tableau-plan';
+/* Les clés de Paul sur la campagne du plan (partie testeur). */
+const K5='tbp-f-001__web', K8='tbp-f-002__web';
 const SCENARIOS=[
   ['TB-01','taches','socle','Créer une tâche récurrente'],
   ['TB-02','taches','socle','Cocher une tâche hors ligne'],
@@ -101,6 +103,13 @@ const SCENARIOS=[
   for (const [r] of SCENARIOS) await effacer(`projets/${PID}/anomalies/ko-${r}`);
   for (const r of ['P-01','P-02','P-03']) await effacer(`projets/${PID}/parcours/${r}`);
   await vider(`projets/${PID}/executions`); await vider('robots'); await vider('presences');
+  /* La grille éprouvée ici est celle d'un projet SANS plan de tests (la
+     bibliothèque) ; le semis en pose un depuis le 03/10/2026. Le testeur,
+     lui, ne reçoit plus que des clés du plan : sa partie pose son propre
+     plan, le temps de la passer (plus bas). */
+  await vider(`projets/${PID}/planTests`);
+  await vider(`projets/${PID}/campagnes/${CIDP}/passages`); await effacer(`projets/${PID}/campagnes/${CIDP}`);
+  await effacer(`projets/${PID}/anomalies/ko-tbp-f-002`);
 
   const inscrire=async(email,prenom,plateformes)=>{
     const r=await serveur('inscrireTesteur',{email,prenom,plateformes,projets:[PID]});
@@ -246,6 +255,25 @@ const SCENARIOS=[
   await equipe.click('[data-plateforme=""]'); await pause(800);
 
   console.log('\n== Le testeur : ses cases, son sens');
+  /* Depuis le 03/10/2026, un testeur ne reçoit que des clés « scénario du
+     plan, plateforme ». Paul (web) a deux clés d'une campagne sur le plan :
+     la première à faire, la seconde en échec, corrigée par l'équipe. */
+  const scP=(id,titre)=>({mapValue:{fields:{id:S(id),titre:S(titre),etapes:S('Ouvrir.'),attendu:S('Ça marche.'),plateformes:L([S('web')]),type:S('normal'),priorite:S('moyenne'),refs:L([]),qui:S('les-deux'),parcours:L([])}}});
+  await poser(`projets/${PID}/planTests/tbp`,{id:S('tbp'),titre:S('Passe du testeur'),groupe:S('fonctionnalites'),ordre:N(1),resume:S('Le tableau du testeur.'),plateformes:L([S('web')]),
+    aspects:{mapValue:{fields:{fonctionnel:L([scP('tbp-f-001','Rappel la veille'),scP('tbp-f-002','Désarchiver un objectif')]),technique:L([]),ux:L([]),securite:L([])}}}});
+  await poser(`projets/${PID}/campagnes/${CIDP}`,{
+    titre:S('Passe du testeur'),statut:S('en-cours'),testeurs:L([S(u3)]),plan:B(true),scenarios:L([S('tbp-f-001'),S('tbp-f-002')]),
+    affectation:{mapValue:{fields:{[u3]:{mapValue:{fields:{telephone:S(''),web:B(true),cles:L([S(K5),S(K8)]),vague:N(2)}}}}}},
+    debut:T(new Date(Date.now()-2*86400000)),fin:T(new Date(Date.now()+10*86400000)),cree:T(new Date()),
+  });
+  await poser(`projets/${PID}/campagnes/${CIDP}/passages/${u3}__${K8}`,{
+    scenario:S('tbp-f-002'),testeur:S(u3),plateforme:S('web'),resultat:S('echec'),commentaire:S('Rien ne se passe'),
+    preuves:L([S(`campagnes/${PID}/${CIDP}/${u3}/preuve.png`)]),contexte:{mapValue:{fields:{appareil:S('PC du banc')}}},cree:T(new Date()),maj:T(new Date()),
+  });
+  verifier(!!(await attendre(async()=>(await lire(`projets/${PID}/anomalies/ko-tbp-f-002`)))),'son échec fait naître son anomalie');
+  await poser(`projets/${PID}/anomalies/ko-tbp-f-002`,{statut:S('corrigee')},['statut']);
+  verifier(!!(await attendre(async()=>champ(await lire(`projets/${PID}/campagnes/${CIDP}/passages/${u3}__${K8}`),'aRevoir').booleanValue===true)),'corrigée, l échec est marqué « à rejouer »');
+
   const ctxT=await nav.newContext({viewport:{width:390,height:844}});
   const testeur=await ctxT.newPage();
   await connecter(testeur,'paul.tableau@exemple.test');
@@ -257,9 +285,9 @@ const SCENARIOS=[
   verifier(/\/suivi\/testeur/.test(testeur.url()),'Paul arrive dans son espace',testeur.url());
   await testeur.waitForSelector('.tb-case',{timeout:30000}).catch(()=>{});
   const eT=await etats(testeur);
-  verifier(Object.keys(eT).length===2,'il ne voit que ses deux scénarios',Object.keys(eT).join(','));
-  verifier(eT['TB-05']==='vide','TB-05 à faire',eT['TB-05']);
-  verifier(eT['TB-08']==='revoir','TB-08 corrigé par l équipe : à rejouer, en orange',eT['TB-08']);
+  verifier(Object.keys(eT).length===2,'il ne voit que ses deux clés',Object.keys(eT).join(','));
+  verifier(eT[K5]==='vide','la première à faire',eT[K5]);
+  verifier(eT[K8]==='revoir','la seconde corrigée par l équipe : à rejouer, en orange',eT[K8]);
   const taille=await testeur.$eval('.tb-case',b=>b.getBoundingClientRect().width).catch(()=>0);
   verifier(taille>=28,'au téléphone, une case se touche du doigt (28 px)',`${taille}px`);
   const texteT=await testeur.textContent('body');
@@ -267,21 +295,21 @@ const SCENARIOS=[
 
   /* La capture de Nadir du 23/09 : « Aucune campagne en cours », et il
      fallait recharger. La page doit suivre le statut de la campagne. */
-  await poser(`projets/${PID}/campagnes/${CID}`,{statut:S('preparation')},['statut']);
+  await poser(`projets/${PID}/campagnes/${CIDP}`,{statut:S('preparation')},['statut']);
   const eteinte=await attendre(async()=>/Aucune campagne en cours/.test(await testeur.textContent('body')),30,500);
   verifier(eteinte,'campagne repassée en préparation : sa page le dit sans recharger');
   verifier(/Capmedia\s*Test/i.test(await testeur.textContent('body')),'et même vide, elle dit où il est');
-  await poser(`projets/${PID}/campagnes/${CID}`,{statut:S('en-cours')},['statut']);
-  verifier(await attendreEtat(testeur,'TB-08','revoir'),'la campagne passe En cours : ses cases apparaissent toutes seules');
+  await poser(`projets/${PID}/campagnes/${CIDP}`,{statut:S('en-cours')},['statut']);
+  verifier(await attendreEtat(testeur,K8,'revoir'),'la campagne passe En cours : ses cases apparaissent toutes seules');
 
   console.log('\n== Présence : lui seul voit qui est là, sur quoi');
-  await testeur.click('[data-sur="web"]'); await pause(500);
-  await testeur.click('[data-case="TB-05"]');
+  await allerTableau(equipe,`projet=${PID}&campagne=${CIDP}`);
+  await testeur.click(`[data-case="${K5}"]`);
   await testeur.waitForSelector('.feuille, .modale--scenario',{timeout:10000}).catch(()=>{});
-  const vu=await attendre(async()=>{const t=await equipe.textContent('.tb-direct').catch(()=>'');return /Paul/.test(t)&&/TB-05/.test(t);},40,500);
-  verifier(vu,'le cockpit voit Paul en ligne, sur TB-05');
-  const pulse=await attendre(async()=>equipe.$eval('[data-case="TB-05"]',b=>b.classList.contains('tb-case--vivante')).catch(()=>false),20,500);
-  verifier(pulse,'et la case TB-05 pulse');
+  const vu=await attendre(async()=>{const t=await equipe.textContent('.tb-direct').catch(()=>'');return /Paul/.test(t)&&/tbp-f-001/.test(t);},40,500);
+  verifier(vu,'le cockpit voit Paul en ligne, sur son scénario',await equipe.textContent('.tb-direct').catch(()=>''));
+  const pulse=await attendre(async()=>equipe.$eval('[data-case="tbp-f-001"]',b=>b.classList.contains('tb-case--vivante')).catch(()=>false),20,500);
+  verifier(pulse,'et sa case pulse');
   const carte=await equipe.textContent('.tb-personne[data-personne="'+u3+'"]').catch(()=>'');
   verifier(/en ligne/.test(carte),'sa carte dit « en ligne »',carte.slice(0,80));
   const pres=await lire(`presences/${u3}`);
@@ -290,15 +318,25 @@ const SCENARIOS=[
   verifier(((sess&&sess.documents)||[]).length>=1,'une session est ouverte, datée, pour mesurer le temps passé');
 
   await testeur.click('[data-feuille-poser="ok"]');
-  verifier(await attendreEtat(equipe,'TB-05','ok'),'Paul pose OK depuis sa feuille : le cockpit passe TB-05 au vert en direct');
-  verifier(await attendreEtat(testeur,'TB-05','ok'),'et sa propre case aussi');
-  await testeur.click('[data-case="TB-08"]'); await testeur.waitForSelector('.feuille, .modale--scenario',{timeout:10000}).catch(()=>{});
+  const p5=await attendre(async()=>str(await lire(`projets/${PID}/campagnes/${CIDP}/passages/${u3}__${K5}`),'resultat')==='reussi');
+  verifier(!!p5,'Paul pose Réussi depuis sa feuille : le passage porte sa clé',`${u3}__${K5}`);
+  verifier(await attendreEtat(equipe,'tbp-f-001','ok'),'le cockpit passe la case au vert en direct');
+  verifier(await attendreEtat(testeur,K5,'ok'),'et sa propre case aussi');
+  /* Après un résultat, la feuille peut s'ouvrir sur le suivant : on la ferme. */
+  await testeur.keyboard.press('Escape'); await pause(500);
+  await testeur.click(`[data-case="${K8}"]`); await testeur.waitForSelector('.feuille, .modale--scenario',{timeout:10000}).catch(()=>{});
   const fT=await testeur.textContent('.feuille, .modale--scenario').catch(()=>'');
-  verifier(/À rejouer/.test(fT),'la feuille de TB-08 lui dit de rejouer');
+  verifier(/À rejouer/.test(fT),'la feuille de la seconde lui dit de rejouer');
   await testeur.click('[data-feuille-poser="ok"]');
-  verifier(await attendreEtat(equipe,'TB-08','ok'),'rejoué OK : TB-08 passe au vert chez l équipe');
-  const a8b=await lire(`projets/${PID}/anomalies/ko-TB-08`);
-  verifier(str(a8b,'statut')==='corrigee','un OK ne rouvre rien',str(a8b,'statut'));
+  verifier(await attendreEtat(equipe,'tbp-f-002','ok'),'rejoué : la case passe au vert chez l équipe');
+  const a8b=await lire(`projets/${PID}/anomalies/ko-tbp-f-002`);
+  verifier(str(a8b,'statut')==='corrigee','une réussite ne rouvre rien',str(a8b,'statut'));
+  await ctxT.close();
+  /* La suite revient au projet sans plan : la campagne du testeur et son
+     plan s'en vont, la grille de la bibliothèque reprend. */
+  await vider(`projets/${PID}/planTests`);
+  await poser(`projets/${PID}/campagnes/${CIDP}`,{statut:S('close')},['statut']);
+  await allerTableau(equipe,`projet=${PID}&campagne=${CID}`);
 
   console.log('\n== Le client : les résultats en direct, rien d autre');
   const ctxC=await nav.newContext({viewport:{width:1440,height:900}});
@@ -308,7 +346,7 @@ const SCENARIOS=[
   verifier(!(await client.$$eval('.lat-lien',as=>as.some(a=>/Tableau/.test(a.textContent)))),'chez le client non plus, pas d entrée séparée : le tableau est dans Tests');
   await allerTableau(client,`projet=${PID}&campagne=${CID}`);
   const eC=await etats(client);
-  verifier(eC['TB-02']==='casse'&&eC['TB-05']==='ok','il voit les mêmes verdicts',JSON.stringify(eC)+' '+(await client.textContent('body')).replace(/\s+/g,' ').slice(0,400)+' '+erreursClient.join('|'));
+  verifier(eC['TB-02']==='casse'&&eC['TB-01']==='ok','il voit les mêmes verdicts',JSON.stringify(eC)+' '+(await client.textContent('body')).replace(/\s+/g,' ').slice(0,400)+' '+erreursClient.join('|'));
   verifier(!('TB-06' in eC),'mais pas les trous d affectation, affaire interne');
   const texteC=await client.textContent('main, #contenu, body');
   verifier(!/Nina|Omar|Paul/.test(texteC),'aucun prénom de testeur dans sa page');

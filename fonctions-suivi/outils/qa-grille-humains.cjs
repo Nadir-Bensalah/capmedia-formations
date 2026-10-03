@@ -301,6 +301,14 @@ const verifierChiffres = (r, quoi) => {
   await passage(alma, 'GH-07', 'ko', 'ios', 44); await passage(bruno, 'GH-07', 'ko', 'android', 43);
   await passage(celia, 'GH-08', 'ok', 'web', 42);
   /* Demain : la répartition enverra les scénarios du plan eux-mêmes. */
+  /* Depuis la garde serveur (03/10/2026), un échec ne fait une anomalie
+     que sur un scénario connu : le KO sur l'identifiant du plan se pose
+     donc avec la section en place, retirée aussitôt (la grille d'avant,
+     juste après, se lit sans plan). */
+  const avantPlan = fs.mkdtempSync(path.join(os.tmpdir(), 'qa-grille-humains-avant-'));
+  SECTIONS.forEach((x) => fs.writeFileSync(path.join(avantPlan, `${x.id}.json`), JSON.stringify(x, null, 2)));
+  importer([P, avantPlan, '--vrai']);
+  fs.rmSync(avantPlan, { recursive: true, force: true });
   await passage(bruno, 'gh-taches-f-001', 'ko', 'android', 41);
   await passage(celia, 'gh-connexion-t-001', 'ok', 'web', 40);
   const anos = await attendre(async () => {
@@ -308,6 +316,7 @@ const verifierChiffres = (r, quoi) => {
     return a.every((x) => x && x.fields) && valeurs(champ(a[1], 'temoins')).length === 2;
   }, 60, 500);
   verifier(anos, 'les KO font naître leurs anomalies, y compris sur un identifiant du plan');
+  await vider(`projets/${P}/planTests`);
 
   console.log('\n== Sans plan : la grille d\'avant');
   const cockpit = await ouvrir('dark');
@@ -503,6 +512,18 @@ const verifierChiffres = (r, quoi) => {
 
     /* Des résultats humains : chaque testeur de c-oct rend ses scénarios,
        un KO tous les neuf, un sans objet tous les treize. */
+    /* Ce qui est éprouvé ici, c'est l'héritage d'une campagne d'avant le
+       plan (des résultats rendus sur la bibliothèque, lus par les refs).
+       Depuis le 03/10/2026, le semis met c-oct sur le plan du banc : on la
+       repasse à l'ancienne, références de la bibliothèque réparties entre
+       ses testeurs, le temps de cette partie. */
+    const biblioRefs = ((((await lire(`projets/${P}/scenarios?pageSize=400`)) || {}).documents) || []).map((d) => d.name.split('/').pop()).filter((r) => !/^GH-/.test(r));
+    const campAvant = await lire(`projets/${P}/campagnes/c-oct`);
+    const ids = valeurs(champ(campAvant, 'testeurs')).map((v) => v.stringValue);
+    const ancienne = Object.fromEntries(ids.map((u) => [u, []]));
+    biblioRefs.forEach((r, i) => ancienne[ids[i % ids.length]].push(r));
+    await fetch(`${bdd(`projets/${P}/campagnes/c-oct`)}?updateMask.fieldPaths=affectation&updateMask.fieldPaths=scenarios&updateMask.fieldPaths=plan`, { method: 'PATCH', headers: { ...prop, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: { plan: B(false), scenarios: L(biblioRefs.map(S)), affectation: M(Object.fromEntries(Object.entries(ancienne).map(([u, r]) => [u, L(r.map(S))]))) } }) });
     const camp = await lire(`projets/${P}/campagnes/c-oct`);
     const aff = (champ(camp, 'affectation').mapValue || {}).fields || {};
     const gens = (((await lire('testeurs?pageSize=100')) || {}).documents || []);

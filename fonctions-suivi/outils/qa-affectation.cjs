@@ -76,7 +76,13 @@ Object.values(SECTIONS).forEach((s) => Object.values(s.aspects).flat().forEach((
 (async()=>{
   admin.initializeApp({ projectId: PROJET });
   const db = admin.firestore();
+  /* Le plan de la suite, seul : le semis pose aussi celui du banc. Et la
+     campagne retient les scénarios d'humains de ce plan, puisque Répartir
+     ne distribue que la sélection de la campagne. */
+  for (const d of (await db.collection('projets/atelier/planTests').get()).docs) await d.ref.delete();
   for (const [id, s] of Object.entries(SECTIONS)) await db.doc(`projets/atelier/planTests/${id}`).set(s);
+  const humainsSuite = Object.values(SECTIONS).flatMap((s) => Object.values(s.aspects).flat()).filter((sc) => NB[sc.qui]).map((sc) => sc.id);
+  await db.doc('projets/atelier/campagnes/c-oct').update({ scenarios: humainsSuite });
   /* Leila n'est inscrite à aucun projet : seul le serveur peut l'y mettre. */
   const vivier = (await db.collection('testeurs').get()).docs.map((d) => ({ id: d.id, ...d.data() }));
   const leila = vivier.find((t) => t.prenom === 'Leila');

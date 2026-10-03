@@ -77,7 +77,10 @@ let page = null;
   const dossierPreuve = `campagnes/${PID}/${CID}/${uid}/preuve.png`;
   for (const ref of refs.slice(1)) {
     const ko = ref === refs[2];
-    await poser(`${passages}/${uid}__${ref}`, { scenario: S(ref), testeur: S(uid), plateforme: S('ios'), resultat: S(ko ? 'ko' : 'ok'), commentaire: S(ko ? 'Rien ne se passe.' : ''), preuves: L(ko ? [S(dossierPreuve)] : []), contexte: { mapValue: { fields: {} } }, le: T(new Date()) });
+    /* Une case est une clé « scénario du plan, plateforme » : le passage
+       porte l'une et l'autre, et son résultat en toutes lettres. */
+    const [scen, plat] = ref.split('__');
+    await poser(`${passages}/${uid}__${ref}`, { scenario: S(scen), testeur: S(uid), plateforme: S(plat), resultat: S(ko ? 'echec' : 'reussi'), commentaire: S(ko ? 'Rien ne se passe.' : ''), preuves: L(ko ? [S(dossierPreuve)] : []), contexte: { mapValue: { fields: {} } }, cree: T(new Date()), maj: T(new Date()) });
   }
   await attendre(async () => page.$('[data-terminer]'), 30, 500);
   verifier(await page.$('[data-terminer]'), 'tout déroulé, le bouton « J ai terminé » apparaît');
