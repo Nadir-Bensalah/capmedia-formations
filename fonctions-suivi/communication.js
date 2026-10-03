@@ -294,12 +294,14 @@ async function ecrireAuxClients(projetOuId, evenement, modele, variables, option
 }
 
 /** Une notification dans la boîte de chaque uid. */
-async function notifier(uids, { type, titre, texte, lien, projet }) {
+/* `message` : l'identifiant du message qui a fait naître la notification,
+   quand il y en a un. Supprimé ensuite, son extrait est effacé ici aussi. */
+async function notifier(uids, { type, titre, texte, lien, projet, message }) {
   const lot = bdd.batch();
   let n = 0;
   for (const uid of new Set((uids || []).filter(Boolean))) {
     const ref = bdd.collection('boites').doc(uid).collection('notifications').doc();
-    lot.set(ref, sansIndefini({ type, titre, texte: texte || '', lien: lien || null, projet: projet || null, lu: false, date: FieldValue.serverTimestamp() }));
+    lot.set(ref, sansIndefini({ type, titre, texte: texte || '', lien: lien || null, projet: projet || null, ...(message ? { message } : {}), lu: false, date: FieldValue.serverTimestamp() }));
     n += 1;
   }
   if (n) { try { await lot.commit(); } catch (err) { console.error('Notifications non écrites', err); } }

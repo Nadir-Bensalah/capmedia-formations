@@ -291,18 +291,30 @@ export const messageHtml = (m, options = {}) => {
      côté, ceux d'en face de l'autre. */
   if (moi) classes.push('message--moi');
   if (m.interne) classes.push('message--interne');
-  const pieces = Array.isArray(m.pieces) && m.pieces.length
+  /* Un message supprimé reste à sa place, vidé : « Message supprimé ».
+     Un message modifié le dit, à côté de l'heure. `options.avant` (la
+     citation d'une réponse) et `options.apres` (les réactions) se posent
+     dans la colonne du message, alignés avec lui. */
+  const supprime = Boolean(m.supprime);
+  if (supprime) classes.push('message--supprime');
+  const pieces = !supprime && Array.isArray(m.pieces) && m.pieces.length
     ? `<div class="pieces">${m.pieces.map((p) => pieceHtml(p)).join('')}</div>` : '';
+  const corps = supprime
+    ? '<p class="message-supprime">Message supprimé</p>'
+    : (String(m.texte || '').trim() ? `<div class="message-corps">${avecLiens(m.texte || '')}</div>` : '');
   return `<article class="${classes.join(' ')}" data-id="${echapper(m.id || '')}">
     ${avatar(de.nom || (equipe ? 'Capmedia' : 'Client'), { equipe })}
     <div>
       <div class="message-tete">
         <span class="message-auteur">${echapper(de.nom || (equipe ? 'Capmedia' : 'Vous'))}${moi ? ' <span class="t-3">(vous)</span>' : ''}</span>
         <span class="message-date">${echapper(depuis(m.date))}</span>
+        ${m.modifie && !supprime ? '<span class="message-modifie">modifié</span>' : ''}
         ${m.interne ? '<span class="marque-interne">Note interne</span>' : ''}
       </div>
-      ${String(m.texte || '').trim() ? `<div class="message-corps">${avecLiens(m.texte || '')}</div>` : ''}
+      ${supprime ? '' : (options.avant || '')}
+      ${corps}
       ${pieces}
+      ${supprime ? '' : (options.apres || '')}
     </div>
   </article>`;
 };

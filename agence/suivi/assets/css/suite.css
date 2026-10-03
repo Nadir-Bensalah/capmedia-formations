@@ -1995,3 +1995,96 @@ body:has(.bulle) #vue .page { padding-bottom: 104px; }
 @media (max-width: 1023px) {
   body:has(.composer textarea:focus, .composer-pied textarea:focus, #vue .zone:focus) .bulle:not(.bulle--ouverte) { display: none; }
 }
+
+/* ==========================================================================
+   La messagerie (octobre 2026) : réagir, répondre, modifier, supprimer.
+   Bulle et page Messages, Hub et Cockpit. docs/suivi.md, section 35.
+   ========================================================================== */
+/* Les gestes d'un message : « En faire une demande » (d'en face) et le
+   menu, posés à l'intérieur du bord, visibles au survol ou au clavier. */
+.message-gestes {
+  position: absolute; top: 0; right: 0; z-index: 1;
+  display: flex; gap: 4px;
+  opacity: 0; transform: translateY(-2px);
+  transition: opacity var(--vite), transform var(--vite);
+}
+.bulle-message:has(.message--moi) .message-gestes, .fil-message:has(.message--moi) .message-gestes { right: auto; left: 0; }
+.message-gestes .bulle-action { position: static; opacity: 1; transform: none; }
+.bulle-message:hover .message-gestes, .fil-message:hover .message-gestes, .message-gestes:focus-within { opacity: 1; transform: none; }
+/* Sur un écran tactile, pas de survol : le menu s'ouvre par un appui long
+   sur le message, et le texte ne se sélectionne pas sous le doigt (le
+   menu propose « Copier le texte »). */
+@media (hover: none) {
+  .message-gestes { display: none; }
+  .bulle-message .message, .fil-message .message { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+}
+
+/* « modifié », à côté de l'heure. */
+.message-modifie { font: var(--t-micro); color: var(--encre-3); }
+/* Un message supprimé garde sa place : une forme vide, le mot en italique. */
+.message-supprime {
+  display: inline-block; max-width: 100%; margin: 0;
+  padding: 8px 14px; border-radius: 16px;
+  font: var(--t-petit); font-style: italic; color: var(--encre-3);
+  box-shadow: inset 0 0 0 1px var(--trait);
+}
+.message--moi .message-supprime { border-radius: 16px 16px 4px 16px; }
+
+/* La citation d'une réponse, au-dessus du texte : un fond léger, sans
+   trait de côté. Un clic ramène au message d'origine. */
+.message-citation {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  width: fit-content; max-width: min(100%, 44ch); margin: 0 0 4px;
+  padding: 6px 10px; border: 0; border-radius: 12px;
+  background: var(--survol); color: var(--encre-2);
+  font: var(--t-micro); text-align: left; cursor: pointer;
+}
+.message--moi .message-citation { margin-left: auto; }
+.message-citation:hover { background: var(--actif, var(--fond-3)); }
+.message-citation:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.message-citation-qui { font-weight: 600; }
+.message-citation-texte { max-width: 100%; color: var(--encre-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Les réactions, sous le message : l'emoji, et le nombre au-delà d'une. */
+.message-reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.message--moi .message-reactions { justify-content: flex-end; }
+.reaction {
+  display: inline-flex; align-items: center; gap: 3px;
+  height: 24px; padding: 0 8px; border: 0; border-radius: 980px;
+  background: var(--fond-2); color: var(--encre-2);
+  font: 600 11.5px/1 var(--police); font-variant-numeric: tabular-nums; cursor: pointer;
+  transition: background var(--vite), color var(--vite);
+}
+.reaction:hover { background: var(--fond-3); }
+.reaction--moi { background: var(--accent-voile); color: var(--accent); }
+.reaction-emoji { font-size: 13px; line-height: 1; }
+
+/* Le message ramené sous les yeux par une citation brille un instant. */
+.message-repere { animation: repere 1.8s ease-out; border-radius: 16px; }
+@keyframes repere { from { background: var(--anneau); } to { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .message-repere { animation: none; background: var(--anneau); } }
+
+/* Le menu d'un message : la palette, puis les actions en mots. */
+.menu.menu-message { min-width: 232px; }
+.menu.menu-message .menu-reactions { display: flex; justify-content: space-between; gap: 2px; padding: 2px; }
+.menu.menu-message .menu-reactions button {
+  width: 36px; height: 36px; padding: 0; display: grid; place-items: center;
+  border-radius: 10px; background: transparent; color: inherit;
+  font: 400 20px/1 var(--police);
+}
+.menu.menu-message .menu-reactions button:hover, .menu.menu-message .menu-reactions button:focus-visible { background: var(--survol); color: inherit; }
+.menu.menu-message .menu-reactions button.actif { background: var(--accent-voile); }
+
+/* « Répondre à … » ou « Modifier votre message », au-dessus du champ. */
+.composer-contexte {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 8px 8px 12px; border-radius: 12px; background: var(--fond-2);
+}
+#bulle-contexte .composer-contexte { margin-bottom: 8px; }
+.composer-contexte-texte { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.composer-contexte-titre { font: var(--t-micro); font-weight: 600; color: var(--encre-2); }
+.composer-contexte-extrait { font: var(--t-micro); color: var(--encre-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composer-contexte .btn-icone { flex: none; width: 28px; height: 28px; }
+/* Une modification ne joint pas de pièce : elle corrige le texte. */
+.composer.en-modification #zone-pieces, .bulle--modification .bulle-joindre, .bulle--modification #bulle-pieces { display: none; }
+
