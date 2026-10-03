@@ -21,7 +21,8 @@
    les axes, écrit l'introduction, et lit les réponses ligne par ligne.
    ========================================================================== */
 
-import { echapper, dateCourte, pluriel, montantHT, estResponsable, OUVERTS, peut } from '../noyau.js';
+import { echapper, dateCourte, pluriel, montant, montantHT, sansTaxe, estResponsable, OUVERTS, peut } from '../noyau.js';
+import { franchise } from '../tarifs.js';
 import { icone, pastille, vide, squelette, titrePage, confirmer, toast, sur, menu, agir, modale } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K, ecrire, abonnerProjet, abonnerPanier, montantDe, horodatage } from '../donnees.js';
@@ -104,7 +105,8 @@ const reperes = (a, d, c) => {
     jaugeAmpleur(a.ampleur),
     joursValides(a.jours) ? `<span class="axe-jours" data-axe-jours data-astuce="Estimation approximative du temps de réalisation"><span class="axe-environ" aria-hidden="true">≈</span>${echapper(joursTexte(a.jours))}<span class="sr-only"> environ</span></span>` : '',
     !equipe && etat.client ? `<span class="axe-etat">${echapper(etat.client)}</span>` : '',
-    typeof prix === 'number' ? `<span class="axe-prix" data-axe-prix>${echapper(montantHT(prix))}</span>` : '',
+    /* Franchise en base de TVA : le prix payé, sans « HT ». */
+    typeof prix === 'number' ? `<span class="axe-prix" data-axe-prix>${echapper((devis ? sansTaxe(devis) : franchise(magasin.lire(K.tarifs))) ? montant(prix) : montantHT(prix))}</span>` : '',
     devis ? `<a class="lien axe-devis" href="#/finances/${echapper(devis.id)}">${echapper(devis.numero || 'Le devis')}</a>` : '',
   ].filter(Boolean).join('');
 };
@@ -276,7 +278,7 @@ const editerAxe = (env, { pid, fiche = null, plateforme = '', d }) => {
       </div>
       <div class="forme-rang">
         ${select('devis', 'Devis lié', devis, fiche ? fiche.devis : '', { vide: 'Aucun' })}
-        ${finance ? champ('prix', 'Prix HT (€)', typeof prix === 'number' ? prix : '', { type: 'number', facultatif: true, aide: 'Lu par le responsable du projet seulement.', attrs: 'min="0" step="1"' }) : ''}
+        ${finance ? champ('prix', franchise(magasin.lire(K.tarifs)) ? 'Prix (€)' : 'Prix HT (€)', typeof prix === 'number' ? prix : '', { type: 'number', facultatif: true, aide: 'Lu par le responsable du projet seulement.', attrs: 'min="0" step="1"' }) : ''}
       </div>
       ${champ('ordre', 'Ordre', fiche ? (fiche.ordre || 0) : ordreSuivant, { type: 'number', attrs: 'min="0" step="1"' })}`,
     regles: {

@@ -416,7 +416,10 @@ const corpsHtml = () => {
       ${equipe()
         ? `<div class="rang" style="margin:var(--e-4) 0"><button class="btn btn-principal" type="button" data-coffre="creer">Créer le coffre-fort</button></div>
            <p class="aide">L'application tire une phrase de ${MOTS_PAR_PHRASE} mots et vous la montre une seule fois. Vous la recopiez sur papier et la transmettez au client de vive voix ou sur papier.</p>`
-        : '<p class="t-petit t-2" style="margin:var(--e-4) 0">Capmedia n\'a pas encore ouvert de coffre pour ce projet. Quand ce sera fait, la phrase vous sera transmise de vive voix ou sur papier, jamais par e-mail.</p>'}
+        /* Pas d'impasse : le client demande l'ouverture par un ticket
+           prérempli, l'équipe le reçoit comme toute demande. */
+        : `<p class="t-petit t-2" style="margin:var(--e-4) 0">Le coffre de ce projet n'est pas encore ouvert. Demandez-le : nous le créons, puis la phrase qui l'ouvre vous est transmise de vive voix ou sur papier, jamais par e-mail.</p>
+           <div class="rang" style="margin:var(--e-4) 0"><a class="btn btn-principal" data-coffre-demander href="#/projets/${encodeURIComponent(e.pid)}/nouvelle-demande?type=technique&amp;titre=${encodeURIComponent("Ouverture du coffre-fort")}">Demander l'ouverture du coffre</a></div>`}
       ${pourquoiHtml(true)}
     </section>`;
   }

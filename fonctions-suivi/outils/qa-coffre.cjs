@@ -487,7 +487,8 @@ const majEntree = (chemin, champs, masque) => ({
   verifier(!(await pl.$('[data-coffre-etat]')), 'l adresse du coffre d Atelier ne lui montre rien');
   await aller(pl, '#/projets/boutique/coffre');
   verifier(await etatCoffre(pl, 'absent'), 'sur Boutique, dont elle est responsable, l onglet existe');
-  verifier(/n'a pas encore ouvert de coffre/.test(await pl.textContent('[data-coffre-etat]')) && !(await pl.$('[data-coffre="creer"]')), 'et dit que Capmedia ne l a pas encore créé (pas de bouton Créer côté client)');
+  verifier(/pas encore ouvert/.test(await pl.textContent('[data-coffre-etat]')) && !(await pl.$('[data-coffre="creer"]')), 'et dit que le coffre n est pas encore ouvert (pas de bouton Créer côté client)');
+  verifier(Boolean(await pl.$('[data-coffre-demander]')), 'mais un bouton pour en demander l ouverture : pas d impasse');
   await ctxL.close();
 
   console.log('\n== Camille repassée collaboratrice : elle perd l accès, Capmedia est invité à renouveler la clé');

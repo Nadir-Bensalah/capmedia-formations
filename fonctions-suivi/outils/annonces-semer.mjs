@@ -47,7 +47,7 @@ export const ANNONCE_TARIF_2027 = {
     'Bonjour,',
     'À partir du 1er janvier 2027, les tarifs de Capmedia évoluent.',
     'Le prix d\'une journée dépend de la durée du projet : un projet long, de plus de 3 mois, et un projet court, de moins de 3 mois. Un projet déjà engagé depuis plus de 3 mois garde le tarif des projets longs.',
-    'Vous trouverez ci-dessous la grille, en euros hors taxes, et ce qu\'elle change pour chacun de vos projets. Une question ? Écrivez-nous, nous vous répondons avec plaisir.',
+    'Vous trouverez ci-dessous la grille, en euros, et ce qu\'elle change pour chacun de vos projets. Une question ? Écrivez-nous, nous vous répondons avec plaisir.',
     'Merci pour votre confiance.',
   ].join('\n\n'),
   dateEffet: '2027-01-01',
