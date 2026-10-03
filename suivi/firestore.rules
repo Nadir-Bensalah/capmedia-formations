@@ -1780,8 +1780,9 @@ service cloud.firestore {
                     || resource.data.reponse.get('par', '') == moi()));
         }
         function axeValide(d) {
-          return d.keys().hasOnly(['plateforme', 'titre', 'description', 'detail', 'apport', 'ampleur', 'etat', 'publication', 'publieLe',
+          return d.keys().hasOnly(['plateforme', 'titre', 'description', 'detail', 'apport', 'ampleur', 'jours', 'etat', 'publication', 'publieLe',
                                    'ordre', 'devis', 'reponse', 'origine', 'cree', 'maj', 'editeLe', 'importeLe'])
+              && (d.get('jours', null) == null || (d.jours is number && d.jours >= 0.5 && d.jours <= 120))
               && d.plateforme in ['ios', 'android', 'web', 'admin', 'backend', 'landing', 'general']
               && texteRequis(d.titre, 120)
               && texteBorne(d.description, 400)

@@ -2,15 +2,47 @@
   "intro": "Voici les pistes que nous voyons pour faire grandir votre application. Cochez celles qui vous parlent : rien n'est engagé tant que vous ne le décidez pas.",
   "plateformes": {
     "ios": [
-      { "id": "ios-widgets", "titre": "Widgets sur l'écran d'accueil", "description": "Vos utilisateurs voient leurs tâches du jour sans ouvrir l'application.", "apport": "engagement", "ampleur": "moyen" },
-      { "id": "ios-raccourcis", "titre": "Raccourcis Siri", "description": "Ajouter une tâche à la voix, en une phrase.", "apport": "confort", "ampleur": "petit", "detail": "Siri reconnaît une phrase choisie par l'utilisateur.\n\nAucune donnée ne quitte le téléphone." }
+      {
+        "id": "ios-widgets",
+        "titre": "Widgets sur l'écran d'accueil",
+        "description": "Vos utilisateurs voient leurs tâches du jour sans ouvrir l'application.",
+        "apport": "engagement",
+        "ampleur": "moyen",
+        "jours": 3
+      },
+      {
+        "id": "ios-raccourcis",
+        "titre": "Raccourcis Siri",
+        "description": "Ajouter une tâche à la voix, en une phrase.",
+        "apport": "confort",
+        "ampleur": "petit",
+        "detail": "Siri reconnaît une phrase choisie par l'utilisateur.\n\nAucune donnée ne quitte le téléphone."
+      }
     ],
     "android": [
-      { "id": "android-widgets", "titre": "Widgets Android", "description": "Les tâches du jour sur l'écran d'accueil, comme sur iPhone.", "apport": "fidélité", "ampleur": "moyen" }
+      {
+        "id": "android-widgets",
+        "titre": "Widgets Android",
+        "description": "Les tâches du jour sur l'écran d'accueil, comme sur iPhone.",
+        "apport": "fidélité",
+        "ampleur": "moyen"
+      }
     ],
     "web": [
-      { "id": "web-notifications", "titre": "Notifications web", "description": "Prévenir vos utilisateurs dans leur navigateur, même onglet fermé.", "apport": "engagement", "ampleur": "moyen" },
-      { "id": "web-installable", "titre": "Application installable sur Mac et Windows", "description": "Votre service s'ouvre comme une vraie application, depuis le Dock ou le menu Démarrer.", "apport": "image", "ampleur": "grand" }
+      {
+        "id": "web-notifications",
+        "titre": "Notifications web",
+        "description": "Prévenir vos utilisateurs dans leur navigateur, même onglet fermé.",
+        "apport": "engagement",
+        "ampleur": "moyen"
+      },
+      {
+        "id": "web-installable",
+        "titre": "Application installable sur Mac et Windows",
+        "description": "Votre service s'ouvre comme une vraie application, depuis le Dock ou le menu Démarrer.",
+        "apport": "image",
+        "ampleur": "grand"
+      }
     ]
   }
 }

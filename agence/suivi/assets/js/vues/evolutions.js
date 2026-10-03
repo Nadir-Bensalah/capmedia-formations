@@ -28,7 +28,7 @@ import { K, ecrire, abonnerProjet, montantDe, horodatage } from '../donnees.js';
 import { filAriane } from '../coquille.js';
 import { feuille, champ, zone, choix as select } from './editeurs.js';
 import {
-  PLATEFORMES_AXE, APPORTS_AXE, AMPLEURS_AXE, ETATS_AXE, ETATS_AXE_CLIENT_AGIT, PUBLICATIONS_AXE, CHOIX_AXE, BORNES_AXE,
+  PLATEFORMES_AXE, APPORTS_AXE, AMPLEURS_AXE, ETATS_AXE, ETATS_AXE_CLIENT_AGIT, PUBLICATIONS_AXE, CHOIX_AXE, BORNES_AXE, joursTexte, joursValides,
 } from '../axes-format.js';
 
 /* La conversation vit en bulle (bulle-projet.js) : on lui passe un début de phrase. */
@@ -84,7 +84,7 @@ const lireTout = (pid, env) => {
 const jaugeAmpleur = (cle) => {
   const a = AMPLEURS_AXE[cle];
   if (!a) return '';
-  return `<span class="axe-ampleur"><span class="axe-marches" aria-hidden="true">${[1, 2, 3].map((n) => `<i${n <= a.marches ? ' class="pleine"' : ''}></i>`).join('')}</span>${echapper(a.libelle)}</span>`;
+  return `<span class="axe-ampleur axe-ampleur--${echapper(cle)}"><span class="axe-marches" aria-hidden="true">${[1, 2, 3].map((n) => `<i${n <= a.marches ? ' class="pleine"' : ''}></i>`).join('')}</span>${echapper(a.libelle)}</span>`;
 };
 
 const reperes = (a, d, c) => {
@@ -93,8 +93,9 @@ const reperes = (a, d, c) => {
   const devis = a.devis && voitPrix(c) ? d.documents.find((x) => x.id === a.devis) : null;
   const etat = ETATS_AXE[a.etat || 'propose'] || ETATS_AXE.propose;
   return [
-    APPORTS_AXE[a.apport] ? `<span class="axe-apport">${echapper(APPORTS_AXE[a.apport].libelle)}</span>` : '',
+    APPORTS_AXE[a.apport] ? `<span class="axe-apport axe-apport--${echapper(APPORTS_AXE[a.apport].ton || 'bleu')}" data-astuce="${echapper(APPORTS_AXE[a.apport].aide)}">${echapper(APPORTS_AXE[a.apport].libelle)}</span>` : '',
     jaugeAmpleur(a.ampleur),
+    joursValides(a.jours) ? `<span class="axe-jours" data-axe-jours data-astuce="Estimation approximative du temps de réalisation"><span class="axe-environ" aria-hidden="true">≈</span>${echapper(joursTexte(a.jours))}<span class="sr-only"> environ</span></span>` : '',
     !equipe && etat.client ? `<span class="axe-etat">${echapper(etat.client)}</span>` : '',
     typeof prix === 'number' ? `<span class="axe-prix" data-axe-prix>${echapper(montantHT(prix))}</span>` : '',
     devis ? `<a class="lien axe-devis" href="#/finances/${echapper(devis.id)}">${echapper(devis.numero || 'Le devis')}</a>` : '',
@@ -170,7 +171,7 @@ const compteur = (axes, equipe) => {
 
 const INTRO_PAR_DEFAUT = 'Les pistes que nous voyons pour faire grandir votre projet, plateforme par plateforme. Cochez celles qui vous parlent et dites-nous ce que vous en pensez : rien n\'est engagé tant que vous ne le décidez pas.';
 
-const pageHtml = (d, c, ouverts) => {
+const pageHtml = (d, c, ouverts, filtre = '') => {
   const equipe = c.env.role === 'equipe';
   const plateformes = plateformesDe(d.composants, d.axes, equipe);
   const parPlateforme = (p) => d.axes.filter((a) => (PLATEFORMES_AXE[a.plateforme] ? a.plateforme : 'general') === p);
@@ -190,8 +191,12 @@ const pageHtml = (d, c, ouverts) => {
   if (!plateformes.length) {
     return `<div class="page page-axes">${tete}${vide({ icone: 'ampoule', titre: equipe ? 'Aucun axe pour le moment' : 'Bientôt ici', texte: equipe ? 'Ajoutez un axe, ou versez le fichier du projet avec axes-importer.mjs. Le client le voit une fois publié.' : 'Nos pistes pour faire grandir votre projet apparaîtront ici.' })}</div>`;
   }
-  return `<div class="page page-axes">${tete}
-    ${plateformes.map((p) => {
+  const filtres = plateformes.length > 1 ? `<div class="segments axes-filtre" role="group" aria-label="Plateforme">
+      ${[['', 'Tout'], ...plateformes.map((p) => [p, PLATEFORMES_AXE[p].libelle])].map(([cle, lib]) => `<button type="button" class="segment${(filtre || '') === cle ? ' actif' : ''}" data-axe-filtre="${echapper(cle)}" aria-pressed="${(filtre || '') === cle}">${echapper(lib)}</button>`).join('')}
+    </div>` : '';
+  const visibles = filtre && plateformes.includes(filtre) ? [filtre] : plateformes;
+  return `<div class="page page-axes">${tete}${filtres}
+    ${visibles.map((p) => {
     const axes = parPlateforme(p);
     return `<section class="section axes-bloc" data-axes-plateforme="${echapper(p)}">
       <div class="section-tete">
@@ -214,7 +219,7 @@ const repondre = async (a, choix, d, c, bouton) => {
   }
   const ok = await confirmer({
     titre: 'On en parle ?',
-    texte: `Nous ouvrons une demande « ${a.titre} » à votre nom, pour en discuter. Vous la suivez dans Demandes. Rien n'est engagé sans votre accord.`,
+    texte: `Nous ouvrons un ticket « ${a.titre} » à votre nom, pour en discuter. Vous le suivez dans Tickets. Rien n'est engagé sans votre accord.`,
     ok: 'Oui, parlons-en',
   });
   if (!ok) return false;
@@ -229,7 +234,7 @@ const repondre = async (a, choix, d, c, bouton) => {
       type: 'fonctionnalite', urgence: 'important', plateforme, composant, axe: a.id,
     });
     await ecrire.repondreAxe(env.session, pid, a.id, 'en-parler', tid);
-  }, 'Une demande est ouverte à votre nom : nous revenons vers vous.');
+  }, 'Un ticket est ouvert à votre nom : nous revenons vers vous.');
 };
 
 /* --- Les gestes de l'équipe ------------------------------------------------- */
@@ -249,6 +254,7 @@ const editerAxe = (env, { pid, fiche = null, plateforme = '', d }) => {
       <div class="forme-rang">
         ${select('apport', 'Ce que ça apporte', Object.fromEntries(Object.entries(APPORTS_AXE).map(([k, f]) => [k, f.libelle])), fiche ? fiche.apport : '', { vide: 'Non précisé' })}
         ${select('ampleur', 'Ampleur', Object.fromEntries(Object.entries(AMPLEURS_AXE).map(([k, f]) => [k, f.libelle])), fiche ? fiche.ampleur : '', { vide: 'Non précisée' })}
+        ${champ('jours', 'Jours estimés', fiche && joursValides(fiche.jours) ? fiche.jours : '', { type: 'number', facultatif: true, aide: 'Lu par le client comme « ≈ 3 jours ».', attrs: 'min="0.5" max="120" step="0.5"' })}
       </div>
       ${zone('detail', 'En savoir plus', fiche ? fiche.detail : '', { facultatif: true, lignes: 4, aide: 'Un paragraphe de plus, que le client déplie. Rien de technique.' })}
       <div class="forme-rang">
@@ -269,6 +275,7 @@ const editerAxe = (env, { pid, fiche = null, plateforme = '', d }) => {
       const donnees = {
         plateforme: v.plateforme, titre: v.titre, description: v.description || '', detail: v.detail || '',
         apport: v.apport || '', ampleur: v.ampleur || '', etat: v.etat || 'propose', publication: v.publication,
+        jours: joursValides(Number(v.jours)) ? Number(v.jours) : null,
         devis: v.devis || '', ordre: Number(v.ordre) || 0,
       };
       let id = fiche ? fiche.id : '';
@@ -326,12 +333,15 @@ export const vue = async (ctx, env) => {
      dessin à l'autre. Cocher ne redessine rien : la classe suffit. */
   const ouverts = new Set();
   let derniere = '';
+  let filtre = '';
+  let dernierFiltre = null;
 
   const rendre = () => {
     const d = lireTout(pid, env);
     if (d.projet === undefined && !magasin.erreur(K.projet(pid))) return;
     const emp = magasin.empreinte([...cles, K.projets]);
-    if (emp === derniere) return;
+    if (emp === derniere && filtre === dernierFiltre) return;
+    dernierFiltre = filtre;
     if (!d.projet) {
       sortie.innerHTML = `<div class="page">${vide({ icone: 'projets', titre: 'Ce projet est introuvable', texte: 'Il a peut-être été archivé, ou vous n\'y avez plus accès.' })}</div>`;
       derniere = emp;
@@ -340,7 +350,7 @@ export const vue = async (ctx, env) => {
     titrePage(`Axes d'évolution · ${d.projet.nom}`);
     filAriane([{ libelle: equipe ? 'Projets' : 'Accueil', chemin: equipe ? '/projets' : '/' }, { libelle: d.projet.nom, chemin: `/projets/${pid}` }, { libelle: 'Axes d\'évolution' }]);
     const focus = document.activeElement && sortie.contains(document.activeElement) ? document.activeElement.id : '';
-    sortie.innerHTML = pageHtml(d, c, ouverts);
+    sortie.innerHTML = pageHtml(d, c, ouverts, filtre);
     if (focus) { const el = document.getElementById(focus); if (el) el.focus({ preventScroll: true }); }
     derniere = emp;
   };
@@ -371,6 +381,8 @@ export const vue = async (ctx, env) => {
     if (ligne) ligne.classList.remove('est-cochee');
   };
   sortie.addEventListener('change', surCase);
+  /* Le filtre de plateforme, en haut : « Tout » par défaut. */
+  const gesteFiltre = sur(sortie, 'click', '[data-axe-filtre]', (el) => { filtre = el.dataset.axeFiltre || ''; rendre(); });
 
   const gestesClient = sur(sortie, 'click', '[data-axe-geste]', async (el) => {
     const d = lireTout(pid, env);
@@ -416,7 +428,7 @@ export const vue = async (ctx, env) => {
   });
 
   return {
-    fin: () => { planifier.arreter(); sortie.removeEventListener('change', surCase); gestesClient(); gestesEquipe(); lot.fin(); },
+    fin: () => { planifier.arreter(); sortie.removeEventListener('change', surCase); gestesClient(); gestesEquipe(); gesteFiltre(); lot.fin(); },
   };
 };
 

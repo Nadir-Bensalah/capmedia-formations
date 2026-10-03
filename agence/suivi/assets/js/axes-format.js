@@ -12,7 +12,7 @@
    reprennent les mêmes bornes et les mêmes valeurs.
    ========================================================================== */
 
-export const BORNES_AXE = { titre: 120, description: 400, detail: 4000, intro: 1000, id: 60 };
+export const BORNES_AXE = { titre: 120, description: 400, detail: 4000, intro: 1000, id: 60, jours: 120 };
 
 /* Les plateformes d'un axe, dans l'ordre de la page. « Général » reçoit ce
    qui touche tout le projet, et les suggestions d'avant sans plateforme. */
@@ -21,19 +21,19 @@ export const PLATEFORMES_AXE = {
   android: { libelle: 'Android' },
   web: { libelle: 'Web' },
   admin: { libelle: 'Tableau de bord' },
-  backend: { libelle: 'Serveur' },
+  backend: { libelle: 'Firebase' },
   landing: { libelle: 'Site vitrine' },
   general: { libelle: 'Général' },
 };
 
 /* Ce qu'un axe apporte : un mot, lu par le client. */
 export const APPORTS_AXE = {
-  engagement: { libelle: 'Engagement', aide: 'Vos utilisateurs reviennent plus souvent.' },
-  revenus: { libelle: 'Revenus', aide: 'De quoi vendre plus, ou mieux.' },
-  fidelite: { libelle: 'Fidélité', aide: 'Vos utilisateurs restent.' },
-  image: { libelle: 'Image', aide: 'Votre marque gagne en allure.' },
-  securite: { libelle: 'Sécurité', aide: 'Vos données et celles de vos utilisateurs, mieux gardées.' },
-  confort: { libelle: 'Confort', aide: 'Tout devient plus simple à utiliser.' },
+  engagement: { libelle: 'Engagement', aide: 'Vos utilisateurs reviennent plus souvent.', ton: 'bleu' },
+  revenus: { libelle: 'Revenus', aide: 'De quoi vendre plus, ou mieux.', ton: 'vert' },
+  fidelite: { libelle: 'Fidélité', aide: 'Vos utilisateurs restent.', ton: 'violet' },
+  image: { libelle: 'Image', aide: 'Votre marque gagne en allure.', ton: 'rose' },
+  securite: { libelle: 'Sécurité', aide: 'Vos données et celles de vos utilisateurs, mieux gardées.', ton: 'ardoise' },
+  confort: { libelle: 'Confort', aide: 'Tout devient plus simple à utiliser.', ton: 'ciel' },
 };
 
 /* L'ampleur, en trois marches : la jauge de la page en remplit une, deux
@@ -71,6 +71,15 @@ const sansAccent = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '
 
 /* « fidélité » dans un fichier, « fidelite » en base. */
 export const normaliserApport = (v) => { const k = sansAccent(v); return APPORTS_AXE[k] ? k : null; };
+/* Le temps estimé d'un axe, en jours de travail : un nombre de 0,5 à 120,
+   lu par le client comme une approximation (« ≈ 3 jours »). */
+export const joursValides = (n) => typeof n === 'number' && Number.isFinite(n) && n >= 0.5 && n <= BORNES_AXE.jours;
+export const joursTexte = (n) => {
+  if (!joursValides(n)) return '';
+  if (n < 1) return 'une demi-journée';
+  const j = Math.round(n * 2) / 2;
+  return `${String(j).replace('.', ',')} jour${j > 1 ? 's' : ''}`;
+};
 export const normaliserAmpleur = (v) => { const k = sansAccent(v); return AMPLEURS_AXE[k] ? k : null; };
 
 /** Valide un axe tel qu'écrit dans le fichier d'import. Rend { erreurs, avis }. */
@@ -79,7 +88,7 @@ export const validerAxe = (a, { plateforme = '', ou = '' } = {}) => {
   const avis = [];
   const dire = (m) => erreurs.push(`${ou}${m}`);
   if (!a || typeof a !== 'object' || Array.isArray(a)) { dire('un axe doit être un objet'); return { erreurs, avis }; }
-  const connus = ['id', 'titre', 'description', 'apport', 'ampleur', 'detail'];
+  const connus = ['id', 'titre', 'description', 'apport', 'ampleur', 'detail', 'jours'];
   Object.keys(a).filter((k) => !connus.includes(k)).forEach((k) => dire(`champ inconnu « ${k} »`));
   if (typeof a.id !== 'string' || !/^[a-z0-9][a-z0-9-]*$/.test(a.id) || a.id.length > BORNES_AXE.id) dire('id : minuscules, chiffres et tirets, 60 caractères au plus');
   else if (plateforme && !a.id.startsWith(`${plateforme}-`)) avis.push(`${ou}id « ${a.id} » ne commence pas par « ${plateforme}- »`);
@@ -91,6 +100,7 @@ export const validerAxe = (a, { plateforme = '', ou = '' } = {}) => {
     if (v.includes(CADRATIN)) dire(`${champ} : tiret cadratin interdit`);
   }
   if (!normaliserApport(a.apport)) dire(`apport « ${a.apport} » : ${Object.keys(APPORTS_AXE).join(', ')}`);
+  if (a.jours !== undefined && !joursValides(a.jours)) dire(`jours « ${a.jours} » : un nombre de 0,5 à ${BORNES_AXE.jours}`);
   if (!normaliserAmpleur(a.ampleur)) dire(`ampleur « ${a.ampleur} » : ${Object.keys(AMPLEURS_AXE).join(', ')}`);
   if (/\d+\s?(€|euros?|k€)/i.test(`${a.titre} ${a.description}`)) avis.push(`${ou}un prix semble écrit dans le texte : il est servi au client`);
   return { erreurs, avis };
@@ -137,6 +147,7 @@ export const versDocumentAxe = (a) => ({
   detail: typeof a.detail === 'string' ? a.detail.trim() : '',
   apport: normaliserApport(a.apport) || '',
   ampleur: normaliserAmpleur(a.ampleur) || '',
+  ...(joursValides(a.jours) ? { jours: a.jours } : {}),
   ordre: Number(a.ordre) || 0,
 });
 

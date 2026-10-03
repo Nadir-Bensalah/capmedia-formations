@@ -295,6 +295,17 @@ const repondreRest = (id, uid, choix) => ({
   verifier(!/undefined|null|NaN/.test(texte), 'aucun « undefined », « null » ni « NaN » à l écran');
   verifier(!texte.includes('—'), 'aucun tiret cadratin à l écran');
 
+  console.log('\n== Le filtre de plateforme, les couleurs et le temps estimé (03/10)');
+  verifier(Boolean(await page.$('.axes-filtre [data-axe-filtre=""][aria-pressed="true"]')), 'le filtre est sur « Tout » par défaut');
+  const blocsTout = (await page.$$('[data-axes-plateforme]')).length;
+  await page.click('.axes-filtre [data-axe-filtre="ios"]'); await pause(500);
+  const blocsIos = await page.$$eval('[data-axes-plateforme]', (l) => l.map((x) => x.dataset.axesPlateforme));
+  verifier(blocsTout > 1 && blocsIos.length === 1 && blocsIos[0] === 'ios', `« iPhone » ne garde que l iPhone (${blocsTout} puis ${blocsIos.join(',')})`);
+  await page.click('.axes-filtre [data-axe-filtre=""]'); await pause(500);
+  verifier((await page.$$('[data-axes-plateforme]')).length === blocsTout, 'et « Tout » les remontre toutes');
+  verifier(/≈\s*3 jours/.test(await page.textContent('[data-axe="ios-widgets"] [data-axe-jours]').catch(() => '')), 'le temps estimé se lit « ≈ 3 jours »');
+  verifier(Boolean(await page.$('[data-axe="ios-widgets"] .axe-apport.axe-apport--bleu')) && Boolean(await page.$('.axe-ampleur--moyen')), 'l apport et l ampleur ont leur couleur douce');
+
   await poser('projets/atelier', { roles: M(rolesAvant), membres: L(membres.map(S)) }, ['roles', 'membres']);
   verifier(erreurs.length === 0, `aucune erreur de page ${erreurs.join(' | ')}`);
   await nav.close();
