@@ -67,7 +67,8 @@ let page = null;
   await page.click(`[data-case="${second}"]`); await pause(700);
   verifier(new RegExp(`${premier} d'abord`).test(await toast(page)), 'toucher le second dit de dérouler le premier', await toast(page));
   verifier(!(await page.$('.modale--scenario, .feuille')), 'et n ouvre pas sa feuille');
-  await page.click('[data-sur="ios"]'); await pause(500);
+  /* La plateforme vient de sa clé : le choix n'apparaît que s'il manque. */
+  if (await page.$('[data-sur="ios"]')) { await page.click('[data-sur="ios"]'); await pause(500); }
   await page.click(`[data-case="${premier}"]`); await page.waitForSelector('[data-feuille-poser="ok"]', { timeout: 10000 });
   await page.click('[data-feuille-poser="ok"]'); await pause(1500);
   verifier(!(await page.$(`[data-case="${second}"][data-verrou]`)), 'le premier réussi, le second s ouvre');

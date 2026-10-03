@@ -53,14 +53,15 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   if (await page.$('.accueil')) { await page.click('.accueil [data-accueil="passer"]'); await page.waitForSelector('.accueil', { state: 'detached' }); }
 
   console.log('\n== Avant de commencer');
+  /* Depuis le 03/10/2026, la première impression est proposée dans le
+     geste suivant, en tête de page, à côté de « Commencer ». */
   const bandeau = await page.evaluate(()=>({
-    texte: (document.querySelector('.avis-appel')||{}).innerText||'',
-    bouton: !!document.querySelector('[data-avis="avant"]'),
+    bouton: !!document.querySelector('.t-suite [data-avis="avant"]'),
   }));
-  verifier(bandeau.bouton,'le bandeau demande la première impression');
-  verifier(/ne se retrouve pas/.test(bandeau.texte),'et dit pourquoi maintenant',bandeau.texte.slice(0,60));
+  verifier(bandeau.bouton,'le geste suivant propose la première impression');
 
   await page.click('[data-avis="avant"]'); await pause(1300);
+  verifier(/ne se retrouve pas/.test(await page.evaluate(()=>((document.querySelector('.voile')||{}).innerText||''))),'et dit pourquoi maintenant');
   const f = await page.evaluate(()=>({
     feuille: !!document.querySelector('.feuille'),
     familles: [...document.querySelectorAll('.avis-famille .bloc-tete')].map(h=>h.innerText.trim()),
@@ -86,7 +87,6 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   verifier(!apres,'le bandeau ne redemande plus');
 
   console.log('\n== Tout dérouler, puis l\'avis complet');
-  await page.click('[data-sur="ios"]'); await pause(800);
   /* Cocher tous ses passages d'un coup, par la base : l'interface est
      deja eprouvee ailleurs, ici on veut atteindre l'etat « tout fait ».
      Depuis le 03/10/2026, ses passages sont des cles « scenario du plan,
@@ -104,15 +104,18 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   await page.reload({waitUntil:'domcontentloaded'}); await pause(4500);
   const fin = await page.evaluate(()=>({
     chapo:(document.querySelector('.chapo')||{}).innerText||'',
-    bouton: !!document.querySelector('[data-avis="apres"]'),
-    texte:(document.querySelector('.avis-appel')||{}).innerText||'',
+    bouton:(document.querySelector('.fin-test [data-terminer]')||{}).innerText||'',
+    texte:(document.querySelector('.fin-test')||{}).innerText||'',
   }));
   console.log('    ', fin.chapo);
   verifier(/100 %/.test(fin.chapo),'la jauge est pleine',fin.chapo);
-  verifier(fin.bouton,'le questionnaire complet est proposé');
-  verifier(/tout déroulé/i.test(fin.texte),'et il le remercie',fin.texte.slice(0,50));
+  /* Un seul bouton à la fin : terminer ouvre l'avis tout seul. */
+  verifier(/Terminer et donner mon avis/.test(fin.bouton),'le questionnaire complet est proposé, par « Terminer et donner mon avis »',fin.bouton);
+  verifier(/tout est déroulé/i.test(fin.texte),'et la page le dit',fin.texte.slice(0,50));
 
-  await page.click('[data-avis="apres"]'); await pause(1500);
+  await page.click('.fin-test [data-terminer]'); await page.waitForSelector('[data-valider]',{timeout:10000}).catch(()=>{});
+  if (await page.$('[data-note-test="5"]')) await page.click('[data-note-test="5"]');
+  await page.click('[data-valider]'); await page.waitForSelector('[data-avis="belle"]',{timeout:15000}).catch(()=>{}); await pause(800);
   const f2 = await page.evaluate(()=>({
     familles: [...document.querySelectorAll('.avis-famille .bloc-tete')].map(h=>h.innerText.trim()),
     prix: document.querySelectorAll('[data-avis-champ*="cher"],[data-avis-champ*="affaire"],[data-avis-champ*="suspect"]').length,
