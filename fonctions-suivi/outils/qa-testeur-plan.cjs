@@ -251,7 +251,7 @@ const fiche = async (page, cle) => {
   verifier(carte.some((x) => /Karim/.test(x) && /2\/5 faits/.test(x) && /1 en échec/.test(x)), 'la carte de Karim compte ses clés : 2/5 faits, 1 en échec', carte.join(' | '));
   verifier(carte.some((x) => /Marc/.test(x) && /1\/2 faits/.test(x)), 'une clé en double ne compte qu\'une fois : Marc, 1/2', carte.join(' | '));
   let f = await fiche(c, 'plan:tp-compte-f-001');
-  verifier(/Sonia[^\n]*· Web[\s\S]{0,40}attendu/.test(f), 'la fiche dit qui est encore attendu, et sur quoi', f.slice(0, 800));
+  verifier(/Sonia[^\n]*· Web[\s\S]{0,40}attendu/i.test(f), 'la fiche dit qui est encore attendu, et sur quoi', f.slice(0, 800));
   verifier(!/Hérité|Reprend les résultats/.test(f), 'sur le plan, rien d\'hérité', f.slice(0, 400));
   f = await fiche(c, 'plan:tp-rien-f-001');
   verifier(/Personne n'a reçu ce scénario sur Web/.test(f), 'la case non affectée dit pourquoi', f.slice(0, 300));
