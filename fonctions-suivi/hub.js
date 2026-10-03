@@ -1424,3 +1424,54 @@ exports.hubAxeEcrit = onDocumentWritten({ region: REGION, document: 'projets/{pr
   await activite({ projet: projetId, type: 'axe', texte: `${geste.texte} « ${titre} »`, par: { uid: rb.par || null, nom: rb.nom || '', cote: 'client' }, cible: evenement.params.axeId, lien });
   await notifierEquipe(projetId, { type: 'axe', titre: geste.titre, texte: `${titre} · ${rb.nom || 'le client'} · ${nomProjet(projet)}`, lien: `#${lien}`, projet: projetId });
 });
+
+/* ==========================================================================
+   Les annonces de Capmedia
+   À la publication d'une annonce, une notification dans la boîte de chaque
+   client visé : tous les clients des projets ouverts, ou ceux que l'annonce
+   nomme (cible.uids, dépliée par le Cockpit). Une annonce ne prévient
+   qu'une fois : la marque annoncesNotifiees/{id}, créée avant d'écrire,
+   arrête une seconde publication comme un déclencheur rejoué. Pas d'e-mail.
+   ========================================================================== */
+
+const TITRES_ANNONCE = {
+  tarif: 'Capmedia annonce un changement de tarifs',
+  indisponibilite: 'Capmedia vous prévient d\'une absence',
+  nouveaute: 'Une nouveauté chez Capmedia',
+  competence: 'Une nouvelle compétence chez Capmedia',
+  changement: 'Un changement chez Capmedia',
+};
+
+/** Les comptes clients visés par une annonce, sur les projets ouverts. */
+async function destinatairesAnnonce(a) {
+  const cible = a.cible || {};
+  const nommes = cible.tous === false ? new Set((cible.uids || []).map(String)) : null;
+  const uids = new Set();
+  const projets = await bdd.collection('projets').where('ouvert', '==', true).get();
+  for (const d of projets.docs) {
+    for (const uid of await communication.uidsClients({ id: d.id, ...d.data() }, 'annonce')) {
+      if (!nommes || nommes.has(uid)) uids.add(uid);
+    }
+  }
+  return [...uids];
+}
+
+exports.hubAnnonceEcrite = onDocumentWritten({ region: REGION, document: 'annonces/{annonceId}' }, async (evenement) => {
+  const avant = evenement.data.before.exists ? evenement.data.before.data() : null;
+  const apres = evenement.data.after.exists ? evenement.data.after.data() : null;
+  if (!apres || apres.publication !== 'publiee') return;
+  if (avant && avant.publication === 'publiee') return;
+  const id = evenement.params.annonceId;
+  try {
+    await bdd.doc(`annoncesNotifiees/${id}`).create({ le: FieldValue.serverTimestamp() });
+  } catch (err) {
+    if (err && (err.code === 6 || /already exists/i.test(String(err.message)))) return;
+    console.error(`Annonce ${id} : marque de notification impossible`, err);
+    return;
+  }
+  const uids = await destinatairesAnnonce(apres);
+  await notifier(uids, {
+    type: 'annonce', titre: TITRES_ANNONCE[apres.type] || 'Une annonce de Capmedia',
+    texte: String(apres.titre || '').slice(0, 140), lien: '#/annonces', projet: null,
+  });
+});

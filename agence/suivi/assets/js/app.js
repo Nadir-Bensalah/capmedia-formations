@@ -37,6 +37,9 @@ import * as demandesProjet from './vues/demandes-projet.js';
    sont construites par d'autres lots (ici, une page « À venir » tient
    l'adresse) ; Marketing reste masquée au client tant qu'elle est vide. */
 import * as marketing from './vues/marketing.js';
+/* Les annonces de Capmedia : hors des projets, en bas du rail. */
+import * as annonces from './vues/annonces.js';
+import { nonLues as annoncesNonLues } from './annonces-format.js';
 
 const session = await exigerSession();
 if (!session) throw new Error('session absente');
@@ -122,7 +125,9 @@ const compter = () => {
   /* Les demandes de projet du client : l'entrée « Mes demandes de projet »
      n'apparaît que s'il en a au moins une. */
   const demandesDeProjet = (magasin.lire(K.demandesProjet) || []).length;
-  return { projets, attente, nonLus, profil, scenariosDuClient, parcoursDuClient, forfaits, maintenanceConnue, campagnesEnCours, demandesDeProjet };
+  /* Les annonces de Capmedia publiées depuis sa dernière lecture. */
+  const annoncesNeuves = annoncesNonLues(magasin.lire(K.annonces) || [], profil);
+  return { projets, attente, nonLus, profil, scenariosDuClient, parcoursDuClient, forfaits, maintenanceConnue, campagnesEnCours, demandesDeProjet, annoncesNeuves };
 };
 
 /* Le projet où l'on se trouve : /projets/{p}/..., /messages/{p}, ou une
@@ -215,7 +220,7 @@ const entreesProjet = (p, { attente, nonLusP }) => {
 };
 
 const construireNavigation = () => {
-  const { projets, attente, profil, demandesDeProjet } = compter();
+  const { projets, attente, profil, demandesDeProjet, annoncesNeuves } = compter();
   const actifs = projets.filter((p) => !p.archive);
   const enCours = actifs.filter(projetEstActif);
   const uid = session.utilisateur.uid;
@@ -246,6 +251,9 @@ const construireNavigation = () => {
         { chemin: '/nouveau-projet', libelle: 'Demander un projet', icone: 'plus' },
         ...(demandesDeProjet ? [{ chemin: '/nouveaux-projets', libelle: 'Mes demandes de projet', icone: 'sparkle', sous: true, compte: { total: demandesDeProjet } }] : []),
         { chemin: '/parametres', libelle: 'Paramètres', icone: 'parametres' },
+        /* Ce que Capmedia annonce (nouveautés, tarifs, congés), après les
+           paramètres ; le badge compte ce qui n'a pas été lu. */
+        { chemin: '/annonces', libelle: 'Annonces', icone: 'porteVoix', compte: { total: 0, neuf: annoncesNeuves } },
       ],
     },
   ]);
@@ -256,7 +264,7 @@ const construireNavigation = () => {
    arbre. Sans lui, les entrées poussaient une à une à mesure que leurs
    données arrivaient, et le rail sautait. */
 const clesDuProjet = (pid) => [K.tickets(pid), K.validations(pid), K.documents(pid), K.fichiers(pid), K.taches(pid), K.blocages(pid), K.messages(pid), K.maintenance(pid), K.scenarios(pid), K.parcours(pid), K.campagnes(pid), K.liens(pid), K.notes(pid), K.axes(pid), K.reunions(pid)];
-const clesNavigation = () => [K.projets, K.profil, K.demandesProjet, ...(magasin.lire(K.projets) || session.projets || []).flatMap((p) => clesDuProjet(p.id))];
+const clesNavigation = () => [K.projets, K.profil, K.demandesProjet, K.annonces, ...(magasin.lire(K.projets) || session.projets || []).flatMap((p) => clesDuProjet(p.id))];
 const dessinerNav = magasin.dessinateur(construireNavigation, 80, clesNavigation, 4000);
 const ecoutees = new Set();
 const ecouterNav = () => clesNavigation().forEach((cle) => { if (!ecoutees.has(cle)) { ecoutees.add(cle); magasin.sur(cle, dessinerNav); } });
@@ -312,7 +320,7 @@ enregistrerRecherche((terme) => {
     ['Calendrier', '/calendrier', 'calendrier'], ['Fichiers', '/fichiers', 'fichiers'], ['Maintenance', '/maintenance', 'sante'],
     ...(projets.some((p) => estResponsable(session, p)) ? [['Devis et factures', '/finances', 'finances']] : []),
     ...(scenariosDuClient || parcoursDuClient ? [['Campagne de tests', '/tests', 'bug']] : []),
-    ['Paramètres', '/parametres', 'parametres'], ['Demander un projet', '/nouveau-projet', 'plus'],
+    ['Paramètres', '/parametres', 'parametres'], ['Annonces Capmedia', '/annonces', 'porteVoix'], ['Demander un projet', '/nouveau-projet', 'plus'],
   ];
   pages.forEach(([libelle, chemin, ic]) => items.push({ groupe: 'Pages', libelle, sous: 'Page de l\'espace', icone: ic, chemin }));
   projets.forEach((p) => items.push({ groupe: 'Projets', libelle: p.nom, sous: p.ref, icone: 'projets', chemin: `/projets/${p.id}` }));
@@ -408,6 +416,7 @@ definir([
   { chemin: '/documents', vue: (ctx) => { naviguer(`/fichiers${ctx.requete && ctx.requete.projet ? `?projet=${encodeURIComponent(ctx.requete.projet)}` : ''}`, { remplacer: true }); } },
   { chemin: '/maintenance', vue: (ctx) => maintenance.vue(ctx, env) },
   { chemin: '/parametres', vue: (ctx) => parametres.vue(ctx, env) },
+  { chemin: '/annonces', vue: (ctx) => annonces.vue(ctx, env) },
   { chemin: '/nouveau-projet', vue: (ctx) => nouveauProjet.nouvelle(ctx, env) },
   { chemin: '/nouveaux-projets', vue: (ctx) => demandesProjet.vue(ctx, env) },
   { chemin: '/nouveaux-projets/:id', vue: (ctx) => nouveauProjet.detail(ctx, env) },

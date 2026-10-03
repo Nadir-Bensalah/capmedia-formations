@@ -128,6 +128,16 @@ export const K = {
      administrateur, projet par projet pour un agent. */
   notesClient: 'notes-client',
   notesPartagees: 'notes-partagees',
+  /* Les annonces de Capmedia (annonces/{id}). L'équipe les lit toutes ;
+     le client lit les publiées qui le visent, par deux requêtes (« tous
+     les clients », puis celles qui le nomment) assemblées en une clé.
+     Leur introduction vit dans reglages/annonces. */
+  annonces: 'annonces',
+  annoncesTous: 'annonces:tous',
+  annoncesMiennes: 'annonces:miennes',
+  reglagesAnnonces: 'reglages:annonces',
+  /* La grille de tarifs, source unique (tarifs.js) : lue par tout le monde. */
+  tarifs: 'reglages:tarifs',
   notesPartageesProjet: (p) => `notes-partagees:${p}`,
 };
 
@@ -272,6 +282,9 @@ export const abonnerGlobal = (lot, session) => {
   /* Les coordonnées de règlement : le client les lit sur une facture due,
      l'équipe les règle dans les paramètres. Un seul document. */
   lot.abonner(K.reglages, () => doc(bdd, 'reglages', 'finance'));
+  lot.abonner(K.reglagesAnnonces, () => doc(bdd, 'reglages', 'annonces'));
+  lot.abonner(K.tarifs, () => doc(bdd, 'reglages', 'tarifs'));
+  abonnerAnnonces(lot, session);
   if (equipe && session.equipe.role !== 'admin') {
     abonnerAgent(lot, session);
   } else if (equipe) {
@@ -351,6 +364,22 @@ export const abonnerGlobal = (lot, session) => {
     suivre(session.projets);
     lot.sur(K.projets, suivre);
   }
+};
+
+/* Les annonces : l'équipe lit tout, brouillons compris ; le client ne
+   demande que les publiées qui le visent (les règles refuseraient une
+   requête plus large). */
+const abonnerAnnonces = (lot, session) => {
+  if (session.equipe) { lot.abonner(K.annonces, () => col('annonces')); return; }
+  if (session.testeur) return;
+  const uid = session.utilisateur.uid;
+  lot.abonner(K.annoncesTous, () => query(col('annonces'), where('publication', '==', 'publiee'), where('cible.tous', '==', true)));
+  lot.abonner(K.annoncesMiennes, () => query(col('annonces'), where('publication', '==', 'publiee'), where('cible.uids', 'array-contains', uid)));
+  lot.ajouter(magasin.deriver(K.annonces, [K.annoncesTous, K.annoncesMiennes], () => {
+    const vues = new Map();
+    [...(magasin.lire(K.annoncesTous) || []), ...(magasin.lire(K.annoncesMiennes) || [])].forEach((a) => vues.set(a.id, a));
+    return [...vues.values()];
+  }));
 };
 
 /**
@@ -677,6 +706,39 @@ export const ecrire = {
     titulaire: String(d.titulaire || '').trim(), iban: String(d.iban || '').replace(/\s+/g, '').toUpperCase(), bic: String(d.bic || '').trim().toUpperCase(),
     banque: String(d.banque || '').trim(), mention: String(d.mention || '').trim(), maj: serverTimestamp(),
   }),
+
+  /* --- Les annonces de Capmedia ---------------------------------------
+     L'administrateur les écrit en entier (firestore.rules : annonceValide).
+     Publier date la publication : c'est elle qui fait le « non lu » du
+     client, et c'est elle qui déclenche la notification (hubAnnonceEcrite). */
+  enregistrerAnnonce: (id, d) => {
+    const fiche = {
+      type: d.type, titre: d.titre, texte: d.texte || '', dateEffet: d.dateEffet || '',
+      publication: d.publication === 'publiee' ? 'publiee' : 'brouillon',
+      publieLe: d.publieLe === undefined ? null : d.publieLe,
+      epinglee: Boolean(d.epinglee),
+      cible: { tous: d.cible.tous !== false, organisations: d.cible.organisations || [], uids: d.cible.uids || [] },
+      tarif: d.type === 'tarif' ? d.tarif : null,
+      indisponibilite: d.type === 'indisponibilite' ? d.indisponibilite : null,
+      maj: serverTimestamp(),
+    };
+    if (id) return updateDoc(doc(bdd, 'annonces', id), fiche).then(() => ({ id }));
+    return addDoc(col('annonces'), { ...fiche, cree: serverTimestamp() });
+  },
+  publierAnnonce: (id, oui) => updateDoc(doc(bdd, 'annonces', id), {
+    publication: oui ? 'publiee' : 'brouillon', publieLe: oui ? serverTimestamp() : null, maj: serverTimestamp(),
+  }),
+  epinglerAnnonce: (id, oui) => updateDoc(doc(bdd, 'annonces', id), { epinglee: Boolean(oui), maj: serverTimestamp() }),
+  supprimerAnnonce: (id) => deleteDoc(doc(bdd, 'annonces', id)),
+  /* La grille de tarifs (admin ou finance) : seuil, TVA, périodes. */
+  poserGrilleTarifs: (g) => setDoc(doc(bdd, 'reglages', 'tarifs'), {
+    seuilMois: Math.round(Number(g.seuilMois)), tva: Number(g.tva), devise: 'EUR',
+    periodes: (g.periodes || []).map((p) => ({ debut: String(p.debut), long: Number(p.long), court: Number(p.court) })),
+    maj: serverTimestamp(),
+  }),
+  poserIntroAnnonces: (texte) => setDoc(doc(bdd, 'reglages', 'annonces'), { intro: String(texte || '').slice(0, 600), maj: serverTimestamp() }),
+  /* Ouvrir la page des annonces les marque lues : une date, dans le profil. */
+  marquerAnnoncesLues: (uid) => setDoc(doc(bdd, 'profils', uid), { annoncesLues: serverTimestamp(), maj: serverTimestamp() }, { merge: true }),
 
   /* --- Les demandes de nouveau projet --------------------------------- */
   async creerDemandeProjet(session, d, pieces = []) {
