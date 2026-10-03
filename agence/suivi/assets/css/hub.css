@@ -2580,6 +2580,49 @@ p.axe-titre { cursor: default; }
 .axe-jours { display: inline-flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums; color: var(--encre-2); }
 .axe-environ { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; font: 700 13px/1 var(--police); color: var(--bleu); background: color-mix(in srgb, var(--bleu) 12%, transparent); }
 
+/* Le calculateur des axes (panier.js, vues/evolutions.js) : un bouton qui
+   reste en haut à droite pendant qu'on descend, une étiquette qui file de
+   la ligne vers lui, et la modale qui fait la somme. Le repère tient au
+   compteur en chiffres fixes, pas à une pastille. */
+.page-axes--panier { position: relative; }
+.panier-ancre { position: sticky; top: 14px; z-index: 6; height: 0; display: flex; justify-content: flex-end; pointer-events: none; }
+.panier-ancre .panier-bouton { pointer-events: auto; box-shadow: var(--ombre-sm); }
+.page-axes--panier .page-tete { padding-right: 190px; }
+.panier-bouton { gap: 8px; }
+.panier-bouton svg { width: 17px; height: 17px; }
+.panier-compte { min-width: 1.4em; text-align: right; font: 600 13px/1 var(--mono, var(--police-mono)); font-variant-numeric: tabular-nums; color: var(--encre-3); }
+.panier-bouton.est-plein .panier-compte { color: var(--encre); }
+.panier-fantome { position: fixed; z-index: 9999; max-width: 320px; padding: 6px 12px; border-radius: 10px; pointer-events: none;
+  font: 600 13px/1.3 var(--police); color: var(--fond); background: var(--encre); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: var(--ombre-survol); }
+.axe.est-au-panier .axe-panier { color: var(--encre); }
+.panier-photo { display: grid; gap: 16px; }
+.panier-lignes { list-style: none; margin: 0; padding: 0; display: grid; }
+.panier-ligne { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; align-items: center; gap: 4px 16px; padding: 10px 0; border-bottom: 1px solid var(--trait); }
+.panier-ligne-titre { font: var(--t-corps-fort); font-weight: 600; color: var(--encre); overflow-wrap: anywhere; }
+.panier-ligne-plateforme { font: var(--t-petit); color: var(--encre-3); }
+.panier-ligne-jours { font: 500 13px/1.4 var(--police); color: var(--encre-2); font-variant-numeric: tabular-nums; text-align: right; min-width: 7.5em; }
+.panier-total { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; font: var(--t-petit); color: var(--encre-2); }
+.panier-total strong { font: 600 17px/1.2 var(--police); color: var(--encre); font-variant-numeric: tabular-nums; }
+.panier-total-nature { margin-left: auto; color: var(--encre-3); }
+.panier-periodes { display: grid; gap: 12px; }
+.panier-periodes--deux { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.panier-periode { padding: 14px 16px; border-radius: 12px; background: var(--fond-2); }
+.panier-periode-titre { margin: 0; font: 600 13px/1.4 var(--police); color: var(--encre); }
+.panier-periode-tjm { margin: 2px 0 10px; font: var(--t-petit); color: var(--encre-3); font-variant-numeric: tabular-nums; }
+.panier-montants { margin: 0; display: grid; gap: 4px; }
+.panier-montants div { display: flex; justify-content: space-between; gap: 12px; font: var(--t-petit); color: var(--encre-2); }
+.panier-montants dd { margin: 0; font-variant-numeric: tabular-nums; color: var(--encre); }
+.panier-montants .panier-ttc { padding-top: 6px; margin-top: 2px; font-weight: 600; }
+.panier-montants .panier-ttc dt, .panier-montants .panier-ttc dd { color: var(--encre); font-weight: 600; }
+.panier-mention { margin: 0; font: var(--t-petit); color: var(--encre-3); }
+.panier-vide { padding: 18px 0; display: grid; gap: 6px; }
+.demande-photo { margin-top: 18px; }
+@media (max-width: 720px) {
+  .page-axes--panier .page-tete { padding-right: 0; padding-top: 48px; }
+  .panier-ligne { grid-template-columns: minmax(0, 1fr) auto; }
+  .panier-ligne-plateforme { grid-column: 1; }
+  .panier-periodes--deux { grid-template-columns: minmax(0, 1fr); }
+}
 /* Annonces de Capmedia (03/10). Le type se lit à un mot teinté (fond pâle,
    texte de la même famille), sans pictogramme ; l'encart du tarif est un
    fond calme, sans bordure ni trait de côté. Le bandeau des congés est une

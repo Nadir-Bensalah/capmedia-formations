@@ -1060,6 +1060,46 @@ await refuse('ni sous un autre nom de document', setDoc(doc(equipe(), 'projets/a
 await doit('Camille ouvre une demande née d un axe', addDoc(collection(camille(), 'tickets'), demandeSuite({ axe: 'a-pub' })));
 await refuse('mais l identifiant de l axe reste borné', addDoc(collection(camille(), 'tickets'), demandeSuite({ axe: 'x'.repeat(81) })));
 
+console.log('\n== Le calculateur des axes et la demande de devis');
+const photoPanier = () => ({ lignes: [{ axe: 'a-pub', titre: 'Widgets', plateforme: 'ios', jours: 3 }], jours: 3, long: true, tva: 20,
+  periode: { debut: '2026-01-01', tjm: 380, ht: 1140, tva: 228, ttc: 1368 }, suivante: { debut: '2027-01-01', tjm: 420, ht: 1260, tva: 252, ttc: 1512 } });
+const demandePanier = (o = {}) => ({ projet: 'atelier', type: 'devis', statut: 'demande', origine: 'panier', numero: '', libelle: 'Axes d évolution : Widgets', description: '', portee: 'complementaire',
+  montant: null, tva: 20, ttc: null, date: serverTimestamp(), expiration: null, echeance: null, fichier: null, liens: [], reponse: null, archive: false,
+  par: { uid: CAMILLE, nom: 'Camille' }, photo: photoPanier(), ...o });
+await doit('Camille, responsable, garde son panier', setDoc(doc(camille(), `projets/atelier/paniers/${CAMILLE}`), { axes: ['a-pub'], maj: serverTimestamp() }));
+await doit('et le relit', getDoc(doc(camille(), `projets/atelier/paniers/${CAMILLE}`)));
+await refuse('pas avec une clé de trop', setDoc(doc(camille(), `projets/atelier/paniers/${CAMILLE}`), { axes: ['a-pub'], prix: 1, maj: serverTimestamp() }));
+await refuse('ni au nom d une autre', setDoc(doc(camille(), `projets/atelier/paniers/${LEA}`), { axes: ['a-pub'], maj: serverTimestamp() }));
+await refuse('ni avec plus de quarante axes', setDoc(doc(camille(), `projets/atelier/paniers/${CAMILLE}`), { axes: Array.from({ length: 41 }, (_, i) => `a${i}`), maj: serverTimestamp() }));
+await refuse('Camille, collaboratrice sur Duo, n a pas de panier', setDoc(doc(camille(), `projets/duo/paniers/${CAMILLE}`), { axes: ['d1'], maj: serverTimestamp() }));
+await refuse('Léa ne lit pas le panier de Camille', getDoc(doc(lea(), `projets/atelier/paniers/${CAMILLE}`)));
+await refuse('l équipe non plus : il est à Camille', getDoc(doc(equipe(), `projets/atelier/paniers/${CAMILLE}`)));
+await doit('Camille demande un devis : fiche, axe « À prévoir » et panier vidé d une seule écriture', (async () => {
+  const db = camille();
+  const b = writeBatch(db);
+  b.set(doc(db, 'documents/dem-1'), demandePanier());
+  b.update(doc(db, 'projets/atelier/axes/a-pub'), { reponse: { par: CAMILLE, nom: 'Camille', choix: 'a-prevoir', demande: '', devis: 'dem-1', le: serverTimestamp() }, maj: serverTimestamp() });
+  b.delete(doc(db, `projets/atelier/paniers/${CAMILLE}`));
+  await b.commit();
+})());
+await doit('elle lit sa demande', getDoc(doc(camille(), 'documents/dem-1')));
+await refuse('une demande avec un montant est refusée', setDoc(doc(camille(), 'documents/dem-x'), demandePanier({ montant: 10 })));
+await refuse('une demande déjà « envoyée » aussi', setDoc(doc(camille(), 'documents/dem-x'), demandePanier({ statut: 'envoye' })));
+await refuse('une demande au nom d une autre aussi', setDoc(doc(camille(), 'documents/dem-x'), demandePanier({ par: { uid: LEA, nom: 'Léa' } })));
+await refuse('une demande avec un PDF aussi', setDoc(doc(camille(), 'documents/dem-x'), demandePanier({ fichier: { chemin: 'x' } })));
+await refuse('une demande datée par le client aussi', setDoc(doc(camille(), 'documents/dem-x'), demandePanier({ date: Timestamp.fromDate(new Date('2020-01-01')) })));
+await refuse('une demande sans ligne aussi', setDoc(doc(camille(), 'documents/dem-x'), demandePanier({ photo: { ...photoPanier(), lignes: [] } })));
+await refuse('une facture créée par le client aussi', setDoc(doc(camille(), 'documents/dem-x'), demandePanier({ type: 'facture' })));
+await refuse('Léa ne demande pas de devis sur Atelier', setDoc(doc(lea(), 'documents/dem-x'), demandePanier({ par: { uid: LEA, nom: 'Léa' } })));
+await refuse('Camille, collaboratrice sur Duo, non plus', setDoc(doc(camille(), 'documents/dem-x'), demandePanier({ projet: 'duo' })));
+await refuse('Camille ne retouche pas la photo', updateDoc(doc(camille(), 'documents/dem-1'), { 'photo.jours': 1 }));
+await refuse('ni ne passe sa demande en « envoyé »', updateDoc(doc(camille(), 'documents/dem-1'), { statut: 'envoye' }));
+await refuse('ni ne l accepte', updateDoc(doc(camille(), 'documents/dem-1'), { statut: 'accepte', reponse: { par: CAMILLE, nom: 'Camille', date: serverTimestamp(), commentaire: '' } }));
+await refuse('ni n y pose un montant', updateDoc(doc(camille(), 'documents/dem-1'), { montant: 1 }));
+await refuse('Léa ne l annule pas', updateDoc(doc(lea(), 'documents/dem-1'), { statut: 'annule', annuleLe: serverTimestamp() }));
+await doit('Camille l annule, datée par le serveur', updateDoc(doc(camille(), 'documents/dem-1'), { statut: 'annule', annuleLe: serverTimestamp() }));
+await refuse('une demande annulée ne revient pas', updateDoc(doc(camille(), 'documents/dem-1'), { statut: 'demande' }));
+await refuse('un devis envoyé ne s annule pas côté client', updateDoc(doc(camille(), 'documents/d-perime'), { statut: 'annule', annuleLe: serverTimestamp() }));
 console.log('\n== Les annonces de Capmedia');
 const annonce = (o = {}) => ({
   type: 'information', titre: 'Nouveau : les applications de bureau', texte: 'Deux lignes.', dateEffet: '', publication: 'publiee', publieLe: serverTimestamp(),
