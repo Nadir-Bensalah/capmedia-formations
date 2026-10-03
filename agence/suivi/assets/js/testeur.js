@@ -25,7 +25,7 @@ import {
 import { icone, pastille, toast, agir, modale, vide } from './ui.js';
 import { monterCoquille, definirNavigation, definirEtat, filAriane, enregistrerRecherche } from './coquille.js';
 import { definir, demarrer, courant, naviguer } from './routeur.js';
-import { tableauTesteur, ETATS_CASE, clesDuTesteur, sectionsDesCles, scenariosDuTesteur, clePassage } from './verdicts.js';
+import { tableauTesteur, ETATS_CASE, clesDuTesteur, sectionsDesCles, scenariosDuTesteur, clePassage, resultatCourt, resultatLong } from './verdicts.js';
 import { barreHtml, famillesHtml } from './grille.js';
 import { ouvrirAccueil, accueilVu, marquerAccueilVu } from './accueil-testeur.js';
 import { ouvrirFiche, consignerAppareil } from './fiche-testeur.js';
@@ -845,18 +845,22 @@ const poser = async (s, resultat, moi) => {
     extra = rep;
   }
 
-  /* L'identifiant porte l'uid : c'est lui qui rend le cloisonnement
-     opposable avant service, et les règles l'exigent tel quel. */
+  /* L'identifiant porte l'uid, le scénario du plan et la plateforme (la
+     clé de l'affectation) : c'est lui qui rend le cloisonnement opposable
+     avant service, et les règles l'exigent tel quel. Le résultat s'écrit
+     en toutes lettres ; l'écran, lui, raisonne en ok, ko, na. */
   const uid = auth.currentUser.uid;
-  const chemin = `projets/${etat.campagne.projet}/campagnes/${etat.campagne.id}/passages/${uid}__${s.ref}`;
+  const scenario = s.id || s.ref;
+  const plateforme = s.plateforme || plateformeCourante;
+  const chemin = `projets/${etat.campagne.projet}/campagnes/${etat.campagne.id}/passages/${uid}__${clePassage(scenario, plateforme)}`;
   const passage = {
-    scenario: s.id || s.ref, testeur: uid, plateforme: s.plateforme || plateformeCourante, resultat,
+    scenario, testeur: uid, plateforme, resultat: resultatLong(resultat),
     commentaire: extra.commentaire, preuves: extra.preuves,
-    contexte: contexteAppareil(), le: serverTimestamp(),
+    contexte: contexteAppareil(), cree: serverTimestamp(), maj: serverTimestamp(),
   };
   try {
     await setDoc(doc(bdd, chemin), passage);
-    etat.passages.set(s.ref, passage);
+    etat.passages.set(s.ref, { ...passage, resultat });
     rendre(moi);
     if (resultat === 'ko') toast('Échec enregistré, merci. On le reproduit de notre côté.');
     return true;
@@ -1147,7 +1151,7 @@ const suivreCampagne = (moi, c, redessiner) => {
   ecoutes.campagne.push(onSnapshot(query(collection(bdd, 'projets', pid, 'campagnes', c.id, 'passages'), where('testeur', '==', moi.uid)), (inst) => {
     /* Rangés par clé : le même scénario passé sur iPhone et sur le web
        fait deux résultats, jamais un seul qui écrase l'autre. */
-    etat.passages = new Map(inst.docs.map((d) => { const x = d.data(); return [clePassage(x.scenario, x.plateforme), x]; }));
+    etat.passages = new Map(inst.docs.map((d) => { const x = d.data(); return [clePassage(x.scenario, x.plateforme), { ...x, resultat: resultatCourt(x.resultat) }]; }));
     recu.passages = true;
     dessinerSiComplet();
   }, (e) => { console.warn('[testeur] passages', e); recu.passages = true; dessinerSiComplet(); }));

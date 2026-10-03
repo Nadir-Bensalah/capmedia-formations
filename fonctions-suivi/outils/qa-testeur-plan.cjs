@@ -215,6 +215,19 @@ const fiche = async (page, cle) => {
   verifier(/2 sur 5/.test(vu.texte), 'son avancement compte ses clés : 2 sur 5', (vu.texte.match(/\d+ sur \d+[^\n]*/) || [''])[0]);
   verifier(lectures.has('tp-compte') && lectures.has('tp-taches'), 'le téléphone lit les sections de ses clés', [...lectures].join(','));
   verifier(!lectures.has('tp-courses') && !lectures.has('tp-rien') && !lectures.has('*collection*'), 'et jamais les autres, ni tout le plan d\'un coup', [...lectures].join(','));
+  /* Poser un résultat depuis la feuille : le passage s'écrit au modèle
+     commun (identifiant par clé, résultat en toutes lettres, heures du
+     serveur), et les règles l'acceptent. */
+  await t.click('.tb-case[data-case="tp-compte-s-001__ios"]').catch(() => {});
+  await t.waitForSelector('[data-feuille-poser="ok"]', { timeout: 8000 }).catch(() => {});
+  await t.click('[data-feuille-poser="ok"]').catch(() => {});
+  const ecrit = await attendre(async () => { const d = await lire(`projets/${P}/campagnes/${CID}/passages/${karim}__tp-compte-s-001__ios`); return d && d.fields ? d : null; }, 30, 500);
+  const fx = (ecrit || {}).fields || {};
+  verifier(ecrit && (fx.resultat || {}).stringValue === 'reussi' && (fx.scenario || {}).stringValue === 'tp-compte-s-001' && (fx.plateforme || {}).stringValue === 'ios',
+    'Réussi depuis la feuille : le passage <uid>__tp-compte-s-001__ios, résultat « reussi »', JSON.stringify(fx).slice(0, 300));
+  verifier(ecrit && fx.cree && fx.maj && !fx.le, 'avec cree et maj, sans l\'ancien « le »', Object.keys(fx).join(','));
+  const apres = await attendre(async () => (await t.$eval('.tb-case[data-case="tp-compte-s-001__ios"]', (x) => x.dataset.e).catch(() => '')) === 'ok', 20, 500);
+  verifier(apres, 'et la case passe au vert chez lui');
   await t.click('[data-vue="liste"]').catch(() => {}); await pause(600);
   const liste = await t.evaluate(() => ({ titres: [...document.querySelectorAll('.bloc-tete')].map((h) => h.firstChild.textContent.trim()), filtre: ((document.querySelector('#f-bloc option') || {}).textContent || '').trim() }));
   verifier(liste.filtre === 'Toutes les sections', 'la vue Liste parle de sections', liste.filtre);
@@ -237,11 +250,11 @@ const fiche = async (page, cle) => {
   await connecter(c, 'agent.essai@exemple.test');
   await allerHumains(c);
   let v = await cases(c);
-  const attendu = { 'tp-compte-f-001': 'fragile', 'tp-compte-s-001': 'nonteste', 'tp-taches-f-001': 'cours', 'tp-taches-u-001': 'nonteste', 'tp-courses-f-001': 'nonteste', 'tp-rien-f-001': 'trou' };
+  const attendu = { 'tp-compte-f-001': 'fragile', 'tp-compte-s-001': 'cours', 'tp-taches-f-001': 'cours', 'tp-taches-u-001': 'nonteste', 'tp-courses-f-001': 'nonteste', 'tp-rien-f-001': 'trou' };
   const faux = Object.entries(attendu).filter(([k, e]) => v[k] !== e);
   verifier(!faux.length && !('tp-compte-f-002' in v), 'les cases suivent les passages du plan : fragile, en cours, pas encore testé, non affecté ; pas de case robot', JSON.stringify(v));
   const m = await meta(c);
-  verifier(/\b4 passages faits sur 11\b/.test(m), 'l\'avancement en passages : 4 faits sur les 11 de l\'affectation', m);
+  verifier(/\b5 passages faits sur 11\b/.test(m), 'l\'avancement en passages : 5 faits sur les 11 de l\'affectation (dont celui posé par Karim)', m);
   await plateforme(c, 'ios'); v = await cases(c);
   verifier(v['tp-taches-f-001'] === 'nonteste' && v['tp-compte-f-001'] === 'ok', 'sur iPhone : le réussi d\'Android ne colore pas la case ; deux réussis sur deux', JSON.stringify(v));
   await plateforme(c, 'android'); v = await cases(c);
@@ -250,7 +263,7 @@ const fiche = async (page, cle) => {
   verifier(v['tp-compte-f-001'] === 'fragile' && v['tp-taches-f-001'] === 'nonteste' && v['tp-rien-f-001'] === 'trou', 'sur le web : l\'échec de Karim, et le scénario que personne n\'a reçu', JSON.stringify(v));
   await plateforme(c, '');
   const carte = await c.evaluate(() => [...document.querySelectorAll('.tb-gens .tb-personne')].map((x) => x.innerText.replace(/\s+/g, ' ')));
-  verifier(carte.some((x) => /Karim/.test(x) && /2\/5 faits/.test(x) && /1 en échec/.test(x)), 'la carte de Karim compte ses clés : 2/5 faits, 1 en échec', carte.join(' | '));
+  verifier(carte.some((x) => /Karim/.test(x) && /3\/5 faits/.test(x) && /1 en échec/.test(x)), 'la carte de Karim compte ses clés : 3/5 faits, 1 en échec', carte.join(' | '));
   verifier(carte.some((x) => /Marc/.test(x) && /1\/2 faits/.test(x)), 'une clé en double ne compte qu\'une fois : Marc, 1/2', carte.join(' | '));
   let f = await fiche(c, 'plan:tp-compte-f-001');
   verifier(/Sonia[^\n]*· Web[\s\S]{0,40}attendu/i.test(f), 'la fiche dit qui est encore attendu, et sur quoi', f.slice(0, 800));

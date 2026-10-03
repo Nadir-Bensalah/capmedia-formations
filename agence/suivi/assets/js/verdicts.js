@@ -58,6 +58,9 @@ const GRAVES = ['bloquant', 'critique'];
    résultat ne se perde d'une écriture à l'autre. */
 const RESULTATS_LONGS = { reussi: 'ok', echec: 'ko', 'sans-objet': 'na' };
 export const resultatCourt = (r) => RESULTATS_LONGS[r] || r;
+/** La forme écrite d'un résultat (ok → reussi, ko → echec, na → sans-objet). */
+const RESULTATS_COURTS = Object.fromEntries(Object.entries(RESULTATS_LONGS).map(([l, c]) => [c, l]));
+export const resultatLong = (r) => RESULTATS_COURTS[r] || r;
 const enCourt = (p) => (p && RESULTATS_LONGS[p.resultat] ? { ...p, resultat: RESULTATS_LONGS[p.resultat] } : p);
 const OUVERTES = ['nouvelle', 'confirmee'];
 
