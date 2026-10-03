@@ -1402,8 +1402,10 @@ service cloud.firestore {
     // (titulaire, IBAN, BIC, banque, mention), lues par tout client
     // connecté sur une facture due (il n'y a qu'une agence), écrites par la
     // finance de l'équipe.
+    // Un testeur n'est client de rien : ni la grille de tarifs ni les
+    // coordonnées bancaires ne le regardent.
     match /reglages/{cle} {
-      allow read: if connecte();
+      allow read: if connecte() && request.auth.token.get('testeur', false) != true;
       // L'introduction de la page « Annonces Capmedia » : un texte, écrit
       // par l'administrateur.
       allow write: if cle == 'annonces'
@@ -1448,7 +1450,11 @@ service cloud.firestore {
         return get(/databases/$(database)/documents/demandesProjet/$(demandeId)).data;
       }
       allow read: if estAdmin() || (connecte() && resource.data.par.uid == moi());
+      // Un testeur ne se fait pas prospect : une adresse, un seul rôle, et
+      // une demande lui rouvrait l'espace client après son retrait.
       allow create: if connecte()
+        && request.auth.token.get('testeur', false) != true
+        && !exists(/databases/$(database)/documents/testeurs/$(moi()))
         && request.resource.data.keys().hasOnly([
              'organisation', 'par', 'titre', 'idee', 'objectifs', 'type', 'plateformes', 'budget', 'delai',
              'description', 'fonctionnalites', 'exemples', 'liens', 'pieces', 'statut', 'projet', 'cree', 'maj'
@@ -1589,6 +1595,9 @@ service cloud.firestore {
           && texteRequis(request.resource.data.texte, 4000)
           && request.resource.data.pieces is list && request.resource.data.pieces.size() == 0
           && request.resource.data.date == request.time
+          && request.resource.data.de is map
+          && request.resource.data.de.keys().hasOnly(['uid', 'nom', 'cote'])
+          && texteBorne(request.resource.data.de.get('nom', ''), 80)
           && request.resource.data.de.uid == moi()
           && ((estTesteur() && testeurId == moi() && request.resource.data.de.cote == 'testeur')
               || (estEquipe() && request.resource.data.de.cote == 'equipe'));
@@ -1802,58 +1811,92 @@ service cloud.firestore {
                       || (estTesteur() && moi() in resource.data.testeurs);
         allow write:  if equipeSurProjet(projetId);
 
-        // Le passage : un scénario, un testeur, une campagne. C'est la seule
-        // chose qu'un testeur écrit, et il n'écrit que la sienne.
+        // Le passage : un testeur, un scénario du plan, une plateforme.
+        // C'est ce qu'un testeur écrit, et il n'écrit que le sien.
         //
-        // L'identifiant du document porte le testeur (« <uid>__DI-15 »), ce
-        // qui rend le cloisonnement vérifiable sans lire le document : une
+        // L'identifiant porte les trois (« <uid>__<scénario>__<plateforme> »),
+        // ce qui rend le cloisonnement vérifiable sans lire le document : une
         // requête sur les passages d'autrui est refusée avant d'être servie.
+        //
+        // La clé « <scénario>__<plateforme> » doit figurer dans l'affectation
+        // que l'équipe a posée pour ce testeur. Sans cette borne, un testeur
+        // inventait un scénario au texte libre, et chaque échec inventé
+        // devenait une anomalie, donc un courriel et une notification chez
+        // le client. Elle borne aussi le nombre de passages possibles.
         match /passages/{passageId} {
           allow read:   if accesProjet(projetId)
                         || (estTesteur() && resource.data.testeur == moi());
 
-          allow create: if testeurDeLaCampagne(projetId, campagneId)
-            && campagneOuverte(projetId, campagneId)
-            && !testeurATermine(projetId, campagneId)
-            && passageId == moi() + '__' + request.resource.data.scenario
-            && request.resource.data.testeur == moi()
-            && request.resource.data.keys().hasOnly([
-                 'scenario', 'testeur', 'plateforme', 'resultat',
-                 'commentaire', 'preuves', 'contexte', 'le'
-               ])
-            && request.resource.data.resultat in ['ok', 'ko', 'na']
-            && request.resource.data.plateforme in ['ios', 'android', 'web']
-            && texteBorne(request.resource.data.commentaire, 4000)
-            && request.resource.data.preuves is list
-            && request.resource.data.preuves.size() <= 5
-            // Un échec sans preuve n'est pas un rapport, c'est une opinion.
-            && (request.resource.data.resultat != 'ko'
-                || request.resource.data.preuves.size() > 0);
+          function clesAffectees() {
+            return ficheCampagne(projetId, campagneId).get('affectation', {}).get(moi(), {}).get('cles', []);
+          }
 
-          // Se corriger, oui. Changer de scénario ou de testeur, non.
+          // Une preuve ne désigne qu'un fichier du dossier de CE testeur,
+          // pour CETTE campagne : jamais la capture d'un autre.
+          function preuveValide(l, i) {
+            return l.size() <= i
+              || (l[i] is string && l[i].size() <= 300
+                  && l[i].matches('campagnes/' + projetId + '/' + campagneId + '/' + moi() + '/[^/]+'));
+          }
+
+          // Le contexte de l'appareil, relevé par la machine : des clés
+          // connues, chacune bornée. Sans borne, un contexte de 900 Ko
+          // saturait l'anomalie partagée par tous les témoins.
+          function contexteBorne(c) {
+            return c is map
+              && c.keys().hasOnly(['agent', 'plateforme', 'langue', 'ecran', 'densite', 'sombre', 'appareil'])
+              && texteBorne(c.get('agent', ''), 300)
+              && texteBorne(c.get('plateforme', ''), 60)
+              && texteBorne(c.get('langue', ''), 12)
+              && texteBorne(c.get('ecran', ''), 20)
+              && texteBorne(c.get('appareil', ''), 120)
+              && c.get('densite', 1) is number
+              && c.get('sombre', false) is bool;
+          }
+
+          // Écrire un passage : affecté à la campagne, campagne en cours,
+          // ni « j'ai terminé », ni accès clos par l'équipe (« fins »).
+          function passageValide(d) {
+            return testeurDeLaCampagne(projetId, campagneId)
+              && campagneOuverte(projetId, campagneId)
+              && !testeurATermine(projetId, campagneId)
+              && accesTesteurEnCours(projetId, campagneId)
+              && d.keys().hasOnly([
+                   'scenario', 'testeur', 'plateforme', 'resultat',
+                   'commentaire', 'preuves', 'contexte', 'cree', 'maj'
+                 ])
+              && d.testeur == moi()
+              && d.scenario is string
+              && d.plateforme in ['ios', 'android', 'web']
+              && passageId == moi() + '__' + d.scenario + '__' + d.plateforme
+              && (d.scenario + '__' + d.plateforme) in clesAffectees()
+              && d.resultat in ['reussi', 'echec', 'sans-objet']
+              && texteBorne(d.commentaire, 4000)
+              && d.preuves is list
+              && d.preuves.size() <= 5
+              && preuveValide(d.preuves, 0) && preuveValide(d.preuves, 1)
+              && preuveValide(d.preuves, 2) && preuveValide(d.preuves, 3)
+              && preuveValide(d.preuves, 4)
+              && contexteBorne(d.get('contexte', {}))
+              && d.maj == request.time
+              // Un échec sans preuve n'est pas un rapport, c'est une opinion.
+              && (d.resultat != 'echec' || d.preuves.size() > 0);
+          }
+
+          allow create: if passageValide(request.resource.data)
+            && request.resource.data.cree == request.time;
+
+          // Se corriger, oui. Changer de scénario, de plateforme ou de
+          // testeur, non : l'identifiant les fige.
           //
-          // Les mêmes contrôles de forme qu'à la création, et pour une
-          // raison précise : un passage déjà consigné se réécrit avec
-          // setDoc, qui est une mise à jour et non une création. Une garde
-          // posée sur le seul « create » laisserait la correction passer
-          // sans contrôle, ce qui est exactement le trou qu'on cherchait.
-          allow update: if testeurDeLaCampagne(projetId, campagneId)
-            && campagneOuverte(projetId, campagneId)
-            && !testeurATermine(projetId, campagneId)
-            && resource.data.testeur == moi()
-            && request.resource.data.scenario == resource.data.scenario
-            && request.resource.data.testeur == resource.data.testeur
-            && request.resource.data.keys().hasOnly([
-                 'scenario', 'testeur', 'plateforme', 'resultat',
-                 'commentaire', 'preuves', 'contexte', 'le'
-               ])
-            && request.resource.data.resultat in ['ok', 'ko', 'na']
-            && request.resource.data.plateforme in ['ios', 'android', 'web']
-            && texteBorne(request.resource.data.commentaire, 4000)
-            && request.resource.data.preuves is list
-            && request.resource.data.preuves.size() <= 5
-            && (request.resource.data.resultat != 'ko'
-                || request.resource.data.preuves.size() > 0);
+          // Les mêmes contrôles qu'à la création, et pour une raison
+          // précise : un passage déjà consigné se réécrit avec setDoc, qui
+          // est une mise à jour et non une création. Une garde posée sur le
+          // seul « create » laisserait la correction passer sans contrôle.
+          allow update: if resource.data.testeur == moi()
+            && passageValide(request.resource.data)
+            && (request.resource.data.cree == resource.data.get('cree', null)
+                || request.resource.data.cree == request.time);
 
           // Un passage ne s'efface pas : c'est la mémoire de la campagne.
           allow delete: if false;
@@ -1916,6 +1959,9 @@ service cloud.firestore {
             && accesTesteurEnCours(projetId, campagneId)
             && appreciationBornee(request.resource.data)
             && request.resource.data.get('remarques', []).size() >= resource.data.get('remarques', []).size()
+            // Une remarque déjà envoyée (et notifiée) ne se réécrit pas :
+            // la liste ne fait que grandir par la fin.
+            && request.resource.data.get('remarques', []).hasAll(resource.data.get('remarques', []))
             && ('termine' in resource.data
                   ? request.resource.data.termine == resource.data.termine
                   : (!('termine' in request.resource.data) || request.resource.data.termine == request.time));
@@ -1923,6 +1969,42 @@ service cloud.firestore {
           // Une appréciation ne s'efface pas plus qu'un passage : c'est la
           // mémoire de la campagne, et se raviser après coup la falsifie.
           allow delete: if false;
+        }
+
+        // Les remarques libres d'un testeur, à part du questionnaire : un
+        // document par remarque. Il écrit les siennes tant que son accès
+        // court ; l'équipe et le client du projet les lisent (l'écran du
+        // client les présente sous « Testeur N »). Une remarque envoyée ne
+        // se réécrit pas : elle a déjà été lue.
+        match /remarques/{remarqueId} {
+          allow read:   if accesProjet(projetId)
+                        || (estTesteur() && resource.data.testeur == moi());
+          allow create: if testeurDeLaCampagne(projetId, campagneId)
+            && campagneOuverte(projetId, campagneId)
+            && accesTesteurEnCours(projetId, campagneId)
+            && request.resource.data.keys().hasOnly(['testeur', 'texte', 'scenario', 'plateforme', 'cree'])
+            && request.resource.data.testeur == moi()
+            && texteRequis(request.resource.data.texte, 2000)
+            && texteBorne(request.resource.data.get('scenario', ''), 80)
+            && request.resource.data.get('plateforme', '') in ['', 'ios', 'android', 'web']
+            && request.resource.data.cree == request.time;
+          allow update, delete: if false;
+        }
+
+        // Les identifiants de test, un document par testeur : le compte que
+        // CE testeur utilise dans l'application testée. Un bloc commun,
+        // lisible de tous, laissait chacun agir sous le compte d'un autre,
+        // et le client n'en a pas l'usage. Le testeur ne relit le sien que
+        // tant que la campagne est en cours et que son accès court.
+        match /acces/{testeurId} {
+          allow read:  if equipeSurProjet(projetId)
+                       || (testeurId == moi()
+                           && testeurDeLaCampagne(projetId, campagneId)
+                           && campagneOuverte(projetId, campagneId)
+                           && accesTesteurEnCours(projetId, campagneId));
+          allow write: if equipeSurProjet(projetId)
+            && request.resource.data.keys().hasOnly(['identifiants', 'maj'])
+            && texteBorne(request.resource.data.get('identifiants', ''), 2000);
         }
       }
 
