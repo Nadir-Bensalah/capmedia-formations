@@ -15,4 +15,9 @@ window.AZ_SUIVI = {
     messagingSenderId: '816332425386',
     appId:             '1:816332425386:web:a2e0c1ef4cd08520a5e8d3',
   },
+  /* La clé publique des notifications push (VAPID). Publique elle aussi :
+     elle dit au service de push que les envois viennent bien de nous. Sa
+     moitié privée ne quitte jamais le serveur (secret VAPID_PRIVEE), et
+     fonctions-suivi/push.js porte la même clé publique. */
+  vapid: 'BHivZYATTn5OIoeOyLL1G1Gkb9ywP6GGQlez1ekUoX0_5r6T1pWI6Fu0fwDsMHeo5Kzi2Q5w20vidtjHqDFDzUs',
 };

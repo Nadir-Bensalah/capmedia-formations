@@ -1,0 +1,16 @@
+{
+  "id": "./hub",
+  "name": "Capmedia Hub",
+  "short_name": "Hub",
+  "description": "Le suivi de vos projets avec Capmedia.",
+  "lang": "fr",
+  "start_url": "./hub",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#111113",
+  "theme_color": "#111113",
+  "icons": [
+    { "src": "assets/img/app-hub.png", "sizes": "256x256", "type": "image/png" },
+    { "src": "../assets/img/apple-touch-agence.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}

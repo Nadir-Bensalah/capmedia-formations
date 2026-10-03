@@ -471,5 +471,8 @@ demarrer();
    projet de l'adresse, sinon celle du dernier projet ouvert, sinon celle
    du premier projet en cours (bulle-projet.js). */
 import('./bulle-projet.js').then((b) => b.brancherBulle(env, { projetParDefaut, sansBulle: (route) => /^\/messages(\/|$)/.test(route.chemin || '') })).catch((e) => console.error('[bulle]', e));
+/* Les notifications push des messages, espace fermé (notifications-push.js) :
+   rien n'est demandé ici, seulement branché. */
+import('./notifications-push.js').then((m) => m.demarrerPush(env)).catch((e) => console.error('[push]', e));
 
 void echapper; void prenom; void icone; void OUVERTS; void ATTEND_CLIENT; void FACTURES_DUES; void joursAvant;

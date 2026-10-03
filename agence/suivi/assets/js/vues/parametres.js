@@ -62,6 +62,11 @@ export const vue = async (ctx, env) => {
         </div>
       </section>
 
+      <section class="section" id="section-push" hidden>
+        <div class="section-tete"><h2>Notifications sur cet appareil</h2></div>
+        <div class="carte" id="reglage-push"></div>
+      </section>
+
       <section class="section">
         <div class="section-tete"><h2>Apparence</h2></div>
         <div class="carte rang-espace"><div><p class="t-corps-fort">Thème</p><p class="t-petit t-2">Automatique suit le réglage de votre appareil.</p></div>
@@ -89,6 +94,8 @@ export const vue = async (ctx, env) => {
     });
     sortie.querySelector('#deconnexion').addEventListener('click', quitter);
     sortie.querySelector('#cles-acces').addEventListener('click', async () => { const { ouvrirClesAcces } = await import('../cles-acces.js'); await ouvrirClesAcces(); });
+    /* Le push des messages, Hub fermé : la section ne paraît que là où il existe. */
+    import('../notifications-push.js').then((m) => m.monterReglage(sortie.querySelector('#section-push'), sortie.querySelector('#reglage-push'), env)).catch(() => {});
   };
 
   const gestes = sur(sortie, 'change', '[data-pref]', async (el) => {

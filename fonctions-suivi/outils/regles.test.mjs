@@ -207,6 +207,29 @@ await refuse('mais pas un état inventé', setDoc(doc(camille(), `profils/${CAMI
 await refuse('ni une autre clé dans le choix', setDoc(doc(camille(), `profils/${CAMILLE}`), { pavesAttente: { role: 'admin' } }, { merge: true }));
 await refuse('ni autre chose qu une carte', setDoc(doc(camille(), `profils/${CAMILLE}`), { pavesAttente: 'ferme' }, { merge: true }));
 await refuse("Camille ne range pas le pavé de Léa", setDoc(doc(camille(), `profils/${LEA}`), { pavesAttente: { accueil: 'ferme' } }, { merge: true }));
+
+// Les abonnements push (notifications des messages, espace fermé) : les siens seulement, champs fermés.
+const PUSH_ID = 'a'.repeat(40);
+const abonnementPush = (d = {}) => ({ endpoint: 'https://fcm.googleapis.com/fcm/send/essai-1', cles: { p256dh: 'B'.repeat(87), auth: 'c'.repeat(22) }, appareil: 'Chrome sur Mac', maj: serverTimestamp(), ...d });
+await doit('Camille enregistre l abonnement push de son appareil', setDoc(doc(camille(), `profils/${CAMILLE}/pushs/${PUSH_ID}`), abonnementPush()));
+await doit('le réécrit (même appareil, nouvelles clés)', setDoc(doc(camille(), `profils/${CAMILLE}/pushs/${PUSH_ID}`), abonnementPush({ cles: { p256dh: 'D'.repeat(87), auth: 'e'.repeat(22) } })));
+await doit('et le relit', getDoc(doc(camille(), `profils/${CAMILLE}/pushs/${PUSH_ID}`)));
+await doit('et liste les siens', getDocs(collection(camille(), `profils/${CAMILLE}/pushs`)));
+await refuse('Léa ne lit pas les abonnements de Camille', getDoc(doc(lea(), `profils/${CAMILLE}/pushs/${PUSH_ID}`)));
+await refuse('ni ne les liste', getDocs(collection(lea(), `profils/${CAMILLE}/pushs`)));
+await refuse('ni n en écrit un chez Camille', setDoc(doc(lea(), `profils/${CAMILLE}/pushs/${'b'.repeat(40)}`), abonnementPush()));
+await refuse('ni n efface le sien', deleteDoc(doc(lea(), `profils/${CAMILLE}/pushs/${PUSH_ID}`)));
+await refuse('L administrateur ne lit pas les abonnements d une cliente', getDoc(doc(equipe(), `profils/${CAMILLE}/pushs/${PUSH_ID}`)));
+await refuse('ni ne les liste', getDocs(collection(equipe(), `profils/${CAMILLE}/pushs`)));
+await refuse('Un anonyme non plus', getDoc(doc(anonyme(), `profils/${CAMILLE}/pushs/${PUSH_ID}`)));
+await refuse('ni en groupe (aucune lecture de toutes les pushs)', getDocs(collectionGroup(equipe(), 'pushs')));
+await refuse('Un champ de plus est refusé', setDoc(doc(camille(), `profils/${CAMILLE}/pushs/${PUSH_ID}`), abonnementPush({ uid: LEA })));
+await refuse('une adresse d envoi qui n est pas https aussi', setDoc(doc(camille(), `profils/${CAMILLE}/pushs/${PUSH_ID}`), abonnementPush({ endpoint: 'http://exemple.test/push' })));
+await refuse('des clés incomplètes aussi', setDoc(doc(camille(), `profils/${CAMILLE}/pushs/${PUSH_ID}`), abonnementPush({ cles: { p256dh: 'B'.repeat(87) } })));
+await refuse('une clé en trop dans les clés aussi', setDoc(doc(camille(), `profils/${CAMILLE}/pushs/${PUSH_ID}`), abonnementPush({ cles: { p256dh: 'B'.repeat(87), auth: 'c'.repeat(22), autre: 'x' } })));
+await refuse('une date qui n est pas celle du serveur aussi', setDoc(doc(camille(), `profils/${CAMILLE}/pushs/${PUSH_ID}`), abonnementPush({ maj: new Date(Date.now() - 86400000) })));
+await refuse('un identifiant qui n est pas une empreinte aussi', setDoc(doc(camille(), `profils/${CAMILLE}/pushs/mon-appareil`), abonnementPush()));
+await doit('Camille efface son abonnement', deleteDoc(doc(camille(), `profils/${CAMILLE}/pushs/${PUSH_ID}`)));
 await doit('Léa décrit un nouveau projet', addDoc(collection(lea(), 'demandesProjet'), { organisation: 'boutique', par: { uid: LEA, nom: 'Léa', email: 'lea.essai@exemple.test' }, titre: 'Appli', idee: 'x', objectifs: '', type: 'autre', plateformes: [], budget: '', delai: '', description: '', fonctionnalites: '', exemples: '', liens: '', pieces: [], statut: 'nouvelle', projet: null, cree: serverTimestamp(), maj: serverTimestamp() }));
 await refuse("Camille ne lit pas la demande de projet de Léa", getDoc(doc(camille(), 'demandesProjet/dp1')));
 

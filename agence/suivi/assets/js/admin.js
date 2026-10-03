@@ -253,4 +253,7 @@ definir([
 demarrer();
 /* La bulle de conversation suit l'adresse : montée sur toute page d'un projet, démontée ailleurs (bulle-projet.js). */
 import('./bulle-projet.js').then((b) => b.brancherBulle(env)).catch((e) => console.error('[bulle]', e));
+/* Les notifications push des messages, espace fermé (notifications-push.js) :
+   rien n'est demandé ici, seulement branché. */
+import('./notifications-push.js').then((m) => m.demarrerPush(env)).catch((e) => console.error('[push]', e));
 void OUVERTS;

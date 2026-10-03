@@ -1421,6 +1421,48 @@ dossier reste en place, inchangée.
 
 Épreuve : `qa-pieces-messages.cjs`.
 
+### Les notifications push des messages, espace fermé (03/10/2026)
+
+Un message dans la conversation d'un projet arrive aussi en notification du
+système, Hub ou Cockpit fermé, sur les appareils où la personne l'a activé.
+
+- **Qui reçoit** : les mêmes personnes que la cloche (communication.uidsClients,
+  uidsEquipe), jamais l'auteur. Des e-mails coupés sur le projet (emailsClient
+  « coupes ») n'arrêtent pas le push : c'est une notification de l'espace, pas
+  un e-mail. Un projet fermé au client ne pousse rien.
+- **Ce qui part** : le nom de l'auteur (et le projet, côté équipe), les 120
+  premiers caractères du message, le lien de la conversation. D'une pièce, seul
+  le compte (« 2 pièces jointes ») : ni nom, ni contenu.
+- **Activer** : jamais à l'ouverture. Le bouton « Activer les notifications »
+  de Paramètres (section « Notifications sur cet appareil », client et équipe),
+  ou la proposition faite une seule fois après le premier message envoyé.
+  Rien n'est proposé là où le push n'existe pas : iPhone hors application
+  installée sur l'écran d'accueil (manifestes `suivi/hub.webmanifest` et
+  `suivi/cockpit.webmanifest`), application de bureau Capmedia (elle a ses
+  propres notifications), navigateur trop ancien.
+- **Les pièces** : `agence/suivi/sw.js` (portée `/suivi/`, aucune interception
+  de requête : il montre le push et ouvre la conversation au clic, sans doublon
+  quand l'espace est au premier plan, sauf sous Safari qui l'exige),
+  `assets/js/notifications-push.js` (activer, désactiver, tenir la copie à
+  jour, rendre l'abonnement si une autre personne se connecte dans ce
+  navigateur), `fonctions-suivi/push.js` (fonction `hubPushMessage`, sur le
+  même document que `hubMessageProjet`).
+- **Les abonnements** : `profils/{uid}/pushs/{id}`, id = 40 premiers caractères
+  hexadécimaux du SHA-256 de l'adresse d'envoi. Champs fermés (endpoint https,
+  cles.p256dh, cles.auth, appareil, maj = heure du serveur) ; chacun ne lit,
+  n'écrit et n'efface que les siens, l'administrateur compris. Le serveur
+  efface un abonnement que le service de push dit disparu (404, 410).
+- **Les clés VAPID** : la publique dans `config-suivi.js` et `push.js`
+  (identiques, qa-push le vérifie) ; la privée dans le secret Firebase
+  `VAPID_PRIVEE`, sauvegardée hors dépôt dans
+  `~/Capmedia/sauvegardes/vapid/vapid-hub-capmedia.json` (600). Sur le banc,
+  rien ne part : chaque envoi est chiffré pour de vrai puis consigné dans
+  `_banc/push/envois` (un endpoint qui contient « expire » joue le 410).
+- **CSP** : rien à ouvrir. Le service est un script du site (`script-src
+  'self'`, à défaut de `worker-src`), le manifeste aussi (`default-src
+  'self'`) ; les envois partent du serveur, pas de la page. Le `.htaccess`
+  donne son type au manifeste et fait revalider `sw.js` à chaque visite.
+
 ## 27. Le calendrier qu'on utilise (01/10/2026)
 
 « Cette page est belle mais elle n'est pas utilisable en l'état. » Le
