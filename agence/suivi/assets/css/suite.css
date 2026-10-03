@@ -1971,3 +1971,6 @@ body:has(.bulle) #vue .page { padding-bottom: 104px; }
 .cartes-plateformes .carte-plateforme-fleche { display: none; }
 .cartes-plateformes .carte-plateforme-icone { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; flex: none; background: color-mix(in srgb, currentColor 12%, transparent); }
 .cartes-plateformes .carte-plateforme-nom { color: var(--encre); }
+
+/* La mention « Bêta » du Hub client, à gauche de la cloche (03/10). */
+.pastille-beta { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; margin-right: 4px; border-radius: 980px; font: 600 11.5px/1 var(--police); letter-spacing: .02em; color: var(--bleu); background: color-mix(in srgb, var(--bleu) 14%, transparent); cursor: default; }

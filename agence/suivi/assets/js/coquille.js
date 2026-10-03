@@ -87,6 +87,7 @@ export const monterCoquille = ({ session, role, groupes, sortie }) => {
           <div class="fin">
             ${suite ? '' : recherche}
             <button class="btn-icone" type="button" id="bouton-recherche-mobile" aria-label="Rechercher" style="display:inline-grid">${icone('recherche')}</button>
+            ${role === 'client' ? '<span class="pastille-beta" data-beta data-astuce="Votre espace est en version bêta : il s\'améliore chaque semaine. Une remarque ? Écrivez-nous.">Bêta</span>' : ''}
             <button class="btn-icone" type="button" id="bouton-notifs" aria-label="Notifications" data-astuce="Notifications">${icone('notifications')}<span class="point masque" id="point-notifs"></span></button>
           </div>
         </header>
