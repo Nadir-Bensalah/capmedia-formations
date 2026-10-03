@@ -9,12 +9,14 @@
 
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
-import { doc, getDoc, getDocs, setDoc, updateDoc, addDoc, deleteDoc, collection, collectionGroup, query, where, serverTimestamp, Timestamp, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, getDocs, setDoc, updateDoc, addDoc, deleteDoc, collection, collectionGroup, query, where, serverTimestamp, Timestamp, writeBatch, deleteField } from 'firebase/firestore';
 
 const PROJET = process.env.GCLOUD_PROJECT || 'capmedia-1f90d';
 const env = await initializeTestEnvironment({
   projectId: PROJET,
-  firestore: { rules: readFileSync(new URL('../../suivi/firestore.rules', import.meta.url), 'utf8'), host: '127.0.0.1', port: 8080 },
+  /* Le port de l'émulateur : celui de FIRESTORE_EMULATOR_HOST quand il est
+     posé (second banc, émulateur à part), sinon 8080. */
+  firestore: { rules: readFileSync(new URL('../../suivi/firestore.rules', import.meta.url), 'utf8'), host: '127.0.0.1', port: Number(String(process.env.FIRESTORE_EMULATOR_HOST || '').split(':')[1]) || 8080 },
 });
 
 const AGENT = 'uid-agent';
@@ -1157,6 +1159,60 @@ await doit('Camille lit la grille (l encart de l annonce en a besoin)', getDoc(d
 await refuse('mais ne l écrit pas', setDoc(doc(camille(), 'reglages/tarifs'), grilleTarifs));
 await refuse('Un anonyme ne la lit pas', getDoc(doc(anonyme(), 'reglages/tarifs')));
 await refuse('Une grille avec un champ inconnu est refusée', setDoc(doc(equipe(), 'reglages/tarifs'), { ...grilleTarifs, remise: 5 }));
+
+/* ==========================================================================
+   La messagerie d'un projet (octobre 2026) : réagir, répondre, modifier,
+   supprimer.
+   ========================================================================== */
+console.log('\n== La messagerie : réagir, répondre, modifier, supprimer');
+const msg = (contexte, id) => doc(contexte, `projets/atelier/messages/${id}`);
+const deCamille = { uid: CAMILLE, nom: 'Camille', cote: 'client' };
+await env.withSecurityRulesDisabled(async (ctx) => {
+  const b = ctx.firestore();
+  /* Un message de Camille écrit il y a vingt minutes : trop tard pour le
+     corriger, jamais trop tard pour le supprimer. */
+  await setDoc(doc(b, 'projets/atelier/messages/m-vieux'), { de: deCamille, texte: 'Ancien', pieces: [{ nom: 'v.png', chemin: 'projets/atelier/messages/v.png', taille: 1, type: 'image/png' }], date: Timestamp.fromDate(new Date(Date.now() - 20 * 60000)) });
+  await setDoc(doc(b, 'projets/atelier/messages/m-equipe'), { de: { uid: AGENT, nom: 'Agent', cote: 'equipe' }, texte: 'Une question ?', pieces: [], date: Timestamp.fromDate(new Date(Date.now() - 60000)) });
+});
+await doit('Camille écrit un message (heure du serveur)', setDoc(msg(camille(), 'm-camille'), { de: deCamille, texte: 'Bonjour à tous', pieces: [], date: serverTimestamp() }));
+await refuse('mais pas avec une date choisie (elle rouvrirait la fenêtre de modification)', setDoc(msg(camille(), 'm-date'), { de: deCamille, texte: 'x', pieces: [], date: Timestamp.fromDate(new Date(Date.now() + 3600000)) }));
+await doit('Camille répond en citant un message', setDoc(msg(camille(), 'm-reponse'), { de: deCamille, texte: 'Oui, bien sûr', pieces: [], date: serverTimestamp(), reponseA: { id: 'm-equipe', nom: 'Agent', extrait: 'Une question ?' } }));
+await refuse('une citation ne porte rien d autre que id, nom, extrait', setDoc(msg(camille(), 'm-reponse-2'), { de: deCamille, texte: 'x', pieces: [], date: serverTimestamp(), reponseA: { id: 'm-equipe', nom: 'Agent', extrait: 'x', texte: 'tout le message' } }));
+await refuse('ni un extrait de plus de 200 caractères', setDoc(msg(camille(), 'm-reponse-3'), { de: deCamille, texte: 'x', pieces: [], date: serverTimestamp(), reponseA: { id: 'm-equipe', nom: 'Agent', extrait: 'x'.repeat(201) } }));
+await refuse('un message ne naît pas avec des réactions', setDoc(msg(camille(), 'm-reac'), { de: deCamille, texte: 'x', pieces: [], date: serverTimestamp(), reactions: { [`pouce_${AGENT}`]: 'Agent' } }));
+
+await doit('Camille réagit au message de l équipe', updateDoc(msg(camille(), 'm-equipe'), { [`reactions.pouce_${CAMILLE}`]: 'Camille' }));
+await doit('et ajoute un second emoji', updateDoc(msg(camille(), 'm-equipe'), { [`reactions.coeur_${CAMILLE}`]: 'Camille' }));
+await doit('l équipe réagit au même message', updateDoc(msg(equipe(), 'm-equipe'), { [`reactions.pouce_${AGENT}`]: 'Agent' }));
+await doit('Camille retire sa réaction (bascule)', updateDoc(msg(camille(), 'm-equipe'), { [`reactions.coeur_${CAMILLE}`]: deleteField() }));
+await refuse('Camille ne retire pas la réaction de l équipe', updateDoc(msg(camille(), 'm-equipe'), { [`reactions.pouce_${AGENT}`]: deleteField() }));
+await refuse('ni ne réagit au nom de l équipe', updateDoc(msg(camille(), 'm-equipe'), { [`reactions.rire_${AGENT}`]: 'Agent' }));
+await refuse('ni avec un emoji hors de la palette', updateDoc(msg(camille(), 'm-equipe'), { [`reactions.feu_${CAMILLE}`]: 'Camille' }));
+await refuse('ni avec autre chose qu un nom', updateDoc(msg(camille(), 'm-equipe'), { [`reactions.rire_${CAMILLE}`]: true }));
+await refuse('une réaction ne glisse pas une retouche du texte', updateDoc(msg(camille(), 'm-equipe'), { [`reactions.rire_${CAMILLE}`]: 'Camille', texte: 'Autre chose' }));
+await refuse('Léa ne réagit pas dans la conversation d Atelier', updateDoc(msg(lea(), 'm-equipe'), { [`reactions.pouce_${LEA}`]: 'Léa' }));
+
+await doit('Camille corrige son message dans les quinze minutes', updateDoc(msg(camille(), 'm-camille'), { texte: 'Bonjour à toutes et à tous', modifie: serverTimestamp() }));
+await refuse('mais pas sans la marque « modifié » du serveur', updateDoc(msg(camille(), 'm-camille'), { texte: 'Encore' }));
+await refuse('ni en changeant son auteur', updateDoc(msg(camille(), 'm-camille'), { texte: 'Encore', modifie: serverTimestamp(), de: { uid: CAMILLE, nom: 'Capmedia', cote: 'client' } }));
+await refuse('ni en déplaçant sa date', updateDoc(msg(camille(), 'm-camille'), { texte: 'Encore', modifie: serverTimestamp(), date: serverTimestamp() }));
+await refuse('ni en le vidant', updateDoc(msg(camille(), 'm-camille'), { texte: '', modifie: serverTimestamp() }));
+await refuse('Camille ne corrige plus un message de vingt minutes', updateDoc(msg(camille(), 'm-vieux'), { texte: 'Corrigé trop tard', modifie: serverTimestamp() }));
+await refuse('L équipe ne modifie pas le message de Camille', updateDoc(msg(equipe(), 'm-camille'), { texte: 'Réécrit par l équipe', modifie: serverTimestamp() }));
+await refuse('Camille ne modifie pas le message de l équipe', updateDoc(msg(camille(), 'm-equipe'), { texte: 'Réécrit par Camille', modifie: serverTimestamp() }));
+
+const suppression = { texte: '', pieces: [], supprime: serverTimestamp(), reactions: deleteField(), reponseA: deleteField() };
+await refuse('L équipe ne supprime pas le message de Camille', updateDoc(msg(equipe(), 'm-camille'), suppression));
+await refuse('Camille ne supprime pas le message de l équipe', updateDoc(msg(camille(), 'm-equipe'), suppression));
+await refuse('personne n efface un message pour de bon (même l auteur)', deleteDoc(msg(camille(), 'm-camille')));
+await refuse('ni l équipe', deleteDoc(msg(equipe(), 'm-camille')));
+await refuse('une suppression ne garde pas le texte', updateDoc(msg(camille(), 'm-camille'), { pieces: [], supprime: serverTimestamp() }));
+await refuse('ni les pièces', updateDoc(msg(camille(), 'm-vieux'), { texte: '', supprime: serverTimestamp() }));
+await doit('Camille supprime son message de vingt minutes (toujours permis)', updateDoc(msg(camille(), 'm-vieux'), suppression));
+await doit('et son message récent', updateDoc(msg(camille(), 'm-camille'), suppression));
+await refuse('un message supprimé ne se corrige plus', updateDoc(msg(camille(), 'm-camille'), { texte: 'Revenu', modifie: serverTimestamp() }));
+await refuse('ne reçoit plus de réaction', updateDoc(msg(equipe(), 'm-camille'), { [`reactions.pouce_${AGENT}`]: 'Agent' }));
+await refuse('et ne se « supprime » pas une seconde fois', updateDoc(msg(camille(), 'm-camille'), suppression));
 
 console.log(`\n${ok} contrôle(s) conforme(s)${ecarts.length ? `, ${ecarts.length} ÉCART(S) :\n  - ${ecarts.join('\n  - ')}` : ''}`);
 await env.cleanup();

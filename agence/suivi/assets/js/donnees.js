@@ -11,7 +11,7 @@
 
 import {
   bdd, collection, collectionGroup, query, where, orderBy, limit, doc, getDoc, getDocs, addDoc, updateDoc, setDoc, deleteDoc,
-  serverTimestamp, arrayUnion, arrayRemove, Timestamp, stockage, refStockage, deleteObject,
+  serverTimestamp, arrayUnion, arrayRemove, Timestamp, stockage, refStockage, deleteObject, deleteField,
   nomAffiche, enDate, parDateDesc, parDateAsc, joursAvant, borner, age, retard, dateCourte,
   OUVERTS, ATTEND_CLIENT, ATTEND_EQUIPE, FACTURES_DUES, PROJETS_ACTIFS, CATEGORIES_CLIENT, projetEstActif, devisADecider, statutPiece,
   statutProjet, pluriel, verdictDelai, NIVEAUX_SCENARIO, STATUTS_PIECE_VISIBLES, startAfter, peut, onSnapshot, writeBatch, runTransaction,
@@ -615,17 +615,45 @@ export const ecrire = {
   /* --- La conversation d'un projet ------------------------------------ */
   /* Un message peut n'être que des pièces : le texte reste vide, jamais un
      mot inventé à la place. La règle l'accepte quand `pieces` n'est pas vide. */
-  async messageProjet(session, pid, texte, pieces = []) {
+  /* `reponseA` : le message auquel on répond ({ id, nom, extrait }), cité
+     au-dessus du nouveau. */
+  async messageProjet(session, pid, texte, pieces = [], reponseA = null) {
     const de = auteurDe(session);
-    await addDoc(col('projets', pid, 'messages'), { de: { uid: de.uid, nom: de.nom, cote: de.cote }, texte: String(texte || ''), pieces, date: serverTimestamp() });
+    const message = { de: { uid: de.uid, nom: de.nom, cote: de.cote }, texte: String(texte || ''), pieces, date: serverTimestamp() };
+    if (reponseA && reponseA.id) {
+      message.reponseA = { id: String(reponseA.id), nom: String(reponseA.nom || '').slice(0, 120), extrait: String(reponseA.extrait || '').slice(0, 200) };
+    }
+    await addDoc(col('projets', pid, 'messages'), message);
+  },
+
+  /* L'auteur corrige son message : quinze minutes au plus après l'envoi
+     (la règle le tient, avec l'heure du serveur). */
+  modifierMessage: (pid, mid, texte) => updateDoc(doc(bdd, 'projets', pid, 'messages', mid), { texte: String(texte || ''), modifie: serverTimestamp() }),
+
+  /* L'auteur supprime son message : il reste à sa place, vidé. Le serveur
+     efface ses pièces du stockage et son extrait partout où il était cité
+     (hubMessageProjetModifie). */
+  supprimerMessage: (pid, mid) => updateDoc(doc(bdd, 'projets', pid, 'messages', mid), {
+    texte: '', pieces: [], supprime: serverTimestamp(), reactions: deleteField(), reponseA: deleteField(),
+  }),
+
+  /* Une réaction : la mienne, posée ou retirée. Une par personne et par
+     emoji ; la clé porte mon identifiant, la valeur mon nom. */
+  reagir: (session, pid, mid, cle, oui) => {
+    const de = auteurDe(session);
+    return updateDoc(doc(bdd, 'projets', pid, 'messages', mid), { [`reactions.${cle}_${de.uid}`]: oui ? (String(de.nom || '').trim() || (de.cote === 'equipe' ? 'Capmedia' : 'Client')).slice(0, 120) : deleteField() });
   },
 
   /* L'accusé de lecture d'un projet : l'instant lu, et l'instant de la
      dernière frappe pour dire à l'autre qu'une réponse s'écrit. */
+  /* La frappe seule ne dit pas qu'on a lu : elle ne touche pas « lu »,
+     sinon l'accusé d'en face bougeait à chaque touche (octobre 2026). */
   marquerLecture: (session, pid, { frappe = false } = {}) => {
     const de = auteurDe(session);
     return setDoc(doc(bdd, 'projets', pid, 'lectures', de.uid),
-      nettoyer({ lu: serverTimestamp(), cote: de.cote, nom: de.nom, frappe: frappe ? serverTimestamp() : null }),
+      frappe
+        ? nettoyer({ cote: de.cote, nom: de.nom, frappe: serverTimestamp() })
+        : nettoyer({ lu: serverTimestamp(), cote: de.cote, nom: de.nom, frappe: null }),
       { merge: true });
   },
 
@@ -1520,7 +1548,7 @@ export const depuisVisite = (activite = [], depuisDate) => {
 /** Les non lus d'un fil de projet pour une personne. */
 export const nonLusProjet = (messages = [], profil, pid, uid) => {
   const lu = enDate(profil && profil.lus && profil.lus[`messages:${pid}`]);
-  return messages.filter((m) => m.de && m.de.uid !== uid && (!lu || (enDate(m.date) || 0) > lu)).length;
+  return messages.filter((m) => m.de && m.de.uid !== uid && !m.supprime && (!lu || (enDate(m.date) || 0) > lu)).length;
 };
 
 /** Regroupe les tâches par statut pour un kanban. */

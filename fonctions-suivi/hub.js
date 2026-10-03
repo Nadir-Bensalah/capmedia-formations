@@ -416,6 +416,16 @@ exports.hubBlocageEcrit = onDocumentWritten({ region: REGION, document: 'blocage
    8. La conversation d'un projet
    ========================================================================== */
 
+/* Le texte d'une ligne d'activité de la conversation. */
+function texteActiviteMessage(m) {
+  if (m.supprime) return 'a supprimé un message de la conversation';
+  const nbPieces = (m.pieces || []).length;
+  const extrait = String(m.texte || '').trim().slice(0, 140) || (nbPieces > 1 ? `${nbPieces} pièces jointes` : 'Pièce jointe');
+  return String(m.texte || '').trim()
+    ? `a écrit dans la conversation : « ${extrait}${(m.texte || '').length > 140 ? '…' : ''} »`
+    : `a envoyé ${extrait.toLowerCase()} dans la conversation`;
+}
+
 exports.hubMessageProjet = onDocumentCreated({ region: REGION, document: 'projets/{projetId}/messages/{messageId}' }, async (evenement) => {
   const m = evenement.data && evenement.data.data();
   if (!m) return;
@@ -427,14 +437,79 @@ exports.hubMessageProjet = onDocumentCreated({ region: REGION, document: 'projet
      citer un mot vide. */
   const extrait = String(m.texte || '').trim().slice(0, 140) || (nbPieces > 1 ? `${nbPieces} pièces jointes` : 'Pièce jointe');
   const lienClient = `/messages/${projetId}`;
-  await activite({ projet: projetId, type: 'message', texte: String(m.texte || '').trim() ? `a écrit dans la conversation : « ${extrait}${(m.texte || '').length > 140 ? '…' : ''} »` : `a envoyé ${extrait.toLowerCase()} dans la conversation`, par: { uid: de.uid, nom: de.nom, cote: de.cote }, lien: lienClient });
+  const messageId = evenement.params.messageId;
+  /* La ligne d'activité et les notifications gardent l'identifiant du
+     message : supprimé, il est effacé d'elles aussi (hubMessageProjetModifie). */
+  await activite({ projet: projetId, type: 'message', texte: texteActiviteMessage(m), par: { uid: de.uid, nom: de.nom, cote: de.cote }, lien: lienClient, cible: { type: 'message', id: messageId } });
   if (de.cote === 'equipe') {
-    await notifierClients(projet, 'message', { type: 'message', titre: `Nouveau message de ${de.nom || 'Capmedia'}`, texte: extrait, lien: `#${lienClient}`, projet: projetId }, { exclure: [de.uid] });
+    await notifierClients(projet, 'message', { type: 'message', titre: `Nouveau message de ${de.nom || 'Capmedia'}`, texte: extrait, lien: `#${lienClient}`, projet: projetId, message: messageId }, { exclure: [de.uid] });
     await ecrireAuxClients(projet, 'message-projet', 'message-projet', { projetNom: nomProjet(projet), auteur: de.nom || 'Capmedia', texte: m.texte, pieces: (m.pieces || []).length, lien: LIEN(lienClient) });
   } else {
-    await notifierEquipe(projetId, { type: 'message', titre: `Message de ${de.nom || 'un client'}`, texte: `${nomProjet(projet)} · ${extrait}`, lien: `#${lienClient}`, projet: projetId }, { exclure: [de.uid] });
+    await notifierEquipe(projetId, { type: 'message', titre: `Message de ${de.nom || 'un client'}`, texte: `${nomProjet(projet)} · ${extrait}`, lien: `#${lienClient}`, projet: projetId, message: messageId }, { exclure: [de.uid] });
     await mettreEnFile('message-projet', contactsEquipe(), { projetNom: nomProjet(projet), auteur: de.nom || 'Client', texte: m.texte, pieces: (m.pieces || []).length, lien: LIEN_ADMIN(lienClient), cote: 'equipe' });
   }
+});
+
+/* Un message modifié ou supprimé par son auteur (les règles ne laissent
+   faire que lui). Modifié : la ligne d'activité suit le nouveau texte.
+   Supprimé : son texte ne doit plus se lire nulle part. La ligne
+   d'activité et les notifications qu'il a fait naître le perdent, les
+   réponses qui le citaient aussi, et ses pièces jointes sont effacées du
+   stockage (seulement celles de la conversation de ce projet, déposées
+   par lui : une pièce d'autrui citée par son chemin n'est jamais touchée).
+   Les e-mails déjà partis ne se rattrapent pas. */
+exports.hubMessageProjetModifie = onDocumentUpdated({ region: REGION, document: 'projets/{projetId}/messages/{messageId}' }, async (evenement) => {
+  const avant = evenement.data.before.data() || {};
+  const apres = evenement.data.after.data() || {};
+  const { projetId, messageId } = evenement.params;
+  const supprime = Boolean(apres.supprime) && !avant.supprime;
+  const modifie = !supprime && !apres.supprime && String(avant.texte || '') !== String(apres.texte || '');
+  if (!supprime && !modifie) return;
+  try {
+    const lignes = await bdd.collection('activite').where('cible.id', '==', messageId).get();
+    for (const l of lignes.docs) {
+      if (l.data().projet !== projetId) continue;
+      await l.ref.update({ texte: texteActiviteMessage(apres) });
+    }
+  } catch (err) { console.error('Activité du message non mise à jour', err); }
+  if (!supprime) return;
+  const auteur = (avant.de || {}).uid || '';
+  /* Les notifications : dans la boîte des membres du projet et de l'équipe. */
+  try {
+    const projet = await lireProjet(projetId);
+    const equipe = await bdd.collection('equipe').get();
+    const uids = new Set([...((projet && projet.membres) || []), ...equipe.docs.map((d) => d.id)]);
+    for (const uid of uids) {
+      const q = await bdd.collection(`boites/${uid}/notifications`).where('message', '==', messageId).get();
+      for (const d of q.docs) await d.ref.update({ texte: 'Message supprimé' });
+    }
+  } catch (err) { console.error('Notifications du message non effacées', err); }
+  try {
+    const reponses = await bdd.collection(`projets/${projetId}/messages`).where('reponseA.id', '==', messageId).get();
+    for (const r of reponses.docs) await r.ref.update({ 'reponseA.extrait': '', 'reponseA.supprime': true });
+  } catch (err) { console.error('Citations du message non effacées', err); }
+  const { getStorage } = require('firebase-admin/storage');
+  const dossier = `projets/${projetId}/messages/`;
+  for (const p of avant.pieces || []) {
+    const chemin = String((p && p.chemin) || '');
+    if (!chemin.startsWith(dossier) || chemin.includes('..')) continue;
+    try {
+      const fichier = getStorage().bucket().file(chemin);
+      const [existe] = await fichier.exists();
+      if (!existe) continue;
+      const [meta] = await fichier.getMetadata();
+      const par = ((meta && meta.metadata) || {}).par || '';
+      if (par && par !== auteur) { console.warn(`Pièce ${chemin} déposée par un autre : gardée`); continue; }
+      /* Une pièce d'avant le dépôt par le serveur ne dit pas qui l'a posée :
+         on la garde si un autre message la cite encore. */
+      if (!par) {
+        const autres = await bdd.collection(`projets/${projetId}/messages`).where('pieces', 'array-contains', p).limit(1).get();
+        if (!autres.empty) continue;
+      }
+      await fichier.delete({ ignoreNotFound: true });
+    } catch (err) { console.error(`Pièce ${chemin} non effacée`, err); }
+  }
+  await audit('message.supprime', { projet: projetId, message: messageId, par: auteur, pieces: (avant.pieces || []).length });
 });
 
 /* ==========================================================================

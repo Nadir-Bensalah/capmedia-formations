@@ -16,7 +16,7 @@ import {
 import {
   getFirestore, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc,
   collection, collectionGroup, query, where, orderBy, limit, startAfter, onSnapshot,
-  serverTimestamp, Timestamp, arrayUnion, arrayRemove, increment, writeBatch, runTransaction,
+  serverTimestamp, Timestamp, arrayUnion, arrayRemove, increment, writeBatch, runTransaction, deleteField,
 } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js';
 import {
   getStorage, ref as refStockage, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject, updateMetadata,
@@ -88,7 +88,7 @@ if (surEmulateur) {
 
 export {
   doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, collection, collectionGroup, query,
-  where, orderBy, limit, startAfter, onSnapshot, serverTimestamp, Timestamp, arrayUnion, arrayRemove, increment, writeBatch, runTransaction,
+  where, orderBy, limit, startAfter, onSnapshot, serverTimestamp, Timestamp, arrayUnion, arrayRemove, increment, writeBatch, runTransaction, deleteField,
   refStockage, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject, updateMetadata, signOut,
   sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink,
 };

@@ -1798,3 +1798,80 @@ changement, un tarif, une indisponibilité (congés), une information.
   grille dans `~/Capmedia/sauvegardes/annonces/`.
 - **Épreuves.** `qa-annonces.cjs`, et la section « Les annonces de
   Capmedia » de `regles.test.mjs`.
+
+## 35. La messagerie au niveau d'une messagerie (03/10/2026)
+
+La conversation d'un projet (`vues/messages.js`, `bulle.js`, Hub et
+Cockpit) gagne ce qu'on attend d'une messagerie : réagir, répondre en
+citant, corriger et supprimer son message. Le code commun vit dans
+`assets/js/messagerie.js`.
+
+### Réagir, répondre, modifier, supprimer
+
+```
+projets/{p}/messages/{m}
+  reponseA   map        { id, nom, extrait <= 200 }  le message cité
+  reactions  map        { "<emoji>_<uid>": nom }      une par personne et par emoji
+  modifie    timestamp  posée par le serveur à chaque correction
+  supprime   timestamp  le message reste en place, vidé
+```
+
+- **Le menu d'un message** : un bouton discret (trois points) au survol,
+  ou un appui long au doigt (450 ms, `brancherAppuiLong`). Il porte la
+  palette (👍 ❤️ 😂 😮 😢 🙏), puis Répondre, Copier le texte, En faire une
+  demande (d'en face), Modifier (le mien, quinze minutes), Supprimer (le
+  mien). Sur un écran tactile, pas de bouton de survol : l'appui long.
+- **Réagir** : un geste pose, le même retire. La clé porte l'identifiant
+  de la personne, la valeur son nom (le survol de la pastille dit qui).
+- **Répondre** : la barre « Répondre à … » au-dessus du champ, Échap
+  l'abandonne ; la citation se lit au-dessus du message (le texte actuel
+  de l'original s'il est dans le fil, sinon l'extrait gardé) et un clic y
+  ramène, en remontant l'historique au besoin (page Messages,
+  `?message=<id>`).
+- **Modifier** : le champ reprend le texte (« Modifier votre message »),
+  sans pièce jointe ; « modifié » s'affiche à côté de l'heure. Quinze
+  minutes après l'envoi, à l'heure du serveur : c'est pourquoi la date
+  d'un message est désormais `request.time` (personne ne la choisit).
+- **Supprimer** : confirmation, puis « Message supprimé » à sa place, des
+  deux côtés. Le serveur (`hubMessageProjetModifie`) efface ses pièces du
+  stockage (celles de `projets/{p}/messages/`, déposées par l'auteur
+  d'après leur métadonnée `par`, ou que plus aucun message ne cite),
+  remplace l'extrait par « Message supprimé » dans les notifications,
+  la ligne d'activité et les citations des réponses, et trace
+  `message.supprime`. Les e-mails déjà partis ne se rattrapent pas.
+  Un message supprimé ne compte plus comme non lu.
+
+**Les règles** (`suivi/firestore.rules`) : à la création, `reponseA`
+borné et `date == request.time` ; ensuite, sur un message non supprimé,
+trois écritures seulement : `reactionSeule` (seules MES clés de la
+palette changent, chacune vaut un nom), `modificationParAuteur` (texte et
+`modifie == request.time`, dans les quinze minutes) et
+`suppressionParAuteur` (texte vide, pièces vides, ni réactions ni
+citation, `supprime == request.time`). Un effacement pour de bon reste
+refusé à tous.
+
+**Un seul dessin par changement.** La page Messages se dessine en trois
+zones (la liste, le fil, le champ monté une fois par conversation) : un
+message qui arrive ne touche plus ni à ce qu'on écrit ni aux pièces qu'on
+joint. Le fil ne se redessine que si sa signature change (`signatureFil` :
+messages, textes, suppressions, réactions, accusé). L'accusé « Lu » ne se
+réécrit que pour un message de plus, et la frappe ne touche plus `lu` :
+sinon une réaction ou une touche redessinait le fil d'en face une seconde
+fois. Le défilement reste où il est, sauf en bas du fil ou pour un message
+à soi.
+
+### Les épreuves
+
+`fonctions-suivi/outils/qa-messagerie.cjs` (deux navigateurs, Hub et
+Cockpit : le direct, Lu, la frappe, réagir et le dessin unique du fil
+d'en face, répondre, modifier, la fenêtre des quinze minutes, supprimer
+avec sa pièce, les refus des règles avec le vrai jeton, la bulle,
+l'appui long à 390 px) ; le bloc « La messagerie » de `regles.test.mjs`.
+
+### À la mise en ligne
+
+1. Les règles Firestore (`suivi/firestore.rules`).
+2. Les fonctions : `hubMessageProjetModifie` (nouvelle) et
+   `hubMessageProjet` (activité et notifications portent l'identifiant du
+   message). Aucun index composite nouveau.
+3. Le site (`agence/suivi/`).

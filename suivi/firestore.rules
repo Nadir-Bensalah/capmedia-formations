@@ -183,6 +183,71 @@ service cloud.firestore {
           && champ.cote == (estEquipe() ? 'equipe' : 'client');
     }
 
+    // ----------------------------------------------------------------
+    // La messagerie d'un projet : citer, réagir, modifier, supprimer.
+    // ----------------------------------------------------------------
+
+    // La citation d'une réponse : le message d'origine, son auteur, un
+    // extrait. Rien d'autre.
+    function citationValide(c) {
+      return c is map
+          && c.keys().hasOnly(['id', 'nom', 'extrait'])
+          && texteRequis(c.id, 128)
+          && texteBorne(c.get('nom', ''), 120)
+          && texteBorne(c.get('extrait', ''), 200);
+    }
+
+    // Les réactions d'une personne : une clé par emoji de la palette,
+    // « <emoji>_<uid> », qui vaut son nom. La palette est fermée.
+    function mesClesReaction() {
+      return ['pouce_' + moi(), 'coeur_' + moi(), 'rire_' + moi(),
+              'wow_' + moi(), 'triste_' + moi(), 'merci_' + moi()];
+    }
+
+    function nomDeReaction(r, cle) {
+      return !(cle in r) || texteRequis(r[cle], 120);
+    }
+
+    // Seules mes réactions changent, chacune vaut un nom, et la carte
+    // reste bornée.
+    function reactionSeule() {
+      let avant = resource.data.get('reactions', {});
+      let apres = request.resource.data.get('reactions', {});
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions'])
+          && apres is map
+          && apres.size() <= 300
+          && apres.diff(avant).affectedKeys().hasOnly(mesClesReaction())
+          && nomDeReaction(apres, mesClesReaction()[0])
+          && nomDeReaction(apres, mesClesReaction()[1])
+          && nomDeReaction(apres, mesClesReaction()[2])
+          && nomDeReaction(apres, mesClesReaction()[3])
+          && nomDeReaction(apres, mesClesReaction()[4])
+          && nomDeReaction(apres, mesClesReaction()[5]);
+    }
+
+    // L'auteur corrige son texte, quinze minutes au plus après l'envoi.
+    // La marque « modifie » est l'heure du serveur.
+    function modificationParAuteur() {
+      return resource.data.de.uid == moi()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['texte', 'modifie'])
+          && request.resource.data.modifie == request.time
+          && request.time < resource.data.date + duration.value(15, 'm')
+          && (texteRequis(request.resource.data.texte, 6000)
+              || (texteBorne(request.resource.data.texte, 6000) && resource.data.pieces.size() > 0));
+    }
+
+    // L'auteur supprime son message : il reste à sa place, sans texte, sans
+    // pièces, sans réactions ni citation, avec l'heure de la suppression.
+    function suppressionParAuteur() {
+      return resource.data.de.uid == moi()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['texte', 'pieces', 'supprime', 'reactions', 'reponseA'])
+          && request.resource.data.supprime == request.time
+          && request.resource.data.texte == ''
+          && request.resource.data.pieces == []
+          && !('reactions' in request.resource.data)
+          && !('reponseA' in request.resource.data);
+    }
+
     // ================================================================
     // L'équipe, les profils, les organisations
     // ================================================================
@@ -529,16 +594,31 @@ service cloud.firestore {
       // La conversation du projet : deux voix, jamais de note interne ici.
       // Le texte peut être vide quand des pièces l'accompagnent : un envoi
       // de pièces seules n'invente pas un mot à leur place.
+      //
+      // Depuis la messagerie d'octobre 2026 (docs/suivi.md, section 35) :
+      // - une réponse cite le message d'origine (reponseA : id, nom, extrait) ;
+      // - la date est celle du serveur : c'est elle qui ouvre la fenêtre de
+      //   modification, personne ne la choisit ;
+      // - chacun pose ou retire SES réactions, rien d'autre (reactionSeule) ;
+      // - l'auteur seul modifie son texte, quinze minutes au plus après
+      //   l'envoi (modificationParAuteur), et supprime son message à tout
+      //   moment : il reste en place, vidé, marqué « supprime »
+      //   (suppressionParAuteur). Personne ne l'efface pour de bon.
       match /messages/{messageId} {
         allow read: if accesProjet(projetId);
         allow create: if accesProjet(projetId)
-          && request.resource.data.keys().hasOnly(['de', 'texte', 'pieces', 'date'])
+          && request.resource.data.keys().hasOnly(['de', 'texte', 'pieces', 'date', 'reponseA'])
           && auteurCoherent(request.resource.data.de)
+          && request.resource.data.date == request.time
           && request.resource.data.pieces is list
           && request.resource.data.pieces.size() <= 10
+          && (!('reponseA' in request.resource.data) || citationValide(request.resource.data.reponseA))
           && (texteRequis(request.resource.data.texte, 6000)
               || (texteBorne(request.resource.data.texte, 6000) && request.resource.data.pieces.size() > 0));
-        allow update, delete: if false;
+        allow update: if accesProjet(projetId)
+          && !('supprime' in resource.data)
+          && (reactionSeule() || modificationParAuteur() || suppressionParAuteur());
+        allow delete: if false;
       }
 
       // L'accusé de lecture : chacun tient le sien, les deux le lisent. Il
