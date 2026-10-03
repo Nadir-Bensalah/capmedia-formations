@@ -60,7 +60,12 @@ const derniere=()=>{const v=[...document.querySelectorAll('.voile')];return v[v.
   const uids=((((camp||{}).fields||{}).testeurs||{}).arrayValue||{}).values?.map(v=>v.stringValue)||[];
   if(uids.length<3) throw new Error('la campagne c-oct du semis doit avoir au moins trois testeurs (semer-campagne.mjs)');
   const [KARIM,SONIA,MARC]=uids;
-  const refsKarim=((((((camp.fields.affectation||{}).mapValue||{}).fields||{})[KARIM]||{}).arrayValue||{}).values||[]).map(v=>v.stringValue);
+  /* Les clés de Karim (« scénario__plateforme ») au modèle commun ; une
+     campagne d'avant le plan donnait une liste de références. */
+  const affKarim=((((camp.fields.affectation||{}).mapValue||{}).fields||{})[KARIM])||{};
+  const refsKarim=((affKarim.arrayValue||((((affKarim.mapValue||{}).fields||{}).cles||{}).arrayValue)||{}).values||[]).map(v=>v.stringValue);
+  const idDe=(cle)=>String(cle||'').split('__')[0];
+  const platDe=(cle)=>String(cle||'').split('__')[1]||'ios';
   await vider('projets/atelier/campagnes/c-oct/appreciations');
   await vider('projets/atelier/campagnes/c-oct/remarques');
   await poser(`projets/atelier/campagnes/c-oct/appreciations/${SONIA}`,{accueil:T(new Date()),testeur:S(SONIA)});
@@ -73,7 +78,7 @@ const derniere=()=>{const v=[...document.querySelectorAll('.voile')];return v[v.
     noteTest:{mapValue:{fields:{note:N(4),commentaire:S('Il manquait le lien TestFlight au début.'),le:T(new Date())}}},
     remarques:{arrayValue:{values:[{mapValue:{fields:{texte:S('Ancienne remarque écrite après la fin.'),le:T(new Date())}}}]}},
   });
-  await poser(`projets/atelier/campagnes/c-oct/remarques/r-marc`,{testeur:S(MARC),texte:S('La police du calendrier est trop petite.'),scenario:S(refsKarim[0]||'DI-01'),plateforme:S('ios'),cree:T(new Date())});
+  await poser(`projets/atelier/campagnes/c-oct/remarques/r-marc`,{testeur:S(MARC),texte:S('La police du calendrier est trop petite.'),scenario:S(idDe(refsKarim[0])||'DI-01'),plateforme:S(platDe(refsKarim[0])),cree:T(new Date())});
   await poser(`projets/atelier/campagnes/c-oct/remarques/r-sonia`,{testeur:S(SONIA),texte:S('Une application agréable à prendre en main.'),cree:T(new Date(Date.now()-60000))});
 
   const nav=await chromium.launch();
@@ -102,7 +107,7 @@ const derniere=()=>{const v=[...document.querySelectorAll('.voile')];return v[v.
   verifier(/4\.0 \/ 5/.test(e1.avis),'la note du test se lit aussi, puisqu\'elle est demandée');
   verifier(/lien TestFlight/.test(e1.avis),'l\'équipe lit le commentaire sur le test');
   verifier(e1.remarques.length===3,'trois remarques : deux libres et l\'ancienne',`${e1.remarques.length}`);
-  verifier(e1.remarques.some(r=>/police du calendrier/.test(r.texte)&&/Marc/.test(r.cite)&&r.cite.includes(refsKarim[0]||'DI-01')),'avec le prénom et le scénario',(e1.remarques[0]||{}).cite);
+  verifier(e1.remarques.some(r=>/police du calendrier/.test(r.texte)&&/Marc/.test(r.cite)&&r.cite.includes(idDe(refsKarim[0])||'DI-01')),'avec le prénom et le scénario',(e1.remarques[0]||{}).cite);
   verifier(e1.remarques.some(r=>/Ancienne remarque/.test(r.texte)&&/après le test/.test(r.cite)),'l\'ancienne reste lisible, marquée comme telle');
 
   console.log('\n== Le Hub : les mêmes questions, sans nom');
@@ -143,11 +148,12 @@ const derniere=()=>{const v=[...document.querySelectorAll('.voile')];return v[v.
   verifier(!!(await te.$('#remarque-texte')),'« Mon avis » offre d\'écrire une remarque, avant même d\'avoir fini');
   await te.fill('#remarque-texte','Le mode sombre éblouit sur l\'écran des réglages.');
   await te.click('[data-remarque]');await pause(2500);
+  verifier(refsKarim.length>=2,'Karim a au moins deux scénarios dans son affectation',`${refsKarim.length}`);
   if(refsKarim[1]){await te.fill('#remarque-texte','Ce scénario parle d\'un bouton que je ne trouve pas.');await te.selectOption('#remarque-scenario',refsKarim[1]);await te.click('[data-remarque]');await pause(2500);}
-  const lireMiennes=async()=>{const j=await lire('projets/atelier/campagnes/c-oct/remarques?pageSize=50');return ((j&&j.documents)||[]).map(d=>({id:d.name.split('/').pop(),testeur:((d.fields.testeur||{}).stringValue),texte:((d.fields.texte||{}).stringValue)||'',scenario:((d.fields.scenario||{}).stringValue)||'',cree:((d.fields.cree||{}).timestampValue)||''})).filter(r=>r.testeur===KARIM);};
+  const lireMiennes=async()=>{const j=await lire('projets/atelier/campagnes/c-oct/remarques?pageSize=50');return ((j&&j.documents)||[]).map(d=>({id:d.name.split('/').pop(),testeur:((d.fields.testeur||{}).stringValue),texte:((d.fields.texte||{}).stringValue)||'',scenario:((d.fields.scenario||{}).stringValue)||'',plateforme:((d.fields.plateforme||{}).stringValue)||'',cree:((d.fields.cree||{}).timestampValue)||''})).filter(r=>r.testeur===KARIM);};
   let miennes=await lireMiennes();
   verifier(miennes.some(r=>/mode sombre/.test(r.texte)&&!r.scenario&&r.cree),'la remarque en général est enregistrée, datée par le serveur',JSON.stringify(miennes).slice(0,160));
-  if(refsKarim[1]) verifier(miennes.some(r=>/bouton que je ne trouve pas/.test(r.texte)&&r.scenario===refsKarim[1]),'celle sur un scénario porte sa référence');
+  if(refsKarim[1]) verifier(miennes.some(r=>/bouton que je ne trouve pas/.test(r.texte)&&r.scenario===idDe(refsKarim[1])&&r.plateforme===platDe(refsKarim[1])),'celle sur un scénario porte l identifiant du scénario et sa plateforme');
   const affichees=await te.evaluate(()=>[...document.querySelectorAll('#remarques .remarque')].map(x=>x.innerText));
   verifier(affichees.some(t=>/mode sombre/.test(t)),'elle apparaît aussitôt dans sa liste, sans recharger',`${affichees.length}`);
   verifier(!affichees.some(t=>/police du calendrier|agréable à prendre/.test(t)),'il ne voit pas celles des autres');
@@ -155,6 +161,7 @@ const derniere=()=>{const v=[...document.querySelectorAll('.voile')];return v[v.
   /* Depuis la feuille du premier scénario. */
   await aller(te,'/','.testeur-tete');
   const caseUn=await te.$('.tb--testeur [data-case]');
+  const cleUn=caseUn?await caseUn.getAttribute('data-case'):'';
   if(caseUn){await caseUn.click();await pause(1300);}
   const lien=await te.$('[data-remarque-scenario]');
   verifier(!!lien,'la feuille d\'un scénario offre « Une remarque sur ce scénario »');
@@ -164,12 +171,12 @@ const derniere=()=>{const v=[...document.querySelectorAll('.voile')];return v[v.
     await te.evaluate(()=>{const v=[...document.querySelectorAll('.voile')].pop();v.querySelector('[data-valider]').click();});await pause(2500);
     miennes=await lireMiennes();
     const r=miennes.find(x=>/où se trouve le bouton/.test(x.texte));
-    verifier(!!r&&r.scenario===(refsKarim[0]||''),'elle part avec la référence du scénario, sans rien recopier',r?r.scenario:'absente');
+    verifier(!!r&&r.scenario===idDe(cleUn)&&r.plateforme===platDe(cleUn),'elle part avec l identifiant du scénario et sa plateforme, sans rien recopier',r?`${r.scenario} ${r.plateforme}`:'absente');
   }
 
   console.log('\n== La note du test en terminant : les questions de la source');
   for(const ref of refsKarim){
-    await poser(`projets/atelier/campagnes/c-oct/passages/${KARIM}__${ref}`,{scenario:S(ref),testeur:S(KARIM),plateforme:S('ios'),resultat:S('ok'),commentaire:S(''),preuves:{arrayValue:{values:[]}},contexte:{mapValue:{fields:{}}}});
+    await poser(`projets/atelier/campagnes/c-oct/passages/${KARIM}__${ref}`,{scenario:S(idDe(ref)),testeur:S(KARIM),plateforme:S(platDe(ref)),resultat:S('reussi'),commentaire:S(''),preuves:{arrayValue:{values:[]}},contexte:{mapValue:{fields:{}}}});
   }
   await te.reload({waitUntil:'domcontentloaded'});await pause(5000);
   if(await te.$('.accueil')){await te.click('.accueil [data-accueil="passer"]').catch(()=>null);await pause(800);}
