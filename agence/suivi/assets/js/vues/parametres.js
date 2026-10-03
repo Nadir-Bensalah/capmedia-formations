@@ -13,8 +13,8 @@ import { quitter } from '../noyau.js';
 /* Les catégories, les mêmes que dans communication.js (EVENEMENTS) : une
    catégorie absente d'ici ne pourrait jamais être coupée. */
 const CATEGORIES = [
-  ['messages', 'Messages et réponses', 'Un message dans une conversation ou une demande.'],
-  ['demandes', 'Mouvements de mes demandes', 'Changement de statut, qualification, résolution.'],
+  ['messages', 'Messages et réponses', 'Un message dans une conversation ou un ticket.'],
+  ['demandes', 'Mouvements de mes tickets', 'Changement de statut, qualification, résolution.'],
   ['validations', 'Validations attendues', "Quand Capmedia attend votre accord."],
   ['projet', 'Vie du projet', 'Étapes, points bloquants, tâches qui attendent votre retour, maintenance, tests.'],
   ['fichiers', 'Nouveaux fichiers', 'Un livrable ou un document déposé.'],

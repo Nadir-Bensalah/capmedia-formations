@@ -204,7 +204,7 @@ export const vue = async (ctx, env) => {
               ${equipe && projet.aFaire && !projet.archive ? `<a class="etiquette etiquette--lien" href="#/a-faire/${echapper(pid)}">${icone('ampoule')} Projet à faire</a>` : ''}
               ${equipe && !projet.interne && nomsContacts(projet) ? `<span class="puce">${icone('utilisateurs')} ${echapper(nomsContacts(projet))}</span>` : ''}
               ${equipe && interneDuProjet(pid).sante && interneDuProjet(pid).sante !== 'ok' ? pastille(SANTES, interneDuProjet(pid).sante) : ''}
-              ${dateCourte(projet.cible) ? `<span class="puce">${icone('cible')} Livraison visée ${echapper(dateCourte(projet.cible))}</span>${verdictHtml(delai)}` : ''}
+              ${dateCourte(projet.cible) ? `<span class="puce">${icone('cible')} Livraison visée ${echapper(dateCourte(projet.cible))}</span>${verdictHtml(delai, { detail: equipe })}` : ''}
               ${projet.responsable ? `<span class="puce">${icone('utilisateur')} ${echapper(nomEquipe(d.equipe, projet.responsable) || 'Capmedia')}</span>` : ''}
               <span class="puce t-3">${icone('horloge')} ${d.activite[0] ? `Dernière activité ${echapper(depuis(d.activite[0].date))}` : 'Pas encore d\'activité'}</span>
             </div>
@@ -626,14 +626,20 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
   const livraison = derniereRelease
     ? `${libellePlateforme(derniereRelease.plateforme)} ${derniereRelease.version || ''}`.trim() + (dateCourte(derniereRelease.date) ? ` · le ${dateCourte(derniereRelease.date)}` : '')
     : (dernierTermine ? dernierTermine.titre : 'Rien encore');
-  /* Le pavé du client peut être replié ou fermé (rangé dans Tickets). */
+  /* Le pavé du client peut être replié ou fermé (rangé dans Tickets).
+     Chaque information n'a qu'une place (03/10) : un point bloquant est
+     dit en tête de la page, le pavé ne le répète pas ; le pouls ne redit
+     plus « Attendu de vous », la colonne de droite ne redit plus les
+     validations ni les tickets. */
   const clePave = `projet:${pid}`;
   const etatP = equipe ? 'ouvert' : etatPave(clePave);
-  const paveVisible = attente.length > 0 && etatP !== 'ferme';
+  const blocagesOuvertsIds = new Set(blocagesOuverts.map((b) => b.id));
+  const attentePave = equipe ? attente : attente.filter((a) => !(a.genre === 'blocage' && blocagesOuvertsIds.has(String(a.chemin).split('blocage=')[1])));
+  const paveVisible = attentePave.length > 0 && etatP !== 'ferme';
   const attenduTexte = attente.length ? `${pluriel(attente.length, 'point', 'points')}, ${paveVisible ? 'voir ci-dessus' : 'rangés dans Tickets'}` : 'Rien';
   const sourceProgression = prog.valeur === null
     ? 'Rien ne permet encore de la calculer'
-    : `${MODES_PROGRESSION[prog.mode] || ''}${prog.mode === 'manuel' && (projet.progression || {}).le ? ` le ${dateCourte(projet.progression.le)}` : ''}`;
+    : `${equipe ? (MODES_PROGRESSION[prog.mode] || '') : (MODES_PROGRESSION[prog.mode] || '').replace('de la feuille de route', 'du planning')}${prog.mode === 'manuel' && (projet.progression || {}).le ? ` le ${dateCourte(projet.progression.le)}` : ''}`;
 
   /* Ce qui a bougé depuis la dernière visite, sur ce projet seulement et
      sans ses propres gestes. Chaque compteur mène à l'onglet. */
@@ -672,14 +678,14 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
       </div>${equipe ? `<span class="rang" style="gap:2px"><button class="btn btn-petit btn-doux" type="button" data-action="resoudre-blocage" data-id="${echapper(b.id)}">Levé</button>${boutonsEdition(env, 'blocage', b.id, b.titre)}</span>` : ''}</div>`).join('')}</div>
     </section>` : ''}
 
-    ${attente.length ? (equipe ? `<section class="section"${blocagesOuverts.length || !rienAuDessus ? '' : ' style="margin-top:0"'}><div class="attente">
+    ${(equipe ? attente.length : attentePave.length) ? (equipe ? `<section class="section"${blocagesOuverts.length || !rienAuDessus ? '' : ' style="margin-top:0"'}><div class="attente">
       <p class="attente-tete">${icone('alerte')} En attente du client <span class="badge badge--vif" style="margin-left:4px">${attente.length}</span></p>
       <div class="liste" style="margin-top:8px">${attente.slice(0, 5).map((a) => ligne({ href: `#${a.chemin}`, icone: a.icone, ton: a.ton, titre: echapper(a.titre), sous: echapper(a.sous) })).join('')}</div>
       ${attente.length > 5 ? `<p class="t-petit" style="margin-top:8px"><a href="#/demandes">${echapper(pluriel(attente.length - 5, 'autre point', 'autres points'))} à voir</a></p>` : ''}
     </div></section>` : paveHtml({
-      cle: clePave, etat: etatP, nombre: attente.length, rangement: 'Le ranger dans les demandes du projet', premier: !blocagesOuverts.length && rienAuDessus,
-      corps: `<div class="liste" style="margin-top:8px">${attente.slice(0, 5).map((a) => ligne({ href: `#${a.chemin}`, icone: a.icone, ton: a.ton, titre: echapper(a.titre), sous: echapper(a.sous) })).join('')}</div>
-      ${attente.length > 5 ? `<p class="t-petit" style="margin-top:8px"><a href="#/projets/${echapper(pid)}/demandes">${echapper(pluriel(attente.length - 5, 'autre point', 'autres points'))} à voir</a></p>` : ''}`,
+      cle: clePave, etat: etatP, nombre: attentePave.length, rangement: 'Le ranger dans les tickets du projet', premier: !blocagesOuverts.length && rienAuDessus,
+      corps: `<div class="liste" style="margin-top:8px">${attentePave.slice(0, 5).map((a) => ligne({ href: `#${a.chemin}`, icone: a.icone, ton: a.ton, titre: echapper(a.titre), sous: echapper(a.sous) })).join('')}</div>
+      ${attentePave.length > 5 ? `<p class="t-petit" style="margin-top:8px"><a href="#/projets/${echapper(pid)}/demandes">${echapper(pluriel(attentePave.length - 5, 'autre point', 'autres points'))} à voir</a></p>` : ''}`,
     })) : ''}
 
     <section class="section${paveVisible || blocagesOuverts.length || !rienAuDessus ? '' : ' section--premiere'}" style="${paveVisible || blocagesOuverts.length || !rienAuDessus ? '' : 'margin-top:0'}">
@@ -689,7 +695,7 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
           <div><p class="quoi">${icone('play')} En ce moment</p><p class="texte${pulse.enCours ? '' : ' rien'}">${echapper(pulse.enCours || (enCours[0] ? enCours[0].titre : (courant ? courant.titre : 'Rien de renseigné')))}</p>${pulse.enCours ? poulsMaj : ''}</div>
           <div><p class="quoi">${icone('check')} Dernière livraison</p><p class="texte${pulse.derniereLivraison || derniereRelease || dernierTermine ? '' : ' rien'}">${echapper(pulse.derniereLivraison || livraison)}</p>${pulse.derniereLivraison ? poulsMaj : ''}</div>
           <div><p class="quoi">${icone('fleche')} Prochaine étape</p><p class="texte${pulse.prochaineEtape || suivant ? '' : ' rien'}">${echapper(pulse.prochaineEtape || (suivant ? suivant.titre : 'À définir'))}</p>${pulse.prochaineEtape ? poulsMaj : ''}</div>
-          <div><p class="quoi">${icone('horloge')} ${equipe ? 'Attente client' : 'Attendu de vous'}</p><p class="texte${attente.length ? '' : ' rien'}">${echapper(attenduTexte)}</p></div>
+          ${equipe ? `<div><p class="quoi">${icone('horloge')} Attente client</p><p class="texte${attente.length ? '' : ' rien'}">${echapper(attenduTexte)}</p></div>` : ''}
         </div>
         <div class="carte carte--creuse rang" style="gap:18px;align-items:center">
           ${anneauOuPas(prog, true)}
@@ -745,12 +751,12 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
           <p class="surtitre">Échéances</p>
           ${echeances.length ? `<div class="pile" style="margin-top:10px;gap:10px">${echeances.map((e) => { const f = calcEcheance(e.date); return `<a class="rang" style="gap:10px;color:inherit;align-items:flex-start;flex-wrap:nowrap" href="#${echapper(e.chemin)}"><span class="ligne-icone" style="width:28px;height:28px;border-radius:8px">${icone(e.icone)}</span><span style="min-width:0"><span class="t-petit t-fort tronque" style="display:block">${echapper(e.titre)}</span><span class="t-micro puce puce--${f.ton}" style="margin-top:2px"><i></i>${echapper(f.texte)}</span></span></a>`; }).join('')}</div>` : '<p class="t-petit t-2" style="margin-top:8px">Rien de daté pour le moment.</p>'}
         </div>
-        ${validationsAttente.length ? `<div class="carte carte--creuse"><p class="surtitre">Validations</p><div class="pile" style="margin-top:10px;gap:8px">${validationsAttente.map((v) => `<button class="rang" type="button" style="gap:10px;text-align:left" data-action="ouvrir-validation" data-id="${echapper(v.id)}"><span class="ligne-icone ligne-icone--violet" style="width:28px;height:28px;border-radius:8px">${icone('valider')}</span><span class="t-petit t-fort">${echapper(v.titre)}</span></button>`).join('')}</div></div>` : ''}
-        <div class="carte carte--creuse">
-          <p class="surtitre">${equipe ? 'Demandes' : 'Tickets'}</p>
-          <p class="t-petit" style="margin-top:8px">${equipe ? pluriel(ouverts.length, 'demande ouverte', 'demandes ouvertes') : pluriel(ouverts.length, 'ticket ouvert', 'tickets ouverts')}${ouverts.filter((t) => ATTEND_CLIENT.includes(t.statut)).length ? `, ${ouverts.filter((t) => ATTEND_CLIENT.includes(t.statut)).length} de votre côté` : ''}</p>
-          <p style="margin-top:8px"><a class="t-petit" href="#/projets/${echapper(pid)}/demandes">${equipe ? 'Voir les demandes' : 'Voir les tickets'}</a></p>
-        </div>
+        ${equipe && validationsAttente.length ? `<div class="carte carte--creuse"><p class="surtitre">Validations</p><div class="pile" style="margin-top:10px;gap:8px">${validationsAttente.map((v) => `<button class="rang" type="button" style="gap:10px;text-align:left" data-action="ouvrir-validation" data-id="${echapper(v.id)}"><span class="ligne-icone ligne-icone--violet" style="width:28px;height:28px;border-radius:8px">${icone('valider')}</span><span class="t-petit t-fort">${echapper(v.titre)}</span></button>`).join('')}</div></div>` : ''}
+        ${equipe ? `<div class="carte carte--creuse">
+          <p class="surtitre">Demandes</p>
+          <p class="t-petit" style="margin-top:8px">${pluriel(ouverts.length, 'demande ouverte', 'demandes ouvertes')}${ouverts.filter((t) => ATTEND_CLIENT.includes(t.statut)).length ? `, ${ouverts.filter((t) => ATTEND_CLIENT.includes(t.statut)).length} de votre côté` : ''}</p>
+          <p style="margin-top:8px"><a class="t-petit" href="#/projets/${echapper(pid)}/demandes">Voir les demandes</a></p>
+        </div>` : ''}
       </aside>
     </div>`;
 };
@@ -889,7 +895,9 @@ const tenueDesDelais = (d, { pid, env, delai, risques, prog }) => {
 
       ${temps !== null && !clos ? `<div class="delais-jauges">
         ${jauge('Temps écoulé depuis le début', temps, 'temps', `${temps} % du temps prévu est écoulé`)}
-        ${travail !== null ? jauge('Travail fait', travail, travail >= temps ? 'vert' : 'ambre', `${travail} % du travail est fait`) : ''}
+        ${/* Le client lit le pourcentage du travail une fois, dans l'anneau
+              de la progression ; ici, la phrase dit l'écart. */ ''}
+        ${travail !== null && equipe ? jauge('Travail fait', travail, travail >= temps ? 'vert' : 'ambre', `${travail} % du travail est fait`) : ''}
         ${lecture ? `<p class="delais-lecture">${echapper(lecture)}</p>` : ''}
       </div>` : ''}
 
@@ -1060,7 +1068,7 @@ const etapes = (d, { env, pid }) => {
   </section>` : ''}
   <section class="section" style="${frises ? '' : 'margin-top:0'}">
     <div class="section-tete"><h2>${env.role === 'equipe' ? 'Feuille de route' : 'Planning'}</h2>${boutonNouveau(env, 'jalon', 'Nouvelle étape', { ordre: d.jalons.length + 1 })}</div>
-    ${d.jalons.length ? `<div class="route" style="margin-bottom:var(--e-6)">${trierEtapes(d.jalons).map(phaseHtml).join('')}</div>
+    ${d.jalons.length ? `${/* Un seul format chez le client (03/10) : la liste par phase. */ env.role === 'equipe' ? `<div class="route" style="margin-bottom:var(--e-6)">${trierEtapes(d.jalons).map(phaseHtml).join('')}</div>` : ''}
     ${phases.map((p) => `<div class="section" style="margin-top:var(--e-5)">
       <p class="surtitre" style="margin-bottom:8px">${echapper(p.nom)}</p>
       <div class="liste">${p.jalons.map((j) => {
@@ -1082,7 +1090,13 @@ const etapes = (d, { env, pid }) => {
 const taches = (d, { env, pid }) => {
   const equipe = env.role === 'equipe';
   const mode = (() => { try { return localStorage.getItem('suivi:taches-vue') || 'liste'; } catch (e) { return 'liste'; } })();
-  const liste = d.taches.slice().sort((a, b) => ((STATUTS_TACHE[a.statut] || {}).ordre || 9) - ((STATUTS_TACHE[b.statut] || {}).ordre || 9) || ((PRIORITES[a.priorite] || {}).rang || 9) - ((PRIORITES[b.priorite] || {}).rang || 9));
+  const toutes = d.taches.slice().sort((a, b) => ((STATUTS_TACHE[a.statut] || {}).ordre || 9) - ((STATUTS_TACHE[b.statut] || {}).ordre || 9) || ((PRIORITES[a.priorite] || {}).rang || 9) - ((PRIORITES[b.priorite] || {}).rang || 9));
+  /* Chez le client (03/10), la page dit ce que Capmedia a en main, et rien
+     d'autre : les tâches terminées se rangent dans un bloc replié, celles
+     qui attendent sa réponse vivent dans « En attente de vous ». */
+  const liste = equipe ? toutes : toutes.filter((t) => t.statut !== 'terminee' && t.statut !== 'attente-client');
+  const terminees = equipe ? [] : toutes.filter((t) => t.statut === 'terminee');
+  const aVous = equipe ? [] : toutes.filter((t) => t.statut === 'attente-client');
   const ligneTache = (t) => {
     const f = t.echeance && t.statut !== 'terminee' ? calcEcheance(t.echeance) : null;
     return ligne({
@@ -1102,11 +1116,13 @@ const taches = (d, { env, pid }) => {
         ${boutonNouveau(env, 'tache', 'Nouvelle tâche')}
       </div>
     </div>
-    ${!liste.length ? vide({ icone: 'taches', titre: 'Aucune tâche visible', texte: equipe ? 'Créez la première tâche du projet.' : 'Les tâches partagées avec vous apparaîtront ici.' })
+    ${aVous.length ? `<p class="t-petit t-2" id="taches-a-vous" style="margin-bottom:var(--e-4)">${echapper(pluriel(aVous.length, 'tâche attend', 'tâches attendent'))} votre retour : <a href="#/projets/${echapper(pid)}/demandes">voir « En attente de vous »</a>.</p>` : ''}
+    ${!liste.length ? vide({ icone: 'taches', titre: equipe ? 'Aucune tâche visible' : 'Rien en cours chez Capmedia', texte: equipe ? 'Créez la première tâche du projet.' : 'Les tâches que nous avons en main apparaîtront ici.' })
     : mode === 'kanban' ? `<div class="kanban">${parStatut(liste, STATUTS_TACHE).map((col) => `<div class="kanban-col"><div class="kanban-tete"><span class="puce puce--${col.fiche.voile}"><i></i></span>${echapper(col.fiche.libelle)}<span class="badge">${col.items.length}</span></div>
       ${col.items.map((t) => `<button class="kanban-carte" type="button" data-action="ouvrir-tache" data-id="${echapper(t.id)}"><p class="titre">${echapper(t.titre)}</p><div class="sous">${puce(PRIORITES, t.priorite || 'normale')}${dateCourte(t.echeance) ? `<span>${echapper(dateCourte(t.echeance))}</span>` : ''}${t.assigne ? avatar(nomEquipe(d.equipe, t.assigne) || 'C', { equipe: true, taille: 'petit' }) : ''}</div></button>`).join('')}
     </div>`).join('')}</div>`
     : `<div class="liste">${liste.map(ligneTache).join('')}</div>`}
+    ${terminees.length ? `<details class="replie-terminees" id="taches-terminees" style="margin-top:var(--e-5)"><summary class="t-petit t-fort">Terminées <span class="compte-section">${terminees.length}</span></summary><div class="liste" style="margin-top:10px">${terminees.map(ligneTache).join('')}</div></details>` : ''}
   </section>`;
 };
 

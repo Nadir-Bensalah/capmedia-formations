@@ -31,9 +31,12 @@ const projetDe = (route) => {
 
 /* `projetParDefaut` (le client seul) : le projet de la bulle sur une page
    qui n'en nomme aucun. Sans lui (le Cockpit), rien ne change. */
-export const brancherBulle = (env, { projetParDefaut = null } = {}) => {
+/* `sansBulle` (le client seul) : les pages où la bulle n'a rien à faire.
+   Sur Messages, la conversation est déjà la page : la bulle la montrait
+   une seconde fois et couvrait « Envoyer » sur un téléphone (03/10). */
+export const brancherBulle = (env, { projetParDefaut = null, sansBulle = null } = {}) => {
   let bulle = null;
-  const voulu = (route) => projetDe(route) || (projetParDefaut ? (projetDeLAdresse(route || {}) || projetParDefaut() || '') : '');
+  const voulu = (route) => (sansBulle && sansBulle(route || {}) ? '' : (projetDe(route) || (projetParDefaut ? (projetDeLAdresse(route || {}) || projetParDefaut() || '') : '')));
 
   const poser = (voulu) => {
     if (bulle && bulle.pid === voulu) return;
@@ -44,6 +47,9 @@ export const brancherBulle = (env, { projetParDefaut = null } = {}) => {
   const surOuvrir = (e) => {
     const d = (e && e.detail) || {};
     if (!d.projet) return;
+    /* Demandée depuis la page Messages (« Écrire » d'un autre bloc) : la
+       page a déjà son fil, on n'y monte pas de bulle. */
+    if (sansBulle && sansBulle(courant() || {})) return;
     poser(String(d.projet));
     if (bulle) bulle.ouvrirAvec(d.texte || '');
   };

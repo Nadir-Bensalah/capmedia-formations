@@ -1974,3 +1974,24 @@ body:has(.bulle) #vue .page { padding-bottom: 104px; }
 
 /* La mention « Bêta » du Hub client, à gauche de la cloche (03/10). */
 .pastille-beta { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; margin-right: 4px; border-radius: 980px; font: 600 11.5px/1 var(--police); letter-spacing: .02em; color: var(--bleu); background: color-mix(in srgb, var(--bleu) 14%, transparent); cursor: default; }
+
+/* ==========================================================================
+   Lot B2 (03/10) : le rail et le téléphone
+   ========================================================================== */
+/* Le compte (Demander un projet, Paramètres, Annonces) reste épinglé en bas
+   de la liste qui défile : sur un téléphone ou un portable de 900 px de
+   haut, les projets passent dessous, le compte ne part jamais. */
+.lat-groupe--pied {
+  position: sticky; bottom: -14px; z-index: 1;
+  margin: auto -14px -14px; padding: 10px 14px 14px;
+  background: var(--rail, var(--fond));
+}
+/* Sur un écran tactile, pas de raccourci clavier à lire. */
+@media (hover: none) and (pointer: coarse) {
+  .cherche kbd, .btn-recherche kbd, .bulle-aide, .aide-clavier { display: none; }
+}
+/* Le clavier ouvert dans un champ de saisie : la bulle s'efface, elle ne
+   couvre plus « Envoyer ». */
+@media (max-width: 1023px) {
+  body:has(.composer textarea:focus, .composer-pied textarea:focus, #vue .zone:focus) .bulle:not(.bulle--ouverte) { display: none; }
+}

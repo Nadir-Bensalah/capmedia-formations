@@ -28,8 +28,11 @@ export const vue = async (ctx, env) => {
   const { session } = env;
   const lot = magasin.lot();
   const sortie = ctx.sortie;
-  titrePage('Tickets');
-  filAriane([{ libelle: 'Tickets' }]);
+  /* La page de tous ses projets s'appelle « En attente de vous » (03/10) :
+     les tickets d'un projet ont leur page dans l'arbre du projet, celle-ci
+     ne se présente pas comme une seconde page Tickets. */
+  titrePage('En attente de vous');
+  filAriane([{ libelle: 'En attente de vous' }]);
   sortie.innerHTML = `<div class="page">${squelette('page', 5)}</div>`;
   const etat = { filtre: lireMemoire(CLE_FILTRE, 'ouvertes'), projet: (ctx.requete && ctx.requete.projet) || lireMemoire(CLE_PROJET, '') };
   /* Une validation dans l'adresse (#/valider/{id}) s'ouvre en fiche dès que
@@ -64,7 +67,7 @@ export const vue = async (ctx, env) => {
     const passees = validations.filter((v) => v.statut !== 'en-attente').sort(parDateDesc('maj'));
     const nomDe = (pid) => ((tousProjets.find((p) => p.id === pid) || {}).nom || '');
     const blocAttente = `<section class="section" id="en-attente" style="margin-top:0">
-        <div class="section-tete"><h2>En attente de vous${attente.length ? ` <span class="compte-section compte-section--vif">${attente.length}</span>` : ''}</h2></div>
+        <div class="section-tete"><h2>À traiter${attente.length ? ` <span class="compte-section compte-section--vif">${attente.length}</span>` : ''}</h2></div>
         <p class="t-petit t-2" style="margin:-4px 0 12px">${attente.length ? `${attente.length} point${attente.length > 1 ? 's' : ''} attend${attente.length > 1 ? 'ent' : ''} votre retour. Le reste avance sans vous.` : 'Rien ne vous attend. Tout avance de notre côté.'}</p>
         ${attente.length ? `<div class="liste">${aValider.map((v) => ligne({
           icone: 'valider', ton: 'violet', titre: echapper(v.titre), sous: `${echapper(TYPES_VALIDATION[v.type] || 'Validation')} · ${echapper(nomDe(v.projet))} · ${echapper(depuis(v.cree))}${v.echeance ? ` ${echeanceHtml(echeance(v.echeance))}` : ''}`,
@@ -82,15 +85,15 @@ export const vue = async (ctx, env) => {
 
     sortie.innerHTML = `<div class="page">
       <div class="page-tete">
-        <div><h1>Tickets</h1><p class="chapo">Ce qui attend votre retour, puis ${projets.length > 1 ? 'tous vos tickets, sur tous vos projets' : 'vos tickets'} : ce qui est chez nous, ce qui attend votre réponse, ce qui est terminé.</p></div>
+        <div><h1>En attente de vous</h1><p class="chapo">Ce qui attend votre retour${projets.length > 1 ? ', sur tous vos projets' : ''} : validations, réponses, devis, factures. Dessous, vos tickets.</p></div>
         <div class="actions">${projets.length ? `<button class="btn btn-principal" type="button" data-nouvelle-demande>${icone('plus')} Nouveau ticket</button>` : ''}</div>
       </div>
       ${blocAttente}
       <section class="section" id="vos-demandes">
-      <div class="section-tete"><h2>Vos tickets</h2></div>
+      <div class="section-tete"><h2>Vos tickets${projets.length > 1 ? ', tous projets' : ''}</h2></div>
       <div class="rang" style="margin-bottom:16px;gap:12px;flex-wrap:wrap">
         <div class="filtres">
-          ${[['ouvertes', 'Ouverts'], ['moi', 'À vous'], ['terminees', 'Terminés'], ['toutes', 'Tous']].map(([cle, lib]) => `<button class="filtre${etat.filtre === cle ? ' actif' : ''}" type="button" data-filtre="${cle}">${lib}<span class="compte">${groupes[cle].length}</span></button>`).join('')}
+          ${[['ouvertes', 'Ouverts'], ['moi', 'Pour vous'], ['terminees', 'Terminés'], ['toutes', 'Tous']].map(([cle, lib]) => `<button class="filtre${etat.filtre === cle ? ' actif' : ''}" type="button" data-filtre="${cle}">${lib}<span class="compte">${groupes[cle].length}</span></button>`).join('')}
         </div>
         ${projets.length > 1 ? `<select class="select" id="filtre-projet" style="width:auto;min-width:180px" aria-label="Projet"><option value="">Tous les projets</option>${projets.map((p) => `<option value="${echapper(p.id)}"${etat.projet === p.id ? ' selected' : ''}>${echapper(p.nom)}</option>`).join('')}</select>` : ''}
       </div>

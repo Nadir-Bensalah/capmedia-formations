@@ -57,11 +57,13 @@ let page = null;
   console.log('\n== Scénario 8 : « En attente de vous », en tête de la page Demandes');
   await aller(page, '#/valider', '#en-attente');
   verifier(/#\/demandes$/.test(page.url()), 'l ancienne adresse #/valider mène à #/demandes', page.url());
-  verifier((await page.textContent('.page h1')).trim() === 'Tickets', 'le titre de la page est « Tickets »');
-  verifier(/^En attente de vous/.test((await page.textContent('#en-attente h2')).trim()), 'et la page s ouvre sur « En attente de vous »');
+  /* Lot B2 (03/10) : la page de tous les projets est « En attente de vous »,
+     elle ne se présente plus comme une seconde page Tickets. */
+  verifier((await page.textContent('.page h1')).trim() === 'En attente de vous', 'le titre de la page est « En attente de vous »');
+  verifier(Boolean(await page.$('#en-attente .liste .ligne')), 'et la page s ouvre sur ce qui attend');
   const ariane = (await page.textContent('#ariane').catch(() => '')) || '';
-  verifier(/Tickets/.test(ariane) && !/Demandes/.test(ariane) && !/À valider/.test(ariane), 'le fil d Ariane dit « Tickets », sans « À valider »', ariane.trim().slice(0, 80));
-  verifier(/^Tickets/.test(await page.title()), 'comme le titre de l onglet');
+  verifier(/En attente de vous/.test(ariane) && !/Tickets|Demandes|À valider/.test(ariane), 'le fil d Ariane dit « En attente de vous »', ariane.trim().slice(0, 80));
+  verifier(/^En attente de vous/.test(await page.title()), 'comme le titre de l onglet');
   const ordre = await page.$$eval('.page section[id]', (els) => els.map((e) => e.id));
   verifier(ordre.indexOf('en-attente') === 0 && ordre.indexOf('vos-demandes') === 1, 'ce qui attend d abord, puis les demandes', ordre.join(' '));
 
@@ -185,7 +187,7 @@ let page = null;
   await pause(1200);
   verifier(/Suite de ATELIER-090/.test(await page.textContent('.suivi-demande')), 'la fiche affiche « Suite de ATELIER-090 »');
   await aller(page, '#/projets/atelier/demandes/t-vieux', '.suivi-demande');
-  verifier(/Suivie par/.test(await page.textContent('.suivi-demande')), 'et l ancienne « Suivie par »');
+  verifier(/Suivi par/.test(await page.textContent('.suivi-demande')) && !/Suivie par/.test(await page.textContent('.suivi-demande')), 'et l ancien « Suivi par » (ticket, au masculin)');
 
   console.log('\n== Scénario 9 : des pièces avec ses remarques, un accusé, une annulation');
   await aller(page, '#/valider/v-maquette', '#commentaire');

@@ -106,19 +106,21 @@ export {
  * Sans ces deux-là, le client lisait un mot d'état et écrivait un message
  * pour savoir la seule chose qui l'intéresse : et maintenant ?
  */
+/* « client » : le mot du client. Lui dit « ticket », au masculin (03/10) ;
+   l'équipe garde « demande ». « suiteClient » de même. */
 export const STATUTS = {
-  'nouveau':           { libelle: 'Reçue',                voile: 'bleu',   ordre: 1,  chez: 'capmedia', suite: 'Nous la lisons et revenons vers vous.' },
+  'nouveau':           { libelle: 'Reçue',                voile: 'bleu',   ordre: 1,  chez: 'capmedia', client: 'Reçu', suite: 'Nous la lisons et revenons vers vous.', suiteClient: 'Nous le lisons et revenons vers vous.' },
   'a-analyser':        { libelle: 'À analyser',           voile: 'bleu',   ordre: 2,  chez: 'capmedia', suite: 'Nous regardons ce que cela implique, puis nous vous disons quand.' },
-  'en-attente-client': { libelle: "Besoin d'information", voile: 'ambre',  ordre: 3,  chez: 'client',   client: 'Une réponse est attendue de vous', suite: 'Répondez ci-dessous : la demande repart dès votre réponse.' },
-  'acceptee':          { libelle: 'Acceptée',             voile: 'violet', ordre: 4,  chez: 'capmedia', suite: 'Elle entre dans le planning. Vous verrez la date apparaître ici.' },
-  'planifiee':         { libelle: 'Planifiée',            voile: 'violet', ordre: 5,  chez: 'capmedia', suite: 'Le travail va commencer.' },
+  'en-attente-client': { libelle: "Besoin d'information", voile: 'ambre',  ordre: 3,  chez: 'client',   client: 'Une réponse est attendue de vous', suite: 'Répondez ci-dessous : la demande repart dès votre réponse.', suiteClient: 'Répondez ci-dessous : le ticket repart dès votre réponse.' },
+  'acceptee':          { libelle: 'Acceptée',             voile: 'violet', ordre: 4,  chez: 'capmedia', client: 'Accepté', suite: 'Elle entre dans le planning. Vous verrez la date apparaître ici.', suiteClient: 'Il entre dans le planning. Vous verrez la date apparaître ici.' },
+  'planifiee':         { libelle: 'Planifiée',            voile: 'violet', ordre: 5,  chez: 'capmedia', client: 'Planifié', suite: 'Le travail va commencer.' },
   'en-cours':          { libelle: 'En cours',             voile: 'bleu',   ordre: 6,  chez: 'capmedia', suite: 'Nous y travaillons. La prochaine étape est une version à essayer.' },
   'en-revue':          { libelle: 'En revue',             voile: 'violet', ordre: 7,  chez: 'capmedia', suite: 'Fait, en cours de relecture chez nous avant de vous être livré.' },
   'a-valider':         { libelle: 'À valider',            voile: 'ambre',  ordre: 8,  chez: 'client',   client: 'À valider par vous', suite: 'Vérifiez de votre côté, puis validez ou dites-nous ce qui manque.' },
-  'resolu':            { libelle: 'Terminée',             voile: 'vert',   ordre: 9,  chez: '',         suite: 'Vous pouvez la rouvrir pendant sept jours.' },
-  'refuse':            { libelle: 'Refusée',              voile: 'gris',   ordre: 10, chez: '',         suite: '' },
-  'annulee':           { libelle: 'Annulée',              voile: 'gris',   ordre: 11, chez: '',         suite: '' },
-  'ferme':             { libelle: 'Fermée',               voile: 'gris',   ordre: 12, chez: '',         suite: '' },
+  'resolu':            { libelle: 'Terminée',             voile: 'vert',   ordre: 9,  chez: '',         client: 'Résolu', suite: 'Vous pouvez la rouvrir pendant sept jours.', suiteClient: 'Vous pouvez le rouvrir pendant sept jours.' },
+  'refuse':            { libelle: 'Refusée',              voile: 'gris',   ordre: 10, chez: '',         client: 'Refusé', suite: '' },
+  'annulee':           { libelle: 'Annulée',              voile: 'gris',   ordre: 11, chez: '',         client: 'Annulé', suite: '' },
+  'ferme':             { libelle: 'Fermée',               voile: 'gris',   ordre: 12, chez: '',         client: 'Fermé', suite: '' },
 };
 
 export const TYPES = {

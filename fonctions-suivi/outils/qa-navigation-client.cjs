@@ -125,7 +125,7 @@ const nettoyer = async () => {
   /* Une suite passée avant a pu déplacer cette demande : on la remet « à valider ». */
   await poser('tickets/t-anniv', { statut: S('a-valider') }, ['statut']); await pause(1200);
   await page.click('[data-filtre="moi"]'); await pause(500);
-  verifier(/anniversaires reste incomplète/.test(await page.textContent('.page')), 'le filtre « À vous » ne garde que ce qui attend Camille');
+  verifier(/anniversaires reste incomplète/.test(await page.textContent('.page')) && (await page.$eval('.filtre.actif', (el) => el.textContent)).includes('Pour vous'), 'le filtre « Pour vous » ne garde que ce qui attend Camille');
 
   console.log('\n== La barre latérale : l arbre du projet');
   await aller(page, '#/projets/atelier', '.page-tete--projet');
@@ -136,18 +136,15 @@ const nettoyer = async () => {
   verifier(chemins.indexOf('/nouveau-projet') > 0 && chemins.indexOf('/nouveau-projet') === chemins.indexOf('/parametres') - 1 && chemins.indexOf('/nouveau-projet') > chemins.indexOf('/fichiers'), '« Demander un projet » est en bas, juste avant « Paramètres »', chemins.join(' '));
   verifier(!chemins.includes('/valider') && chemins.filter((c) => c === '/projets/atelier/demandes').length === 1, '« En attente de vous » et « Demandes » ne font qu une entrée', chemins.join(' '));
   await aller(page, '#/projets/atelier/demandes', '#en-attente-projet');
-  const lignesAttente = (await page.$$('#en-attente-projet .ligne')).length;
+  /* Lot B2 (03/10) : le rouge de Tickets ne compte que les tickets qui
+     attendent Camille, le filtre « Pour vous » de la page. */
+  const pourVous = await page.$eval('[data-filtre-demandes="moi"] .compte', (el) => Number(el.textContent)).catch(() => -1);
   const rougeDemandes = await page.$eval('#lat-corps a[data-chemin="/projets/atelier/demandes"] .compte.vif', (el) => Number(el.textContent)).catch(() => 0);
-  verifier(lignesAttente > 0 && rougeDemandes === lignesAttente, 'le rouge de « Demandes » compte ce qui attend Camille sur le projet', `${rougeDemandes} pour ${lignesAttente} point(s)`);
+  verifier(pourVous > 0 && rougeDemandes === pourVous, 'le rouge de « Tickets » compte les tickets qui attendent Camille (« Pour vous »)', `${rougeDemandes} pour ${pourVous}`);
   const repere = '#lat-corps a[data-chemin="/maintenance"][data-projet="atelier"] .lat-repere';
-  verifier(await attendre(async () => Boolean(await page.$(repere))), 'sans forfait, un repère « rien en cours » à droite de Maintenance');
-  const etiquette = await page.$eval(repere, (el) => ({ label: el.getAttribute('aria-label'), astuce: el.getAttribute('data-astuce'), role: el.getAttribute('role'), fond: getComputedStyle(el).backgroundColor, svg: Boolean(el.querySelector('svg')) })).catch(() => ({}));
-  verifier(etiquette.label === 'Aucun forfait de maintenance en cours' && etiquette.astuce === etiquette.label && etiquette.role === 'img' && etiquette.svg, 'nommé et en infobulle : « Aucun forfait de maintenance en cours »', JSON.stringify(etiquette));
-  verifier(/rgba\(0, 0, 0, 0\)|transparent/.test(etiquette.fond || ''), 'sans fond', etiquette.fond);
-  await poser('projets/atelier/maintenance/contrat', { genre: S('contrat'), statut: S('actif'), cree: T(new Date()), maj: T(new Date()) });
-  verifier(await attendre(async () => !(await page.$(repere))), 'un forfait actif : le repère s en va, sans recharger');
-  await effacer('projets/atelier/maintenance/contrat');
-  verifier(await attendre(async () => Boolean(await page.$(repere))), 'le forfait retiré : il revient');
+  verifier(!(await page.$(repere)), 'sans forfait, plus de repère dans le rail : la page le dit');
+  await aller(page, '#/maintenance?projet=atelier', '.page h1');
+  verifier(/Pas encore de forfait/.test(await page.textContent('#vue')), 'la page Maintenance dit « Pas encore de forfait »');
   const tests = '#lat-corps a[data-chemin="/tests"][data-projet="atelier"]';
   /* Les campagnes déjà ouvertes par les semis passent « en préparation » le
      temps du contrôle (ce statut ne déclenche rien côté serveur) : on part
