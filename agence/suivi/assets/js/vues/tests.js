@@ -33,6 +33,8 @@ import { editer } from './editeurs.js';
 import { appelServeur } from '../serveur.js';
 import { filAriane } from '../coquille.js';
 import { monter as monterTableau } from './tableau.js';
+import { ordonnerSections as rangerSections } from './plan-tests.js';
+import { scenariosHumainsDuPlan, estSurLePlan, clesAttendues, vivierPropose, pretALancer, verdictDe, VERDICTS, NOMS_PLATEFORMES } from '../campagne-plan.js';
 
 /* La mémoire des filtres tient dans l'adresse, pas dans le stockage : un
    lien vers « les anomalies Android de tel projet » doit pouvoir se coller
@@ -121,6 +123,7 @@ const lireTout = (env) => {
 const avisDe = (campagnes) => campagnes.flatMap((c) => (magasin.lire(K.appreciations(c.id)) || [])
   .map((a) => ({ ...a, testeur: a.id, campagne: c.id })));
 const passagesDe = (c) => (magasin.lire(K.passages(c.id)) || []);
+const sectionsDuPlan = (pid) => (pid ? rangerSections(magasin.lire(K.planTests(pid)) || []) : []);
 
 /* Comment on nomme un testeur. L'équipe lit son prénom ; le client lit un
    numéro, le MÊME partout sur la page, du vivier aux réponses libres :
@@ -224,8 +227,8 @@ const EXPLICATIONS = {
     <p>Quand personne n'a encore répondu, la page montre quand même toutes les questions : c'est ce qui sera demandé, et vous pouvez le lire avant que la campagne commence.</p>` },
   'resultats': { titre: 'Les résultats, scénario par scénario', corps: `
     <p>Chaque fois qu'un testeur déroule un scénario, il consigne un <b>passage</b> : ce qu'il a obtenu, sur quel appareil, avec un commentaire et une capture s'il y a eu un problème.</p>
-    <p><b>OK</b> : ça a marché comme prévu. <b>KO</b> : ça n'a pas marché, et une preuve est jointe. <b>NA</b> : le scénario ne s'appliquait pas sur cet appareil.</p>
-    <p>Un scénario important est déroulé par deux personnes sur deux systèmes différents : il a donc deux passages. Un KO fait naître une anomalie tout seul, regroupée par scénario.</p>` },
+    <p><b>Réussi</b> : ça a marché comme prévu. <b>Échec</b> : ça n'a pas marché, et une preuve est jointe. <b>Sans objet</b> : le scénario ne s'appliquait pas sur cet appareil.</p>
+    <p>Chaque scénario est passé sur chacune de ses plateformes, iPhone, Android ou Web. Celui qu'aucun robot ne vérifie est passé par deux personnes. Un échec fait naître une anomalie tout seul, regroupée par scénario.</p>` },
   'activite': { titre: 'Activité', corps: `
     <p>Ce qui s'est passé récemment sur tous les projets, du plus récent au plus ancien : une campagne qui change d'état, une anomalie signalée ou corrigée.</p>` },
 };
@@ -691,7 +694,7 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAU
 
   const sectionCampagnes = `<section class="section" id="campagnes">
     <div class="section-tete">
-      <div><h2>Campagnes ${infoBouton('campagnes')}</h2><p class="chapo">Une campagne pioche dans la bibliothèque : les mêmes scénarios sont rejoués d'une version à l'autre.</p></div>
+      <div><h2>Campagnes ${infoBouton('campagnes')}</h2><p class="chapo">${sectionsDuPlan(pid).length ? 'Une campagne prend ses scénarios dans le plan de tests, et les répartit entre les testeurs.' : 'Une campagne pioche dans la bibliothèque : les mêmes scénarios sont rejoués d\'une version à l\'autre.'}</p></div>
       ${equipe ? `<button class="btn btn-principal btn-petit" type="button" data-nouvelle-campagne="${echapper(pid)}">${icone('plus')} Nouvelle campagne</button>` : ''}
     </div>
     ${camp.length ? `<div class="liste">${camp.map((c) => ligne({
@@ -1128,28 +1131,32 @@ const avisHtml = (avis, { nommer }) => {
 
 /* Les résultats d'une campagne, scénario par scénario : chaque passage,
    avec qui l'a fait, sur quoi, ce qu'il a obtenu, et sa preuve. C'est ce
-   que le client vient lire pendant la campagne, et il le lit en entier. */
+   que le client vient lire pendant la campagne, et il le lit en entier.
+   Le profil du testeur n'y est pas répété : il figure une fois, dans la
+   liste des testeurs, et la ligne dit seulement qui. */
+const quandPassage = (x) => enDate(x.maj) || enDate(x.cree) || enDate(x.le);
 const resultatsHtml = (c, { dedans, nommer }) => {
-  const passages = passagesDe(c).slice().sort((a, b) => (enDate(b.le) || 0) - (enDate(a.le) || 0));
+  const passages = passagesDe(c).slice().sort((a, b) => (quandPassage(b) || 0) - (quandPassage(a) || 0));
   const attendus = Object.values(c.affectation || {}).reduce((n, r) => n + r.length, 0);
-  const compte = (r) => passages.filter((x) => x.resultat === r).length;
+  const compte = (r) => passages.filter((x) => verdictDe(x.resultat) === r).length;
   const parScenario = dedans.map((s) => ({ s, p: passages.filter((x) => x.scenario === s.ref) })).filter((x) => x.p.length);
   return `<div class="groupe" id="resultats">
     <span class="etiquette-champ">Les résultats, scénario par scénario ${infoBouton('resultats')}</span>
     ${passages.length ? `
-      ${jauge([{ n: compte('ok'), nom: 'réussis', ton: 'vert' }, { n: compte('ko'), nom: 'échoués', ton: 'rouge' }, { n: compte('na'), nom: 'sans objet', ton: 'gris' }])}
+      ${jauge([{ n: compte('reussi'), nom: 'réussis', ton: 'vert' }, { n: compte('echec'), nom: 'en échec', ton: 'rouge' }, { n: compte('sans-objet'), nom: 'sans objet', ton: 'gris' }])}
       <p class="aide" style="margin:8px 0 12px">${pluriel(passages.length, 'passage consigné', 'passages consignés')}${attendus ? ` sur ${attendus} ${attendus > 1 ? 'attendus' : 'attendu'}` : ''}.</p>
       ${parScenario.map(({ s, p }) => `<div class="resultat">
         <p class="resultat-tete">${ref(s.ref)} <span>${echapper(s.titre)}</span></p>
         <div class="liste liste--serree">${p.map((x) => {
           const qui = nommer(x.testeur);
+          const v = verdictDe(x.resultat);
           const appareil = (x.contexte || {}).appareil || (x.contexte || {}).modele || '';
           return ligne({
-            icone: x.resultat === 'ko' ? 'alerte' : x.resultat === 'ok' ? 'check' : 'moins',
-            ton: x.resultat === 'ko' ? 'rouge' : x.resultat === 'ok' ? 'vert' : '',
-            titre: `${echapper(qui.nom)} · ${echapper((PLATEFORMES_TEST[x.plateforme] || {}).libelle || x.plateforme || '')}${appareil ? ` · ${echapper(appareil)}` : ''}`,
-            sous: `${dateHeure(x.le) ? `${echapper(dateHeure(x.le))} · ` : ''}${echapper(x.commentaire || (x.resultat === 'ok' ? 'Comme prévu' : 'Sans commentaire'))}${qui.traits ? ` · <span class="t-3">${echapper(qui.traits)}</span>` : ''}`,
-            fin: `${pastille(RESULTATS_PASSAGE, x.resultat || 'na')}${(x.preuves || []).map((ch, i) => `<button class="btn btn-doux btn-petit" type="button" data-piece="${echapper(ch)}">${icone('image')} Preuve ${i + 1}</button>`).join('')}`,
+            icone: v === 'echec' ? 'alerte' : v === 'reussi' ? 'check' : 'moins',
+            ton: v === 'echec' ? 'rouge' : v === 'reussi' ? 'vert' : '',
+            titre: `${echapper(qui.nom)} · ${echapper(NOMS_PLATEFORMES[x.plateforme] || x.plateforme || '')}${appareil ? ` · ${echapper(appareil)}` : ''}`,
+            sous: `${dateHeure(quandPassage(x)) ? `${echapper(dateHeure(quandPassage(x)))} · ` : ''}${echapper(x.commentaire || (v === 'reussi' ? 'Comme prévu' : 'Sans commentaire'))}`,
+            fin: `${pastille(VERDICTS, v)}${(x.preuves || []).map((ch, i) => `<button class="btn btn-doux btn-petit" type="button" data-piece="${echapper(ch)}">${icone('image')} Preuve ${i + 1}</button>`).join('')}`,
           });
         }).join('')}</div>
       </div>`).join('')}`
@@ -1160,12 +1167,21 @@ const resultatsHtml = (c, { dedans, nommer }) => {
 /* L'affectation des testeurs à une campagne.
    Le calcul propose, il ne décide pas : un testeur tombe malade, un autre
    demande un bloc précis, et aucun calcul ne prévoit cela. */
-const ouvrirCampagne = async (c, { pid, env, scenarios, nommer }) => {
+const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer }) => {
   const equipe = env.role === 'equipe';
-  const vivier = magasin.lire(K.testeurs) || [];
+  /* Le vivier proposé : sans les retirés (sauf ceux déjà dans la
+     campagne), ceux du projet d'abord. */
+  const vivier = vivierPropose(magasin.lire(K.testeurs) || [], pid, c.testeurs || []);
   const retenus = c.scenarios || [];
-  const dedans = scenarios.filter((s) => retenus.includes(s.ref));
-  const doubles = dedans.filter((s) => (NIVEAUX_SCENARIO[s.niveau] || {}).double).length;
+  /* Une campagne sur le plan lit les scénarios d'humains du plan, et
+     compte en passages (scénario × plateforme, deux testeurs pour un
+     « humain » seul) ; une campagne d'avant lit la bibliothèque. */
+  const humains = scenariosHumainsDuPlan(sections);
+  const surPlan = estSurLePlan(c, humains);
+  const dedans = surPlan ? humains.filter((s) => retenus.includes(s.id)) : scenarios.filter((s) => retenus.includes(s.ref));
+  const doubles = surPlan
+    ? [...clesAttendues(dedans).values()].reduce((a, b) => a + b, 0) - dedans.length
+    : dedans.filter((s) => (NIVEAUX_SCENARIO[s.niveau] || {}).double).length;
 
   const affectation = c.affectation || {};
   /* Le nom passe par le nommeur : prénom pour l'équipe, « Testeur N » pour
@@ -1197,15 +1213,35 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, nommer }) => {
     return `<span class="t-micro ${passe ? 't-3' : 't-ok'}">${echapper(texte)}</span>`;
   };
 
+  /* Le lancement, en quatre lignes : la campagne ne part que si toutes
+     sont vraies. Avant, il fallait sept gestes dans quatre fenêtres, et
+     rien ne disait ce qui manquait ; passer « En cours » par la feuille
+     reste possible, avec le même contrôle. */
+  const enPreparation = (c.statut || 'preparation') === 'preparation';
+  const pret = surPlan ? pretALancer(c, { humains }) : [];
+  const lancable = surPlan && pret.every((x) => x.ok);
+  const lancementHtml = equipe && enPreparation ? `<div class="groupe" data-lancement>
+    <span class="etiquette-champ">Prête à lancer ?</span>
+    ${surPlan ? `<div class="liste liste--serree">${pret.map((x, i) => `
+      <div class="rang" style="justify-content:space-between;gap:10px;padding:6px 10px;border-radius:8px;background:var(--fond-2)" data-pret="${echapper(x.cle)}" data-ok="${x.ok ? '1' : '0'}">
+        <span><span class="t-micro t-3">${i + 1}</span> ${echapper(x.libelle)}</span>
+        <span class="t-petit ${x.ok ? 't-ok' : 't-3'}">${echapper(x.detail)}</span>
+      </div>`).join('')}</div>
+      <p class="aide">Les scénarios, la présentation et les liens se règlent dans « Modifier » ; les testeurs, avec « Répartir », ci-dessous.</p>`
+      : '<p class="aide">Ce projet n\'a pas encore de plan de tests, ou la campagne reprend l\'ancienne bibliothèque : modifiez-la pour choisir les sections du plan.</p>'}
+  </div>` : '';
+
   const m = modale({
     titre: c.titre || 'Campagne', sousTitre: `${(STATUTS_CAMPAGNE[c.statut] || {}).libelle || ''} · ${pluriel(dedans.length, 'scénario', 'scénarios')}`,
     feuille: true,
     corps: `
       <div class="rang chiffres-tests" style="margin-bottom:18px">
         <div class="chiffre"><span class="chiffre-valeur">${dedans.length}</span><span class="chiffre-nom">scénarios</span></div>
-        <div class="chiffre"><span class="chiffre-valeur">${dedans.length + doubles}</span><span class="chiffre-nom">passages mobiles</span></div>
+        <div class="chiffre"><span class="chiffre-valeur">${dedans.length + doubles}</span><span class="chiffre-nom">${surPlan ? 'passages' : 'passages mobiles'}</span></div>
         <div class="chiffre"><span class="chiffre-valeur">${(c.testeurs || []).length}</span><span class="chiffre-nom">testeurs</span></div>
       </div>
+
+      ${lancementHtml}
 
       ${(c.builds && (c.builds.ios || c.builds.android || c.builds.web)) ? `<div class="groupe">
         <span class="etiquette-champ">Builds</span>
@@ -1222,7 +1258,7 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, nommer }) => {
             <div class="rang" style="justify-content:space-between">
               <span>${echapper(t.nom)}${t.mobile ? ` <span class="puce puce--mini">${echapper((PLATEFORMES_TEST[t.mobile] || {}).court || t.mobile)}</span>` : ''}</span>
               <span class="rang" style="gap:10px;align-items:center">
-                ${t.accueil ? '<span class="pastille pastille--vert" title="A parcouru l\'accueil de son espace">Premiers pas faits</span>' : '<span class="t-micro t-3">premiers pas à faire</span>'}
+                ${!equipe ? '' : t.accueil ? '<span class="pastille pastille--vert" title="A parcouru l\'accueil de son espace">Premiers pas faits</span>' : '<span class="t-micro t-3">premiers pas à faire</span>'}
                 <span class="t-micro">${t.n ? pluriel(t.n, 'passage', 'passages') : 'rien encore'}</span>
               </span>
             </div>
@@ -1233,7 +1269,7 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, nommer }) => {
                 ${t.fin && t.fin.getTime() > Date.now() ? `<button class="btn btn-fantome btn-petit" type="button" data-clore="${echapper(t.id)}">Clore l'accès</button>` : ''}
               </span>` : ''}
             </div>` : ''}
-            ${t.noteTest ? `<p class="t-petit" style="margin:6px 0 0">Note du test : <b>${echapper(String(t.noteTest.note))}/5</b>${equipe && t.noteTest.commentaire ? ` · « ${echapper(String(t.noteTest.commentaire))} »` : ''}</p>` : ''}
+            ${equipe && t.noteTest ? `<p class="t-petit" style="margin:6px 0 0">Note du test : <b>${echapper(String(t.noteTest.note))}/5</b>${equipe && t.noteTest.commentaire ? ` · « ${echapper(String(t.noteTest.commentaire))} »` : ''}</p>` : ''}
             ${equipe && t.remarques.length ? `<div style="margin-top:8px">${t.remarques.map((r) => `<p class="t-petit" style="margin:4px 0;padding:6px 8px;border-radius:8px;background:var(--fond-3)">${echapper(String(r.texte || ''))}${enDate(r.le) ? ` <span class="t-micro t-3">· ${echapper(jourCourt(enDate(r.le)))}</span>` : ''}</p>`).join('')}</div>` : ''}
           </div>`).join('')}</div>`
           : `<p class="aide">Aucun testeur pour l'instant. ${equipe ? (vivier.length ? 'Choisissez-les ci-dessous.' : 'Le vivier est vide : le serveur seul y inscrit quelqu\'un.') : 'Ils apparaîtront ici dès qu\'ils seront choisis.'}</p>`}
@@ -1249,10 +1285,22 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, nommer }) => {
       </div>` : ''}`,
     pied: `<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>
       <button class="btn btn-secondaire" type="button" data-voir-avis>${icone('coeur')} Leur avis</button>
-      ${equipe ? `<button class="btn btn-principal" type="button" data-repartir>${icone('eclair')} Répartir</button>` : ''}`,
+      ${equipe ? `<button class="btn ${lancable ? 'btn-secondaire' : 'btn-principal'}" type="button" data-repartir>${icone('eclair')} Répartir</button>` : ''}
+      ${equipe && enPreparation && surPlan ? `<button class="btn btn-principal" type="button" data-lancer${lancable ? '' : ' disabled'}>Lancer la campagne</button>` : ''}`,
   });
 
   brancherPieces(m.el);
+
+  /* Lancer : la campagne passe « En cours », le début est daté si rien ne
+     l'était. Le serveur prévient le client (hubCampagneEcrite). */
+  const lancer = m.el.querySelector('[data-lancer]');
+  if (lancer) lancer.addEventListener('click', () => agir(lancer, async () => {
+    if (!lancable) { toast('Il manque encore quelque chose : voyez la liste.', 'erreur'); return; }
+    await ecrire.majCampagne(pid, c.id, { statut: 'en-cours', ...(c.debut ? {} : { debut: new Date() }) });
+    toast('Campagne lancée.');
+    m.fermer(true);
+  }));
+
   const voir = m.el.querySelector('[data-voir-avis]');
   if (voir) voir.addEventListener('click', () => agir(voir, async () => {
     /* Les avis de la campagne sont déjà dans le magasin, abonnés par la
@@ -1343,9 +1391,18 @@ export const vue = async (ctx, env) => {
   /* Une seule fonction pour toutes les clés : un dessin par tour, et le
      premier quand tout est là (voir « planifier », plus bas). */
   const redessiner = () => planifier();
+  /* Le plan de tests du projet ouvert : la campagne y prend ses
+     scénarios. Abonné comme les campagnes, quand le projet s'ouvre. */
+  const plansSuivis = new Set();
+  const clesDesPlans = () => [...plansSuivis].map((p) => K.planTests(p));
   const suivreCampagnes = () => {
     const pid = projetCourant();
     if (!pid) return;
+    if (!plansSuivis.has(pid)) {
+      plansSuivis.add(pid);
+      lot.abonner(K.planTests(pid), () => collection(bdd, 'projets', pid, 'planTests'));
+      lot.sur(K.planTests(pid), redessiner);
+    }
     lireTout(env).campagnes.filter((c) => projetDe(c) === pid).forEach((c) => {
       if (campagnesSuivies.has(c.id)) return;
       campagnesSuivies.add(c.id);
@@ -1358,7 +1415,7 @@ export const vue = async (ctx, env) => {
 
   const rendre = (force = false) => {
     suivreCampagnes();
-    const sceau = magasin.empreinte(clesSuivies()) + '|' + etat.projet + '|' + etat.plateforme + '|' + etat.onglet;
+    const sceau = magasin.empreinte([...clesSuivies(), ...clesDesPlans()]) + '|' + etat.projet + '|' + etat.plateforme + '|' + etat.onglet;
     if (!force && sceau === empreinte) return;
     empreinte = sceau;
 
@@ -1539,7 +1596,7 @@ export const vue = async (ctx, env) => {
       sur(m.el, 'click', '[data-qualifier]', async () => { m.fermer(); await editer('anomalie', env, { pid, fiche: a }); });
       return;
     }
-    if (el.dataset.nouvelleCampagne) { await editer('campagne', env, { pid: el.dataset.nouvelleCampagne }); return; }
+    if (el.dataset.nouvelleCampagne) { await editer('campagne', env, { pid: el.dataset.nouvelleCampagne, sections: sectionsDuPlan(el.dataset.nouvelleCampagne) }); return; }
     if (el.dataset.nouveauParcours) { await editer('parcours', env, { pid: el.dataset.nouveauParcours }); return; }
     if (el.dataset.editerParcours) {
       const pid = projetCourant();
@@ -1560,13 +1617,13 @@ export const vue = async (ctx, env) => {
       const pid = projetCourant();
       const d = lireTout(env);
       const c = d.campagnes.find((x) => x.id === el.dataset.id && projetDe(x) === pid);
-      if (c) await ouvrirCampagne(c, { pid, env, scenarios: d.scenarios.filter((x) => projetDe(x) === pid), nommer: nommeur(d, { equipe: env.role === 'equipe', pid }) });
+      if (c) await ouvrirCampagne(c, { pid, env, scenarios: d.scenarios.filter((x) => projetDe(x) === pid), sections: sectionsDuPlan(pid), nommer: nommeur(d, { equipe: env.role === 'equipe', pid }) });
       return;
     }
     if (el.dataset.editerCampagne) {
       const pid = projetCourant();
       const c = lireTout(env).campagnes.find((x) => x.id === el.dataset.editerCampagne && projetDe(x) === pid);
-      if (c) await editer('campagne', env, { pid, fiche: c });
+      if (c) await editer('campagne', env, { pid, fiche: c, sections: sectionsDuPlan(pid) });
       return;
     }
     poser({ projet: etat.projet, plateforme: el.dataset.plateforme, onglet: etat.onglet === ONGLET_DEFAUT ? '' : etat.onglet });
@@ -1579,7 +1636,7 @@ export const vue = async (ctx, env) => {
   /* Les clés du tableau aussi : leur arrivée doit réveiller le premier
      dessin de la page, qui les attend. Ensuite, elles ne changent pas
      l'empreinte de la page : pas de redessin pour rien. */
-  const toutesLesCles = () => [...clesSuivies(), ...(tableau ? tableau.cles() : [])];
+  const toutesLesCles = () => [...clesSuivies(), ...clesDesPlans(), ...(tableau ? tableau.cles() : [])];
   const suivre = () => {
     toutesLesCles().forEach((c) => {
       if (suivies.has(c)) return;

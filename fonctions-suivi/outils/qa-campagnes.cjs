@@ -175,6 +175,29 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
     await page.keyboard.press('Escape'); await pause(500);
   } else dire('aucun bouton de modification');
 
+  /* B1 (03/10/2026) : la feuille cochait tous les blocs à l'ouverture, et
+     enregistrer remettait la campagne sur tous les scénarios. On réduit la
+     campagne à cinq scénarios d'un même bloc, on change un build, et la
+     sélection doit rester la même. */
+  if (neuve) {
+    const cidN = neuve.name.split('/').pop();
+    const actifsTries = actifs.slice().sort((a,b)=>Number((((a.fields||{}).ordre||{}).integerValue)||0)-Number((((b.fields||{}).ordre||{}).integerValue)||0));
+    const bloc1 = (((actifsTries[0].fields||{}).bloc||{}).stringValue)||'';
+    const cinq = actifsTries.filter(d=>((((d.fields||{}).bloc||{}).stringValue)||'')===bloc1).slice(0,5).map(d=>d.name.split('/').pop());
+    await fetch(`${bdd(`projets/atelier/campagnes/${cidN}`)}?updateMask.fieldPaths=scenarios`,{method:'PATCH',headers:{...prop,'Content-Type':'application/json'},
+      body:JSON.stringify({fields:{scenarios:{arrayValue:{values:cinq.map(r=>({stringValue:r}))}}}})});
+    await pause(1500);
+    await page.evaluate((i)=>{const b=document.querySelector(`[data-editer-campagne="${i}"]`);if(b)b.click();},cidN); await pause(1100);
+    const coches = await page.evaluate(()=>[...document.querySelectorAll('[data-bloc]')].filter(c=>c.checked).map(c=>c.dataset.bloc));
+    verifier(coches.length===1&&coches[0]===bloc1,`la feuille rouvre le seul bloc de la campagne (${bloc1})`,coches.join(','));
+    await page.fill('#ed-build_web','qa-1.2.1');
+    await page.click('button[type="submit"][form="ed-forme"]'); await pause(2200);
+    const relue = await lire(`projets/atelier/campagnes/${cidN}`);
+    const apresB1 = ((((relue||{}).fields||{}).scenarios||{}).arrayValue||{}).values||[];
+    verifier(apresB1.length===5&&apresB1.map(v=>v.stringValue).join(',')===cinq.join(','),'changer un build garde ses 5 scénarios',`${apresB1.length}`);
+    verifier(((((relue||{}).fields||{}).builds||{}).mapValue||{}).fields&&relue.fields.builds.mapValue.fields.web.stringValue==='qa-1.2.1','et le build est enregistré');
+  }
+
   console.log('\n== Le client ne crée rien');
   const nav2=await chromium.launch();
   const cl=await (await nav2.newContext({viewport:{width:1500,height:1100}})).newPage();
