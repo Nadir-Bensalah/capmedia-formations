@@ -14,7 +14,7 @@
    même dessin.
    ========================================================================== */
 
-import { grilleDe, periodeA, periodeSuivante, projetLong, montants } from './tarifs.js';
+import { grilleDe, periodeA, periodeSuivante, projetLong, montants, MENTION_FRANCHISE } from './tarifs.js';
 import { joursValides, joursTexte, PLATEFORMES_AXE } from './axes-format.js';
 import { echapper, montantHT, montantTTC, montant } from './noyau.js';
 
@@ -62,7 +62,18 @@ export const libelleDemande = (photo) => {
 
 const joursLigne = (l) => (joursValides(l.jours) ? `≈ ${joursTexte(l.jours)}` : 'À estimer');
 
-const blocPeriode = (titre, p, tva) => `<div class="panier-periode" data-panier-periode="${echapper(p.debut)}">
+/* En franchise de TVA (tva 0), une seule ligne : le prix payé, avec la
+   mention légale. Sinon hors taxes, TVA et TTC. */
+const blocPeriode = (titre, p, tva) => (Number(tva) === 0
+  ? `<div class="panier-periode" data-panier-periode="${echapper(p.debut)}">
+    <p class="panier-periode-titre">${echapper(titre)}</p>
+    <p class="panier-periode-tjm">${echapper(montant(p.tjm))} par jour</p>
+    <dl class="panier-montants">
+      <div class="panier-ttc"><dt>Total</dt><dd data-panier-ht>${echapper(montant(p.ht) || montant(0))}</dd></div>
+    </dl>
+    <p class="t-petit t-3" data-panier-franchise>${echapper(MENTION_FRANCHISE)}</p>
+  </div>`
+  : `<div class="panier-periode" data-panier-periode="${echapper(p.debut)}">
     <p class="panier-periode-titre">${echapper(titre)}</p>
     <p class="panier-periode-tjm">${echapper(montantHT(p.tjm))} par jour</p>
     <dl class="panier-montants">
@@ -70,7 +81,7 @@ const blocPeriode = (titre, p, tva) => `<div class="panier-periode" data-panier-
       <div><dt>TVA ${echapper(String(tva).replace('.', ','))} %</dt><dd data-panier-tva>${echapper(montant(p.tva) || montant(0))}</dd></div>
       <div class="panier-ttc"><dt>TTC</dt><dd data-panier-ttc>${echapper(montantTTC(p.ttc) || `${montant(0)} TTC`)}</dd></div>
     </dl>
-  </div>`;
+  </div>`);
 
 /**
  * Le dessin d'une photo : les lignes (avec « Retirer » dans le panier
@@ -103,4 +114,4 @@ export const dessinPhoto = (photo, { retirer = false } = {}) => {
 };
 
 /** L'estimation à afficher en une ligne : celle de la période en cours. */
-export const estimationCourte = (photo) => (photo && photo.periode ? `≈ ${montantHT(photo.periode.ht)}` : '');
+export const estimationCourte = (photo) => (photo && photo.periode ? `≈ ${Number(photo.tva) === 0 ? montant(photo.periode.ht) : montantHT(photo.periode.ht)}` : '');
