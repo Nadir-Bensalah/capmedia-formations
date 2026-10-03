@@ -1071,6 +1071,25 @@ const dureeLisible = (ms) => {
   return `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')}`;
 };
 
+const VERDICT_BILAN = { reussi: 'ok', echec: 'ko', 'sans-objet': 'na', ok: 'ok', ko: 'ko', na: 'na' };
+
+/* Le titre d'un scénario : dans le plan de tests (« <section>-<f|t|u|s>-<nnn> »,
+   rangé dans planTests/<section> sous son aspect, comme le lit suiviPassageKo),
+   sinon dans l'ancienne bibliothèque. */
+const ASPECT_BILAN = { f: 'fonctionnel', t: 'technique', u: 'ux', s: 'securite' };
+async function titreDuScenario(pid, id) {
+  const plan = /^([a-z0-9]+(?:-[a-z0-9]+)*)-([ftus])-\d{3}$/.exec(String(id || ''));
+  if (plan) {
+    const section = await bdd.doc(`projets/${pid}/planTests/${plan[1]}`).get();
+    const liste = section.exists ? (((section.data() || {}).aspects || {})[ASPECT_BILAN[plan[2]]] || []) : [];
+    const x = Array.isArray(liste) ? liste.find((y) => y && y.id === id) : null;
+    if (x) return String(x.titre || '');
+  }
+  if (!id || String(id).includes('/')) return '';
+  const s = await bdd.doc(`projets/${pid}/scenarios/${id}`).get();
+  return s.exists ? (s.data().titre || '') : '';
+}
+
 /* Le bilan d'un testeur sur une campagne : ses résultats, ses échecs avec
    le titre du scénario, le temps donné. Tout est compté, rien n'est deviné. */
 async function bilanTesteur(pid, cid, uid) {
@@ -1082,12 +1101,15 @@ async function bilanTesteur(pid, cid, uid) {
   const echecs = [];
   for (const d of passages.docs) {
     const p = d.data();
-    if (compte[p.resultat] !== undefined) compte[p.resultat] += 1;
-    if (p.resultat === 'ko') echecs.push({ ref: p.scenario, commentaire: p.commentaire || '', plateforme: p.plateforme || '' });
+    /* Les verdicts du plan (reussi, echec, sans-objet) et ceux d'avant
+       (ok, ko, na) se comptent ensemble. */
+    const r = VERDICT_BILAN[p.resultat];
+    if (r) compte[r] += 1;
+    if (r === 'ko') echecs.push({ ref: p.scenario, commentaire: p.commentaire || '', plateforme: p.plateforme || '' });
   }
   const titres = new Map();
   for (const e of echecs.slice(0, 20)) {
-    try { const s = await bdd.doc(`projets/${pid}/scenarios/${e.ref}`).get(); if (s.exists) titres.set(e.ref, s.data().titre || ''); } catch (err) { /* sans titre */ }
+    try { const t = await titreDuScenario(pid, e.ref); if (t) titres.set(e.ref, t); } catch (err) { /* sans titre */ }
   }
   let temps = 0;
   for (const d of sessions.docs) {

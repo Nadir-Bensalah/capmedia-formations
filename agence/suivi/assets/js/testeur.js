@@ -20,7 +20,7 @@
 import {
   bdd, auth, doc, getDoc, setDoc, addDoc, updateDoc, collection, query, where, signOut, onSnapshot, effacerSecretsLocaux, enDate,
   serverTimestamp, session, echapper, envoyerPiece,
-  PLATEFORMES_TEST, RESULTATS_PASSAGE, FAMILLES_AVIS,
+  PLATEFORMES_TEST, RESULTATS_PASSAGE, FAMILLES_AVIS, FORMATS_PREUVE,
   aRepondu, resumeQuestionnaire, remarqueAEnvoyer, REMARQUE_MAX,
 } from './noyau.js';
 import { icone, pastille, toast, agir, modale, vide } from './ui.js';
@@ -240,7 +240,7 @@ const remarquesBloc = ({ titre = 'Mes remarques' } = {}) => {
       <textarea class="champ" id="remarque-texte" rows="3" maxlength="${REMARQUE_MAX}" placeholder="Ce que vous avez remarqué.">${echapper(brouillonRemarque)}</textarea>
       ${etat.scenarios.length ? `<select class="select" id="remarque-scenario" style="margin-top:8px;width:auto;max-width:100%">
         <option value="">En général</option>
-        ${etat.scenarios.map((x) => `<option value="${echapper(x.ref)}">${echapper(x.ref)} · ${echapper(x.titre || '')}</option>`).join('')}
+        ${etat.scenarios.map((x) => `<option value="${echapper(x.ref)}">${echapper(x.id || x.ref)}${plateformeImposee(x) ? ` (${echapper(PLATEFORMES_TESTEUR[x.plateforme] || x.plateforme)})` : ''} · ${echapper(x.titre || '')}</option>`).join('')}
       </select>` : ''}
       <div class="actions" style="margin-top:8px"><button class="btn btn-secondaire" type="button" data-remarque>Envoyer la remarque</button></div>
     </div>` : '<p class="aide">Votre accès est terminé : plus de remarque possible.</p>'}
@@ -340,7 +340,7 @@ const ajouterRemarque = async (moi, { texte, scenario, plateforme } = {}) => {
    plateforme partent avec, le testeur n'a rien à recopier. */
 const ouvrirRemarque = (s, moi) => {
   const m = modale({
-    titre: 'Une remarque', sousTitre: `${s.ref} · ${s.titre || ''}`,
+    titre: 'Une remarque', sousTitre: `${s.id || s.ref} · ${s.titre || ''}`,
     corps: `<div class="groupe"><label class="etiquette-champ" for="remarque-feuille">Ce que vous avez remarqué</label>
       <textarea class="champ" id="remarque-feuille" rows="4" maxlength="${REMARQUE_MAX}"></textarea>
       <p class="aide">Pas un résultat : une impression, un détail, une idée. L'équipe la lit avec votre nom, le client sans votre nom.</p></div>`,
@@ -348,7 +348,7 @@ const ouvrirRemarque = (s, moi) => {
   });
   const bouton = m.el.querySelector('[data-valider]');
   bouton.addEventListener('click', () => agir(bouton, async () => {
-    const parti = await ajouterRemarque(moi, { texte: ($('#remarque-feuille', m.el).value || ''), scenario: s.ref, plateforme: plateformeCourante });
+    const parti = await ajouterRemarque(moi, { texte: ($('#remarque-feuille', m.el).value || ''), scenario: s.id || s.ref, plateforme: plateformeDe(s) });
     if (parti) m.fermer(true);
   }));
   return m.fin;
@@ -987,7 +987,7 @@ const aideCapture = () => {
 
 const ouvrirEchec = (s) => {
   const m = modale({
-    titre: s.titre, sousTitre: `${s.ref} · vous avez constaté un échec`, feuille: true,
+    titre: s.titre, sousTitre: `${s.id || s.ref} · vous avez constaté un échec`, feuille: true,
     corps: `
       <div class="groupe"><span class="etiquette-champ">Ce qui était attendu</span>
         <p class="t-corps">${echapper(s.attendu || '')}</p></div>
@@ -1017,7 +1017,7 @@ const ouvrirEchec = (s) => {
         <button class="btn-icone t-preuve-retirer" type="button" data-retirer-preuve="${i}" aria-label="Retirer ${echapper(x.fichier.name)}">${icone('fermer')}</button>
       </div>`).join('')}
       ${pieces.length < PREUVES_MAX ? `<label class="t-preuve-ajout">
-        <input class="t-preuve-fichier" id="t-preuve" type="file" accept="image/png,image/jpeg,image/webp,image/heic,image/heif,video/mp4,video/quicktime,video/webm" multiple>
+        <input class="t-preuve-fichier" id="t-preuve" type="file" accept="${echapper(FORMATS_PREUVE.accept)}" multiple>
         ${icone('plus')}<span>${pieces.length ? 'Ajouter une autre capture' : 'Ajouter une capture'}</span>
       </label>` : ''}`;
   };
@@ -1551,8 +1551,10 @@ const monter = async () => {
     if (el.hasAttribute('data-terminer')) { await agir(el, () => terminer(testeur)); return; }
     if (el.hasAttribute('data-remarque')) {
       const z = $('#remarque-texte'); const sc = $('#remarque-scenario');
-      const scenario = sc ? sc.value : '';
-      await agir(el, () => ajouterRemarque(testeur, { texte: z ? z.value : '', scenario, plateforme: scenario ? plateformeCourante : '' }));
+      /* Le choix porte la clé du testeur (scénario et plateforme) : la
+         remarque garde l'identifiant du scénario du plan et sa plateforme. */
+      const choisi = sc && sc.value ? etat.scenarios.find((x) => x.ref === sc.value) : null;
+      await agir(el, () => ajouterRemarque(testeur, { texte: z ? z.value : '', scenario: choisi ? (choisi.id || choisi.ref) : '', plateforme: choisi ? plateformeDe(choisi) : '' }));
       return;
     }
     if (el.hasAttribute('data-astuce-suivante')) {

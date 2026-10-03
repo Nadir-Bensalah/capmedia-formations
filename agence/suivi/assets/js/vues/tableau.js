@@ -65,8 +65,9 @@ const estLa = (p, maintenant = Date.now()) => Boolean(p && p.enLigne && enDate(p
 /* Pourquoi cette couleur, en une phrase. C'est ce qui rend la règle
    discutable : une case qu'on ne sait pas expliquer ne convainc personne. */
 const pourquoi = (c) => {
-  const aRejouer = (p) => p.resultat === 'ko' && p.aRevoir === true;
-  const echecs = c.passages.filter((p) => p.resultat === 'ko' && !aRejouer(p)).length;
+  /* Les verdicts du plan (echec) et ceux d'avant (ko) se lisent pareil. */
+  const aRejouer = (p) => resultatCourt(p.resultat) === 'ko' && p.aRevoir === true;
+  const echecs = c.passages.filter((p) => resultatCourt(p.resultat) === 'ko' && !aRejouer(p)).length;
   const faits = c.passages.filter((p) => !aRejouer(p)).length;
   const ouverte = c.anomalies.find((a) => ['nouvelle', 'confirmee'].includes(a.statut));
   const gravite = ouverte ? ((GRAVITES_ANOMALIE[ouverte.gravite] || {}).libelle || '').toLowerCase() : '';
