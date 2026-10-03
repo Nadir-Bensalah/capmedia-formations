@@ -369,7 +369,7 @@ const texteDe = (page, sel) => page.$eval(sel, (el) => el.textContent.replace(/\
   const surtitre = await texteDe(page, '.page-tete--projet .surtitre');
   verifier(/Application web et mobile/.test(surtitre), 'un projet web ET mobile : « Application web et mobile » dans l en-tête', surtitre);
   const apercuTexte = await texteDe(page, '#vue');
-  verifier(/Tickets/.test(apercuTexte) && /Planning/.test(apercuTexte) && !/Feuille de route|Voir les demandes/.test(apercuTexte) && !/\bnull\b|\bundefined\b/.test(apercuTexte), 'l aperçu dit Tickets et Planning, sans « null »');
+  verifier(/Planning/.test(apercuTexte) && !/Voir les tickets/.test(apercuTexte) && !/Feuille de route|Voir les demandes/.test(apercuTexte) && !/\bnull\b|\bundefined\b/.test(apercuTexte), 'l aperçu dit Planning, sans la carte Tickets (lot B2) ni « null »');
   /* Les anciennes adresses. */
   const redirections = [['#/projets/atelier/versions', /^#\/projets\/atelier$/], ['#/projets/atelier/releases', /^#\/projets\/atelier$/], ['#/projets/atelier/decisions', /^#\/projets\/atelier\/notes$/], ['#/projets/atelier/suggestions', /^#\/projets\/atelier\/evolutions$/], ['#/projets/atelier/marketing', /^#\/projets\/atelier$/]];
   for (const [de, vers] of redirections) {

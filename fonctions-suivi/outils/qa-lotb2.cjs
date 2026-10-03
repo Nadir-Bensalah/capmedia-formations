@@ -47,6 +47,8 @@ const verifier = (c, m, detail) => { if (c) { ok += 1; console.log(`  ok     ${m
 let page = null;
 const SECOND = 'second-menage';
 
+const texteDe = (p, sel) => p.$eval(sel, (el) => el.textContent.replace(/\s+/g, ' ').trim()).catch(() => '');
+
 (async () => {
   const nav = await chromium.launch();
   const erreurs = []; const garder = (p) => p.on('pageerror', (e) => erreurs.push(e.message.slice(0, 160)));
@@ -103,7 +105,10 @@ const SECOND = 'second-menage';
   const aside = await page.$$eval('#vue aside .surtitre', (l) => l.map((x) => x.textContent.trim()));
   verifier(!aside.includes('Validations') && !aside.includes('Tickets') && !/Voir les tickets/.test(await texteDe(page, '#vue aside')), 'la colonne de droite ne redit plus les validations ni les tickets', aside.join(', '));
   const vueTexte = await page.$eval('#vue', (el) => el.innerText);
-  const fois = (vueTexte.match(/Publication Android bloquée/g) || []).length;
+  /* L'historique (« Activité récente ») peut citer le point : c'est un
+     fait passé, pas une seconde place de l'information. */
+  const horsHistorique = await page.$eval('#vue', (el) => { const c = el.cloneNode(true); c.querySelectorAll('section').forEach((x) => { const h = x.querySelector('h2'); if (h && /Activité récente/.test(h.textContent)) x.remove(); }); return c.textContent; });
+  const fois = (horsHistorique.match(/Publication Android bloquée/g) || []).length;
   verifier(fois === 1, 'le point bloquant n apparaît qu une fois', `${fois} fois`);
   verifier(!/point bloquant/.test(await texteDe(page, '.page-tete--projet')), 'l en-tête ne le redit pas');
   verifier(!/Travail fait/.test(vueTexte) && Boolean(await page.$('#source-progression')), 'le pourcentage du travail une seule fois : l anneau, sans la jauge « Travail fait »');
@@ -156,8 +161,8 @@ const SECOND = 'second-menage';
   await connecter(tel, 'camille.essai@exemple.test');
   await aller(tel, '#/messages/atelier', '.page h1');
   verifier(await attendre(async () => !(await tel.$('.bulle #bulle-ouvrir')), 4000), '390 : pas de bulle sur Messages, la conversation n est plus montrée deux fois');
-  const envoyer = await tel.$eval('#forme-message [type="submit"]', (b) => { b.scrollIntoView({ block: 'center' }); const r = b.getBoundingClientRect(); const el = document.elementFromPoint(r.left + r.width - 6, r.top + r.height / 2); return Boolean(el && b.contains(el)); }).catch(() => false);
-  verifier(envoyer, '390 : « Envoyer » n est couvert par rien sur Messages');
+  const envoyer = await tel.$eval('#forme-message [type="submit"]', (b) => { b.scrollIntoView({ block: 'center' }); const r = b.getBoundingClientRect(); const el = document.elementFromPoint(r.left + r.width - 6, r.top + r.height / 2); return Boolean(el) && !el.closest('.bulle'); }).catch(() => false);
+  verifier(envoyer, '390 : « Envoyer » n est pas couvert par la bulle sur Messages');
   verifier(await tel.$eval('#vue .aide-clavier', (el) => getComputedStyle(el).display === 'none').catch(() => false), '390 tactile : « Entrée pour envoyer, Maj+Entrée » masqué');
   await aller(tel, '#/projets/atelier/demandes/t-anniv', '.suivi-demande');
   const surFiche = await tel.$eval('#forme-message [type="submit"], [data-action="valider-client"], .suivi-demande', (b) => { b.scrollIntoView({ block: 'end' }); return true; }).catch(() => false);
