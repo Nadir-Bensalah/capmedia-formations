@@ -1683,9 +1683,9 @@ a.coffre-lien:hover { color: var(--accent); }
 .accueil-mascotte--fin { width: 260px; height: 260px; margin: 0; }
 @keyframes mascotte-arrive { from { opacity: 0; transform: translateY(18px) scale(.86); } to { opacity: 1; transform: none; } }
 @keyframes mascotte-flotte { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
-.accueil-porte--hub .accueil-marque { margin-top: 6px; font: 600 22px var(--titre); letter-spacing: -.02em; color: var(--encre); }
-.accueil-porte--hub .accueil-marque span { margin-left: 9px; padding: 3px 11px; font-size: 13px; vertical-align: 3px; }
-.accueil-porte--hub h1 { margin-top: 18px; }
+.accueil-porte--hub .accueil-marque, .accueil-porte--test .accueil-marque { margin-top: 6px; font: 600 22px var(--titre); letter-spacing: -.02em; color: var(--encre); }
+.accueil-porte--hub .accueil-marque span, .accueil-porte--test .accueil-marque span { margin-left: 9px; padding: 3px 11px; font-size: 13px; vertical-align: 3px; }
+.accueil-porte--hub h1, .accueil-porte--test h1 { margin-top: 18px; }
 .accueil-appli { display: grid; justify-items: center; gap: 14px; }
 .accueil-appli-icone { display: grid; place-items: center; width: 132px; height: 132px; border-radius: 30px; overflow: hidden; background: var(--fond-2); box-shadow: 0 20px 44px rgba(0, 0, 0, .22), 0 2px 6px rgba(0, 0, 0, .12); }
 .accueil-appli-icone img { width: 100%; height: 100%; object-fit: cover; }
@@ -2088,3 +2088,14 @@ body:has(.bulle) #vue .page { padding-bottom: 104px; }
 /* Une modification ne joint pas de pièce : elle corrige le texte. */
 .composer.en-modification #zone-pieces, .bulle--modification .bulle-joindre, .bulle--modification #bulle-pieces { display: none; }
 
+
+/* ==========================================================================
+   L'espace Test au niveau du Hub (03/10) : les états en texte courant,
+   comme les cartes des plateformes. Un point de couleur douce, le mot en
+   gris ; jamais une pastille rouge pour un fait qui n'alarme personne.
+   ========================================================================== */
+.etat-courant { display: inline-flex; align-items: baseline; gap: 6px; font: 400 12.5px/1.4 var(--police); color: var(--encre-3); white-space: normal; text-align: right; }
+.etat-courant i { flex: none; width: 6px; height: 6px; border-radius: 50%; align-self: center; background: var(--encre-3); }
+.etat-courant--ambre i { background: var(--ambre); }
+.etat-courant--bleu i { background: var(--accent, var(--bleu)); }
+.etat-courant--vert i { background: var(--vert); }

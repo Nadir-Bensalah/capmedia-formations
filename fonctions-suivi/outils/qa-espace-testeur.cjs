@@ -1,6 +1,6 @@
 /* ==========================================================================
    CAPMEDIA CLIENT HUB · l'espace Test, ses pages et ses gestes
-   L'accueil de la première fois (la marque, le prénom, les sept écrans,
+   L'accueil de la première fois (la mascotte, le prénom, les quatre écrans,
    l'application de la campagne avec ses écrans), le sombre par défaut, le
    rail, les astuces, le chronomètre, Mon avis, le guide et la recherche,
    vus par un testeur du banc (semer-campagne.mjs).
@@ -35,15 +35,14 @@ let page = null;
 
   console.log('\n== La première fois : l accueil');
   verifier((await page.getAttribute('html', 'data-theme')) === 'dark', 'l espace Test est sombre par défaut');
-  verifier(await page.$('.accueil-logo .feuille--4'), 'la marque en quatre feuilles est au centre');
+  verifier(await page.$('.accueil-porte .accueil-mascotte'), 'la mascotte est au centre, comme sur la porte du Hub');
   verifier(/Bienvenue, Karim/.test(await page.textContent('.accueil-porte h1')), 'la porte dit bienvenue au prénom');
   verifier(/Capmedia\s*Test/.test(await page.textContent('.accueil-marque')), 'et nomme Capmedia Test');
   await page.waitForSelector('.testeur-tete', { state: 'attached', timeout: 20000 });
-  await page.click('[data-accueil="commencer"]'); await page.waitForSelector('.accueil-guide'); await pause(500);
-  verifier(/Vous testez avant les clients/.test(await page.textContent('.ecran.actif')), 'Commencer ouvre le premier écran, le rôle');
-  await page.click('[data-accueil="suivant"]'); await pause(700);
+  verifier(/regard de nouvel utilisateur/.test(await page.textContent('.accueil-porte .texte')), 'la porte dit son rôle en une phrase');
+  await page.click('[data-accueil="commencer"]'); await page.waitForSelector('.accueil-guide'); await pause(700);
   const appli = await page.textContent('.ecran.actif');
-  verifier(/Atelier/.test(appli) && /dans une seule application/.test(appli), 'le deuxième écran présente l application de la campagne, avec sa phrase');
+  verifier(/Atelier/.test(appli) && /dans une seule application/.test(appli), 'Commencer ouvre l application de la campagne, avec sa phrase');
   verifier((await page.$$('.ecran.actif .atouts li')).length === 3, 'et ses trois points forts');
   /* Les adresses des écrans se résolvent après coup (Storage) : on leur
      laisse quelques secondes. */
@@ -53,9 +52,9 @@ let page = null;
   await pause(300);
   const captures = await page.$$eval('.ecran.actif .telephone-ecran img', (l) => l.map((i) => i.getAttribute('src') || ''));
   verifier(captures.length === 3 && captures.every((s) => /^http/.test(s)), `dans un téléphone, ses trois écrans (${captures.filter((s) => /^http/.test(s)).length} adresse(s) résolue(s) sur ${captures.length}${stockage.length ? ` · Storage : ${stockage.slice(0, 3).join(' | ')}` : ''})`);
-  let n = 2;
+  let n = 1;
   while (await page.$('[data-accueil="suivant"]')) { await page.click('[data-accueil="suivant"]'); n += 1; await pause(350); if (n > 12) break; }
-  verifier(n === 7, `sept écrans en tout (${n})`);
+  verifier(n === 4, `quatre écrans en tout, comme le Hub (${n})`);
   verifier(/Votre campagne vous attend/.test(await page.textContent('.ecran.actif')), 'le dernier sait que la campagne est ouverte');
   await page.click('[data-accueil="fin"]'); await pause(900);
   verifier(!(await page.$('.accueil')), 'C est parti efface l accueil');
@@ -80,7 +79,7 @@ let page = null;
   verifier(await page.$('.accueil-porte'), 'Revoir les premiers pas rouvre l accueil');
   await page.click('[data-accueil="commencer"]'); await page.waitForSelector('.accueil-guide'); await pause(400);
   await page.keyboard.press('ArrowRight'); await pause(700);
-  verifier(/Atelier/.test(await page.textContent('.ecran.actif')), 'la flèche droite passe à l écran suivant');
+  verifier(/Trois réponses possibles/.test(await page.textContent('.ecran.actif')), 'la flèche droite passe à l écran suivant');
   await page.click('[data-accueil="passer"]'); await pause(900);
   verifier(!(await page.$('.accueil')), 'Passer referme l accueil');
   await page.click('[data-theme-val="light"]'); await pause(200);
