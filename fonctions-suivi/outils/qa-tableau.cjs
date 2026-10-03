@@ -222,12 +222,15 @@ const SCENARIOS=[
     await equipe.waitForSelector(`[data-editer-campagne="${CID}"]`,{timeout:20000}).catch(()=>{});
     await equipe.click(`[data-editer-campagne="${CID}"]`);
     await equipe.waitForSelector('#ed-debut',{timeout:10000});
+    /* La date posée est comparée à celle d'avant : un motif de date en dur
+       tombait le jour où le semis (début il y a deux jours) la croisait. */
+    const debutAvant=champ(await lire(`projets/${PID}/campagnes/${CID}`),'debut').timestampValue||'';
     await equipe.fill('#ed-debut','2026-10-01'); await equipe.fill('#ed-fin','2026-09-30');
     await equipe.click('.feuille [type="submit"], .feuille .btn-principal');
     const refus=await attendre(async()=>{const t=await equipe.textContent('.toasts').catch(()=>'');return /avant le début/.test(t);},15,300);
     verifier(refus,'des dates inversées sont refusées, avec la raison');
     const c=await lire(`projets/${PID}/campagnes/${CID}`);
-    verifier(!/2026-10-01/.test(champ(c,'debut').timestampValue||''),'et rien n est enregistré',champ(c,'debut').timestampValue);
+    verifier((champ(c,'debut').timestampValue||'')===debutAvant,'et rien n est enregistré',`${debutAvant} puis ${champ(c,'debut').timestampValue}`);
     await equipe.click('.feuille [data-fermer], .modale--scenario [data-fermer]').catch(()=>{});
     await allerTableau(equipe,`projet=${PID}&campagne=${CID}`);
   }

@@ -37,9 +37,10 @@ export const cle = (scenarioId, plateforme) => `${scenarioId}__${plateforme}`;
 export const scenarioDeCle = (c) => String(c || '').split('__')[0];
 export const plateformeDeCle = (c) => String(c || '').split('__')[1] || '';
 
-/* Les scénarios d'humains du plan, dans l'ordre des sections reçues. Un
-   scénario sans plateforme déclarée vaut sur celles de sa section, et à
-   défaut sur les trois. */
+/* Les scénarios d'humains du plan, dans l'ordre des sections reçues. Les
+   plateformes sont celles que le scénario déclare, comme dans la
+   répartition (repartition.js, passagesAttendus) : un scénario qui n'en
+   déclare aucune n'attend aucun passage. */
 export const scenariosHumainsDuPlan = (sections = []) => {
   const vus = new Set();
   const sortie = [];
@@ -49,10 +50,9 @@ export const scenariosHumainsDuPlan = (sections = []) => {
       if (!sc || !sc.id || !QUI_HUMAINS.includes(sc.qui) || vus.has(sc.id)) return;
       vus.add(sc.id);
       const propres = (sc.plateformes || []).filter((p) => PLATEFORMES.includes(p));
-      const deSection = (s.plateformes || []).filter((p) => PLATEFORMES.includes(p));
       sortie.push({
         id: sc.id, ref: sc.id, titre: sc.titre || '', qui: sc.qui, priorite: sc.priorite || '',
-        plateformes: propres.length ? propres : (deSection.length ? deSection : PLATEFORMES.slice()),
+        plateformes: propres,
         section: s.id, sectionTitre: s.titre || s.id || '', groupe: s.groupe || '', aspect,
       });
     }));
@@ -99,7 +99,7 @@ export const scenariosAEcrire = ({ fiche, touche, choisies, avant }) => {
    sur chacune. */
 export const clesAttendues = (humains = []) => {
   const m = new Map();
-  humains.forEach((x) => (x.plateformes || PLATEFORMES).forEach((p) => {
+  humains.forEach((x) => (x.plateformes || []).forEach((p) => {
     m.set(cle(x.id, p), x.qui === 'humain' ? 2 : 1);
   }));
   return m;

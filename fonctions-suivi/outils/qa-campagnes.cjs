@@ -60,6 +60,10 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   const err=[]; page.on('pageerror',e=>err.push('PAGE: '+e.message.slice(0,160)));
   page.on('console',m=>{if(m.type()==='error')err.push(m.text().slice(0,160));});
 
+  /* Cette suite éprouve la campagne d'un projet SANS plan de tests (la
+     bibliothèque seule) ; le semis en pose un depuis le 03/10/2026, on le
+     retire. La campagne sur le plan a sa suite : qa-campagne-plan. */
+  await vider('projets/atelier/planTests');
   await connecter(page,'agent.essai@exemple.test');
   /* La liste des vérifications a son onglet, « Ce qu'on vérifie », sur la page d'un projet. */
   await aller(page,'/tests?projet=atelier&onglet=bibliotheque','#bibliotheque, [data-plier-scenarios]','Tests');

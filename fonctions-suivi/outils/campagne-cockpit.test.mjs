@@ -32,17 +32,16 @@ const sc = (id, qui, plateformes) => ({ id, titre: `Scénario ${id}`, qui, plate
 const SECTIONS = [
   { id: 'connexion', titre: 'Connexion', plateformes: ['ios', 'android', 'web'], aspects: {
     fonctionnel: [sc('cx-1', 'humain', ['ios', 'android']), sc('cx-2', 'les-deux', ['web']), sc('cx-3', 'robot', ['ios'])],
-    technique: [sc('cx-4', 'les-deux', [])], ux: [], securite: [] } },
+    technique: [sc('cx-4', 'les-deux', ['ios', 'android', 'web']), sc('cx-5', 'les-deux', [])], ux: [], securite: [] } },
   { id: 'taches', titre: 'Tâches', plateformes: ['ios'], aspects: {
-    fonctionnel: [sc('ta-1', 'humain', [])], technique: [], ux: [], securite: [sc('ta-2', 'robot', ['web'])] } },
+    fonctionnel: [sc('ta-1', 'humain', ['ios'])], technique: [], ux: [], securite: [sc('ta-2', 'robot', ['web'])] } },
   { id: 'presentation', genre: 'presentation' },
 ];
 
 console.log('\n== Les scénarios d\'humains du plan');
 const H = scenariosHumainsDuPlan(SECTIONS);
-egal(H.map((x) => x.id), ['cx-1', 'cx-2', 'cx-4', 'ta-1'], 'les robots seuls et la présentation sont laissés dehors');
-egal(H.find((x) => x.id === 'cx-4').plateformes, ['ios', 'android', 'web'], 'sans plateforme, un scénario vaut sur celles de sa section');
-egal(H.find((x) => x.id === 'ta-1').plateformes, ['ios'], 'et une section sur iPhone seul le garde sur iPhone');
+egal(H.map((x) => x.id), ['cx-1', 'cx-2', 'cx-4', 'cx-5', 'ta-1'], 'les robots seuls et la présentation sont laissés dehors');
+egal(H.find((x) => x.id === 'cx-4').plateformes, ['ios', 'android', 'web'], 'un scénario garde ses plateformes');
 egal(H.find((x) => x.id === 'ta-1').section, 'taches', 'chacun sait de quelle section il vient');
 
 console.log('\n== B1 : modifier ne remet pas tous les scénarios');
@@ -66,6 +65,7 @@ const att = clesAttendues(H);
 egal(att.get('cx-1__ios'), 2, '« humain » seul : deux testeurs');
 egal(att.get('cx-2__web'), 1, '« les-deux » : un testeur');
 egal(att.size, 2 + 1 + 3 + 1, 'une clé par scénario et par plateforme');
+egal([...att.keys()].some((k) => k.startsWith('cx-5__')), false, 'sans plateforme déclarée, aucun passage attendu (comme la répartition)');
 
 console.log('\n== B2 : aucune clé oubliée ne passe inaperçue');
 const T = [{ id: 'u1', telephone: 'ios', web: true }, { id: 'u2', telephone: 'android', web: true }, { id: 'u3', telephone: '', web: true }];

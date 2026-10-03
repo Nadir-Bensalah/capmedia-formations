@@ -20,8 +20,8 @@ const { lireRest } = require('./lib/rest-banc.cjs');
      commun, et la fiche le vide une fois ressaisi.
 
    Banc : émulateurs, site local, semer-suivi, semer-campagne (six
-   testeurs, la campagne c-oct d'avant le plan). La suite pose elle-même
-   le plan de tests d'« atelier ».
+   testeurs). La suite pose elle-même son plan de tests sur « atelier »
+   et une campagne d'avant le plan.
 
      node fonctions-suivi/outils/qa-campagne-plan.cjs
    ========================================================================== */
@@ -151,10 +151,13 @@ const SECTIONS = [
   const accesApres = camp ? (((camp.fields.acces || {}).mapValue || {}).fields || {}) : {};
   verifier(texte(accesApres, 'identifiants') === 'test1 · MotDePasse1' && texte(accesApres, 'instructions') === 'Créez un compte.', 'la feuille ne touche pas à l\'ancien bloc d\'identifiants', JSON.stringify(accesApres).slice(0, 160));
 
-  /* La campagne d'avant le plan (c-oct, la bibliothèque) : rien de coché,
+  /* Une campagne d'avant le plan (sur la bibliothèque) : rien de coché,
      un mot pour le dire, et elle garde ses scénarios. */
-  const avantOct = liste(((await lire(`projets/${P}/campagnes/c-oct`)) || {}).fields, 'scenarios');
-  await editer('c-oct');
+  const biblio = (((await lire(`projets/${P}/scenarios?pageSize=300`)) || {}).documents || []).map((d) => d.name.split('/').pop()).slice(0, 5);
+  await ecrire(`projets/${P}/campagnes/qa-ancienne`, { titre: 'Campagne d\'avant le plan', statut: 'preparation', scenarios: biblio, testeurs: [], affectation: {}, cree: new Date(), maj: new Date() });
+  await pause(1500);
+  const avantOct = liste(((await lire(`projets/${P}/campagnes/qa-ancienne`)) || {}).fields, 'scenarios');
+  await editer('qa-ancienne');
   const old = await page.evaluate(() => ({
     note: !!document.querySelector('[data-ancienne]'),
     cochees: [...document.querySelectorAll('[data-section]')].filter((c) => c.checked).length,
@@ -163,7 +166,7 @@ const SECTIONS = [
   verifier(old.cochees === 0, 'aucune section n\'est cochée pour elle', `${old.cochees}`);
   await page.fill('#ed-build_web', 'qa-1.2.1');
   await page.click('button[type="submit"][form="ed-forme"]'); await pause(2200);
-  const apresOct = liste(((await lire(`projets/${P}/campagnes/c-oct`)) || {}).fields, 'scenarios');
+  const apresOct = liste(((await lire(`projets/${P}/campagnes/qa-ancienne`)) || {}).fields, 'scenarios');
   verifier(avantOct.length > 0 && apresOct.join(',') === avantOct.join(','), `elle garde ses ${avantOct.length} scénarios`, `${apresOct.length}`);
 
   console.log('\n== La feuille ne lance pas une campagne qui n\'est pas prête');
