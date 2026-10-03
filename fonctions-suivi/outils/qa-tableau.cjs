@@ -313,7 +313,7 @@ const SCENARIOS=[
   await testeur.waitForSelector('.feuille, .modale--scenario',{timeout:10000}).catch(()=>{});
   const vu=await attendre(async()=>{const t=await equipe.textContent('.tb-direct').catch(()=>'');return /Paul/.test(t)&&/tbp-f-001/.test(t);},40,500);
   verifier(vu,'le cockpit voit Paul en ligne, sur son scénario',await equipe.textContent('.tb-direct').catch(()=>''));
-  const pulse=await attendre(async()=>equipe.$eval('[data-case="tbp-f-001"]',b=>b.classList.contains('tb-case--vivante')).catch(()=>false),20,500);
+  const pulse=await attendre(async()=>equipe.$eval('[data-case="plan:tbp-f-001"]',b=>b.classList.contains('tb-case--vivante')).catch(()=>false),20,500);
   verifier(pulse,'et sa case pulse');
   const carte=await equipe.textContent('.tb-personne[data-personne="'+u3+'"]').catch(()=>'');
   verifier(/en ligne/.test(carte),'sa carte dit « en ligne »',carte.slice(0,80));
@@ -325,7 +325,8 @@ const SCENARIOS=[
   await testeur.click('[data-feuille-poser="ok"]');
   const p5=await attendre(async()=>str(await lire(`projets/${PID}/campagnes/${CIDP}/passages/${u3}__${K5}`),'resultat')==='reussi');
   verifier(!!p5,'Paul pose Réussi depuis sa feuille : le passage porte sa clé',`${u3}__${K5}`);
-  verifier(await attendreEtat(equipe,'tbp-f-001','ok'),'le cockpit passe la case au vert en direct');
+  /* Sur la grille du plan, une case porte « plan:<scénario> ». */
+  verifier(await attendreEtat(equipe,'plan:tbp-f-001','ok'),'le cockpit passe la case au vert en direct');
   verifier(await attendreEtat(testeur,K5,'ok'),'et sa propre case aussi');
   /* Après un résultat, la feuille peut s'ouvrir sur le suivant : on la ferme. */
   await testeur.keyboard.press('Escape'); await pause(500);
@@ -333,7 +334,7 @@ const SCENARIOS=[
   const fT=await testeur.textContent('.feuille, .modale--scenario').catch(()=>'');
   verifier(/À rejouer/.test(fT),'la feuille de la seconde lui dit de rejouer');
   await testeur.click('[data-feuille-poser="ok"]');
-  verifier(await attendreEtat(equipe,'tbp-f-002','ok'),'rejoué : la case passe au vert chez l équipe');
+  verifier(await attendreEtat(equipe,'plan:tbp-f-002','ok'),'rejoué : la case passe au vert chez l équipe');
   const a8b=await lire(`projets/${PID}/anomalies/ko-tbp-f-002`);
   verifier(str(a8b,'statut')==='corrigee','une réussite ne rouvre rien',str(a8b,'statut'));
   await ctxT.close();
