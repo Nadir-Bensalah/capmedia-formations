@@ -202,10 +202,14 @@ export const ouvrirClesAcces = async () => {
 
 /* Après une connexion par code, une seule fois par session de navigateur :
    proposer la clé, sans insister. */
-export const proposerCle = async () => {
+/* Une seule fois par personne (03/10) : la proposition revenait à chaque
+   connexion par code. Retenue sur cet appareil, au nom de la personne. */
+export const proposerCle = async (uid = '') => {
   let marque = '';
   try { marque = sessionStorage.getItem('suivi:proposer-cle') || ''; sessionStorage.removeItem('suivi:proposer-cle'); } catch (e) { return; }
   if (marque !== '1' || !cleDisponible()) return;
+  const deja = `suivi:cle-proposee:${uid || 'anonyme'}`;
+  try { if (localStorage.getItem(deja)) return; localStorage.setItem(deja, '1'); } catch (e) { /* stockage refusé : on propose, sans retenir */ }
   const { toast } = await import('./ui.js');
   toast('Ouvrir plus vite la prochaine fois, sans code ?', 'ok', { libelle: 'Ajouter une clé d\'accès', action: ouvrirClesAcces, duree: 12000 });
 };

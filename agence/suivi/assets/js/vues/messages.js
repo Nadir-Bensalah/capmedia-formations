@@ -110,7 +110,7 @@ export const vue = async (ctx, env) => {
     }
 
     sortie.innerHTML = `<div class="page">
-      <div class="page-tete"><div><h1>Messages</h1><p class="chapo">${equipe ? 'Une conversation par projet, avec le client.' : 'Une conversation par projet, directement avec Capmedia. Pour une anomalie ou une demande précise, préférez une demande : elle est suivie jusqu\'au bout.'}</p></div></div>
+      <div class="page-tete"><div><h1>Messages</h1><p class="chapo">${equipe ? 'Une conversation par projet, avec le client.' : 'Une conversation par projet, directement avec Capmedia. Pour une anomalie ou un besoin précis, préférez un ticket : il est suivi jusqu\'au bout.'}</p></div></div>
       ${liste.length ? `<div class="grille" style="grid-template-columns:${avecListe ? 'minmax(0,280px) minmax(0,1fr)' : 'minmax(0,1fr)'}">
         ${avecListe ? `<div class="liste" style="align-self:start">${liste.map((p) => { const nb = nonLusProjet(messagesDuProjet(p.id), profil, p.id, uid); const dernier = messagesDuProjet(p.id).slice(-1)[0]; return `
           <a class="ligne${p.id === pid ? ' actif' : ''}${nb ? ' non-lu' : ''}" href="#/messages/${echapper(p.id)}" style="${p.id === pid ? 'background:var(--fond-2)' : ''}">
@@ -129,7 +129,7 @@ export const vue = async (ctx, env) => {
           <form class="composer" id="forme-message" novalidate>
             <textarea class="zone" name="texte" id="texte-message" maxlength="6000" placeholder="Écrivez votre message..." aria-label="Votre message. Entrée envoie, Maj+Entrée va à la ligne.">${echapper(brouillon)}</textarea>
             <div id="zone-pieces"></div>
-            <div class="composer-pied"><span class="t-micro t-3">Entrée pour envoyer, Maj+Entrée pour une nouvelle ligne.</span><span class="pousse"></span><button class="btn btn-principal" type="submit">${icone('envoyer')} Envoyer</button></div>
+            <div class="composer-pied"><span class="t-micro t-3 aide-clavier">Entrée pour envoyer, Maj+Entrée pour une nouvelle ligne.</span><span class="pousse"></span><button class="btn btn-principal" type="submit">${icone('envoyer')} Envoyer</button></div>
           </form>
         </section>
       </div>` : vide({ icone: 'messages', titre: 'Aucun projet à discuter', texte: 'La messagerie s\'ouvre dès qu\'un projet est rattaché à votre compte.' })}

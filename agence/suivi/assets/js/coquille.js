@@ -103,7 +103,7 @@ export const monterCoquille = ({ session, role, groupes, sortie }) => {
   brancherNotifications();
   brancherPalette();
   /* Entré par un code sans aucune clé : proposer la clé d'accès, une fois. */
-  import('./cles-acces.js').then((c) => c.proposerCle()).catch(() => {});
+  import('./cles-acces.js').then((c) => c.proposerCle(session.utilisateur && session.utilisateur.uid)).catch(() => {});
   surChangement(() => { marquerActif(); fermerTiroir(); });
 
   // Sur grand écran, le bouton loupe de la barre est redondant.
@@ -222,7 +222,7 @@ const squeletteHtml = ({ projets = 1, branches = 0 } = {}) => `
     </div>`;
 
 const htmlNavigation = () => contexte.groupes.map((g) => `
-    <div class="lat-groupe">
+    <div class="lat-groupe${g.pied ? ' lat-groupe--pied' : ''}">
       ${g.titre ? `<p class="lat-titre">${echapper(g.titre)}</p>` : ''}
       ${g.squelette ? squeletteHtml(g.squelette) : g.items.map((it) => (it.enfants ? arbreHtml(it) : lienHtml(it))).join('')}
     </div>`).join('');

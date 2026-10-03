@@ -39,6 +39,9 @@ export const K = {
   parcours: (p) => `parcours:${p}`,
   regles: (p) => `regles:${p}`,
   maintenance: (p) => `maintenance:${p}`,
+  /* Le document du coffre d'un projet : sa seule existence, pour le rail
+     (le marqueur « Chiffré » ne vient qu'avec un coffre ouvert). */
+  coffre: (p) => `coffre:${p}`,
   /* Les axes d'évolution, par plateforme : le client ne lit que les
      publiés (la requête le dit, les règles aussi). Leur introduction vit
      à part, lisible des deux côtés. */
@@ -1611,6 +1614,10 @@ export const LOT_MAX_COFFRE = 400;
 
 const refCoffre = (pid) => doc(bdd, 'coffres', pid);
 const colCoffre = (pid, sous) => col('coffres', pid, sous);
+
+/* Le rail du client écoute l'existence du coffre de chaque projet dont il
+   est responsable (les règles ne l'ouvrent qu'à lui). */
+export const abonnerCoffre = (lot, pid) => lot.abonner(K.coffre(pid), () => refCoffre(pid));
 
 /* Ce qui marque une personne parmi les porteurs de la clé ; la même
    forme que la règle (marqueCoffre). */

@@ -334,7 +334,7 @@ const attendre = async (page, motif, secondes = 12) => {
   await pause(2500);
   const surDemande = await texte(client, '.page');
   verifier(new RegExp(titreDemande).test(surDemande), "la demande est créée et ouverte", surDemande.slice(0, 120));
-  verifier(/Reçue/.test(surDemande), "elle s'annonce reçue");
+  verifier(/Reçu/.test(surDemande), "elle s'annonce reçue (« Reçu » chez le client)");
   verifier(/à nous de jouer|rien à faire/i.test(surDemande), "elle dit que la balle est chez Capmedia");
   const idDemande = await client.evaluate(() => (location.hash.match(/demandes\/([^/?]+)/) || [])[1]);
 
@@ -358,7 +358,7 @@ const attendre = async (page, motif, secondes = 12) => {
   await client.click('[data-action="valider"]');
   await confirmerOui(client);
   await pause(2500);
-  verifier(/Terminée/.test(await texte(client, '.page')), "la demande se termine sur sa validation");
+  verifier(/Terminée|Résolu/.test(await texte(client, '.page')), "la demande se termine sur sa validation");
 
   /* ====================================================================== */
   scenario(8, "Ce que le client ne doit jamais voir");

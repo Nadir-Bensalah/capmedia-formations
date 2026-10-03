@@ -340,7 +340,7 @@ export const vue = async (ctx, env) => {
       </section>` : ''}
 
       ${jalons.length ? `<section class="section">
-        <div class="section-tete"><h2>Les étapes qui la concernent <span class="compte-section">${jalons.length}</span></h2><a class="lien" href="#/projets/${echapper(pid)}/etapes">La feuille de route</a></div>
+        <div class="section-tete"><h2>Les étapes qui la concernent <span class="compte-section">${jalons.length}</span></h2><a class="lien" href="#/projets/${echapper(pid)}/etapes">${equipe ? 'La feuille de route' : 'Le planning'}</a></div>
         <div class="liste">${jalons.map((j) => ligne({
           icone: j.statut === 'termine' ? 'check' : j.statut === 'bloque' ? 'alerte' : 'drapeau',
           ton: j.statut === 'termine' ? 'vert' : j.statut === 'bloque' ? 'rouge' : j.statut === 'en-cours' ? 'bleu' : '',

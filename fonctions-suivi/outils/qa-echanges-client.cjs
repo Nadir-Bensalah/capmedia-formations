@@ -117,8 +117,10 @@ let page = null;
   await pause(800);
   verifier(await page.$('.bulle[data-projet="atelier"]'), 'et sur la page d une brique');
   verifier((await page.$$('.bulle')).length === 1, 'une seule bulle, pas une par page');
-  await aller(page, '#/calendrier');
-  verifier(!(await page.$('.bulle')), 'hors du projet, elle est démontée');
+  /* Depuis le 02/10, la bulle est sur toutes les pages du client ; depuis
+     le lot B2 (03/10), sauf sur Messages, où la conversation est la page. */
+  await aller(page, '#/messages/atelier');
+  verifier(await attendre(async () => !(await page.$('.bulle')), 5000), 'sur Messages, elle est démontée (la conversation n est pas montrée deux fois)');
   await aller(page, '#/projets/atelier');
   await page.waitForSelector('.bulle[data-projet="atelier"]', { timeout: 15000 });
   await page.evaluate(() => document.dispatchEvent(new CustomEvent('bulle:ouvrir', { detail: { projet: 'atelier', texte: 'Une question sur cette étape : ' } })));

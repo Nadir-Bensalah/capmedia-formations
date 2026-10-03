@@ -56,7 +56,7 @@ const ecranProjets = (projets) => {
       visuel: `<div class="accueil-appli">${iconeProjet(p)}<p class="accueil-appli-nom">${echapper(p.nom || '')}</p>${typeDe(p) ? `<p class="accueil-appli-type">${echapper(typeDe(p))}</p>` : ''}</div>`,
       texte: `<p class="surtitre">Votre projet</p>
         <h2>Tout votre projet, au même endroit</h2>
-        <p>Son avancement, ses versions, vos demandes et vos fichiers.</p>`,
+        <p>Son avancement, ses versions, vos tickets et vos fichiers.</p>`,
     };
   }
   return {
@@ -64,7 +64,7 @@ const ecranProjets = (projets) => {
     visuel: `<div class="accueil-applis">${liste.slice(0, 4).map((p) => `<div class="accueil-appli accueil-appli--petite">${iconeProjet(p)}<p class="accueil-appli-nom">${echapper(p.nom || '')}</p></div>`).join('')}</div>`,
     texte: `<p class="surtitre">Vos projets</p>
       <h2>${liste.length} projets, au même endroit</h2>
-      <p>Pour chacun : son avancement, ses versions, vos demandes et vos fichiers.</p>`,
+      <p>Pour chacun : son avancement, ses versions, vos tickets et vos fichiers.</p>`,
   };
 };
 

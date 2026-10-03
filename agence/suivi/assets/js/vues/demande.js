@@ -293,10 +293,10 @@ export const detail = async (ctx, env) => {
           <div class="carte carte--creuse">
             <p class="surtitre">Fiche</p>
             <dl class="faits" style="margin-top:10px;grid-template-columns:1fr">
-              ${fait('Demandée par', `${echapper((t.auteur || {}).nom || '')}${equipe && t.auteur && t.auteur.email ? `<br><span class="t-micro t-3">${echapper(t.auteur.email)}</span>` : ''}`)}
+              ${fait(equipe ? 'Demandée par' : 'Demandé par', `${echapper((t.auteur || {}).nom || '')}${equipe && t.auteur && t.auteur.email ? `<br><span class="t-micro t-3">${echapper(t.auteur.email)}</span>` : ''}`)}
               ${fait('Le', echapper(dateHeure(t.cree)))}
-              ${fait('Dernier mouvement', echapper(dateHeure(t.maj)))}
-              ${fait('Suivie par', echapper(t.assigne ? (nomEquipe(t.assigne) || 'Capmedia') : (equipe ? 'Personne' : 'Capmedia')))}
+              ${equipe ? fait('Dernier mouvement', echapper(dateHeure(t.maj))) : ''}
+              ${fait(equipe ? 'Suivie par' : 'Suivi par', echapper(t.assigne ? (nomEquipe(t.assigne) || 'Capmedia') : (equipe ? 'Personne' : 'Capmedia')))}
               ${fait('Partie concernée', echapper((composants.find((c) => c.id === t.composant) || {}).nom || ''))}
             </dl>
           </div>
@@ -438,7 +438,7 @@ const demanderMotif = ({ titre, sousTitre, etiquette, placeholder, bouton, manqu
 const bandeauSuivi = (t, { equipe, release, nomEquipe, evenements, tickets = [], pid = '' }) => {
   const s = STATUTS[t.statut] || {};
   /* Le numéro d'une demande liée (suite, suivante), s'il est connu. */
-  const refDe = (id) => { const x = tickets.find((y) => y.id === id); return x ? (x.numero || x.titre) : 'une autre demande'; };
+  const refDe = (id) => { const x = tickets.find((y) => y.id === id); return x ? (x.numero || x.titre) : (equipe ? 'une autre demande' : 'un autre ticket'); };
   const ouverte = OUVERTS.includes(t.statut);
   const chez = s.chez === 'client' ? (equipe ? 'client' : 'vous') : s.chez === 'capmedia' ? 'capmedia' : '';
   const ton = !ouverte ? (t.statut === 'resolu' ? 'ok' : 'gris') : chez === 'capmedia' ? 'info' : 'attention';
@@ -455,34 +455,36 @@ const bandeauSuivi = (t, { equipe, release, nomEquipe, evenements, tickets = [],
       <span class="suivi-demande-pastille">${icone(ouverte ? (chez === 'capmedia' ? 'play' : 'help') : 'check')}</span>
       <div style="min-width:0">
         <p class="t-titre-3">${echapper((!equipe && s.client) || s.libelle || t.statut)}</p>
-        <p class="t-petit t-2" style="margin-top:2px">${echapper([balle, s.suite].filter(Boolean).join(' '))}</p>
+        <p class="t-petit t-2" style="margin-top:2px">${echapper([balle, (!equipe && s.suiteClient) || s.suite].filter(Boolean).join(' '))}</p>
       </div>
     </div>
     <dl class="suivi-demande-faits">
-      <div><dt>Ouverte depuis</dt><dd>${echapper(age(t.cree))}</dd></div>
+      <div><dt>${equipe ? 'Ouverte depuis' : 'Ouvert depuis'}</dt><dd>${echapper(age(t.cree))}</dd></div>
       <div><dt>Dernier mouvement</dt><dd>${echapper((dernier && age(dernier.date)) || age(t.maj) || age(t.cree))}</dd></div>
-      <div><dt>Suivie par</dt><dd>${echapper(suivie)}</dd></div>
-      <div><dt>Livrée dans</dt><dd>${release
+      <div><dt>${equipe ? 'Suivie par' : 'Suivi par'}</dt><dd>${echapper(suivie)}</dd></div>
+      <div><dt>${equipe ? 'Livrée dans' : 'Livré dans'}</dt><dd>${release
         ? `${echapper([release.plateforme && (PLATEFORMES[release.plateforme] || {}).libelle, release.version].filter(Boolean).join(' '))} <span class="t-3">· ${echapper((STATUTS_RELEASE[release.statut] || {}).libelle || '')}${dateCourte(release.date) ? ` ${dateCourte(release.date)}` : ''}</span>`
         : '<span class="t-3">version pas encore fixée</span>'}</dd></div>
     </dl>
     ${t.qualification === 'hors-perimetre' || t.qualification === 'a-chiffrer' ? `<p class="suivi-demande-note">${t.qualification === 'a-chiffrer' ? (equipe ? 'Cette demande sera chiffrée.' : 'Ce ticket sera chiffré.') : (equipe ? 'Cette demande sort du périmètre prévu.' : 'Ce ticket sort du périmètre prévu.')} ${t.devis ? `Le devis <a href="#/finances/${echapper(t.devis)}">est disponible</a>.` : 'Un devis vous sera proposé avant tout développement.'}</p>` : ''}
     ${t.statut === 'refuse' && t.motifRefus ? `<p class="suivi-demande-note">Pourquoi : ${echapper(t.motifRefus)}</p>` : ''}
     ${t.suite ? `<p class="suivi-demande-note">Suite de <a href="#/projets/${echapper(pid)}/demandes/${echapper(t.suite)}">${echapper(refDe(t.suite))}</a>.</p>` : ''}
-    ${t.suivant ? `<p class="suivi-demande-note">Suivie par <a href="#/projets/${echapper(pid)}/demandes/${echapper(t.suivant)}">${echapper(refDe(t.suivant))}</a>.</p>` : ''}
+    ${t.suivant ? `<p class="suivi-demande-note">${equipe ? 'Suivie par' : 'Suivi par'} <a href="#/projets/${echapper(pid)}/demandes/${echapper(t.suivant)}">${echapper(refDe(t.suivant))}</a>.</p>` : ''}
   </section>`;
 };
 
 const texteEvenement = (e, nomEquipe, equipe = true) => {
   const par = (e.par && e.par.nom) || 'Capmedia';
   if (e.type === 'creation') return `${equipe ? 'Demande créée' : 'Ticket créé'} par <strong>${echapper(par)}</strong>`;
-  if (e.type === 'statut') return `Statut passé de <strong>${echapper((STATUTS[e.avant] || {}).libelle || e.avant || '')}</strong> à <strong>${echapper((STATUTS[e.apres] || {}).libelle || e.apres || '')}</strong> par ${echapper(par)}`;
+  /* Le client lit les statuts au masculin (« Reçu », « Résolu ») : ses mots. */
+  const statut = (cle) => { const f = STATUTS[cle] || {}; return (!equipe && f.client) || f.libelle || cle || ''; };
+  if (e.type === 'statut') return `Statut passé de <strong>${echapper(statut(e.avant))}</strong> à <strong>${echapper(statut(e.apres))}</strong> par ${echapper(par)}`;
   /* Le champ porte un identifiant : on cherche le nom AVANT de se rabattre
      dessus, faute de quoi le client lit un code Firebase. */
-  if (e.type === 'assignation') return `Confiée à <strong>${echapper(nomEquipe(e.apres) || 'Capmedia')}</strong>`;
+  if (e.type === 'assignation') return `${equipe ? 'Confiée' : 'Confié'} à <strong>${echapper(nomEquipe(e.apres) || 'Capmedia')}</strong>`;
   if (e.type === 'urgence') return `Urgence passée à <strong>${echapper((URGENCES[e.apres] || {}).libelle || e.apres || '')}</strong>`;
-  if (e.type === 'qualification') return `Qualifiée <strong>${echapper((QUALIFICATIONS[e.apres] || {}).libelle || e.apres || '')}</strong>`;
-  if (e.type === 'archive') return e.apres ? 'Archivée' : 'Sortie des archives';
+  if (e.type === 'qualification') return `${equipe ? 'Qualifiée' : 'Qualifié'} <strong>${echapper((QUALIFICATIONS[e.apres] || {}).libelle || e.apres || '')}</strong>`;
+  if (e.type === 'archive') return e.apres ? (equipe ? 'Archivée' : 'Archivé') : (equipe ? 'Sortie des archives' : 'Sorti des archives');
   return `${echapper(e.type)} : ${echapper(e.avant || 'vide')} vers ${echapper(e.apres || 'vide')}`;
 };
 

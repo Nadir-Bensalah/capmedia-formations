@@ -246,7 +246,7 @@ const texteDe = (page, sel) => page.$eval(sel, (el) => el.textContent.replace(/\
   await page.click(`${paveP} [data-pave-geste="fermer"]`);
   verifier((await recuP) === '/projets/atelier/demandes', 'fermé : il se range vers Tickets du projet');
   verifier(await attendre(async () => !(await page.$(paveP)) && (await paves(uid)).atelier === 'ferme'), 'il quitte l aperçu, le profil dit « ferme »');
-  verifier(/rangés dans Tickets/.test(await texteDe(page, '.pouls')), '« Attendu de vous » ne dit plus « voir ci-dessus »', await texteDe(page, '.pouls'));
+  verifier(!/Attendu de vous|voir ci-dessus/.test(await texteDe(page, '.pouls')), '« Attendu de vous » a quitté le pouls (lot B2 : une seule place par info)', await texteDe(page, '.pouls'));
   await aller(page, '#/projets/atelier/demandes', '#en-attente-projet');
   await page.click('[data-pave-range="projet:atelier"] [data-pave-geste="reafficher"]');
   verifier(await attendre(async () => (await paves(uid)).atelier === 'ouvert'), 'réafficher dans l aperçu');
@@ -264,9 +264,9 @@ const texteDe = (page, sel) => page.$eval(sel, (el) => el.textContent.replace(/\
   verifier((await texteDe(page, '#personnes h2')) === 'Collaborateurs sur ce projet' && !/Les personnes/.test(await texteDe(page, '#vue')), '« Collaborateurs sur ce projet », plus « Les personnes »');
 
   console.log('\n== 8. La feuille de route du client, sans le devis ligne par ligne');
-  await aller(page, '#/projets/atelier/etapes', '.route');
+  await aller(page, '#/projets/atelier/etapes', '#onglet-corps .liste .ligne');
   verifier(!(await page.$('.frise')) && !/ligne par ligne/.test(await texteDe(page, '#vue')), 'pas de frise du devis');
-  verifier(Boolean(await page.$('.route .phase')), 'les étapes restent');
+  verifier(Boolean(await page.$('#onglet-corps .liste .ligne')) && !(await page.$('#onglet-corps .route')), 'les étapes restent, en un seul format : la liste par phase');
 
   console.log('\n== 9, 10. Fichiers');
   await aller(page, '#/documents', '.page h1');
@@ -287,10 +287,11 @@ const texteDe = (page, sel) => page.$eval(sel, (el) => el.textContent.replace(/\
   await aller(page, '#/projets/atelier/demandes', '#demandes-projet');
   verifier((await texteDe(page, '#demandes-projet h2')) === 'Tickets Atelier', '« Tickets Atelier »', await texteDe(page, '#demandes-projet h2'));
   verifier(/Nouveau ticket/.test(await texteDe(page, '#demandes-projet .section-tete')), 'et son bouton « Nouveau ticket »');
-  /* Le chiffre rouge de Tickets compte ce que la page met en tête. */
+  /* Le chiffre de Tickets ne compte que les tickets qui attendent le
+     client (lot B2) : le filtre « Pour vous » de la page. */
   const rouge = Number(await texteDe(page, `${arbre} a[data-chemin="/projets/atelier/demandes"] .compte.vif`)) || 0;
-  const lignes = (await page.$$('#en-attente-projet .ligne')).length;
-  verifier(rouge > 0 && rouge === lignes, 'le chiffre de Tickets = les lignes « En attente de vous » du projet', `${rouge} / ${lignes}`);
+  const lignes = Number(await texteDe(page, '[data-filtre-demandes="moi"] .compte')) || 0;
+  verifier(rouge > 0 && rouge === lignes, 'le chiffre de Tickets = les tickets « Pour vous » du projet', `${rouge} / ${lignes}`);
 
   console.log('\n== 14. Deux projets : replié, le clic qui déplie, la somme');
   await poser(`projets/${SECOND}`, { nom: S('Second projet ménage'), ref: S('SECONDM'), statut: S('en-cours'), organisation: S('atelier-nord'), membres: L([S(uid)]), roles: M({ [uid]: S('collaborateur') }), personnes: L([S(uid)]), ouvert: B(true), archive: B(false), compteur: N(0), accesVersion: N(2), emailsClient: S('actifs'), plateformes: L([S('web')]), cree: T(new Date()), maj: T(new Date()) });
@@ -347,13 +348,19 @@ const texteDe = (page, sel) => page.$eval(sel, (el) => el.textContent.replace(/\
     return { texte: m.textContent.trim(), couleur: st.color, fond: st.backgroundColor, bord: st.borderTopWidth, svg: Boolean(svg), svgCouleur: svg ? getComputedStyle(svg).color : '', libelle: a.querySelector('.tronque').textContent.trim() };
   }).catch(() => null);
   const vert = (c) => { const m = /rgba?\((\d+), (\d+), (\d+)/.exec(c || ''); return Boolean(m) && Number(m[2]) > Number(m[1]) + 40 && Number(m[2]) > Number(m[3]) + 40; };
-  verifier(coffre && coffre.texte === 'Chiffré' && coffre.svg && vert(coffre.couleur) && vert(coffre.svgCouleur), 'le coffre-fort porte le marqueur « Chiffré », vert, avec son cadenas', JSON.stringify(coffre));
-  verifier(coffre && /rgba\(0, 0, 0, 0\)|transparent/.test(coffre.fond) && parseFloat(coffre.bord || '0') === 0 && coffre.libelle === 'Coffre-fort', 'un mot et un cadenas, sans pastille ni bordure', JSON.stringify(coffre));
+  /* Lot B2 : « Chiffré » seulement quand le coffre du projet est ouvert. */
+  const coffreExiste = Boolean((await lire('coffres/atelier')).fields);
+  if (coffreExiste) {
+    verifier(coffre && coffre.texte === 'Chiffré' && coffre.svg && vert(coffre.couleur) && vert(coffre.svgCouleur), 'coffre ouvert : le coffre-fort porte le marqueur « Chiffré », vert, avec son cadenas', JSON.stringify(coffre));
+    verifier(coffre && /rgba\(0, 0, 0, 0\)|transparent/.test(coffre.fond) && parseFloat(coffre.bord || '0') === 0 && coffre.libelle === 'Coffre-fort', 'un mot et un cadenas, sans pastille ni bordure', JSON.stringify(coffre));
+  } else {
+    verifier(!coffre && Boolean(await page.$(`${arbre} a[href="#/projets/atelier/coffre"]`)), 'pas encore de coffre : l entrée Coffre-fort, sans « Chiffré »', JSON.stringify(coffre));
+  }
   /* Les renommages dans les pages. */
   await aller(page, '#/projets/atelier/etapes', '.section-tete h2');
   verifier((await texteDe(page, '#onglet-corps .section-tete h2')) === 'Planning' && /Planning/.test(await texteDe(page, '#ariane')) && !/Feuille de route/.test(await texteDe(page, '#vue')), '« Planning » à la place de « Feuille de route » (titre, fil d Ariane)', await texteDe(page, '#ariane'));
   await aller(page, '#/demandes', '.page h1');
-  verifier((await texteDe(page, '.page h1')) === 'Tickets' && /Nouveau ticket/.test(await texteDe(page, '.page-tete')), 'la page de tous les tickets : « Tickets », « Nouveau ticket »');
+  verifier((await texteDe(page, '.page h1')) === 'En attente de vous' && /En attente de vous/.test(await texteDe(page, '#ariane')) && !/Tickets/.test(await texteDe(page, '#ariane')) && /Nouveau ticket/.test(await texteDe(page, '.page-tete')), 'la page de tous les projets : « En attente de vous » (titre, fil d Ariane), « Nouveau ticket »');
   await aller(page, '#/projets/atelier/nouvelle-demande', '#forme-demande');
   verifier((await texteDe(page, '.page h1')) === 'Nouveau ticket' && /Tickets/.test(await texteDe(page, '#ariane')), 'le formulaire : « Nouveau ticket », fil d Ariane par « Tickets »', await texteDe(page, '#ariane'));
   await aller(page, '#/tests?projet=atelier', '.page h1');
@@ -362,7 +369,7 @@ const texteDe = (page, sel) => page.$eval(sel, (el) => el.textContent.replace(/\
   const surtitre = await texteDe(page, '.page-tete--projet .surtitre');
   verifier(/Application web et mobile/.test(surtitre), 'un projet web ET mobile : « Application web et mobile » dans l en-tête', surtitre);
   const apercuTexte = await texteDe(page, '#vue');
-  verifier(/Tickets/.test(apercuTexte) && /Planning/.test(apercuTexte) && !/Feuille de route|Voir les demandes/.test(apercuTexte) && !/\bnull\b|\bundefined\b/.test(apercuTexte), 'l aperçu dit Tickets et Planning, sans « null »');
+  verifier(/Planning/.test(apercuTexte) && !/Voir les tickets/.test(apercuTexte) && !/Feuille de route|Voir les demandes/.test(apercuTexte) && !/\bnull\b|\bundefined\b/.test(apercuTexte), 'l aperçu dit Planning, sans la carte Tickets (lot B2) ni « null »');
   /* Les anciennes adresses. */
   const redirections = [['#/projets/atelier/versions', /^#\/projets\/atelier$/], ['#/projets/atelier/releases', /^#\/projets\/atelier$/], ['#/projets/atelier/decisions', /^#\/projets\/atelier\/notes$/], ['#/projets/atelier/suggestions', /^#\/projets\/atelier\/evolutions$/], ['#/projets/atelier/marketing', /^#\/projets\/atelier$/]];
   for (const [de, vers] of redirections) {
@@ -385,7 +392,7 @@ const texteDe = (page, sel) => page.$eval(sel, (el) => el.textContent.replace(/\
     verifier(bloc.includes(str(v, 'version')), `la version ${str(v, 'version')} est dans la page de sa plateforme (${cid})`, bloc.slice(0, 120));
   }
   /* La bulle, sur chaque page du client. */
-  const pagesBulle = ['#/', '#/projets/atelier', '#/projets/atelier/demandes', '#/projets/atelier/etapes', '#/messages/atelier', '#/calendrier?projet=atelier', '#/tests?projet=atelier', '#/projets/atelier/evolutions', '#/projets/atelier/coffre', '#/fichiers?projet=atelier', '#/projets/atelier/liens', '#/projets/atelier/notes', '#/finances?projet=atelier', '#/maintenance?projet=atelier', '#/demandes', '#/activite', '#/parametres', '#/nouveau-projet', '#/projets/atelier/brique/web'];
+  const pagesBulle = ['#/', '#/projets/atelier', '#/projets/atelier/demandes', '#/projets/atelier/etapes', '#/calendrier?projet=atelier', '#/tests?projet=atelier', '#/projets/atelier/evolutions', '#/projets/atelier/coffre', '#/fichiers?projet=atelier', '#/projets/atelier/liens', '#/projets/atelier/notes', '#/finances?projet=atelier', '#/maintenance?projet=atelier', '#/demandes', '#/activite', '#/parametres', '#/nouveau-projet', '#/projets/atelier/brique/web'];
   for (const r of pagesBulle) {
     await page.evaluate((c) => { location.hash = c; }, r); await pause(1300);
     const b = await page.evaluate(() => { const el = document.querySelector('.bulle #bulle-ouvrir'); if (!el) return null; const rc = el.getBoundingClientRect(); return { projet: el.closest('.bulle').dataset.projet, vu: rc.width > 0 && rc.height > 0, basDroite: rc.right > window.innerWidth - 120 && rc.bottom > window.innerHeight - 140 }; });

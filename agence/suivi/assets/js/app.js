@@ -4,11 +4,11 @@
    navigation vivante et la recherche.
    ========================================================================== */
 
-import { exigerSession, $, echapper, prenom, nomAffiche, OUVERTS, ATTEND_CLIENT, FACTURES_DUES, joursAvant, effacerSecretsLocaux, estResponsable, roleSur, ROLES_CLIENT, libellePlateforme, projetEstActif } from './noyau.js';
+import { exigerSession, $, echapper, prenom, nomAffiche, OUVERTS, ATTEND_CLIENT, FACTURES_DUES, joursAvant, effacerSecretsLocaux, estResponsable, roleSur, ROLES_CLIENT, libellePlateforme, projetEstActif, PLATEFORMES, PLATEFORMES_TEST, TYPES_COMPOSANT } from './noyau.js';
 import { monterCoquille, definirNavigation, enregistrerRecherche, definirRoleProjet, definirRetoucheAriane, projetDeLAdresse, deplierArbre } from './coquille.js';
 import { definir, demarrer, courant, surChangement, naviguer } from './routeur.js';
 import * as magasin from './magasin.js';
-import { abonnerGlobal, K, G, agreger, enAttenteDeVous, nonLusProjet, ecrire, messagesDuProjet } from './donnees.js';
+import { abonnerGlobal, abonnerCoffre, K, G, agreger, enAttenteDeVous, nonLusProjet, ecrire, messagesDuProjet } from './donnees.js';
 import { icone } from './icones.js';
 import { avatarProjet, toast } from './ui.js';
 import { ouvrirAccueil, accueilVu, marquerAccueilVu } from './accueil-client.js';
@@ -62,6 +62,14 @@ if (session.testeur) {
 /* Un compte client n'a rien à faire d'une clé d'administration laissée
    dans ce navigateur par une autre session. */
 effacerSecretsLocaux();
+
+/* Le client dit « iPhone », jamais « iOS » (03/10) : les libellés partagés
+   avec le Cockpit prennent son mot ici, dans l'espace client seul. Les
+   données saisies (le nom d'une partie) restent telles quelles. */
+PLATEFORMES.ios.court = 'iPhone';
+PLATEFORMES_TEST.ios.libelle = 'iPhone';
+PLATEFORMES_TEST.ios.court = 'iPhone';
+TYPES_COMPOSANT.ios = 'Application iPhone';
 
 const env = { session, role: 'client' };
 const lotGlobal = magasin.lot();
@@ -178,46 +186,50 @@ const entreesProjet = (p, { attente, nonLusP }) => {
   const lireP = (cle) => magasin.lire(cle(pid)) || [];
   const attenteP = attente.filter((a) => a.projet === pid);
   const argent = attenteP.filter((a) => a.genre === 'devis' || a.genre === 'facture').length;
+  /* Le chiffre orange de Tickets ne compte que les tickets qui attendent
+     le client (03/10) : les validations, les tâches et les points
+     bloquants ont leur place dans « En attente de vous ». */
+  const ticketsPourVous = attenteP.filter((a) => a.genre === 'demande').length;
   const responsable = estResponsable(session, p);
   const tickets = lireP(K.tickets).filter((t) => !t.archive);
   const taches = lireP(K.taches).filter((t) => !t.archive);
   const liens = lireP(K.liens);
-  const notes = lireP(K.notes);
   const fichiers = lireP(K.fichiers).filter((f) => !f.archive);
   const scenarios = lireP(K.scenarios).filter((x) => x.actif !== false).length;
   const parcours = lireP(K.parcours).filter((x) => x.actif !== false).length;
   const campagnes = lireP(K.campagnes).filter((c) => c.statut === 'en-cours').length;
   const axes = lireP(K.axes).filter(evolutions.estPublie).length;
-  const reunions = lireP(K.reunions).filter((r) => joursAvant(r.date) >= 0).length;
-  const forfait = lireP(K.maintenance).some((x) => x.id === 'contrat' && x.statut === 'actif');
-  const maintenanceConnue = magasin.lire(K.maintenance(pid)) !== undefined || Boolean(magasin.erreur(K.maintenance(pid)));
+  /* Le coffre ne se dit « Chiffré » qu'une fois ouvert par Capmedia. */
+  const coffreOuvert = Boolean(magasin.lire(K.coffre(pid)));
+  /* Les tâches qui sont chez Capmedia : ce que montre la page Tâches. */
+  const tachesChezNous = taches.filter((t) => t.statut !== 'terminee' && t.statut !== 'attente-client').length;
   const base = `/projets/${pid}`;
   return [
     { chemin: base, libelle: 'Aperçu', icone: 'accueil', exact: true, projet: pid },
-    { chemin: `${base}/demandes`, libelle: 'Tickets', icone: 'demandes', projet: pid, compte: { total: tickets.filter((t) => OUVERTS.includes(t.statut)).length, neuf: attenteP.length - argent } },
+    { chemin: `${base}/demandes`, libelle: 'Tickets', icone: 'demandes', projet: pid, compte: { total: tickets.filter((t) => OUVERTS.includes(t.statut)).length, neuf: ticketsPourVous } },
     { chemin: `/messages/${pid}`, libelle: 'Messages', icone: 'messages', projet: pid, compte: { total: 0, neuf: nonLusP } },
     { chemin: `${base}/etapes`, libelle: 'Planning', icone: 'route', projet: pid },
-    { chemin: `${base}/notes`, libelle: 'Notes', icone: 'note', projet: pid, compte: { total: notes.length } },
+    /* Sans chiffre gris : le nombre de notes ou de réunions n'attend rien. */
+    { chemin: `${base}/notes`, libelle: 'Notes', icone: 'note', projet: pid },
     /* Les tâches suivent le planning dont elles sont le détail. */
-    ...(taches.length ? [{ chemin: `${base}/taches`, libelle: 'Tâches', icone: 'taches', projet: pid, compte: { total: taches.filter((t) => t.statut !== 'terminee').length } }] : []),
-    { chemin: '/calendrier', lien: `/calendrier?projet=${pid}`, libelle: 'Calendrier', icone: 'calendrier', projet: pid, compte: { total: reunions } },
+    ...(taches.length ? [{ chemin: `${base}/taches`, libelle: 'Tâches', icone: 'taches', projet: pid, compte: { total: tachesChezNous } }] : []),
+    { chemin: '/calendrier', lien: `/calendrier?projet=${pid}`, libelle: 'Calendrier', icone: 'calendrier', projet: pid },
     ...(scenarios || parcours || campagnes ? [{
       /* Sans le total gris : « Campagne de tests » prend toute la place. */
       chemin: '/tests', lien: `/tests?projet=${pid}`, libelle: 'Campagne de tests', icone: 'bug', projet: pid,
       enCours: campagnes ? (campagnes > 1 ? `${campagnes} campagnes de tests en cours` : 'campagne de tests en cours') : '',
     }] : []),
     ...(marketing.aDuContenu(p) ? [{ chemin: `${base}/marketing`, libelle: 'Marketing', icone: 'trend', projet: pid }] : []),
-    /* Le coffre est au responsable ; il dit qu'il est chiffré. */
-    ...(responsable ? [{ chemin: `${base}/coffre`, libelle: 'Coffre-fort', icone: 'cadenas', projet: pid, marque: { texte: 'Chiffré', icone: 'cadenas', ton: 'vert', titre: 'Chiffré de bout en bout : Capmedia ne lit pas son contenu' } }] : []),
+    /* Le coffre est au responsable ; il dit qu'il est chiffré, une fois
+       ouvert (avant, il n'y a rien à chiffrer). */
+    ...(responsable ? [{ chemin: `${base}/coffre`, libelle: 'Coffre-fort', icone: 'cadenas', projet: pid, marque: coffreOuvert ? { texte: 'Chiffré', icone: 'cadenas', ton: 'vert', titre: 'Chiffré de bout en bout : Capmedia ne lit pas son contenu' } : null }] : []),
     { chemin: '/fichiers', lien: `/fichiers?projet=${pid}`, libelle: 'Fichiers', icone: 'fichiers', projet: pid, compte: { total: fichiers.length } },
     ...(liens.length ? [{ chemin: `${base}/liens`, libelle: 'Ressources', icone: 'liens', projet: pid, compte: { total: liens.length } }] : []),
     /* Ce que Capmedia propose pour la suite (les suggestions y sont). */
     { chemin: `${base}/evolutions`, libelle: 'Axes d\'évolution', icone: 'ampoule', projet: pid, compte: { total: axes } },
     ...(responsable ? [{ chemin: '/finances', lien: `/finances?projet=${pid}`, libelle: 'Devis et factures', icone: 'finances', projet: pid, compte: { total: argent, neuf: argent } }] : []),
-    {
-      chemin: '/maintenance', lien: `/maintenance?projet=${pid}`, libelle: 'Maintenance', icone: 'sante', projet: pid,
-      repere: maintenanceConnue && !forfait ? { texte: 'Aucun forfait de maintenance en cours', icone: 'aucun' } : null,
-    },
+    /* « Aucun forfait en cours » se dit dans la page, plus dans le rail. */
+    { chemin: '/maintenance', lien: `/maintenance?projet=${pid}`, libelle: 'Maintenance', icone: 'sante', projet: pid },
   ];
 };
 
@@ -247,7 +259,9 @@ const construireNavigation = () => {
       }),
     },
     {
-      titre: 'Compte',
+      /* Épinglé en bas du rail : la liste des projets défile, le compte
+         (Paramètres, Annonces) reste en vue, même sur un téléphone. */
+      titre: 'Compte', pied: true,
       items: [
         /* Hors des projets : demander un nouveau projet, et les paramètres. */
         { chemin: '/nouveau-projet', libelle: 'Demander un projet', icone: 'plus' },
@@ -265,10 +279,16 @@ const construireNavigation = () => {
    un squelette de la même hauteur tient la place des projets et de leur
    arbre. Sans lui, les entrées poussaient une à une à mesure que leurs
    données arrivaient, et le rail sautait. */
-const clesDuProjet = (pid) => [K.tickets(pid), K.validations(pid), K.documents(pid), K.fichiers(pid), K.taches(pid), K.blocages(pid), K.messages(pid), K.maintenance(pid), K.scenarios(pid), K.parcours(pid), K.campagnes(pid), K.liens(pid), K.notes(pid), K.axes(pid), K.reunions(pid)];
+const clesDuProjet = (pid) => [K.tickets(pid), K.validations(pid), K.documents(pid), K.fichiers(pid), K.taches(pid), K.blocages(pid), K.messages(pid), K.maintenance(pid), K.scenarios(pid), K.parcours(pid), K.campagnes(pid), K.liens(pid), K.axes(pid), K.coffre(pid)];
 const clesNavigation = () => [K.projets, K.profil, K.demandesProjet, K.annonces, ...(magasin.lire(K.projets) || session.projets || []).flatMap((p) => clesDuProjet(p.id))];
 const dessinerNav = magasin.dessinateur(construireNavigation, 80, clesNavigation, 4000);
 const ecoutees = new Set();
+/* L'existence du coffre, pour les projets dont il est responsable : les
+   règles ne l'ouvrent qu'à eux. */
+const coffresSuivis = new Set();
+const suivreCoffres = () => (magasin.lire(K.projets) || session.projets || []).filter((p) => !p.archive && estResponsable(session, p) && !coffresSuivis.has(p.id)).forEach((p) => { coffresSuivis.add(p.id); abonnerCoffre(lotGlobal, p.id); });
+suivreCoffres();
+magasin.sur(K.projets, suivreCoffres);
 const ecouterNav = () => clesNavigation().forEach((cle) => { if (!ecoutees.has(cle)) { ecoutees.add(cle); magasin.sur(cle, dessinerNav); } });
 ecouterNav();
 magasin.sur(K.projets, ecouterNav);
@@ -318,7 +338,7 @@ enregistrerRecherche((terme) => {
   }
   const { scenariosDuClient, parcoursDuClient } = compter();
   const pages = [
-    ['En attente de vous', '/demandes', 'valider'], ['Tickets', '/demandes', 'demandes'], ['Messages', '/messages', 'messages'],
+    ['En attente de vous', '/demandes', 'valider'], ['Messages', '/messages', 'messages'],
     ['Calendrier', '/calendrier', 'calendrier'], ['Fichiers', '/fichiers', 'fichiers'], ['Maintenance', '/maintenance', 'sante'],
     ...(projets.some((p) => estResponsable(session, p)) ? [['Devis et factures', '/finances', 'finances']] : []),
     ...(scenariosDuClient || parcoursDuClient ? [['Campagne de tests', '/tests', 'bug']] : []),
@@ -450,6 +470,6 @@ demarrer();
 /* La bulle de conversation est sur toutes les pages du client : celle du
    projet de l'adresse, sinon celle du dernier projet ouvert, sinon celle
    du premier projet en cours (bulle-projet.js). */
-import('./bulle-projet.js').then((b) => b.brancherBulle(env, { projetParDefaut })).catch((e) => console.error('[bulle]', e));
+import('./bulle-projet.js').then((b) => b.brancherBulle(env, { projetParDefaut, sansBulle: (route) => /^\/messages(\/|$)/.test(route.chemin || '') })).catch((e) => console.error('[bulle]', e));
 
-void echapper; void prenom; void icone; void OUVERTS; void ATTEND_CLIENT; void FACTURES_DUES;
+void echapper; void prenom; void icone; void OUVERTS; void ATTEND_CLIENT; void FACTURES_DUES; void joursAvant;

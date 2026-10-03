@@ -77,7 +77,7 @@ export const monterNotesClient = (sortie, env, { projet: projetFixe = '', propos
       <div class="rang-espace notes-forme-pied">
         <div class="rang" style="gap:10px">
           ${projetFixe ? '' : (verrouProjet ? `<span class="t-micro t-2">${echapper(nomProjet(projet))}</span>` : selecteurProjet(cle, projet))}
-          <span class="t-micro t-3">Entrée pour enregistrer, Maj+Entrée pour une nouvelle ligne.</span>
+          <span class="t-micro t-3 aide-clavier">Entrée pour enregistrer, Maj+Entrée pour une nouvelle ligne.</span>
         </div>
         <div class="rang" style="gap:6px">
           <button class="btn btn-doux btn-petit" type="button" data-note-geste="annuler" data-note-cle="${echapper(cle)}">Annuler</button>
