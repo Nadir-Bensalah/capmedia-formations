@@ -794,6 +794,12 @@ exports.suiviPassageKo = onDocumentWritten(
  * tombe ; un nouveau KO rouvre l'anomalie en régression.
  *
  * Si l'équipe revient sur sa décision, la marque est retirée.
+ *
+ * Un testeur qui a terminé (« termines ») ou dont l'accès est clos
+ * (« fins » passée) ne peut plus rejouer : les règles refusent son geste.
+ * Son passage ne reçoit donc pas la marque, qui resterait orange pour
+ * toujours. Le passage est noté à la place sur l'anomalie, dans
+ * « aVerifierEquipe » : c'est à l'équipe de vérifier la correction.
  */
 exports.suiviAnomalieCorrigee = onDocumentUpdated(
   { region: REGION, document: 'projets/{projetId}/anomalies/{anomalieId}' },
@@ -805,20 +811,34 @@ exports.suiviAnomalieCorrigee = onDocumentUpdated(
     const { projetId } = evenement.params;
 
     const campagnes = new Map();
+    const aVerifier = [];
     for (const t of apres.temoins || []) {
       if (!t.passage || !t.campagne) continue;
       if (!campagnes.has(t.campagne)) {
         const c = await bdd.doc(`projets/${projetId}/campagnes/${t.campagne}`).get();
-        campagnes.set(t.campagne, c.exists && c.data().statut === 'en-cours');
+        campagnes.set(t.campagne, c.exists && c.data().statut === 'en-cours' ? c.data() : null);
       }
-      if (!campagnes.get(t.campagne)) continue;
+      const campagne = campagnes.get(t.campagne);
+      if (!campagne) continue;
       const ref = bdd.doc(`projets/${projetId}/campagnes/${t.passage.replace('/', '/passages/')}`);
       try {
         const p = await ref.get();
         if (!p.exists || !['echec', 'ko'].includes(p.data().resultat)) continue;
+        const testeur = p.data().testeur || t.testeur || '';
+        const fin = (campagne.fins || {})[testeur];
+        const finDate = fin && typeof fin.toDate === 'function' ? fin.toDate() : (fin ? new Date(fin) : null);
+        const nePeutPlusRejouer = testeur in (campagne.termines || {}) || Boolean(finDate && finDate.getTime() <= Date.now());
+        if (corrigee && nePeutPlusRejouer) { aVerifier.push(t.passage); continue; }
         await ref.update(corrigee ? { aRevoir: true } : { aRevoir: FieldValue.delete() });
       } catch (err) { console.error('Passage à rejouer non marqué', t.passage, err); }
     }
+    /* La note pour l'équipe : posée à la correction, retirée si l'équipe
+       revient sur sa décision. Réécrire l'anomalie relance ce déclencheur,
+       qui s'arrête aussitôt (le statut n'a pas changé). */
+    try {
+      if (corrigee && aVerifier.length) await evenement.data.after.ref.update({ aVerifierEquipe: aVerifier });
+      else if (!corrigee && 'aVerifierEquipe' in avant) await evenement.data.after.ref.update({ aVerifierEquipe: FieldValue.delete() });
+    } catch (err) { console.error('Note de vérification non posée', err); }
   },
 );
 

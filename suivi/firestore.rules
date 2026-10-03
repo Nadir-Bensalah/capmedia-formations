@@ -1929,8 +1929,16 @@ service cloud.firestore {
           // « noteTest » : ce que le testeur pense du TEST lui-même (clair,
           // faisable), une note sur cinq et quelques mots, posés en disant
           // « j'ai terminé ».
-          function appreciationBornee(d) {
+          // La note du test et les remarques ne s'écrivent plus ici : le
+          // questionnaire et les remarques libres ont leur propre place.
+          // Une appréciation neuve n'en porte pas ; une ancienne garde les
+          // siennes telles quelles (« avant » : null à la création).
+          function appreciationBornee(d, avant) {
             return d.size() <= 60
+              && (avant == null
+                  ? (!('noteTest' in d) && !('remarques' in d))
+                  : (d.get('noteTest', null) == avant.get('noteTest', null)
+                     && d.get('remarques', null) == avant.get('remarques', null)))
               && texteBorne(d.get('libre', ''), 8000)
               && (!('noteTest' in d)
                   || (d.noteTest is map
@@ -1949,7 +1957,7 @@ service cloud.firestore {
             && testeurDeLaCampagne(projetId, campagneId)
             && campagneOuverte(projetId, campagneId)
             && accesTesteurEnCours(projetId, campagneId)
-            && appreciationBornee(request.resource.data)
+            && appreciationBornee(request.resource.data, null)
             && (!('termine' in request.resource.data) || request.resource.data.termine == request.time);
 
           allow update: if estTesteur()
@@ -1957,11 +1965,7 @@ service cloud.firestore {
             && testeurDeLaCampagne(projetId, campagneId)
             && campagneOuverte(projetId, campagneId)
             && accesTesteurEnCours(projetId, campagneId)
-            && appreciationBornee(request.resource.data)
-            && request.resource.data.get('remarques', []).size() >= resource.data.get('remarques', []).size()
-            // Une remarque déjà envoyée (et notifiée) ne se réécrit pas :
-            // la liste ne fait que grandir par la fin.
-            && request.resource.data.get('remarques', []).hasAll(resource.data.get('remarques', []))
+            && appreciationBornee(request.resource.data, resource.data)
             && ('termine' in resource.data
                   ? request.resource.data.termine == resource.data.termine
                   : (!('termine' in request.resource.data) || request.resource.data.termine == request.time));

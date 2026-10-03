@@ -760,9 +760,14 @@ await refuse('Karim ne date pas sa fin de test lui-même', setDoc(doc(karim(), `
 await doit('Karim dit « j ai terminé » avec la date du serveur', setDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`), { termine: serverTimestamp(), testeur: KARIM, maj: serverTimestamp() }, { merge: true }));
 await refuse('Karim ne redate pas sa fin de test', updateDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`), { termine: serverTimestamp() }));
 await refuse('Karim ne retire pas sa fin de test', setDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`), { beaute: 4, prix: 5, testeur: KARIM }));
-await doit('Karim ajoute une remarque après coup', updateDoc(doc(karim(), `projets/atelier/campagnes/c-fin/appreciations/${KARIM}`), { remarques: [PREMIERE_REMARQUE, SECONDE_REMARQUE], maj: serverTimestamp() }));
+/* Les remarques ont quitté l'appréciation (campagnes/{c}/remarques) : une
+   ancienne liste reste telle quelle, rien ne s'y ajoute. */
+await refuse('Karim n ajoute plus de remarque dans l appréciation', updateDoc(doc(karim(), `projets/atelier/campagnes/c-fin/appreciations/${KARIM}`), { remarques: [PREMIERE_REMARQUE, SECONDE_REMARQUE], maj: serverTimestamp() }));
+await doit('mais met à jour son appréciation sans toucher l ancienne liste', updateDoc(doc(karim(), `projets/atelier/campagnes/c-fin/appreciations/${KARIM}`), { 'esthetique.belle': 4, maj: serverTimestamp() }));
 await refuse('Karim n efface pas une remarque', updateDoc(doc(karim(), `projets/atelier/campagnes/c-fin/appreciations/${KARIM}`), { remarques: [] }));
-await refuse('Karim ne réécrit pas une remarque déjà envoyée', updateDoc(doc(karim(), `projets/atelier/campagnes/c-fin/appreciations/${KARIM}`), { remarques: [{ texte: 'autre chose', le: new Date() }, SECONDE_REMARQUE, { texte: 'nouvelle', le: new Date() }] }));
+await refuse('Karim ne réécrit pas une remarque déjà envoyée', updateDoc(doc(karim(), `projets/atelier/campagnes/c-fin/appreciations/${KARIM}`), { remarques: [{ texte: 'autre chose', le: new Date() }] }));
+await refuse('Une appréciation neuve ne porte pas de remarques', setDoc(doc(sonia(), `projets/atelier/campagnes/c-fin/appreciations/${SONIA}`), { remarques: [{ texte: 'x', le: new Date() }], testeur: SONIA }));
+await refuse('ni de note du test', setDoc(doc(sonia(), `projets/atelier/campagnes/c-close-sans-fin/appreciations/${SONIA}`), { noteTest: { note: 4, commentaire: '', le: new Date() }, testeur: SONIA }));
 await refuse('Une remarque tient en 4 000 caractères', updateDoc(doc(karim(), `projets/atelier/campagnes/c-fin/appreciations/${KARIM}`), { remarques: [PREMIERE_REMARQUE, SECONDE_REMARQUE, { texte: 'x'.repeat(4001), le: new Date() }] }));
 await refuse('Une remarque vide ne passe pas', updateDoc(doc(karim(), `projets/atelier/campagnes/c-fin/appreciations/${KARIM}`), { remarques: [PREMIERE_REMARQUE, SECONDE_REMARQUE, { texte: '', le: new Date() }] }));
 await refuse('Test terminé : Karim ne pose plus de passage', setDoc(doc(karim(), CHEMIN('c-fin', KARIM, 'DI-16', 'ios')), PASSAGE(KARIM, 'DI-16', 'ios')));
@@ -790,7 +795,7 @@ await refuse('Karim ne glisse pas un champ de profil inconnu', updateDoc(doc(kar
 await doit('Karim ajoute l appareil du jour', updateDoc(doc(karim(), 'testeurs', KARIM), { appareils: [{ cle: 'a1', plateforme: 'ios', modele: 'iPhone 13', os: 'iOS 18', navigateur: 'Safari 18', ecran: '390×844', reseau: '', agent: 'x', vu: new Date(), confirme: true }, { cle: 'a2', plateforme: 'web', modele: 'Mac', os: 'macOS 15', navigateur: 'Chrome 129', ecran: '1440×900', reseau: '', agent: 'y', vu: new Date(), confirme: true }], maj: serverTimestamp() }));
 await refuse('Sonia ne touche pas la fiche de Karim', updateDoc(doc(sonia(), 'testeurs', KARIM), { nom: 'X' }));
 await refuse("L'équipe n écrit pas une fiche depuis le navigateur", updateDoc(doc(equipe(), 'testeurs', KARIM), { nom: 'X' }));
-await doit('Karim note le test en terminant', setDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`), { noteTest: { note: 4, commentaire: 'Clair.', le: new Date() }, testeur: KARIM, maj: serverTimestamp() }, { merge: true }));
+await refuse('La note du test ne s ajoute plus à l appréciation', setDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`), { noteTest: { note: 4, commentaire: 'Clair.', le: new Date() }, testeur: KARIM, maj: serverTimestamp() }, { merge: true }));
 await refuse('Une note hors de 1 à 5 ne passe pas', setDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`), { noteTest: { note: 9, commentaire: '', le: new Date() } }, { merge: true }));
 await env.withSecurityRulesDisabled(async (ctx) => {
   await setDoc(doc(ctx.firestore(), `conversationsTesteurs/${KARIM}`), { testeur: KARIM, nonLusEquipe: 2, nonLusTesteur: 1, maj: new Date() });

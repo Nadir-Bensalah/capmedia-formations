@@ -27,6 +27,13 @@ const T = (d) => ({ timestampValue: d.toISOString() });
 const L = (l) => ({ arrayValue: { values: l } });
 const soucis = []; const ok = (m) => console.log('  ok     ' + m); const dire = (m) => { soucis.push(m); console.log('  ÉCART  ' + m); };
 const verifier = (c, m) => (c ? ok(m) : dire(m));
+/* Une mise à jour partielle : seuls les champs nommés changent. */
+const changer = async (chemin, fields) => {
+  const masque = Object.keys(fields).map((k) => `updateMask.fieldPaths=${encodeURIComponent(k)}`).join('&');
+  const r = await fetch(`${bdd(chemin)}?${masque}`, { method: 'PATCH', headers: { ...prop, 'Content-Type': 'application/json' }, body: JSON.stringify({ fields }) });
+  if (!r.ok) throw new Error(`mise à jour refusée : ${chemin} (${r.status})`);
+};
+const attendreQue = async (test, ms = 30000) => { for (let i = 0; i < ms / 500; i++) { if (await test()) return true; await pause(500); } return false; };
 const attendre = async (chemin, ms = 30000) => { for (let i = 0; i < ms / 500; i++) { const d = await lire(chemin); if (d) return d; await pause(500); } return null; };
 
 const CID = 'qa-ko-garde';
@@ -37,13 +44,14 @@ const passage = (scenario, testeur, plateforme, resultat, date) => ({
 });
 
 (async () => {
-  for (const a of ['ko-connexion-f-001', 'ko-connexion-f-002', 'ko-INVENTE-appelez-le-0600000000', 'ko-QA-LEG-01']) await effacer(`projets/atelier/anomalies/${a}`);
+  for (const a of ['ko-connexion-f-003', 'ko-connexion-f-001', 'ko-connexion-f-002', 'ko-INVENTE-appelez-le-0600000000', 'ko-QA-LEG-01']) await effacer(`projets/atelier/anomalies/${a}`);
   await poser('projets/atelier/planTests/connexion', {
     id: S('connexion'), groupe: S('socle'), ordre: { integerValue: '1' }, titre: S('Connexion'), resume: S(''), plateformes: L([S('ios'), S('web')]),
     aspects: { mapValue: { fields: {
       fonctionnel: L([
         { mapValue: { fields: { id: S('connexion-f-001'), titre: S('Se connecter avec un code'), qui: S('humain') } } },
         { mapValue: { fields: { id: S('connexion-f-002'), titre: S('Se déconnecter'), qui: S('humain') } } },
+        { mapValue: { fields: { id: S('connexion-f-003'), titre: S('Changer d adresse'), qui: S('humain') } } },
       ]),
       technique: L([]), ux: L([]), securite: L([]),
     } } },
@@ -77,6 +85,30 @@ const passage = (scenario, testeur, plateforme, resultat, date) => ({
   await pause(5000);
   verifier(!(await lire('projets/atelier/anomalies/ko-INVENTE-appelez-le-0600000000')), 'Un scénario inventé ne fait pas d anomalie');
   verifier(!(await lire('projets/atelier/anomalies/ko-connexion-f-002')), 'Un identifiant qui ne colle pas au testeur ne fait pas d anomalie');
+
+  console.log('\n== Corrigé après la fin de test : pas de « à rejouer » impossible');
+  /* Karim a terminé, Sonia non. L'équipe corrige : Sonia rejoue, Karim ne
+     le peut plus, son passage est noté pour l'équipe sur l'anomalie. */
+  const CF = 'qa-ko-fini';
+  await poser(`projets/atelier/campagnes/${CF}`, { titre: S('Garde des KO, fin'), statut: S('en-cours'), testeurs: L([S('uid-karim'), S('uid-sonia')]),
+    termines: { mapValue: { fields: { 'uid-karim': T(new Date()) } } }, fins: { mapValue: { fields: { 'uid-karim': T(new Date(Date.now() + 5 * 86400000)) } } } });
+  const pk = `projets/atelier/campagnes/${CF}/passages/uid-karim__connexion-f-003__ios`;
+  const ps = `projets/atelier/campagnes/${CF}/passages/uid-sonia__connexion-f-003__android`;
+  await poser(pk, passage('connexion-f-003', 'uid-karim', 'ios', 'echec', new Date()));
+  await poser(ps, passage('connexion-f-003', 'uid-sonia', 'android', 'echec', new Date()));
+  const A = 'projets/atelier/anomalies/ko-connexion-f-003';
+  const deuxTemoins = await attendreQue(async () => { const d = await lire(A); return Boolean(d) && ((((d.fields || {}).temoins || {}).arrayValue || {}).values || []).length === 2; });
+  verifier(deuxTemoins, 'les deux échecs témoignent dans l anomalie');
+  await changer(A, { statut: S('corrigee') });
+  const soniaMarquee = await attendreQue(async () => { const d = await lire(ps); return Boolean(d && d.fields && d.fields.aRevoir && d.fields.aRevoir.booleanValue === true); });
+  verifier(soniaMarquee, 'Sonia, accès en cours, reçoit « à rejouer »');
+  const note = await attendreQue(async () => { const d = await lire(A); return ((((d && d.fields && d.fields.aVerifierEquipe) || {}).arrayValue || {}).values || []).some((v) => v.stringValue === `${CF}/uid-karim__connexion-f-003__ios`); });
+  verifier(note, 'le passage de Karim est noté pour l équipe sur l anomalie');
+  const karim = await lire(pk);
+  verifier(!(karim && karim.fields && karim.fields.aRevoir), 'Karim, qui a terminé, ne reçoit pas « à rejouer »');
+  await changer(A, { statut: S('nouvelle') });
+  const noteRetiree = await attendreQue(async () => { const d = await lire(A); return Boolean(d) && !((d.fields || {}).aVerifierEquipe); });
+  verifier(noteRetiree, 'l équipe revient sur sa décision : la note tombe');
 
   console.log(soucis.length ? `\n${soucis.length} ÉCART(S)` : '\nTout est conforme.');
   process.exit(soucis.length ? 1 : 0);
