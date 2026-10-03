@@ -2554,3 +2554,28 @@ p.axe-titre { cursor: default; }
   .axe { transition: none; }
   .est-cochee .axe-gestes { animation: none; }
 }
+
+/* Axes d'évolution, 03/10 : des couleurs douces, jamais d'alerte. L'apport
+   a sa teinte (un fond pâle, un texte de la même famille) ; l'ampleur
+   remplit ses marches dans une couleur calme qui fonce avec le chantier ;
+   le temps estimé se lit « ≈ 3 jours ». */
+.axes-filtre { margin: 4px 0 22px; flex-wrap: wrap; }
+.axe-apport { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 980px; text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 600;
+  color: var(--axe-t, var(--encre-2)); background: color-mix(in srgb, var(--axe-t, var(--encre-3)) 13%, transparent); }
+.axe-apport--bleu { --axe-t: var(--bleu); }
+.axe-apport--vert { --axe-t: var(--vert); }
+.axe-apport--violet { --axe-t: var(--violet-desk); }
+.axe-apport--rose { --axe-t: #C2185B; }
+.axe-apport--ardoise { --axe-t: #5B6B8C; }
+.axe-apport--ciel { --axe-t: #0A84A8; }
+:root[data-theme="dark"] .axe-apport--rose { --axe-t: #FF6FA5; }
+:root[data-theme="dark"] .axe-apport--ardoise { --axe-t: #A3B1CC; }
+:root[data-theme="dark"] .axe-apport--ciel { --axe-t: #5AC8E8; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .axe-apport--rose { --axe-t: #FF6FA5; } :root:not([data-theme="light"]) .axe-apport--ardoise { --axe-t: #A3B1CC; } :root:not([data-theme="light"]) .axe-apport--ciel { --axe-t: #5AC8E8; } }
+.axe-ampleur--petit { --axe-m: #34C3A0; }
+.axe-ampleur--moyen { --axe-m: var(--bleu); }
+.axe-ampleur--grand { --axe-m: var(--violet-desk); }
+.axe-ampleur .axe-marches i { width: 5px; background: color-mix(in srgb, var(--axe-m, var(--encre-3)) 22%, transparent); }
+.axe-ampleur .axe-marches i.pleine { background: var(--axe-m, var(--encre-2)); }
+.axe-jours { display: inline-flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums; color: var(--encre-2); }
+.axe-environ { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; font: 700 13px/1 var(--police); color: var(--bleu); background: color-mix(in srgb, var(--bleu) 12%, transparent); }
