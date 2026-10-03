@@ -175,7 +175,7 @@ const releverPage = (page) => page.evaluate(() => {
   }));
   const carte = (p) => cartes.find((c) => c.p === p) || { etats: [] };
   verifier(carte('backend').nom === 'Firebase', 'la carte du serveur s\'appelle « Firebase », tirée de la partie', carte('backend').nom);
-  verifier(carte('ios').etats.join(' / ') === 'En ligne 1.1.2 / En préparation 1.1.3', 'la carte iPhone : version en ligne et en préparation, lisibles', carte('ios').etats.join(' / '));
+  verifier(carte('ios').etats.join(' / ') === '1.1.2 en ligne / 1.1.3 en préparation', 'la carte iPhone : version en ligne et en préparation, lisibles', carte('ios').etats.join(' / '));
   verifier(cartes.length >= 5 && cartes.every((c) => c.coupes === 0), 'aucun texte coupé dans les cartes', JSON.stringify(cartes.map((c) => [c.p, c.coupes])));
   const hauteurs = cartes.map((c) => c.h);
   verifier(Math.max(...hauteurs) - Math.min(...hauteurs) <= 1, 'toutes les cartes ont la même hauteur', hauteurs.join(','));

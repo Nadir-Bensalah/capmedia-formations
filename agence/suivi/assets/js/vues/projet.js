@@ -452,7 +452,7 @@ const cartesPlateformes = (projet, d, pid) => {
     const court = (t) => String(t || '').replace(/^Version du\s+/i, '').replace(/\b(janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[ée]cembre)\b/i, (m) => MOIS[m.toLowerCase()] || m);
     const numerote = (t) => /\d/.test(String(t || ''));
     if (v.enLigne) lignes.push({ quoi: 'en ligne', num: court(v.enLigne.numero), ton: 'ok', detail: [v.enLigne.quand && `depuis le ${v.enLigne.quand}`, v.enLigne.ou].filter(Boolean).join(' · ') });
-    if (v.prep) lignes.push({ quoi: 'en préparation', num: numerote(v.prep.numero) ? court(v.prep.numero) : '', ton: 'prep', detail: [v.prep.numero, v.prep.etat].filter(Boolean).join(' · ') });
+    if (v.prep) lignes.push({ quoi: 'en préparation', num: numerote(v.prep.numero) ? court(v.prep.numero) : '', ton: 'prep', detail: numerote(v.prep.numero) ? v.prep.etat : [v.prep.numero, v.prep.etat].filter(Boolean).join(' · ') });
     const etat = !lignes.length ? (c ? ((STATUTS_COMPOSANT[c.statut || 'en-cours'] || {}).libelle || 'En cours') : 'Pas encore suivie') : '';
     const store = v.disponible && v.disponible.liens && v.disponible.liens.store;
     const test = v.enRoute && v.enRoute.liens && v.enRoute.liens.test;

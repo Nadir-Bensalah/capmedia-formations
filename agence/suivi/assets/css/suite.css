@@ -1955,8 +1955,9 @@ body:has(.bulle) #vue .page { padding-bottom: 104px; }
 .cartes-plateformes .carte-plateforme-tuile { width: 32px; height: 32px; border-radius: 9px; grid-row: 1 / 3; }
 .cartes-plateformes .carte-plateforme-tuile svg { width: 16px; height: 16px; }
 .cartes-plateformes .carte-plateforme-corps { grid-column: 2; grid-row: 1 / 3; gap: 3px; }
-.cartes-plateformes .carte-plateforme-nom { font-size: 14px; font-weight: 600; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cartes-plateformes .carte-plateforme-etat { display: flex; align-items: center; gap: 6px; font-size: 12.5px; line-height: 1.35; color: var(--encre-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cartes-plateformes .carte-plateforme-nom { font-size: 14px; font-weight: 600; line-height: 1.25; }
+.cartes-plateformes .carte-plateforme-etat { display: flex; align-items: baseline; gap: 6px; font-size: 12.5px; line-height: 1.35; color: var(--encre-2); }
+.cartes-plateformes .carte-plateforme-etat i { align-self: center; }
 .cartes-plateformes .carte-plateforme-etat b { font-weight: 600; color: var(--encre); font-variant-numeric: tabular-nums; }
 .cartes-plateformes .carte-plateforme-etat i { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--encre-3); }
 .cartes-plateformes .carte-plateforme-etat--ok i { background: var(--ok, var(--vert)); }
