@@ -97,7 +97,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
      résultat sans avoir lu ce qui doit se passer. */
   verifier(v.ouvrir===N&&v.choix===0,'chaque ligne ouvre sa feuille, sans bouton de résultat',`${v.ouvrir} / ${v.choix}`);
   verifier(v.jauge,'sa jauge d\'avancement est là');
-  verifier(/sur (iPhone|Android|Web)/.test(v.suite),'le geste suivant dit sur quoi, imposé par son affectation',v.suite);
+  verifier(/sur (iPhone|Android|Web)/i.test(v.suite),'le geste suivant dit sur quoi, imposé par son affectation',v.suite);
   verifier(!v.autres,'il ne voit AUCUN autre testeur');
 
   console.log('\n== La plateforme vient de son affectation');

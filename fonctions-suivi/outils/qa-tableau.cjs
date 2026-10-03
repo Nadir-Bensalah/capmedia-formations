@@ -282,10 +282,12 @@ const SCENARIOS=[
   const ctxT=await nav.newContext({viewport:{width:390,height:844}});
   const testeur=await ctxT.newPage();
   await connecter(testeur,'paul.tableau@exemple.test');
-  /* Un testeur neuf remplit sa fiche avant tout (qa-fiche-testeur la teste) : ici on la passe comme lui. */
+  /* Un testeur neuf voit l'accueil, puis sa fiche (depuis le 03/10/2026,
+     dans cet ordre ; qa-espace-testeur et qa-fiche-testeur les éprouvent) :
+     ici on passe l'un et on remplit l'autre, comme lui. */
+  await testeur.waitForSelector('.accueil [data-accueil="passer"], #ft-prenom, .testeur-tete', { timeout: 20000 }).catch(() => null);
+  if (await testeur.$('.accueil')) { await testeur.click('.accueil [data-accueil="passer"]'); await testeur.waitForSelector('.accueil', { state: 'detached' }); }
   await remplirFiche(testeur, { prenom: 'Paul', modele: 'PC du banc' });
-  /* Un testeur neuf voit l'accueil devant tout (qa-espace-testeur le teste) : ici on va droit à sa campagne. */
-  await testeur.waitForSelector('.accueil [data-accueil="passer"], .testeur-tete', { timeout: 20000 }).catch(() => null);
   if (await testeur.$('.accueil')) { await testeur.click('.accueil [data-accueil="passer"]'); await testeur.waitForSelector('.accueil', { state: 'detached' }); }
   verifier(/\/suivi\/testeur/.test(testeur.url()),'Paul arrive dans son espace',testeur.url());
   await testeur.waitForSelector('.tb-case',{timeout:30000}).catch(()=>{});

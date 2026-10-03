@@ -65,7 +65,10 @@ let page = null;
   verifier(await page.$(`[data-case="${second}"][data-verrou]`), 'le second est verrouillé tant que le premier n a pas de résultat');
   verifier(!(await page.$(`[data-case="${premier}"][data-verrou]`)), 'le premier est ouvrable');
   await page.click(`[data-case="${second}"]`); await pause(700);
-  verifier(new RegExp(`${premier} d'abord`).test(await toast(page)), 'toucher le second dit de dérouler le premier', await toast(page));
+  /* Un autre message peut passer devant (la clé d'accès proposée après la
+     connexion) : on attend celui du verrou. */
+  const verrouDit = await attendre(async () => new RegExp(`${premier} d'abord`).test(await toast(page)), 10, 300);
+  verifier(verrouDit, 'toucher le second dit de dérouler le premier', await toast(page));
   verifier(!(await page.$('.modale--scenario, .feuille')), 'et n ouvre pas sa feuille');
   /* La plateforme vient de sa clé : le choix n'apparaît que s'il manque. */
   if (await page.$('[data-sur="ios"]')) { await page.click('[data-sur="ios"]'); await pause(500); }
