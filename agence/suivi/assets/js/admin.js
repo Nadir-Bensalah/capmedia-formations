@@ -138,7 +138,7 @@ const construireNavigation = () => {
         { chemin: '/activite', libelle: 'Activité', icone: 'activite' },
         /* Ce que Capmedia annonce à ses clients, congés compris : le
            total gris compte les publiées. */
-        { chemin: '/annonces', libelle: 'Annonces', icone: 'porteVoix', compte: { total: (magasin.lire(K.annonces) || []).filter((a) => a.publication === 'publiee').length }, si: admin },
+        { chemin: '/annonces', libelle: 'Annonces', icone: 'porteVoix', compte: { total: (magasin.lire(K.annonces) || []).filter((a) => a.publication === 'publiee').length }, si: admin || peut(session, 'finance.gerer') },
         { chemin: '/archives', libelle: 'Archives', icone: 'archive', si: admin },
         { chemin: '/equipe', libelle: 'Équipe', icone: 'utilisateurs' },
         { chemin: '/parametres', libelle: 'Paramètres', icone: 'parametres' },

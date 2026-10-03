@@ -98,7 +98,10 @@ const sansDefaut = (texte, ou) => {
   const uidCamille = await uidDe(CAMILLE); const uidLea = await uidDe(LEA);
   for (const u of [uidCamille, uidLea]) await poser(`profils/${u}`, { accueil: T(new Date()) }, ['accueil']);
   const jC = await jetonPour(CAMILLE); const jL = await jetonPour(LEA);
-  const effet = iso(dansJours(10));
+  /* La date d'effet de la grille par défaut : 420 / 480 € HT à partir de là.
+     Boutique (Léa) démarre en novembre : encore court au 1er janvier. */
+  const effet = '2027-01-01';
+  await poser('projets/boutique', { debut: T(new Date(2026, 10, 15)) }, ['debut']);
 
   console.log('\n== Le semis de la première annonce');
   const blanc = semer([]);
@@ -109,7 +112,10 @@ const sansDefaut = (texte, ou) => {
   const semee = await lire('annonces/tarif-2027-01');
   const tarifSeme = (champ(semee, 'tarif').mapValue || {}).fields || {};
   verifier(str(semee, 'publication') === 'brouillon' && str(semee, 'type') === 'tarif' && str(semee, 'dateEffet') === '2027-01-01', 'l annonce tarif 2027 est créée en brouillon, effet le 1er janvier 2027');
-  verifier((tarifSeme.tjmLong || {}).integerValue === '420' && (tarifSeme.tjmCourt || {}).integerValue === '480' && (tarifSeme.seuilMois || {}).integerValue === '3' && (tarifSeme.taxe || {}).stringValue === 'HT', 'ses règles : 420 € HT long, 480 € HT court, seuil 3 mois');
+  verifier(!('tjmLong' in tarifSeme) && !('tjmCourt' in tarifSeme), 'l annonce ne porte aucun prix : ils vivent dans la grille');
+  const grilleSemee = await lire('reglages/tarifs');
+  const periodesSemees = (((champ(grilleSemee, 'periodes').arrayValue || {}).values) || []).map((v) => v.mapValue.fields).map((f) => `${f.debut.stringValue}:${f.long.integerValue}/${f.court.integerValue}`);
+  verifier(periodesSemees.join(' ') === '2026-01-01:380/420 2027-01-01:420/480' && (champ(grilleSemee, 'seuilMois').integerValue === '3'), 'la grille par défaut est semée : 380 / 420 € HT, puis 420 / 480 € HT au 1er janvier 2027, seuil 3 mois', periodesSemees.join(' '));
   const encore = semer(['--vrai']);
   verifier(encore.status === 0 && /laissée telle quelle/.test(encore.stdout), 'relancé, il ne réécrit pas l annonce', encore.stdout.slice(-160));
   verifier((await notifAnnonce(uidCamille)).length === 0, 'un brouillon ne prévient personne');
@@ -139,11 +145,10 @@ const sansDefaut = (texte, ou) => {
   await equipe.waitForSelector('#ed-forme #ed-type', { timeout: 8000 });
   verifier(await equipe.isHidden('[data-pour-type="tarif"]'), 'le formulaire cache les règles du tarif tant que le type n est pas « Tarifs »');
   await equipe.selectOption('#ed-type', 'tarif');
-  verifier(await equipe.isVisible('#ed-tjmLong') && await equipe.isHidden('#ed-du'), 'choisir « Tarifs » montre les prix et cache la période');
+  verifier(await equipe.isVisible('#ed-texteLong') && await equipe.isHidden('#ed-du') && !(await equipe.$('#ed-tjmLong')), 'choisir « Tarifs » montre les phrases de l encart (pas de prix : la grille) et cache la période');
   await equipe.fill('#ed-titre', 'Nos tarifs changent');
   await equipe.fill('#ed-texte', 'Le prix de la journée dépend désormais de la durée du projet.');
   await equipe.fill('#ed-dateEffet', effet);
-  await equipe.fill('#ed-tjmLong', '420'); await equipe.fill('#ed-tjmCourt', '480'); await equipe.fill('#ed-seuilMois', '3');
   await equipe.check('#ed-forme [name="epinglee"]');
   await equipe.click('.voile button[type="submit"]');
   const tarif = await attendre(async () => parTitre(/Nos tarifs changent/));
@@ -193,6 +198,26 @@ const sansDefaut = (texte, ou) => {
   await equipe.screenshot({ path: join(CAPTURES, 'annonces-cockpit-apercu-sombre.png') });
   await equipe.click('.voile [data-fermer]');
   await pause(500);
+
+  console.log('\n== La grille de tarifs, dans le Cockpit');
+  const lignesGrille = await equipe.$$eval('[data-grille-tarifs] [data-grille-periode]', (l) => l.map((x) => `${x.dataset.grillePeriode}:${x.textContent.replace(/\s+/g, ' ').trim()}`));
+  verifier(lignesGrille.length === 2 && /380/.test(lignesGrille[0]) && /En vigueur/.test(lignesGrille[0]) && /480/.test(lignesGrille[1]) && /À venir/.test(lignesGrille[1]), 'la section « Grille de tarifs » montre les deux périodes, celle en vigueur et celle à venir', lignesGrille.join(' | '));
+  await equipe.click('[data-annonce-action="grille"]');
+  await equipe.waitForSelector('[data-periodes] [data-periode]', { timeout: 8000 });
+  const champsCourt = await equipe.$$('[data-periodes] [data-periode-court]');
+  await champsCourt[1].fill('490');
+  await equipe.click('.voile button[type="submit"]');
+  const grilleLue = async () => (((champ(await lire('reglages/tarifs'), 'periodes').arrayValue || {}).values) || []).map((v) => v.mapValue.fields);
+  verifier(await attendre(async () => { const g = await grilleLue(); return g[1] && (g[1].court.integerValue === '490' || g[1].court.doubleValue === 490); }), 'l éditeur de la grille écrit reglages/tarifs (projet court 2027 à 490)');
+  await pause(1000);
+  await equipe.click(`[data-annonce-action="apercu"][data-id="${idTarif}"]`);
+  await equipe.waitForSelector('#apercu-client', { timeout: 8000 });
+  await equipe.selectOption('#apercu-client', 'boutique-sud'); await pause(300);
+  verifier(Boolean(await equipe.$('[data-apercu] [data-tarif-projet="boutique"][data-tarif-tjm="490"]')), 'l annonce suit la grille : l aperçu de Boutique passe à 490 € HT');
+  await equipe.click('.voile [data-fermer]');
+  const P = (d, l, c) => M({ debut: S(d), long: I(l), court: I(c) });
+  await poser('reglages/tarifs', { periodes: L([P('2026-01-01', 380, 420), P('2027-01-01', 420, 480)]) }, ['periodes']);
+  await pause(1200);
   await equipe.evaluate(() => window.scrollTo(0, 0));
   await equipe.screenshot({ path: join(CAPTURES, 'annonces-cockpit-sombre.png'), fullPage: true });
 
@@ -215,7 +240,8 @@ const sansDefaut = (texte, ou) => {
   verifier(vues.length === 2 && vues[0] === idTarif && vues.includes(idInfo) && !vues.includes('tarif-2027-01'), 'elle lit les deux annonces publiées, l épinglée en haut, pas le brouillon', vues.join(', '));
   verifier(/Tarifs/.test(await page.textContent(`[data-annonce="${idTarif}"] [data-annonce-type]`)) && /À partir du/.test(await page.textContent(`[data-annonce="${idTarif}"] [data-annonce-effet]`)), 'chaque annonce dit son type et sa date d effet');
   const verdict = await page.textContent(`[data-annonce="${idTarif}"] [data-tarif-projet="atelier"]`).catch(() => '');
-  verifier(/projet long/.test(verdict) && /420\s?€ HT par jour/.test(verdict) && Boolean(await page.$(`[data-annonce="${idTarif}"] [data-tarif-projet="atelier"][data-tarif-tjm="420"]`)), 'l encart personnalisé : Atelier, commencé il y a plus de 3 mois, reste à 420 € HT par jour', verdict.trim());
+  verifier(/projet long/.test(verdict) && /420\s?€ HT/.test(verdict) && Boolean(await page.$(`[data-annonce="${idTarif}"] [data-tarif-projet="atelier"][data-tarif-tjm="420"]`)), 'l encart personnalisé : Atelier, commencé il y a plus de 3 mois, est un projet long à 420 € HT par jour', verdict.trim());
+  verifier(/passe de 380\s?€ HT à 420\s?€ HT/.test(verdict) && Boolean(await page.$(`[data-annonce="${idTarif}"] [data-tarif-projet="atelier"][data-tarif-avant="380"]`)), 'avec l avant et l après la date d effet : de 380 à 420 € HT (grille)');
   verifier(/\d{4}/.test(verdict) && /commencé le/.test(verdict), 'et dit quand le projet a commencé');
   verifier(await attendre(async () => (await badgeAnnonces(page)) === 0), 'ouvrir la page fait retomber le badge à zéro');
   verifier(await attendre(async () => Boolean(champ(await lire(`profils/${uidCamille}`), 'annoncesLues').timestampValue)), 'la lecture est gardée dans son profil (annoncesLues)');
@@ -248,7 +274,7 @@ const sansDefaut = (texte, ou) => {
   const vuesLea = await lea.$$eval('.annonces-liste [data-annonce]', (l) => l.map((a) => a.dataset.annonce));
   verifier(vuesLea.length === 1 && vuesLea[0] === idTarif, 'Léa ne voit que le tarif, pas l annonce d Atelier Nord', vuesLea.join(', '));
   const verdictLea = await lea.textContent(`[data-annonce="${idTarif}"] [data-tarif-projet="boutique"]`).catch(() => '');
-  verifier(/projet court/.test(verdictLea) && /480\s?€ HT par jour/.test(verdictLea), 'l encart de Léa : Boutique, ouvert il y a deux mois, sera à 480 € HT par jour', verdictLea.trim());
+  verifier(/projet court/.test(verdictLea) && /480\s?€ HT/.test(verdictLea) && /début prévu le/.test(verdictLea), 'l encart de Léa : Boutique, récent, est un projet court à 480 € HT par jour', verdictLea.trim());
   await ctxLea.close();
   page = await ctxClient.pages()[0];
 

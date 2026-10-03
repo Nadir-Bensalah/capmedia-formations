@@ -11,6 +11,7 @@
    ========================================================================== */
 
 import { enDate, montantHT, projetEstActif } from './noyau.js';
+import { grilleDe, periodeA, projetLong, tjmA, debutProjet as debutDeLaGrille } from './tarifs.js';
 
 /* Le repère de chaque type : un mot, une teinte douce (fond pâle, texte de
    la même famille). Jamais de pictogramme dans une pastille. */
@@ -29,12 +30,12 @@ export const PUBLICATIONS_ANNONCE = {
 };
 
 /* Les bornes : les mêmes que suivi/firestore.rules. */
-export const BORNES_ANNONCE = { titre: 120, texte: 4000, phrase: 400, message: 300, intro: 600, tjm: 10000, seuilMax: 36 };
+export const BORNES_ANNONCE = { titre: 120, texte: 4000, phrase: 400, message: 300, intro: 600 };
 
 /* Les phrases de l'encart personnalisé. Elles se modifient dans le Cockpit
    (champ par annonce) ; vides, ce sont elles qui reviennent. */
-export const PHRASE_LONG = 'Votre projet {projet}, commencé le {debut}, est un projet long : il reste à {tjm} par jour à partir du {date}.';
-export const PHRASE_COURT = 'Votre projet {projet}, commencé le {debut}, est un projet court : il sera facturé {tjm} par jour à partir du {date}.';
+export const PHRASE_LONG = 'Votre projet {projet}, {demarrage}, est un projet long : son prix par jour {evolution} à partir du {date}.';
+export const PHRASE_COURT = 'Votre projet {projet}, {demarrage}, est un projet court : son prix par jour {evolution} à partir du {date}.';
 export const INTRO_ANNONCES = 'Les nouvelles de Capmedia : nos nouveautés, nos compétences, ce qui change et nos périodes d\'absence. Rien ici ne vous engage.';
 
 export const estPubliee = (a) => Boolean(a) && a.publication === 'publiee';
@@ -60,62 +61,63 @@ export const dateFr = (valeur) => {
 };
 
 const minuit = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-const plusMois = (d, n) => {
-  const r = new Date(d.getFullYear(), d.getMonth() + n, d.getDate());
-  /* Le 31 août plus un mois ne devient pas le 1er octobre. */
-  if (r.getDate() !== d.getDate()) r.setDate(0);
-  return r;
-};
 
-/* --- Le tarif ------------------------------------------------------------ */
+/* --- Le tarif ------------------------------------------------------------
+   Les chiffres ne vivent plus dans l'annonce : ils viennent de la grille
+   unique (reglages/tarifs, tarifs.js), la même que lisent le calculateur
+   et les devis. L'annonce garde sa date d'effet, son texte et ses deux
+   phrases, modifiables dans le Cockpit. */
 
-/** Les règles chiffrées d'une annonce « tarif », bornées et complètes. */
-export const reglesTarif = (a) => {
+/** Les phrases de l'encart d'une annonce « tarif » (vides : celles par défaut). */
+export const phrasesTarif = (a) => {
   const t = (a && a.tarif) || {};
-  const nombre = (v, defaut) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : defaut);
   return {
-    tjmLong: nombre(t.tjmLong, null),
-    tjmCourt: nombre(t.tjmCourt, null),
-    seuilMois: Math.round(nombre(t.seuilMois, 3)),
     texteLong: String(t.texteLong || '').trim() || PHRASE_LONG,
     texteCourt: String(t.texteCourt || '').trim() || PHRASE_COURT,
   };
 };
 
-/**
- * Le début d'un projet, pour mesurer sa durée : sa date de début, sinon sa
- * première activité, sinon son ouverture au client, sinon sa création.
- * `premiereActivite(pid)` rend une date ou null.
- */
-export const debutProjet = (p, premiereActivite = () => null) => {
-  const d = enDate(p && p.debut) || premiereActivite(p && p.id) || enDate(p && p.ouvertLe) || enDate(p && p.cree);
-  return d ? minuit(d) : null;
+/** La date à laquelle l'annonce s'applique : sa date d'effet, sinon aujourd'hui. */
+export const dateDeLAnnonce = (a, aujourdHui = new Date()) => {
+  const effet = jourDe(a && a.dateEffet);
+  const jour = minuit(aujourdHui);
+  return effet && effet > jour ? effet : jour;
+};
+
+/** Ce que la grille dit à la date de l'annonce : les deux prix et le seuil. */
+export const grilleALaDate = (a, grille, aujourdHui = new Date()) => {
+  const g = grilleDe(grille);
+  const p = periodeA(g, dateDeLAnnonce(a, aujourdHui));
+  return { seuilMois: g.seuilMois, long: p ? p.long : null, court: p ? p.court : null };
 };
 
 /**
- * Le verdict d'un projet face à une annonce « tarif » : long ou court, et
- * le TJM qui s'applique. La durée se mesure au plus tard du jour et de la
- * date d'effet : c'est à cette date que le tarif s'applique. Un projet dont
- * la date cible est à plus de « seuil » mois de son début est long aussi.
+ * Le verdict d'un projet face à une annonce « tarif » : long ou court à la
+ * date d'effet (projetLong de la grille), le prix par jour d'aujourd'hui
+ * et celui qui s'appliquera (tjmA, avant et après la date d'effet).
  */
-export const verdictTarif = (a, p, { aujourdHui = new Date(), premiereActivite } = {}) => {
-  const r = reglesTarif(a);
-  const debut = debutProjet(p, premiereActivite);
-  if (!debut || r.tjmLong === null || r.tjmCourt === null) return null;
-  const effet = jourDe(a.dateEffet);
+export const verdictTarif = (a, p, grille, { aujourdHui = new Date() } = {}) => {
+  const debut = debutDeLaGrille(p);
+  if (!debut) return null;
   const jour = minuit(aujourdHui);
-  const reference = effet && effet > jour ? effet : jour;
-  const seuil = plusMois(debut, r.seuilMois);
-  const cible = enDate(p.cible);
-  const long = seuil <= reference || Boolean(cible && seuil <= minuit(cible));
-  const tjm = long ? r.tjmLong : r.tjmCourt;
+  const effet = dateDeLAnnonce(a, aujourdHui);
+  const long = projetLong(p, grille, effet);
+  const tjm = tjmA(grille, { long, date: effet });
+  const tjmAvant = tjmA(grille, { long: projetLong(p, grille, jour), date: jour });
+  if (tjm === null) return null;
+  const debutJour = minuit(debut);
+  const evolution = tjmAvant === null || tjmAvant === tjm ? `reste à ${montantHT(tjm)}` : `passe de ${montantHT(tjmAvant)} à ${montantHT(tjm)}`;
+  const phrases = phrasesTarif(a);
   const remplir = (modele) => modele
     .replaceAll('{projet}', p.nom || 'sans nom')
-    .replaceAll('{debut}', dateFr(debut))
+    .replaceAll('{demarrage}', debutJour > jour ? `début prévu le ${dateFr(debutJour)}` : `commencé le ${dateFr(debutJour)}`)
+    .replaceAll('{debut}', dateFr(debutJour))
+    .replaceAll('{evolution}', evolution)
+    .replaceAll('{tjmAvant}', montantHT(tjmAvant))
     .replaceAll('{tjm}', montantHT(tjm))
-    .replaceAll('{date}', effet ? dateFr(effet) : dateFr(jour))
-    .replaceAll('{seuil}', String(r.seuilMois));
-  return { projet: p.id, nom: p.nom || '', debut, long, tjm, phrase: remplir(long ? r.texteLong : r.texteCourt) };
+    .replaceAll('{date}', dateFr(effet))
+    .replaceAll('{seuil}', String(grilleDe(grille).seuilMois));
+  return { projet: p.id, nom: p.nom || '', debut: debutJour, long, tjm, tjmAvant, phrase: remplir(long ? phrases.texteLong : phrases.texteCourt) };
 };
 
 /** Les projets d'un client qui comptent pour un tarif : ouverts, en cours. */

@@ -1,15 +1,20 @@
 /* ==========================================================================
    CAPMEDIA CLIENT HUB · la première annonce : la tarification de 2027
 
-   Crée, EN BROUILLON, l'annonce « Nouvelle tarification au 1er janvier
-   2027 » (annonces/tarif-2027-01) : type tarif, tous les clients, 420 € HT
-   par jour pour un projet long (plus de 3 mois), 480 € HT pour un projet
-   court (moins de 3 mois), date d'effet 2027-01-01. Nadir la relit puis la
-   publie depuis le Cockpit (Annonces) : c'est la publication qui prévient
-   les clients, une seule fois (hubAnnonceEcrite).
+   Deux choses :
+   - la grille de tarifs, source unique (reglages/tarifs, voir
+     agence/suivi/assets/js/tarifs.js) : GRILLE_DEFAUT, soit 380 / 420 € HT
+     par jour aujourd'hui et 420 / 480 € HT au 1er janvier 2027 (projet long
+     de plus de 3 mois / projet court) ;
+   - EN BROUILLON, l'annonce « Nouvelle tarification au 1er janvier 2027 »
+     (annonces/tarif-2027-01) : type tarif, tous les clients, date d'effet
+     2027-01-01. Elle ne porte aucun chiffre : l'encart de chaque client lit
+     la grille. Nadir la relit puis la publie depuis le Cockpit (Annonces) :
+     c'est la publication qui prévient les clients, une seule fois.
 
-   Une annonce déjà là n'est pas réécrite (elle a pu être retouchée dans le
-   Cockpit) ; --ecraser la remet à ce texte, toujours en brouillon.
+   Ce qui est déjà là (grille ou annonce) n'est pas réécrit : il a pu être
+   retouché dans le Cockpit ; --ecraser les remet à ces valeurs (l'annonce
+   toujours en brouillon).
 
    À BLANC PAR DÉFAUT : rien n'est lu ni écrit, le script montre l'annonce.
 
@@ -17,14 +22,15 @@
      node annonces-semer.mjs --vrai                 (émulateur seulement)
      node annonces-semer.mjs --vrai --production    (PRODUCTION, sur ordre explicite)
 
-   En production, la collection annonces/ est sauvegardée en JSON, hors du
-   dépôt, AVANT la première écriture : ~/Capmedia/sauvegardes/annonces/
+   En production, la collection annonces/ et reglages/tarifs sont
+   sauvegardés en JSON, hors du dépôt, AVANT la première écriture : ~/Capmedia/sauvegardes/annonces/
    (ou $SAUVEGARDES).
    ========================================================================== */
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { GRILLE_DEFAUT } from '../../agence/suivi/assets/js/tarifs.js';
 
 const arg = (nom) => process.argv.includes(nom);
 const VRAI = arg('--vrai');
@@ -39,9 +45,9 @@ export const ANNONCE_TARIF_2027 = {
   titre: 'Nouvelle tarification au 1er janvier 2027',
   texte: [
     'Bonjour,',
-    'À partir du 1er janvier 2027, la tarification de Capmedia tient compte de la durée de chaque projet.',
-    'Un projet long, de plus de 3 mois, est facturé 420 € HT par jour. Un projet court, de moins de 3 mois, est facturé 480 € HT par jour. Un projet déjà engagé depuis plus de 3 mois reste donc à 420 € HT par jour.',
-    'Vous trouverez ci-dessous ce que cela change pour chacun de vos projets. Une question ? Écrivez-nous, nous vous répondons avec plaisir.',
+    'À partir du 1er janvier 2027, les tarifs de Capmedia évoluent.',
+    'Le prix d\'une journée dépend de la durée du projet : un projet long, de plus de 3 mois, et un projet court, de moins de 3 mois. Un projet déjà engagé depuis plus de 3 mois garde le tarif des projets longs.',
+    'Vous trouverez ci-dessous la grille, en euros hors taxes, et ce qu\'elle change pour chacun de vos projets. Une question ? Écrivez-nous, nous vous répondons avec plaisir.',
     'Merci pour votre confiance.',
   ].join('\n\n'),
   dateEffet: '2027-01-01',
@@ -49,7 +55,8 @@ export const ANNONCE_TARIF_2027 = {
   publieLe: null,
   epinglee: true,
   cible: { tous: true, organisations: [], uids: [] },
-  tarif: { tjmLong: 420, tjmCourt: 480, seuilMois: 3, devise: '€', taxe: 'HT', texteLong: '', texteCourt: '' },
+  /* Les deux phrases de l'encart : vides, celles de la page reviennent. */
+  tarif: { texteLong: '', texteCourt: '' },
   indisponibilite: null,
 };
 
@@ -78,7 +85,9 @@ const verifier = (a) => {
   if (JSON.stringify(a).includes('\u2014')) fautes.push('tiret cadratin dans le texte');
   if (a.titre.length > 120) fautes.push('titre de plus de 120 caractères');
   if (a.texte.length > 4000) fautes.push('texte de plus de 4 000 caractères');
-  if (!(a.tarif.tjmLong > 0 && a.tarif.tjmCourt > 0 && a.tarif.taxe === 'HT')) fautes.push('tarif incomplet');
+  if (Object.keys(a.tarif).some((k) => !['texteLong', 'texteCourt'].includes(k))) fautes.push('chiffres dans l annonce : ils vivent dans la grille');
+  const g = GRILLE_DEFAUT;
+  if (!g.periodes.length || g.periodes.some((p) => !(p.long > 0 && p.court > 0)) || !(g.seuilMois >= 1)) fautes.push('grille par défaut incomplète');
   return fautes;
 };
 
@@ -90,11 +99,12 @@ const sauvegarder = async (bdd, Timestamp) => {
     return v;
   };
   const q = await bdd.collection('annonces').get();
+  const grille = await bdd.doc('reglages/tarifs').get();
   const lieu = process.env.SAUVEGARDES || join(homedir(), 'Capmedia', 'sauvegardes', 'annonces');
   mkdirSync(lieu, { recursive: true });
   const fichier = join(lieu, `annonces-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
-  writeFileSync(fichier, JSON.stringify({ base: PROJET_FIREBASE, le: new Date().toISOString(), annonces: q.docs.map((d) => ({ id: d.id, donnees: conv(d.data()) })) }, null, 2));
-  console.log(`Sauvegarde de l'existant (${q.size} annonce(s)) : ${fichier}`);
+  writeFileSync(fichier, JSON.stringify({ base: PROJET_FIREBASE, le: new Date().toISOString(), annonces: q.docs.map((d) => ({ id: d.id, donnees: conv(d.data()) })), tarifs: grille.exists ? conv(grille.data()) : null }, null, 2));
+  console.log(`Sauvegarde de l'existant (${q.size} annonce(s), grille ${grille.exists ? 'présente' : 'absente'}) : ${fichier}`);
 };
 
 async function principal() {
@@ -103,7 +113,8 @@ async function principal() {
   if (fautes.length) { console.error(`Annonce refusée : ${fautes.join(', ')}.`); process.exit(1); }
   console.log(`annonces/${ID} · ${ANNONCE_TARIF_2027.titre}`);
   console.log(`  type tarif, tous les clients, effet le ${ANNONCE_TARIF_2027.dateEffet}, en brouillon, épinglée`);
-  console.log(`  long (plus de 3 mois) : ${ANNONCE_TARIF_2027.tarif.tjmLong} € HT par jour ; court (moins de 3 mois) : ${ANNONCE_TARIF_2027.tarif.tjmCourt} € HT par jour`);
+  console.log(`reglages/tarifs · grille par défaut, seuil ${GRILLE_DEFAUT.seuilMois} mois, TVA ${GRILLE_DEFAUT.tva} %`);
+  GRILLE_DEFAUT.periodes.forEach((p) => console.log(`  à partir du ${p.debut} : long ${p.long} € HT par jour ; court ${p.court} € HT par jour`));
   console.log(`\n${ANNONCE_TARIF_2027.texte}\n`);
   if (!VRAI) { console.log('À blanc : relancez avec --vrai sur l\'émulateur.'); return; }
 
@@ -112,6 +123,13 @@ async function principal() {
   initializeApp({ projectId: PROJET_FIREBASE });
   const bdd = getFirestore();
   if (PRODUCTION) await sauvegarder(bdd, Timestamp);
+  const refGrille = bdd.doc('reglages/tarifs');
+  const grille = await refGrille.get();
+  if (grille.exists && !ECRASER) console.log('reglages/tarifs existe déjà : laissée telle quelle.');
+  else {
+    await refGrille.set({ ...GRILLE_DEFAUT, periodes: GRILLE_DEFAUT.periodes.map((p) => ({ ...p })), maj: FieldValue.serverTimestamp() });
+    console.log(`reglages/tarifs ${grille.exists ? 'réécrite' : 'créée'} avec la grille par défaut.`);
+  }
   const ref = bdd.doc(`annonces/${ID}`);
   const deja = await ref.get();
   if (deja.exists && !ECRASER) {

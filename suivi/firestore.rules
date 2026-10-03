@@ -1340,20 +1340,14 @@ service cloud.firestore {
     function jourIso(v) {
       return v is string && v.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
     }
-    function montantTjm(v) {
-      return (v is int || v is float) && v > 0 && v <= 10000;
-    }
+    // Une annonce « tarif » ne porte plus de chiffres : ils vivent dans la
+    // grille unique (reglages/tarifs). Elle garde ses deux phrases.
     function tarifValide(t) {
-      return t is map
-          && t.keys().hasOnly(['tjmLong', 'tjmCourt', 'seuilMois', 'devise', 'taxe', 'texteLong', 'texteCourt'])
-          && montantTjm(t.tjmLong)
-          && montantTjm(t.tjmCourt)
-          && t.seuilMois is int && t.seuilMois >= 1 && t.seuilMois <= 36
-          && t.devise == '€'
-          // Un montant de Capmedia se lit toujours hors taxes.
-          && t.taxe == 'HT'
-          && texteBorne(t.get('texteLong', ''), 400)
-          && texteBorne(t.get('texteCourt', ''), 400);
+      return t == null
+          || (t is map
+              && t.keys().hasOnly(['texteLong', 'texteCourt'])
+              && texteBorne(t.get('texteLong', ''), 400)
+              && texteBorne(t.get('texteCourt', ''), 400));
     }
     function indisponibiliteValide(i) {
       return i is map
@@ -1372,9 +1366,9 @@ service cloud.firestore {
           && (d.publieLe == null || d.publieLe is timestamp)
           && d.epinglee is bool
           && cibleAnnonceValide(d.cible)
-          // Les règles chiffrées n'existent que sur un tarif, la période
+          // Les phrases du tarif n'existent que sur un tarif, la période
           // que sur une indisponibilité.
-          && (d.type == 'tarif' ? tarifValide(d.tarif) : d.get('tarif', null) == null)
+          && (d.type == 'tarif' ? tarifValide(d.get('tarif', null)) : d.get('tarif', null) == null)
           && (d.type == 'indisponibilite' ? indisponibiliteValide(d.indisponibilite) : d.get('indisponibilite', null) == null)
           && d.maj == request.time;
     }

@@ -136,6 +136,8 @@ export const K = {
   annoncesTous: 'annonces:tous',
   annoncesMiennes: 'annonces:miennes',
   reglagesAnnonces: 'reglages:annonces',
+  /* La grille de tarifs, source unique (tarifs.js) : lue par tout le monde. */
+  tarifs: 'reglages:tarifs',
   notesPartageesProjet: (p) => `notes-partagees:${p}`,
 };
 
@@ -281,6 +283,7 @@ export const abonnerGlobal = (lot, session) => {
      l'équipe les règle dans les paramètres. Un seul document. */
   lot.abonner(K.reglages, () => doc(bdd, 'reglages', 'finance'));
   lot.abonner(K.reglagesAnnonces, () => doc(bdd, 'reglages', 'annonces'));
+  lot.abonner(K.tarifs, () => doc(bdd, 'reglages', 'tarifs'));
   abonnerAnnonces(lot, session);
   if (equipe && session.equipe.role !== 'admin') {
     abonnerAgent(lot, session);
@@ -727,6 +730,12 @@ export const ecrire = {
   }),
   epinglerAnnonce: (id, oui) => updateDoc(doc(bdd, 'annonces', id), { epinglee: Boolean(oui), maj: serverTimestamp() }),
   supprimerAnnonce: (id) => deleteDoc(doc(bdd, 'annonces', id)),
+  /* La grille de tarifs (admin ou finance) : seuil, TVA, périodes. */
+  poserGrilleTarifs: (g) => setDoc(doc(bdd, 'reglages', 'tarifs'), {
+    seuilMois: Math.round(Number(g.seuilMois)), tva: Number(g.tva), devise: 'EUR',
+    periodes: (g.periodes || []).map((p) => ({ debut: String(p.debut), long: Number(p.long), court: Number(p.court) })),
+    maj: serverTimestamp(),
+  }),
   poserIntroAnnonces: (texte) => setDoc(doc(bdd, 'reglages', 'annonces'), { intro: String(texte || '').slice(0, 600), maj: serverTimestamp() }),
   /* Ouvrir la page des annonces les marque lues : une date, dans le profil. */
   marquerAnnoncesLues: (uid) => setDoc(doc(bdd, 'profils', uid), { annoncesLues: serverTimestamp(), maj: serverTimestamp() }, { merge: true }),

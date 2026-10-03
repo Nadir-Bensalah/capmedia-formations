@@ -15,7 +15,7 @@
    se posent ici (type « Indisponibilité »).
    ========================================================================== */
 
-import { echapper, dateCourte, pluriel, montantHT, enDate } from '../noyau.js';
+import { echapper, dateCourte, pluriel, montantHT, enDate, peut, estAdmin } from '../noyau.js';
 import { icone, pastille, vide, squelette, titrePage, confirmer, toast, sur, menu, agir, modale } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K, ecrire, horodatage } from '../donnees.js';
@@ -23,8 +23,9 @@ import { filAriane } from '../coquille.js';
 import { feuille, champ, zone, choix as select } from './editeurs.js';
 import {
   TYPES_ANNONCE, PUBLICATIONS_ANNONCE, BORNES_ANNONCE, PHRASE_LONG, PHRASE_COURT, INTRO_ANNONCES,
-  estPubliee, dateFr, reglesTarif, verdictTarif, projetsTarifables, periode, periodeTexte, parOrdreAnnonce, estNonLue, cibleTexte,
+  estPubliee, dateFr, grilleALaDate, verdictTarif, projetsTarifables, periode, periodeTexte, parOrdreAnnonce, estNonLue, cibleTexte,
 } from '../annonces-format.js';
+import { grilleDe, periodeA } from '../tarifs.js';
 
 /* --- Le dessin d'une annonce, le même des deux côtés ---------------------- */
 
@@ -35,19 +36,21 @@ const repereType = (a) => {
   return `<span class="annonce-type annonce-type--${echapper(t.ton)}" data-annonce-type="${echapper(a.type)}">${echapper(t.libelle)}</span>`;
 };
 
-/** L'encart personnalisé d'un tarif : une phrase par projet du lecteur. */
-const encartTarif = (a, { projets, premiereActivite }) => {
-  const r = reglesTarif(a);
-  const grille = `<div class="annonce-tarifs">
-    <div class="annonce-tarif"><p class="annonce-tarif-qui">Projets longs <span class="t-3">(plus de ${echapper(pluriel(r.seuilMois, 'mois', 'mois'))})</span></p><p class="annonce-tarif-prix" data-tarif-long>${echapper(montantHT(r.tjmLong) || '-')}<span> par jour</span></p></div>
-    <div class="annonce-tarif"><p class="annonce-tarif-qui">Projets courts <span class="t-3">(moins de ${echapper(pluriel(r.seuilMois, 'mois', 'mois'))})</span></p><p class="annonce-tarif-prix" data-tarif-court>${echapper(montantHT(r.tjmCourt) || '-')}<span> par jour</span></p></div>
+/** L'encart d'un tarif : la grille à la date d'effet (reglages/tarifs, la
+    source unique), puis une phrase par projet du lecteur, avant et après. */
+const encartTarif = (a, { projets, grille }) => {
+  const r = grilleALaDate(a, grille);
+  const seuil = echapper(pluriel(r.seuilMois, 'mois', 'mois'));
+  const grilleHtml = `<div class="annonce-tarifs">
+    <div class="annonce-tarif"><p class="annonce-tarif-qui">Projets longs <span class="t-3">(plus de ${seuil})</span></p><p class="annonce-tarif-prix" data-tarif-long>${echapper(montantHT(r.long) || '-')}<span> par jour</span></p></div>
+    <div class="annonce-tarif"><p class="annonce-tarif-qui">Projets courts <span class="t-3">(moins de ${seuil})</span></p><p class="annonce-tarif-prix" data-tarif-court>${echapper(montantHT(r.court) || '-')}<span> par jour</span></p></div>
   </div>`;
-  const verdicts = (projets || []).map((p) => verdictTarif(a, p, { premiereActivite })).filter(Boolean);
-  if (!projets) return grille;
-  return `${grille}<div class="annonce-encart" data-encart-tarif>
+  if (!projets) return grilleHtml;
+  const verdicts = projets.map((p) => verdictTarif(a, p, grille)).filter(Boolean);
+  return `${grilleHtml}<div class="annonce-encart" data-encart-tarif>
     <p class="surtitre">Pour vos projets</p>
     ${verdicts.length
-    ? `<ul class="annonce-verdicts">${verdicts.map((v) => `<li data-tarif-projet="${echapper(v.projet)}" data-tarif-tjm="${echapper(v.tjm)}"><span class="annonce-duree annonce-duree--${v.long ? 'long' : 'court'}">${v.long ? 'Projet long' : 'Projet court'}</span><span>${echapper(v.phrase)}</span></li>`).join('')}</ul>`
+    ? `<ul class="annonce-verdicts">${verdicts.map((v) => `<li data-tarif-projet="${echapper(v.projet)}" data-tarif-tjm="${echapper(v.tjm)}" data-tarif-avant="${echapper(v.tjmAvant === null ? '' : v.tjmAvant)}"><span class="annonce-duree annonce-duree--${v.long ? 'long' : 'court'}">${v.long ? 'Projet long' : 'Projet court'}</span><span>${echapper(v.phrase)}</span></li>`).join('')}</ul>`
     : '<p class="t-petit t-2">Aucun projet en cours : le tarif s\'appliquera à votre prochain projet, selon sa durée.</p>'}
   </div>`;
 };
@@ -62,7 +65,7 @@ const blocPeriode = (a) => {
 };
 
 /** Une annonce, telle que le client la lit. `projets` : ceux du lecteur. */
-export const annonceHtml = (a, { projets = null, premiereActivite = () => null, nouvelle = false } = {}) => {
+export const annonceHtml = (a, { projets = null, grille = null, nouvelle = false } = {}) => {
   const effet = dateFr(a.dateEffet);
   return `<article class="annonce carte" data-annonce="${echapper(a.id || '')}">
     <div class="annonce-tete">
@@ -73,17 +76,10 @@ export const annonceHtml = (a, { projets = null, premiereActivite = () => null, 
     </div>
     <h2 class="annonce-titre">${echapper(a.titre || '')}</h2>
     ${a.texte ? `<div class="prose annonce-texte">${paragraphes(a.texte)}</div>` : ''}
-    ${a.type === 'tarif' ? encartTarif(a, { projets, premiereActivite }) : ''}
+    ${a.type === 'tarif' ? encartTarif(a, { projets, grille }) : ''}
     ${a.type === 'indisponibilite' ? blocPeriode(a) : ''}
     <p class="annonce-pied">${estPubliee(a) && enDate(a.publieLe) ? `Publiée le ${echapper(dateFr(a.publieLe))}` : (estPubliee(a) ? 'Publiée à l\'instant' : 'Brouillon, pas encore publiée')}</p>
   </article>`;
-};
-
-/* La première activité d'un projet que lit le client : sa date de départ
-   quand le projet n'a pas de date de début. */
-const premiereActiviteDe = (pid) => {
-  const dates = (magasin.lire(K.activite(pid)) || []).map((x) => enDate(x.date)).filter(Boolean);
-  return dates.length ? new Date(Math.min(...dates.map((d) => d.getTime()))) : null;
 };
 
 const introDe = () => (((magasin.lire(K.reglagesAnnonces) || {}).intro || '').trim()) || INTRO_ANNONCES;
@@ -101,7 +97,7 @@ const vueClient = (ctx, env) => {
   sortie.innerHTML = `<div class="page">${squelette('page', 4)}</div>`;
   const uid = session.utilisateur.uid;
   const projetsDuClient = () => projetsTarifables((magasin.lire(K.projets) || session.projets || []).filter((p) => !p.archive));
-  const cles = () => [K.annonces, K.profil, K.projets, K.reglagesAnnonces, ...(magasin.lire(K.projets) || session.projets || []).map((p) => K.activite(p.id))];
+  const cles = [K.annonces, K.profil, K.projets, K.reglagesAnnonces, K.tarifs];
   /* La lecture d'avant l'ouverture : ce qui a été publié depuis porte
      « Nouveau » le temps de la visite, même une fois marqué lu. */
   let luAvant;
@@ -118,7 +114,7 @@ const vueClient = (ctx, env) => {
         <p class="chapo" data-annonces-intro>${echapper(introDe())}</p>
       </div></header>
       ${annonces.length
-    ? `<div class="annonces-liste">${annonces.map((a) => annonceHtml(a, { projets, premiereActivite: premiereActiviteDe, nouvelle: estNonLue(a, luAvant) })).join('')}</div>`
+    ? `<div class="annonces-liste">${annonces.map((a) => annonceHtml(a, { projets, grille: magasin.lire(K.tarifs), nouvelle: estNonLue(a, luAvant) })).join('')}</div>`
     : vide({ icone: 'porteVoix', titre: 'Aucune annonce pour le moment', texte: 'Les nouvelles de Capmedia apparaîtront ici.' })}
     </div>`;
     /* Ouvrir la page, c'est lire : une date dans le profil, une seule
@@ -131,8 +127,7 @@ const vueClient = (ctx, env) => {
   };
 
   const planifier = magasin.dessinateur(rendre, 60, cles);
-  [K.annonces, K.profil, K.projets, K.reglagesAnnonces].forEach((k) => lot.sur(k, planifier));
-  (magasin.lire(K.projets) || session.projets || []).forEach((p) => lot.sur(K.activite(p.id), planifier));
+  cles.forEach((k) => lot.sur(k, planifier));
   planifier();
   return { fin: () => { planifier.arreter(); lot.fin(); } };
 };
@@ -174,13 +169,9 @@ const editerAnnonce = (fiche = null) => {
       ${zone('texte', 'Texte', fiche ? fiche.texte : '', { lignes: 5, aide: 'Une ligne vide sépare deux paragraphes.' })}
       ${champ('dateEffet', 'Date d\'effet', fiche ? fiche.dateEffet : '', { type: 'date', facultatif: true, aide: 'Lu « À partir du … » par le client.' })}
       ${pour('tarif', `
-        <p class="surtitre" style="margin-top:6px">Les règles du tarif</p>
-        <div class="forme-rang">
-          ${champ('tjmLong', 'Prix par jour, projet long (€ HT)', numero(t.tjmLong) ?? 420, { type: 'number', attrs: 'min="1" max="10000" step="1"' })}
-          ${champ('tjmCourt', 'Prix par jour, projet court (€ HT)', numero(t.tjmCourt) ?? 480, { type: 'number', attrs: 'min="1" max="10000" step="1"' })}
-          ${champ('seuilMois', 'Seuil (mois)', numero(t.seuilMois) ?? 3, { type: 'number', attrs: 'min="1" max="36" step="1"', aide: 'Au-delà, le projet est long.' })}
-        </div>
-        ${zone('texteLong', 'Phrase pour un projet long', t.texteLong || PHRASE_LONG, { lignes: 2, aide: 'Repères : {projet}, {debut}, {tjm}, {date}.' })}
+        <p class="surtitre" style="margin-top:6px">L'encart de chaque client</p>
+        <p class="aide">Les prix viennent de la grille de tarifs (plus bas sur cette page) à la date d'effet : l'annonce n'en porte aucun.</p>
+        ${zone('texteLong', 'Phrase pour un projet long', t.texteLong || PHRASE_LONG, { lignes: 2, aide: 'Repères : {projet}, {demarrage}, {evolution} (« reste à … » ou « passe de … à … »), {tjm}, {tjmAvant}, {date}, {seuil}.' })}
         ${zone('texteCourt', 'Phrase pour un projet court', t.texteCourt || PHRASE_COURT, { lignes: 2 })}`)}
       ${pour('indisponibilite', `
         <p class="surtitre" style="margin-top:6px">La période</p>
@@ -206,9 +197,6 @@ const editerAnnonce = (fiche = null) => {
     regles: {
       titre: (v) => (!v ? 'Un titre, s\'il vous plaît.' : (v.length > BORNES_ANNONCE.titre ? `${BORNES_ANNONCE.titre} caractères au plus.` : '')),
       texte: (v) => (v && v.length > BORNES_ANNONCE.texte ? `${BORNES_ANNONCE.texte} caractères au plus.` : ''),
-      tjmLong: (v, d) => (d.type === 'tarif' && !(v > 0 && v <= BORNES_ANNONCE.tjm) ? 'Un prix entre 1 et 10 000 € HT.' : ''),
-      tjmCourt: (v, d) => (d.type === 'tarif' && !(v > 0 && v <= BORNES_ANNONCE.tjm) ? 'Un prix entre 1 et 10 000 € HT.' : ''),
-      seuilMois: (v, d) => (d.type === 'tarif' && !(Number.isInteger(v) && v >= 1 && v <= BORNES_ANNONCE.seuilMax) ? 'Un nombre de mois entre 1 et 36.' : ''),
       texteLong: (v, d) => (d.type === 'tarif' && v && v.length > BORNES_ANNONCE.phrase ? `${BORNES_ANNONCE.phrase} caractères au plus.` : ''),
       texteCourt: (v, d) => (d.type === 'tarif' && v && v.length > BORNES_ANNONCE.phrase ? `${BORNES_ANNONCE.phrase} caractères au plus.` : ''),
       du: (v, d) => (d.type === 'indisponibilite' && !v ? 'Le premier jour, s\'il vous plaît.' : ''),
@@ -237,7 +225,6 @@ const editerAnnonce = (fiche = null) => {
         epinglee: Boolean(v.epinglee),
         cible: { tous, organisations, uids: tous ? [] : comptesDe(organisations) },
         tarif: v.type === 'tarif' ? {
-          tjmLong: Number(v.tjmLong), tjmCourt: Number(v.tjmCourt), seuilMois: Math.round(Number(v.seuilMois)), devise: '€', taxe: 'HT',
           texteLong: v.texteLong === PHRASE_LONG ? '' : (v.texteLong || ''), texteCourt: v.texteCourt === PHRASE_COURT ? '' : (v.texteCourt || ''),
         } : null,
         indisponibilite: v.type === 'indisponibilite' ? { du: v.du, au: v.au, message: v.message || '' } : null,
@@ -269,21 +256,91 @@ const apercu = (a) => {
   });
   const dessiner = () => {
     const sel = m.el.querySelector('#apercu-client');
-    m.el.querySelector('[data-apercu]').innerHTML = annonceHtml(a, { projets: sel ? projetsDe(sel.value) : null });
+    m.el.querySelector('[data-apercu]').innerHTML = annonceHtml(a, { projets: sel ? projetsDe(sel.value) : null, grille: magasin.lire(K.tarifs) });
   };
   const sel = m.el.querySelector('#apercu-client');
   if (sel) sel.addEventListener('change', dessiner);
   dessiner();
 };
 
-const ligneEquipe = (a, orgs) => {
+/* --- La grille de tarifs (reglages/tarifs), source unique -------------------
+   Lue par l'annonce « tarif », le calculateur et les devis. L'administrateur
+   ou la finance la règle ici : seuil en mois, TVA, et des périodes (à
+   partir de quelle date, prix par jour d'un projet long et d'un court). */
+
+const ligneDePeriode = (p = {}) => `<div class="grille-periode" data-periode>
+    <div class="groupe"><label class="etiquette-champ">À partir du</label><input class="champ" type="date" lang="fr-FR" data-periode-debut value="${echapper(p.debut || '')}"></div>
+    <div class="groupe"><label class="etiquette-champ">Projet long (€ HT par jour)</label><input class="champ" type="number" min="1" max="10000" step="1" data-periode-long value="${echapper(p.long ?? '')}"></div>
+    <div class="groupe"><label class="etiquette-champ">Projet court (€ HT par jour)</label><input class="champ" type="number" min="1" max="10000" step="1" data-periode-court value="${echapper(p.court ?? '')}"></div>
+    <button class="btn-icone" type="button" data-periode-retirer aria-label="Retirer cette période" data-astuce="Retirer">${icone('corbeille')}</button>
+  </div>`;
+
+const editerGrille = () => {
+  const g = grilleDe(magasin.lire(K.tarifs));
+  return feuille({
+    titre: 'La grille de tarifs',
+    sousTitre: 'La source unique du prix d\'une journée : annonces, calculateur et devis la lisent.',
+    corps: `
+      <div class="forme-rang">
+        ${champ('seuilMois', 'Seuil d\'un projet long (mois)', g.seuilMois, { type: 'number', attrs: 'min="1" max="24" step="1"', aide: 'Au-delà, le projet est long.' })}
+        ${champ('tva', 'TVA (%)', g.tva, { type: 'number', attrs: 'min="0" max="30" step="0.1"' })}
+      </div>
+      <p class="surtitre" style="margin-top:6px">Les périodes</p>
+      <div class="grille-periodes" data-periodes>${g.periodes.map(ligneDePeriode).join('')}</div>
+      <button class="btn btn-secondaire btn-petit" type="button" data-periode-ajouter>${icone('plus')} Ajouter une période</button>`,
+    regles: {
+      seuilMois: (v) => (Number.isInteger(v) && v >= 1 && v <= 24 ? '' : 'Un nombre de mois entre 1 et 24.'),
+      tva: (v) => (typeof v === 'number' && v >= 0 && v <= 30 ? '' : 'Un taux entre 0 et 30 %.'),
+    },
+    surMontage: (el) => {
+      el.querySelector('[data-periode-ajouter]').addEventListener('click', () => {
+        const liste = el.querySelector('[data-periodes]');
+        if (liste.children.length >= 12) { toast('Douze périodes au plus.', 'erreur'); return; }
+        liste.insertAdjacentHTML('beforeend', ligneDePeriode());
+      });
+      el.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-periode-retirer]');
+        if (b) b.closest('[data-periode]').remove();
+      });
+    },
+    enregistrer: async (v, _pieces, racine) => {
+      const periodes = [...racine.querySelectorAll('[data-periode]')].map((l) => ({
+        debut: l.querySelector('[data-periode-debut]').value,
+        long: Number(l.querySelector('[data-periode-long]').value),
+        court: Number(l.querySelector('[data-periode-court]').value),
+      }));
+      const fautive = periodes.find((p) => !/^\d{4}-\d{2}-\d{2}$/.test(p.debut) || !(p.long > 0 && p.long <= 10000) || !(p.court > 0 && p.court <= 10000));
+      if (!periodes.length || fautive) { toast('Chaque période demande une date et deux prix entre 1 et 10 000 € HT.', 'erreur'); return false; }
+      if (new Set(periodes.map((p) => p.debut)).size !== periodes.length) { toast('Deux périodes ne peuvent pas commencer le même jour.', 'erreur'); return false; }
+      periodes.sort((x, y) => x.debut.localeCompare(y.debut));
+      await ecrire.poserGrilleTarifs({ seuilMois: v.seuilMois, tva: v.tva, periodes });
+      toast('Grille de tarifs enregistrée : annonces, calculateur et devis la lisent.');
+    },
+  });
+};
+
+const sectionGrille = () => {
+  const doc = magasin.lire(K.tarifs);
+  const g = grilleDe(doc);
+  const enVigueur = periodeA(g, new Date());
+  return `<section class="section" data-grille-tarifs>
+    <div class="section-tete"><h2>Grille de tarifs</h2><button class="btn btn-secondaire btn-petit" type="button" data-annonce-action="grille">Modifier la grille</button></div>
+    <p class="t-petit t-2">Seuil d'un projet long : ${echapper(pluriel(g.seuilMois, 'mois', 'mois'))} · TVA ${echapper(String(g.tva).replace('.', ','))} % · la source unique des annonces, du calculateur et des devis.${doc && doc.periodes ? '' : ' Grille par défaut, pas encore enregistrée.'}</p>
+    <table class="grille-tarifs">
+      <thead><tr><th scope="col">À partir du</th><th scope="col">Projet long</th><th scope="col">Projet court</th><th scope="col"><span class="sr-only">État</span></th></tr></thead>
+      <tbody>${g.periodes.map((p) => `<tr data-grille-periode="${echapper(p.debut)}"><td>${echapper(dateFr(p.debut))}</td><td>${echapper(montantHT(p.long))} par jour</td><td>${echapper(montantHT(p.court))} par jour</td><td class="t-petit">${enVigueur && p.debut === enVigueur.debut ? '<span class="grille-en-vigueur">En vigueur</span>' : (p.debut > (enVigueur ? enVigueur.debut : '') ? '<span class="t-3">À venir</span>' : '<span class="t-3">Passée</span>')}</td></tr>`).join('')}</tbody>
+    </table>
+  </section>`;
+};
+
+const ligneEquipe = (a, orgs, admin = true) => {
   const effet = dateFr(a.dateEffet);
   const p = a.type === 'indisponibilite' ? periode(a) : null;
-  const r = a.type === 'tarif' ? reglesTarif(a) : null;
+  const r = a.type === 'tarif' ? grilleALaDate(a, magasin.lire(K.tarifs)) : null;
   const details = [
     effet ? `À partir du ${effet}` : '',
     p ? periodeTexte(p).replace(/^./, (c) => c.toUpperCase()) : '',
-    r ? `${montantHT(r.tjmLong)} long · ${montantHT(r.tjmCourt)} court · seuil ${pluriel(r.seuilMois, 'mois', 'mois')}` : '',
+    r ? `grille : ${montantHT(r.long) || '-'} long · ${montantHT(r.court) || '-'} court · seuil ${pluriel(r.seuilMois, 'mois', 'mois')}` : '',
     cibleTexte(a, orgs),
     estPubliee(a) ? (enDate(a.publieLe) ? `publiée le ${dateCourte(a.publieLe)}` : 'publiée') : '',
   ].filter(Boolean);
@@ -295,21 +352,23 @@ const ligneEquipe = (a, orgs) => {
     </div>
     <div class="annonce-ligne-gestes">
       ${pastille(PUBLICATIONS_ANNONCE, estPubliee(a) ? 'publiee' : 'brouillon')}
-      <button class="btn btn-petit ${estPubliee(a) ? 'btn-doux' : 'btn-secondaire'}" type="button" data-annonce-action="publier" data-id="${echapper(a.id)}">${estPubliee(a) ? 'Retirer' : 'Publier'}</button>
+      ${admin ? `<button class="btn btn-petit ${estPubliee(a) ? 'btn-doux' : 'btn-secondaire'}" type="button" data-annonce-action="publier" data-id="${echapper(a.id)}">${estPubliee(a) ? 'Retirer' : 'Publier'}</button>
       <button class="btn btn-petit btn-fantome" type="button" data-annonce-action="apercu" data-id="${echapper(a.id)}">Aperçu</button>
       <button class="btn-icone" type="button" data-annonce-action="editer" data-id="${echapper(a.id)}" aria-label="Modifier" data-astuce="Modifier">${icone('edit')}</button>
-      <button class="btn-icone" type="button" data-annonce-action="menu" data-id="${echapper(a.id)}" aria-label="Plus d'actions">${icone('points')}</button>
+      <button class="btn-icone" type="button" data-annonce-action="menu" data-id="${echapper(a.id)}" aria-label="Plus d'actions">${icone('points')}</button>` : `<button class="btn btn-petit btn-fantome" type="button" data-annonce-action="apercu" data-id="${echapper(a.id)}">Aperçu</button>`}
     </div>
   </li>`;
 };
 
-const vueEquipe = (ctx) => {
+const vueEquipe = (ctx, env) => {
+  const admin = estAdmin(env.session);
+  const finance = admin || peut(env.session, 'finance.gerer');
   const sortie = ctx.sortie;
   const lot = magasin.lot();
   titrePage('Annonces');
   filAriane([{ libelle: 'Annonces' }]);
   sortie.innerHTML = `<div class="page">${squelette('page', 4)}</div>`;
-  const cles = [K.annonces, K.organisations, K.projets, K.reglagesAnnonces];
+  const cles = [K.annonces, K.organisations, K.projets, K.reglagesAnnonces, K.tarifs];
   const toutes = () => (magasin.lire(K.annonces) || []).slice().sort(parOrdreAnnonce);
 
   const rendre = () => {
@@ -322,14 +381,15 @@ const vueEquipe = (ctx) => {
           <h1>Annonces</h1>
           <p class="chapo">Ce que Capmedia annonce à ses clients : nouveautés, compétences, changements, tarifs, congés. ${echapper(annonces.length ? `${pluriel(publiees, 'publiée', 'publiées')} sur ${annonces.length}.` : '')}</p>
         </div>
-        <div class="actions">
+        ${admin ? `<div class="actions">
           <button class="btn btn-secondaire" type="button" data-annonce-action="intro">Modifier l'introduction</button>
           <button class="btn btn-principal" type="button" data-annonce-action="nouvelle">${icone('plus')} Nouvelle annonce</button>
-        </div>
+        </div>` : ''}
       </header>
       ${annonces.length
-    ? `<ol class="annonces-lignes">${annonces.map((a) => ligneEquipe(a, orgs)).join('')}</ol>`
-    : vide({ icone: 'porteVoix', titre: 'Aucune annonce', texte: 'Une nouveauté, un tarif, des congés : écrivez-la, choisissez qui la lit, publiez.', action: '<button class="btn btn-principal" type="button" data-annonce-action="nouvelle">Nouvelle annonce</button>' })}
+    ? `<ol class="annonces-lignes">${annonces.map((a) => ligneEquipe(a, orgs, admin)).join('')}</ol>`
+    : vide({ icone: 'porteVoix', titre: 'Aucune annonce', texte: 'Une nouveauté, un tarif, des congés : écrivez-la, choisissez qui la lit, publiez.', action: admin ? '<button class="btn btn-principal" type="button" data-annonce-action="nouvelle">Nouvelle annonce</button>' : '' })}
+      ${finance ? sectionGrille() : ''}
     </div>`;
   };
 
@@ -339,6 +399,9 @@ const vueEquipe = (ctx) => {
 
   const gestes = sur(sortie, 'click', '[data-annonce-action]', async (el) => {
     const action = el.dataset.annonceAction;
+    if (action === 'grille') { if (finance) editerGrille(); return; }
+    if (action === 'apercu') { const x = toutes().find((y) => y.id === el.dataset.id); if (x) apercu(x); return; }
+    if (!admin) return;
     if (action === 'nouvelle') { editerAnnonce(); return; }
     if (action === 'intro') { editerIntro(); return; }
     const a = toutes().find((x) => x.id === el.dataset.id);
