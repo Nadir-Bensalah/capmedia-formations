@@ -15,8 +15,8 @@ import { echapper, prenom, nomAffiche, typeProjetAffiche } from './noyau.js';
 import * as magasin from './magasin.js';
 import { K } from './donnees.js';
 import { icone } from './ui.js';
-import { ouvrirAccueil as ouvrirMoteur, accueilVu as vu, marquerAccueilVu as marquer } from './accueil.js';
-import { installable, systemeCourant, lienInstalleur } from './installer.js';
+import { ouvrirAccueil as ouvrirMoteur, accueilVu as vu, marquerAccueilVu as marquer, mascotteHtml, ecranInstallerApp, ecranPret } from './accueil.js';
+import { installable } from './installer.js';
 
 const prenomDe = (session) => prenom(nomAffiche(session));
 const societeDe = (session) => { const o = (session.organisations || [])[0] || {}; return String(o.entreprise || o.nom || '').trim(); };
@@ -68,32 +68,10 @@ const ecranProjets = (projets) => {
   };
 };
 
-/* L'application, pour qui peut l'installer : sur le web, depuis un Mac ou
-   un PC. Le bouton vise directement le bon fichier pour son système. */
-const ecranApplication = () => {
-  const systeme = systemeCourant();
-  const libelle = systeme === 'mac' ? 'Mac' : 'Windows';
-  return {
-    cle: 'application-hub',
-    visuel: `<div class="accueil-appli">
-        <span class="accueil-appli-icone accueil-appli-icone--app"><img src="./assets/img/app-hub.png" alt=""></span>
-        <p class="accueil-appli-nom">Capmedia Hub</p>
-        <p class="accueil-appli-type">pour ${echapper(libelle)}</p>
-      </div>`,
-    texte: `<p class="surtitre">L'application</p>
-      <h2>Installez-la sur votre ${echapper(libelle)}</h2>
-      <p>Les notifications de votre ordinateur, à chaque nouveauté.</p>
-      <p class="accueil-telecharger"><a class="btn btn-principal" href="${echapper(lienInstalleur('hub', systeme))}" download data-installer="hub" data-systeme="${echapper(systeme)}">${icone(systeme === 'mac' ? 'apple' : 'composants')} Télécharger pour ${echapper(libelle)}</a></p>`,
-  };
-};
-
-const ecranFin = (session) => ({
-  cle: 'fin',
-  visuel: '<img class="accueil-mascotte accueil-mascotte--fin" src="./assets/img/hub-pret.png" alt="" width="260" height="260">',
-  texte: `<p class="surtitre">C'est fait</p>
-    <h2>Tout est prêt${prenomDe(session) ? `, ${echapper(prenomDe(session))}` : ''}</h2>
-    <p>Ces écrans se revoient depuis le menu de votre compte.</p>`,
-});
+/* L'application pour son ordinateur et le dernier écran : communs au Hub
+   et à Test (accueil.js). */
+const ecranApplication = () => ecranInstallerApp('hub');
+const ecranFin = (session) => ecranPret({ prenom: prenomDe(session) });
 
 /* --------------------------------------------------------------------------
    L'ouverture
@@ -112,7 +90,7 @@ export const ouvrirAccueil = ({ session, projets, surFin = null }) => {
     prenom: prenomDe(session) || '',
     titre: societe ? `Bienvenue ${societe}` : `Bienvenue${prenomDe(session) ? `, ${prenomDe(session)}` : ''}`,
     texte: 'Sur votre Hub Capmedia, un espace pensé pour vous.',
-    visuel: '<img class="accueil-mascotte" src="./assets/img/hub-bienvenue.png" alt="" width="220" height="220">',
+    visuel: mascotteHtml(),
     ecrans: () => [ecranProjets(projets()), ...(installable() ? [ecranApplication()] : []), ecranFin(session)],
     surFin,
   });

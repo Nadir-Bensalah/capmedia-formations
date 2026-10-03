@@ -1,12 +1,14 @@
 /* ==========================================================================
    CAPMEDIA TEST · l'accueil du testeur
 
-   Les trois écrans de la première fois (le moteur est dans accueil.js) :
-   son rôle, l'application qu'il va tester (ce que l'équipe a écrit et
-   déposé dans la campagne : nom, phrase, points forts, captures), puis les
-   trois réponses et le bon signalement. Trois, pas sept : sur un téléphone,
-   le reste (le déroulé, le temps, l'avis) vit dans le guide du testeur, et
-   la campagne dit à chaque instant quoi faire. Sa fiche vient après.
+   Les écrans de la première fois (le moteur est dans accueil.js), courts et
+   dans l'ordre du Hub (02/10) : la porte (la mascotte, son prénom, son rôle
+   en une phrase), l'application qu'il va tester en grand (ce que l'équipe a
+   écrit et déposé dans la campagne : nom, phrase, points forts, captures, et
+   le lien d'installation de son téléphone), les trois réponses, Capmedia
+   Test à installer sur son ordinateur (seulement sur le web, depuis un Mac
+   ou un PC), puis « tout est prêt ». Le déroulé, le bon signalement et le
+   temps vivent dans le guide du testeur.
 
    Tout ce qu'il dit vient de la campagne que l'équipe pilote depuis le
    Cockpit. Ce qui est fait est consigné (testeur.js) : l'équipe voit qui a
@@ -15,7 +17,8 @@
 
 import { echapper, lienPiece } from './noyau.js';
 import { icone } from './ui.js';
-import { ouvrirAccueil as ouvrirMoteur, accueilVu as vu, marquerAccueilVu as marquer, paragraphes } from './accueil.js';
+import { ouvrirAccueil as ouvrirMoteur, accueilVu as vu, marquerAccueilVu as marquer, paragraphes, mascotteHtml, ecranInstallerApp, ecranPret } from './accueil.js';
+import { installable } from './installer.js';
 
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const CLE = (uid) => `suivi:testeur-accueil:${uid || ''}`;
@@ -23,26 +26,26 @@ const CLE = (uid) => `suivi:testeur-accueil:${uid || ''}`;
 export const accueilVu = (uid) => vu(CLE(uid));
 export const marquerAccueilVu = (uid) => marquer(CLE(uid));
 
-const visuelIcone = (nom) => `<div class="visuel-icone">${icone(nom)}</div>`;
+/* Le téléphone du testeur, s'il lit l'accueil dessus : le lien
+   d'installation de l'application testée qui lui correspond. */
+const telephone = () => {
+  const ua = navigator.userAgent || '';
+  if (/iPhone|iPad/i.test(ua)) return 'ios';
+  if (/Android/i.test(ua)) return 'android';
+  return '';
+};
+const INSTALLER = { ios: 'Installer sur iPhone', android: 'Installer sur Android' };
 
 /* --------------------------------------------------------------------------
-   Les trois écrans. Chacun reçoit le testeur, la campagne (peut manquer) et
-   les adresses des captures déjà résolues.
+   Les écrans. Chacun reçoit le testeur, la campagne (peut manquer) et les
+   adresses des captures déjà résolues.
    -------------------------------------------------------------------------- */
-
-const ecranRole = (moi) => ({
-  cle: 'role',
-  visuel: visuelIcone('cible'),
-  texte: `<p class="surtitre">Votre rôle</p>
-    <h2>Vous testez avant les clients</h2>
-    <p>Chaque défaut que vous trouvez, ${moi.prenom ? echapper(moi.prenom) : 'vous'}, c'est un client qui ne le trouvera pas. Ce qui compte, c'est votre regard de nouvel utilisateur : personne ne vous demande d'être un expert.</p>`,
-});
 
 const ecranApplication = (moi, c, liens) => {
   if (!c) {
     return {
       cle: 'application',
-      visuel: `<div class="appli-icone appli-icone--vide">${icone('composants')}</div>`,
+      visuel: `<div class="accueil-appli"><span class="accueil-appli-icone accueil-appli-icone--vide">${icone('composants')}</span></div>`,
       texte: `<p class="surtitre">Ce que vous allez tester</p>
         <h2>Votre campagne arrive</h2>
         <p>Dès que l'équipe Capmedia ouvre votre campagne, l'application vous est présentée ici : à quoi elle sert, ses écrans, et le lien pour l'installer.</p>`,
@@ -56,7 +59,9 @@ const ecranApplication = (moi, c, liens) => {
         <div class="telephone-ecran"><span class="telephone-initiale">${initiale}</span>${visuels.map((v, i) => `<img${liens[v.chemin] ? ` src="${echapper(liens[v.chemin])}"` : ''} data-chemin="${echapper(v.chemin)}" alt="" class="${i === 0 ? 'actif' : ''}" draggable="false">`).join('')}</div>
         ${visuels.length > 1 ? `<span class="telephone-points">${visuels.map((v, i) => `<i class="${i === 0 ? 'actif' : ''}"></i>`).join('')}</span>` : ''}
       </div>`
-    : `<div class="appli-icone">${initiale}</div>`;
+    : `<div class="accueil-appli"><span class="accueil-appli-icone accueil-appli-icone--initiales">${initiale}</span><p class="accueil-appli-nom">${echapper(nom)}</p></div>`;
+  const tel = telephone();
+  const lien = tel && /^https:\/\/[^\s"'<>]+$/.test(String((c.installation || {})[tel] || '')) ? c.installation[tel] : '';
   const atouts = (c.atouts || []).map((a) => String(a || '').trim()).filter(Boolean).slice(0, 4);
   return {
     cle: 'application',
@@ -65,11 +70,12 @@ const ecranApplication = (moi, c, liens) => {
       <h2>${echapper(nom)}</h2>
       ${c.accroche ? `<p class="accroche">${echapper(c.accroche)}</p>` : ''}
       ${paragraphes(c.presentation, 1)}
-      ${atouts.length ? `<ul class="atouts">${atouts.map((a) => `<li>${icone('check')}<span>${echapper(a)}</span></li>`).join('')}</ul>` : ''}`,
+      ${atouts.length ? `<ul class="atouts">${atouts.map((a) => `<li>${icone('check')}<span>${echapper(a)}</span></li>`).join('')}</ul>` : ''}
+      ${lien ? `<p class="accueil-telecharger"><a class="btn btn-principal" href="${echapper(lien)}" target="_blank" rel="noopener" data-installer-teste="${tel}">${icone(tel === 'ios' ? 'apple' : 'android')} ${INSTALLER[tel]}</a></p>` : ''}`,
   };
 };
 
-const ecranVerdicts = (moi, c) => ({
+const ecranVerdicts = () => ({
   cle: 'verdicts',
   visuel: `<div class="verdicts-accueil">
       <div><b class="verdict verdict--ok">Réussi</b><span>Ce qui devait se passer s'est passé, exactement.</span></div>
@@ -78,8 +84,16 @@ const ecranVerdicts = (moi, c) => ({
     </div>`,
   texte: `<p class="surtitre">Vos réponses</p>
     <h2>Trois réponses possibles</h2>
-    <p>Chaque scénario dit ce qui doit se passer. Si ce n'est pas exactement ça, c'est un échec : décrivez ce que vous avez vu et joignez une capture. Un scénario où rien ne se passe est un échec, jamais une réussite.</p>
-    <p>Le guide du testeur, dans le menu, reprend tout. ${c ? 'Votre campagne vous attend' : 'Votre espace est prêt'}${moi.prenom ? `, ${echapper(moi.prenom)}` : ''}.</p>`,
+    <p>Chaque scénario dit ce qui doit se passer. Si ce n'est pas exactement ça, c'est un échec. Un scénario où rien ne se passe est un échec, jamais une réussite.</p>`,
+});
+
+/* Capmedia Test sur son ordinateur, et le dernier écran : les mêmes que
+   ceux du Hub (accueil.js). */
+const ecranOrdinateur = () => ecranInstallerApp('test', { texte: 'Les notifications de votre ordinateur, dès qu\'une campagne vous attend.' });
+
+const ecranFin = (moi, c) => ecranPret({
+  prenom: moi.prenom || '',
+  texte: `${c ? 'Votre campagne vous attend.' : 'Votre campagne arrive bientôt.'} Le guide du testeur et ces écrans se revoient depuis le menu de votre compte.`,
 });
 
 /* --------------------------------------------------------------------------
@@ -97,8 +111,10 @@ export const ouvrirAccueil = ({ moi, campagne = null, surFin = null }) => {
   const moteur = ouvrirMoteur({
     service: 'Test',
     prenom: moi.prenom || '',
-    texte: 'Vous êtes sur Capmedia Test, l\'espace où l\'on découvre une application avant tout le monde. Laissez-nous vous présenter votre rôle, et ce que vous allez tester.',
-    ecrans: () => [ecranRole(moi), ecranApplication(moi, c, liens), ecranVerdicts(moi, c)],
+    classe: 'accueil-porte--test',
+    texte: 'Vous découvrez une application avant ses clients. Ce qui compte, c\'est votre regard de nouvel utilisateur.',
+    visuel: mascotteHtml(),
+    ecrans: () => [ecranApplication(moi, c, liens), ecranVerdicts(), ...(installable() ? [ecranOrdinateur()] : []), ecranFin(moi, c)],
     surFin,
   });
 
@@ -126,7 +142,7 @@ export const ouvrirAccueil = ({ moi, campagne = null, surFin = null }) => {
   const majCampagne = (nouvelle) => {
     c = nouvelle || null;
     moteur.redessiner('application');
-    moteur.redessiner('verdicts');
+    moteur.redessiner('fin');
     chargerLiens();
   };
 

@@ -30,6 +30,13 @@ import { barreHtml, famillesHtml } from './grille.js';
 import { ouvrirAccueil, accueilVu, marquerAccueilVu } from './accueil-testeur.js';
 import { ouvrirFiche, consignerAppareil } from './fiche-testeur.js';
 import { monterBulleTesteur } from './bulle-testeur.js';
+import { squelette } from './ui.js';
+import { definirRetoucheAriane } from './coquille.js';
+
+/* Le testeur dit « iPhone », jamais « iOS », comme le client du Hub (03/10) :
+   les libellés partagés avec le Cockpit prennent son mot ici seulement. */
+PLATEFORMES_TEST.ios.libelle = 'iPhone';
+PLATEFORMES_TEST.ios.court = 'iPhone';
 
 const $ = (s, r = document) => r.querySelector(s);
 /* La zone où s'affiche la page courante : celle de la coquille, une fois
@@ -750,7 +757,7 @@ const pageSignalements = (moi) => {
         <span class="ligne-icone ligne-icone--${p.aRevoir ? 'ambre' : 'rouge'}">${icone(p.aRevoir ? 'restaurer' : 'alerte')}</span>
         <span class="ligne-corps"><span class="ligne-titre"><span class="ref">${echapper(s.id || s.ref)}</span> ${echapper(s.titre)}</span>
           <span class="ligne-sous">${p.commentaire ? `« ${echapper(p.commentaire.slice(0, 140))}${p.commentaire.length > 140 ? '…' : ''} »` : ''}${enDate(p.le) ? ` · ${echapper(enDate(p.le).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }))}` : ''}</span></span>
-        <span class="ligne-fin">${p.aRevoir ? '<span class="pastille pastille--ambre">Corrigé, à rejouer</span>' : '<span class="pastille pastille--rouge">Transmis à l\'équipe</span>'}</span>
+        <span class="ligne-fin">${p.aRevoir ? '<span class="etat-courant etat-courant--ambre"><i aria-hidden="true"></i>Corrigé, à rejouer</span>' : '<span class="etat-courant etat-courant--bleu"><i aria-hidden="true"></i>Transmis à l\'équipe</span>'}</span>
       </button>`).join('')}</div>`
       : vide({ icone: 'check', titre: 'Rien à signaler', texte: 'Quand un scénario échoue, il arrive ici avec la suite que l\'équipe lui donne.', compact: true })}
   </div>`;
@@ -843,7 +850,7 @@ const majNavigation = () => {
   const avisDus = c ? (!Object.keys(a).some((k) => k.startsWith('impression.')) ? 1 : 0)
     + (etat.scenarios.length && !r.reste && !Object.keys(a).some((k) => k.startsWith('esthetique.')) ? 1 : 0) : 0;
   definirNavigation([
-    { items: [{ chemin: '/', libelle: 'Ma campagne', icone: 'taches', exact: true, compte: c ? { total: r.reste } : 0 }] },
+    { items: [{ chemin: '/', libelle: 'Ma campagne', icone: 'accueil', exact: true, compte: c ? { total: r.reste } : 0 }] },
     {
       titre: 'Découvrir',
       items: [
@@ -1415,7 +1422,12 @@ const monter = async () => {
      se dessinent dans sa zone. */
   const { vue } = monterCoquille({ session: sess, role: 'testeur', groupes: [], sortie: racine });
   racine = vue;
-  racine.innerHTML = `<div class="page page--testeur"><p class="aide" style="text-align:center;margin-top:40px">Chargement de votre campagne…</p></div>`;
+  /* Le squelette de la page, comme dans le Hub, le temps que la campagne
+     arrive : des lignes qui chatoient, pas une phrase d'attente. */
+  racine.innerHTML = `<div class="page page--testeur">${squelette('page', 5)}</div>`;
+  /* Le fil d'Ariane part de « Ma campagne », comme celui du Hub part de
+     l'accueil : le bouton Retour (coquille.js) y remonte. */
+  definirRetoucheAriane((fil) => (courant().chemin === '/' ? fil : [{ libelle: 'Ma campagne', chemin: '/' }, ...fil]));
   if (!plateformeCourante) plateformeCourante = plateformeParDefaut(testeur);
   /* La première fois : l'accueil, devant tout, pour qu'il sache ce qu'est
      Capmedia Test avant qu'on lui demande quoi que ce soit. La campagne se
