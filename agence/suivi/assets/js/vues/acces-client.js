@@ -175,6 +175,24 @@ export const gesteAcces = async (el, d, { pid }) => {
     }
     const roles = ROLES_CLIENT[i.role] ? [i.role === 'responsable' ? 'collaborateur' : 'responsable'] : ['responsable', 'collaborateur'];
     menu(el, [
+      { libelle: 'Modifier le nom', icone: 'edit', action: () => {
+        const m = modale({
+          titre: 'Modifier le nom', sousTitre: "Il change partout : son espace, ses e-mails et la liste des accès.",
+          corps: `<form class="forme" id="f-nom" novalidate>
+            <div class="groupe"><label class="etiquette-champ" for="ac-nouveau-nom">Nom</label><input class="champ" id="ac-nouveau-nom" name="nom" maxlength="120" autocomplete="off" value="${echapper(i.nom || '')}"></div>
+          </form>`,
+          pied: '<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button><button class="btn btn-principal" type="submit" form="f-nom">Enregistrer</button>',
+        });
+        m.el.querySelector('#f-nom').addEventListener('submit', async (e) => {
+          e.preventDefault();
+          if (!valider(e.target, { nom: obligatoire() })) return;
+          const { nom: nouveau } = lireForme(e.target);
+          if (await agir(m.pied.querySelector('[type="submit"]'), () => appelServeur('modifierInterlocuteur', { projet: pid, cle, nom: nouveau }))) {
+            m.fermer(true);
+            toast('Nom modifié.');
+          }
+        });
+      } },
       ...roles.map((autreRole) => ({ libelle: `Passer ${ROLES_CLIENT[autreRole].toLowerCase()}`, icone: 'edit', action: () => agir(null, () => appelServeur('modifierInterlocuteur', { projet: pid, cle, role: autreRole }), 'Rôle choisi.') })),
       ...(ouvert ? [
         { libelle: "Renvoyer l'invitation", icone: 'mail', action: () => agir(null, async () => {

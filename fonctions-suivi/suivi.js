@@ -1320,10 +1320,21 @@ async function modifierInterlocuteur(identite, { projet: projetId, cle, email, r
     if (fiche.role === 'responsable' && role !== 'responsable') await controleDernierResponsable(projet.id, id, role);
     changements.role = role;
   }
-  if (nom !== undefined) changements.nom = String(nom).trim().slice(0, 120);
+  const nomPropre = nom === undefined ? undefined : String(nom).trim().slice(0, 120);
+  if (nomPropre !== undefined) {
+    if (!nomPropre) throw new Refus(400, 'Le nom ne peut pas être vide.');
+    changements.nom = nomPropre;
+  }
   await ref.update(changements);
+  /* Le nom corrigé doit se lire partout : le « Bonjour » du Hub et des
+     e-mails vient du profil, puis du compte. */
+  if (nomPropre !== undefined && fiche.uid) {
+    await getAuth().updateUser(fiche.uid, { displayName: nomPropre }).catch(() => {});
+    const profil = bdd.doc(`profils/${fiche.uid}`);
+    if ((await profil.get()).exists) await profil.set({ nom: nomPropre, maj: FieldValue.serverTimestamp() }, { merge: true });
+  }
   await acces.recalculerAcces(projet.id);
-  await audit('acces.interlocuteur-modifie', { projet: projet.id, cle: id, role: changements.role || fiche.role, par: identite.uid });
+  await audit('acces.interlocuteur-modifie', { projet: projet.id, cle: id, role: changements.role || fiche.role, ...(nomPropre !== undefined ? { nom: nomPropre } : {}), par: identite.uid });
   return { ok: true, cle: id, role: changements.role || fiche.role };
 }
 
