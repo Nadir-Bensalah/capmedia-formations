@@ -1,10 +1,12 @@
 /* ==========================================================================
    CAPMEDIA TEST · l'accueil du testeur
 
-   Les sept écrans de la première fois (le moteur est dans accueil.js) : son
-   rôle, l'application qu'il va tester (ce que l'équipe a écrit et déposé
-   dans la campagne : nom, phrase, points forts, captures), le déroulé, les
-   trois réponses, un bon signalement, le temps et l'avis, puis la campagne.
+   Les trois écrans de la première fois (le moteur est dans accueil.js) :
+   son rôle, l'application qu'il va tester (ce que l'équipe a écrit et
+   déposé dans la campagne : nom, phrase, points forts, captures), puis les
+   trois réponses et le bon signalement. Trois, pas sept : sur un téléphone,
+   le reste (le déroulé, le temps, l'avis) vit dans le guide du testeur, et
+   la campagne dit à chaque instant quoi faire. Sa fiche vient après.
 
    Tout ce qu'il dit vient de la campagne que l'équipe pilote depuis le
    Cockpit. Ce qui est fait est consigné (testeur.js) : l'équipe voit qui a
@@ -13,7 +15,7 @@
 
 import { echapper, lienPiece } from './noyau.js';
 import { icone } from './ui.js';
-import { ouvrirAccueil as ouvrirMoteur, accueilVu as vu, marquerAccueilVu as marquer, logoHtml, paragraphes } from './accueil.js';
+import { ouvrirAccueil as ouvrirMoteur, accueilVu as vu, marquerAccueilVu as marquer, paragraphes } from './accueil.js';
 
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const CLE = (uid) => `suivi:testeur-accueil:${uid || ''}`;
@@ -24,7 +26,7 @@ export const marquerAccueilVu = (uid) => marquer(CLE(uid));
 const visuelIcone = (nom) => `<div class="visuel-icone">${icone(nom)}</div>`;
 
 /* --------------------------------------------------------------------------
-   Les sept écrans. Chacun reçoit le testeur, la campagne (peut manquer) et
+   Les trois écrans. Chacun reçoit le testeur, la campagne (peut manquer) et
    les adresses des captures déjà résolues.
    -------------------------------------------------------------------------- */
 
@@ -67,20 +69,7 @@ const ecranApplication = (moi, c, liens) => {
   };
 };
 
-const ecranDeroule = () => ({
-  cle: 'deroule',
-  visuel: `<ol class="frise-accueil">
-      <li><span class="frise-accueil-n">01</span><span class="frise-accueil-i">${icone('telecharger')}</span><span>Installez l'application<small>Le lien est dans « L'application », pour votre appareil.</small></span></li>
-      <li><span class="frise-accueil-n">02</span><span class="frise-accueil-i">${icone('smartphone')}</span><span>Dites sur quoi vous testez<small>iPhone, Android ou le web. Changez-le si vous changez d'appareil.</small></span></li>
-      <li><span class="frise-accueil-n">03</span><span class="frise-accueil-i">${icone('coeur')}</span><span>Donnez votre première impression<small>Deux minutes, avant de toucher à quoi que ce soit.</small></span></li>
-      <li><span class="frise-accueil-n">04</span><span class="frise-accueil-i">${icone('taches')}</span><span>Déroulez vos scénarios<small>Un par un, à votre rythme. Tout est enregistré.</small></span></li>
-    </ol>`,
-  texte: `<p class="surtitre">Le déroulé</p>
-    <h2>Quatre gestes, dans l'ordre</h2>
-    <p>Votre campagne les reprend en tête de page. Rien n'est à retenir : l'espace vous dit à chaque instant ce qu'il reste à faire.</p>`,
-});
-
-const ecranVerdicts = () => ({
+const ecranVerdicts = (moi, c) => ({
   cle: 'verdicts',
   visuel: `<div class="verdicts-accueil">
       <div><b class="verdict verdict--ok">Réussi</b><span>Ce qui devait se passer s'est passé, exactement.</span></div>
@@ -89,34 +78,8 @@ const ecranVerdicts = () => ({
     </div>`,
   texte: `<p class="surtitre">Vos réponses</p>
     <h2>Trois réponses possibles</h2>
-    <p>Chaque scénario dit ce qui doit se passer. Si ce n'est pas exactement ça, c'est un échec. Un scénario où rien ne se passe est un échec, jamais une réussite.</p>`,
-});
-
-const ecranSignalement = () => ({
-  cle: 'signalement',
-  visuel: `<div class="capture-accueil" aria-hidden="true">
-      <span class="capture-accueil-image">${icone('image')}</span>
-      <i style="width:88%"></i><i style="width:64%"></i><i style="width:76%"></i>
-    </div>`,
-  texte: `<p class="surtitre">Un échec</p>
-    <h2>Un bon signalement</h2>
-    <p>Ce que vous avez fait, ce que vous avez vu, et une capture. Décrivez ce que vous voyez, pas ce que vous en pensez : l'équipe cherche la cause, et c'est la capture qui lui permet de reproduire.</p>`,
-});
-
-const ecranTemps = () => ({
-  cle: 'temps',
-  visuel: `<div class="chrono-accueil" aria-hidden="true"><b data-chrono-demo>0 min 00 s</b><small>3 sessions additionnées</small></div>`,
-  texte: `<p class="surtitre">Votre temps, votre avis</p>
-    <h2>Chaque minute compte</h2>
-    <p>Le chronomètre additionne vos sessions : arrêtez-vous quand vous voulez, rien n'est perdu. À la fin, votre avis sur l'application. Les scénarios disent si elle marche ; votre avis dit si elle plaît.</p>`,
-});
-
-const ecranFin = (moi, c) => ({
-  cle: 'fin',
-  visuel: logoHtml(true),
-  texte: `<p class="surtitre">Tout est prêt</p>
-    <h2>${c ? 'Votre campagne vous attend' : 'Votre espace est prêt'}</h2>
-    <p>Le guide du testeur reste à portée de main, dans le rail à gauche, et vous pouvez revoir ces écrans quand vous voulez. Bonne découverte${moi.prenom ? `, ${echapper(moi.prenom)}` : ''}.</p>`,
+    <p>Chaque scénario dit ce qui doit se passer. Si ce n'est pas exactement ça, c'est un échec : décrivez ce que vous avez vu et joignez une capture. Un scénario où rien ne se passe est un échec, jamais une réussite.</p>
+    <p>Le guide du testeur, dans le menu, reprend tout. ${c ? 'Votre campagne vous attend' : 'Votre espace est prêt'}${moi.prenom ? `, ${echapper(moi.prenom)}` : ''}.</p>`,
 });
 
 /* --------------------------------------------------------------------------
@@ -135,7 +98,7 @@ export const ouvrirAccueil = ({ moi, campagne = null, surFin = null }) => {
     service: 'Test',
     prenom: moi.prenom || '',
     texte: 'Vous êtes sur Capmedia Test, l\'espace où l\'on découvre une application avant tout le monde. Laissez-nous vous présenter votre rôle, et ce que vous allez tester.',
-    ecrans: () => [ecranRole(moi), ecranApplication(moi, c, liens), ecranDeroule(), ecranVerdicts(), ecranSignalement(), ecranTemps(), ecranFin(moi, c)],
+    ecrans: () => [ecranRole(moi), ecranApplication(moi, c, liens), ecranVerdicts(moi, c)],
     surFin,
   });
 
@@ -163,7 +126,7 @@ export const ouvrirAccueil = ({ moi, campagne = null, surFin = null }) => {
   const majCampagne = (nouvelle) => {
     c = nouvelle || null;
     moteur.redessiner('application');
-    moteur.redessiner('fin');
+    moteur.redessiner('verdicts');
     chargerLiens();
   };
 

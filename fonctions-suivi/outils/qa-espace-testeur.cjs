@@ -1,6 +1,6 @@
 /* ==========================================================================
    CAPMEDIA CLIENT HUB · l'espace Test, ses pages et ses gestes
-   L'accueil de la première fois (la marque, le prénom, les sept écrans,
+   L'accueil de la première fois (la marque, le prénom, les trois écrans,
    l'application de la campagne avec ses écrans), le sombre par défaut, le
    rail, les astuces, le chronomètre, Mon avis, le guide et la recherche,
    vus par un testeur du banc (semer-campagne.mjs).
@@ -55,7 +55,7 @@ let page = null;
   verifier(captures.length === 3 && captures.every((s) => /^http/.test(s)), `dans un téléphone, ses trois écrans (${captures.filter((s) => /^http/.test(s)).length} adresse(s) résolue(s) sur ${captures.length}${stockage.length ? ` · Storage : ${stockage.slice(0, 3).join(' | ')}` : ''})`);
   let n = 2;
   while (await page.$('[data-accueil="suivant"]')) { await page.click('[data-accueil="suivant"]'); n += 1; await pause(350); if (n > 12) break; }
-  verifier(n === 7, `sept écrans en tout (${n})`);
+  verifier(n === 3, `trois écrans en tout (${n})`);
   verifier(/Votre campagne vous attend/.test(await page.textContent('.ecran.actif')), 'le dernier sait que la campagne est ouverte');
   await page.click('[data-accueil="fin"]'); await pause(900);
   verifier(!(await page.$('.accueil')), 'C est parti efface l accueil');
@@ -70,7 +70,7 @@ let page = null;
   const a1 = await page.textContent('.astuce-testeur p'); await page.click('[data-astuce-suivante]'); const a2 = await page.textContent('.astuce-testeur p');
   verifier(a1 !== a2, 'Une autre change d astuce');
   await pause(1500);
-  verifier(/\d+ min \d+ s|\d+ h \d+/.test(await page.textContent('[data-chrono]')), `le chronomètre compte (${await page.textContent('[data-chrono]')})`);
+  verifier(/^\d+ min$|\d+ h \d+/.test(await page.textContent('[data-chrono]')), `le chronomètre compte, en minutes (${await page.textContent('[data-chrono]')})`);
   await page.evaluate(() => { location.hash = '#/avis'; }); await page.waitForSelector('[data-avis-page="avant"]');
   await page.click('[data-avis-page="avant"]'); await pause(600);
   verifier(await page.$('.feuille, .modale'), 'Mon avis ouvre le questionnaire');

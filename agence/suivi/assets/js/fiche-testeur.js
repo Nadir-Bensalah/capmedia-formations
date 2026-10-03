@@ -8,15 +8,22 @@
    la machine et complété par lui. C'est lui qui valide, et c'est sa
    validation qui fait foi dans la base (ficheValidee). Ensuite, chaque
    connexion ajoute l'appareil du jour à sa liste, sans rien demander.
+
+   Elle passe après l'accueil : il sait ce qu'est Capmedia Test avant qu'on
+   lui demande son âge. Et elle a une sortie : on peut se déconnecter (une
+   mauvaise adresse, un mauvais moment), et ne pas dire son sexe.
    ========================================================================== */
 
-import { bdd, auth, doc, updateDoc, serverTimestamp, echapper, PLATEFORMES_TEST } from './noyau.js';
+import { bdd, auth, doc, updateDoc, serverTimestamp, echapper, PLATEFORMES_TEST, signOut, effacerSecretsLocaux } from './noyau.js';
 import { modale, toast, agir, icone } from './ui.js';
 import { releverAppareil, libelleAppareil } from './appareil.js';
 
 const AGES = ['18-24', '25-34', '35-44', '45-54', '55-64', '65 et plus'];
 const AISANCE = ['À l\'aise', 'Moyenne', 'Peu à l\'aise'];
-const SEXES = [['homme', 'Homme'], ['femme', 'Femme'], ['autre', 'Autre']];
+const SEXES = [['homme', 'Homme'], ['femme', 'Femme'], ['autre', 'Autre'], ['non-dit', 'Je préfère ne pas le dire']];
+/* « 65 et plus » se lit « 65 ans et plus », pas « 65 et plus ans ». */
+const libelleAge = (v) => (/ et plus$/.test(v) ? v.replace(/ et plus$/, ' ans et plus') : `${v} ans`);
+const MOTS_PLATEFORME = { ios: 'iPhone', android: 'Android', web: 'Web' };
 
 /* La liste des appareils, avec celui-ci ajouté ou rafraîchi. Dix au plus :
    les plus anciens s'effacent. */
@@ -48,6 +55,7 @@ export const consignerAppareil = async (testeur) => {
   } catch (e) { console.warn('[testeur] appareil non consigné', e); }
 };
 
+const facultatif = ' <span class="facultatif">(facultatif)</span>';
 const champ = (id, libelle, valeur, { type = 'text', placeholder = '', requis = false } = {}) => `
   <div class="groupe"><label class="etiquette-champ" for="${id}">${echapper(libelle)}${requis ? '' : ' <span class="facultatif">(facultatif)</span>'}</label>
     <input class="champ" id="${id}" type="${type}" value="${echapper(valeur || '')}" placeholder="${echapper(placeholder)}"></div>`;
@@ -65,32 +73,32 @@ export const ouvrirFiche = async (testeur) => {
   if (!plateformes.size) plateformes.add(courant.plateforme);
 
   const m = modale({
-    titre: `Bienvenue${testeur.prenom ? `, ${testeur.prenom}` : ''}`,
-    sousTitre: 'Avant de commencer, dites-nous qui teste et sur quoi. Deux minutes, une seule fois.',
+    titre: 'Vous, en deux minutes',
+    sousTitre: 'Qui teste et sur quoi, une seule fois. Le client lit votre profil, jamais votre nom.',
     feuille: true, fermable: false,
     corps: `
       <section class="fiche-bloc">
         <h3 class="bloc-tete">Vous</h3>
         <div class="forme-rang">
           ${champ('ft-prenom', 'Prénom', testeur.prenom || '', { requis: true, placeholder: 'Karim' })}
-          ${champ('ft-nom', 'Nom', testeur.nom || '', { requis: true, placeholder: 'Benali' })}
+          ${champ('ft-nom', 'Nom', testeur.nom || '', { requis: true, placeholder: 'Votre nom de famille' })}
         </div>
         <div class="forme-rang">
           <div class="groupe"><label class="etiquette-champ" for="ft-sexe">Sexe</label>
             <select class="select" id="ft-sexe"><option value="">Choisir</option>${SEXES.map(([v, l]) => `<option value="${v}"${p.sexe === v ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
           <div class="groupe"><label class="etiquette-champ" for="ft-age">Tranche d'âge</label>
-            <select class="select" id="ft-age"><option value="">Choisir</option>${AGES.map((v) => `<option value="${echapper(v)}"${p.age === v ? ' selected' : ''}>${echapper(v)} ans</option>`).join('')}</select></div>
+            <select class="select" id="ft-age"><option value="">Choisir</option>${AGES.map((v) => `<option value="${echapper(v)}"${p.age === v ? ' selected' : ''}>${echapper(libelleAge(v))}</option>`).join('')}</select></div>
         </div>
         ${champ('ft-expertise', 'Votre domaine', p.expertise || p.fonction || '', { requis: true, placeholder: 'Infirmière, développeur, étudiante en droit, commerçant…' })}
-        <div class="groupe"><label class="etiquette-champ" for="ft-aisance">Votre aisance avec le numérique</label>
+        <div class="groupe"><label class="etiquette-champ" for="ft-aisance">Votre aisance avec le numérique${facultatif}</label>
           <select class="select" id="ft-aisance"><option value="">Choisir</option>${AISANCE.map((v) => `<option value="${echapper(v)}"${p.aisance === v ? ' selected' : ''}>${echapper(v)}</option>`).join('')}</select></div>
-        <p class="aide">Le client lit votre profil sans votre nom : un blocage n'a pas le même sens chez une experte et chez un débutant.</p>
+        <p class="aide">Un blocage n'a pas le même sens chez une experte et chez un débutant : c'est pour cela que le client lit votre profil.</p>
       </section>
 
       <section class="fiche-bloc">
         <h3 class="bloc-tete">Ce que vous testez</h3>
         <div class="cases-blocs">${Object.entries(PLATEFORMES_TEST).map(([cle, x]) => `
-          <label class="case"><input type="checkbox" data-ft-plateforme="${echapper(cle)}" ${plateformes.has(cle) ? 'checked' : ''}> ${icone(cle === 'ios' ? 'apple' : cle === 'android' ? 'android' : 'globe')} ${echapper(x.libelle)}</label>`).join('')}</div>
+          <label class="case"><input type="checkbox" data-ft-plateforme="${echapper(cle)}" ${plateformes.has(cle) ? 'checked' : ''}> ${icone(cle === 'ios' ? 'apple' : cle === 'android' ? 'android' : 'globe')} ${echapper(MOTS_PLATEFORME[cle] || x.libelle)}</label>`).join('')}</div>
         <p class="aide">Cochez ce que vous avez sous la main. Un scénario iPhone ne sera confié qu'à qui a un iPhone.</p>
       </section>
 
@@ -104,7 +112,16 @@ export const ouvrirFiche = async (testeur) => {
         <label class="case"><input type="checkbox" id="ft-confirme" checked> Je testerai depuis cet appareil</label>
         <p class="aide">Le web ne dit pas le numéro du modèle : précisez-le, c'est ce qui permet de reproduire un défaut. Vos autres appareils s'ajouteront tout seuls à votre première connexion depuis chacun.</p>
       </section>`,
-    pied: '<button class="btn btn-principal" type="button" data-valider>Valider ma fiche</button>',
+    pied: '<button class="btn btn-fantome" type="button" data-sortir-fiche>Se déconnecter</button><span class="pousse"></span><button class="btn btn-principal" type="button" data-valider>Valider ma fiche</button>',
+  });
+  /* Sur un téléphone, le clavier ne monte pas tout seul sur le premier
+     champ : il couvrirait la fiche avant qu'il l'ait lue. */
+  if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) {
+    setTimeout(() => { if (m.el.contains(document.activeElement) && document.activeElement.matches('input, select, textarea')) document.activeElement.blur(); }, 60);
+  }
+  m.el.querySelector('[data-sortir-fiche]').addEventListener('click', async () => {
+    try { effacerSecretsLocaux(); await signOut(auth); } catch (e) { /* on part quand même */ }
+    location.replace('./');
   });
 
   return new Promise((resoudre) => {
@@ -112,10 +129,12 @@ export const ouvrirFiche = async (testeur) => {
     bouton.addEventListener('click', () => agir(bouton, async () => {
       const v = (id) => (m.el.querySelector(`#${id}`).value || '').trim();
       const prenom = v('ft-prenom'); const nom = v('ft-nom'); const expertise = v('ft-expertise');
-      const sexe = v('ft-sexe'); const age = v('ft-age'); const aisance = v('ft-aisance'); const modele = v('ft-modele');
+      const sexeChoisi = v('ft-sexe'); const age = v('ft-age');
+      /* « Je préfère ne pas le dire » est une réponse : rien n'est écrit. */
+      const sexe = sexeChoisi === 'non-dit' ? '' : sexeChoisi; const aisance = v('ft-aisance'); const modele = v('ft-modele');
       const choisies = [...m.el.querySelectorAll('[data-ft-plateforme]')].filter((x) => x.checked).map((x) => x.dataset.ftPlateforme);
       if (!prenom || !nom) { toast('Votre prénom et votre nom, s\'il vous plaît.', 'erreur'); return; }
-      if (!sexe || !age) { toast('Dites votre sexe et votre tranche d\'âge : le client lit un profil, jamais un nom.', 'erreur'); return; }
+      if (!sexeChoisi || !age) { toast('Choisissez une réponse pour le sexe (vous pouvez ne pas le dire) et votre tranche d\'âge.', 'erreur'); return; }
       if (!expertise) { toast('Dites votre domaine : ce que vous faites, ce que vous connaissez.', 'erreur'); return; }
       if (!choisies.length) { toast('Cochez au moins une plateforme.', 'erreur'); return; }
       if (!modele) { toast('Précisez le modèle de cet appareil.', 'erreur'); return; }

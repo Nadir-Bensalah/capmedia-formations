@@ -20,7 +20,7 @@
 import {
   bdd, auth, doc, getDoc, setDoc, updateDoc, collection, query, where, signOut, onSnapshot, effacerSecretsLocaux, enDate,
   serverTimestamp, session, echapper, envoyerPiece,
-  NIVEAUX_SCENARIO, BLOCS_SCENARIO, PLATEFORMES_TEST, RESULTATS_PASSAGE, FAMILLES_AVIS,
+  BLOCS_SCENARIO, PLATEFORMES_TEST, RESULTATS_PASSAGE, FAMILLES_AVIS,
 } from './noyau.js';
 import { icone, pastille, toast, agir, modale, vide } from './ui.js';
 import { monterCoquille, definirNavigation, definirEtat, filAriane, enregistrerRecherche } from './coquille.js';
@@ -53,11 +53,43 @@ const contexteAppareil = () => {
 };
 
 /* Sur quoi il est en train de tester. Le contexte dit l'appareil, ceci dit
-   la plateforme au sens de la campagne : c'est lui qui choisit, parce que
-   le même téléphone sert au mobile et au web. */
+   la plateforme au sens de la campagne. Quand le scénario porte sa
+   plateforme (celle de l'affectation), c'est elle qui fait foi et le
+   testeur ne choisit rien. Sinon, son dernier choix, ou à défaut
+   l'appareil qu'il a sous la main s'il figure dans sa fiche : un testeur
+   ne doit jamais tomber sur « dites d'abord sur quoi vous testez ». */
 let plateformeCourante = (() => {
   try { return localStorage.getItem('suivi:testeur-plateforme') || ''; } catch (e) { return ''; }
 })();
+
+const plateformeAppareil = () => {
+  const ua = String(navigator.userAgent || '');
+  if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return 'ios';
+  if (/Android/.test(ua)) return 'android';
+  return 'web';
+};
+
+const plateformeParDefaut = (moi) => {
+  const siennes = (moi && Array.isArray(moi.plateformes)) ? moi.plateformes : [];
+  const ici = plateformeAppareil();
+  if (!siennes.length || siennes.includes(ici)) return ici;
+  return (moi && moi.mobile) || siennes[0] || '';
+};
+
+const plateformeDe = (s) => (s && s.plateforme) || plateformeCourante;
+const plateformeImposee = (s) => Boolean(s && s.plateforme);
+
+/* Les mots du testeur, ceux du guide, de l'accueil et de la feuille :
+   « Réussi, Échec, Sans objet » et « iPhone ». « OK, KO, NA » et « iOS »
+   sont des mots d'équipe. Les deux jeux de clés de résultat sont compris. */
+const VERDICTS_TESTEUR = {
+  ok: { libelle: 'Réussi', voile: 'vert' }, reussi: { libelle: 'Réussi', voile: 'vert' },
+  ko: { libelle: 'Échec', voile: 'rouge' }, echec: { libelle: 'Échec', voile: 'rouge' },
+  na: { libelle: 'Sans objet', voile: 'gris' }, 'sans-objet': { libelle: 'Sans objet', voile: 'gris' },
+};
+const sorteVerdict = (r) => ({ reussi: 'ok', echec: 'ko', 'sans-objet': 'na' }[r] || r);
+const estEchec = (r) => sorteVerdict(r) === 'ko';
+const PLATEFORMES_TESTEUR = { ios: 'iPhone', android: 'Android', web: 'Web' };
 
 /* Tableau ou liste : le tableau dit d'un coup d'œil où l'on en est, la
    liste se lit ligne à ligne. Le choix reste d'une visite à l'autre. */
@@ -69,12 +101,18 @@ const etat = { campagne: null, scenarios: [], passages: new Map(), avis: null, b
 
 /* -------------------------------------------------------------------------- */
 
-/* Fait, c'est passé et pas à rejouer : un KO que l'équipe a corrigé
-   revient dans ce qui reste, jusqu'à ce qu'on le rejoue. */
+/* Fait, c'est passé et pas à rejouer : un échec que l'équipe a corrigé
+   revient dans ce qui reste, jusqu'à ce qu'on le rejoue. Une fois le test
+   terminé, ses résultats sont figés : rien ne revient chez lui, l'équipe
+   fait rejouer ailleurs. C'est la seule mesure de « fait » de l'écran :
+   l'en-tête, la fin, l'avis et le bouton « J'ai terminé » la partagent. */
 const fait = (ref) => {
   const p = etat.passages.get(ref);
-  return Boolean(p) && !(p.resultat === 'ko' && p.aRevoir === true);
+  if (!p) return false;
+  if (aTermine()) return true;
+  return !(estEchec(p.resultat) && p.aRevoir === true);
 };
+const toutFait = () => etat.scenarios.length > 0 && etat.scenarios.every((s) => fait(s.ref));
 
 /* --------------------------------------------------------------------------
    La fin de test
@@ -110,6 +148,10 @@ const ouvrable = (ref) => {
 
 const prochain = () => etat.scenarios.find((s) => !etat.passages.has(s.ref)) || null;
 
+/* Ce qu'il a à faire maintenant : le premier scénario qui n'est pas fait,
+   à rejouer compris. Tous ceux d'avant ont un résultat : il est ouvrable. */
+const aFaire = () => etat.scenarios.find((s) => !fait(s.ref)) || null;
+
 /* Ce que le rail dit de l'accès, en bas. */
 const etatAcces = () => {
   const c = etat.campagne;
@@ -126,7 +168,6 @@ const etatAcces = () => {
 
 const finTestHtml = () => {
   const total = etat.scenarios.length;
-  const faits = etat.scenarios.filter((s) => etat.passages.has(s.ref)).length;
   if (!total) return '';
   if (aTermine()) {
     const fin = finAcces();
@@ -136,11 +177,13 @@ const finTestHtml = () => {
     </div>
     ${magasinsHtml()}`;
   }
-  if (faits === total) {
+  if (toutFait()) {
+    /* Un seul bouton à la fin : terminer ouvre l'avis tout seul. */
+    const avisDonne = Object.keys(etat.avis || {}).some((k) => k.startsWith('esthetique.'));
     return `<div class="fin-test">
       <h2>Tout est déroulé. Il reste à le dire.</h2>
-      <p>« J'ai terminé » transmet vos résultats à l'équipe et les fige. Relisez d'abord vos échecs si vous avez un doute : après, vous ne pourrez plus les changer.</p>
-      <div class="actions"><button class="btn btn-principal" type="button" data-terminer>J'ai terminé le test</button></div>
+      <p>Vos résultats partent à l'équipe et sont figés. Relisez d'abord vos échecs si vous avez un doute : après, vous ne pourrez plus les changer.</p>
+      <div class="actions"><button class="btn btn-principal" type="button" data-terminer>${avisDonne ? 'J\'ai terminé le test' : 'Terminer et donner mon avis'}</button></div>
     </div>`;
   }
   return '';
@@ -181,7 +224,7 @@ const magasinsHtml = () => {
 
 const terminer = async (moi) => {
   const total = etat.scenarios.length;
-  if (!total || etat.scenarios.some((s) => !etat.passages.has(s.ref))) { toast('Il reste des scénarios à dérouler.', 'erreur'); return; }
+  if (!total || !toutFait()) { toast('Il reste des scénarios à dérouler, ou à rejouer.', 'erreur'); return; }
   /* Une note sur le TEST lui-même, pas sur l'application : c'est ce qui
      dit à l'équipe si les scénarios étaient clairs et faisables. */
   const m = modale({
@@ -253,20 +296,48 @@ const enTete = (moi, campagne) => {
              ni à l'espace client : il faut lui dire où il est et ce qu'on
              attend de lui, sinon il lit « Bonjour » et un nom de campagne
              sans comprendre son rôle. -->
-        <p class="surtitre">Ma campagne</p>
+        <p class="surtitre">${echapper(campagne.titre || 'Campagne en cours')}</p>
         <h1>Bonjour ${echapper(moi.prenom || '')}</h1>
-        <p class="t-petit t-2" style="margin-top:2px">${echapper(campagne.titre || 'Campagne en cours')}</p>
       </div>
     </div>
 
     <div style="margin-top:14px">${barreHtml(tableauTesteur({ scenarios: etat.scenarios, passages: etat.passages, blocs: BLOCS_SCENARIO }), { legende: false })}</div>
-    <p class="chapo">${faits} sur ${total} · ${part} %${faits === total && total ? ' · vous avez tout déroulé, merci' : ''}</p>
-
-    <div class="segments" role="group" aria-label="Sur quoi vous testez" style="margin-top:12px">
-      ${Object.entries(PLATEFORMES_TEST).map(([cle, f]) => `<button type="button" data-sur="${echapper(cle)}" aria-pressed="${plateformeCourante === cle}">${icone(cle === 'ios' ? 'apple' : cle === 'android' ? 'android' : 'globe')} ${echapper(f.libelle)}</button>`).join('')}
-    </div>
-    ${!plateformeCourante ? '<p class="aide">Dites d\'abord sur quoi vous testez : le résultat n\'a pas le même sens sur un iPhone et sur le web.</p>' : ''}
+    <p class="chapo">${aTermine() ? `Test terminé · ${faits} scénario${faits > 1 ? 's' : ''} rendu${faits > 1 ? 's' : ''}` : `${faits} sur ${total} · ${part} %`}</p>
+    ${choixPlateformeHtml()}
   </header>`;
+};
+
+/* Le choix de la plateforme : seulement quand un de ses scénarios ne la
+   porte pas, et jamais après la fin. Prérempli : c'est une vérification,
+   pas une question. */
+const choixPlateformeHtml = ({ dansFeuille = false } = {}) => {
+  if (aTermine() || !etat.scenarios.some((s) => !plateformeImposee(s))) return '';
+  return `<div class="t-plateforme${dansFeuille ? ' t-plateforme--feuille' : ''}">
+    <span class="t-plateforme-sur">${dansFeuille ? 'Vous le faites sur' : 'Vous testez sur'}</span>
+    <div class="segments" role="group" aria-label="Sur quoi vous testez">
+      ${Object.keys(PLATEFORMES_TEST).map((cle) => `<button type="button" data-sur="${echapper(cle)}" aria-pressed="${plateformeCourante === cle}">${echapper(PLATEFORMES_TESTEUR[cle] || cle)}</button>`).join('')}
+    </div>
+  </div>`;
+};
+
+/* Le geste suivant, juste sous la jauge : le scénario qui l'attend, à un
+   pouce. Le testeur ne revient au tableau que s'il le veut. */
+const suiteHtml = () => {
+  if (aTermine()) return '';
+  const s = aFaire();
+  if (!s) return finTestHtml();
+  const p = etat.passages.get(s.ref);
+  const rejouer = Boolean(p) && estEchec(p.resultat) && p.aRevoir === true;
+  const entame = etat.scenarios.some((x) => etat.passages.has(x.ref));
+  const avantFait = Object.keys(etat.avis || {}).some((k) => k.startsWith('impression.'));
+  return `<section class="t-suite" aria-label="Votre prochain scénario">
+    <p class="t-suite-sur">${rejouer ? 'À rejouer' : entame ? 'À vous' : 'Pour commencer'} · <span class="t-scenario-ref">${echapper(s.ref)}</span>${plateformeImposee(s) ? ` · sur ${echapper(PLATEFORMES_TESTEUR[s.plateforme] || s.plateforme)}` : ''}</p>
+    <p class="t-suite-titre">${echapper(s.titre || '')}</p>
+    <div class="t-suite-gestes">
+      <button class="btn btn-principal" type="button" data-continuer="${echapper(s.ref)}">${entame ? 'Continuer' : 'Commencer'}</button>
+      ${avantFait ? '' : `<button class="btn btn-secondaire" type="button" data-avis="avant">${entame ? 'Ma première impression' : 'D\'abord ma première impression'}</button>`}
+    </div>
+  </section>`;
 };
 
 const ligneScenario = (s) => {
@@ -274,16 +345,17 @@ const ligneScenario = (s) => {
   const r = p ? p.resultat : '';
   const verrou = !ouvrable(s.ref);
   const fige = aTermine();
+  /* La ligne ouvre la feuille, elle ne pose aucun résultat : on ne
+     répond pas sans avoir lu « Ce qui doit se passer ». */
+  const rejouer = Boolean(p) && !fige && estEchec(r) && p.aRevoir === true;
+  const suivant = !fige && (aFaire() || {}).ref === s.ref;
   return `
-  <div class="t-scenario${r ? ` t-scenario--${r}` : ''}${verrou ? ' t-scenario--verrou' : ''}${fige ? ' t-scenario--fige' : ''}" data-ref="${echapper(s.ref)}">
-    <button class="t-scenario-corps" type="button" data-ouvrir="${echapper(s.ref)}"${verrou ? ' aria-disabled="true" title="Déroulez d\'abord le scénario précédent"' : ''}>
+  <div class="t-scenario${r ? ` t-scenario--${sorteVerdict(r)}` : ''}${verrou ? ' t-scenario--verrou' : ''}${fige ? ' t-scenario--fige' : ''}${suivant ? ' t-scenario--suivant' : ''}" data-ref="${echapper(s.ref)}">
+    <button class="t-scenario-corps" type="button" data-ouvrir="${echapper(s.ref)}"${verrou ? ' aria-disabled="true"' : ''}>
       <span class="t-scenario-ref">${echapper(s.ref)}</span>
       <span class="t-scenario-titre">${echapper(s.titre)}</span>
-      ${r ? pastille(RESULTATS_PASSAGE, r) : ''}
+      ${rejouer ? '<span class="pastille pastille--ambre">À rejouer</span>' : r ? pastille(VERDICTS_TESTEUR, r) : suivant ? '<span class="pastille pastille--bleu">À vous</span>' : ''}
     </button>
-    <div class="t-scenario-choix" role="group" aria-label="Résultat de ${echapper(s.ref)}">
-      ${Object.entries(RESULTATS_PASSAGE).map(([cle, f]) => `<button type="button" class="t-choix t-choix--${cle}" data-poser="${echapper(s.ref)}" data-resultat="${cle}" aria-pressed="${r === cle}"${verrou || fige ? ' disabled' : ''}>${echapper(f.libelle)}</button>`).join('')}
-    </div>
   </div>`;
 };
 
@@ -291,33 +363,16 @@ const ligneScenario = (s) => {
    déroulé : un avis demandé au milieu n'a ni la fraîcheur du premier
    regard ni le recul du dernier. */
 const appelAvis = () => {
-  const total = etat.scenarios.length;
-  const faits = etat.scenarios.filter((s) => etat.passages.has(s.ref)).length;
-  const a = etat.avis || {};
-  const avantFait = Object.keys(a).some((k) => k.startsWith('impression.'));
-  const apresFait = Object.keys(a).some((k) => k.startsWith('esthetique.'));
-
-  if (!avantFait && !faits) {
-    return `<div class="encart encart--attention avis-appel">
-      ${icone('ampoule')}
-      <div><strong>Avant de commencer, deux minutes.</strong>
-      <p>Ce que vous pensez de l'application en la découvrant ne se retrouve pas ensuite.</p>
-      <button class="btn btn-principal btn-petit" type="button" data-avis="avant" style="margin-top:10px">Donner ma première impression</button></div>
-    </div>`;
-  }
-  if (total && faits === total && !apresFait) {
-    return `<div class="encart encart--attention avis-appel">
-      ${icone('coeur')}
-      <div><strong>Vous avez tout déroulé. Merci.</strong>
-      <p>Il reste le plus utile : ce que vous pensez de l'application.</p>
-      <button class="btn btn-principal btn-petit" type="button" data-avis="apres" style="margin-top:10px">Donner mon avis</button></div>
-    </div>`;
-  }
-  if (apresFait) return '';
-  if (faits) {
-    return `<p class="aide" style="margin-bottom:14px">Quand vous aurez tout déroulé, un questionnaire vous demandera ce que vous pensez de l'application. <button class="lien-sobre" type="button" data-avis="apres">Y répondre maintenant</button></p>`;
-  }
-  return '';
+  /* La première impression est proposée dans le geste suivant, tant
+     qu'elle n'est pas donnée ; l'avis de fin, par le bouton de fin. Il ne
+     reste ici que le cas d'un test terminé sans avis. */
+  const apresFait = Object.keys(etat.avis || {}).some((k) => k.startsWith('esthetique.'));
+  if (!aTermine() || apresFait) return '';
+  return `<div class="fin-test fin-test--avis">
+    <h2>Il reste le plus utile</h2>
+    <p>Ce que vous pensez de l'application : les scénarios disent si elle marche, votre avis dit si elle plaît.</p>
+    <div class="actions"><button class="btn btn-principal" type="button" data-avis="apres">Donner mon avis</button></div>
+  </div>`;
 };
 
 /* La légende du testeur : ses mots à lui. L'orange n'est pas « pas
@@ -339,7 +394,7 @@ const pageCampagne = (moi) => {
         <div><p class="surtitre">Ma campagne</p><h1>Bonjour ${echapper(moi.prenom || '')}</h1></div>
       </div></header>
       ${vide({
-        icone: 'bug', titre: 'Aucune campagne en cours',
+        icone: 'taches', titre: 'Aucune campagne en cours',
         texte: 'Vos scénarios apparaîtront ici dès qu\'une campagne vous est confiée, sans recharger la page.',
       })}</div>`;
     return;
@@ -364,16 +419,18 @@ const pageCampagne = (moi) => {
     g.items.push(s);
   });
 
+  /* Sur un téléphone, le premier geste doit se voir sans défiler : la
+     jauge, puis le scénario suivant. Les chiffres et l'astuce passent
+     sous le tableau. */
   racine.innerHTML = `<div class="page page--testeur">
     ${enTete(moi, campagne)}
 
-    ${chiffresHtml()}
-    ${finTestHtml()}
-    ${remarquesHtml()}
+    ${suiteHtml()}
+    ${aTermine() ? finTestHtml() : ''}
     ${appelAvis()}
-    ${aTermine() ? '' : astuceHtml()}
+    ${remarquesHtml()}
 
-    <div class="segments" role="group" aria-label="Affichage" style="margin-bottom:16px">
+    <div class="segments t-vues" role="group" aria-label="Affichage">
       <button type="button" data-vue="grille" aria-pressed="${vueCourante === 'grille'}">Tableau</button>
       <button type="button" data-vue="liste" aria-pressed="${vueCourante === 'liste'}">Liste</button>
     </div>
@@ -381,7 +438,7 @@ const pageCampagne = (moi) => {
     ${vueCourante === 'grille' ? `<div class="tb tb--testeur">
       <div class="tb-legende">${legendeTesteur()}</div>
       ${famillesHtml(tableauTesteur({ scenarios: etat.scenarios, passages: etat.passages, blocs: BLOCS_SCENARIO }), { mode: 'testeur' })}
-      <p class="aide">Touchez une case pour lire le scénario et poser votre résultat.</p>
+      <p class="aide">${aTermine() ? 'Touchez une case pour relire un scénario.' : 'La case entourée est la vôtre. Touchez une case pour lire le scénario et poser votre résultat.'}</p>
     </div>` : `
     <div class="rang testeur-filtres">
       <select class="select" id="f-bloc" style="width:auto">
@@ -398,14 +455,20 @@ const pageCampagne = (moi) => {
       </div>`).join('')
       : vide({ icone: 'check', titre: etat.reste ? 'Rien ne reste ici' : 'Aucun scénario',
           texte: etat.reste ? 'Décochez « ce qui reste » pour revoir ce que vous avez déjà coché.' : 'Changez de bloc.', compact: true })}`}
+
+    ${etat.scenarios.some((s) => etat.passages.has(s.ref)) ? chiffresHtml() : ''}
+    ${aTermine() ? '' : astuceHtml()}
   </div>`;
 
   const b = $('#f-bloc'); if (b) b.addEventListener('change', (e) => { etat.bloc = e.target.value; rendre(moi); });
   const r = $('#f-reste'); if (r) r.addEventListener('change', (e) => { etat.reste = e.target.checked; rendre(moi); });
   /* Dans le tableau, une case verrouillée se voit : le suivant attend le
      précédent. */
+  const suivant = aTermine() ? '' : (aFaire() || {}).ref;
   racine.querySelectorAll('.tb--testeur [data-case]').forEach((el) => {
     if (!ouvrable(el.dataset.case)) el.setAttribute('data-verrou', '');
+    /* La case suivante se voit d'un coup d'œil : un contour plein. */
+    if (suivant && el.dataset.case === suivant) { el.setAttribute('data-suivant', ''); el.setAttribute('aria-label', `${el.getAttribute('aria-label') || ''}, à vous`); }
   });
 };
 
@@ -429,7 +492,7 @@ const suivreTemps = (uid) => {
       afficherTemps();
     }, () => { temps.lisible = false; afficherTemps(); });
   } catch (e) { temps.lisible = false; }
-  temps.minuterie = setInterval(afficherTemps, 1000);
+  temps.minuterie = setInterval(afficherTemps, 15000);
 };
 
 /* En millisecondes, pour la campagne ouverte. */
@@ -451,8 +514,10 @@ const duree = (ms) => {
   const s = Math.floor(ms / 1000);
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
+  /* Des minutes, pas des secondes : un chronomètre qui défile à la
+     seconde met une pression inutile. */
   if (h) return `${h} h ${String(m).padStart(2, '0')}`;
-  return `${m} min ${String(s % 60).padStart(2, '0')} s`;
+  return `${m} min`;
 };
 
 const afficherTemps = () => {
@@ -461,7 +526,7 @@ const afficherTemps = () => {
   });
   document.querySelectorAll('[data-chrono-sessions]').forEach((el) => {
     const n = temps.sessions.filter((x) => etat.campagne && x.campagne === etat.campagne.id).length;
-    el.textContent = temps.lisible ? `${n} session${n > 1 ? 's' : ''}` : 'bientôt disponible';
+    el.textContent = temps.lisible ? `${n} session${n > 1 ? 's' : ''}` : '';
   });
 };
 
@@ -474,8 +539,9 @@ const compter = () => {
   etat.scenarios.forEach((s) => {
     const p = etat.passages.get(s.ref);
     if (!p) { r.reste += 1; return; }
-    if (p.resultat === 'ko' && p.aRevoir === true) { r.revoir += 1; r.reste += 1; return; }
-    if (r[p.resultat] !== undefined) r[p.resultat] += 1;
+    if (!fait(s.ref)) { r.revoir += 1; r.reste += 1; return; }
+    const k = sorteVerdict(p.resultat);
+    if (r[k] !== undefined) r[k] += 1;
   });
   return r;
 };
@@ -485,7 +551,7 @@ const chiffresHtml = () => {
   return `<div class="testeur-chiffres">
     <div class="testeur-chiffre testeur-chiffre--temps"><span>Temps de test</span><b data-chrono>–</b><small data-chrono-sessions></small></div>
     <div class="testeur-chiffre"><span>Réussis</span><b class="t-ok">${r.ok}</b><small>scénarios passés</small></div>
-    <div class="testeur-chiffre"><span>Échecs signalés</span><b class="${r.ko ? 't-ko' : ''}">${r.ko}</b><small><a href="#/signalements">Mes signalements</a></small></div>
+    <div class="testeur-chiffre"><span>Échecs signalés</span><b class="${r.ko + r.revoir ? 't-ko' : ''}">${r.ko + r.revoir}</b><small><a href="#/signalements">Mes signalements</a></small></div>
     <div class="testeur-chiffre"><span>À rejouer</span><b class="${r.revoir ? 't-revoir' : ''}">${r.revoir}</b><small>corrigés par l'équipe</small></div>
   </div>`;
 };
@@ -501,6 +567,13 @@ const chiffresHtml = () => {
    -------------------------------------------------------------------------- */
 
 let accueil = null;
+/* Ceux qui attendent la fin de l'accueil : la fiche passe après lui. */
+let apresAccueil = [];
+const accueilFini = () => {
+  const attente = apresAccueil; apresAccueil = [];
+  attente.forEach((f) => { try { f(); } catch (e) { /* rien */ } });
+};
+const attendreAccueil = () => (accueil ? new Promise((r) => { apresAccueil.push(r); }) : Promise.resolve());
 
 const consignerAccueil = async (moi) => {
   const c = etat.campagne;
@@ -517,7 +590,7 @@ const lancerAccueil = (moi, { demande = false } = {}) => {
   if (accueil) return;
   accueil = ouvrirAccueil({
     moi, campagne: etat.campagne,
-    surFin: () => { accueil = null; marquerAccueilVu(moi.uid); consignerAccueil(moi); },
+    surFin: () => { accueil = null; marquerAccueilVu(moi.uid); consignerAccueil(moi); accueilFini(); },
   });
   accueil.demande = demande;
 };
@@ -531,6 +604,7 @@ const accorderAccueil = (moi) => {
     accueil.fermer({ silencieux: true });
     accueil = null;
     marquerAccueilVu(moi.uid);
+    accueilFini();
     return;
   }
   if (!fait && !accueil && accueilVu(moi.uid)) consignerAccueil(moi);
@@ -543,10 +617,10 @@ const accorderAccueil = (moi) => {
 const ASTUCES = [
   'Testez comme un vrai utilisateur pressé : double-cliquez, revenez en arrière, quittez en plein milieu.',
   'Une capture vaut mille mots. Sur iPhone : bouton latéral + volume haut. Sur Android : marche/arrêt + volume bas.',
-  'Changez d\'appareil ? Changez aussi la plateforme en haut de la page : le résultat n\'a pas le même sens sur un iPhone et sur le web.',
+  'Changez d\'appareil ? Vérifiez la plateforme dans la feuille du scénario : le résultat n\'a pas le même sens sur un iPhone et sur le web.',
   'Un texte coupé, un bouton trop petit, une faute : ce sont des échecs aussi. Signalez-les.',
   'Coupez le réseau quelques secondes pendant un envoi : une application sérieuse doit le dire proprement.',
-  'Une case orange est à rejouer : l\'équipe a corrigé ce que vous aviez signalé. Un OK ferme la boucle.',
+  'Une case orange est à rejouer : l\'équipe a corrigé ce que vous aviez signalé. Un Réussi ferme la boucle.',
   'Vous hésitez entre Réussi et Échec ? Relisez « Ce qui doit se passer ». Si ce n\'est pas exactement ça, c\'est un échec.',
   'Passez en mode sombre sur votre téléphone et regardez les écrans à nouveau : c\'est là que les contrastes lâchent.',
   'Tournez l\'écran, agrandissez le texte dans les réglages : beaucoup de défauts se cachent là.',
@@ -555,7 +629,6 @@ const ASTUCES = [
 let astuce = Math.floor(Math.random() * ASTUCES.length);
 
 const astuceHtml = () => `<aside class="astuce-testeur" aria-label="Astuce">
-    <span class="astuce-testeur-icone">${icone('ampoule')}</span>
     <p><b>Astuce.</b> ${echapper(ASTUCES[astuce])}</p>
     <button class="btn btn-fantome btn-petit" type="button" data-astuce-suivante>Une autre</button>
   </aside>`;
@@ -572,7 +645,7 @@ const LIENS_INSTALLATION = {
 
 const sansCampagne = (titre) => `<div class="page">
   <div class="page-tete"><div><p class="surtitre">Capmedia Test</p><h1>${echapper(titre)}</h1></div></div>
-  ${vide({ icone: 'bug', titre: 'Aucune campagne en cours', texte: 'Cette page se remplira dès qu\'une campagne vous est confiée, sans recharger.' })}
+  ${vide({ icone: 'taches', titre: 'Aucune campagne en cours', texte: 'Cette page se remplira dès qu\'une campagne vous est confiée, sans recharger.' })}
 </div>`;
 
 const pageApplication = () => {
@@ -631,7 +704,7 @@ const pageSignalements = (moi) => {
   if (!etat.campagne) { racine.innerHTML = sansCampagne('Mes signalements'); return; }
   const echecs = etat.scenarios
     .map((s) => ({ s, p: etat.passages.get(s.ref) }))
-    .filter((x) => x.p && x.p.resultat === 'ko')
+    .filter((x) => x.p && estEchec(x.p.resultat))
     .sort((a, b) => ((enDate(b.p.le) || 0) - (enDate(a.p.le) || 0)));
   const aRejouer = echecs.filter((x) => x.p.aRevoir === true).length;
   racine.innerHTML = `<div class="page">
@@ -692,12 +765,11 @@ const pageGuide = () => {
       <div class="section-tete"><h2>Le déroulé d'une campagne</h2></div>
       <ol class="guide-etapes">
         <li><b>Installez l'application.</b> La page <a href="#/application">L'application</a> donne le lien pour votre appareil.</li>
-        <li><b>Dites sur quoi vous testez.</b> iPhone, Android ou web, en haut de votre campagne. Changez-le si vous changez d'appareil.</li>
+        <li><b>Vérifiez sur quoi vous testez.</b> iPhone, Android ou Web : la feuille de chaque scénario le dit. Changez-le si vous changez d'appareil.</li>
         <li><b>Donnez votre première impression</b>, avant de toucher à quoi que ce soit.</li>
-        <li><b>Déroulez vos scénarios, dans l'ordre.</b> Chaque case du tableau en est un : touchez-la, lisez ce qui doit se passer, faites-le, et dites ce que vous avez obtenu. Le suivant s'ouvre quand le précédent a son résultat.</li>
-        <li><b>Rejouez les cases orange.</b> L'équipe a corrigé ce que vous aviez signalé : votre OK ferme la boucle.</li>
-        <li><b>Dites que vous avez terminé.</b> Le bouton apparaît quand tout est déroulé : il transmet votre bilan à l'équipe et fige vos résultats. Vous gardez sept jours pour ajouter une remarque.</li>
-        <li><b>Donnez votre avis</b> une fois tout déroulé.</li>
+        <li><b>Déroulez vos scénarios, dans l'ordre.</b> « Continuer », en tête de votre campagne, ouvre celui qui vous attend : lisez ce qui doit se passer, faites-le, et dites ce que vous avez obtenu. Le suivant s'ouvre aussitôt ; fermez la feuille pour faire une pause.</li>
+        <li><b>Rejouez les cases orange.</b> L'équipe a corrigé ce que vous aviez signalé : votre Réussi ferme la boucle.</li>
+        <li><b>Terminez, et donnez votre avis.</b> Le bouton apparaît quand tout est déroulé et rejoué : il transmet votre bilan à l'équipe, fige vos résultats, puis vous demande ce que vous pensez de l'application. Vous gardez sept jours pour ajouter une remarque.</li>
       </ol>
     </section>
     <section>
@@ -736,7 +808,7 @@ const majNavigation = () => {
   const avisDus = c ? (!Object.keys(a).some((k) => k.startsWith('impression.')) ? 1 : 0)
     + (etat.scenarios.length && !r.reste && !Object.keys(a).some((k) => k.startsWith('esthetique.')) ? 1 : 0) : 0;
   definirNavigation([
-    { items: [{ chemin: '/', libelle: 'Ma campagne', icone: 'bug', exact: true, compte: c ? { total: r.reste } : 0 }] },
+    { items: [{ chemin: '/', libelle: 'Ma campagne', icone: 'taches', exact: true, compte: c ? { total: r.reste } : 0 }] },
     {
       titre: 'Découvrir',
       items: [
@@ -782,6 +854,20 @@ const rendre = (moi) => {
 /* Un échec sans preuve n'est pas un rapport, c'est une opinion. Les règles
    le refusent côté serveur ; on le dit ici pour que le testeur le sache
    AVANT d'avoir tout tapé, et non par un message d'erreur après coup. */
+/* Trois captures au plus : un écran, l'écran d'avant, une vidéo. Les
+   règles en acceptent cinq ; trois suffisent à reproduire. */
+const PREUVES_MAX = 3;
+
+/* Sur un téléphone, le testeur teste l'application sur ce même appareil :
+   il fait sa capture, revient ici et la retrouve dans ses photos. On le
+   lui dit avec les gestes de SON appareil. */
+const aideCapture = () => {
+  const ici = plateformeAppareil();
+  if (ici === 'ios') return 'Sur iPhone : bouton latéral et volume haut ensemble, revenez ici, touchez « Ajouter une capture », puis Photothèque.';
+  if (ici === 'android') return 'Sur Android : marche/arrêt et volume bas ensemble, revenez ici, touchez « Ajouter une capture », puis choisissez-la dans vos photos.';
+  return 'Une capture d\'écran ou une courte vidéo de ce que vous avez vu.';
+};
+
 const ouvrirEchec = (s) => {
   const m = modale({
     titre: s.titre, sousTitre: `${s.ref} · vous avez constaté un échec`, feuille: true,
@@ -794,37 +880,77 @@ const ouvrirEchec = (s) => {
         <p class="aide">Décrivez ce que vous avez vu, pas ce que vous en pensez. « Rien ne se passe » est une réponse utile.</p>
       </div>
       <div class="groupe">
-        <label class="etiquette-champ" for="t-preuve">Une preuve</label>
-        <input class="champ" id="t-preuve" type="file" accept="image/*,video/*">
-        <p class="aide">Une capture ou une petite vidéo. Sans elle, l'échec ne peut pas être enregistré : c'est elle qui permet de reproduire.</p>
-        <p class="aide" id="t-envoi"></p>
+        <span class="etiquette-champ">Vos captures</span>
+        <div class="t-preuves" data-preuves></div>
+        <p class="aide">${echapper(aideCapture())} Sans capture, l'échec ne peut pas être enregistré : c'est elle qui permet de reproduire.</p>
+        <p class="aide" id="t-envoi" aria-live="polite"></p>
       </div>`,
     pied: '<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button><button class="btn btn-principal" type="button" data-valider>Enregistrer l\'échec</button>',
   });
 
+  /* Les pièces choisies, avec leur vignette. Le vrai champ fichier est
+     caché sous le bouton « Ajouter une capture » : le contrôle natif dit
+     « Aucun fichier choisi » et ne montre rien de ce qui a été pris. */
+  const pieces = [];
+  const zone = m.el.querySelector('[data-preuves]');
+  const dessiner = () => {
+    zone.innerHTML = `${pieces.map((x, i) => `<div class="t-preuve">
+        ${x.apercu ? `<img src="${echapper(x.apercu)}" alt="">` : `<span class="t-preuve-video">${icone('video')}</span>`}
+        <span class="t-preuve-nom">${echapper(x.fichier.name)}</span>
+        <button class="btn-icone t-preuve-retirer" type="button" data-retirer-preuve="${i}" aria-label="Retirer ${echapper(x.fichier.name)}">${icone('fermer')}</button>
+      </div>`).join('')}
+      ${pieces.length < PREUVES_MAX ? `<label class="t-preuve-ajout">
+        <input class="t-preuve-fichier" id="t-preuve" type="file" accept="image/*,video/*" multiple>
+        ${icone('plus')}<span>${pieces.length ? 'Ajouter une autre capture' : 'Ajouter une capture'}</span>
+      </label>` : ''}`;
+  };
+  dessiner();
+  zone.addEventListener('change', (e) => {
+    if (!e.target.matches('.t-preuve-fichier')) return;
+    const choisis = [...(e.target.files || [])];
+    const place = PREUVES_MAX - pieces.length;
+    choisis.slice(0, place).forEach((fichier) => {
+      let apercu = '';
+      if (/^image\//.test(fichier.type)) { try { apercu = URL.createObjectURL(fichier); } catch (err) { apercu = ''; } }
+      pieces.push({ fichier, apercu });
+    });
+    if (choisis.length > place) toast(`Trois captures au plus : ${place ? `les ${place} premières sont gardées` : 'retirez-en une d\'abord'}.`, 'info');
+    dessiner();
+  });
+  zone.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-retirer-preuve]');
+    if (!b) return;
+    const [x] = pieces.splice(Number(b.dataset.retirerPreuve), 1);
+    if (x && x.apercu) { try { URL.revokeObjectURL(x.apercu); } catch (err) { /* rien */ } }
+    dessiner();
+  });
+  m.fin.then(() => pieces.forEach((x) => { if (x.apercu) { try { URL.revokeObjectURL(x.apercu); } catch (err) { /* rien */ } } }));
+
   const bouton = m.el.querySelector('[data-valider]');
   bouton.addEventListener('click', () => agir(bouton, async () => {
     const quoi = ($('#t-quoi', m.el).value || '').trim();
-    const fichier = ($('#t-preuve', m.el).files || [])[0];
     if (!quoi) { toast('Dites ce qui s\'est passé.', 'erreur'); return; }
-    if (!fichier) { toast('Joignez une preuve : sans elle, l\'échec ne peut pas être enregistré.', 'erreur'); return; }
+    if (!pieces.length) { toast('Ajoutez une capture : sans elle, l\'échec ne peut pas être enregistré.', 'erreur'); return; }
     const echo = $('#t-envoi', m.el);
-    let piece;
-    try {
-      piece = await envoyerPiece(fichier, `campagnes/${etat.campagne.projet}/${etat.campagne.id}/${auth.currentUser.uid}`,
-        (n) => { echo.textContent = `Envoi ${n} %`; });
-    } catch (e) { toast(String(e.message || e), 'erreur'); return; }
-    m.fermer({ commentaire: quoi, preuves: [piece.chemin] });
+    const chemins = [];
+    for (let i = 0; i < pieces.length; i += 1) {
+      try {
+        const piece = await envoyerPiece(pieces[i].fichier, `campagnes/${etat.campagne.projet}/${etat.campagne.id}/${auth.currentUser.uid}`,
+          (n) => { echo.textContent = pieces.length > 1 ? `Envoi de la capture ${i + 1} sur ${pieces.length} · ${n} %` : `Envoi ${n} %`; });
+        chemins.push(piece.chemin);
+      } catch (e) { echo.textContent = ''; toast(String(e.message || e), 'erreur'); return; }
+    }
+    m.fermer({ commentaire: quoi, preuves: chemins });
   }));
   return m.fin;
 };
 
 const poser = async (s, resultat, moi) => {
   if (aTermine()) { toast('Le test est terminé : vos résultats sont figés.', 'erreur'); return; }
-  if (!ouvrable(s.ref)) { toast('Déroulez d\'abord le scénario précédent.', 'erreur'); return; }
-  if (!plateformeCourante) { toast('Dites d\'abord sur quoi vous testez.', 'erreur'); return; }
+  if (!ouvrable(s.ref)) { toast('Les scénarios se suivent : déroulez d\'abord le précédent.', 'info'); return; }
+  if (!plateformeDe(s)) { toast('Dites d\'abord sur quoi vous testez.', 'erreur'); return; }
   let extra = { commentaire: '', preuves: [] };
-  if (resultat === 'ko') {
+  if (estEchec(resultat)) {
     const rep = await ouvrirEchec(s);
     if (!rep) return;
     extra = rep;
@@ -835,7 +961,7 @@ const poser = async (s, resultat, moi) => {
   const uid = auth.currentUser.uid;
   const chemin = `projets/${etat.campagne.projet}/campagnes/${etat.campagne.id}/passages/${uid}__${s.ref}`;
   const passage = {
-    scenario: s.ref, testeur: uid, plateforme: plateformeCourante, resultat,
+    scenario: s.ref, testeur: uid, plateforme: plateformeDe(s), resultat,
     commentaire: extra.commentaire, preuves: extra.preuves,
     contexte: contexteAppareil(), le: serverTimestamp(),
   };
@@ -843,7 +969,7 @@ const poser = async (s, resultat, moi) => {
     await setDoc(doc(bdd, chemin), passage);
     etat.passages.set(s.ref, passage);
     rendre(moi);
-    if (resultat === 'ko') toast('Échec enregistré, merci. On le reproduit de notre côté.');
+    if (estEchec(resultat)) toast('Échec enregistré, merci. On le reproduit de notre côté.');
     return true;
   } catch (e) {
     console.error(e);
@@ -1037,36 +1163,60 @@ const demarrerPresence = (uid) => {
    La feuille d'un scénario, depuis le tableau
    -------------------------------------------------------------------------- */
 
-const VERDICTS = { ok: 'Réussi', ko: 'Échec', na: 'Sans objet' };
-
-const ouvrirFeuille = (s, moi) => {
-  const niveau = NIVEAUX_SCENARIO[s.niveau] || NIVEAUX_SCENARIO.reparti;
+/* `apres` : le scénario qu'il vient de rendre, quand cette feuille
+   s'enchaîne sur la précédente. Elle le lui confirme en une ligne. */
+const ouvrirFeuille = (s, moi, { apres = null } = {}) => {
   const p = etat.passages.get(s.ref);
   const v = tableauTesteur({ scenarios: [s], passages: etat.passages }).familles[0].cases[0].etat;
+  const fige = aTermine();
+  const rang = etat.scenarios.findIndex((x) => x.ref === s.ref) + 1;
   regarder(s.ref);
+  /* À rejouer après la fin : ses résultats sont figés, il ne peut plus
+     rien poser. On ne lui demande donc pas de le refaire. */
+  const alerte = v !== 'revoir' ? ''
+    : fige ? '<section class="fs-bloc fs-bloc--alerte"><p class="fs-bloc-sur">Corrigé par l\'équipe</p><p>L\'équipe a corrigé ce que vous aviez signalé. Votre test est terminé : elle le fait vérifier de son côté, vous n\'avez rien à refaire.</p></section>'
+      : '<section class="fs-bloc fs-bloc--alerte"><p class="fs-bloc-sur">À rejouer</p><p>L\'équipe a corrigé ce que vous aviez signalé. Refaites-le : un Réussi ferme la boucle, un nouvel Échec la rouvre.</p></section>';
+  const plateforme = plateformeImposee(s)
+    ? `<p class="fs-plateforme">À faire sur <strong>${echapper(PLATEFORMES_TESTEUR[s.plateforme] || s.plateforme)}</strong></p>`
+    : fige ? '' : choixPlateformeHtml({ dansFeuille: true });
   const m = modale({
-    titre: s.titre, sousTitre: `${s.ref} · ${(BLOCS_SCENARIO[s.bloc] || {}).libelle || ''}`, scenario: true,
+    titre: s.titre, sousTitre: `${s.ref} · ${(BLOCS_SCENARIO[s.bloc] || {}).libelle || ''}${rang ? ` · ${rang} sur ${etat.scenarios.length}` : ''}`, scenario: true,
     corps: `
-      ${v === 'revoir' ? '<section class="fs-bloc fs-bloc--alerte"><p class="fs-bloc-sur">À rejouer</p><p>L\'équipe a corrigé ce que vous aviez signalé. Refaites-le : un Réussi ferme la boucle, un nouvel Échec la rouvre.</p></section>' : ''}
-      ${p && v !== 'revoir' ? `<div class="fs-etat">${pastille(RESULTATS_PASSAGE, p.resultat)}<span class="t-2 t-petit">Votre résultat${p.commentaire ? ` · ${echapper(p.commentaire)}` : ''}. Vous pouvez vous corriger.</span></div>` : ''}
-      ${s.options ? `<section class="fs-bloc"><p class="fs-bloc-sur">Ce qu'il faut poser</p><p>${echapper(s.options).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')}</p></section>` : ''}
+      ${apres ? `<p class="fs-enchaine">${echapper(apres.s.ref)} enregistré : ${echapper((VERDICTS_TESTEUR[apres.resultat] || {}).libelle || '')}. Voici le suivant.</p>` : ''}
+      ${alerte}
+      ${p && v !== 'revoir' ? `<div class="fs-etat">${pastille(VERDICTS_TESTEUR, p.resultat)}<span class="t-2 t-petit">Votre résultat${p.commentaire ? ` · ${echapper(p.commentaire)}` : ''}.${fige ? '' : ' Vous pouvez vous corriger.'}</span></div>` : ''}
+      ${s.options ? `<section class="fs-bloc"><p class="fs-bloc-sur">Ce qu'il faut faire</p><p>${echapper(s.options).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')}</p></section>` : ''}
       <section class="fs-bloc fs-bloc--attendu"><p class="fs-bloc-sur">Ce qui doit se passer</p><p>${echapper(s.attendu || '')}</p></section>
-      <p class="fs-note">Un scénario où rien ne se passe est un échec, jamais une réussite. ${echapper(niveau.aide)}</p>
-      ${!plateformeCourante ? '<p class="fs-note"><strong>Dites d\'abord sur quoi vous testez</strong>, en haut de la page.</p>' : ''}
-      ${aTermine() ? '<p class="fs-note"><strong>Le test est terminé</strong> : ce résultat est figé.</p>' : ''}`,
-    pied: aTermine()
+      ${plateforme}
+      <p class="fs-note">${fige ? '<strong>Le test est terminé</strong> : ce résultat est figé.' : 'Un scénario où rien ne se passe est un échec, jamais une réussite.'}</p>
+      ${apres && !fige ? '<p class="fs-note"><button class="lien-sobre" type="button" data-fermer>Faire une pause</button> : tout est enregistré, « Continuer » vous ramènera ici.</p>' : ''}`,
+    pied: fige
       ? '<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>'
-      : Object.keys(RESULTATS_PASSAGE).map((cle) => `<button type="button" class="fs-verdict fs-verdict--${cle}" data-feuille-poser="${cle}" aria-pressed="${p && p.resultat === cle}"><i aria-hidden="true"></i>${VERDICTS[cle]}</button>`).join(''),
+      : Object.keys(RESULTATS_PASSAGE).map((cle) => `<button type="button" class="fs-verdict fs-verdict--${sorteVerdict(cle)}" data-feuille-poser="${cle}" aria-pressed="${Boolean(p) && p.resultat === cle}"><i aria-hidden="true"></i>${(VERDICTS_TESTEUR[cle] || {}).libelle || cle}</button>`).join(''),
   });
   m.el.addEventListener('click', async (ev) => {
     const b = ev.target.closest('[data-feuille-poser]');
     if (!b) return;
     const resultat = b.dataset.feuillePoser;
-    if (!plateformeCourante) { toast('Dites d\'abord sur quoi vous testez, en haut de la page.', 'erreur'); return; }
+    if (!plateformeDe(s)) { toast('Dites d\'abord sur quoi vous le faites : iPhone, Android ou Web.', 'erreur'); return; }
     m.fermer(true);
-    await poser(s, resultat, moi);
+    const pose = await poser(s, resultat, moi);
+    if (pose) enchainer(s, resultat, moi);
   });
   m.fin.then(() => regarder(''));
+};
+
+/* Après un résultat, le scénario suivant s'ouvre tout seul : c'est le
+   geste qu'il fera des dizaines de fois. Fermer la feuille, c'est la
+   pause. Quand il n'en reste plus, la page montre la fin. */
+const enchainer = (s, resultat, moi) => {
+  if (aTermine()) return;
+  const suivant = aFaire();
+  if (!suivant || suivant.ref === s.ref) {
+    if (!suivant) toast('Tout est déroulé. Il reste à le dire, en tête de page.', 'info');
+    return;
+  }
+  ouvrirFeuille(suivant, moi, { apres: { s, resultat } });
 };
 
 /* --------------------------------------------------------------------------
@@ -1182,16 +1332,20 @@ const monter = async () => {
   const { vue } = monterCoquille({ session: sess, role: 'testeur', groupes: [], sortie: racine });
   racine = vue;
   racine.innerHTML = `<div class="page page--testeur"><p class="aide" style="text-align:center;margin-top:40px">Chargement de votre campagne…</p></div>`;
-  /* Sa fiche d'abord, tant qu'il ne l'a pas validée : qui teste, sur quoi,
+  if (!plateformeCourante) plateformeCourante = plateformeParDefaut(testeur);
+  /* La première fois : l'accueil, devant tout, pour qu'il sache ce qu'est
+     Capmedia Test avant qu'on lui demande quoi que ce soit. La campagne se
+     dessine derrière pendant qu'il le lit, et l'attend à la sortie. */
+  if (!accueilVu(testeur.uid)) lancerAccueil(testeur);
+  /* Puis sa fiche, tant qu'il ne l'a pas validée : qui teste, sur quoi,
      depuis quel appareil. Ensuite, chaque connexion consigne l'appareil du
      jour sans rien demander. */
-  if (!testeur.ficheValidee) await ouvrirFiche(testeur);
-  else consignerAppareil(testeur);
-  /* La bulle vers l'équipe, en bas à droite. */
-  try { bulle = monterBulleTesteur({ testeur }); } catch (e) { console.warn('[testeur] bulle non montée', e); }
-  /* La première fois : l'accueil, devant tout. La campagne se dessine
-     derrière pendant qu'il le lit, et l'attend à la sortie. */
-  if (!accueilVu(testeur.uid)) lancerAccueil(testeur);
+  const fiche = testeur.ficheValidee ? (consignerAppareil(testeur), null)
+    : attendreAccueil().then(() => ouvrirFiche(testeur));
+  /* La bulle vers l'équipe, en bas à droite, une fois la fiche validée :
+     rien ne doit passer devant elle. */
+  const monterBulle = () => { try { bulle = monterBulleTesteur({ testeur }); } catch (e) { console.warn('[testeur] bulle non montée', e); } };
+  if (fiche) fiche.then(monterBulle); else monterBulle();
   document.addEventListener('suivi:accueil-revoir', () => lancerAccueil(testeur, { demande: true }));
   majNavigation();
   definir(Object.keys(PAGES).map((chemin) => ({ chemin, vue: () => { rendre(testeur); } })), { defaut: '/', cible: vue });
@@ -1199,7 +1353,7 @@ const monter = async () => {
 
   /* ⌘K : un scénario par sa référence ou son titre, et les pages. */
   enregistrerRecherche((terme) => [
-    ...etat.scenarios.map((x) => ({ groupe: 'Mes scénarios', libelle: `${x.ref} · ${x.titre}`, sous: (BLOCS_SCENARIO[x.bloc] || {}).libelle || '', icone: 'bug', action: () => { naviguer('/'); ouvrirFeuille(x, testeur); } })),
+    ...etat.scenarios.map((x) => ({ groupe: 'Mes scénarios', libelle: `${x.ref} · ${x.titre}`, sous: (BLOCS_SCENARIO[x.bloc] || {}).libelle || '', icone: 'taches', action: () => { naviguer('/'); ouvrirFeuille(x, testeur); } })),
     { groupe: 'Pages', libelle: 'L\'application', icone: 'composants', chemin: '/application' },
     { groupe: 'Pages', libelle: 'Mes signalements', icone: 'alerte', chemin: '/signalements' },
     { groupe: 'Pages', libelle: 'Mon avis', icone: 'coeur', chemin: '/avis' },
@@ -1210,7 +1364,7 @@ const monter = async () => {
   ecouterCampagnes(testeur, redessiner);
 
   document.addEventListener('click', async (e) => {
-    const el = e.target.closest('[data-sortir], [data-sur], [data-poser], [data-ouvrir], [data-avis], [data-vue], [data-case], [data-accueil="revoir"], [data-astuce-suivante], [data-avis-page], [data-terminer], [data-remarque]');
+    const el = e.target.closest('[data-sortir], [data-sur], [data-continuer], [data-ouvrir], [data-avis], [data-vue], [data-case], [data-accueil="revoir"], [data-astuce-suivante], [data-avis-page], [data-terminer], [data-remarque]');
     if (!el) return;
 
     if (el.dataset.accueil === 'revoir') { lancerAccueil(testeur, { demande: true }); return; }
@@ -1242,6 +1396,8 @@ const monter = async () => {
       plateformeCourante = el.dataset.sur;
       try { localStorage.setItem('suivi:testeur-plateforme', plateformeCourante); } catch (err) { /* stockage refusé */ }
       rendre(testeur);
+      /* Le même choix vit aussi dans la feuille ouverte, s'il y en a une. */
+      document.querySelectorAll('[data-sur]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.sur === plateformeCourante)));
       signe(true);
       return;
     }
@@ -1255,24 +1411,19 @@ const monter = async () => {
       return;
     }
 
-    if (el.dataset.case || el.dataset.ouvrir) {
-      const ref = el.dataset.case || el.dataset.ouvrir;
+    if (el.dataset.case || el.dataset.ouvrir || el.dataset.continuer) {
+      const ref = el.dataset.case || el.dataset.ouvrir || el.dataset.continuer;
       const s = etat.scenarios.find((x) => x.ref === ref);
       if (!s) return;
       /* Un scénario verrouillé se lit quand le test est terminé (tout est
-         déroulé) ; avant, il attend le précédent. */
+         déroulé) ; avant, il attend le précédent. Un guidage, pas une
+         erreur : le toast est neutre. */
       if (!ouvrable(ref) && !aTermine()) {
         const p = prochain();
-        toast(p ? `Déroulez d'abord ${p.ref} : les scénarios se suivent.` : 'Déroulez d\'abord le scénario précédent.', 'erreur');
+        toast(p ? `Les scénarios se suivent : ${p.ref} d'abord.` : 'Les scénarios se suivent : le précédent d\'abord.', 'info');
         return;
       }
       ouvrirFeuille(s, testeur);
-      return;
-    }
-
-    if (el.dataset.poser) {
-      const s = etat.scenarios.find((x) => x.ref === el.dataset.poser);
-      if (s) await poser(s, el.dataset.resultat, testeur);
     }
   });
 };

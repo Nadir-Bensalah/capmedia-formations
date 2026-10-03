@@ -62,10 +62,17 @@ let page = null;
   }, ['acces', 'magasins', 'termines', 'fins']);
   await vider(`projets/${PID}/campagnes/${CID}/passages`); await vider(`projets/${PID}/campagnes/${CID}/appreciations`); await vider('envois');
 
-  console.log('\n== La première connexion : la fiche, devant tout');
+  console.log('\n== La première connexion : l accueil, puis la fiche');
   await connecter(page, karim);
+  await page.waitForSelector('.accueil [data-accueil="passer"]', { timeout: 20000 }).catch(() => null);
+  verifier(await page.$('.accueil') && !(await page.$('#ft-prenom')), 'l accueil passe d abord : il sait ce qu est Capmedia Test avant qu on lui demande son âge');
+  if (await page.$('.accueil')) { await page.click('.accueil [data-accueil="passer"]'); await page.waitForSelector('.accueil', { state: 'detached' }); }
   await page.waitForSelector('#ft-prenom', { timeout: 20000 });
-  verifier(true, 'la fiche s ouvre avant tout');
+  verifier(true, 'puis la fiche s ouvre');
+  verifier(!/Bienvenue/.test(await page.textContent('.feuille h2')), 'sans redire « Bienvenue »', await page.textContent('.feuille h2'));
+  verifier(await page.$('.feuille [data-sortir-fiche]'), 'avec une sortie : « Se déconnecter »');
+  verifier(await page.$('#ft-sexe option[value="non-dit"]'), 'et le droit de ne pas dire son sexe');
+  verifier(/65 ans et plus/.test(await page.textContent('#ft-age')), 'la dernière tranche se lit « 65 ans et plus »');
   verifier(!(await page.$('.modale [data-fermer], .feuille [data-fermer]')), 'et ne se ferme pas sans être validée');
   await page.keyboard.press('Escape'); await pause(300);
   verifier(await page.$('#ft-prenom'), 'même avec Échap');
@@ -90,10 +97,8 @@ let page = null;
   verifier(appareils.length === 1 && (a0.modele || {}).stringValue === 'MacBook Air M2' && Boolean((a0.os || {}).stringValue), 'et son appareil, modèle complété, système relevé', JSON.stringify(a0).slice(0, 120));
   const recopie = await attendre(async () => { const p = await lire(`projets/${PID}/profilsTesteurs/${uid}`); return str(p, 'expertise') === 'Pharmacien' && Boolean(champ(p, 'ficheValidee').timestampValue); }, 60, 500);
   verifier(recopie, 'le serveur recopie le profil enrichi sous le projet, pour le client');
-  await page.waitForSelector('.accueil [data-accueil="passer"], .testeur-tete', { timeout: 20000 }).catch(() => null);
-  if (await page.$('.accueil')) { await page.click('.accueil [data-accueil="passer"]'); await page.waitForSelector('.accueil', { state: 'detached' }); }
   await page.waitForSelector('.testeur-tete', { timeout: 20000 });
-  verifier(true, 'puis l accueil et la campagne');
+  verifier(!(await page.$('.accueil')), 'puis la campagne, sans repasser par l accueil');
 
   console.log('\n== L application : instructions, identifiants, copie');
   await page.evaluate(() => { location.hash = '#/application'; }); await page.waitForSelector('#identifiants-bloc', { timeout: 10000 });
