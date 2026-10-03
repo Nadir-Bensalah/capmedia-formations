@@ -190,6 +190,7 @@ const entreesProjet = (p, { attente, nonLusP }) => {
     { chemin: `${base}/demandes`, libelle: 'Tickets', icone: 'demandes', projet: pid, compte: { total: tickets.filter((t) => OUVERTS.includes(t.statut)).length, neuf: attenteP.length - argent } },
     { chemin: `/messages/${pid}`, libelle: 'Messages', icone: 'messages', projet: pid, compte: { total: 0, neuf: nonLusP } },
     { chemin: `${base}/etapes`, libelle: 'Planning', icone: 'route', projet: pid },
+    { chemin: `${base}/notes`, libelle: 'Notes', icone: 'note', projet: pid, compte: { total: notes.length } },
     /* Les tâches suivent le planning dont elles sont le détail. */
     ...(taches.length ? [{ chemin: `${base}/taches`, libelle: 'Tâches', icone: 'taches', projet: pid, compte: { total: taches.filter((t) => t.statut !== 'terminee').length } }] : []),
     { chemin: '/calendrier', lien: `/calendrier?projet=${pid}`, libelle: 'Calendrier', icone: 'calendrier', projet: pid, compte: { total: reunions } },
@@ -198,14 +199,13 @@ const entreesProjet = (p, { attente, nonLusP }) => {
       chemin: '/tests', lien: `/tests?projet=${pid}`, libelle: 'Campagne de tests', icone: 'bug', projet: pid,
       enCours: campagnes ? (campagnes > 1 ? `${campagnes} campagnes de tests en cours` : 'campagne de tests en cours') : '',
     }] : []),
-    /* Ce que Capmedia propose pour la suite (les suggestions y sont). */
-    { chemin: `${base}/evolutions`, libelle: 'Axes d\'évolution', icone: 'ampoule', projet: pid, compte: { total: axes } },
     ...(marketing.aDuContenu(p) ? [{ chemin: `${base}/marketing`, libelle: 'Marketing', icone: 'trend', projet: pid }] : []),
     /* Le coffre est au responsable ; il dit qu'il est chiffré. */
     ...(responsable ? [{ chemin: `${base}/coffre`, libelle: 'Coffre-fort', icone: 'cadenas', projet: pid, marque: { texte: 'Chiffré', icone: 'cadenas', ton: 'vert', titre: 'Chiffré de bout en bout : Capmedia ne lit pas son contenu' } }] : []),
     { chemin: '/fichiers', lien: `/fichiers?projet=${pid}`, libelle: 'Fichiers', icone: 'fichiers', projet: pid, compte: { total: fichiers.length } },
     ...(liens.length ? [{ chemin: `${base}/liens`, libelle: 'Ressources', icone: 'liens', projet: pid, compte: { total: liens.length } }] : []),
-    { chemin: `${base}/notes`, libelle: 'Notes', icone: 'note', projet: pid, compte: { total: notes.length } },
+    /* Ce que Capmedia propose pour la suite (les suggestions y sont). */
+    { chemin: `${base}/evolutions`, libelle: 'Axes d\'évolution', icone: 'ampoule', projet: pid, compte: { total: axes } },
     ...(responsable ? [{ chemin: '/finances', lien: `/finances?projet=${pid}`, libelle: 'Devis et factures', icone: 'finances', projet: pid, compte: { total: argent, neuf: argent } }] : []),
     {
       chemin: '/maintenance', lien: `/maintenance?projet=${pid}`, libelle: 'Maintenance', icone: 'sante', projet: pid,
