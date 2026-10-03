@@ -994,6 +994,25 @@ exports.hubCampagneEcrite = onDocumentWritten({ region: REGION, document: 'proje
   const avant = evenement.data.before.exists ? evenement.data.before.data() : null;
   const apres = evenement.data.after.exists ? evenement.data.after.data() : null;
   if (!apres) return;
+  /* Un testeur choisi pour la campagne doit la voir : l'espace Test
+     n'écoute que les projets de sa fiche, et lui ne peut pas les écrire.
+     Quand les testeurs ou l'affectation changent (« Répartir »), chacun
+     est inscrit au projet. Un testeur retiré du vivier ou disparu ne
+     l'est pas. */
+  const testeursApres = Array.isArray(apres.testeurs) ? apres.testeurs : [];
+  const empreinte = (d) => JSON.stringify([(d && d.testeurs) || [], (d && d.affectation) || {}]);
+  if (empreinte(apres) !== empreinte(avant)) {
+    for (const uid of testeursApres) {
+      if (typeof uid !== 'string' || !uid) continue;
+      try {
+        const ref = bdd.doc(`testeurs/${uid}`);
+        const fiche = await ref.get();
+        const t = fiche.exists ? fiche.data() || {} : null;
+        if (!t || t.actif === false || (Array.isArray(t.projets) && t.projets.includes(evenement.params.projetId))) continue;
+        await ref.update({ projets: FieldValue.arrayUnion(evenement.params.projetId), maj: FieldValue.serverTimestamp() });
+      } catch (err) { console.error('Testeur non inscrit au projet', uid, err); }
+    }
+  }
   const statutAvant = avant ? avant.statut : null;
   if (statutAvant === apres.statut || !['en-cours', 'close'].includes(apres.statut)) return;
   const { projetId, campagneId } = evenement.params;
