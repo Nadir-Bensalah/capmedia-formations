@@ -2276,7 +2276,7 @@ service cloud.firestore {
       return texteBorne(d.get('campagne', ''), 40)
           && texteBorne(d.get('projet', ''), 40)
           && d.get('plateforme', '') in ['', 'ios', 'android', 'web']
-          && texteBorne(d.get('scenario', ''), 24)
+          && texteBorne(d.get('scenario', ''), 40)
           && texteBorne(d.get('session', ''), 40);
     }
 

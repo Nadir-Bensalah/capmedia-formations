@@ -659,6 +659,8 @@ await refuse('Karim n antidate pas le début de sa présence', setDoc(doc(karim(
 await refuse('Karim ne recule pas son dernier signe', updateDoc(doc(karim(), `presences/${KARIM}`), { vu: new Date(Date.now() + 3600000) }));
 await refuse('Karim ne glisse pas de champ en plus', setDoc(doc(karim(), `presences/${KARIM}`), presence({ note: 'x' })));
 await refuse('Karim ne pose pas un scénario sans borne', updateDoc(doc(karim(), `presences/${KARIM}`), { vu: serverTimestamp(), scenario: 'x'.repeat(200) }));
+await doit('Karim pose la clé du plan qu il regarde (scénario et plateforme)', updateDoc(doc(karim(), `presences/${KARIM}`), { vu: serverTimestamp(), scenario: 'PAIEMENT-ABONNEMENT-RESTAURER-1__android' }));
+await refuse('Karim ne dépasse pas quarante caractères de clé', updateDoc(doc(karim(), `presences/${KARIM}`), { vu: serverTimestamp(), scenario: 'x'.repeat(41) }));
 await refuse('Camille, cliente, ne se déclare pas présente', setDoc(doc(camille(), `presences/${CAMILLE}`), presence()));
 await doit('Karim ouvre une session', setDoc(doc(karim(), `presences/${KARIM}/sessions/s1`), { debut: serverTimestamp(), vu: serverTimestamp(), campagne: 'c1', projet: 'atelier', plateforme: 'ios', agent: 'Safari' }));
 await doit('Karim prolonge sa session', updateDoc(doc(karim(), `presences/${KARIM}/sessions/s1`), { vu: serverTimestamp() }));
