@@ -25,7 +25,7 @@ import {
   TYPES_ANNONCE, PUBLICATIONS_ANNONCE, BORNES_ANNONCE, PHRASE_LONG, PHRASE_COURT, INTRO_ANNONCES,
   estPubliee, dateFr, grilleALaDate, verdictTarif, projetsTarifables, periode, periodeTexte, parOrdreAnnonce, estNonLue, cibleTexte,
 } from '../annonces-format.js';
-import { grilleDe, periodeA, prix } from '../tarifs.js';
+import { grilleDe, periodeA, prix, franchise } from '../tarifs.js';
 
 /* --- Le dessin d'une annonce, le même des deux côtés ---------------------- */
 
@@ -64,6 +64,11 @@ const blocPeriode = (a) => {
   </div>`;
 };
 
+/* Franchise en base de TVA : la grille est en euros, sans « hors taxes ».
+   La première annonce de 2027 le disait ; le texte reste modifiable dans
+   le Cockpit, mais le client ne lit jamais « hors taxes » sur un prix payé. */
+const texteTarif = (texte, grille) => (franchise(grille) ? String(texte).replace(/\s+hors taxes\b/g, '') : texte);
+
 /** Une annonce, telle que le client la lit. `projets` : ceux du lecteur. */
 export const annonceHtml = (a, { projets = null, grille = null, nouvelle = false } = {}) => {
   const effet = dateFr(a.dateEffet);
@@ -75,7 +80,7 @@ export const annonceHtml = (a, { projets = null, grille = null, nouvelle = false
       ${effet ? `<span class="annonce-effet" data-annonce-effet>À partir du ${echapper(effet)}</span>` : ''}
     </div>
     <h2 class="annonce-titre">${echapper(a.titre || '')}</h2>
-    ${a.texte ? `<div class="prose annonce-texte">${paragraphes(a.texte)}</div>` : ''}
+    ${a.texte ? `<div class="prose annonce-texte">${paragraphes(a.type === 'tarif' ? texteTarif(a.texte, grille) : a.texte)}</div>` : ''}
     ${a.type === 'tarif' ? encartTarif(a, { projets, grille }) : ''}
     ${a.type === 'indisponibilite' ? blocPeriode(a) : ''}
     <p class="annonce-pied">${estPubliee(a) && enDate(a.publieLe) ? `Publiée le ${echapper(dateFr(a.publieLe))}` : (estPubliee(a) ? 'Publiée à l\'instant' : 'Brouillon, pas encore publiée')}</p>

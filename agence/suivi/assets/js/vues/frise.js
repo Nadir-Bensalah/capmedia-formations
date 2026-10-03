@@ -16,7 +16,7 @@
    jamais ce qu'elle vaut.
    ========================================================================== */
 
-import { echapper, montant, montantHT, dateCourte, STATUTS_ETAPE, devisFrisable } from '../noyau.js';
+import { echapper, montant, montantHT, sansTaxe, dateCourte, STATUTS_ETAPE, devisFrisable } from '../noyau.js';
 import { icone, pastille, toast, menu } from '../ui.js';
 import { ecrire, K, montantDe } from '../donnees.js';
 import * as magasin from '../magasin.js';
@@ -43,12 +43,14 @@ export const friseDevis = (devis, jalons, { equipe, pid }) => {
   const total = etapes.reduce((n, j) => n + (Number(j.montant) || 0), 0);
   const fait = faites.reduce((n, j) => n + (Number(j.montant) || 0), 0);
   const pct = Math.round((faites.length / etapes.length) * 100);
+  /* Franchise en base de TVA : le montant d'une ligne est le prix payé, sans « HT ». */
+  const somme = (v) => (sansTaxe(devis) ? montant(v) : montantHT(v));
 
   return `<div class="frise" data-devis="${echapper(devis.id)}">
     <div class="frise-tete">
       <div>
         <p class="frise-titre">${echapper(devis.numero || 'Devis')}${devis.libelle ? ` · ${echapper(devis.libelle)}` : ''}</p>
-        <p class="frise-sous"><b>${faites.length} / ${etapes.length}</b> ${etapes.length > 1 ? 'étapes faites' : 'étape faite'}${total ? ` · <b>${echapper(montant(fait))}</b> sur ${echapper(montantHT(total))}` : ''}</p>
+        <p class="frise-sous"><b>${faites.length} / ${etapes.length}</b> ${etapes.length > 1 ? 'étapes faites' : 'étape faite'}${total ? ` · <b>${echapper(montant(fait))}</b> sur ${echapper(somme(total))}` : ''}</p>
       </div>
     </div>
     ${/* Pas de pourcentage ici : le seul chiffre d'avancement du projet est
@@ -70,7 +72,7 @@ export const friseDevis = (devis, jalons, { equipe, pid }) => {
             j.description,
           ].filter(Boolean).map(echapper).join(' · ')}</span>` : ''}
         </span>
-        <span class="frise-fin">${Number(j.montant) ? `<span class="frise-montant">${echapper(montantHT(j.montant))}</span>` : ''}${equipe
+        <span class="frise-fin">${Number(j.montant) ? `<span class="frise-montant">${echapper(somme(j.montant))}</span>` : ''}${equipe
           ? `<button class="frise-statut" type="button" data-statut-etape="${echapper(j.id)}" data-projet="${echapper(pid)}" aria-label="Changer le statut" data-astuce="Changer le statut">${pastille(STATUTS_ETAPE, j.statut || 'a-venir')}${icone('chevron')}</button><button class="btn-icone" type="button" data-editer-etape="${echapper(j.id)}" data-projet="${echapper(pid)}" aria-label="Modifier l'étape" data-astuce="Modifier">${icone('edit')}</button>`
           : pastille(STATUTS_ETAPE, j.statut || 'a-venir')}</span>
       </li>`).join('')}

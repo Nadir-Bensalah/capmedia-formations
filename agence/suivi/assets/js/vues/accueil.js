@@ -4,7 +4,7 @@
    ========================================================================== */
 
 import {
-  echapper, prenom, nomAffiche, depuis, dateCourte, heure, dateHeure, montant, montantTTC, enDate, parDateDesc,
+  echapper, prenom, nomAffiche, depuis, dateCourte, heure, dateHeure, montant, montantTTC, piecesSansTaxe, enDate, parDateDesc,
   OUVERTS, ATTEND_CLIENT, STATUTS_PROJET, pluriel, statutProjet, verdictDelai, estResponsable, libellePlateforme
 } from '../noyau.js';
 import { telechargerICS, demanderRendezVous } from './calendrier.js';
@@ -255,7 +255,7 @@ export const vue = async (ctx, env) => {
           ${projets.some((p) => estResponsable(session, p)) ? `<div class="carte carte--creuse">
             <p class="surtitre">Finances</p>
             ${dues.length ? `
-              <p class="prix" style="margin-top:8px"><span class="montant">${echapper(montant(du))}</span><span class="unite">TTC à régler</span></p>
+              <p class="prix" style="margin-top:8px"><span class="montant">${echapper(montant(du))}</span><span class="unite">${piecesSansTaxe(documents) ? 'à régler' : 'TTC à régler'}</span></p>
               <p class="t-petit t-2" style="margin-top:4px">${pluriel(dues.length, 'facture en attente', 'factures en attente')}</p>`
             : '<p class="t-petit t-2" style="margin-top:8px">Aucune facture en attente.</p>'}
             <p style="margin-top:10px"><a class="t-petit" href="#/finances">Devis et factures</a></p>

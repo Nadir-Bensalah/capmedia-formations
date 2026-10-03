@@ -38,10 +38,6 @@ const str=(d,k)=>champ(d,k).stringValue||'';
 const texte=(page,sel)=>page.evaluate((s)=>{const e=document.querySelector(s);return e?e.innerText:'';},sel);
 const existe=(page,sel)=>page.evaluate((s)=>!!document.querySelector(s),sel);
 const attendre=async(fn,n=25)=>{for(let i=0;i<n;i++){const v=await fn();if(v)return v;await pause(800);}return null;};
-/* Un montant nu : des chiffres, un €, et aucune mention sur la ligne.
-   La fenêtre couvre la ligne entière : « 2 875 € sur 5 750 € HT » et
-   « 2 875 € TTC à régler » portent bien leur mention. */
-const MONTANT_NU=/\d[\d   ]*€(?![^\n]*(HT|TTC))/;
 
 (async()=>{
   const nav=await chromium.launch();
@@ -107,13 +103,11 @@ const MONTANT_NU=/\d[\d   ]*€(?![^\n]*(HT|TTC))/;
 
     await aller(cl,'/finances','.metriques');
     const fin=await texte(cl,'.page');
-    verifier(!MONTANT_NU.test(fin),'aucun montant nu sur Devis et factures',(fin.match(MONTANT_NU)||[''])[0]);
-    /* Le semis ne porte que des pièces sans TVA : « HT » est donc la bonne
-       réponse partout, et « TTC » n'apparaîtrait qu'avec une TVA. On
-       vérifie la règle plutôt qu'un mot : chaque montant a SA mention. */
-    const montants=(fin.match(/\d[\d\u202f\u00a0 ]*€[^\n]*/g)||[]);
-    const sansMention=montants.filter(m=>!/HT|TTC/.test(m));
-    verifier(sansMention.length===0,`les ${montants.length} montants de la page portent leur mention`,sansMention.join(' | '));
+    /* Règle du 03/10 : Capmedia est en franchise de TVA. Le semis ne porte
+       que des pièces sans TVA : la mention d'un montant n'est plus « HT »
+       sur chaque chiffre, c'est la mention légale, une fois, sur la page. */
+    verifier(!/\b(HT|TTC)\b/.test(fin),'franchise : ni « HT » ni « TTC » sur Devis et factures',(fin.match(/[^\n]*\b(HT|TTC)\b[^\n]*/)||[''])[0]);
+    verifier(/TVA non applicable, article 293 B du CGI/.test(fin),'et la mention légale 293 B y est');
 
     /* « innerText » coupe à chaque bloc : un montant et sa mention posés
        dans deux éléments voisins se retrouvent sur deux lignes, alors
@@ -123,11 +117,11 @@ const MONTANT_NU=/\d[\d   ]*€(?![^\n]*(HT|TTC))/;
 
     await aller(cl,'/','.page-tete');
     const acc=await texteVu(cl,'.page');
-    verifier(!MONTANT_NU.test(acc),"aucun montant nu sur l'accueil",(acc.match(MONTANT_NU)||[''])[0]);
+    verifier(!/\bTTC\b/.test(acc),"ni « TTC » sur l'accueil",(acc.match(/.{30}\bTTC\b.{0,20}/)||[''])[0]);
 
     await aller(cl,'/projets/atelier/etapes','.page');
     const et=await texteVu(cl,'.page');
-    verifier(!MONTANT_NU.test(et),'ni sur la frise du devis',(et.match(MONTANT_NU)||[''])[0]);
+    verifier(!/€ HT\b/.test(et),'ni « HT » sur la frise du devis',(et.match(/.{30}€ HT/)||[''])[0]);
 
     console.log('\n== 3 · Un seul chiffre par entrée de menu');
     const barre=await cl.evaluate(()=>[...document.querySelectorAll('.lat .comptes')].map(c=>({

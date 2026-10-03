@@ -1232,6 +1232,31 @@ export const montantPiece = (d, decimales = 0) => {
   return avecTaxe ? montantTTC(ttcDe(d), decimales) : montantHT(Number((d || {}).montant) || ttcDe(d), decimales);
 };
 
+/* Le même montant, tel que le client le lit : en franchise de TVA, le
+   chiffre seul (la fiche porte la mention légale une fois). L'équipe garde
+   montantPiece, qui nomme toujours ce qu'elle compte. */
+export const montantPieceClient = (d, decimales = 0) => (sansTaxe(d)
+  ? montant(Number((d || {}).montant) || ttcDe(d), decimales)
+  : montantTTC(ttcDe(d), decimales));
+
+/* Capmedia est une micro-entreprise : franchise en base de TVA. Une pièce
+   à TVA 0 n'a qu'un montant, le prix payé : ni « HT » ni « TTC » ni
+   « TVA 0 % », un seul chiffre et la mention légale une fois par fiche.
+   Une pièce qui porte une vraie TVA garde hors taxes, TVA et TTC. */
+export { MENTION_FRANCHISE } from './tarifs.js';
+export const sansTaxe = (d) => {
+  const x = d || {};
+  if (Number(x.tva) > 0) return false;
+  return !(typeof x.ttc === 'number' && Math.abs(x.ttc - (Number(x.montant) || 0)) > 0.004 && x.montant !== undefined && x.montant !== null && x.montant !== '');
+};
+/** Toutes ces pièces sont-elles sans TVA ? (une liste vide l'est) */
+export const piecesSansTaxe = (pieces) => (pieces || []).every(sansTaxe);
+/** Un montant dû ou réglé : seul en franchise, « TTC » sinon. Jamais vide. */
+export const montantDu = (valeur, franchise, decimales = 0) => {
+  const v = typeof valeur === 'number' && Number.isFinite(valeur) ? valeur : 0;
+  return franchise ? montant(v, decimales) : montantTTC(v, decimales);
+};
+
 export const poids = (octets) => {
   if (!octets) return '';
   const ko = octets / 1024;

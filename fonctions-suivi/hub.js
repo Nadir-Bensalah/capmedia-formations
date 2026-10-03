@@ -119,6 +119,13 @@ const auteurDe = (doc, defaut = 'equipe') => ((doc && doc.par) ? { uid: doc.par.
    1. Les tâches
    ========================================================================== */
 
+/* Le passage d'un état à un autre, en une phrase juste : « en cours » et
+   « à faire » se suivent de « a passé … » sans « en » de trop (« en en
+   cours »), un état qui est un participe se dit « a marqué … comme … ». */
+const phraseStatut = (sujet, libelle) => (/^(en|à) /.test(String(libelle))
+  ? `a passé ${sujet} ${libelle}`
+  : `a marqué ${sujet} comme ${libelle}`);
+
 exports.hubTacheEcrite = onDocumentWritten({ region: REGION, document: 'taches/{tacheId}' }, async (evenement) => {
   const avant = evenement.data.before.exists ? evenement.data.before.data() : null;
   const apres = evenement.data.after.exists ? evenement.data.after.data() : null;
@@ -133,7 +140,7 @@ exports.hubTacheEcrite = onDocumentWritten({ region: REGION, document: 'taches/{
     return;
   }
   if (avant.statut !== apres.statut) {
-    const libelles = { 'a-faire': 'à faire', 'en-cours': 'en cours', 'en-revue': 'en revue', 'bloquee': 'bloquée', 'attente-client': 'en attente du client', 'repondu': 'réponse reçue', 'terminee': 'terminée' };
+    const libelles = { 'a-faire': 'à faire', 'en-cours': 'en cours', 'en-revue': 'en revue', 'bloquee': 'bloquée', 'attente-client': 'en attente du client', 'repondu': 'répondue', 'terminee': 'terminée' };
     /* La réponse du client depuis la fiche de la tâche : l'activité est à
        son nom, l'équipe est prévenue (notification et lettre). */
     const reponse = apres.statut === 'repondu' && avant.statut === 'attente-client' && apres.reponseClient ? apres.reponseClient : null;
@@ -144,7 +151,7 @@ exports.hubTacheEcrite = onDocumentWritten({ region: REGION, document: 'taches/{
       await mettreEnFile('tache-reponse', contactsEquipe(), { projetNom: nomProjet(projet), titre: apres.titre, par: reponse.nom || '', texte: reponse.texte || '', pieces: Array.isArray(reponse.pieces) ? reponse.pieces.length : 0, lien: LIEN_ADMIN(lien) }, { projet: apres.projet, evenement: 'tache-reponse' });
       return;
     }
-    await activite({ projet: apres.projet, type: 'tache', texte: `a passé la tâche « ${apres.titre} » en ${libelles[apres.statut] || apres.statut}`, par, lien, visibilite });
+    await activite({ projet: apres.projet, type: 'tache', texte: phraseStatut(`la tâche « ${apres.titre} »`, libelles[apres.statut] || apres.statut), par, lien, visibilite });
     if (apres.statut === 'attente-client' && visibilite === 'client') {
       await notifierClients(projet, 'tache', { type: 'tache', titre: 'Nous attendons votre retour', texte: apres.titre, lien: `#${lien}`, projet: apres.projet });
       await ecrireAuxClients(projet, 'tache-attente', 'tache-attente', { projetNom: nomProjet(projet), titre: apres.titre, description: apres.description, lien: LIEN(lien) });
@@ -180,12 +187,13 @@ async function recalculerProgression(projetId) {
    rend simplement vide. */
 const euros = (n) => `${Number(n).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} €`;
 async function ligneDeDevis(projetId, jalonId, jalon) {
-  if (!jalon || !jalon.devis) return { numero: '', montant: null };
+  if (!jalon || !jalon.devis) return { numero: '', montant: null, taxe: false };
   let numero = '';
   let montant = null;
-  try { const d = await bdd.doc(`documents/${jalon.devis}`).get(); if (d.exists) numero = String(d.data().numero || ''); } catch (err) { console.error('Devis de l étape illisible', err); }
+  let taxe = false;
+  try { const d = await bdd.doc(`documents/${jalon.devis}`).get(); if (d.exists) { numero = String(d.data().numero || ''); taxe = Number(d.data().tva) > 0; } } catch (err) { console.error('Devis de l étape illisible', err); }
   try { const m = await bdd.doc(`projets/${projetId}/montants/jalon-${jalonId}`).get(); if (m.exists && Number.isFinite(Number(m.data().montant))) montant = Number(m.data().montant); } catch (err) { console.error('Montant de l étape illisible', err); }
-  return { numero, montant };
+  return { numero, montant, taxe };
 }
 
 exports.hubJalonEcrit = onDocumentWritten({ region: REGION, document: 'projets/{projetId}/jalons/{jalonId}' }, async (evenement) => {
@@ -201,14 +209,14 @@ exports.hubJalonEcrit = onDocumentWritten({ region: REGION, document: 'projets/{
     /* Une étape née d'une ligne de devis : la notification nomme le devis,
        et dit le montant HT de la ligne aux seuls responsables, puisque la
        finance n'est qu'à eux. Les autres lisent le devis sans le chiffre. */
-    const { numero, montant } = await ligneDeDevis(projetId, evenement.params.jalonId, apres);
+    const { numero, montant, taxe } = await ligneDeDevis(projetId, evenement.params.jalonId, apres);
     const texteBase = numero ? `${apres.titre} · devis ${numero}` : apres.titre;
     const uids = await communication.uidsClients(projet, 'jalon');
     const roles = (projet && projet.roles) || {};
     const responsables = uids.filter((u) => roles[u] === 'responsable');
     const autres = uids.filter((u) => roles[u] !== 'responsable');
     const notif = { type: 'jalon', titre: 'Étape terminée', lien: `#${lien}`, projet: projetId };
-    if (responsables.length) await notifier(responsables, { ...notif, texte: numero && montant !== null ? `${texteBase} · ${euros(montant)} HT` : texteBase });
+    if (responsables.length) await notifier(responsables, { ...notif, texte: numero && montant !== null ? `${texteBase} · ${euros(montant)}${taxe ? ' HT' : ''}` : texteBase });
     if (autres.length) await notifier(autres, { ...notif, texte: texteBase });
   } else if (apres && avant && avant.statut !== apres.statut && apres.statut === 'bloque') {
     await activite({ projet: projetId, type: 'jalon', texte: `a marqué l'étape « ${apres.titre} » comme bloqué`, lien, visibilite: 'interne' });
@@ -464,7 +472,7 @@ exports.hubDocumentActivite = onDocumentWritten({ region: REGION, document: 'doc
      l'équipe y joint le devis, c'est un devis déposé. */
   const photo = apres.photo || {};
   const nbLignes = (photo.lignes || []).length;
-  const estimation = photo.periode && Number.isFinite(Number(photo.periode.ht)) ? `≈ ${euros(Number(photo.periode.ht))} HT` : '';
+  const estimation = photo.periode && Number.isFinite(Number(photo.periode.ht)) ? `≈ ${euros(Number(photo.periode.ht))}${Number(photo.tva) > 0 ? ' HT' : ''}` : '';
   const parClient = apres.par && apres.par.uid ? { uid: apres.par.uid, nom: apres.par.nom || '', cote: 'client' } : null;
   if (!avant && apres.statut === 'demande') {
     const projet = await lireProjet(apres.projet);
@@ -494,7 +502,7 @@ exports.hubDocumentActivite = onDocumentWritten({ region: REGION, document: 'doc
   if (genre === 'facture' && declare && (!declareAvant || enMillis(declareAvant.le) !== enMillis(declare.le))) {
     const projet = await lireProjet(apres.projet);
     const somme = Number(declare.montant) || 0;
-    const texteMontant = `${somme.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })} TTC`;
+    const texteMontant = `${somme.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}${Number(apres.tva) > 0 ? ' TTC' : ''}`;
     const par = { uid: declare.par || null, nom: declare.nom || '', cote: 'client' };
     await activite({ projet: apres.projet, type: 'paiement', texte: `a déclaré un règlement de ${texteMontant} sur la facture ${nom}`, par, lien });
     await notifierEquipe(apres.projet, { type: 'paiement', titre: 'Règlement déclaré', texte: `${nom} · ${texteMontant} · ${nomProjet(projet)}`, lien: `#${lien}`, projet: apres.projet });
@@ -529,8 +537,15 @@ exports.hubDocumentActivite = onDocumentWritten({ region: REGION, document: 'doc
     /* Une seule ligne pour une acceptation, la plus parlante : le devis
        fondateur fait démarrer le projet, un avenant s'accepte. */
     const signature = apres.type === 'devis' && apres.statut === 'accepte' && (apres.portee || 'initial') === 'initial';
-    const texte = signature ? `a signé le devis ${nom} : le projet démarre` : `${libelles[apres.statut] || `a passé en ${apres.statut}`} ${genre === 'devis' ? 'le devis' : 'la facture'} ${nom}`;
-    await activite({ projet: apres.projet, type: genre, texte, par: qui, cible: signature ? evenement.params.documentId : undefined, lien, visibilite: apres.statut === 'consulte' ? 'interne' : 'client' });
+    /* Un règlement : l'équipe ne « règle » pas la facture, elle reçoit le
+       paiement. Le client qui l'a déclaré en est le sujet ; sinon la ligne
+       dit que le paiement est reçu. */
+    const regle = genre === 'facture' && ['payee', 'partielle'].includes(apres.statut);
+    const payeur = regle && declare && declare.nom ? { uid: declare.par || null, nom: declare.nom, cote: 'client' } : null;
+    const texte = signature ? `a signé le devis ${nom} : le projet démarre`
+      : regle && !payeur ? `a reçu ${apres.statut === 'payee' ? 'le paiement' : 'un paiement partiel'} de la facture ${nom}`
+        : `${libelles[apres.statut] || `a passé en ${apres.statut}`} ${genre === 'devis' ? 'le devis' : 'la facture'} ${nom}`;
+    await activite({ projet: apres.projet, type: genre, texte, par: payeur || qui, cible: signature ? evenement.params.documentId : undefined, lien, visibilite: apres.statut === 'consulte' ? 'interne' : 'client' });
     if (['accepte', 'refuse'].includes(apres.statut)) {
       await audit('devis', { projet: apres.projet, document: evenement.params.documentId, statut: apres.statut, par: (apres.reponse || {}).par || null });
       /* L'équipe l'apprend dans le Cockpit, pas seulement par la lettre. */
@@ -576,7 +591,7 @@ exports.hubTicketActivite = onDocumentWritten({ region: REGION, document: 'ticke
     const retiree = ['nouveau', 'a-analyser', 'acceptee', 'planifiee'].includes(avant.statut) && apres.statut === 'annulee'
       && String((avant.lu || {}).client || '') !== String((apres.lu || {}).client || '');
     const parClient = (avant.statut === 'a-valider' && apres.statut === 'resolu') || (avant.statut === 'resolu' && apres.statut === 'en-cours') || conteste || repondu || retiree;
-    await activite({ projet: apres.projet, type: 'demande', texte: repondu ? `a répondu : la demande ${nom} repart` : retiree ? `a retiré la demande ${nom}` : `a passé la demande ${nom} en ${libelles[apres.statut] || apres.statut}`, par: parClient && apres.auteur ? { uid: apres.auteur.uid, nom: apres.auteur.nom, cote: 'client' } : null, lien });
+    await activite({ projet: apres.projet, type: 'demande', texte: repondu ? `a répondu : la demande ${nom} repart` : retiree ? `a retiré la demande ${nom}` : phraseStatut(`la demande ${nom}`, libelles[apres.statut] || apres.statut), par: parClient && apres.auteur ? { uid: apres.auteur.uid, nom: apres.auteur.nom, cote: 'client' } : null, lien });
     /* La réponse elle-même a déjà prévenu l'équipe (le message) : pas de
        seconde notification pour la demande qui repart. */
     if (!repondu && parClient) await notifierEquipe(apres.projet, { type: 'demande', titre: apres.statut === 'resolu' ? 'Correction validée par le client' : conteste ? 'Correction contestée par le client' : retiree ? 'Demande retirée par le client' : 'Demande rouverte par le client', texte: `${apres.titre} · ${nomProjet(projet)}`, lien: `#${lien}`, projet: apres.projet });
@@ -1146,7 +1161,7 @@ async function pointsEnAttente(projetId) {
   /* Un devis dont la validité est passée n'est plus à décider. */
   const expire = (x) => { const d = enDateFn(x.expiration); return Boolean(d) && d.getTime() < Date.now(); };
   await prendre('documents', (x) => x.type === 'devis' && ['envoye', 'consulte'].includes(x.statut) && !expire(x),
-    (x) => ({ quoi: 'Devis à décider', detail: `${x.numero || ''} ${x.libelle || ''}`.trim() }));
+    (x) => ({ quoi: 'Devis à décider', detail: `${x.numero || ''} ${x.libelle || ''}`.trim(), reserve: true }));
   /* Chaque facture avec ce qu'elle vaut et quand : « F-2026-0031 ·
      1 200,00 € TTC · échéance 30/09 ». Sans montant ni date, la ligne ne
      disait pas de quoi il retournait. */
@@ -1156,7 +1171,10 @@ async function pointsEnAttente(projetId) {
     (x) => {
       const j = ageEnJours(x.echeance);
       const quand = x.echeance ? (j !== null && j > 0 ? `en retard de ${j} jour${j > 1 ? 's' : ''} (échéance ${jourMois(x.echeance)})` : `échéance ${jourMois(x.echeance)}`) : '';
-      return { quoi: 'Facture à régler', detail: [x.numero || x.libelle || '', `${ttcDe(x).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })} TTC`, quand].filter(Boolean).join(' · ') };
+      /* Franchise en base de TVA (TVA 0) : le montant seul, sans « TTC ». */
+      const somme = `${ttcDe(x).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}${Number(x.tva) > 0 ? ' TTC' : ''}`;
+      /* La finance est au responsable : un collaborateur n'en reçoit rien. */
+      return { quoi: 'Facture à régler', detail: [x.numero || x.libelle || '', somme, quand].filter(Boolean).join(' · '), reserve: true };
     });
   await prendre('taches', (x) => !x.archive && x.statut === 'attente-client' && x.visibilite === 'client',
     (x) => ({ quoi: 'Tâche en attente de vous', detail: `${x.titre || ''} · ${depuisJours(x.maj)}` }));

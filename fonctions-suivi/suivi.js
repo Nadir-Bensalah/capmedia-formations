@@ -1261,6 +1261,9 @@ async function ajouterInterlocuteur(identite, { projet: projetId, email, nom, ro
   const { utilisateur } = await compteAuth(adresse, nom, 'client');
   const { ref, cle, fiche } = await lireInterlocuteur(projet.id, { email: adresse });
   const reprise = !fiche || fiche.statut !== 'actif';
+  /* Ré-ajouter une adresse déjà active change son rôle : ce geste ne doit
+     jamais retirer le dernier responsable d'un projet ouvert. */
+  if (!reprise && fiche.role !== role) await controleDernierResponsable(projet.id, cle, role);
   await ref.set(sansIndefini({
     email: adresse, nom: String(nom || (fiche && fiche.nom) || '').trim().slice(0, 120), uid: utilisateur.uid, role, statut: 'actif',
     ajoute: fiche && fiche.ajoute ? fiche.ajoute : FieldValue.serverTimestamp(), ajoutePar: identite.uid,
@@ -1293,6 +1296,10 @@ async function inviterCollegue(identite, { projet: projetId, email, nom }) {
   const adresse = normaliserEmail(email);
   if (!emailPlausible(adresse)) throw new Refus(400, "L'adresse de votre collègue a l'air incomplète.");
   if (memeEmail(adresse, identite.email)) throw new Refus(409, "C'est votre propre adresse.");
+  /* Une adresse qui a déjà accès n'est pas un nouveau collègue : l'inviter
+     comme collaborateur rétrograderait un responsable. */
+  const deja = await lireInterlocuteur(projet.id, { email: adresse });
+  if (deja.fiche && deja.fiche.statut === 'actif') throw new Refus(409, 'Cette personne a déjà accès au projet.');
   const r = await ajouterInterlocuteur(identite, { projet: projet.id, email: adresse, nom, role: 'collaborateur' });
   const auteur = await bdd.collection(`projets/${projet.id}/interlocuteurs`).where('uid', '==', identite.uid).limit(1).get();
   const nomAuteur = auteur.empty ? identite.email : (auteur.docs[0].data().nom || identite.email);
