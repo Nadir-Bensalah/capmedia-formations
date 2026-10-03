@@ -1334,6 +1334,17 @@ export const FORMATS_ACCEPTES = {
   aide: 'Images, PDF, documents Office, zip jusqu\'à 10 Mo ; vidéos mp4, mov, webm jusqu\'à 100 Mo.',
 };
 
+/* Les preuves d'un testeur (campagnes/<projet>/<campagne>/<uid>) : une
+   capture ou une vidéo, rien d'autre, comme le disent les règles Storage.
+   Ni archive, ni document, ni SVG ; 10 Mo une image, 50 Mo une vidéo. */
+const DOSSIER_PREUVES = /^campagnes\/[^/]+\/[^/]+\/[^/]+$/;
+const TYPES_PREUVE = /^(image\/(png|jpeg|webp|heic|heif)|video\/(mp4|quicktime|webm))$/;
+const TAILLE_MAX_PREUVE_VIDEO = 50 * 1024 * 1024;
+export const FORMATS_PREUVE = {
+  accept: 'image/png,image/jpeg,image/webp,image/heic,image/heif,.png,.jpg,.jpeg,.webp,.heic,video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm',
+  aide: 'Une capture (png, jpeg, webp, heic) jusqu\'à 10 Mo, ou une vidéo (mp4, mov, webm) jusqu\'à 50 Mo.',
+};
+
 /**
  * Envoie un fichier et renvoie la fiche à ranger dans `pieces`.
  * Refuse tout ce que les règles de stockage refuseraient, pour donner
@@ -1341,6 +1352,15 @@ export const FORMATS_ACCEPTES = {
  * pourcentage.
  */
 export const envoyerPiece = async (fichier, chemin, surProgres, metadonnees = null) => {
+  if (DOSSIER_PREUVES.test(chemin)) {
+    if (!TYPES_PREUVE.test(fichier.type)) {
+      throw new Error(`« ${fichier.name} » : une preuve est une capture (png, jpeg, webp, heic) ou une vidéo (mp4, mov, webm).`);
+    }
+    const plafondPreuve = /^video\//.test(fichier.type) ? TAILLE_MAX_PREUVE_VIDEO : TAILLE_MAX;
+    if (fichier.size > plafondPreuve) {
+      throw new Error(`« ${fichier.name} » est trop lourd : une preuve tient en 10 Mo pour une image, 50 Mo pour une vidéo.`);
+    }
+  }
   if (!TYPES_ACCEPTES.test(fichier.type)) {
     throw new Error(`« ${fichier.name} » : ce type de fichier n'est pas accepté.`);
   }

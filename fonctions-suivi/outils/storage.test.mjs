@@ -15,7 +15,7 @@
 
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
-import { ref, uploadString, getBytes, listAll, updateMetadata, deleteObject } from 'firebase/storage';
+import { ref, uploadString, uploadBytes, getBytes, listAll, updateMetadata, deleteObject } from 'firebase/storage';
 import { doc, setDoc } from 'firebase/firestore';
 
 /* L'émulateur Storage traite l'écriture sur un objet EXISTANT comme une
@@ -28,7 +28,13 @@ import { doc, setDoc } from 'firebase/firestore';
    AVANT l'environnement du test : l'émulateur n'a qu'un jeu de règles
    Storage, qu'elle remplace. */
 const nonVerifiables = [];
-const sonde = await initializeTestEnvironment({ projectId: 'sonde-ecrasement', storage: { host: '127.0.0.1', port: 9199,
+/* Les ports : ceux de FIREBASE_STORAGE_EMULATOR_HOST et
+   FIRESTORE_EMULATOR_HOST quand ils sont posés (émulateur à part), sinon
+   9199 et 8080. */
+const portDe = (v, defaut) => Number(String(process.env[v] || '').split(':')[1]) || defaut;
+const PORT_STOCKAGE = portDe('FIREBASE_STORAGE_EMULATOR_HOST', 9199);
+const PORT_BASE = portDe('FIRESTORE_EMULATOR_HOST', 8080);
+const sonde = await initializeTestEnvironment({ projectId: 'sonde-ecrasement', storage: { host: '127.0.0.1', port: PORT_STOCKAGE,
   rules: "rules_version='2'; service firebase.storage { match /b/{b}/o { match /{c=**} { allow read, create: if true; allow update: if false; } } }" } });
 await sonde.clearStorage();
 await sonde.withSecurityRulesDisabled((c) => uploadString(ref(c.storage(), 'x/existant.txt'), 'a', 'raw', { contentType: 'text/plain' }));
@@ -44,8 +50,8 @@ const ecrasement = async (l, p) => {
 const PROJET = process.env.GCLOUD_PROJECT || 'capmedia-1f90d';
 const env = await initializeTestEnvironment({
   projectId: PROJET,
-  storage: { rules: readFileSync(new URL('../../suivi/storage.rules', import.meta.url), 'utf8'), host: '127.0.0.1', port: 9199 },
-  firestore: { rules: readFileSync(new URL('../../suivi/firestore.rules', import.meta.url), 'utf8'), host: '127.0.0.1', port: 8080 },
+  storage: { rules: readFileSync(new URL('../../suivi/storage.rules', import.meta.url), 'utf8'), host: '127.0.0.1', port: PORT_STOCKAGE },
+  firestore: { rules: readFileSync(new URL('../../suivi/firestore.rules', import.meta.url), 'utf8'), host: '127.0.0.1', port: PORT_BASE },
 });
 
 const P = 'st-projet', Q = 'st-autre';
@@ -83,6 +89,12 @@ await env.withSecurityRulesDisabled(async (ctx) => {
   await setDoc(doc(b, 'documents/st-range'), { projet: P, type: 'facture', statut: 'payee', archive: true });
   await setDoc(doc(b, `projets/${P}/campagnes/st-en-cours`), { statut: 'en-cours', testeurs: ['st-testeur'] });
   await setDoc(doc(b, `projets/${P}/campagnes/st-close`), { statut: 'close', testeurs: ['st-testeur'] });
+  /* L'équipe a clos l'accès (« fins » passée) sans « j'ai terminé » ; et
+     une campagne où le testeur a dit « j'ai terminé ». */
+  await setDoc(doc(b, `projets/${P}/campagnes/st-acces-clos`), { statut: 'en-cours', testeurs: ['st-testeur'], fins: { 'st-testeur': new Date(Date.now() - 60000) } });
+  await setDoc(doc(b, `projets/${P}/campagnes/st-termine`), { statut: 'en-cours', testeurs: ['st-testeur'], termines: { 'st-testeur': new Date() }, fins: { 'st-testeur': new Date(Date.now() + 5 * 86400000) } });
+  await setDoc(doc(b, 'testeurs/st-retire'), { prenom: 'Retiré', actif: false, projets: [P] });
+  await setDoc(doc(b, `projets/${P}/campagnes/st-retire`), { statut: 'en-cours', testeurs: ['st-retire'] });
   /* Les objets. */
   for (const c of [`projets/${P}/fichiers/st-visible/a.png`, `projets/${P}/fichiers/st-interne/b.png`, `projets/${P}/fichiers/st-archive/c.png`, `projets/${Q}/fichiers/st-ailleurs/d.png`]) await uploadString(ref(s, c), 'x', 'raw', png);
   for (const c of [`projets/${P}/pieces/st-devis/devis.pdf`, `projets/${P}/pieces/st-brouillon/brouillon.pdf`, `projets/${P}/pieces/st-range/facture.pdf`]) await uploadString(ref(s, c), 'x', 'raw', pdf);
@@ -93,6 +105,7 @@ await env.withSecurityRulesDisabled(async (ctx) => {
   await uploadString(ref(s, `projets/${P}/documents/client/ancien-client.png`), 'x', 'raw', png);
   await uploadString(ref(s, `projets/${P}/documents/devis/ancien-devis.pdf`), 'x', 'raw', pdf);
   await uploadString(ref(s, `campagnes/${P}/st-en-cours/st-testeur/preuve.png`), 'x', 'raw', png);
+  for (const c of ['st-en-cours', 'st-acces-clos', 'st-retire']) await uploadString(ref(s, `projets/${P}/campagnes/${c}/visuels/ecran.png`), 'x', 'raw', png);
   await uploadString(ref(s, 'preprojets/st-client/demande.png'), 'x', 'raw', png);
 });
 
@@ -151,6 +164,29 @@ await refuse('ni dans le dossier d un autre testeur', uploadString(ref(testeur()
 await ecrasement('ni n écrase une preuve déjà déposée', uploadString(ref(testeur(), `campagnes/${P}/st-en-cours/st-testeur/preuve.png`), 'y', 'raw', png));
 await doit('Le client du projet lit la preuve', getBytes(ref(client(), `campagnes/${P}/st-en-cours/st-testeur/preuve.png`)));
 await refuse('Un autre client ne la lit pas', getBytes(ref(autreClient(), `campagnes/${P}/st-en-cours/st-testeur/preuve.png`)));
+/* H1. « Clore l'accès » ferme aussi le dépôt de preuves. */
+await refuse('Accès clos par l équipe : plus de dépôt de preuve', uploadString(ref(testeur(), `campagnes/${P}/st-acces-clos/st-testeur/p.png`), 'x', 'raw', png));
+await refuse('Test terminé : plus de dépôt de preuve non plus', uploadString(ref(testeur(), `campagnes/${P}/st-termine/st-testeur/p.png`), 'x', 'raw', png));
+/* M3. Une preuve est une capture ou une vidéo, bornée. */
+const MO = 1024 * 1024;
+await doit('Une capture JPEG passe', uploadString(ref(testeur(), `campagnes/${P}/st-en-cours/st-testeur/p3.jpg`), 'x', 'raw', { contentType: 'image/jpeg' }));
+await doit('Une vidéo d écran MP4 passe', uploadString(ref(testeur(), `campagnes/${P}/st-en-cours/st-testeur/p4.mp4`), 'x', 'raw', { contentType: 'video/mp4' }));
+await refuse('Le testeur ne dépose pas un zip comme preuve', uploadString(ref(testeur(), `campagnes/${P}/st-en-cours/st-testeur/p.zip`), 'x', 'raw', { contentType: 'application/zip' }));
+await refuse('ni un SVG', uploadString(ref(testeur(), `campagnes/${P}/st-en-cours/st-testeur/p.svg`), '<svg/>', 'raw', { contentType: 'image/svg+xml' }));
+await refuse('ni un document Word', uploadString(ref(testeur(), `campagnes/${P}/st-en-cours/st-testeur/p.docx`), 'x', 'raw', { contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }));
+await refuse('ni un PDF', uploadString(ref(testeur(), `campagnes/${P}/st-en-cours/st-testeur/p.pdf`), 'x', 'raw', pdf));
+await refuse('ni une image de plus de 10 Mo', uploadBytes(ref(testeur(), `campagnes/${P}/st-en-cours/st-testeur/grande.png`), new Uint8Array(10 * MO + 1), png));
+await refuse('ni une vidéo de plus de 50 Mo', uploadBytes(ref(testeur(), `campagnes/${P}/st-en-cours/st-testeur/longue.mp4`), new Uint8Array(50 * MO + 1), { contentType: 'video/mp4' }));
+await doit('Une vidéo de 49 Mo passe', uploadBytes(ref(testeur(), `campagnes/${P}/st-en-cours/st-testeur/moyenne.mp4`), new Uint8Array(49 * MO), { contentType: 'video/mp4' }));
+
+console.log('\n== Les écrans d une campagne : le testeur, tant que son accès court');
+await doit('Le testeur de la campagne voit ses écrans', getBytes(ref(testeur(), `projets/${P}/campagnes/st-en-cours/visuels/ecran.png`)));
+await refuse('Un testeur hors de la campagne ne les voit pas', getBytes(ref(intrus(), `projets/${P}/campagnes/st-en-cours/visuels/ecran.png`)));
+/* F4. Accès clos, ou testeur retiré : son jeton vit encore une heure, la
+   fiche relue ferme la porte tout de suite. */
+await refuse('Accès clos : le testeur ne voit plus les écrans', getBytes(ref(testeur(), `projets/${P}/campagnes/st-acces-clos/visuels/ecran.png`)));
+await refuse('Testeur retiré, jeton encore valide : plus d écrans', getBytes(ref(env.authenticatedContext('st-retire', jeton('st-retire', { testeur: true })).storage(), `projets/${P}/campagnes/st-retire/visuels/ecran.png`)));
+await doit('Le client du projet les voit', getBytes(ref(client(), `projets/${P}/campagnes/st-en-cours/visuels/ecran.png`)));
 
 console.log('\n== Une demande de nouveau projet');
 await doit('L équipe dépose sa réponse dans le dossier du demandeur', uploadString(ref(equipe(), 'preprojets/st-client/reponse.png'), 'x', 'raw', png));

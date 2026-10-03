@@ -688,23 +688,62 @@ exports.suiviProfilTesteur = onDocumentWritten(
  * Les témoins sont recopiés dans l'anomalie (qui, sur quoi, quand, le
  * commentaire, les preuves) pour que le Hub n'ait rien d'autre à lire.
  */
+/* L'identifiant d'un passage : « <uid>__<scénario>__<plateforme> » (le
+   modèle du plan), ou « <uid>__<scénario> » (avant le plan). */
+const passageCoherent = (passageId, p) => {
+  const base = `${p.testeur || ''}__${p.scenario}`;
+  return Boolean(p.testeur) && (passageId === `${base}__${p.plateforme || ''}` || passageId === base);
+};
+
+/* Le scénario d'un passage, s'il existe : dans le plan de tests
+   (« <section>-<f|t|u|s>-<nnn> », rangé dans planTests/<section> sous son
+   aspect), sinon dans l'ancienne bibliothèque. Rend { titre, bloc } ou null. */
+const ASPECT_DE_LETTRE = { f: 'fonctionnel', t: 'technique', u: 'ux', s: 'securite' };
+const scenarioConnu = async (projetId, p) => {
+  const plan = /^([a-z0-9]+(?:-[a-z0-9]+)*)-([ftus])-\d{3}$/.exec(p.scenario);
+  if (plan) {
+    const section = await bdd.doc(`projets/${projetId}/planTests/${plan[1]}`).get();
+    const liste = section.exists ? (((section.data() || {}).aspects || {})[ASPECT_DE_LETTRE[plan[2]]] || []) : [];
+    const x = Array.isArray(liste) ? liste.find((y) => y && y.id === p.scenario) : null;
+    if (x) return { titre: String(x.titre || ''), bloc: plan[1] };
+  }
+  if (p.scenario.includes('/')) return null;
+  const ancien = await bdd.doc(`projets/${projetId}/scenarios/${p.scenario}`).get();
+  return ancien.exists ? { titre: ancien.data().titre || '', bloc: ancien.data().bloc || '' } : null;
+};
+
 exports.suiviPassageKo = onDocumentWritten(
   { region: REGION, document: 'projets/{projetId}/campagnes/{campagneId}/passages/{passageId}' },
   async (evenement) => {
     const apres = evenement.data.after.exists ? evenement.data.after.data() : null;
-    if (!apres || apres.resultat !== 'ko' || !apres.scenario) return;
+    /* « echec » : le verdict du modèle des passages ; « ko » : l'ancien,
+       encore porté par les passages d'avant le plan. */
+    if (!apres || !['echec', 'ko'].includes(apres.resultat) || typeof apres.scenario !== 'string' || !apres.scenario) return;
     /* Seul un geste du TESTEUR fait un témoin, et un testeur qui écrit
-       pose toujours une date neuve. Le serveur qui marque le passage « à
-       rejouer », ou l'équipe qui le rattache à une anomalie, laisse la date
-       intacte : sans cette garde, marquer un KO corrigé rouvrait aussitôt
+       pose toujours une date neuve (« maj », ou « le » sur un ancien
+       passage). Le serveur qui marque le passage « à rejouer », ou
+       l'équipe qui le rattache à une anomalie, laisse la date intacte :
+       sans cette garde, marquer un KO corrigé rouvrait aussitôt
        l'anomalie en régression. */
     const avant = evenement.data.before.exists ? evenement.data.before.data() : null;
-    if (avant && avant.le && apres.le && typeof avant.le.isEqual === 'function' && avant.le.isEqual(apres.le)) return;
+    const dateAvant = avant && (avant.maj || avant.le);
+    const dateApres = apres.maj || apres.le;
+    if (dateAvant && dateApres && typeof dateAvant.isEqual === 'function' && dateAvant.isEqual(dateApres)) return;
     const { projetId, campagneId, passageId } = evenement.params;
 
+    /* La garde serveur. Une anomalie part chez le client (activité,
+       courriel, notification) : elle ne naît que d'un passage dont
+       l'identifiant colle au testeur et au scénario, et d'un scénario qui
+       existe vraiment, dans le plan ou dans l'ancienne bibliothèque. Un
+       texte inventé n'invente plus « Échec sur … ». */
+    const scenario = await scenarioConnu(projetId, apres);
+    if (!passageCoherent(passageId, apres) || !scenario) {
+      console.warn('Passage en échec ignoré : scénario inconnu ou identifiant incohérent', projetId, campagneId, passageId);
+      return;
+    }
+
     const ref = bdd.doc(`projets/${projetId}/anomalies/ko-${apres.scenario}`);
-    const scenario = await bdd.doc(`projets/${projetId}/scenarios/${apres.scenario}`).get();
-    const le = apres.le && apres.le.toDate ? apres.le.toDate() : new Date();
+    const le = dateApres && dateApres.toDate ? dateApres.toDate() : new Date();
     const temoin = {
       passage: `${campagneId}/${passageId}`, campagne: campagneId,
       testeur: apres.testeur || '', plateforme: apres.plateforme || '',
@@ -717,8 +756,8 @@ exports.suiviPassageKo = onDocumentWritten(
         const d = await t.get(ref);
         if (!d.exists) {
           t.set(ref, {
-            titre: scenario.exists ? scenario.data().titre || apres.scenario : `Échec sur ${apres.scenario}`,
-            scenario: apres.scenario, bloc: scenario.exists ? scenario.data().bloc || '' : '',
+            titre: scenario.titre || apres.scenario,
+            scenario: apres.scenario, bloc: scenario.bloc || '',
             gravite: 'important', statut: 'nouvelle', origine: 'testeur',
             description: '', passages: [temoin.passage], temoins: [temoin],
             plateformes: temoin.plateforme ? [temoin.plateforme] : [],
@@ -755,6 +794,12 @@ exports.suiviPassageKo = onDocumentWritten(
  * tombe ; un nouveau KO rouvre l'anomalie en régression.
  *
  * Si l'équipe revient sur sa décision, la marque est retirée.
+ *
+ * Un testeur qui a terminé (« termines ») ou dont l'accès est clos
+ * (« fins » passée) ne peut plus rejouer : les règles refusent son geste.
+ * Son passage ne reçoit donc pas la marque, qui resterait orange pour
+ * toujours. Le passage est noté à la place sur l'anomalie, dans
+ * « aVerifierEquipe » : c'est à l'équipe de vérifier la correction.
  */
 exports.suiviAnomalieCorrigee = onDocumentUpdated(
   { region: REGION, document: 'projets/{projetId}/anomalies/{anomalieId}' },
@@ -766,20 +811,34 @@ exports.suiviAnomalieCorrigee = onDocumentUpdated(
     const { projetId } = evenement.params;
 
     const campagnes = new Map();
+    const aVerifier = [];
     for (const t of apres.temoins || []) {
       if (!t.passage || !t.campagne) continue;
       if (!campagnes.has(t.campagne)) {
         const c = await bdd.doc(`projets/${projetId}/campagnes/${t.campagne}`).get();
-        campagnes.set(t.campagne, c.exists && c.data().statut === 'en-cours');
+        campagnes.set(t.campagne, c.exists && c.data().statut === 'en-cours' ? c.data() : null);
       }
-      if (!campagnes.get(t.campagne)) continue;
+      const campagne = campagnes.get(t.campagne);
+      if (!campagne) continue;
       const ref = bdd.doc(`projets/${projetId}/campagnes/${t.passage.replace('/', '/passages/')}`);
       try {
         const p = await ref.get();
-        if (!p.exists || p.data().resultat !== 'ko') continue;
+        if (!p.exists || !['echec', 'ko'].includes(p.data().resultat)) continue;
+        const testeur = p.data().testeur || t.testeur || '';
+        const fin = (campagne.fins || {})[testeur];
+        const finDate = fin && typeof fin.toDate === 'function' ? fin.toDate() : (fin ? new Date(fin) : null);
+        const nePeutPlusRejouer = testeur in (campagne.termines || {}) || Boolean(finDate && finDate.getTime() <= Date.now());
+        if (corrigee && nePeutPlusRejouer) { aVerifier.push(t.passage); continue; }
         await ref.update(corrigee ? { aRevoir: true } : { aRevoir: FieldValue.delete() });
       } catch (err) { console.error('Passage à rejouer non marqué', t.passage, err); }
     }
+    /* La note pour l'équipe : posée à la correction, retirée si l'équipe
+       revient sur sa décision. Réécrire l'anomalie relance ce déclencheur,
+       qui s'arrête aussitôt (le statut n'a pas changé). */
+    try {
+      if (corrigee && aVerifier.length) await evenement.data.after.ref.update({ aVerifierEquipe: aVerifier });
+      else if (!corrigee && 'aVerifierEquipe' in avant) await evenement.data.after.ref.update({ aVerifierEquipe: FieldValue.delete() });
+    } catch (err) { console.error('Note de vérification non posée', err); }
   },
 );
 
