@@ -108,7 +108,7 @@ const poserLesAvis=async()=>{
     }:{};
   });
   console.log('    ', (v.chiffres||[]).join(' | '));
-  verifier((v.familles||[]).length===7,'les sept familles',(v.familles||[]).join('/'));
+  verifier((v.familles||[]).length===8,'les huit familles (le test lui-même compris)',(v.familles||[]).join('/'));
   verifier((v.verbatims||0)>0,`les réponses libres sont rendues (${v.verbatims})`);
   verifier(/récurrences/.test(v.texte||''),'mot pour mot, sans résumé');
   verifier(/recommandation sur 10/.test((v.chiffres||[]).join(' ')),'le score de recommandation est calculé');

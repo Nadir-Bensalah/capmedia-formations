@@ -1923,6 +1923,34 @@ service cloud.firestore {
           // Une appréciation ne s'efface pas plus qu'un passage : c'est la
           // mémoire de la campagne, et se raviser après coup la falsifie.
           allow delete: if false;
+
+          // Ce qui ne regarde que l'équipe : la note du test (clair,
+          // faisable ?) et ses mots, posés en disant « j'ai terminé », et
+          // les anciennes remarques d'après test qu'on y a rangées. Le client
+          // lit l'appréciation, pas ce document. Le testeur le relit et
+          // l'écrit tant qu'il n'a pas terminé, sans toucher aux remarques.
+          match /equipe/{docId} {
+            allow read:   if equipeSurProjet(projetId)
+                          || (estTesteur() && testeurId == moi());
+            allow create, update: if estTesteur()
+              && testeurId == moi()
+              && docId == 'retour'
+              && testeurDeLaCampagne(projetId, campagneId)
+              && campagneOuverte(projetId, campagneId)
+              && accesTesteurEnCours(projetId, campagneId)
+              && !testeurATermine(projetId, campagneId)
+              && (resource == null
+                    ? request.resource.data.keys().hasOnly(['noteTest', 'testeur', 'maj'])
+                    : request.resource.data.diff(resource.data).affectedKeys().hasOnly(['noteTest', 'testeur', 'maj']))
+              && request.resource.data.testeur == moi()
+              && request.resource.data.noteTest is map
+              && request.resource.data.noteTest.keys().hasOnly(['note', 'commentaire', 'le'])
+              && request.resource.data.noteTest.note is int
+              && request.resource.data.noteTest.note >= 1 && request.resource.data.noteTest.note <= 5
+              && texteBorne(request.resource.data.noteTest.get('commentaire', ''), 2000)
+              && request.resource.data.noteTest.le == request.time;
+            allow delete: if false;
+          }
         }
       }
 

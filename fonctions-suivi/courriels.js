@@ -1181,12 +1181,16 @@ function testeurTermine(v) {
 function testeurRemarque(v) {
   const remarques = (Array.isArray(v.remarques) ? v.remarques : []).map(valeurTexte).filter(Boolean);
   const qui = valeurTexte(v.testeur) || 'Un testeur';
+  /* « libre » : une remarque écrite à tout moment (campagnes/{c}/remarques),
+     pas seulement après la fin du test. */
+  const libre = v.libre === true;
+  const scenario = valeurTexte(v.scenario);
   return {
-    objet: `Remarque de ${qui} après son test : ${valeurTexte(v.campagne)}`,
+    objet: libre ? `Remarque de ${qui} : ${valeurTexte(v.campagne)}` : `Remarque de ${qui} après son test : ${valeurTexte(v.campagne)}`,
     ...rendreGabarit({
-      titre: 'Une remarque après le test',
-      intro: `${qui} a ajouté ce qui suit sur ${valeurTexte(v.campagne) || 'la campagne'}${v.projetNom ? ` (${valeurTexte(v.projetNom)})` : ''}, après avoir terminé.`,
-      faits: [['Testeur', `${qui}${v.email ? ` · ${valeurTexte(v.email)}` : ''}`]],
+      titre: libre ? 'Une remarque d\'un testeur' : 'Une remarque après le test',
+      intro: `${qui} a ajouté ce qui suit sur ${valeurTexte(v.campagne) || 'la campagne'}${v.projetNom ? ` (${valeurTexte(v.projetNom)})` : ''}${libre ? '.' : ', après avoir terminé.'}`,
+      faits: [['Testeur', `${qui}${v.email ? ` · ${valeurTexte(v.email)}` : ''}`], ...(scenario ? [['Scénario', scenario]] : [])],
       citation: remarques.join('\n\n'),
       bouton: { libelle: 'Ouvrir la campagne dans le Cockpit', url: valeurTexte(v.lien) },
     }),

@@ -18,9 +18,10 @@
    ========================================================================== */
 
 import {
-  bdd, auth, doc, getDoc, setDoc, updateDoc, collection, query, where, signOut, onSnapshot, effacerSecretsLocaux, enDate,
+  bdd, auth, doc, getDoc, setDoc, addDoc, updateDoc, collection, query, where, signOut, onSnapshot, effacerSecretsLocaux, enDate,
   serverTimestamp, session, echapper, envoyerPiece,
   NIVEAUX_SCENARIO, BLOCS_SCENARIO, PLATEFORMES_TEST, RESULTATS_PASSAGE, FAMILLES_AVIS,
+  aRepondu, resumeQuestionnaire, remarqueAEnvoyer, REMARQUE_MAX,
 } from './noyau.js';
 import { icone, pastille, toast, agir, modale, vide } from './ui.js';
 import { monterCoquille, definirNavigation, definirEtat, filAriane, enregistrerRecherche } from './coquille.js';
@@ -65,7 +66,7 @@ let vueCourante = (() => {
   try { return localStorage.getItem('suivi:testeur-vue') || 'grille'; } catch (e) { return 'grille'; }
 })();
 
-const etat = { campagne: null, scenarios: [], passages: new Map(), avis: null, bloc: '', reste: true, charge: false };
+const etat = { campagne: null, scenarios: [], passages: new Map(), avis: null, retour: null, remarques: [], bloc: '', reste: true, charge: false };
 
 /* -------------------------------------------------------------------------- */
 
@@ -146,22 +147,58 @@ const finTestHtml = () => {
   return '';
 };
 
-/* Après la fin : ce qui lui revient après coup. Une remarque part telle
-   quelle à l'équipe, sans passer par un scénario. */
-const remarquesHtml = () => {
-  if (!aTermine()) return '';
-  const liste = (etat.avis && Array.isArray(etat.avis.remarques)) ? etat.avis.remarques : [];
+/* Ce qu'il a commencé à écrire survit à un nouveau dessin de la page (une
+   campagne que l'équipe modifie redessine tout). */
+let brouillonRemarque = '';
+
+/* Les remarques libres : à tout moment, sur un scénario ou en général.
+   Elles vivent à part (campagnes/{c}/remarques), lues par l'équipe avec le
+   nom et par le client sous « Testeur N ». Les anciennes, écrites dans
+   l'appréciation après la fin du test, restent affichées ici. */
+const peutRemarquer = () => {
+  const c = etat.campagne;
+  if (!c || c.statut !== 'en-cours') return false;
   const fin = finAcces();
-  const encore = !fin || fin.getTime() > Date.now();
-  return `<section class="remarques-fin">
-    <div class="section-tete"><h2>Une remarque de plus&nbsp;?</h2></div>
-    ${liste.length ? liste.map((r) => `<div class="remarque">${echapper(String(r.texte || ''))}<small>${enDate(r.le) ? echapper(enDate(r.le).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })) : ''}</small></div>`).join('') : ''}
-    ${encore && liste.length < 20 ? `<div class="groupe">
-      <textarea class="champ" id="remarque-texte" rows="3" placeholder="Ce qui vous est revenu après coup : un écran, un détail, une idée."></textarea>
-      <div class="actions" style="margin-top:8px"><button class="btn btn-secondaire" type="button" data-remarque>Envoyer à l'équipe</button></div>
-    </div>` : `<p class="aide">${liste.length >= 20 ? 'Vingt remarques, merci : l\'équipe a de quoi lire.' : 'Votre accès est terminé.'}</p>`}
+  return !fin || fin.getTime() > Date.now();
+};
+
+const mesRemarques = () => {
+  /* Les anciennes : dans equipe/retour une fois migrées, sinon encore sur
+     l'appréciation. */
+  const source = (etat.retour && Array.isArray(etat.retour.remarques)) ? etat.retour.remarques
+    : ((etat.avis && Array.isArray(etat.avis.remarques)) ? etat.avis.remarques : []);
+  const anciennes = source.map((r) => ({ texte: r.texte, cree: r.le }));
+  return [...(etat.remarques || []), ...anciennes]
+    .sort((a, b) => ((enDate(b.cree) || new Date()) - (enDate(a.cree) || new Date())));
+};
+
+const remarqueLigne = (r) => {
+  const quand = enDate(r.cree);
+  const sur = [r.scenario ? `<span class="ref">${echapper(r.scenario)}</span>` : '', r.plateforme ? echapper((PLATEFORMES_TEST[r.plateforme] || {}).libelle || r.plateforme) : '',
+    quand ? echapper(quand.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })) : ''].filter(Boolean).join(' · ');
+  return `<div class="remarque">${echapper(String(r.texte || ''))}<small>${sur}</small></div>`;
+};
+
+const remarquesBloc = ({ titre = 'Mes remarques' } = {}) => {
+  const liste = mesRemarques();
+  return `<section class="remarques-fin" id="remarques">
+    <div class="section-tete"><h2>${echapper(titre)}</h2></div>
+    <p class="aide">Ce qui vous passe par la tête, à tout moment : un écran, un détail, une idée. L'équipe Capmedia la lit avec votre nom, le client la lit sans votre nom.</p>
+    ${liste.map(remarqueLigne).join('')}
+    ${peutRemarquer() ? `<div class="groupe">
+      <textarea class="champ" id="remarque-texte" rows="3" maxlength="${REMARQUE_MAX}" placeholder="Ce que vous avez remarqué.">${echapper(brouillonRemarque)}</textarea>
+      ${etat.scenarios.length ? `<select class="select" id="remarque-scenario" style="margin-top:8px;width:auto;max-width:100%">
+        <option value="">En général</option>
+        ${etat.scenarios.map((x) => `<option value="${echapper(x.ref)}">${echapper(x.ref)} · ${echapper(x.titre || '')}</option>`).join('')}
+      </select>` : ''}
+      <div class="actions" style="margin-top:8px"><button class="btn btn-secondaire" type="button" data-remarque>Envoyer la remarque</button></div>
+    </div>` : '<p class="aide">Votre accès est terminé : plus de remarque possible.</p>'}
   </section>`;
 };
+
+/* Sur la page de la campagne, le bloc ne vient qu'après la fin : avant,
+   il est dans « Mon avis » et dans la feuille de chaque scénario. */
+const remarquesHtml = () => (aTermine() ? remarquesBloc({ titre: 'Une remarque de plus\u00a0?' }) : '');
 
 /* Les fiches des magasins, pour un vrai avis une fois le test fini : un
    testeur qui a passé des heures dans l'application est le mieux placé
@@ -181,16 +218,19 @@ const magasinsHtml = () => {
 
 const terminer = async (moi) => {
   const total = etat.scenarios.length;
+  /* Les deux questions sur le test viennent de la source du questionnaire :
+     ce qui est demandé ici est ce que le Cockpit et le Hub restituent. */
+  const [qNote, qCommentaire] = FAMILLES_AVIS.test.questions;
   if (!total || etat.scenarios.some((s) => !etat.passages.has(s.ref))) { toast('Il reste des scénarios à dérouler.', 'erreur'); return; }
   /* Une note sur le TEST lui-même, pas sur l'application : c'est ce qui
      dit à l'équipe si les scénarios étaient clairs et faisables. */
   const m = modale({
     titre: 'Terminer le test', sousTitre: 'Vos résultats seront transmis et figés.',
     corps: `<p>L'équipe Capmedia reçoit votre bilan : ${compter().ok} réussi${compter().ok > 1 ? 's' : ''}, ${compter().ko} échec${compter().ko > 1 ? 's' : ''}, ${compter().na} sans objet. Vous ne pourrez plus modifier vos résultats, mais vous garderez sept jours pour ajouter une remarque.</p>
-      <div class="groupe" style="margin-top:16px"><span class="etiquette-champ">Ce test était-il clair et faisable&nbsp;?</span>
+      <div class="groupe" style="margin-top:16px"><span class="etiquette-champ">${echapper(qNote.libelle)}</span>
         <div class="avis-echelle" role="group" aria-label="Note du test">${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="avis-cran" data-note-test="${n}" aria-pressed="false">${n}</button>`).join('')}</div>
-        <div class="rang avis-bornes"><span>Confus, pénible</span><span>Limpide, agréable</span></div></div>
-      <div class="groupe"><label class="etiquette-champ" for="note-test-texte">Ce qui aurait rendu ce test plus facile <span class="facultatif">(facultatif)</span></label>
+        <div class="rang avis-bornes"><span>${echapper(qNote.bas)}</span><span>${echapper(qNote.haut)}</span></div></div>
+      <div class="groupe"><label class="etiquette-champ" for="note-test-texte">${echapper(qCommentaire.libelle)} <span class="facultatif">(facultatif)</span></label>
         <textarea class="champ" id="note-test-texte" rows="3" placeholder="Un scénario flou, une consigne manquante, un lien qui ne marchait pas…"></textarea></div>`,
     pied: '<button class="btn btn-secondaire" type="button" data-fermer>Pas encore</button><button class="btn btn-principal" type="button" data-valider>Oui, j\'ai terminé</button>',
   });
@@ -210,35 +250,57 @@ const terminer = async (moi) => {
   const uid = auth.currentUser.uid;
   const chemin = `projets/${etat.campagne.projet}/campagnes/${etat.campagne.id}/appreciations/${uid}`;
   try {
-    await setDoc(doc(bdd, chemin), { termine: serverTimestamp(), noteTest: { note: reponse.note, commentaire: reponse.commentaire, le: new Date() }, testeur: uid, maj: serverTimestamp() }, { merge: true });
+    /* La note du test d'abord, à part (equipe/retour) : le client lit
+       l'appréciation, pas ce document-là. Le serveur la relit quand il voit
+       arriver « termine », qui part donc en second. */
+    await setDoc(doc(bdd, chemin, 'equipe', 'retour'), { noteTest: { note: reponse.note, commentaire: reponse.commentaire, le: serverTimestamp() }, testeur: uid, maj: serverTimestamp() }, { merge: true });
+    await setDoc(doc(bdd, chemin), { termine: serverTimestamp(), testeur: uid, maj: serverTimestamp() }, { merge: true });
     etat.avis = { ...(etat.avis || {}), termine: new Date(), noteTest: { note: reponse.note, commentaire: reponse.commentaire } };
     toast('Merci. Votre bilan est transmis à l\'équipe.');
     rendre(moi);
     /* Le plus utile arrive à la fin : son avis sur l'application, s'il ne
        l'a pas encore donné. */
-    if (!Object.keys(etat.avis).some((k) => k.startsWith('esthetique.'))) { await ouvrirAvis(moi, 'apres'); rendre(moi); }
+    if (!aRepondu(etat.avis, 'apres')) { await ouvrirAvis(moi, 'apres'); rendre(moi); }
   } catch (e) {
     console.error(e);
     toast("La fin du test n'a pas pu être enregistrée. Réessayez.", 'erreur');
   }
 };
 
-const ajouterRemarque = async (moi, texte) => {
-  const t = String(texte || '').trim();
-  if (!t) { toast('Écrivez votre remarque d\'abord.', 'erreur'); return; }
-  if (t.length > 4000) { toast('Une remarque tient en 4 000 caractères.', 'erreur'); return; }
+const ajouterRemarque = async (moi, { texte, scenario, plateforme } = {}) => {
+  const { remarque, erreur } = remarqueAEnvoyer({ texte, scenario, plateforme });
+  if (erreur) { toast(erreur, 'erreur'); return false; }
   const uid = auth.currentUser.uid;
-  const chemin = `projets/${etat.campagne.projet}/campagnes/${etat.campagne.id}/appreciations/${uid}`;
-  const liste = [...((etat.avis && etat.avis.remarques) || []), { texte: t, le: new Date() }];
   try {
-    await setDoc(doc(bdd, chemin), { remarques: liste, testeur: uid, maj: serverTimestamp() }, { merge: true });
-    etat.avis = { ...(etat.avis || {}), remarques: liste };
-    toast('Remarque envoyée à l\'équipe, merci.');
+    await addDoc(collection(bdd, 'projets', etat.campagne.projet, 'campagnes', etat.campagne.id, 'remarques'),
+      { ...remarque, testeur: uid, cree: serverTimestamp() });
+    toast('Remarque envoyée, merci.');
+    if (!scenario || String(texte || '').trim() === brouillonRemarque.trim()) brouillonRemarque = '';
     rendre(moi);
+    return true;
   } catch (e) {
     console.error(e);
-    toast("La remarque n'a pas pu être envoyée. Votre accès est peut-être terminé.", 'erreur');
+    toast(peutRemarquer() ? "La remarque n'a pas pu être envoyée. Réessayez." : 'Votre accès est terminé : la remarque n\'a pas pu partir.', 'erreur');
+    return false;
   }
+};
+
+/* Une remarque sur un scénario, depuis sa feuille : la référence et la
+   plateforme partent avec, le testeur n'a rien à recopier. */
+const ouvrirRemarque = (s, moi) => {
+  const m = modale({
+    titre: 'Une remarque', sousTitre: `${s.ref} · ${s.titre || ''}`,
+    corps: `<div class="groupe"><label class="etiquette-champ" for="remarque-feuille">Ce que vous avez remarqué</label>
+      <textarea class="champ" id="remarque-feuille" rows="4" maxlength="${REMARQUE_MAX}"></textarea>
+      <p class="aide">Pas un résultat : une impression, un détail, une idée. L'équipe la lit avec votre nom, le client sans votre nom.</p></div>`,
+    pied: '<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button><button class="btn btn-principal" type="button" data-valider>Envoyer</button>',
+  });
+  const bouton = m.el.querySelector('[data-valider]');
+  bouton.addEventListener('click', () => agir(bouton, async () => {
+    const parti = await ajouterRemarque(moi, { texte: ($('#remarque-feuille', m.el).value || ''), scenario: s.ref, plateforme: plateformeCourante });
+    if (parti) m.fermer(true);
+  }));
+  return m.fin;
 };
 
 const enTete = (moi, campagne) => {
@@ -294,8 +356,8 @@ const appelAvis = () => {
   const total = etat.scenarios.length;
   const faits = etat.scenarios.filter((s) => etat.passages.has(s.ref)).length;
   const a = etat.avis || {};
-  const avantFait = Object.keys(a).some((k) => k.startsWith('impression.'));
-  const apresFait = Object.keys(a).some((k) => k.startsWith('esthetique.'));
+  const avantFait = aRepondu(a, 'avant');
+  const apresFait = aRepondu(a, 'apres');
 
   if (!avantFait && !faits) {
     return `<div class="encart encart--attention avis-appel">
@@ -653,9 +715,10 @@ const pageAvis = (moi) => {
   filAriane([{ libelle: 'Mon avis' }]);
   if (!etat.campagne) { racine.innerHTML = sansCampagne('Mon avis'); return; }
   const a = etat.avis || {};
-  const avantFait = Object.keys(a).some((k) => k.startsWith('impression.'));
-  const apresFait = Object.keys(a).some((k) => k.startsWith('esthetique.'));
+  const avantFait = aRepondu(a, 'avant');
+  const apresFait = aRepondu(a, 'apres');
   const note = Object.entries(a).find(([k]) => k.endsWith('.recommande'));
+  const q = resumeQuestionnaire();
   const r = compter();
   const total = etat.scenarios.length;
   racine.innerHTML = `<div class="page">
@@ -665,19 +728,20 @@ const pageAvis = (moi) => {
       <section class="avis-moment">
         <p class="surtitre">Avant de commencer</p>
         <h2>Première impression</h2>
-        <p class="t-2">Deux minutes, en découvrant l'application. Ce regard-là ne se retrouve pas ensuite.</p>
+        <p class="t-2">${q.avant} questions, deux minutes, en découvrant l'application. Ce regard-là ne se retrouve pas ensuite.</p>
         <div class="avis-moment-pied">${avantFait ? '<span class="pastille pastille--vert">Donnée, merci</span>' : '<span class="pastille pastille--ambre">À donner</span>'}
           <button class="btn ${avantFait ? 'btn-secondaire' : 'btn-principal'} btn-petit" type="button" data-avis-page="avant">${avantFait ? 'Revoir' : 'Donner ma première impression'}</button></div>
       </section>
       <section class="avis-moment">
         <p class="surtitre">À la fin</p>
         <h2>Votre avis sur l'application</h2>
-        <p class="t-2">L'esthétique, la facilité, l'utilité, et votre note sur 10. ${total ? `Vous en êtes à ${total - r.reste} scénarios sur ${total}.` : ''}</p>
+        <p class="t-2">${q.apres} questions : ${echapper(q.sujetsApres)}. ${total ? `Vous en êtes à ${total - r.reste} scénarios sur ${total}.` : ''}</p>
         <div class="avis-moment-pied">${apresFait ? '<span class="pastille pastille--vert">Donné, merci</span>' : '<span class="pastille pastille--gris">À la fin de la campagne</span>'}
           <button class="btn ${apresFait ? 'btn-secondaire' : 'btn-principal'} btn-petit" type="button" data-avis-page="apres">${apresFait ? 'Revoir' : 'Donner mon avis'}</button></div>
       </section>
     </div>
     ${note ? `<section class="avis-note"><p class="surtitre">Votre note</p><p class="avis-note-valeur">${echapper(String(note[1]))}<small>/10</small></p><p class="t-2">Vous recommanderiez l'application à ce niveau. Vous pouvez la changer en revoyant votre avis.</p></section>` : ''}
+    ${remarquesBloc()}
   </div>`;
   void moi;
 };
@@ -733,8 +797,8 @@ const majNavigation = () => {
   const r = compter();
   const c = etat.campagne;
   const a = etat.avis || {};
-  const avisDus = c ? (!Object.keys(a).some((k) => k.startsWith('impression.')) ? 1 : 0)
-    + (etat.scenarios.length && !r.reste && !Object.keys(a).some((k) => k.startsWith('esthetique.')) ? 1 : 0) : 0;
+  const avisDus = c ? (!aRepondu(a, 'avant') ? 1 : 0)
+    + (etat.scenarios.length && !r.reste && !aRepondu(a, 'apres') ? 1 : 0) : 0;
   definirNavigation([
     { items: [{ chemin: '/', libelle: 'Ma campagne', icone: 'bug', exact: true, compte: c ? { total: r.reste } : 0 }] },
     {
@@ -1053,12 +1117,14 @@ const ouvrirFeuille = (s, moi) => {
       <section class="fs-bloc fs-bloc--attendu"><p class="fs-bloc-sur">Ce qui doit se passer</p><p>${echapper(s.attendu || '')}</p></section>
       <p class="fs-note">Un scénario où rien ne se passe est un échec, jamais une réussite. ${echapper(niveau.aide)}</p>
       ${!plateformeCourante ? '<p class="fs-note"><strong>Dites d\'abord sur quoi vous testez</strong>, en haut de la page.</p>' : ''}
-      ${aTermine() ? '<p class="fs-note"><strong>Le test est terminé</strong> : ce résultat est figé.</p>' : ''}`,
+      ${aTermine() ? '<p class="fs-note"><strong>Le test est terminé</strong> : ce résultat est figé.</p>' : ''}
+      ${peutRemarquer() ? '<p class="fs-note"><button class="lien-sobre" type="button" data-remarque-scenario>Une remarque sur ce scénario</button></p>' : ''}`,
     pied: aTermine()
       ? '<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>'
       : Object.keys(RESULTATS_PASSAGE).map((cle) => `<button type="button" class="fs-verdict fs-verdict--${cle}" data-feuille-poser="${cle}" aria-pressed="${p && p.resultat === cle}"><i aria-hidden="true"></i>${VERDICTS[cle]}</button>`).join(''),
   });
   m.el.addEventListener('click', async (ev) => {
+    if (ev.target.closest('[data-remarque-scenario]')) { await ouvrirRemarque(s, moi); return; }
     const b = ev.target.closest('[data-feuille-poser]');
     if (!b) return;
     const resultat = b.dataset.feuillePoser;
@@ -1085,6 +1151,8 @@ const suivreCampagne = (moi, c, redessiner) => {
   etat.campagne = c;
   etat.passages = new Map();
   etat.avis = null;
+  etat.retour = null;
+  etat.remarques = [];
   if (!c) { etat.scenarios = []; if (accueil) accueil.majCampagne(null); redessiner(); return; }
 
   const pid = c.projet;
@@ -1112,9 +1180,19 @@ const suivreCampagne = (moi, c, redessiner) => {
     dessinerSiComplet();
   }, (e) => { console.warn('[testeur] passages', e); recu.passages = true; dessinerSiComplet(); }));
 
+  /* Ses remarques à lui, en direct : celle qu'il vient d'envoyer apparaît
+     sans recharger, sur ce téléphone comme sur son ordinateur. */
+  ecoutes.campagne.push(onSnapshot(query(collection(bdd, 'projets', pid, 'campagnes', c.id, 'remarques'), where('testeur', '==', moi.uid)), (inst) => {
+    etat.remarques = inst.docs.map((d) => ({ id: d.id, ...d.data() }));
+    redessiner();
+  }, (e) => { console.warn('[testeur] remarques', e); }));
+
   getDoc(doc(bdd, 'projets', pid, 'campagnes', c.id, 'appreciations', moi.uid))
     .then((a) => { if (a.exists()) { etat.avis = a.data(); redessiner(); } accorderAccueil(moi); })
     .catch(() => { /* pas encore d'avis */ });
+  getDoc(doc(bdd, 'projets', pid, 'campagnes', c.id, 'appreciations', moi.uid, 'equipe', 'retour'))
+    .then((r) => { if (r.exists()) { etat.retour = r.data(); redessiner(); } })
+    .catch(() => { /* rien à part */ });
   if (accueil) accueil.majCampagne(c);
 };
 
@@ -1209,13 +1287,20 @@ const monter = async () => {
   suivreTemps(testeur.uid);
   ecouterCampagnes(testeur, redessiner);
 
+  document.addEventListener('input', (e) => { if (e.target && e.target.id === 'remarque-texte') brouillonRemarque = e.target.value; });
+
   document.addEventListener('click', async (e) => {
     const el = e.target.closest('[data-sortir], [data-sur], [data-poser], [data-ouvrir], [data-avis], [data-vue], [data-case], [data-accueil="revoir"], [data-astuce-suivante], [data-avis-page], [data-terminer], [data-remarque]');
     if (!el) return;
 
     if (el.dataset.accueil === 'revoir') { lancerAccueil(testeur, { demande: true }); return; }
     if (el.hasAttribute('data-terminer')) { await agir(el, () => terminer(testeur)); return; }
-    if (el.hasAttribute('data-remarque')) { const z = $('#remarque-texte'); await agir(el, () => ajouterRemarque(testeur, z ? z.value : '')); return; }
+    if (el.hasAttribute('data-remarque')) {
+      const z = $('#remarque-texte'); const sc = $('#remarque-scenario');
+      const scenario = sc ? sc.value : '';
+      await agir(el, () => ajouterRemarque(testeur, { texte: z ? z.value : '', scenario, plateforme: scenario ? plateformeCourante : '' }));
+      return;
+    }
     if (el.hasAttribute('data-astuce-suivante')) {
       astuce = (astuce + 1) % ASTUCES.length;
       const p = el.closest('.astuce-testeur');

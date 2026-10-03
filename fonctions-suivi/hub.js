@@ -1113,6 +1113,10 @@ exports.hubAppreciationEcrite = onDocumentWritten({ region: REGION, document: 'p
     try { await bdd.doc(`projets/${pid}/campagnes/${cid}`).update(maj); } catch (err) { console.error('Fin de test : campagne non mise à jour', err); }
 
     const bilan = await bilanTesteur(pid, cid, uid);
+    /* La note du test vit à part (equipe/retour), réservée à l'équipe ;
+       une ancienne fin de test l'avait encore sur l'appréciation. */
+    const retour = await bdd.doc(`projets/${pid}/campagnes/${cid}/appreciations/${uid}/equipe/retour`).get().catch(() => null);
+    const noteTest = (retour && retour.exists && retour.data().noteTest) || apres.noteTest || null;
     const termines = Object.keys(campagne.termines || {}).length + 1;
     const total = (campagne.testeurs || []).length;
     const titreCampagne = campagne.titre || 'la campagne';
@@ -1126,8 +1130,8 @@ exports.hubAppreciationEcrite = onDocumentWritten({ region: REGION, document: 'p
       finAcces: fin.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }),
       echecs: bilan.echecs.map((e) => `${e.ref}${e.titre ? ` · ${e.titre}` : ''}${e.plateforme ? ` (${e.plateforme})` : ''}${e.commentaire ? ` : ${e.commentaire.slice(0, 200)}` : ''}`),
       avisDonne: Object.keys(apres).some((k) => k.startsWith('esthetique.')) ? 'oui' : 'pas encore',
-      noteTest: apres.noteTest && apres.noteTest.note ? `${apres.noteTest.note} sur 5` : '',
-      noteTestCommentaire: apres.noteTest ? String(apres.noteTest.commentaire || '').slice(0, 2000) : '',
+      noteTest: noteTest && noteTest.note ? `${noteTest.note} sur 5` : '',
+      noteTestCommentaire: noteTest ? String(noteTest.commentaire || '').slice(0, 2000) : '',
       lien: LIEN_ADMIN(lienAdmin),
     }, { projet: pid, evenement: 'testeur-termine' });
     await audit('test.termine', { projet: pid, campagne: cid, testeur: uid, ok: bilan.compte.ok, ko: bilan.compte.ko, na: bilan.compte.na, finAcces: fin });
@@ -1144,6 +1148,35 @@ exports.hubAppreciationEcrite = onDocumentWritten({ region: REGION, document: 'p
       remarques: nouvelles, lien: LIEN_ADMIN(lienAdmin),
     }, { projet: pid, evenement: 'testeur-remarque' });
   }
+});
+
+/* Une remarque libre d'un testeur (campagnes/{c}/remarques) : écrite à
+   tout moment, sur un scénario ou en général. L'équipe est prévenue comme
+   pour une remarque d'après test ; le client la lit dans le Hub, sans nom,
+   et ne reçoit rien de plus. */
+exports.hubRemarqueTesteur = onDocumentCreated({ region: REGION, document: 'projets/{projetId}/campagnes/{campagneId}/remarques/{remarqueId}' }, async (evenement) => {
+  const r = evenement.data ? evenement.data.data() : null;
+  if (!r || !r.texte) return;
+  const { projetId: pid, campagneId: cid } = evenement.params;
+  const [projet, campagneDoc, testeurDoc] = await Promise.all([
+    lireProjet(pid),
+    bdd.doc(`projets/${pid}/campagnes/${cid}`).get(),
+    bdd.doc(`testeurs/${r.testeur}`).get(),
+  ]);
+  if (!campagneDoc.exists) return;
+  const campagne = campagneDoc.data();
+  const testeur = testeurDoc.exists ? testeurDoc.data() : {};
+  const nomTesteur = testeur.prenom || testeur.email || 'Un testeur';
+  const titreCampagne = campagne.titre || 'la campagne';
+  const lienAdmin = `/tests?projet=${pid}`;
+  const texte = String(r.texte).slice(0, 2000);
+  const scenario = String(r.scenario || '').slice(0, 80);
+  await activite({ projet: pid, type: 'test', texte: `${nomTesteur} a écrit une remarque${scenario ? ` sur ${scenario}` : ''} (« ${titreCampagne} »)`, par: { uid: null, nom: 'Capmedia Test', cote: 'equipe' }, lien: lienAdmin, visibilite: 'interne' });
+  await notifierEquipe(pid, { type: 'test', titre: `Remarque de ${nomTesteur}`, texte: `${scenario ? `${scenario} · ` : ''}${texte.slice(0, 140)}`, lien: `#${lienAdmin}`, projet: pid });
+  await mettreEnFile('testeur-remarque', contactsEquipe(), {
+    projetNom: nomProjet(projet), campagne: titreCampagne, testeur: nomTesteur, email: testeur.email || '',
+    remarques: [texte], scenario, libre: true, lien: LIEN_ADMIN(lienAdmin),
+  }, { projet: pid, evenement: 'testeur-remarque' });
 });
 
 /* ==========================================================================

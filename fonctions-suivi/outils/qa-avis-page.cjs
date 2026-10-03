@@ -71,9 +71,9 @@ const nombre=(page,sel)=>page.evaluate((s)=>document.querySelectorAll(s).length,
   verifier(/2 testeurs ont répondu/.test(resume),'le résumé compte deux réponses',resume);
   verifier(/7[,.]5/.test(resume),'et une recommandation de 7,5',resume);
   verifier(/3.*12 €/.test(resume),'et une fourchette de 3 à 12 €',resume);
-  verifier(await nombre(page,'#avis .avis-famille')===7,'les sept familles sont là',String(await nombre(page,'#avis .avis-famille')));
+  verifier(await nombre(page,'#avis .avis-famille')===8,'les huit familles sont là (le test lui-même compris)',String(await nombre(page,'#avis .avis-famille')));
   const nq=await nombre(page,'#avis .avis-question');
-  verifier(nq===35,`les 35 questions sont toutes visibles (${nq})`);
+  verifier(nq===37,`les 37 questions de la source sont toutes visibles (${nq})`);
   const avisT=await texte(page,'#avis');
   verifier(/Les récurrences, le calendrier, les objectifs/.test(avisT),'une réponse libre est rendue mot pour mot');
   verifier(/Karim/.test(avisT)&&/Infirmier/.test(avisT),'signée du prénom et du profil pour l équipe');
@@ -128,7 +128,7 @@ const nombre=(page,sel)=>page.evaluate((s)=>document.querySelectorAll(s).length,
   verifier(!/Karim|Sonia|karim\.essai|sonia\.essai/.test(avisC),'mais aucun prénom ni adresse');
   verifier(/Testeur \d/.test(avisC),'les testeurs sont numérotés');
   verifier(/Infirmier/.test(avisC)&&/25-34 ans/.test(avisC),'et leur profil reste');
-  verifier(await nombre(cl,'#avis .avis-question')===35,'les 35 questions sont là aussi');
+  verifier(await nombre(cl,'#avis .avis-question')===35,'les 35 questions sont là aussi (la note du test reste à l équipe)');
   /* Le même numéro partout : celui du vivier et celui de la citation. */
   const numCite=await cl.evaluate(()=>{
     const cite=[...document.querySelectorAll('#avis .avis-verbatim')].find(b=>/récurrences, le calendrier/.test(b.innerText));
