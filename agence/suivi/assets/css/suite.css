@@ -1946,3 +1946,24 @@ a.coffre-lien:hover { color: var(--accent); }
    client : la page garde de la place en bas pour qu'aucun bouton ne passe
    dessous (le bouton « Agenda » du calendrier y disparaissait). */
 body:has(.bulle) #vue .page { padding-bottom: 104px; }
+
+/* Les cartes des plateformes (03/10) : une seule rangée qui défile, des
+   cartes de même largeur, un nom court, deux lignes d'état discrètes avec
+   un point de couleur, les liens en petites pastilles en bas. */
+.cartes-plateformes { display: flex; gap: 12px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; padding: 2px 2px 8px; margin: 0 -2px; scrollbar-width: thin; }
+.cartes-plateformes .carte-plateforme { flex: 0 0 214px; scroll-snap-align: start; display: grid; grid-template-columns: 32px minmax(0, 1fr); grid-template-rows: auto 1fr auto; column-gap: 10px; row-gap: 8px; align-items: start; padding: 14px 14px 12px; min-height: 0; }
+.cartes-plateformes .carte-plateforme-tuile { width: 32px; height: 32px; border-radius: 9px; grid-row: 1 / 3; }
+.cartes-plateformes .carte-plateforme-tuile svg { width: 16px; height: 16px; }
+.cartes-plateformes .carte-plateforme-corps { grid-column: 2; grid-row: 1 / 3; gap: 3px; }
+.cartes-plateformes .carte-plateforme-nom { font-size: 14px; font-weight: 600; line-height: 1.25; }
+.cartes-plateformes .carte-plateforme-etat { display: flex; align-items: baseline; gap: 6px; font-size: 12.5px; line-height: 1.35; color: var(--encre-2); }
+.cartes-plateformes .carte-plateforme-etat i { align-self: center; }
+.cartes-plateformes .carte-plateforme-etat b { font-weight: 600; color: var(--encre); font-variant-numeric: tabular-nums; }
+.cartes-plateformes .carte-plateforme-etat i { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--encre-3); }
+.cartes-plateformes .carte-plateforme-etat--ok i { background: var(--ok, var(--vert)); }
+.cartes-plateformes .carte-plateforme-etat--prep i { background: var(--accent, var(--bleu)); }
+.cartes-plateformes .carte-plateforme-quoi { color: var(--encre-3); }
+.cartes-plateformes .carte-plateforme-gestes { grid-column: 1 / -1; grid-row: 3; display: flex; gap: 6px; flex-wrap: nowrap; }
+.cartes-plateformes .carte-plateforme-gestes .btn { height: 26px; padding: 0 10px; font-size: 12px; gap: 5px; }
+.cartes-plateformes .carte-plateforme-gestes .btn svg { width: 12px; height: 12px; }
+.cartes-plateformes .carte-plateforme-fleche { grid-column: 2; grid-row: 3; justify-self: end; }

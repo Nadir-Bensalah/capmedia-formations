@@ -437,14 +437,22 @@ const cartesPlateformes = (projet, d, pid) => {
     const c = d.composants.find((x) => x.type === (f.composant || cle)) || null;
     /* Le nom vient de la partie quand elle existe (« Firebase » plutôt que
        « Serveur ») ; la plateforme ne donne que l'icône et la couleur. */
-    const nom = (c && String(c.nom || '').trim()) || f.libelle;
+    const nomLong = (c && String(c.nom || '').trim()) || f.libelle;
+    /* Sur la carte, un nom court (« iPhone », « Firebase ») : le nom complet
+       est sur la page de la partie. */
+    const nom = cle === 'backend' ? nomLong : f.libelle;
     const v = versionsPartie(d.releases, cle, c);
     /* Deux lignes courtes, lisibles en entier : le numéro, rien d'autre.
        Le détail (date, état chez Apple) est sur la page de la partie, et
        dans l'infobulle. Plus de texte coupé par des points de suspension. */
     const lignes = [];
-    if (v.enLigne) lignes.push({ quoi: 'En ligne', num: v.enLigne.numero, detail: [v.enLigne.quand && `depuis le ${v.enLigne.quand}`, v.enLigne.ou].filter(Boolean).join(' · ') });
-    if (v.prep) lignes.push({ quoi: 'En préparation', num: v.prep.numero, detail: v.prep.etat });
+    /* « Version du 28 septembre 2026 » devient « 28 sept. 2026 » ; une
+       préparation sans numéro (« Version nettoyée ») se dit sans valeur. */
+    const MOIS = { janvier: 'janv.', fevrier: 'févr.', février: 'févr.', mars: 'mars', avril: 'avr.', mai: 'mai', juin: 'juin', juillet: 'juil.', aout: 'août', août: 'août', septembre: 'sept.', octobre: 'oct.', novembre: 'nov.', decembre: 'déc.', décembre: 'déc.' };
+    const court = (t) => String(t || '').replace(/^Version du\s+/i, '').replace(/\b(janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[ée]cembre)\b/i, (m) => MOIS[m.toLowerCase()] || m);
+    const numerote = (t) => /\d/.test(String(t || ''));
+    if (v.enLigne) lignes.push({ quoi: 'en ligne', num: court(v.enLigne.numero), ton: 'ok', detail: [v.enLigne.quand && `depuis le ${v.enLigne.quand}`, v.enLigne.ou].filter(Boolean).join(' · ') });
+    if (v.prep) lignes.push({ quoi: 'en préparation', num: numerote(v.prep.numero) ? court(v.prep.numero) : '', ton: 'prep', detail: numerote(v.prep.numero) ? v.prep.etat : [v.prep.numero, v.prep.etat].filter(Boolean).join(' · ') });
     const etat = !lignes.length ? (c ? ((STATUTS_COMPOSANT[c.statut || 'en-cours'] || {}).libelle || 'En cours') : 'Pas encore suivie') : '';
     const store = v.disponible && v.disponible.liens && v.disponible.liens.store;
     const test = v.enRoute && v.enRoute.liens && v.enRoute.liens.test;
@@ -467,7 +475,7 @@ const cartesPlateformes = (projet, d, pid) => {
       <a class="carte-plateforme-tuile" href="${href}" aria-label="${echapper(`Ouvrir la page ${nom}`)}">${icone(f.icone)}</a>
       <a class="carte-plateforme-corps" href="${href}" data-astuce="${echapper(`Ouvrir la page ${nom}`)}">
         <span class="carte-plateforme-nom">${echapper(nom)}</span>
-        ${lignes.map((l) => `<span class="carte-plateforme-etat"${l.detail ? ` title="${echapper(l.detail)}"` : ''}><span class="carte-plateforme-quoi">${echapper(l.quoi)}</span> <b>${echapper(l.num)}</b></span>`).join('')}
+        ${lignes.map((l) => `<span class="carte-plateforme-etat carte-plateforme-etat--${l.ton}"${l.detail ? ` title="${echapper(l.detail)}"` : ''}><i aria-hidden="true"></i>${l.num ? `<b>${echapper(l.num)}</b> ` : ''}<span class="carte-plateforme-quoi">${echapper(l.num ? l.quoi : l.quoi.replace(/^./, (x) => x.toUpperCase()))}</span></span>`).join('')}
         ${etat ? `<span class="carte-plateforme-etat">${echapper(etat)}</span>` : ''}
       </a>
       ${boutons.length ? `<span class="carte-plateforme-gestes">${boutons.join('')}</span>` : `<a class="carte-plateforme-fleche" href="${href}" aria-hidden="true" tabindex="-1">${icone('fleche')}</a>`}
