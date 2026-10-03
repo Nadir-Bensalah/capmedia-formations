@@ -304,10 +304,15 @@ const verifierChiffres = (r, quoi) => {
   await passage(bruno, 'gh-taches-f-001', 'ko', 'android', 41);
   await passage(celia, 'gh-connexion-t-001', 'ok', 'web', 40);
   const anos = await attendre(async () => {
-    const a = await Promise.all(['ko-GH-02', 'ko-GH-07', 'ko-gh-taches-f-001'].map((x) => lire(`projets/${P}/anomalies/${x}`)));
+    const a = await Promise.all(['ko-GH-02', 'ko-GH-07'].map((x) => lire(`projets/${P}/anomalies/${x}`)));
     return a.every((x) => x && x.fields) && valeurs(champ(a[1], 'temoins')).length === 2;
   }, 60, 500);
-  verifier(anos, 'les KO font naître leurs anomalies, y compris sur un identifiant du plan');
+  verifier(anos, 'les KO de la bibliothèque font naître leurs anomalies');
+  /* La garde du serveur (suiviPassageKo) : un KO sur un scénario qui
+     n'existe ni dans le plan ni dans la bibliothèque ne fait pas
+     d'anomalie. Le plan n'est pas encore versé : rien pour gh-taches-f-001. */
+  const sansPlan = await lire(`projets/${P}/anomalies/ko-gh-taches-f-001`);
+  verifier(!(sansPlan && sansPlan.fields), 'un KO sur un identifiant absent du plan ne fait pas d anomalie');
 
   console.log('\n== Sans plan : la grille d\'avant');
   const cockpit = await ouvrir('dark');
@@ -326,6 +331,11 @@ const verifierChiffres = (r, quoi) => {
   SECTIONS.forEach((s) => fs.writeFileSync(path.join(dossierPlan, `${s.id}.json`), JSON.stringify(s, null, 2)));
   const imp = importer([P, dossierPlan, '--vrai']);
   verifier(imp.code === 0 && /4 sections versées/.test(imp.sortie), 'les quatre sections sont versées', imp.sortie.slice(-300));
+  /* Le plan versé, le testeur rend de nouveau son KO sur l'identifiant du
+     plan : le scénario existe, l'anomalie naît. */
+  await passage(bruno, 'gh-taches-f-001', 'ko', 'android', 39);
+  const anoPlan = await attendre(async () => { const a = await lire(`projets/${P}/anomalies/ko-gh-taches-f-001`); return Boolean(a && a.fields); }, 60, 500);
+  verifier(anoPlan, 'le plan versé, le KO sur un identifiant du plan fait naître son anomalie');
   const bascule = await attendre(async () => (await cockpit.$$('.tb-groupe')).length > 0, 40, 500);
   verifier(bascule, 'sans recharger, la grille des humains se range par le plan');
   await pause(900);
