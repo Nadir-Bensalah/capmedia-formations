@@ -321,10 +321,10 @@ const texteDe = (page, sel) => page.$eval(sel, (el) => el.textContent.replace(/\
   await page.evaluate(() => { location.hash = '#/'; });
   await page.reload({ waitUntil: 'domcontentloaded' }); await page.waitForSelector(`${arbre} .lat-branche a`, { timeout: 30000 }); await pause(2500);
   if (!(await page.$eval(arbre, (a) => a.classList.contains('deplie')).catch(() => false))) { await page.click(`${arbre} .lat-arbre-bascule`); await pause(600); }
-  const ORDRE = ['Aperçu', 'Tickets', 'Messages', 'Planning', 'Tâches', 'Calendrier', 'Campagne de tests', 'Axes d\'évolution', 'Marketing', 'Coffre-fort', 'Fichiers', 'Ressources', 'Notes', 'Devis et factures', 'Maintenance'];
+  const ORDRE = ['Aperçu', 'Tickets', 'Messages', 'Planning', 'Notes', 'Tâches', 'Calendrier', 'Campagne de tests', 'Marketing', 'Coffre-fort', 'Fichiers', 'Ressources', 'Axes d\'évolution', 'Devis et factures', 'Maintenance'];
   const libs = await page.$$eval(`${arbre} .lat-branche a .tronque`, (els) => els.map((e) => e.textContent.trim()));
   const rangs = libs.map((l) => ORDRE.indexOf(l));
-  verifier(rangs.every((r) => r >= 0) && rangs.every((r, i) => i === 0 || r > rangs[i - 1]), 'l ordre exact du rail : Aperçu, Tickets, Messages, Planning, Calendrier, Campagne de tests, Axes d évolution, Coffre-fort, Fichiers, Ressources, Notes, Devis et factures, Maintenance', libs.join(' | '));
+  verifier(rangs.every((r) => r >= 0) && rangs.every((r, i) => i === 0 || r > rangs[i - 1]), 'l ordre exact du rail : Aperçu, Tickets, Messages, Planning, Notes, Calendrier, Campagne de tests, Coffre-fort, Fichiers, Ressources, Axes d évolution, Devis et factures, Maintenance', libs.join(' | '));
   verifier(['Aperçu', 'Tickets', 'Messages', 'Planning', 'Calendrier', 'Axes d\'évolution', 'Coffre-fort', 'Fichiers', 'Notes', 'Devis et factures', 'Maintenance'].every((l) => libs.includes(l)), 'les entrées attendues du responsable sont toutes là', libs.join(' | '));
   verifier(libs.indexOf('Coffre-fort') === libs.indexOf('Fichiers') - 1, 'le coffre-fort juste au-dessus de Fichiers');
   /* Captures du rail, sombre et clair, quand on les demande (CAPTURES_RAIL : un dossier). */
