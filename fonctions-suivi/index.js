@@ -43,3 +43,8 @@ exports.suiviPieceMessage = pieces.suiviPieceMessage;
 
 /* Les notifications push des messages d'un projet, espace fermé (VAPID). */
 exports.hubPushMessage = require('./push').hubPushMessage;
+/* La conversation d'un testeur avec l'équipe, poussée elle aussi. */
+exports.hubPushMessageTesteur = require('./push').hubPushMessageTesteur;
+
+/* La campagne commence : chaque testeur prévenu (lettre, cloche, push). */
+exports.hubCampagneTesteurs = require('./testeurs-lettres').hubCampagneTesteurs;

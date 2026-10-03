@@ -1154,8 +1154,30 @@ exports.hubAppreciationEcrite = onDocumentWritten({ region: REGION, document: 'p
    dit ne regarde que l'équipe. Le serveur tient le document de la
    conversation (dernier message, compteurs de non lus) et prévient : la
    notification et la lettre à l'équipe quand le testeur écrit, la
-   notification et la lettre au testeur quand l'équipe répond.
+   notification et la lettre au testeur quand l'équipe répond (le push part
+   de push.js, hubPushMessageTesteur). Depuis octobre 2026, la messagerie
+   commune : un message peut n'être que des pièces, et un message supprimé
+   est effacé partout où il se lisait (hubMessageTesteurModifie).
    ========================================================================== */
+
+/* Le débit des lettres à l'équipe : une par testeur et par dix minutes au
+   plus. Une rafale de messages (ou un compte qui en abuse) ne remplit pas
+   la boîte de l'agence ; la cloche et le push, eux, suivent chaque message.
+   La place se prend dans une transaction, sur la conversation (champ
+   « lettreEquipe », que seul le serveur écrit). */
+const PAUSE_LETTRE_EQUIPE = 10 * 60 * 1000;
+async function reserverLettreEquipe(uid) {
+  const ref = bdd.doc(`conversationsTesteurs/${uid}`);
+  try {
+    return await bdd.runTransaction(async (tx) => {
+      const c = await tx.get(ref);
+      const avant = enMillis(c.exists ? (c.data() || {}).lettreEquipe : null);
+      if (avant && Date.now() - avant < PAUSE_LETTRE_EQUIPE) return false;
+      tx.set(ref, { lettreEquipe: FieldValue.serverTimestamp() }, { merge: true });
+      return true;
+    });
+  } catch (err) { console.error('Débit des lettres du testeur illisible : la lettre part', err); return true; }
+}
 
 exports.hubMessageTesteur = onDocumentCreated({ region: REGION, document: 'conversationsTesteurs/{testeurId}/messages/{messageId}' }, async (evenement) => {
   const m = evenement.data && evenement.data.data();
@@ -1163,7 +1185,9 @@ exports.hubMessageTesteur = onDocumentCreated({ region: REGION, document: 'conve
   const { testeurId: uid } = evenement.params;
   const de = m.de || {};
   const duTesteur = de.cote === 'testeur';
-  const extrait = String(m.texte || '').slice(0, 140);
+  const nbPieces = (m.pieces || []).length;
+  const extrait = String(m.texte || '').trim().slice(0, 140) || (nbPieces > 1 ? `${nbPieces} pièces jointes` : (nbPieces ? 'Pièce jointe' : ''));
+  const messageId = evenement.params.messageId;
   let testeur = {};
   try { const t = await bdd.doc(`testeurs/${uid}`).get(); testeur = t.exists ? t.data() : {}; } catch (err) { testeur = {}; }
   const prenom = testeur.prenom || de.nom || 'Un testeur';
@@ -1171,7 +1195,7 @@ exports.hubMessageTesteur = onDocumentCreated({ region: REGION, document: 'conve
   try {
     await bdd.doc(`conversationsTesteurs/${uid}`).set(sansIndefini({
       testeur: uid, prenom: testeur.prenom || '', email: testeur.email || '',
-      dernier: { texte: extrait, cote: de.cote || '', nom: de.nom || '', date: m.date || FieldValue.serverTimestamp() },
+      dernier: { id: messageId, texte: extrait, cote: de.cote || '', nom: de.nom || '', date: m.date || FieldValue.serverTimestamp() },
       nonLusEquipe: duTesteur ? FieldValue.increment(1) : 0,
       nonLusTesteur: duTesteur ? 0 : FieldValue.increment(1),
       maj: FieldValue.serverTimestamp(),
@@ -1180,14 +1204,68 @@ exports.hubMessageTesteur = onDocumentCreated({ region: REGION, document: 'conve
 
   const lienAdmin = `/testeurs-messages/${uid}`;
   if (duTesteur) {
-    await notifierEquipe(null, { type: 'message', titre: `Message de ${prenom} (testeur)`, texte: extrait, lien: `#${lienAdmin}` });
-    await mettreEnFile('message-testeur', contactsEquipe(), { testeur: prenom, email: testeur.email || '', texte: m.texte, lien: LIEN_ADMIN(lienAdmin) }, { evenement: 'message-testeur' });
+    await notifierEquipe(null, { type: 'message', titre: `Message de ${prenom} (testeur)`, texte: extrait, lien: `#${lienAdmin}`, message: messageId });
+    if (await reserverLettreEquipe(uid)) {
+      await mettreEnFile('message-testeur', contactsEquipe(), { testeur: prenom, email: testeur.email || '', texte: m.texte, lien: LIEN_ADMIN(lienAdmin) }, { evenement: 'message-testeur' });
+    }
   } else {
-    await notifier([uid], { type: 'message', titre: `Réponse de ${de.nom || 'Capmedia'}`, texte: extrait, lien: '#/messages' });
+    await notifier([uid], { type: 'message', titre: `Réponse de ${de.nom || 'Capmedia'}`, texte: extrait, lien: '#/messages', message: messageId });
     if (testeur.email) {
       await mettreEnFile('message-testeur-reponse', [{ email: testeur.email, nom: testeur.prenom || '' }], { prenom: testeur.prenom || '', auteur: de.nom || 'Capmedia', texte: m.texte, lien: `${courriels.BASE}testeur#/messages` }, { evenement: 'message-testeur-reponse' });
     }
   }
+});
+
+/* Un message de la conversation d'un testeur, supprimé par son auteur (les
+   règles ne laissent faire que lui) : comme pour un projet
+   (hubMessageProjetModifie), son texte ne se lit plus nulle part. Les
+   notifications qu'il a fait naître, les réponses qui le citaient et le
+   dernier message de la conversation le perdent ; ses pièces sont effacées
+   du stockage (seulement celles de CETTE conversation, déposées par lui).
+   Les e-mails déjà partis ne se rattrapent pas. */
+exports.hubMessageTesteurModifie = onDocumentUpdated({ region: REGION, document: 'conversationsTesteurs/{testeurId}/messages/{messageId}' }, async (evenement) => {
+  const avant = evenement.data.before.data() || {};
+  const apres = evenement.data.after.data() || {};
+  const { testeurId, messageId } = evenement.params;
+  const supprime = Boolean(apres.supprime) && !avant.supprime;
+  const modifie = !supprime && !apres.supprime && String(avant.texte || '') !== String(apres.texte || '');
+  if (!supprime && !modifie) return;
+  const conv = bdd.doc(`conversationsTesteurs/${testeurId}`);
+  try {
+    const c = await conv.get();
+    if (c.exists && ((c.data() || {}).dernier || {}).id === messageId) {
+      await conv.update({ 'dernier.texte': supprime ? 'Message supprimé' : String(apres.texte || '').trim().slice(0, 140) });
+    }
+  } catch (err) { console.error('Dernier message de la conversation non mis à jour', err); }
+  if (!supprime) return;
+  const auteur = (avant.de || {}).uid || '';
+  try {
+    const equipe = await bdd.collection('equipe').get();
+    for (const uid of new Set([testeurId, ...equipe.docs.map((d) => d.id)])) {
+      const q = await bdd.collection(`boites/${uid}/notifications`).where('message', '==', messageId).get();
+      for (const d of q.docs) await d.ref.update({ texte: 'Message supprimé' });
+    }
+  } catch (err) { console.error('Notifications du message non effacées', err); }
+  try {
+    const reponses = await bdd.collection(`conversationsTesteurs/${testeurId}/messages`).where('reponseA.id', '==', messageId).get();
+    for (const r of reponses.docs) await r.ref.update({ 'reponseA.extrait': '', 'reponseA.supprime': true });
+  } catch (err) { console.error('Citations du message non effacées', err); }
+  const { getStorage } = require('firebase-admin/storage');
+  const dossier = `conversationsTesteurs/${testeurId}/`;
+  for (const p of avant.pieces || []) {
+    const chemin = String((p && p.chemin) || '');
+    if (!chemin.startsWith(dossier) || chemin.includes('..')) continue;
+    try {
+      const fichier = getStorage().bucket().file(chemin);
+      const [existe] = await fichier.exists();
+      if (!existe) continue;
+      const [meta] = await fichier.getMetadata();
+      const par = ((meta && meta.metadata) || {}).par || '';
+      if (par !== auteur) { console.warn(`Pièce ${chemin} déposée par un autre : gardée`); continue; }
+      await fichier.delete({ ignoreNotFound: true });
+    } catch (err) { console.error(`Pièce ${chemin} non effacée`, err); }
+  }
+  await audit('message-testeur.supprime', { testeur: testeurId, message: messageId, par: auteur, pieces: (avant.pieces || []).length });
 });
 
 /* ==========================================================================

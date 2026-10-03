@@ -1573,26 +1573,48 @@ service cloud.firestore {
     // racine, à part des messages de projet (un testeur n'est membre
     // d'aucun projet). Le serveur crée le document et tient les compteurs
     // (hubMessageTesteur) ; chacun ne remet que SON compteur à zéro.
+    // La conversation d'un testeur avec l'équipe. Chacun ne remet que SON
+    // compteur à zéro, avec l'heure de lecture (« Lu le » d'en face), qui
+    // est celle du serveur.
+    function luA(champ) {
+      return !(champ in request.resource.data.diff(resource.data).affectedKeys())
+          || request.resource.data[champ] == request.time;
+    }
     match /conversationsTesteurs/{testeurId} {
       allow read:   if estEquipe() || (estTesteur() && testeurId == moi());
       allow update: if (estEquipe()
-                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nonLusEquipe'])
-                        && request.resource.data.nonLusEquipe == 0)
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nonLusEquipe', 'luEquipe'])
+                        && request.resource.data.nonLusEquipe == 0 && luA('luEquipe'))
                     || (estTesteur() && testeurId == moi()
-                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nonLusTesteur'])
-                        && request.resource.data.nonLusTesteur == 0);
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nonLusTesteur', 'luTesteur'])
+                        && request.resource.data.nonLusTesteur == 0 && luA('luTesteur'));
       allow create, delete: if false;
 
+      // La messagerie commune (octobre 2026), comme celle d'un projet :
+      // citer, joindre, puis réagir, modifier (quinze minutes) et supprimer
+      // son message. Un effacement pour de bon reste refusé à tous.
+      function dansLaConversation() {
+        return estEquipe() || (estTesteur() && testeurId == moi());
+      }
       match /messages/{messageId} {
-        allow read:   if estEquipe() || (estTesteur() && testeurId == moi());
-        allow create: if request.resource.data.keys().hasOnly(['de', 'texte', 'pieces', 'date'])
-          && texteRequis(request.resource.data.texte, 4000)
-          && request.resource.data.pieces is list && request.resource.data.pieces.size() == 0
+        allow read:   if dansLaConversation();
+        allow create: if request.resource.data.keys().hasOnly(['de', 'texte', 'pieces', 'date', 'reponseA'])
+          && request.resource.data.pieces is list
+          && request.resource.data.pieces.size() <= 10
+          && (texteRequis(request.resource.data.texte, 6000)
+              || (texteBorne(request.resource.data.texte, 6000) && request.resource.data.pieces.size() > 0))
+          && (!('reponseA' in request.resource.data) || citationValide(request.resource.data.reponseA))
           && request.resource.data.date == request.time
+          && request.resource.data.de is map
+          && request.resource.data.de.keys().hasOnly(['uid', 'nom', 'cote'])
+          && texteBorne(request.resource.data.de.get('nom', ''), 80)
           && request.resource.data.de.uid == moi()
           && ((estTesteur() && testeurId == moi() && request.resource.data.de.cote == 'testeur')
               || (estEquipe() && request.resource.data.de.cote == 'equipe'));
-        allow update, delete: if false;
+        allow update: if dansLaConversation()
+          && !('supprime' in resource.data)
+          && (reactionSeule() || modificationParAuteur() || suppressionParAuteur());
+        allow delete: if false;
       }
     }
 

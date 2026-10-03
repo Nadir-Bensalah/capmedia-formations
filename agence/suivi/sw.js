@@ -11,8 +11,9 @@
    Portée : /suivi/ (il vit à la racine de l'espace pour la couvrir).
 
    Ce que porte un push : { titre, corps, lien, tag }. « lien » est relatif
-   à l'espace (« hub#/messages/<projet> », « cockpit#/messages/<projet> ») ;
-   un lien qui sortirait de l'espace est ignoré.
+   à l'espace (« hub#/messages/<projet> », « cockpit#/messages/<projet> »,
+   « testeur#/messages », « cockpit#/testeurs-messages/<uid> ») ; un lien
+   qui sortirait de l'espace est ignoré. L'icône suit l'espace du lien.
    ========================================================================== */
 
 self.addEventListener('install', () => self.skipWaiting());
@@ -34,6 +35,14 @@ const lienSur = (lien) => {
 const ua = String((self.navigator && self.navigator.userAgent) || '');
 const exigeToujours = /Safari/.test(ua) && !/Chrome|Chromium|Edg|Firefox/.test(ua);
 
+/* L'icône de l'espace que le lien ouvre : Test, Cockpit, ou Hub. */
+const iconeDe = (lien) => {
+  const espace = String(lien || '').split('#')[0];
+  if (espace === 'testeur') return 'assets/img/app-test.png';
+  if (espace === 'cockpit') return 'assets/img/app-cockpit.png';
+  return 'assets/img/app-hub.png';
+};
+
 self.addEventListener('push', (e) => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (err) { d = { corps: e.data ? e.data.text() : '' }; }
@@ -43,7 +52,7 @@ self.addEventListener('push', (e) => {
     tag: String(d.tag || 'capmedia').slice(0, 120),
     renotify: true,
     lang: 'fr',
-    icon: new URL('assets/img/app-hub.png', self.registration.scope).href,
+    icon: new URL(iconeDe(d.lien), self.registration.scope).href,
     data: { lien: String(d.lien || '') },
   };
   e.waitUntil((async () => {
@@ -62,7 +71,7 @@ self.addEventListener('notificationclick', (e) => {
   const cible = lienSur((e.notification.data || {}).lien);
   if (!cible) return;
   e.waitUntil((async () => {
-    const page = cible.pathname.split('/').pop(); // « hub » ou « cockpit »
+    const page = cible.pathname.split('/').pop(); // « hub », « cockpit » ou « testeur »
     const fenetres = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     /* Une fenêtre déjà ouverte sur le même espace : elle va à la conversation
        (la page suit le message, voir notifications-push.js), et passe devant. */

@@ -1,6 +1,10 @@
 /* ==========================================================================
    CAPMEDIA CLIENT HUB · les notifications push des messages
 
+   Deux conversations : celle d'un projet (ci-dessous), et celle d'un
+   testeur avec l'équipe (hubPushMessageTesteur, en bas). La campagne qui
+   commence pousse aussi vers ses testeurs (testeurs-lettres.js).
+
    Un message dans la conversation d'un projet (projets/{p}/messages) part
    aussi en push vers les appareils abonnés de ceux qui le reçoivent dans
    leur cloche : les mêmes personnes, décidées au même endroit
@@ -161,7 +165,58 @@ exports.hubPushMessage = v2firestore.onDocumentCreated(
   },
 );
 
+/* ==========================================================================
+   L'espace Test : la conversation d'un testeur avec l'équipe
+
+   Un testeur écrit : l'équipe qui reçoit sa cloche (les administrateurs
+   actifs, comme hubMessageTesteur) est poussée, lien du Cockpit. L'équipe
+   répond : le testeur est poussé, s'il est encore actif, lien de sa bulle.
+   ========================================================================== */
+
+/** Pousse `donnees` vers ces personnes, avec le secret ; rien sans lui. */
+async function pousserAvecCle(uids, donnees) {
+  if (!uids.length) return null;
+  const clePrivee = SUR_BANC ? '' : String(VAPID_PRIVEE.value() || '').trim();
+  if (!SUR_BANC && !clePrivee) { console.error('Push non envoyé : secret VAPID_PRIVEE absent'); return null; }
+  return pousser(uids, donnees, clePrivee);
+}
+
+/** Ce que reçoit l'appareil pour un message de la conversation d'un testeur. */
+function chargeTesteur({ m, testeurId, prenom, versEquipe }) {
+  const de = (m && m.de) || {};
+  return versEquipe
+    ? { titre: `${String(prenom || de.nom || '').trim() || 'Un testeur'} (testeur)`.slice(0, 120), corps: extrait(m), lien: `cockpit#/testeurs-messages/${encodeURIComponent(testeurId)}`, tag: `testeur-${testeurId}`.slice(0, 120) }
+    : { titre: (String(de.nom || '').trim() || 'Capmedia').slice(0, 120), corps: extrait(m), lien: 'testeur#/messages', tag: 'messages-testeur' };
+}
+
+async function surMessageTesteur(evenement) {
+  const m = evenement.data && evenement.data.data();
+  if (!m || !m.de) return null;
+  const testeurId = evenement.params.testeurId;
+  const lu = await bdd.doc(`testeurs/${testeurId}`).get();
+  const fiche = lu.exists ? lu.data() : null;
+  const versEquipe = m.de.cote === 'testeur';
+  let uids = [];
+  if (versEquipe) uids = await communication.uidsEquipe(null, { exclure: [m.de.uid] });
+  else if (fiche && fiche.actif !== false) uids = [testeurId];
+  uids = uids.filter((u) => u && u !== m.de.uid);
+  return pousserAvecCle(uids, chargeTesteur({ m, testeurId, prenom: fiche && fiche.prenom, versEquipe }));
+}
+
+exports.hubPushMessageTesteur = v2firestore.onDocumentCreated(
+  { region: REGION, document: 'conversationsTesteurs/{testeurId}/messages/{messageId}', secrets: [VAPID_PRIVEE] },
+  async (evenement) => {
+    if (await evenementDuSemis(evenement)) return null;
+    return surMessageTesteur(evenement);
+  },
+);
+
+/* Pour les autres déclencheurs (la campagne qui commence) : le même secret. */
+exports.VAPID_PRIVEE = VAPID_PRIVEE;
+exports.pousserAvecCle = pousserAvecCle;
+
 /* Pour les essais. */
+exports.chargeTesteur = chargeTesteur;
 exports.VAPID_PUBLIQUE = VAPID_PUBLIQUE;
 exports.extrait = extrait;
 exports.charge = charge;

@@ -749,7 +749,45 @@ await env.withSecurityRulesDisabled(async (ctx) => {
 await doit('Karim écrit à l équipe', addDoc(collection(karim(), `conversationsTesteurs/${KARIM}/messages`), { de: { uid: KARIM, nom: 'Karim', cote: 'testeur' }, texte: 'Le lien TestFlight ne marche pas.', pieces: [], date: serverTimestamp() }));
 await refuse('Karim n écrit pas dans la conversation de Sonia', addDoc(collection(karim(), `conversationsTesteurs/${SONIA}/messages`), { de: { uid: KARIM, nom: 'Karim', cote: 'testeur' }, texte: 'x', pieces: [], date: serverTimestamp() }));
 await refuse('Karim ne se fait pas passer pour l équipe', addDoc(collection(karim(), `conversationsTesteurs/${KARIM}/messages`), { de: { uid: KARIM, nom: 'Karim', cote: 'equipe' }, texte: 'x', pieces: [], date: serverTimestamp() }));
-await refuse('Karim ne joint pas de pièce dans la bulle', addDoc(collection(karim(), `conversationsTesteurs/${KARIM}/messages`), { de: { uid: KARIM, nom: 'Karim', cote: 'testeur' }, texte: 'x', pieces: ['p/1.png'], date: serverTimestamp() }));
+/* La bulle du testeur sur la messagerie commune (octobre 2026) : joindre,
+   citer, réagir, modifier quinze minutes, supprimer ; « Lu le » à l'heure du serveur. */
+const pieceT = (n) => ({ nom: `capture-${n}.png`, chemin: `conversationsTesteurs/${KARIM}/${n}.png`, taille: 10, type: 'image/png' });
+await doit('Karim joint une capture dans la bulle', addDoc(collection(karim(), `conversationsTesteurs/${KARIM}/messages`), { de: { uid: KARIM, nom: 'Karim', cote: 'testeur' }, texte: '', pieces: [pieceT(1)], date: serverTimestamp() }));
+await refuse('mais pas onze pièces d un coup', addDoc(collection(karim(), `conversationsTesteurs/${KARIM}/messages`), { de: { uid: KARIM, nom: 'Karim', cote: 'testeur' }, texte: 'x', pieces: Array.from({ length: 11 }, (_, i) => pieceT(i)), date: serverTimestamp() }));
+await refuse('ni un message vide, sans pièce', addDoc(collection(karim(), `conversationsTesteurs/${KARIM}/messages`), { de: { uid: KARIM, nom: 'Karim', cote: 'testeur' }, texte: '', pieces: [], date: serverTimestamp() }));
+await refuse('ni une date choisie par lui', addDoc(collection(karim(), `conversationsTesteurs/${KARIM}/messages`), { de: { uid: KARIM, nom: 'Karim', cote: 'testeur' }, texte: 'x', pieces: [], date: new Date(Date.now() - 3600000) }));
+await refuse('ni un auteur qui porte un champ en plus', addDoc(collection(karim(), `conversationsTesteurs/${KARIM}/messages`), { de: { uid: KARIM, nom: 'Karim', cote: 'testeur', role: 'admin' }, texte: 'x', pieces: [], date: serverTimestamp() }));
+await refuse('ni un nom d auteur de plus de 80 caractères', addDoc(collection(karim(), `conversationsTesteurs/${KARIM}/messages`), { de: { uid: KARIM, nom: 'K'.repeat(81), cote: 'testeur' }, texte: 'x', pieces: [], date: serverTimestamp() }));
+await doit('Karim répond en citant', addDoc(collection(karim(), `conversationsTesteurs/${KARIM}/messages`), { de: { uid: KARIM, nom: 'Karim', cote: 'testeur' }, texte: 'Oui.', pieces: [], date: serverTimestamp(), reponseA: { id: 'm-equipe', nom: 'Alex', extrait: 'On regarde.' } }));
+await refuse('une citation avec un champ en plus ne passe pas', addDoc(collection(karim(), `conversationsTesteurs/${KARIM}/messages`), { de: { uid: KARIM, nom: 'Karim', cote: 'testeur' }, texte: 'Oui.', pieces: [], date: serverTimestamp(), reponseA: { id: 'm-equipe', nom: 'Alex', extrait: 'x', role: 'admin' } }));
+await env.withSecurityRulesDisabled(async (ctx) => {
+  const b = ctx.firestore();
+  await setDoc(doc(b, `conversationsTesteurs/${KARIM}/messages/m-equipe`), { de: { uid: AGENT, nom: 'Alex', cote: 'equipe' }, texte: 'On regarde.', pieces: [], date: Timestamp.now() });
+  await setDoc(doc(b, `conversationsTesteurs/${KARIM}/messages/m-karim`), { de: { uid: KARIM, nom: 'Karim', cote: 'testeur' }, texte: 'Le lien ne marche pas.', pieces: [], date: Timestamp.now() });
+  await setDoc(doc(b, `conversationsTesteurs/${KARIM}/messages/m-karim-vieux`), { de: { uid: KARIM, nom: 'Karim', cote: 'testeur' }, texte: 'Hier.', pieces: [], date: Timestamp.fromDate(new Date(Date.now() - 20 * 60000)) });
+  await setDoc(doc(b, `conversationsTesteurs/${KARIM}/messages/m-karim-2`), { de: { uid: KARIM, nom: 'Karim', cote: 'testeur' }, texte: 'À supprimer.', pieces: [pieceT(2)], date: Timestamp.now() });
+});
+const mK = (id, qui = karim()) => doc(qui, `conversationsTesteurs/${KARIM}/messages/${id}`);
+await doit('Karim réagit au message de l équipe', updateDoc(mK('m-equipe'), { [`reactions.pouce_${KARIM}`]: 'Karim' }));
+await refuse('mais pas au nom de Sonia', updateDoc(mK('m-equipe'), { [`reactions.pouce_${SONIA}`]: 'Sonia' }));
+await refuse('ni avec un emoji hors de la palette', updateDoc(mK('m-equipe'), { [`reactions.feu_${KARIM}`]: 'Karim' }));
+await doit("L'équipe réagit au message de Karim", updateDoc(mK('m-karim', equipe()), { [`reactions.merci_${AGENT}`]: 'Alex' }));
+await refuse('Sonia ne réagit pas dans la conversation de Karim', updateDoc(mK('m-karim', sonia()), { [`reactions.pouce_${SONIA}`]: 'Sonia' }));
+await refuse('Camille non plus', updateDoc(mK('m-karim', camille()), { [`reactions.pouce_${CAMILLE}`]: 'Camille' }));
+await doit('Karim corrige son message dans les quinze minutes', updateDoc(mK('m-karim'), { texte: 'Le lien TestFlight ne marche pas.', modifie: serverTimestamp() }));
+await refuse('pas après quinze minutes', updateDoc(mK('m-karim-vieux'), { texte: 'Avant-hier.', modifie: serverTimestamp() }));
+await refuse('ni le message de l équipe', updateDoc(mK('m-equipe'), { texte: 'Rien à voir.', modifie: serverTimestamp() }));
+await refuse("L'équipe ne corrige pas le message de Karim", updateDoc(mK('m-karim', equipe()), { texte: 'Autre.', modifie: serverTimestamp() }));
+await refuse('Karim ne supprime pas le message de l équipe', updateDoc(mK('m-equipe'), { texte: '', pieces: [], supprime: serverTimestamp(), reactions: deleteField(), reponseA: deleteField() }));
+await doit('Karim supprime le sien', updateDoc(mK('m-karim-2'), { texte: '', pieces: [], supprime: serverTimestamp(), reactions: deleteField(), reponseA: deleteField() }));
+await refuse('un message supprimé ne se réécrit plus', updateDoc(mK('m-karim-2'), { [`reactions.pouce_${KARIM}`]: 'Karim' }));
+await refuse('et personne ne l efface pour de bon', deleteDoc(mK('m-karim', equipe())));
+await doit('Karim dit « lu », à l heure du serveur', updateDoc(doc(karim(), `conversationsTesteurs/${KARIM}`), { nonLusTesteur: 0, luTesteur: serverTimestamp() }));
+await refuse('pas à une heure choisie', updateDoc(doc(karim(), `conversationsTesteurs/${KARIM}`), { nonLusTesteur: 0, luTesteur: new Date(Date.now() + 86400000) }));
+await refuse('ni à la place de l équipe', updateDoc(doc(karim(), `conversationsTesteurs/${KARIM}`), { nonLusTesteur: 0, luEquipe: serverTimestamp() }));
+await doit("L'équipe dit « lu » à son tour", updateDoc(doc(equipe(), `conversationsTesteurs/${KARIM}`), { nonLusEquipe: 0, luEquipe: serverTimestamp() }));
+/* Les compteurs reviennent à leur état de départ pour les essais qui suivent. */
+await env.withSecurityRulesDisabled(async (ctx) => { await updateDoc(doc(ctx.firestore(), `conversationsTesteurs/${KARIM}`), { nonLusEquipe: 2, nonLusTesteur: 1 }); });
 await doit('Karim lit sa conversation', getDoc(doc(karim(), `conversationsTesteurs/${KARIM}`)));
 await refuse('Karim ne lit pas celle de Sonia', getDoc(doc(karim(), `conversationsTesteurs/${SONIA}`)));
 await refuse('Karim ne liste pas les conversations', getDocs(collection(karim(), 'conversationsTesteurs')));

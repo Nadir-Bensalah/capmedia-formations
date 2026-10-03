@@ -30,6 +30,7 @@ import { barreHtml, famillesHtml } from './grille.js';
 import { ouvrirAccueil, accueilVu, marquerAccueilVu } from './accueil-testeur.js';
 import { ouvrirFiche, consignerAppareil } from './fiche-testeur.js';
 import { monterBulleTesteur } from './bulle-testeur.js';
+import { demarrerPush } from './notifications-push.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 /* La zone où s'affiche la page courante : celle de la coquille, une fois
@@ -1189,6 +1190,9 @@ const monter = async () => {
   else consignerAppareil(testeur);
   /* La bulle vers l'équipe, en bas à droite. */
   try { bulle = monterBulleTesteur({ testeur }); } catch (e) { console.warn('[testeur] bulle non montée', e); }
+  /* Les notifications push : la proposition après son premier message, le
+     clic sur une notification qui ouvre la bulle (notifications-push.js). */
+  demarrerPush({ session: sess, role: 'testeur' });
   /* La première fois : l'accueil, devant tout. La campagne se dessine
      derrière pendant qu'il le lit, et l'attend à la sortie. */
   if (!accueilVu(testeur.uid)) lancerAccueil(testeur);

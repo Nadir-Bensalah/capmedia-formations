@@ -1944,3 +1944,85 @@ l'appui long à 390 px) ; le bloc « La messagerie » de `regles.test.mjs`.
    `hubMessageProjet` (activité et notifications portent l'identifiant du
    message). Aucun index composite nouveau.
 3. Le site (`agence/suivi/`).
+
+## 36. Capmedia Test : la bulle sur la messagerie commune, le push, les lettres (03/10/2026)
+
+La conversation d'un testeur avec l'équipe (`bulle-testeur.js` côté
+testeur, `vues/admin-testeurs-messages.js` côté Cockpit) passe sur la
+messagerie de la section 35, sans code recopié : `messageDuFil`,
+`brancherGestesMessages` et `filParJour` sont les mêmes, et les écritures
+d'un fil vivent à un seul endroit, `filDeMessages(segments, de)`
+(`donnees.js`), dont la conversation d'un projet se sert aussi.
+
+```
+conversationsTesteurs/{uid}
+  luEquipe    timestamp  l'équipe a lu (« Lu le » chez le testeur), heure du serveur
+  luTesteur   timestamp  le testeur a lu (« Lu le » dans le Cockpit)
+  dernier.id  string     le dernier message, pour l'effacer s'il est supprimé
+conversationsTesteurs/{uid}/messages/{m}
+  reponseA, reactions, modifie, supprime   comme un message de projet
+  pieces      ≤ 10, rangées sous conversationsTesteurs/{uid}/ (métadonnée « par »)
+```
+
+- **Côté testeur** : le fil par jour, « Envoyé » puis « Lu le », réagir,
+  répondre, modifier (quinze minutes), supprimer, joindre une capture. Pas
+  de « En faire une demande » : un testeur n'a pas de projet.
+- **Côté Cockpit** : la même chose, en trois zones (la liste, le fil, le
+  champ monté une fois) : un message qui arrive n'efface plus la réponse
+  en cours de frappe. « Écrire à un testeur » ouvre le fil de n'importe
+  quel testeur actif du vivier, même s'il n'a encore rien écrit.
+- **Supprimer** : `hubMessageTesteurModifie` efface les pièces de
+  l'auteur (dossier de la conversation, métadonnée `par`), l'extrait dans
+  les notifications, les citations et le dernier message de la liste.
+
+**Le push.** `hubPushMessageTesteur` (push.js) : un testeur écrit, les
+administrateurs actifs (ceux de la cloche) sont poussés, lien
+`cockpit#/testeurs-messages/<uid>` ; l'équipe répond, le testeur actif est
+poussé, lien `testeur#/messages` (sa bulle s'ouvre). L'espace Test a son
+manifeste (`testeur.webmanifest`, Capmedia Test), `testeur.js` appelle
+`demarrerPush` (la proposition après le premier message), et le réglage
+« Notifications sur cet appareil » est dans la tête de la bulle (cloche),
+là où le push existe. Le service (`sw.js`) prend l'icône de l'espace du
+lien (Test, Cockpit, Hub).
+
+**Le débit.** Une lettre « message-testeur » à l'équipe par testeur et par
+dix minutes au plus (`reserverLettreEquipe`, champ serveur `lettreEquipe`
+de la conversation, pris dans une transaction) ; la cloche et le push
+suivent chaque message.
+
+**La campagne commence.** `hubCampagneTesteurs` (testeurs-lettres.js) :
+quand une campagne passe « en cours », ou qu'on y ajoute un testeur alors
+qu'elle l'est, chaque testeur actif reçoit la lettre `campagne-testeur`
+(l'application, le nombre de SES scénarios, quel que soit le modèle de
+l'affectation, la fin prévue, le lien de son espace), une notification et
+un push. Une seule fois par testeur et par campagne : la marque
+`projets/{p}/campagnes/{c}/lettresTesteurs/{uid}` (serveur seul).
+
+**La marque.** `rendreGabarit` prend `marque` : les lettres aux testeurs
+(`invitation-testeur`, `message-testeur-reponse`, `campagne-testeur`) sont
+signées « Capmedia Test », pied « au titre de votre mission de test » ;
+les lettres aux clients ne changent pas.
+
+**Les règles.** Firestore : les messages de la conversation suivent celles
+d'un projet (`reactionSeule`, `modificationParAuteur`,
+`suppressionParAuteur`, `citationValide`, pièces ≤ 10) ; chacun ne remet
+que SON compteur à zéro, avec `lu… == request.time`. Storage :
+`conversationsTesteurs/{uid}/{nom}`, le testeur dans son dossier (fiche
+active), l'équipe active, `par == request.auth.uid` à la création,
+remplacer et effacer réservés à l'équipe (aussi dans
+`storage.transition.rules`).
+
+### Les épreuves
+
+`qa-chat-testeur.cjs` (deux navigateurs), le bloc de la bulle dans
+`regles.test.mjs`, la section des conversations dans `storage.test.mjs`,
+et `communication-testeurs.test.mjs` (sans émulateur : lettres, qui est
+prévenu, ce que porte un push, l'icône, le manifeste).
+
+### À la mise en ligne
+
+1. Les règles Firestore et Storage.
+2. Les fonctions : `hubPushMessageTesteur`, `hubCampagneTesteurs`,
+   `hubMessageTesteurModifie` (nouvelles), `hubMessageTesteur` (extrait
+   des pièces, identifiant du message).
+3. Le site (`agence/suivi/`, dont `testeur.webmanifest` et `sw.js`).

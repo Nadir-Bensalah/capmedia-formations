@@ -190,7 +190,7 @@ export const monterReglage = async (section, boite, env) => {
 let demarre = false;
 
 /**
- * Le branchement, une fois par page (app.js, admin.js) : la copie tenue à
+ * Le branchement, une fois par page (app.js, admin.js, testeur.js) : la copie tenue à
  * jour, la conversation ouverte au clic sur une notification, et la
  * proposition après le premier message envoyé.
  */
@@ -199,12 +199,15 @@ export const demarrerPush = (env) => {
   demarre = true;
   const uid = env.session.utilisateur.uid;
   const equipe = env.role === 'equipe';
+  const testeur = env.role === 'testeur';
 
   /* Le clic sur une notification, fenêtre déjà ouverte : le service dit où aller. */
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.addEventListener('message', (e) => {
       const d = e.data || {};
-      if (d.type === 'suivi:ouvrir' && /^#\/messages\/[^\s#?]+$/.test(String(d.lien || ''))) location.hash = d.lien;
+      /* La conversation d'un projet, celle d'un testeur (Cockpit), ou la
+         bulle du testeur (« #/messages », qui l'ouvre). */
+      if (d.type === 'suivi:ouvrir' && /^#\/(messages(\/[^\s#?]+)?|testeurs-messages\/[^\s#?]+)$/.test(String(d.lien || ''))) location.hash = d.lien;
     });
   }
   if (!pushPossible()) return;
@@ -222,13 +225,15 @@ export const demarrerPush = (env) => {
     ecrireCle(CLE_PROPOSE, '1');
     setTimeout(async () => {
       if (await etatPush(uid) !== 'inactif') return;
-      toast(equipe ? 'Être prévenu sur cet appareil quand le client répond, même le Cockpit fermé ?' : 'Être prévenu sur cet appareil quand Capmedia vous répond, même le Hub fermé ?', 'info', {
+      toast(equipe ? 'Être prévenu sur cet appareil quand le client répond, même le Cockpit fermé ?'
+        : testeur ? 'Être prévenu sur cet appareil quand l\'équipe vous répond, même votre espace de test fermé ?'
+          : 'Être prévenu sur cet appareil quand Capmedia vous répond, même le Hub fermé ?', 'info', {
         libelle: 'Activer',
         duree: 15000,
         action: async () => {
           try {
             const etat = await activerPush(uid);
-            if (etat === 'actif') toast('Notifications activées. Vous pourrez les couper dans Paramètres.');
+            if (etat === 'actif') toast(testeur ? 'Notifications activées. Vous pourrez les couper depuis la bulle.' : 'Notifications activées. Vous pourrez les couper dans Paramètres.');
           } catch (err) {
             console.error('[push]', err);
             toast('Les notifications n\'ont pas pu être activées sur cet appareil.', 'erreur');

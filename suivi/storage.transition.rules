@@ -48,6 +48,7 @@ rules_version = '2';
     projets/{p}/taches/{t}/reponse/...     pièces de la réponse du client sur une tâche
     campagnes/{p}/{c}/{uid}/...            preuves d'un testeur de la campagne
     preprojets/{uid}/...                   pièces d'une demande de nouveau projet
+    conversationsTesteurs/{uid}/...        pièces de la conversation d'un testeur avec l'équipe
     projets/{p}/documents/...              ANCIEN rangement, en attente de migration
 */
 
@@ -298,6 +299,27 @@ service firebase.storage {
       allow list: if equipeSurProjet(projetId);
       allow create, update: if equipeSurProjet(projetId) && fichierAccepte();
       allow delete: if equipeSurProjet(projetId);
+    }
+
+    // Les pièces de la conversation d'un testeur avec l'équipe : le testeur
+    // dans SON dossier (une lecture : sa fiche, encore active), l'équipe
+    // active (une lecture : sa fiche). Chaque pièce dit qui l'a posée
+    // (métadonnée « par ») : le serveur n'efface, à la suppression d'un
+    // message, que celles de son auteur. Personne ne réécrit une pièce.
+    match /conversationsTesteurs/{testeurId}/{nom} {
+      function testeurDeCetteConversation() {
+        return request.auth != null && !jetonEquipe()
+          && request.auth.uid == testeurId
+          && request.auth.token.get('testeur', false) == true
+          && fiche(/databases/(default)/documents/testeurs/$(testeurId)).get('actif', true) != false;
+      }
+      allow get:    if jetonEquipe() ? estEquipe() : testeurDeCetteConversation();
+      allow list:   if estEquipe();
+      allow create: if (jetonEquipe() ? estEquipe() : testeurDeCetteConversation())
+        && request.resource.metadata != null
+        && request.resource.metadata.get('par', '') == request.auth.uid
+        && fichierAccepte();
+      allow update, delete: if estEquipe();
     }
 
     // Une demande de nouveau projet : le demandeur dépose dans son dossier,
