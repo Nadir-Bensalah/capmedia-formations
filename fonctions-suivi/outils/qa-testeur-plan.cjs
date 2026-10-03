@@ -194,6 +194,8 @@ const fiche = async (page, cle) => {
     if (!/Firestore\/(Listen|Write)|documents/.test(r.url())) return;
     let corps = ''; try { corps = decodeURIComponent((r.postData() || '').replace(/\+/g, ' ')); } catch (e) { corps = r.postData() || ''; }
     for (const m of `${r.url()} ${corps}`.matchAll(/planTests\/([A-Za-z0-9_-]+)/g)) lectures.add(m[1]);
+    /* Une requête sur toute la collection du plan : tout le plan descend. */
+    if (/"collectionId"\s*:\s*"planTests"/.test(corps)) lectures.add('*collection*');
   });
   await connecter(t, 'karim.testeur@essai.test');
   await passerAccueil(t);
@@ -212,7 +214,7 @@ const fiche = async (page, cle) => {
   verifier(etat['tp-taches-f-001__ios'] === 'vide' && etat['tp-taches-f-001__web'] === 'vide', 'et ce qu\'il n\'a pas rendu reste à faire', JSON.stringify(etat));
   verifier(/2 sur 5/.test(vu.texte), 'son avancement compte ses clés : 2 sur 5', (vu.texte.match(/\d+ sur \d+[^\n]*/) || [''])[0]);
   verifier(lectures.has('tp-compte') && lectures.has('tp-taches'), 'le téléphone lit les sections de ses clés', [...lectures].join(','));
-  verifier(!lectures.has('tp-courses') && !lectures.has('tp-rien'), 'et jamais les autres', [...lectures].join(','));
+  verifier(!lectures.has('tp-courses') && !lectures.has('tp-rien') && !lectures.has('*collection*'), 'et jamais les autres, ni tout le plan d\'un coup', [...lectures].join(','));
   await t.click('[data-vue="liste"]').catch(() => {}); await pause(600);
   const liste = await t.evaluate(() => ({ titres: [...document.querySelectorAll('.bloc-tete')].map((h) => h.firstChild.textContent.trim()), filtre: ((document.querySelector('#f-bloc option') || {}).textContent || '').trim() }));
   verifier(liste.filtre === 'Toutes les sections', 'la vue Liste parle de sections', liste.filtre);
