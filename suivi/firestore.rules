@@ -1248,6 +1248,16 @@ service cloud.firestore {
         && texteBorne(request.resource.data.get('bic', ''), 16)
         && texteBorne(request.resource.data.get('banque', ''), 120)
         && texteBorne(request.resource.data.get('mention', ''), 600);
+      // La grille de tarifs (tarifs.js) : l'équipe finance l'écrit, toute
+      // personne connectée la lit (annonce, calculateur, devis demandé).
+      allow write: if cle == 'tarifs'
+        && estEquipe()
+        && (ficheEquipe().get('role', '') == 'admin'
+            || ficheEquipe().get('permissions', []).hasAny(['finance.gerer']))
+        && request.resource.data.keys().hasOnly(['seuilMois', 'tva', 'devise', 'periodes', 'maj'])
+        && request.resource.data.periodes is list && request.resource.data.periodes.size() <= 12
+        && request.resource.data.get('seuilMois', 3) is int && request.resource.data.get('seuilMois', 3) >= 1 && request.resource.data.get('seuilMois', 3) <= 24
+        && request.resource.data.get('tva', 20) is number && request.resource.data.get('tva', 20) >= 0 && request.resource.data.get('tva', 20) <= 30;
     }
 
     // Un paiement ne porte plus sa note interne : elle vit dans
