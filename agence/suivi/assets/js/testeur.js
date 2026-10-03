@@ -648,10 +648,30 @@ const sansCampagne = (titre) => `<div class="page">
   ${vide({ icone: 'taches', titre: 'Aucune campagne en cours', texte: 'Cette page se remplira dès qu\'une campagne vous est confiée, sans recharger.' })}
 </div>`;
 
-const pageApplication = () => {
+/* Ses identifiants de test : les siens, posés par l'équipe dans
+   campagnes/{c}/acces/{uid}, que lui seul lit. L'ancien champ commun de la
+   campagne sert encore tant que rien n'est posé pour lui. Lus une fois par
+   campagne, puis la page se redessine. */
+const identifiantsTesteur = { cle: '', valeur: '' };
+const chargerIdentifiants = async (moi) => {
+  const c = etat.campagne;
+  const cle = `${c.projet}/${c.id}`;
+  if (identifiantsTesteur.cle === cle) return;
+  identifiantsTesteur.cle = cle;
+  identifiantsTesteur.valeur = '';
+  try {
+    const d = await getDoc(doc(bdd, 'projets', c.projet, 'campagnes', c.id, 'acces', auth.currentUser.uid));
+    identifiantsTesteur.valeur = d.exists() ? String(d.data().identifiants || '') : '';
+  } catch (e) { identifiantsTesteur.valeur = ''; }
+  if (identifiantsTesteur.valeur && courant().chemin === '/application') rendre(moi);
+};
+
+const pageApplication = (moi) => {
   filAriane([{ libelle: 'L\'application' }]);
   const c = etat.campagne;
   if (!c) { racine.innerHTML = sansCampagne('L\'application'); return; }
+  chargerIdentifiants(moi);
+  const identifiants = (identifiantsTesteur.cle === `${c.projet}/${c.id}` && identifiantsTesteur.valeur) || (c.acces && c.acces.identifiants) || '';
   /* Seules les adresses https deviennent des boutons. */
   const liens = Object.fromEntries(Object.entries(c.installation || {}).filter(([, u]) => /^https:\/\/[^\s"'<>]+$/.test(String(u || ''))));
   const builds = c.builds || {};
@@ -675,12 +695,12 @@ const pageApplication = () => {
         </div>`;
       }).join('')}</div>` : '<p class="t-2">Le lien d\'installation vous arrive par e-mail. Si rien n\'est arrivé, écrivez à l\'équipe.</p>'}
     </section>
-    ${(c.acces && (c.acces.instructions || c.acces.identifiants)) ? `<section>
+    ${((c.acces && c.acces.instructions) || identifiants) ? `<section>
       <div class="section-tete"><h2>Pour entrer dans l'application</h2></div>
-      ${c.acces.instructions ? `<div class="prose">${echapper(c.acces.instructions).split(/\n{2,}/).map((x) => `<p>${x.replace(/\n/g, '<br>')}</p>`).join('')}</div>` : ''}
-      ${c.acces.identifiants ? `<div class="identifiants-test">
+      ${(c.acces && c.acces.instructions) ? `<div class="prose">${echapper(c.acces.instructions).split(/\n{2,}/).map((x) => `<p>${x.replace(/\n/g, '<br>')}</p>`).join('')}</div>` : ''}
+      ${identifiants ? `<div class="identifiants-test">
         <p class="surtitre">Vos identifiants de test</p>
-        <pre class="identifiants-bloc" id="identifiants-bloc">${echapper(c.acces.identifiants)}</pre>
+        <pre class="identifiants-bloc" id="identifiants-bloc">${echapper(identifiants)}</pre>
         <div class="actions"><button class="btn btn-secondaire btn-petit" type="button" data-copier-identifiants>${icone('copier')} Copier</button></div>
         <p class="aide">Ce sont des comptes de test : rien de réel n'y passe. Ne les partagez pas.</p>
       </div>` : ''}
@@ -857,6 +877,16 @@ const rendre = (moi) => {
 /* Trois captures au plus : un écran, l'écran d'avant, une vidéo. Les
    règles en acceptent cinq ; trois suffisent à reproduire. */
 const PREUVES_MAX = 3;
+/* Ce que les règles du dossier des preuves acceptent : des images et des
+   vidéos courantes, 10 Mo une image, 50 Mo une vidéo. Refusé ici, avec
+   la raison, plutôt qu'au milieu de l'envoi. */
+const TYPES_PREUVE = /^(image\/(png|jpeg|webp|heic|heif)|video\/(mp4|quicktime|webm))$/;
+const refusPreuve = (f) => {
+  if (!TYPES_PREUVE.test(f.type || '')) return `« ${f.name} » : une capture (PNG, JPEG, WebP, HEIC) ou une vidéo (MP4, MOV, WebM), s'il vous plaît.`;
+  const plafond = /^video\//.test(f.type) ? 50 : 10;
+  if (f.size > plafond * 1024 * 1024) return `« ${f.name} » dépasse ${plafond} Mo.`;
+  return '';
+};
 
 /* Sur un téléphone, le testeur teste l'application sur ce même appareil :
    il fait sa capture, revient ici et la retrouve dans ses photos. On le
@@ -900,14 +930,17 @@ const ouvrirEchec = (s) => {
         <button class="btn-icone t-preuve-retirer" type="button" data-retirer-preuve="${i}" aria-label="Retirer ${echapper(x.fichier.name)}">${icone('fermer')}</button>
       </div>`).join('')}
       ${pieces.length < PREUVES_MAX ? `<label class="t-preuve-ajout">
-        <input class="t-preuve-fichier" id="t-preuve" type="file" accept="image/*,video/*" multiple>
+        <input class="t-preuve-fichier" id="t-preuve" type="file" accept="image/png,image/jpeg,image/webp,image/heic,image/heif,video/mp4,video/quicktime,video/webm" multiple>
         ${icone('plus')}<span>${pieces.length ? 'Ajouter une autre capture' : 'Ajouter une capture'}</span>
       </label>` : ''}`;
   };
   dessiner();
   zone.addEventListener('change', (e) => {
     if (!e.target.matches('.t-preuve-fichier')) return;
-    const choisis = [...(e.target.files || [])];
+    const tous = [...(e.target.files || [])];
+    const refus = tous.map(refusPreuve).filter(Boolean);
+    if (refus.length) toast(refus[0], 'erreur');
+    const choisis = tous.filter((f) => !refusPreuve(f));
     const place = PREUVES_MAX - pieces.length;
     choisis.slice(0, place).forEach((fichier) => {
       let apercu = '';

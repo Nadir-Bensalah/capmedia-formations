@@ -102,6 +102,8 @@ let page = null;
   const natif = await page.$eval('.t-preuve-fichier', (i) => { const r = i.getBoundingClientRect(); return { multiple: i.multiple, large: r.width > 2 || r.height > 2 }; });
   verifier(natif.multiple && !natif.large, 'le champ fichier du navigateur est caché sous « Ajouter une capture », et accepte plusieurs pièces');
   verifier(/Photothèque/.test(await page.textContent('.voile--feuille')), 'l aide parle des gestes de l iPhone');
+  await page.setInputFiles('.t-preuve-fichier', [{ name: 'notes.zip', mimeType: 'application/zip', buffer: PNG }]); await pause(400);
+  verifier((await page.$$('.t-preuve')).length === 0 && /MP4|PNG/.test(await page.evaluate(() => ((document.querySelector('.toasts') || {}).innerText || ''))), 'un fichier que le dossier des preuves refuse est écarté, avec la raison');
   await page.setInputFiles('.t-preuve-fichier', [{ name: 'ecran-1.png', mimeType: 'image/png', buffer: PNG }, { name: 'ecran-2.png', mimeType: 'image/png', buffer: PNG }]);
   await pause(500);
   verifier((await page.$$('.t-preuve img')).length === 2, 'deux vignettes, chacune avec son aperçu');
