@@ -1237,6 +1237,50 @@ await refuse('un message supprimé ne se corrige plus', updateDoc(msg(camille(),
 await refuse('ne reçoit plus de réaction', updateDoc(msg(equipe(), 'm-camille'), { [`reactions.pouce_${AGENT}`]: 'Agent' }));
 await refuse('et ne se « supprime » pas une seconde fois', updateDoc(msg(camille(), 'm-camille'), suppression));
 
+console.log('\n== Présence des clients et journal des connexions (équipe seule)');
+/* Le Hub bat une fois par minute dans projets/{p}/presencesClient/{uid} :
+   l'heure du serveur et « enLigne », rien d'autre, dans SON document, sur
+   SES projets. Seule l'équipe du projet lit. Le journal des connexions
+   est au serveur seul. */
+const AGENT_AILLEURS = 'uid-agent-ailleurs';
+const agentAilleurs = () => env.authenticatedContext(AGENT_AILLEURS, jeton(AGENT_AILLEURS, 'agent3.essai@exemple.test')).firestore();
+await env.withSecurityRulesDisabled(async (ctx) => {
+  const b = ctx.firestore();
+  await setDoc(doc(b, 'equipe', AGENT_AILLEURS), { nom: 'Ali Agent', email: 'agent3.essai@exemple.test', role: 'agent', actif: true, projets: ['boutique'], permissions: [] });
+  await setDoc(doc(b, `projets/boutique/presencesClient/${LEA}`), { vu: Timestamp.fromDate(new Date()), enLigne: true });
+  await setDoc(doc(b, `journalConnexions/${CAMILLE}`), { n: 1 });
+  await setDoc(doc(b, `journalConnexions/${CAMILLE}/entrees/e1`), { le: Timestamp.fromDate(new Date()), mode: 'code', appareil: 'Mac · Safari' });
+});
+const presenceClient = (bd, pid, uid) => doc(bd, `projets/${pid}/presencesClient/${uid}`);
+await doit('Camille bat sur son projet (heure du serveur, en ligne)', setDoc(presenceClient(camille(), 'atelier', CAMILLE), { vu: serverTimestamp(), enLigne: true }));
+await doit('et dit qu elle part (enLigne: false)', setDoc(presenceClient(camille(), 'atelier', CAMILLE), { vu: serverTimestamp(), enLigne: false }));
+await refuse('Camille ne relit pas sa propre présence', getDoc(presenceClient(camille(), 'atelier', CAMILLE)));
+await refuse('ni la liste des présences de son projet', getDocs(collection(camille(), 'projets/atelier/presencesClient')));
+await refuse('Camille ne lit pas la présence de Léa', getDoc(presenceClient(camille(), 'boutique', LEA)));
+await refuse('Léa ne lit pas les présences de Atelier', getDocs(collection(lea(), 'projets/atelier/presencesClient')));
+await refuse('Camille n écrit pas la présence de Léa (sur son projet à elle)', setDoc(presenceClient(camille(), 'atelier', LEA), { vu: serverTimestamp(), enLigne: true }));
+await refuse('ni sur le projet de Léa', setDoc(presenceClient(camille(), 'boutique', LEA), { vu: serverTimestamp(), enLigne: true }));
+await refuse('Camille ne bat pas sur un projet dont elle n est pas membre', setDoc(presenceClient(camille(), 'boutique', CAMILLE), { vu: serverTimestamp(), enLigne: true }));
+await refuse('ni sur un projet fermé', setDoc(presenceClient(camille(), 'ferme', CAMILLE), { vu: serverTimestamp(), enLigne: true }));
+await refuse('pas d heure inventée', setDoc(presenceClient(camille(), 'atelier', CAMILLE), { vu: Timestamp.fromDate(new Date(Date.now() + 3600000)), enLigne: true }));
+await refuse('pas de champ en plus', setDoc(presenceClient(camille(), 'atelier', CAMILLE), { vu: serverTimestamp(), enLigne: true, page: '/finances' }));
+await refuse('pas sans « enLigne »', setDoc(presenceClient(camille(), 'atelier', CAMILLE), { vu: serverTimestamp() }));
+await refuse('« enLigne » est un booléen', setDoc(presenceClient(camille(), 'atelier', CAMILLE), { vu: serverTimestamp(), enLigne: 'oui' }));
+await refuse('Camille ne supprime pas sa présence', deleteDoc(presenceClient(camille(), 'atelier', CAMILLE)));
+await refuse('un testeur n écrit pas de présence client', setDoc(presenceClient(karim(), 'atelier', KARIM), { vu: serverTimestamp(), enLigne: true }));
+await refuse('l équipe n écrit pas la présence d un client', setDoc(presenceClient(equipe(), 'atelier', CAMILLE), { vu: serverTimestamp(), enLigne: true }));
+await refuse('anonyme ne lit rien', getDocs(collection(anonyme(), 'projets/atelier/presencesClient')));
+await doit('l administrateur lit les présences du projet', getDocs(collection(equipe(), 'projets/atelier/presencesClient')));
+await doit('un agent du projet aussi', getDoc(presenceClient(agentSansFinance(), 'atelier', CAMILLE)));
+await refuse('un agent d un autre projet, non', getDocs(collection(agentAilleurs(), 'projets/atelier/presencesClient')));
+await refuse('un testeur ne lit pas les présences', getDocs(collection(karim(), 'projets/atelier/presencesClient')));
+await refuse('Camille ne lit pas son journal de connexions', getDocs(collection(camille(), `journalConnexions/${CAMILLE}/entrees`)));
+await refuse('ni la fiche du journal', getDoc(doc(camille(), `journalConnexions/${CAMILLE}`)));
+await refuse('Léa ne lit pas celui de Camille', getDoc(doc(lea(), `journalConnexions/${CAMILLE}/entrees/e1`)));
+await refuse('Camille n écrit pas dans son journal', setDoc(doc(camille(), `journalConnexions/${CAMILLE}/entrees/faux`), { le: serverTimestamp(), mode: 'code', appareil: 'Mac' }));
+await refuse('l équipe ne lit pas le journal en direct (serveur seul)', getDocs(collection(equipe(), `journalConnexions/${CAMILLE}/entrees`)));
+await refuse('ni par une lecture en groupe', getDocs(collectionGroup(equipe(), 'entrees')));
+
 console.log(`\n${ok} contrôle(s) conforme(s)${ecarts.length ? `, ${ecarts.length} ÉCART(S) :\n  - ${ecarts.join('\n  - ')}` : ''}`);
 await env.cleanup();
 process.exit(ecarts.length ? 1 : 0);

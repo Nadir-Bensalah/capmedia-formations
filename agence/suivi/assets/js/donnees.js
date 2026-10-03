@@ -61,6 +61,10 @@ export const K = {
   /* Les personnes qui ont accès au projet (ou l'auront), leur rôle, leur
      invitation : l'équipe seule les lit. */
   interlocuteurs: (p) => `interlocuteurs:${p}`,
+  /* La présence des clients sur le projet (le battement du Hub ouvert) :
+     l'équipe seule, et hors de l'empreinte des pages, pour qu'un battement
+     ne redessine rien (acces-client.js patche la pastille). */
+  presencesClient: (p) => `presences-client:${p}`,
   taches: (p) => `taches:${p}`,
   tickets: (p) => `tickets:${p}`,
   validations: (p) => `validations:${p}`,
@@ -233,6 +237,7 @@ export const abonnerProjet = (lot, pid, role) => {
      la requête à un client, et elle ne lui sert à rien. */
   if (!client) lot.abonner(K.technique(pid), () => col('projets', pid, 'technique'));
   if (!client) lot.abonner(K.interlocuteurs(pid), () => col('projets', pid, 'interlocuteurs'));
+  if (!client) lot.abonner(K.presencesClient(pid), () => col('projets', pid, 'presencesClient'));
   /* La plateforme de tests. Les scénarios et les campagnes se lisent des
      deux côtés ; les anomalies aussi, puisque le client doit savoir ce qui
      a été trouvé. Seuls les passages restent cloisonnés, et ils se lisent

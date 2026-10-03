@@ -39,6 +39,11 @@ const erreur = (texte, genre = 'alerte') => {
   zone.innerHTML = `<aside class="encart encart--${genre}"><div><p class="t-petit">${echapper(texte)}</p></div></aside>`;
 };
 
+/* La session vient d'être ouverte ici : le Hub ne la notera pas comme
+   « reprise » (le serveur a déjà écrit la ligne du journal, sauf pour
+   l'ancien lien, qu'il ne voit pas passer). */
+const marquerSessionNeuve = (valeur = '1') => { try { sessionStorage.setItem('suivi:session-neuve', valeur); } catch (e) { /* stockage refusé */ } };
+
 const appeler = async (action, corps) => {
   const r = await fetch(PORTE, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -175,6 +180,7 @@ const demander = async (bouton, libelle) => {
         montrer('#entree');
         try {
           await signInWithEmailLink(auth, adresse, cle.lien);
+          marquerSessionNeuve();
           try { localStorage.removeItem(CLE_EMAIL); } catch (e) { /* rien */ }
           await orienter();
           return true;
@@ -247,7 +253,7 @@ $('#forme-code').addEventListener('submit', async (e) => {
   bouton.disabled = true;
   bouton.textContent = 'Connexion...';
   try {
-    const r = await appeler('verifierCode', { email: adresse, code });
+    const r = await appeler('verifierCode', { email: adresse, code, bureau: Boolean(window.capmediaBureau) });
     if (!r.ok || !r.lien) {
       erreur(r.message || 'Code incorrect.');
       champCode.value = '';
@@ -259,6 +265,7 @@ $('#forme-code').addEventListener('submit', async (e) => {
        Firebase le brûle après cette seule utilisation. */
     montrer('#entree');
     await signInWithEmailLink(auth, adresse, r.lien);
+    marquerSessionNeuve();
     try { localStorage.removeItem(CLE_EMAIL); } catch (e2) { /* rien */ }
     /* Entré par un code, sans aucune clé : l'espace proposera d'en ajouter
        une, une fois. */
@@ -286,6 +293,7 @@ if (isSignInWithEmailLink(auth, location.href)) {
   try { memorisee = localStorage.getItem(CLE_EMAIL) || ''; } catch (e) { /* rien */ }
   signInWithEmailLink(auth, memorisee.trim().toLowerCase(), location.href)
     .then(() => {
+      marquerSessionNeuve('lien');
       try { localStorage.removeItem(CLE_EMAIL); } catch (e) { /* rien */ }
       history.replaceState(null, '', location.pathname);
       return orienter();

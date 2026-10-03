@@ -500,6 +500,23 @@ service cloud.firestore {
         allow write:  if false;
       }
 
+      // La présence d'un client sur ce projet : la pastille « En ligne » de
+      // l'onglet Accès client. Le Hub ouvert et visible écrit un battement
+      // (l'heure du serveur, rien d'autre) dans le document de SON compte,
+      // sur un projet dont il est membre ; caché ou fermé, il écrit
+      // « enLigne: false ». Seule l'équipe du projet lit : le client ne
+      // relit ni sa présence ni celle d'un autre.
+      match /presencesClient/{uid} {
+        allow read:   if equipeSurProjet(projetId);
+        allow create, update: if connecte() && moi() == uid
+          && membreDuProjet(projetId)
+          && request.resource.data.keys().hasOnly(['vu', 'enLigne'])
+          && request.resource.data.keys().hasAll(['vu', 'enLigne'])
+          && request.resource.data.vu == request.time
+          && request.resource.data.enLigne is bool;
+        allow delete: if false;
+      }
+
       // Une partie du projet est lue par le client : rien de technique ne
       // s'y pose (comptes, accès, dépendances vont dans technique/, juste
       // en dessous). Une règle ne masque pas un champ à la lecture : elle
@@ -2210,6 +2227,13 @@ service cloud.firestore {
     // Les clés d'accès et leurs défis : le serveur seul (cles.js).
     match /cles/{cleId}          { allow read, write: if false; }
     match /defis/{defiId}        { allow read, write: if false; }
+    // Le journal des connexions des clients (journal-connexions.js) :
+    // écrit et lu par le serveur seul. L'équipe le lit par suiviAdmin
+    // (historiqueConnexions), qui contrôle le projet ; le client, jamais.
+    match /journalConnexions/{uid} {
+      allow read, write: if false;
+      match /entrees/{entreeId} { allow read, write: if false; }
+    }
 
     // ================================================================
     // FORMULAIRES PUBLICS DU SITE (déjà en service sur ce projet)

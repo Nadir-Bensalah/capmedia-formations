@@ -33,6 +33,7 @@ const courriels = require('./courriels');
 const invitations = require('./invitations');
 const acces = require('./acces');
 const cles = require('./cles');
+const journal = require('./journal-connexions');
 
 const bdd = getFirestore();
 const REGION = 'europe-west1';
@@ -177,6 +178,7 @@ exports.suiviConnexion = onRequest(
       if (action === 'cleEnregistrer') return await cles.enregistrer(req, res, outils);
       if (action === 'clesLister') return await cles.lister(req, res, outils);
       if (action === 'cleRetirer') return await cles.retirer(req, res, outils);
+      if (action === 'noterConnexion') return await noterConnexion(req, res);
       return res.status(400).json({ ok: false, message: 'action inconnue' });
     } catch (err) {
       if (err && err.refus) return res.status(err.code).json({ ok: false, message: err.message });
@@ -306,7 +308,7 @@ async function verifierCode(req, res) {
   }
 
   /* Le code est bon : la suite est la même que pour une clé d'accès. */
-  return ouvrirSession({ uid: verdict.uid, email, adresseIp, res, mode: 'code' });
+  return ouvrirSession({ uid: verdict.uid, email, adresseIp, res, mode: 'code', req });
 }
 
 /* --- 4. L'ouverture de session, commune au code et à la clé ------------- */
@@ -316,7 +318,7 @@ async function verifierCode(req, res) {
  * entre la demande et la preuve, le compte a pu être désactivé ou retiré.
  * Ni un code ni une clé ne rouvrent une porte qu'on vient de fermer.
  */
-async function ouvrirSession({ uid, email, adresseIp, res, mode }) {
+async function ouvrirSession({ uid, email, adresseIp, res, mode, req = null }) {
   const verdict = { uid };
   let compte = null;
   try { compte = await getAuth().getUser(verdict.uid); } catch (err) { compte = null; }
@@ -380,6 +382,13 @@ async function ouvrirSession({ uid, email, adresseIp, res, mode }) {
   }
   await audit('connexion.ouverte', { email, uid: verdict.uid, equipe: verdict.equipe, espace: etat.espace, ip: adresseIp, mode });
 
+  /* Le journal des connexions d'un client, que l'équipe lit dans l'onglet
+     Accès client : la date, l'appareil, le mode. L'équipe et les testeurs
+     n'y figurent pas. */
+  if (etat.espace === 'hub' || etat.espace === 'attente') {
+    await journal.noter(verdict.uid, { mode, agent: req ? req.headers['user-agent'] : '', bureau: Boolean(req && req.body && req.body.bureau === true) });
+  }
+
   /* Une première connexion consomme les invitations de ce compte : le
      cockpit les voit « acceptées », et leur lien ne pré-remplit plus. */
   try { await invitations.accepter(verdict.uid); } catch (err) { console.error('Invitations non marquées acceptées', err); }
@@ -401,6 +410,25 @@ async function ouvrirSession({ uid, email, adresseIp, res, mode }) {
   try { nombreCles = (await cles.clesDe(verdict.uid)).length; } catch (err) { nombreCles = 0; }
 
   return res.json({ ok: true, lien, espace: etat.espace, mode, cles: nombreCles });
+}
+
+/* --- 5. Une session reprise ---------------------------------------------- */
+
+/**
+ * Le Hub s'ouvre sur une session déjà là (onglet rouvert, application
+ * relancée) : aucune porte n'a été franchie, mais c'est une visite. Le
+ * navigateur le signale avec son jeton ; le serveur écrit la ligne, en
+ * lisant lui-même l'appareil. « lien » : une session ouverte par l'ancien
+ * lien de connexion, que la porte ne voit pas passer. Un compte d'équipe
+ * ou de testeur n'a pas de journal.
+ */
+async function noterConnexion(req, res) {
+  const qui = await acces.identifier(req);
+  if (qui.fiche) return res.json({ ok: true, notee: false });
+  if (await estTesteur(qui.uid)) return res.json({ ok: true, notee: false });
+  const mode = (req.body || {}).mode === 'lien' ? 'lien' : 'reprise';
+  const notee = await journal.noter(qui.uid, { mode, agent: req.headers['user-agent'], bureau: (req.body || {}).bureau === true });
+  return res.json({ ok: true, notee });
 }
 
 /* --- Exposé pour l'épreuve ----------------------------------------------- */

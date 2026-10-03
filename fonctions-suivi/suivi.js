@@ -1565,6 +1565,8 @@ const ACTIONS = {
   fermerAuClient: { permission: 'projets.ouvrir', projet: (c) => c.id },
   reglerEmailsClient: { permission: 'projets.ouvrir', projet: (c) => c.id },
   classerArbitrageAcces: { permission: 'acces.gerer', projet: (c) => c.id },
+  /* Le journal des connexions d'un interlocuteur : l'équipe du projet. */
+  historiqueConnexions: { permission: 'projet.voir', projet: (c) => c.projet },
   deposerDocument: { permission: 'finance.gerer', projet: (c) => c.projet },
   majDocument: { permission: 'finance.gerer', projet: (c) => projetDuDocument(c.id) },
   joindreDevis: { permission: 'finance.gerer', projet: (c) => projetDuDocument(c.id) },
@@ -1779,6 +1781,15 @@ exports.suiviAdmin = onRequest(
       if (action === 'modifierInterlocuteur') {
         if (!projet) return res.status(400).send('projet requis');
         return res.json(await modifierInterlocuteur(identite, { projet, cle: req.body.cle, email, role, nom }));
+      }
+      /* --- Le journal des connexions d'un interlocuteur du projet : la
+         personne doit en être (fiche d'accès), sinon on ne dit rien. */
+      if (action === 'historiqueConnexions') {
+        if (!projet) return res.status(400).send('projet requis');
+        const { fiche } = await lireInterlocuteur(String(projet), { cle: req.body.cle });
+        if (!fiche) return res.status(404).send("Cette personne n'est pas un interlocuteur de ce projet.");
+        const entrees = fiche.uid ? await require('./journal-connexions').lire(fiche.uid) : [];
+        return res.json({ ok: true, entrees });
       }
       if (action === 'inviterCollegue') {
         return res.json(await inviterCollegue(identite, { projet, email, nom }));
