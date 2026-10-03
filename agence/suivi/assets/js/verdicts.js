@@ -51,6 +51,22 @@ export const ETATS_CASE = {
 };
 
 const GRAVES = ['bloquant', 'critique'];
+
+/* Les clés d'un testeur, quel que soit le format de l'affectation : la
+   liste de références d'avant le plan, ou { telephone, web, cles, vague }.
+   La même lecture que clesDe (repartition.js) ; ce fichier n'importe rien. */
+const clesDeLAffectation = (a) => (Array.isArray(a) ? a : (a && Array.isArray(a.cles) ? a.cles : []));
+
+/* Les résultats d'un passage. Le modèle du 03/10/2026 les écrit en toutes
+   lettres (reussi, echec, sans-objet) ; les passages d'avant disent ok, ko
+   et na. Les deux se lisent ici, ramenés à la forme courte, pour qu'aucun
+   résultat ne se perde d'une écriture à l'autre. */
+const RESULTATS_LONGS = { reussi: 'ok', echec: 'ko', 'sans-objet': 'na' };
+export const resultatCourt = (r) => RESULTATS_LONGS[r] || r;
+/** La forme écrite d'un résultat (ok → reussi, ko → echec, na → sans-objet). */
+const RESULTATS_COURTS = Object.fromEntries(Object.entries(RESULTATS_LONGS).map(([l, c]) => [c, l]));
+export const resultatLong = (r) => RESULTATS_COURTS[r] || r;
+const enCourt = (p) => (p && RESULTATS_LONGS[p.resultat] ? { ...p, resultat: RESULTATS_LONGS[p.resultat] } : p);
 const OUVERTES = ['nouvelle', 'confirmee'];
 
 /* Une anomalie compte pour CETTE campagne si un de ses témoins y a été
@@ -94,7 +110,8 @@ const tranche = (a) => {
  *                                pour cette campagne.
  * @returns {{ etat: string, revoir: boolean }}
  */
-export const verdictScenario = ({ attendus, passages = [], anomalies = [] }) => {
+export const verdictScenario = ({ attendus, passages: bruts = [], anomalies = [] }) => {
+  const passages = bruts.map(enCourt);
   if (attendus === 0 && !passages.length) return { etat: 'trou', revoir: false };
 
   const aRejouer = passages.filter((p) => koCorrige(p, anomalies));
@@ -130,9 +147,10 @@ export const verdictScenario = ({ attendus, passages = [], anomalies = [] }) => 
 /** Le résultat d'un testeur sur un de SES scénarios. */
 export const verdictTesteur = (passage) => {
   if (!passage) return 'vide';
-  if (passage.resultat === 'ko') return passage.aRevoir === true ? 'revoir' : 'ko';
-  if (passage.resultat === 'ok') return 'ok';
-  if (passage.resultat === 'na') return 'na';
+  const r = resultatCourt(passage.resultat);
+  if (r === 'ko') return passage.aRevoir === true ? 'revoir' : 'ko';
+  if (r === 'ok') return 'ok';
+  if (r === 'na') return 'na';
   return 'vide';
 };
 
@@ -191,10 +209,11 @@ const grouper = (cases, famille, libelle) => {
  * @param {Object} blocs       { cle: { libelle } }
  * @param {boolean} trous      montrer les scénarios que personne n'a reçus
  */
-export const tableauHumain = ({ scenarios = [], campagne = {}, passages = [], anomalies = [], plateforme = '', blocs = {}, trous = true }) => {
+export const tableauHumain = ({ scenarios = [], campagne = {}, passages: bruts = [], anomalies = [], plateforme = '', blocs = {}, trous = true }) => {
+  const passages = bruts.map(enCourt);
   const dedans = new Set(campagne.scenarios || []);
   const affectation = campagne.affectation || {};
-  const attendusDe = (ref) => Object.values(affectation).filter((refs) => (refs || []).includes(ref)).length;
+  const attendusDe = (ref) => Object.values(affectation).filter((a) => clesDeLAffectation(a).includes(ref)).length;
   const liste = scenarios.filter((s) => dedans.has(s.ref) && s.actif !== false)
     .sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
 
@@ -232,10 +251,11 @@ export const tableauHumain = ({ scenarios = [], campagne = {}, passages = [], an
 
 /** Le tableau d'un testeur : ses scénarios, son résultat. */
 export const tableauTesteur = ({ scenarios = [], passages = new Map(), blocs = {} }) => {
-  const cases = scenarios.map((s) => ({ ref: s.ref, titre: s.titre || '', bloc: s.bloc, etat: verdictTesteur(passages.get(s.ref)) }));
+  const cases = scenarios.map((s) => ({ ref: s.ref, titre: s.titre || '', bloc: s.bloc, blocLibelle: s.blocLibelle || '', etat: verdictTesteur(passages.get(s.ref)) }));
   const faits = cases.filter((c) => c.etat === 'ok' || c.etat === 'ko' || c.etat === 'na').length;
   return {
-    familles: grouper(cases, (c) => c.bloc, (cle) => (blocs[cle] || {}).libelle || 'Divers'),
+    /* Une section du plan porte son titre sur chacun de ses scénarios. */
+    familles: grouper(cases, (c) => c.bloc, (cle, c) => (blocs[cle] || {}).libelle || c.blocLibelle || 'Divers'),
     compte: compter(cases, ORDRE_TESTEUR),
     ordre: ORDRE_TESTEUR,
     total: cases.length,
@@ -399,28 +419,30 @@ export const tableauPlan = ({ sections = [], parcours = [], regles = [], platefo
    seul, ou humain et robot. Un scénario fait par un robot seul n'a pas de
    case ici.
 
-   La couleur vient de ce que les testeurs ont rendu dans la campagne, par
-   deux chemins :
-   - aujourd'hui, ils testent les scénarios de la bibliothèque (TA-01…) :
-     un scénario du plan hérite des résultats de ceux que cite son champ
-     « refs » ;
-   - demain, la répartition leur enverra les scénarios du plan eux-mêmes :
-     un passage dont la référence est l'identifiant du scénario du plan
-     (taches-f-001) compte aussi.
-   Chaque origine est jugée comme dans la grille d'avant (verdictScenario :
-   passages, KO corrigés à rejouer, anomalies qualifiées), plateforme par
-   plateforme, et le pire l'emporte. Sans résultat : pas encore testé.
+   La couleur vient de ce que les testeurs ont rendu dans la campagne. Deux
+   sortes de campagnes :
+   - une campagne SUR LE PLAN (le modèle du 03/10/2026) : chaque testeur
+     reçoit des clés « scénario du plan, plateforme » dans son affectation,
+     et un passage compte pour la case de SON scénario et de SA plateforme,
+     jamais pour un autre. Le nombre attendu vient de l'affectation : deux
+     testeurs pour un scénario humain seul, un pour humain et robot ;
+   - une campagne d'avant, sur la bibliothèque (TA-01…) : un scénario du
+     plan hérite des résultats de ceux que cite son champ « refs ». Ces
+     résultats restent lisibles, marqués « hérité ».
+   Chaque plateforme est jugée comme dans la grille d'avant (verdictScenario :
+   passages, KO corrigés à rejouer, anomalies qualifiées), et le pire
+   l'emporte. Sans résultat : pas encore testé.
 
-   Rien ne se perd : un scénario de la bibliothèque testé par des humains
-   mais cité par aucun scénario humain du plan reste visible, dans une carte
-   « Hors plan », sans compter dans l'avancement.
+   Rien ne se perd : un scénario testé par des humains mais repris par aucun
+   scénario humain du plan reste visible, dans une carte « Hors plan », sans
+   compter dans l'avancement.
    -------------------------------------------------------------------------- */
 
 export const QUI_HUMAIN = ['humain', 'les-deux'];
-const ORDRE_HUMAIN_PLAN = ['ok', 'fragile', 'casse', 'cours', 'na', 'nonteste'];
+const ORDRE_HUMAIN_PLAN = ['ok', 'fragile', 'casse', 'cours', 'na', 'nonteste', 'trou'];
 /* Du plus mauvais au meilleur. Un KO corrigé qui attend d'être rejoué
    (en cours) passe devant un réussi ; un réussi devant un sans objet. */
-const RANG_HUMAIN = ['casse', 'fragile', 'cours', 'ok', 'na', 'nonteste'];
+const RANG_HUMAIN = ['casse', 'fragile', 'cours', 'trou', 'ok', 'na', 'nonteste'];
 const rangHumain = (e) => { const i = RANG_HUMAIN.indexOf(e); return i < 0 ? RANG_HUMAIN.indexOf('cours') : i; };
 
 /** Le plus mauvais de plusieurs résultats humains ('nonteste' si aucun). */
@@ -435,6 +457,197 @@ const TRANCHES = ['ok', 'fragile', 'casse', 'na'];
 /* Une anomalie vue sur une plateforme ; posée sans plateforme, partout. */
 const anomalieSur = (a, plateforme) => !plateforme || !(a.plateformes || []).length || a.plateformes.includes(plateforme);
 
+/* --------------------------------------------------------------------------
+   Une campagne sur le plan : l'affectation et ses clés
+
+   affectation.{uid} = { telephone, web, cles: ['taches-f-001__ios', …], vague }
+   Une clé dit un scénario du plan ET la plateforme où ce testeur le passe.
+   L'identifiant d'un passage en découle : `${uid}__${clé}`.
+   -------------------------------------------------------------------------- */
+
+export const PLATEFORMES_PLAN = ['ios', 'android', 'web'];
+const estAffectationPlan = (a) => Boolean(a) && typeof a === 'object' && !Array.isArray(a) && Array.isArray(a.cles);
+
+/** La clé d'un passage : un scénario du plan, une plateforme. */
+export const clePassage = (scenario, plateforme) => `${scenario}__${plateforme}`;
+
+/** Une clé découpée, ou null si elle ne suit pas la forme attendue. */
+export const decouperCle = (cle) => {
+  const s = String(cle || '');
+  const i = s.lastIndexOf('__');
+  if (i <= 0) return null;
+  const scenario = s.slice(0, i);
+  const plateforme = s.slice(i + 2);
+  return PLATEFORMES_PLAN.includes(plateforme) ? { scenario, plateforme } : null;
+};
+
+/** La campagne se déroule-t-elle sur le plan (et non sur la bibliothèque) ? */
+export const campagneSurPlan = (c) => Boolean(c)
+  && (c.plan === true || Object.values(c.affectation || {}).some(estAffectationPlan));
+
+/** L'affectation d'un testeur dans une campagne sur le plan, ou null. */
+export const affectationPlan = (campagne, uid) => {
+  const a = ((campagne || {}).affectation || {})[uid];
+  return estAffectationPlan(a) ? a : null;
+};
+
+/** Ses clés valides, sans doublon, dans l'ordre de l'affectation. */
+export const clesDuTesteur = (campagne, uid) => {
+  const a = affectationPlan(campagne, uid);
+  if (!a) return [];
+  return Array.from(new Set(a.cles.filter((k) => typeof k === 'string' && decouperCle(k))));
+};
+
+/** La section d'un scénario du plan, d'après son identifiant (« taches-f-001 » : taches). */
+export const sectionDuScenario = (id) => {
+  const m = /^(.+)-[ftus]-\d+$/.exec(String(id || ''));
+  return m ? m[1] : '';
+};
+
+/** Les sections à lire pour ces clés, et elles seules. */
+export const sectionsDesCles = (cles = []) => Array.from(new Set(cles
+  .map((k) => decouperCle(k)).filter(Boolean)
+  .map((k) => sectionDuScenario(k.scenario)).filter(Boolean)));
+
+/* Le passage, s'il porte la clé d'un scénario du plan. */
+const cleDuPassage = (p) => (p && p.scenario && p.plateforme ? clePassage(p.scenario, p.plateforme) : '');
+
+/* L'ordre des groupes, celui de la page « Ce qui va être testé ». */
+const ORDRE_GROUPES = ['demarrage', 'socle', 'fonctionnalites', 'transverse'];
+const rangGroupe = (g) => { const i = ORDRE_GROUPES.indexOf(g); return i < 0 ? 99 : i; };
+
+/**
+ * Les scénarios d'un testeur dans une campagne sur le plan : une ligne par
+ * clé de son affectation, rangée par section (dans l'ordre du plan), puis
+ * le téléphone avant le web (on ne change pas d'appareil à chaque ligne),
+ * puis l'ordre des scénarios dans la section.
+ *
+ * Une clé dont le scénario n'est plus dans le plan, n'est plus fait par un
+ * humain, ou n'est plus déclaré sur cette plateforme, ne donne pas de
+ * ligne : elle est rendue dans `ecartees`, pour que rien ne disparaisse
+ * sans bruit.
+ *
+ * @param {Array} sections  les sections lues (au moins celles des clés)
+ * @param {Array} cles      ses clés
+ * @returns {{ scenarios: Array, ecartees: Array<string> }}
+ *   chaque scénario : { ref (la clé), id, plateforme, titre, etapes, attendu,
+ *   priorite, type, qui, aspect, section, sectionTitre, bloc, blocLibelle }
+ */
+export const scenariosDuTesteur = ({ sections = [], cles = [] }) => {
+  const parId = new Map();
+  sections.filter((s) => s && s.aspects).forEach((s) => {
+    let rang = 0;
+    ASPECTS_DU_PLAN.forEach((aspect) => ((s.aspects || {})[aspect] || []).forEach((sc) => {
+      rang += 1;
+      if (sc && sc.id) parId.set(sc.id, { sc, s, aspect, rang });
+    }));
+  });
+  const scenarios = [];
+  const ecartees = [];
+  cles.forEach((cle) => {
+    const k = decouperCle(cle);
+    const x = k && parId.get(k.scenario);
+    if (!x || !QUI_HUMAIN.includes(x.sc.qui) || !(x.sc.plateformes || []).includes(k.plateforme)) { ecartees.push(cle); return; }
+    const { sc, s, aspect, rang } = x;
+    scenarios.push({
+      ref: cle, id: sc.id, plateforme: k.plateforme,
+      titre: sc.titre || sc.id, etapes: sc.etapes || '', attendu: sc.attendu || '',
+      priorite: sc.priorite || '', type: sc.type || '', qui: sc.qui, aspect,
+      section: s.id, sectionTitre: s.titre || s.id, bloc: s.id, blocLibelle: s.titre || s.id,
+      rang: [rangGroupe(s.groupe), Number(s.ordre) || 0, s.id, k.plateforme === 'web' ? 1 : 0, rang],
+    });
+  });
+  const comparer = (a, b) => {
+    for (let i = 0; i < a.rang.length; i += 1) {
+      if (a.rang[i] < b.rang[i]) return -1;
+      if (a.rang[i] > b.rang[i]) return 1;
+    }
+    return 0;
+  };
+  scenarios.sort(comparer);
+  return { scenarios: scenarios.map(({ rang, ...s }) => s), ecartees };
+};
+
+/**
+ * Les chiffres des humains dans un plan, pour la page d'un projet : les
+ * scénarios faits par un humain (humain seul ou humain et robot), ceux
+ * qu'on passe sur iPhone ET sur Android, et les passages d'une campagne
+ * complète (chaque plateforme déclarée, deux testeurs pour un humain seul,
+ * un pour humain et robot : la règle de répartition).
+ */
+export const chiffresHumainsDuPlan = (sections = []) => {
+  let scenarios = 0; let mobiles = 0; let passages = 0;
+  sections.forEach((s) => ASPECTS_DU_PLAN.forEach((aspect) => (((s || {}).aspects || {})[aspect] || []).forEach((sc) => {
+    if (!sc || !QUI_HUMAIN.includes(sc.qui)) return;
+    const p = (sc.plateformes || []).filter((x) => PLATEFORMES_PLAN.includes(x));
+    scenarios += 1;
+    if (p.includes('ios') && p.includes('android')) mobiles += 1;
+    passages += p.length * (sc.qui === 'humain' ? 2 : 1);
+  })));
+  return { scenarios, mobiles, passages };
+};
+
+/* Le nombre de passages attendus par clé, d'après toute l'affectation. */
+const attendusParCle = (campagne) => {
+  const n = new Map();
+  Object.values((campagne || {}).affectation || {}).forEach((a) => {
+    if (!estAffectationPlan(a)) return;
+    Array.from(new Set(a.cles)).forEach((k) => { if (typeof k === 'string') n.set(k, (n.get(k) || 0) + 1); });
+  });
+  return n;
+};
+
+/* Le verdict d'une case d'une campagne sur le plan : seuls comptent les
+   passages rendus sur l'identifiant du scénario, plateforme par plateforme,
+   contre le nombre attendu de l'affectation. */
+const verdictSurLePlan = ({ scenario, passages, anomalies, plateforme, attendus, trous }) => {
+  const id = scenario.id || '';
+  const siens = passages.filter((p) => p.scenario === id).map((p) => ({ ...enCourt(p), origine: id }));
+  const anos = anomalies.filter((a) => a.scenario === id);
+  const attenduSur = (p) => attendus.get(clePassage(id, p)) || 0;
+  const vide = (e) => (e === 'trou' ? (trous ? 'trou' : 'nonteste') : 'nonteste');
+
+  const juger = (p) => {
+    const ceux = siens.filter((x) => x.plateforme === p);
+    const v = verdictScenario({ attendus: attenduSur(p), passages: ceux, anomalies: anos.filter((a) => anomalieSur(a, p)) });
+    let e = v.etat;
+    if (v.revoir && (e === 'ok' || e === 'na')) e = 'cours';
+    if (e === 'vide' || e === 'trou') e = vide(e);
+    const faits = Math.min(attenduSur(p), ceux.filter((x) => !koCorrige(x, anos)).length);
+    return { plateforme: p, etat: e, revoir: v.revoir, attendus: attenduSur(p), faits, origines: ceux.length ? [{ cle: id, etat: e }] : [] };
+  };
+
+  const declarees = (scenario.plateformes || []).filter(Boolean);
+  if (plateforme) {
+    const ici = juger(plateforme);
+    return {
+      etat: ici.etat, revoir: ici.revoir, sources: [id], origines: ici.origines, parPlateforme: [ici], partiel: false, manquent: [],
+      passages: siens.filter((x) => x.plateforme === plateforme), anomalies: anos.filter((a) => anomalieSur(a, plateforme)),
+      attendus: ici.attendus, faits: ici.faits, herite: false, surPlan: true,
+    };
+  }
+  const vues = Array.from(new Set(siens.map((x) => x.plateforme || '').filter(Boolean)));
+  const toutes = [...declarees, ...vues.filter((p) => !declarees.includes(p))];
+  const parPlateforme = toutes.map(juger);
+  const attendusTotal = parPlateforme.reduce((n, x) => n + x.attendus, 0);
+  /* Toutes plateformes confondues, les échecs se comptent ensemble, comme
+     dans la grille d'avant : un KO sur iOS et un sur Android font un
+     cassé. */
+  const tout = verdictScenario({ attendus: attendusTotal, passages: siens, anomalies: anos });
+  let etat;
+  if (tout.etat === 'casse' || tout.etat === 'fragile') etat = tout.etat;
+  else if (parPlateforme.some((x) => x.etat === 'trou')) etat = 'trou';
+  else if (parPlateforme.every((x) => x.etat === 'nonteste')) etat = 'nonteste';
+  else if (parPlateforme.some((x) => !['ok', 'na'].includes(x.etat))) etat = 'cours';
+  else etat = parPlateforme.every((x) => x.etat === 'na') ? 'na' : 'ok';
+  const manquent = declarees.filter((p) => !siens.some((x) => x.plateforme === p));
+  return {
+    etat, revoir: tout.revoir, sources: [id], origines: siens.length ? [{ cle: id, etat }] : [],
+    partiel: siens.length > 0 && manquent.length > 0, manquent, parPlateforme, passages: siens, anomalies: anos,
+    attendus: attendusTotal, faits: parPlateforme.reduce((n, x) => n + x.faits, 0), herite: false, surPlan: true,
+  };
+};
+
 /**
  * Le verdict humain d'un scénario du plan.
  *
@@ -442,19 +655,26 @@ const anomalieSur = (a, plateforme) => !plateforme || !(a.plateformes || []).len
  * @param {Array}  passages    les passages de la campagne (toutes origines)
  * @param {Array}  anomalies   les anomalies qui comptent pour la campagne
  * @param {string} plateforme  '' pour toutes
- * @returns {{ etat, revoir, sources, origines, parPlateforme, passages, anomalies, partiel, manquent }}
+ * @param {Map}    attendus    campagne sur le plan : passages attendus par
+ *                             clé (absent : campagne d'avant, par refs)
+ * @param {boolean} trous      campagne sur le plan : dire « non affecté »
+ *                             quand personne n'a reçu une plateforme
+ * @returns {{ etat, revoir, sources, origines, parPlateforme, passages, anomalies, partiel, manquent, herite }}
  *   sources : les références lues (refs, puis l'identifiant du plan) ;
  *   origines : celles qui ont rendu quelque chose, et leur verdict ;
  *   parPlateforme : [{ plateforme, etat, revoir, origines: [{ cle, etat }] }] ;
- *   passages : ceux qui comptent, chacun marqué de son origine (« origine ») ;
+ *   passages : ceux qui comptent, chacun marqué de son origine (« origine »)
+ *   et, s'il vient d'un autre scénario, « herite » ;
  *   partiel, manquent : les plateformes du scénario qu'aucun humain n'a
- *   encore passées.
+ *   encore passées ; herite : un résultat au moins vient d'un autre scénario.
  */
-export const verdictHumainPlan = ({ scenario = {}, passages = [], anomalies = [], plateforme = '' }) => {
+export const verdictHumainPlan = ({ scenario = {}, passages = [], anomalies = [], plateforme = '', attendus = null, trous = false }) => {
+  if (attendus instanceof Map) return verdictSurLePlan({ scenario, passages, anomalies, plateforme, attendus, trous });
   const refs = (Array.isArray(scenario.refs) ? scenario.refs : []).filter((r) => typeof r === 'string' && r);
   const sources = Array.from(new Set([...refs, ...(scenario.id ? [scenario.id] : [])]));
   const dedans = new Set(sources);
-  const siens = passages.filter((p) => dedans.has(p.scenario)).map((p) => ({ ...p, origine: p.scenario }));
+  const siens = passages.filter((p) => dedans.has(p.scenario))
+    .map((p) => ({ ...enCourt(p), origine: p.scenario, herite: p.scenario !== scenario.id }));
   const anos = anomalies.filter((a) => dedans.has(a.scenario));
 
   /* Une origine jugée comme dans la grille d'avant, sur une plateforme ou
@@ -481,13 +701,14 @@ export const verdictHumainPlan = ({ scenario = {}, passages = [], anomalies = []
     };
   };
 
+  const herite = siens.some((x) => x.herite);
   const declarees = (scenario.plateformes || []).filter(Boolean);
   if (plateforme) {
     const ici = juger(plateforme);
+    const lesSiens = siens.filter((x) => x.plateforme === plateforme);
     return {
       etat: ici.etat, revoir: ici.revoir, sources, origines: ici.origines, parPlateforme: [ici], partiel: false, manquent: [],
-      passages: siens.filter((x) => x.plateforme === plateforme),
-      anomalies: anos.filter((a) => anomalieSur(a, plateforme)),
+      passages: lesSiens, anomalies: anos.filter((a) => anomalieSur(a, plateforme)), herite: lesSiens.some((x) => x.herite),
     };
   }
   /* Toutes plateformes : chaque origine est jugée sur tous ses passages,
@@ -504,7 +725,7 @@ export const verdictHumainPlan = ({ scenario = {}, passages = [], anomalies = []
   const manquent = declarees.filter((p) => !siens.some((x) => x.plateforme === p));
   const partiel = siens.length > 0 && manquent.length > 0;
   const etat = partiel && (tout.etat === 'ok' || tout.etat === 'na') ? 'cours' : tout.etat;
-  return { etat, revoir: tout.revoir, sources, origines: tout.origines, partiel, manquent, parPlateforme, passages: siens, anomalies: anos };
+  return { etat, revoir: tout.revoir, sources, origines: tout.origines, partiel, manquent, parPlateforme, passages: siens, anomalies: anos, herite };
 };
 
 /**
@@ -512,26 +733,31 @@ export const verdictHumainPlan = ({ scenario = {}, passages = [], anomalies = []
  *
  * @param {Array}  sections    les sections du plan, dans l'ordre de la page
  * @param {Array}  scenarios   la bibliothèque du projet (titres du hors plan)
- * @param {Object} campagne    { id, scenarios, affectation } ; null : aucune
+ * @param {Object} campagne    { id, scenarios, affectation, plan } ; null : aucune
  * @param {Array}  passages    tous les passages de la campagne
  * @param {Array}  anomalies   toutes les anomalies du projet
  * @param {string} plateforme  '' pour toutes
+ * @param {boolean} trous      campagne sur le plan : montrer « non affecté »
+ *                             (l'équipe), sinon « pas encore testé » (le client)
  */
-export const tableauHumainPlan = ({ sections = [], scenarios = [], campagne = null, passages = [], anomalies = [], plateforme = '' }) => {
+export const tableauHumainPlan = ({ sections = [], scenarios = [], campagne = null, passages = [], anomalies = [], plateforme = '', trous = false }) => {
   const camp = campagne || {};
+  const surPlan = campagneSurPlan(campagne);
+  const attendus = surPlan ? attendusParCle(campagne) : null;
   const anosCampagne = campagne ? anomalies.filter((a) => anomalieDeLaCampagne(a, camp.id)) : [];
   const lesPassages = campagne ? passages : [];
   /* Les références qu'un scénario humain du plan reprend, toutes
-     plateformes confondues : celles-là ont leur place dans le plan. */
+     plateformes confondues : celles-là ont leur place dans le plan. Une
+     campagne sur le plan ne reprend que les identifiants du plan. */
   const reprises = new Set();
   const familles = sections.map((s) => {
     const cases = [];
     ASPECTS_DU_PLAN.forEach((aspect) => ((s.aspects || {})[aspect] || []).forEach((sc) => {
       if (!sc || !QUI_HUMAIN.includes(sc.qui)) return;
-      (Array.isArray(sc.refs) ? sc.refs : []).forEach((r) => reprises.add(r));
+      if (!surPlan) (Array.isArray(sc.refs) ? sc.refs : []).forEach((r) => reprises.add(r));
       if (sc.id) reprises.add(sc.id);
       if (!surLaPlateforme(sc, plateforme)) return;
-      const v = verdictHumainPlan({ scenario: sc, passages: lesPassages, anomalies: anosCampagne, plateforme });
+      const v = verdictHumainPlan({ scenario: sc, passages: lesPassages, anomalies: anosCampagne, plateforme, attendus, trous });
       cases.push({ ref: sc.id || '', cle: `plan:${sc.id || ''}`, titre: sc.titre || '', qui: sc.qui, aspect, section: s.id, scenario: sc, ...v });
     }));
     return { cle: `section:${s.id}`, libelle: s.titre || s.id || 'Section', groupe: s.groupe || '', section: s, cases };
@@ -543,7 +769,7 @@ export const tableauHumainPlan = ({ sections = [], scenarios = [], campagne = nu
   const hors = [];
   if (campagne) {
     const ici = (p) => !plateforme || p.plateforme === plateforme;
-    const attendusDe = (ref) => Object.values(camp.affectation || {}).filter((refs) => (refs || []).includes(ref)).length;
+    const attendusDe = (ref) => Object.values(camp.affectation || {}).filter((a) => clesDeLAffectation(a).includes(ref)).length;
     const dansCampagne = new Set(camp.scenarios || []);
     const parRef = new Map(scenarios.map((s) => [s.ref, s]));
     const cles = Array.from(new Set(lesPassages.filter(ici).map((p) => p.scenario).filter((r) => r && !reprises.has(r))));
@@ -551,25 +777,30 @@ export const tableauHumainPlan = ({ sections = [], scenarios = [], campagne = nu
     cles.sort((a, b) => rang(a) - rang(b) || String(a).localeCompare(String(b)));
     cles.forEach((ref) => {
       const s = parRef.get(ref) || {};
-      const ceux = lesPassages.filter((p) => p.scenario === ref && ici(p));
+      const ceux = lesPassages.filter((p) => p.scenario === ref && ici(p)).map(enCourt);
       const anos = anosCampagne.filter((a) => a.scenario === ref && anomalieSur(a, plateforme));
-      const attendus = plateforme || !dansCampagne.has(ref) ? null : attendusDe(ref);
-      const v = verdictScenario({ attendus, passages: ceux, anomalies: anos });
-      hors.push({ ref, titre: s.titre || '', bloc: s.bloc, niveau: s.niveau, attendus, passages: ceux, anomalies: anos, horsPlan: true, ...v });
+      const attendusHors = plateforme || surPlan || !dansCampagne.has(ref) ? null : attendusDe(ref);
+      const v = verdictScenario({ attendus: attendusHors, passages: ceux, anomalies: anos });
+      hors.push({ ref, titre: s.titre || '', bloc: s.bloc, niveau: s.niveau, attendus: attendusHors, passages: ceux, anomalies: anos, horsPlan: true, ...v });
     });
   }
   if (hors.length) familles.push({ cle: 'hors-plan', libelle: 'Hors plan', groupe: 'autres', horsPlan: true, cases: hors });
 
-  /* Ce qui compte dans l'avancement : les scénarios humains du plan. */
+  /* Ce qui compte dans l'avancement. Campagne sur le plan : les passages
+     attendus par l'affectation, et ceux qui sont rendus (un KO corrigé
+     qui attend d'être rejoué n'est plus fait). Sinon : les scénarios
+     humains du plan, faits quand ils ont un verdict. */
   const casesPlan = familles.filter((f) => f.section).flatMap((f) => f.cases);
   return {
     familles,
     compte: compter(casesPlan, ORDRE_HUMAIN_PLAN),
     ordre: ORDRE_HUMAIN_PLAN,
     total: casesPlan.length,
-    attendus: casesPlan.length,
-    faits: casesPlan.filter((c) => TRANCHES.includes(c.etat)).length,
-    commences: casesPlan.filter((c) => c.etat !== 'nonteste').length,
+    attendus: surPlan ? casesPlan.reduce((n, c) => n + c.attendus, 0) : casesPlan.length,
+    faits: surPlan ? casesPlan.reduce((n, c) => n + c.faits, 0) : casesPlan.filter((c) => TRANCHES.includes(c.etat)).length,
+    unite: surPlan ? 'passages' : 'scenarios',
+    surPlan,
+    commences: casesPlan.filter((c) => c.etat !== 'nonteste' && c.etat !== 'trou').length,
     scenarios: casesPlan.length,
     horsPlan: hors.length,
     qui: { humain: casesPlan.filter((c) => c.qui === 'humain').length, 'les-deux': casesPlan.filter((c) => c.qui === 'les-deux').length },

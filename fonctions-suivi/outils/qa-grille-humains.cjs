@@ -23,7 +23,9 @@ require('./lib/garde-banc.cjs'); const BANC = require('./lib/ports-banc.cjs');
       vert et violet, statut hérité par refs ou par identifiant, le pire
       l'emporte, filtre de plateforme, fiches, Hors plan, chiffres du haut ;
    3. le client : la même grille, rien à modifier, testeurs numérotés ;
-   4. l'espace testeur : inchangé ;
+   4. l'espace testeur : une campagne d'avant (sur la bibliothèque) ne lui
+      propose plus rien, ses scénarios arrivent avec la répartition du plan
+      (voir qa-testeur-plan) ;
    5. le plan retiré : la grille d'avant, à l'identique ;
    6. le vrai plan ForgeMe sur l'émulateur ($PLAN_REEL_HUMAINS, sinon
       ~/ForgeMe-tests/plan-tests s'il existe) : les chiffres relevés.
@@ -395,7 +397,7 @@ const verifierChiffres = (r, quoi) => {
   verifier(/Ouvrir l'application/.test(f.texte) && /Le résultat de gh-taches-f-001 s'affiche/.test(f.texte), 'avec ses étapes et ce qui doit se passer');
   verifier(/Humain et robot/.test(f.texte) && /iOS, Android, Web/.test(f.texte), 'qui le fait, et ses plateformes');
   verifier(/Alma · iOS · iPhone 15/.test(f.texte) && /Bruno · Android · Pixel 8/.test(f.texte), 'chaque résultat : le testeur nommé, la plateforme, l\'appareil', f.texte.slice(0, 900));
-  verifier(/Repris de GH-04/.test(f.texte) && (f.texte.match(/Repris de/g) || []).length === 1, '« Repris de GH-04 » pour le résultat de la bibliothèque, rien pour celui rendu sur le plan');
+  verifier(/Hérité de GH-04/.test(f.texte) && (f.texte.match(/Hérité de/g) || []).length === 1, '« Hérité de GH-04 » pour le résultat de la bibliothèque, rien pour celui rendu sur le plan');
   verifier(/Rien ne se passe sur gh-taches-f-001/.test(f.texte) && f.preuves === 1, 'la remarque et la preuve du KO');
   verifier(/\d{1,2} \S+ à \d{2}:\d{2}/.test(f.texte), 'la date du passage', f.texte.slice(0, 600));
   verifier(/Fragile\./.test(f.texte) && /Pas encore testé sur Web/.test(f.texte), 'pourquoi cette couleur, et la plateforme qui attend', f.texte.slice(0, 300));
@@ -409,10 +411,10 @@ const verifierChiffres = (r, quoi) => {
   verifier(/Une tâche que personne/.test(f.titre) && /Pas encore testé par un humain/.test(f.texte) && /Humain seul/.test(f.texte), 'sans résultat : « Pas encore testé par un humain »', f.texte.slice(0, 300));
   await fermer(cockpit);
   f = await fiche(cockpit, 'plan:gh-connexion-s-001');
-  verifier(/Cassé\./.test(f.texte) && /GH-07/.test(f.texte) && (f.texte.match(/Repris de GH-07/g) || []).length === 2 && f.preuves === 2, 'cassé : les deux KO, repris de GH-07, chacun avec sa preuve', f.texte.slice(0, 400));
+  verifier(/Cassé\./.test(f.texte) && /GH-07/.test(f.texte) && (f.texte.match(/Hérité de GH-07/g) || []).length === 2 && f.preuves === 2, 'cassé : les deux KO, hérités de GH-07, chacun avec sa preuve', f.texte.slice(0, 400));
   await fermer(cockpit);
   f = await fiche(cockpit, 'plan:gh-connexion-t-001');
-  verifier(/Celia · Web · Firefox 131/.test(f.texte) && !/Repris de/.test(f.texte), 'rendu sur l\'identifiant du plan : pas de « Repris de »', f.texte.slice(0, 400));
+  verifier(/Celia · Web · Firefox 131/.test(f.texte) && !/Hérité de/.test(f.texte), 'rendu sur l\'identifiant du plan : pas de « Hérité de »', f.texte.slice(0, 400));
   await fermer(cockpit);
   f = await fiche(cockpit, 'GH-08');
   verifier(/Testé, repris par rien/.test(f.titre) && /Celia/.test(f.texte), 'une case hors plan : la fiche d\'avant', f.titre);
@@ -446,19 +448,19 @@ const verifierChiffres = (r, quoi) => {
   f = await fiche(client, 'plan:gh-taches-f-001');
   verifier(/Créer une tâche partout/.test(f.titre) && /Testeur \d/.test(f.texte) && !/Alma|Bruno/.test(f.texte), 'la fiche : les testeurs numérotés, comme dans la grille d\'avant', f.texte.slice(0, 500));
   verifier(!f.qualifier && !f.modifier, 'sans rien à modifier ni qualifier');
-  verifier(/Repris de GH-04/.test(f.texte), 'et d\'où vient chaque résultat');
+  verifier(/Hérité de GH-04/.test(f.texte), 'et d\'où vient chaque résultat');
   await fermer(client);
   await theme(client, 'light');
   await client.screenshot({ path: path.join(CAPTURES, 'grille-humains-client-clair.png'), fullPage: true });
   verifier(fs.existsSync(path.join(CAPTURES, 'grille-humains-client-clair.png')), `capture du client en clair : ${path.join(CAPTURES, 'grille-humains-client-clair.png')}`);
 
-  console.log('\n== L\'espace testeur : inchangé');
+  console.log('\n== L\'espace testeur : la bibliothèque n\'est plus proposée');
   const testeur = await ouvrir('light', 390);
   await connecter(testeur, 'celia.humains@exemple.test');
   await remplirFiche(testeur, { prenom: 'Celia', modele: 'PC du banc' });
   await testeur.waitForSelector('.accueil [data-accueil="passer"], .testeur-tete', { timeout: 20000 }).catch(() => null);
   if (await testeur.$('.accueil')) { await testeur.click('.accueil [data-accueil="passer"]'); await testeur.waitForSelector('.accueil', { state: 'detached' }).catch(() => {}); }
-  await testeur.waitForSelector('.tb-case', { timeout: 30000 }).catch(() => {});
+  await testeur.waitForSelector('.tb-case, .vide-titre', { timeout: 30000 }).catch(() => {});
   await pause(800);
   const t = await testeur.evaluate(() => ({
     cases: Object.fromEntries([...document.querySelectorAll('.tb-case')].map((c) => [c.dataset.case, c.dataset.e])),
@@ -466,8 +468,7 @@ const verifierChiffres = (r, quoi) => {
     texte: document.body.innerText,
   }));
   verifier(/\/suivi\/testeur/.test(testeur.url()), 'Celia arrive dans son espace', testeur.url());
-  verifier(Object.keys(t.cases).sort().join(',') === 'GH-05,GH-08', 'elle voit ses deux scénarios de la bibliothèque, pas ceux du plan', Object.keys(t.cases).join(','));
-  verifier(t.cases['GH-08'] === 'ok' && t.cases['GH-05'] === 'vide', 'avec son propre résultat, comme avant', JSON.stringify(t.cases));
+  verifier(!Object.keys(t.cases).length && /Vos scénarios arrivent/.test(t.texte), 'une campagne sur la bibliothèque ne lui propose plus rien : ses scénarios arrivent', Object.keys(t.cases).join(','));
   verifier(!t.groupes && !t.points && !/Hors plan|humain seul|humain et robot/.test(t.texte), 'ni sections du plan, ni points, ni « Hors plan »');
   verifier(!/Alma|Bruno/.test(t.texte), 'et jamais les autres testeurs');
 

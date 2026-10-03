@@ -15,11 +15,17 @@
      B2   après la fin, une case « à rejouer » ne demande plus de refaire ce
           qu'on ne peut plus poser.
 
+   La suite verse elle-même un petit plan (deux sections, cinq scénarios)
+   et confie à Karim, sur la campagne du banc, des clés « scénario du plan,
+   plateforme » au modèle commun : la plateforme vient de la clé.
+
    Banc : émulateurs, site local, semer-suivi puis semer-campagne.
    ========================================================================== */
 require('./lib/garde-banc.cjs'); const BANC = require('./lib/ports-banc.cjs');
 const { chromium } = require('@playwright/test');
 const { lireRest } = require('./lib/rest-banc.cjs');
+const { execFileSync } = require('node:child_process');
+const fs = require('node:fs'); const os = require('node:os'); const path = require('node:path');
 const PROJET = 'capmedia-1f90d'; const SITE = process.env.BANC_SITE || BANC.site;
 const PID = 'atelier'; const CID = 'c-oct';
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -28,6 +34,23 @@ const bdd = (c) => `${BANC.firestore}/v1/projects/${PROJET}/databases/(default)/
 const lire = async (c) => lireRest(bdd(c), prop);
 const vider = async (col) => { const j = await lire(`${col}?pageSize=300`); for (const d of (j && j.documents) || []) await fetch(`${BANC.firestore}/v1/${d.name}`, { method: 'DELETE', headers: prop }); };
 const S = (v) => ({ stringValue: String(v) }); const L = (l) => ({ arrayValue: { values: l } }); const T = (d) => ({ timestampValue: d.toISOString() });
+const B = (v) => ({ booleanValue: v }); const N = (v) => ({ integerValue: String(v) }); const M = (o) => ({ mapValue: { fields: o } });
+/* Le plan de la suite : deux sections, cinq scénarios faits par un humain. */
+const sc = (id, titre) => ({ id, titre, etapes: `Ouvrir l'application.\nFaire ${titre.toLowerCase()}.`, attendu: `${titre} : le résultat s'affiche.`, plateformes: ['ios', 'android', 'web'], type: 'normal', priorite: 'haute', refs: [], qui: 'humain', parcours: [] });
+const vides = { fonctionnel: [], technique: [], ux: [], securite: [] };
+const SECTIONS = [
+  { id: 'pp-dates', groupe: 'demarrage', ordre: 1, titre: 'Dates importantes', resume: 'Les dates.', plateformes: ['ios', 'android', 'web'], aspects: { ...vides,
+    fonctionnel: [sc('pp-dates-f-001', 'Créer une date'), sc('pp-dates-f-002', 'Modifier une date'), sc('pp-dates-f-003', 'Supprimer une date')] } },
+  { id: 'pp-taches', groupe: 'fonctionnalites', ordre: 2, titre: 'Tâches', resume: 'Les tâches.', plateformes: ['ios', 'android', 'web'], aspects: { ...vides,
+    fonctionnel: [sc('pp-taches-f-001', 'Créer une tâche'), sc('pp-taches-f-002', 'Cocher une tâche')] } },
+];
+const CLES = ['pp-dates-f-001__ios', 'pp-dates-f-002__ios', 'pp-dates-f-003__ios', 'pp-taches-f-001__ios', 'pp-taches-f-002__ios'];
+const verserPlan = () => {
+  const racine = fs.mkdtempSync(path.join(os.tmpdir(), 'qa-parcours-testeur-'));
+  SECTIONS.forEach((s) => fs.writeFileSync(path.join(racine, `${s.id}.json`), JSON.stringify(s, null, 2)));
+  try { return execFileSync(process.execPath, [path.join(__dirname, 'plan-tests-importer.mjs'), PID, racine, '--vrai'], { encoding: 'utf8', env: process.env, stdio: ['ignore', 'pipe', 'pipe'] }); }
+  catch (e) { return `ÉCHEC ${e.stdout || ''}${e.stderr || ''}`; } finally { fs.rmSync(racine, { recursive: true, force: true }); }
+};
 const poser = async (chemin, fields, masque) => fetch(`${bdd(chemin)}${masque ? `?${masque.map((m) => `updateMask.fieldPaths=${m}`).join('&')}` : ''}`, { method: 'PATCH', headers: { ...prop, 'Content-Type': 'application/json' }, body: JSON.stringify({ fields }) });
 const champ = (d, n) => (((d || {}).fields || {})[n]) || {};
 const str = (d, n) => champ(d, n).stringValue || '';
@@ -52,6 +75,9 @@ let page = null;
   const fiches = ((await lire('testeurs?pageSize=50')) || {}).documents || [];
   const uid = (fiches.find((d) => str(d, 'email') === karim) || { name: '' }).name.split('/').pop();
   verifier(Boolean(uid), 'Karim a une fiche dans le vivier');
+  const verse = verserPlan();
+  verifier(/2 sections versées/.test(verse), 'le petit plan est versé', verse.slice(-200));
+  await poser(`projets/${PID}/campagnes/${CID}`, { plan: B(true), affectation: M({ [uid]: M({ telephone: S('ios'), web: B(false), cles: L(CLES.map(S)), vague: N(1) }) }) }, ['plan', 'affectation']);
 
   await vider('connexions'); await vider('connexionsIp');
   await page.goto(`${SITE}/suivi/?emul`, { waitUntil: 'domcontentloaded' });
@@ -71,9 +97,9 @@ let page = null;
   verifier(refs.length >= 4, `ses scénarios sont là (${refs.length})`);
   verifier((await page.getAttribute('[data-continuer]', 'data-continuer')) === refs[0], 'le geste suivant est son premier scénario');
   verifier(await page.$(`.tb--testeur [data-case="${refs[0]}"][data-suivant]`), 'et sa case est marquée dans le tableau');
-  const choisie = await page.$$eval('.testeur-tete [data-sur][aria-pressed="true"]', (l) => l.map((b) => b.textContent.trim()));
-  verifier(choisie.length === 1 && choisie[0] === 'iPhone', `la plateforme est préremplie : iPhone (${choisie.join(',') || 'aucune'})`);
-  verifier(!/\biOS\b/.test(await page.textContent('.testeur-tete')), 'le testeur lit « iPhone », pas « iOS »');
+  verifier(refs.join('|') === CLES.join('|'), 'ses cases sont ses clés, dans l ordre du plan', refs.join('|'));
+  verifier((await page.$$('[data-sur]')).length === 0, 'aucun choix de plateforme : elle vient de sa clé');
+  verifier(/sur iPhone/.test(await page.textContent('.t-suite')) && !/\biOS\b/.test(await page.textContent('.page--testeur')), 'le geste suivant dit « sur iPhone », jamais « iOS »', await page.textContent('.t-suite'));
   verifier(!(await page.$('[data-terminer]')), 'pas de bouton de fin le premier jour');
 
   console.log('\n== La liste ne pose rien');
@@ -84,6 +110,9 @@ let page = null;
   verifier(true, 'toucher une ligne ouvre la feuille du scénario');
   const verdicts = await page.$$eval('[data-feuille-poser]', (l) => l.map((b) => b.textContent.trim()));
   verifier(verdicts.join('|') === 'Réussi|Échec|Sans objet', `la feuille dit Réussi, Échec, Sans objet (${verdicts.join('|')})`);
+  const feuille = await page.textContent('.modale--scenario');
+  verifier(/À faire sur iPhone/.test(feuille), 'la feuille dit sur quoi le faire : iPhone');
+  verifier(/Ce qu'il faut faire/i.test(feuille) && /Ouvrir l'application/.test(feuille) && /Priorité haute/i.test(feuille), 'et montre les étapes et la priorité du plan', feuille.slice(0, 160));
   await page.keyboard.press('Escape'); await pause(500);
   await page.click('[data-vue="grille"]'); await pause(500);
 
@@ -91,11 +120,12 @@ let page = null;
   await page.click('[data-continuer]'); await page.waitForSelector('[data-feuille-poser]', { timeout: 10000 });
   await page.click('[data-feuille-poser]:first-child'); await pause(1800);
   const p0 = await lire(`${passages}/${uid}__${refs[0]}`);
-  verifier(str(p0, 'plateforme') === 'ios' && Boolean(str(p0, 'resultat')), `le passage est écrit, sur iPhone (${str(p0, 'plateforme')})`);
+  verifier(str(p0, 'plateforme') === 'ios' && str(p0, 'resultat') === 'reussi', `le passage est écrit, sur iPhone, « reussi » (${str(p0, 'plateforme')} ${str(p0, 'resultat')})`);
   await page.waitForSelector('.modale--scenario .fs-enchaine', { timeout: 10000 }).catch(() => null);
+  const id = (k) => k.split('__')[0];
   const titreSuivant = await page.evaluate(() => ((document.querySelector('.modale--scenario .modale-tete p') || {}).textContent || ''));
-  verifier(titreSuivant.startsWith(refs[1]), `la feuille du suivant s'ouvre toute seule (${titreSuivant.slice(0, 30)})`);
-  verifier(new RegExp(`${refs[0]} enregistré`).test(await page.textContent('.fs-enchaine').catch(() => '')), 'et confirme le résultat posé');
+  verifier(titreSuivant.startsWith(id(refs[1])), `la feuille du suivant s'ouvre toute seule (${titreSuivant.slice(0, 30)})`);
+  verifier(new RegExp(`${id(refs[0])} enregistré`).test(await page.textContent('.fs-enchaine').catch(() => '')), 'et confirme le résultat posé');
 
   console.log('\n== Un échec, avec deux captures');
   await page.click('.modale--scenario [data-feuille-poser]:nth-child(2)'); await page.waitForSelector('.t-preuves', { timeout: 10000 });
@@ -121,7 +151,7 @@ let page = null;
   await page.keyboard.press('Escape'); await pause(600);
 
   console.log('\n== Un échec à rejouer retient la fin');
-  for (const ref of refs.slice(2)) await poser(`${passages}/${uid}__${ref}`, { scenario: S(ref), testeur: S(uid), plateforme: S('ios'), resultat: S('ok'), commentaire: S(''), preuves: L([]), contexte: { mapValue: { fields: {} } }, le: T(new Date()) });
+  for (const ref of refs.slice(2)) await poser(`${passages}/${uid}__${ref}`, { scenario: S(id(ref)), testeur: S(uid), plateforme: S('ios'), resultat: S('reussi'), commentaire: S(''), preuves: L([]), contexte: { mapValue: { fields: {} } }, cree: T(new Date()), maj: T(new Date()) });
   await poser(`${passages}/${uid}__${refs[1]}`, { aRevoir: { booleanValue: true } }, ['aRevoir']);
   await attendre(async () => /À rejouer/i.test(await page.textContent('.t-suite').catch(() => '')), 30, 500);
   verifier(/À rejouer/i.test(await page.textContent('.t-suite').catch(() => '')) && (await page.getAttribute('[data-continuer]', 'data-continuer')) === refs[1], 'le geste suivant est l échec corrigé, à rejouer');
@@ -136,7 +166,7 @@ let page = null;
 
   console.log('\n== Après la fin, plus rien à refaire');
   await poser(`projets/${PID}/campagnes/${CID}/appreciations/${uid}`, { termine: T(new Date()), testeur: S(uid) });
-  await poser(`${passages}/${uid}__${refs[1]}`, { resultat: S('ko'), aRevoir: { booleanValue: true }, commentaire: S('Toujours rien.'), preuves: L([S(preuves[0])]) }, ['resultat', 'aRevoir', 'commentaire', 'preuves']);
+  await poser(`${passages}/${uid}__${refs[1]}`, { resultat: S('echec'), aRevoir: { booleanValue: true }, commentaire: S('Toujours rien.'), preuves: L([S(preuves[0])]) }, ['resultat', 'aRevoir', 'commentaire', 'preuves']);
   await page.reload(); await page.waitForSelector('.fin-test--faite', { timeout: 25000 }).catch(() => null); await pause(1200);
   verifier(await page.$('.fin-test--faite'), 'la page dit que le test est terminé');
   await page.click(`.tb--testeur [data-case="${refs[1]}"]`); await page.waitForSelector('.modale--scenario', { timeout: 10000 });
