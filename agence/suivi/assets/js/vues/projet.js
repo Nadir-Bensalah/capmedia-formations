@@ -20,7 +20,7 @@ import {
   verdictHtml, anneauOuPas, progressionOuPas, copier, reglerBarreOnglets,
 } from '../ui.js';
 import * as magasin from '../magasin.js';
-import { K, ecrire, nouvelId, interneDuProjet, abonnerProjet, progressionProjet, jalonCourant, jalonSuivant, prochaineReunion, reunionAVenir, activiteDepuis, versionsPartie, enAttenteDeVous, peutRepondreValidation, parStatut, risquesProjet, MODES_PROGRESSION, trierEtapes, phasesTriees, notesPartageesDuProjet } from '../donnees.js';
+import { K, ecrire, nouvelId, interneDuProjet, abonnerProjet, abonnerPlan, progressionProjet, jalonCourant, jalonSuivant, prochaineReunion, reunionAVenir, activiteDepuis, versionsPartie, enAttenteDeVous, peutRepondreValidation, parStatut, risquesProjet, MODES_PROGRESSION, trierEtapes, phasesTriees, notesPartageesDuProjet } from '../donnees.js';
 import { filAriane } from '../coquille.js';
 import { notesPartageesHtml, gesteNoteDemande } from './notes-client.js';
 import { naviguer } from '../routeur.js';
@@ -30,6 +30,8 @@ import { activiteHtml } from './accueil.js';
 import { basculerAFaire } from './admin-a-faire.js';
 import { accesHtml, gesteAcces, brancherPresences } from './acces-client.js';
 import { personnesHtml } from './personnes.js';
+import { chiffresHumainsDuPlan } from '../verdicts.js';
+import { ordonnerSections } from './plan-tests.js';
 import { telechargerICS } from './calendrier.js';
 import { etatPave, paveHtml, reafficherHtml, brancherPaves } from '../pave-attente.js';
 
@@ -108,6 +110,11 @@ const lireTout = (pid) => ({
   /* Les notes que le client a partagées (équipe seule : un client n'a
      jamais cette clé, la liste est vide chez lui). */
   notesPartagees: notesPartageesDuProjet(pid),
+  /* Le plan de tests : sa présentation dit qu'il existe ; ses sections ne
+     sont lues que sur l'onglet Tests (undefined tant qu'elles ne le sont
+     pas). */
+  plan: Boolean(magasin.lire(K.planPresentation(pid))),
+  sectionsPlan: magasin.chargee(K.planTests(pid)) ? ordonnerSections(magasin.lire(K.planTests(pid))) : undefined,
 });
 
 const nomEquipe = (equipe, uid) => ((equipe.find((e) => e.id === uid) || {}).nom || '');
@@ -158,9 +165,14 @@ export const vue = async (ctx, env) => {
   /* L'empreinte du magasin ne relit pas les rôles d'un projet : un client
      qui perd la responsabilité doit pourtant perdre le coffre tout de
      suite. Son droit au coffre entre donc dans l'empreinte de la page. */
-  const empreintePage = () => `${magasin.empreinte(cles)}|${onglet}|${voitLeCoffre(env, magasin.lire(K.projet(pid))) ? 'coffre' : ''}|${equipe ? '' : `${etatPave(`projet:${pid}`)}${etatPave('accueil')}`}`;
+  /* Le plan de tests (lourd) ne s'écoute qu'en arrivant sur l'onglet
+     Tests d'un projet qui en a un : ses chiffres remplacent ceux de la
+     bibliothèque. */
+  let planSuivi = false;
+  const empreintePage = () => `${magasin.empreinte(cles)}|${planSuivi ? magasin.empreinte([K.planTests(pid)]) : ''}|${onglet}|${voitLeCoffre(env, magasin.lire(K.projet(pid))) ? 'coffre' : ''}|${equipe ? '' : `${etatPave(`projet:${pid}`)}${etatPave('accueil')}`}`;
 
   const rendre = (force = false) => {
+    suivrePlan();
     const d = lireTout(pid);
     const projet = d.projet;
     if (projet === undefined && !magasin.erreur(K.projet(pid))) return;
@@ -187,7 +199,7 @@ export const vue = async (ctx, env) => {
       liens: d.liens.length,
       reunions: d.reunions.filter(reunionAVenir).length,
       notes: d.notes.length,
-      tests: d.scenarios.length,
+      tests: d.plan ? (d.sectionsPlan ? chiffresHumainsDuPlan(d.sectionsPlan).scenarios : '') : d.scenarios.length,
       marketing: equipe ? 'À venir' : '',
     };
 
@@ -384,6 +396,12 @@ export const vue = async (ctx, env) => {
      n'apparaît qu'une fois, sans squelette quand la donnée est déjà là. */
   const planifier = magasin.dessinateur(() => rendre(false), 60, cles);
   cles.forEach((c) => lot.sur(c, planifier));
+  function suivrePlan() {
+    if (planSuivi || onglet !== 'tests' || !magasin.lire(K.planPresentation(pid))) return;
+    planSuivi = true;
+    abonnerPlan(lot, pid);
+    lot.sur(K.planTests(pid), planifier);
+  }
   /* Le profil porte le choix du pavé (replié, fermé) : il redessine la page
      quand ce choix change, et seulement alors (l'empreinte le contient). */
   if (!equipe) lot.sur(K.profil, planifier);
@@ -527,7 +545,7 @@ const tests = (d, { pid, env }) => {
   const campagnes = d.campagnes;
   const anomalies = d.anomalies;
 
-  if (!scenarios.length && !campagnes.length) {
+  if (!scenarios.length && !campagnes.length && !d.plan) {
     return `<section class="section" style="margin-top:0">
       <div class="section-tete"><h2>${equipe ? 'Tests' : 'Campagne de tests'}</h2>${boutonNouveau(env, 'scenario', 'Nouveau scénario')}</div>
       ${vide({ icone: 'bug', titre: 'Aucun scénario', texte: equipe ? 'Écrivez-en un, ou versez un plan de tests existant avec l\'outil d\'import.' : 'Les scénarios de test apparaîtront ici.' })}
@@ -536,7 +554,14 @@ const tests = (d, { pid, env }) => {
 
   const parNiveau = { socle: 0, transversal: 0, reparti: 0 };
   scenarios.forEach((s) => { parNiveau[s.niveau] = (parNiveau[s.niveau] || 0) + 1; });
-  const passages = parNiveau.socle * 2 + parNiveau.transversal * 2 + parNiveau.reparti;
+  /* Avec un plan, les chiffres sont les siens : ses scénarios faits par
+     un humain, pas la bibliothèque d'avant. Tant qu'il arrive, un tiret. */
+  const plan = d.plan ? (d.sectionsPlan ? chiffresHumainsDuPlan(d.sectionsPlan) : null) : undefined;
+  const nScenarios = plan === undefined ? scenarios.length : plan ? plan.scenarios : null;
+  const passages = plan === undefined ? parNiveau.socle * 2 + parNiveau.transversal * 2 + parNiveau.reparti : plan ? plan.passages : null;
+  const nMobiles = plan === undefined ? parNiveau.socle + parNiveau.transversal : plan ? plan.mobiles : null;
+  const chiffre = (n) => (n === null ? '–' : n);
+  const nomScenarios = plan === undefined ? 'scénarios' : (equipe ? 'scénarios humains du plan' : 'scénarios pour de vraies personnes');
   const enCours = campagnes.filter((c) => c.statut === 'en-cours');
   const ouvertes = anomalies.filter((a) => !['corrigee', 'sans-suite'].includes(a.statut));
   const bloquantes = ouvertes.filter((a) => a.gravite === 'bloquant');
@@ -547,8 +572,10 @@ const tests = (d, { pid, env }) => {
   <section class="section" style="margin-top:0">
     <div class="section-tete">
       <div><h2>${equipe ? 'Tests' : 'Campagne de tests'}</h2><p class="chapo">${equipe
-    ? `${pluriel(scenarios.length, 'scénario', 'scénarios')}, soit ${passages} passages sur mobile par campagne complète.`
-    : `Votre application est testée par de vraies personnes avant chaque sortie : ${pluriel(scenarios.length, 'scénario', 'scénarios')} à dérouler${enCours.length ? `, ${pluriel(enCours.length, 'campagne en cours', 'campagnes en cours')}` : ''}.`}</p></div>
+    ? (plan === undefined
+      ? `${pluriel(scenarios.length, 'scénario', 'scénarios')}, soit ${passages} passages sur mobile par campagne complète.`
+      : plan ? `${pluriel(plan.scenarios, 'scénario humain', 'scénarios humains')} dans le plan, soit ${plan.passages} passages par campagne complète.` : 'Le plan de tests arrive.')
+    : `Votre application est testée par de vraies personnes avant chaque sortie${nScenarios !== null ? ` : ${pluriel(nScenarios, 'scénario', 'scénarios')} à dérouler` : ''}${enCours.length ? `${nScenarios !== null ? ', ' : ' : '}${pluriel(enCours.length, 'campagne en cours', 'campagnes en cours')}` : ''}.`}</p></div>
       <div class="rang" style="gap:8px">
         ${equipe || magasin.lire(K.planPresentation(pid)) ? `<a class="btn btn-secondaire btn-petit" href="#/tests/plan?projet=${echapper(pid)}" data-plan-tests>${icone('liste')} Ce qui va être testé</a>` : ''}
         <a class="btn btn-principal btn-petit" href="#/tests?projet=${echapper(pid)}">${icone('bug')} ${equipe ? 'Ouvrir la console' : 'Voir les tests'}</a>
@@ -556,8 +583,8 @@ const tests = (d, { pid, env }) => {
     </div>
 
     <div class="rang chiffres-tests">
-      <div class="chiffre"><span class="chiffre-valeur">${scenarios.length}</span><span class="chiffre-nom">scénarios</span></div>
-      <div class="chiffre"><span class="chiffre-valeur">${parNiveau.socle + parNiveau.transversal}</span><span class="chiffre-nom">${equipe ? 'passés deux fois' : 'testés sur iPhone et Android'}</span></div>
+      <div class="chiffre"><span class="chiffre-valeur">${chiffre(nScenarios)}</span><span class="chiffre-nom">${nomScenarios}</span></div>
+      <div class="chiffre"><span class="chiffre-valeur">${chiffre(nMobiles)}</span><span class="chiffre-nom">${equipe && plan === undefined ? 'passés deux fois' : 'testés sur iPhone et Android'}</span></div>
       <div class="chiffre"><span class="chiffre-valeur">${enCours.length}</span><span class="chiffre-nom">campagnes en cours</span></div>
       <div class="chiffre${ouvertes.length ? ' chiffre--alerte' : ''}"><span class="chiffre-valeur">${ouvertes.length}</span><span class="chiffre-nom">${equipe ? 'anomalies ouvertes' : 'problèmes à corriger'}</span></div>
     </div>

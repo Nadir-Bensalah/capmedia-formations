@@ -20,12 +20,12 @@
 import {
   bdd, auth, doc, getDoc, setDoc, updateDoc, collection, query, where, signOut, onSnapshot, effacerSecretsLocaux, enDate,
   serverTimestamp, session, echapper, envoyerPiece,
-  NIVEAUX_SCENARIO, BLOCS_SCENARIO, PLATEFORMES_TEST, RESULTATS_PASSAGE, FAMILLES_AVIS,
+  NIVEAUX_SCENARIO, PLATEFORMES_TEST, RESULTATS_PASSAGE, FAMILLES_AVIS,
 } from './noyau.js';
 import { icone, pastille, toast, agir, modale, vide } from './ui.js';
 import { monterCoquille, definirNavigation, definirEtat, filAriane, enregistrerRecherche } from './coquille.js';
 import { definir, demarrer, courant, naviguer } from './routeur.js';
-import { tableauTesteur, ETATS_CASE } from './verdicts.js';
+import { tableauTesteur, ETATS_CASE, clesDuTesteur, sectionsDesCles, scenariosDuTesteur, clePassage, resultatCourt, resultatLong } from './verdicts.js';
 import { barreHtml, famillesHtml } from './grille.js';
 import { ouvrirAccueil, accueilVu, marquerAccueilVu } from './accueil-testeur.js';
 import { ouvrirFiche, consignerAppareil } from './fiche-testeur.js';
@@ -259,7 +259,7 @@ const enTete = (moi, campagne) => {
       </div>
     </div>
 
-    <div style="margin-top:14px">${barreHtml(tableauTesteur({ scenarios: etat.scenarios, passages: etat.passages, blocs: BLOCS_SCENARIO }), { legende: false })}</div>
+    <div style="margin-top:14px">${barreHtml(tableauTesteur({ scenarios: etat.scenarios, passages: etat.passages }), { legende: false })}</div>
     <p class="chapo">${faits} sur ${total} · ${part} %${faits === total && total ? ' · vous avez tout déroulé, merci' : ''}</p>
 
     <div class="segments" role="group" aria-label="Sur quoi vous testez" style="margin-top:12px">
@@ -277,7 +277,7 @@ const ligneScenario = (s) => {
   return `
   <div class="t-scenario${r ? ` t-scenario--${r}` : ''}${verrou ? ' t-scenario--verrou' : ''}${fige ? ' t-scenario--fige' : ''}" data-ref="${echapper(s.ref)}">
     <button class="t-scenario-corps" type="button" data-ouvrir="${echapper(s.ref)}"${verrou ? ' aria-disabled="true" title="Déroulez d\'abord le scénario précédent"' : ''}>
-      <span class="t-scenario-ref">${echapper(s.ref)}</span>
+      <span class="t-scenario-ref">${echapper(s.id || s.ref)}</span>
       <span class="t-scenario-titre">${echapper(s.titre)}</span>
       ${r ? pastille(RESULTATS_PASSAGE, r) : ''}
     </button>
@@ -345,14 +345,29 @@ const pageCampagne = (moi) => {
     return;
   }
 
-  /* Rangés par bloc, dans l'ordre du plan : un testeur qui déroule les
+  /* Une campagne, mais rien de confié encore : l'équipe n'a pas réparti.
+     Il ne reçoit jamais toute la campagne à la place. */
+  if (!etat.scenarios.length) {
+    racine.innerHTML = `<div class="page page--testeur">
+      <header class="testeur-tete"><div class="rang" style="justify-content:space-between;align-items:center;gap:16px">
+        <div><p class="surtitre">Ma campagne</p><h1>Bonjour ${echapper(moi.prenom || '')}</h1>
+        <p class="t-petit t-2" style="margin-top:2px">${echapper(campagne.titre || 'Campagne en cours')}</p></div>
+      </div></header>
+      ${vide({
+        icone: 'bug', titre: 'Vos scénarios arrivent',
+        texte: 'L\'équipe prépare la répartition. Ils apparaîtront ici, sans recharger la page.',
+      })}</div>`;
+    return;
+  }
+
+  /* Rangés par section, dans l'ordre du plan : un testeur qui déroule les
      dates importantes d'affilée garde le contexte en tête. */
   const visibles = etat.scenarios.filter((s) => (!etat.bloc || s.bloc === etat.bloc)
     && (etat.reste ? !fait(s.ref) : true));
   const blocs = [];
   etat.scenarios.forEach((s) => {
     let g = blocs.find((b) => b.cle === s.bloc);
-    if (!g) { g = { cle: s.bloc, libelle: (BLOCS_SCENARIO[s.bloc] || {}).libelle || s.blocLibelle || 'Divers', n: 0, faits: 0 }; blocs.push(g); }
+    if (!g) { g = { cle: s.bloc, libelle: s.blocLibelle || 'Divers', n: 0, faits: 0 }; blocs.push(g); }
     g.n += 1;
     if (fait(s.ref)) g.faits += 1;
   });
@@ -360,7 +375,7 @@ const pageCampagne = (moi) => {
   const parBloc = [];
   visibles.forEach((s) => {
     let g = parBloc.find((b) => b.cle === s.bloc);
-    if (!g) { g = { cle: s.bloc, libelle: (BLOCS_SCENARIO[s.bloc] || {}).libelle || s.blocLibelle || 'Divers', items: [] }; parBloc.push(g); }
+    if (!g) { g = { cle: s.bloc, libelle: s.blocLibelle || 'Divers', items: [] }; parBloc.push(g); }
     g.items.push(s);
   });
 
@@ -380,12 +395,12 @@ const pageCampagne = (moi) => {
 
     ${vueCourante === 'grille' ? `<div class="tb tb--testeur">
       <div class="tb-legende">${legendeTesteur()}</div>
-      ${famillesHtml(tableauTesteur({ scenarios: etat.scenarios, passages: etat.passages, blocs: BLOCS_SCENARIO }), { mode: 'testeur' })}
+      ${famillesHtml(tableauTesteur({ scenarios: etat.scenarios, passages: etat.passages }), { mode: 'testeur' })}
       <p class="aide">Touchez une case pour lire le scénario et poser votre résultat.</p>
     </div>` : `
     <div class="rang testeur-filtres">
       <select class="select" id="f-bloc" style="width:auto">
-        <option value="">Tous les blocs</option>
+        <option value="">Toutes les sections</option>
         ${blocs.map((b) => `<option value="${echapper(b.cle)}"${etat.bloc === b.cle ? ' selected' : ''}>${echapper(b.libelle)} · ${b.faits}/${b.n}</option>`).join('')}
       </select>
       <label class="case"><input type="checkbox" id="f-reste" ${etat.reste ? 'checked' : ''}> Ne montrer que ce qui reste</label>
@@ -397,7 +412,7 @@ const pageCampagne = (moi) => {
         <div class="liste liste--serree">${g.items.map(ligneScenario).join('')}</div>
       </div>`).join('')
       : vide({ icone: 'check', titre: etat.reste ? 'Rien ne reste ici' : 'Aucun scénario',
-          texte: etat.reste ? 'Décochez « ce qui reste » pour revoir ce que vous avez déjà coché.' : 'Changez de bloc.', compact: true })}`}
+          texte: etat.reste ? 'Décochez « ce qui reste » pour revoir ce que vous avez déjà coché.' : 'Changez de section.', compact: true })}`}
   </div>`;
 
   const b = $('#f-bloc'); if (b) b.addEventListener('change', (e) => { etat.bloc = e.target.value; rendre(moi); });
@@ -822,7 +837,7 @@ const ouvrirEchec = (s) => {
 const poser = async (s, resultat, moi) => {
   if (aTermine()) { toast('Le test est terminé : vos résultats sont figés.', 'erreur'); return; }
   if (!ouvrable(s.ref)) { toast('Déroulez d\'abord le scénario précédent.', 'erreur'); return; }
-  if (!plateformeCourante) { toast('Dites d\'abord sur quoi vous testez.', 'erreur'); return; }
+  if (!(s.plateforme || plateformeCourante)) { toast('Dites d\'abord sur quoi vous testez.', 'erreur'); return; }
   let extra = { commentaire: '', preuves: [] };
   if (resultat === 'ko') {
     const rep = await ouvrirEchec(s);
@@ -830,18 +845,22 @@ const poser = async (s, resultat, moi) => {
     extra = rep;
   }
 
-  /* L'identifiant porte l'uid : c'est lui qui rend le cloisonnement
-     opposable avant service, et les règles l'exigent tel quel. */
+  /* L'identifiant porte l'uid, le scénario du plan et la plateforme (la
+     clé de l'affectation) : c'est lui qui rend le cloisonnement opposable
+     avant service, et les règles l'exigent tel quel. Le résultat s'écrit
+     en toutes lettres ; l'écran, lui, raisonne en ok, ko, na. */
   const uid = auth.currentUser.uid;
-  const chemin = `projets/${etat.campagne.projet}/campagnes/${etat.campagne.id}/passages/${uid}__${s.ref}`;
+  const scenario = s.id || s.ref;
+  const plateforme = s.plateforme || plateformeCourante;
+  const chemin = `projets/${etat.campagne.projet}/campagnes/${etat.campagne.id}/passages/${uid}__${clePassage(scenario, plateforme)}`;
   const passage = {
-    scenario: s.ref, testeur: uid, plateforme: plateformeCourante, resultat,
+    scenario, testeur: uid, plateforme, resultat: resultatLong(resultat),
     commentaire: extra.commentaire, preuves: extra.preuves,
-    contexte: contexteAppareil(), le: serverTimestamp(),
+    contexte: contexteAppareil(), cree: serverTimestamp(), maj: serverTimestamp(),
   };
   try {
     await setDoc(doc(bdd, chemin), passage);
-    etat.passages.set(s.ref, passage);
+    etat.passages.set(s.ref, { ...passage, resultat });
     rendre(moi);
     if (resultat === 'ko') toast('Échec enregistré, merci. On le reproduit de notre côté.');
     return true;
@@ -1045,14 +1064,14 @@ const ouvrirFeuille = (s, moi) => {
   const v = tableauTesteur({ scenarios: [s], passages: etat.passages }).familles[0].cases[0].etat;
   regarder(s.ref);
   const m = modale({
-    titre: s.titre, sousTitre: `${s.ref} · ${(BLOCS_SCENARIO[s.bloc] || {}).libelle || ''}`, scenario: true,
+    titre: s.titre, sousTitre: `${s.id || s.ref} · ${s.blocLibelle || ''}`, scenario: true,
     corps: `
       ${v === 'revoir' ? '<section class="fs-bloc fs-bloc--alerte"><p class="fs-bloc-sur">À rejouer</p><p>L\'équipe a corrigé ce que vous aviez signalé. Refaites-le : un Réussi ferme la boucle, un nouvel Échec la rouvre.</p></section>' : ''}
       ${p && v !== 'revoir' ? `<div class="fs-etat">${pastille(RESULTATS_PASSAGE, p.resultat)}<span class="t-2 t-petit">Votre résultat${p.commentaire ? ` · ${echapper(p.commentaire)}` : ''}. Vous pouvez vous corriger.</span></div>` : ''}
       ${s.options ? `<section class="fs-bloc"><p class="fs-bloc-sur">Ce qu'il faut poser</p><p>${echapper(s.options).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')}</p></section>` : ''}
       <section class="fs-bloc fs-bloc--attendu"><p class="fs-bloc-sur">Ce qui doit se passer</p><p>${echapper(s.attendu || '')}</p></section>
       <p class="fs-note">Un scénario où rien ne se passe est un échec, jamais une réussite. ${echapper(niveau.aide)}</p>
-      ${!plateformeCourante ? '<p class="fs-note"><strong>Dites d\'abord sur quoi vous testez</strong>, en haut de la page.</p>' : ''}
+      ${!(s.plateforme || plateformeCourante) ? '<p class="fs-note"><strong>Dites d\'abord sur quoi vous testez</strong>, en haut de la page.</p>' : ''}
       ${aTermine() ? '<p class="fs-note"><strong>Le test est terminé</strong> : ce résultat est figé.</p>' : ''}`,
     pied: aTermine()
       ? '<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>'
@@ -1062,7 +1081,7 @@ const ouvrirFeuille = (s, moi) => {
     const b = ev.target.closest('[data-feuille-poser]');
     if (!b) return;
     const resultat = b.dataset.feuillePoser;
-    if (!plateformeCourante) { toast('Dites d\'abord sur quoi vous testez, en haut de la page.', 'erreur'); return; }
+    if (!(s.plateforme || plateformeCourante)) { toast('Dites d\'abord sur quoi vous testez, en haut de la page.', 'erreur'); return; }
     m.fermer(true);
     await poser(s, resultat, moi);
   });
@@ -1088,26 +1107,51 @@ const suivreCampagne = (moi, c, redessiner) => {
   if (!c) { etat.scenarios = []; if (accueil) accueil.majCampagne(null); redessiner(); return; }
 
   const pid = c.projet;
-  /* Ses scénarios à lui : ceux que l'affectation lui a confiés, et non
-     toute la campagne. Un testeur qui verrait les 173 ne saurait plus
-     lesquels sont les siens. */
-  const miens = () => new Set((c.affectation || {})[moi.uid] || c.scenarios || []);
-  /* Les scénarios et les passages arrivent chacun de leur côté : la page
+  /* Ses scénarios à lui : les clés « scénario du plan, plateforme » que
+     l'affectation lui a confiées, et rien d'autre. Sans affectation, rien :
+     ses scénarios arrivent quand l'équipe a réparti. L'ancienne
+     bibliothèque n'est plus proposée aux testeurs.
+
+     Le plan d'un projet pèse des milliers de scénarios : le téléphone ne
+     lit que les sections où il a au moins une clé (le document de section
+     est la plus petite lecture que permet la base), et n'en garde que ses
+     scénarios. */
+  const cles = clesDuTesteur(c, moi.uid);
+  const sections = new Map();
+  const attendues = sectionsDesCles(cles);
+  const arrivees = new Set();
+  /* Les sections et les passages arrivent chacun de leur côté : la page
      ne se dessine qu'une fois les deux là, sinon elle apparaissait vide
      puis pleine, comme chargée deux fois. */
-  const recu = { scenarios: false, passages: false };
+  const recu = { scenarios: !attendues.length, passages: false };
   const dessinerSiComplet = () => { if (recu.scenarios && recu.passages) redessiner(); };
-  ecoutes.campagne.push(onSnapshot(collection(bdd, 'projets', pid, 'scenarios'), (inst) => {
-    const m = miens();
-    etat.scenarios = inst.docs.map((d) => ({ ref: d.id, ...d.data() }))
-      .filter((x) => x.actif !== false && m.has(x.ref))
-      .sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
-    recu.scenarios = true;
-    dessinerSiComplet();
-  }, (e) => { console.warn('[testeur] scénarios', e); recu.scenarios = true; dessinerSiComplet(); }));
+  const ranger = () => {
+    const { scenarios, ecartees } = scenariosDuTesteur({ sections: [...sections.values()], cles });
+    if (ecartees.length) console.warn('[testeur] clés sans scénario du plan', ecartees);
+    etat.scenarios = scenarios;
+  };
+  etat.scenarios = [];
+  attendues.forEach((sid) => {
+    ecoutes.campagne.push(onSnapshot(doc(bdd, 'projets', pid, 'planTests', sid), (d) => {
+      if (d.exists()) sections.set(sid, { id: d.id, ...d.data() }); else sections.delete(sid);
+      arrivees.add(sid);
+      if (arrivees.size === attendues.length) recu.scenarios = true;
+      ranger();
+      dessinerSiComplet();
+    }, (e) => {
+      console.warn('[testeur] plan', sid, e);
+      sections.delete(sid);
+      arrivees.add(sid);
+      if (arrivees.size === attendues.length) recu.scenarios = true;
+      ranger();
+      dessinerSiComplet();
+    }));
+  });
 
   ecoutes.campagne.push(onSnapshot(query(collection(bdd, 'projets', pid, 'campagnes', c.id, 'passages'), where('testeur', '==', moi.uid)), (inst) => {
-    etat.passages = new Map(inst.docs.map((d) => { const x = d.data(); return [x.scenario, x]; }));
+    /* Rangés par clé : le même scénario passé sur iPhone et sur le web
+       fait deux résultats, jamais un seul qui écrase l'autre. */
+    etat.passages = new Map(inst.docs.map((d) => { const x = d.data(); return [clePassage(x.scenario, x.plateforme), { ...x, resultat: resultatCourt(x.resultat) }]; }));
     recu.passages = true;
     dessinerSiComplet();
   }, (e) => { console.warn('[testeur] passages', e); recu.passages = true; dessinerSiComplet(); }));
@@ -1199,7 +1243,7 @@ const monter = async () => {
 
   /* ⌘K : un scénario par sa référence ou son titre, et les pages. */
   enregistrerRecherche((terme) => [
-    ...etat.scenarios.map((x) => ({ groupe: 'Mes scénarios', libelle: `${x.ref} · ${x.titre}`, sous: (BLOCS_SCENARIO[x.bloc] || {}).libelle || '', icone: 'bug', action: () => { naviguer('/'); ouvrirFeuille(x, testeur); } })),
+    ...etat.scenarios.map((x) => ({ groupe: 'Mes scénarios', libelle: `${x.ref} · ${x.titre}`, sous: x.blocLibelle || '', icone: 'bug', action: () => { naviguer('/'); ouvrirFeuille(x, testeur); } })),
     { groupe: 'Pages', libelle: 'L\'application', icone: 'composants', chemin: '/application' },
     { groupe: 'Pages', libelle: 'Mes signalements', icone: 'alerte', chemin: '/signalements' },
     { groupe: 'Pages', libelle: 'Mon avis', icone: 'coeur', chemin: '/avis' },

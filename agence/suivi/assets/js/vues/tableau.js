@@ -34,9 +34,10 @@ import { K, profilsTesteurs } from '../donnees.js';
 import { editer } from './editeurs.js';
 import { nommeur } from './tests.js';
 import { appelServeur, URL_SUIVI } from '../serveur.js';
-import { tableauHumain, tableauHumainPlan, tableauMachine, tableauPlan, verdictParcours, rythme, ETATS_CASE } from '../verdicts.js';
+import { tableauHumain, tableauHumainPlan, tableauMachine, tableauPlan, verdictParcours, rythme, ETATS_CASE, campagneSurPlan, affectationPlan, clesDuTesteur, clePassage, resultatCourt } from '../verdicts.js';
 import { barreHtml, famillesHtml } from '../grille.js';
 import { ordonnerSections, GROUPES_PLAN, QUI_PLAN } from './plan-tests.js';
+import { clesDe } from '../repartition.js';
 
 /* Un testeur est « là » si son dernier signe a moins de 75 secondes : il
    en envoie un toutes les 30, et un réseau lent en perd un. */
@@ -92,6 +93,9 @@ const pourquoi = (c) => {
 const sectionsDuPlan = (pid) => (pid ? ordonnerSections(magasin.lire(K.planTests(pid))) : []);
 const listeRefs = (refs) => refs.map((r) => `<span class="ref">${echapper(r)}</span>`).join(', ');
 const libellePlateforme = (p) => (PLATEFORMES_TEST[p] || {}).libelle || p;
+/* Un testeur sur une campagne du plan signale la clé qu'il a ouverte
+   (« taches-f-001__ios ») : la case est celle de son scénario. */
+const scenarioOuvert = (x) => String(x || '').replace(/__(ios|android|web)$/, '');
 const etatCaseHtml = (etat) => `<span class="tb-etat-case"><i class="tb-puce" data-e="${echapper(etat)}" aria-hidden="true"></i>${echapper((ETATS_CASE[etat] || {}).libelle || etat)}</span>`;
 
 /* Pourquoi cette couleur, pour un scénario du plan. */
@@ -116,6 +120,11 @@ const pourquoiPlan = (c, plateforme) => {
 /* Pourquoi cette couleur, pour un scénario du plan fait par un humain. */
 const pourquoiHumainPlan = (c, plateforme) => {
   if (c.etat === 'nonteste') return `Pas encore testé par un humain${plateforme ? ` sur ${libellePlateforme(plateforme)}` : ''}.`;
+  if (c.etat === 'trou') {
+    const sans = c.parPlateforme.filter((p) => p.etat === 'trou').map((p) => libellePlateforme(p.plateforme));
+    return `Personne n'a reçu ce scénario${sans.length ? ` sur ${sans.join(', ')}` : ''} : relancez la répartition dans la campagne.`;
+  }
+  if (c.surPlan && c.etat === 'cours' && !c.revoir) return `${pluriel(c.faits, 'passage fait', 'passages faits')} sur ${c.attendus} attendus.${c.manquent.length ? ` Pas encore testé sur ${c.manquent.map(libellePlateforme).join(', ')}.` : ''}`;
   const nomPlat = (p) => (p ? libellePlateforme(p) : 'sans plateforme');
   const dapres = c.origines.filter((o) => o.etat === c.etat).map((o) => o.cle);
   const enEchec = plateforme ? [] : c.parPlateforme.filter((p) => ['casse', 'fragile'].includes(p.etat)).map((p) => nomPlat(p.plateforme));
@@ -289,7 +298,7 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
     const sections = sectionsDuPlan(pid);
     const th = sections.length ? marquer(tableauHumainPlan({
       sections, scenarios: d.scenarios.filter((s) => projetDe(s) === pid), campagne, passages,
-      anomalies: d.anomalies.filter((a) => projetDe(a) === pid), plateforme: etat.plateforme,
+      anomalies: d.anomalies.filter((a) => projetDe(a) === pid), plateforme: etat.plateforme, trous: equipe,
     })) : campagne ? tableauHumain({
       scenarios: d.scenarios.filter((s) => projetDe(s) === pid), campagne, passages,
       anomalies: d.anomalies.filter((a) => projetDe(a) === pid), plateforme: etat.plateforme, blocs: BLOCS_SCENARIO, trous: equipe,
@@ -307,7 +316,7 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
     const metaHumain = campagne || (th && th.plan) ? [
       campagne ? echapper(campagne.titre || 'Campagne') : 'Aucune campagne pour ce projet',
       campagne ? (STATUTS_CAMPAGNE[campagne.statut] || {}).libelle || '' : '',
-      `${th.faits} vérifications faites sur ${th.attendus}`,
+      th.unite === 'passages' ? `${th.faits} passages faits sur ${th.attendus}` : `${th.faits} vérifications faites sur ${th.attendus}`,
       th.plan && th.horsPlan ? `${th.horsPlan} hors plan, montrés à part` : '',
       !campagne ? '' : (campagne.testeurs || []).length ? pluriel((campagne.testeurs || []).length, 'testeur', 'testeurs') : 'aucun testeur',
       r && r.avant ? `commence dans ${pluriel(r.avant, 'jour', 'jours')}` : '',
@@ -340,8 +349,10 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
       ${aide ? `<p class="tb-ligne-aide">${aide}</p>` : ''}
     </div>`;
     /* D'où viennent les chiffres des humains, en une phrase. */
-    const aideHumain = th && th.plan
-      ? `Chaque scénario du plan fait par un humain compte une fois, coloré par le plus mauvais résultat des testeurs de la campagne : celui des scénarios qu'il reprend (TA-01…), ou celui rendu sur lui-même. Il est fait quand toutes ses plateformes ont un résultat, ou dès qu'un échec y est relevé${th.horsPlan ? ' ; les scénarios testés hors plan se montrent à part, sans compter' : ''}.`
+    const aideHumain = th && th.surPlan
+      ? `Chaque scénario du plan fait par un humain est confié, plateforme par plateforme, à deux testeurs s'il est fait par un humain seul, à un testeur s'il est fait aussi par un robot. L'avancement compte ces passages ; la case prend le plus mauvais résultat rendu sur ce scénario${th.horsPlan ? ' ; les résultats hors plan se montrent à part, sans compter' : ''}.`
+      : th && th.plan
+      ? `Chaque scénario du plan fait par un humain compte une fois, coloré par le plus mauvais résultat des testeurs de la campagne : celui rendu sur lui-même, ou, pour une campagne d'avant le plan, celui hérité des scénarios qu'il reprend (TA-01…). Il est fait quand toutes ses plateformes ont un résultat, ou dès qu'un échec y est relevé${th.horsPlan ? ' ; les scénarios testés hors plan se montrent à part, sans compter' : ''}.`
       : '';
     /* D'où viennent les chiffres des robots, en une phrase. */
     const aideMachine = tm.plan
@@ -355,8 +366,8 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
     const execEnCours = execs.find((e) => e.statut === 'en-cours');
     const direct = `<div class="tb-direct" aria-live="polite">${presents.map((p) => {
       const qui = nommer(p.id).nom;
-      const sc = p.scenario ? d.scenarios.find((x) => x.ref === p.scenario && projetDe(x) === pid) : null;
-      return `<button type="button" class="tb-present" data-personne="${echapper(p.id)}"><i></i>${echapper(qui)}<span>${p.plateforme ? `${echapper((PLATEFORMES_TEST[p.plateforme] || {}).court || p.plateforme)} · ` : ''}${sc ? `sur ${echapper(sc.ref)}` : 'sur son tableau'} · là depuis ${duree(maintenant - (enDate(p.debut) || new Date()).getTime())}</span></button>`;
+      const ouvert = scenarioOuvert(p.scenario);
+      return `<button type="button" class="tb-present" data-personne="${echapper(p.id)}"><i></i>${echapper(qui)}<span>${p.plateforme ? `${echapper((PLATEFORMES_TEST[p.plateforme] || {}).court || p.plateforme)} · ` : ''}${ouvert ? `sur ${echapper(ouvert)}` : 'sur son tableau'} · là depuis ${duree(maintenant - (enDate(p.debut) || new Date()).getTime())}</span></button>`;
     }).join('')}${tm.tournent ? `<span class="tb-present" role="status"><i style="background:var(--case-cours)"></i>Exécution en cours<span>${equipe && execEnCours
       ? `${echapper((OUTILS_PARCOURS[execEnCours.outil] || {}).court || execEnCours.outil)}${execEnCours.plateforme ? ` · ${echapper(execEnCours.plateforme)}` : ''}${execEnCours.branche ? ` · ${echapper(execEnCours.branche)}` : ''}${execEnCours.commit ? `@${echapper(execEnCours.commit.slice(0, 8))}` : ''} · ${execEnCours.faits || 0}/${execEnCours.total || 0} rendus · ${echapper(depuis(execEnCours.debut))}`
       : `${pluriel(tm.tournent, 'test', 'tests')} en cours`}</span></span>` : ''}</div>`;
@@ -401,7 +412,7 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
     /* Avec un plan : ses sections, une case par scénario fait par un humain.
        Une case s'anime quand un testeur est sur un scénario qu'elle reprend. */
     if (thToutes && thToutes.plan) {
-      const ouverts = new Set(presents.map((p) => p.scenario).filter(Boolean));
+      const ouverts = new Set(presents.map((p) => scenarioOuvert(p.scenario)).filter(Boolean));
       const vivants = new Set(thToutes.familles.flatMap((f) => f.cases)
         .filter((c) => (c.sources || [c.ref]).some((r) => ouverts.has(r))).map((c) => c.cle || c.ref));
       return `${campagne ? '' : `<p class="aide">Aucune campagne pour ce projet : les cases s'allumeront avec les résultats des testeurs.${equipe ? ' Créez-la dans la section Campagnes ci-dessous.' : ''}</p>`}
@@ -425,23 +436,27 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
      de temps, où il en est. L'équipe seule. */
   const personnesHtml = (d, pid, campagne, passages, nommer, maintenant) => {
     const uids = campagne.testeurs || [];
+    const surPlan = campagneSurPlan(campagne);
     if (!uids.length) return `<p class="tb-section-titre">Les testeurs</p><p class="aide">Aucun testeur dans cette campagne. Ajoutez-en depuis la campagne, puis répartissez.</p>`;
     return `<p class="tb-section-titre">Les testeurs</p>
     <div class="tb-gens">${uids.map((uid) => {
       const p = d.presences.find((x) => x.id === uid);
       const sessions = (magasin.lire(K.sessions(uid)) || []).filter((s) => !s.campagne || s.campagne === campagne.id);
       const total = sessions.reduce((n, s) => n + Math.max(0, (enDate(s.vu) || 0) - (enDate(s.debut) || 0)), 0);
-      const miens = ((campagne.affectation || {})[uid] || []).length;
-      const siens = passages.filter((x) => x.testeur === uid);
-      const faits = siens.filter((x) => !(x.resultat === 'ko' && x.aRevoir)).length;
-      const ko = siens.filter((x) => x.resultat === 'ko' && !x.aRevoir).length;
+      /* Sur le plan : ses clés, et ses passages sur ces clés seulement. */
+      const sesCles = surPlan ? new Set(clesDuTesteur(campagne, uid)) : null;
+      const miens = surPlan ? sesCles.size : clesDe(campagne.affectation, uid).length;
+      const siens = passages.filter((x) => x.testeur === uid && (!sesCles || sesCles.has(clePassage(x.scenario, x.plateforme))));
+      const enKo = (x) => resultatCourt(x.resultat) === 'ko';
+      const faits = siens.filter((x) => !(enKo(x) && x.aRevoir)).length;
+      const ko = siens.filter((x) => enKo(x) && !x.aRevoir).length;
       const la = estLa(p, maintenant);
       const vu = p && enDate(p.vu);
       return `<button type="button" class="tb-personne" data-personne="${echapper(uid)}">
         <div class="tb-personne-tete"><b>${echapper(nommer(uid).nom)}</b>
           <span class="tb-etat${la ? ' tb-etat--la' : ''}">${la ? `en ligne${p.scenario ? ` · ${echapper(p.scenario)}` : ''}` : (vu ? `vu ${echapper(depuis(vu))}` : 'jamais venu')}</span></div>
         <div class="tb-mini"><i style="flex-basis:${miens ? ((faits / miens) * 100).toFixed(1) : 0}%;background:var(--case-ok)"></i></div>
-        <div class="tb-chiffres"><span><b>${faits}</b>/${miens} faits</span>${ko ? `<span><b>${ko}</b> KO</span>` : ''}${sessions.length ? `<span><b>${duree(total)}</b> en ${pluriel(sessions.length, 'session', 'sessions')}</span>` : ''}</div>
+        <div class="tb-chiffres"><span><b>${faits}</b>/${miens} faits</span>${ko ? `<span><b>${ko}</b> en échec</span>` : ''}${sessions.length ? `<span><b>${duree(total)}</b> en ${pluriel(sessions.length, 'session', 'sessions')}</span>` : ''}</div>
       </button>`;
     }).join('')}</div>`;
   };
@@ -527,7 +542,7 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
     /* L'énoncé, mot pour mot : ce que le testeur a lu. */
     const sc = d.scenarios.find((x) => x.ref === ref && projetDe(x) === pid) || {};
     const nommer = nommeur(d, { equipe, pid });
-    const affectes = Object.entries(campagne.affectation || {}).filter(([, refs]) => (refs || []).includes(ref)).map(([uid]) => uid);
+    const affectes = Object.keys(campagne.affectation || {}).filter((uid) => clesDe(campagne.affectation, uid).includes(ref));
     const uids = Array.from(new Set([...affectes, ...c.passages.map((p) => p.testeur)]));
     const presents = equipe ? (magasin.lire(K.presences) || []).filter((p) => estLa(p) && p.scenario === ref && p.campagne === campagne.id).map((p) => p.id) : [];
     const e = ETATS_CASE[c.etat] || {};
@@ -582,8 +597,17 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
     const nommer = nommeur(d, { equipe, pid });
     const titres = new Map(d.scenarios.filter((s) => projetDe(s) === pid).map((s) => [s.ref, s.titre || '']));
     const refs = (sc.refs || []).filter(Boolean);
-    const presents = equipe && campagne ? (magasin.lire(K.presences) || []).filter((p) => estLa(p) && p.campagne === campagne.id && c.sources.includes(p.scenario)) : [];
-    const passages = c.passages.slice().sort((a, b) => (enDate(b.le) || 0) - (enDate(a.le) || 0));
+    const presents = equipe && campagne ? (magasin.lire(K.presences) || []).filter((p) => estLa(p) && p.campagne === campagne.id && c.sources.includes(scenarioOuvert(p.scenario))) : [];
+    const quand = (p) => enDate(p.maj) || enDate(p.le) || enDate(p.cree);
+    const passages = c.passages.slice().sort((a, b) => (quand(b) || 0) - (quand(a) || 0));
+    /* Sur le plan : qui l'a reçu, sur quelle plateforme, et n'a encore rien
+       rendu. L'équipe seule : le client lit des résultats, pas un planning. */
+    const attendusSans = equipe && c.surPlan ? Object.keys(campagne.affectation || {}).flatMap((uid) => {
+      const a = affectationPlan(campagne, uid);
+      return (a ? a.cles : []).filter((k) => typeof k === 'string' && k.startsWith(`${sc.id}__`) && (!etat.plateforme || k === clePassage(sc.id, etat.plateforme)))
+        .map((k) => ({ uid, plateforme: k.slice(sc.id.length + 2) }))
+        .filter((x) => !c.passages.some((p) => p.testeur === x.uid && p.plateforme === x.plateforme));
+    }) : [];
     const plateformeDe = (p) => (p ? libellePlateforme(p) : 'Sans plateforme');
     const m = modale({
       titre: sc.titre || sc.id, scenario: true,
@@ -591,7 +615,7 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
       corps: `
         <p class="tb-pourquoi"><strong>${echapper(e.libelle || c.etat)}${etat.plateforme ? ` sur ${echapper(libellePlateforme(etat.plateforme))}` : ''}.</strong> ${echapper(pourquoiHumainPlan(c, etat.plateforme))}</p>
         <p class="tb-plan-qui"><span class="plan-qui-puce plan-qui-${echapper(qui.ton || 'vert')}"><i aria-hidden="true"></i>${echapper(qui.libelle || '')}</span><span>${echapper((sc.plateformes || []).map(libellePlateforme).join(', ') || '–')}</span></p>
-        ${refs.length ? `<p class="aide tb-plan-refs">Reprend les résultats de ${refs.map((r) => `<span class="ref"${titres.get(r) ? ` data-astuce="${echapper(titres.get(r))}"` : ''}>${echapper(r)}</span>`).join(', ')}.</p>` : ''}
+        ${refs.length && !c.surPlan ? `<p class="aide tb-plan-refs">Reprend les résultats de ${refs.map((r) => `<span class="ref"${titres.get(r) ? ` data-astuce="${echapper(titres.get(r))}"` : ''}>${echapper(r)}</span>`).join(', ')}.</p>` : ''}
         ${c.revoir ? '<section class="fs-bloc fs-bloc--alerte"><p class="fs-bloc-sur">À rejouer</p><p>Une correction attend d\'être rejouée par le testeur qui avait trouvé le défaut.</p></section>' : ''}
         ${sc.etapes ? `<section class="fs-bloc"><p class="fs-bloc-sur">Les étapes</p><p>${texte(sc.etapes)}</p></section>` : ''}
         ${sc.attendu ? `<section class="fs-bloc fs-bloc--attendu"><p class="fs-bloc-sur">Ce qui doit se passer</p><p>${texte(sc.attendu)}</p></section>` : ''}
@@ -605,10 +629,14 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
     const ici = presents.some((x) => x.id === p.testeur);
     return `<div class="tb-passage">
             <div><p><strong>${echapper(nommer(p.testeur).nom)}</strong>${p.plateforme ? ` · ${echapper(libellePlateforme(p.plateforme))}` : ''}${appareil ? ` · ${echapper(appareil)}` : ''}${ici ? ' · <span class="tb-bleu">l\'a ouvert en ce moment</span>' : ''}</p>
-              <p class="aide">${[p.le ? echapper(dateHeure(p.le)) : '', p.commentaire ? echapper(p.commentaire) : '', p.aRevoir ? 'corrigé, à rejouer' : '', p.origine !== sc.id ? `Repris de <span class="ref">${echapper(p.origine)}</span>` : ''].filter(Boolean).join(' · ')}</p></div>
+              <p class="aide">${[quand(p) ? echapper(dateHeure(quand(p))) : '', p.commentaire ? echapper(p.commentaire) : '', p.aRevoir ? 'corrigé, à rejouer' : '', p.herite ? `Hérité de <span class="ref">${echapper(p.origine)}</span>, campagne d'avant le plan` : ''].filter(Boolean).join(' · ')}</p></div>
             <div class="rang">${pastille(RESULTATS_PASSAGE, p.resultat)}${(p.preuves || []).map((ch, i) => `<button class="btn btn-doux btn-petit" type="button" data-piece="${echapper(ch)}">${icone('image')} Preuve ${i + 1}</button>`).join('')}</div>
           </div>`;
   }).join('')}</div>` : `<p>Pas encore testé par un humain${etat.plateforme ? ` sur ${echapper(libellePlateforme(etat.plateforme))}` : ''}.</p>`}
+          ${attendusSans.length ? `<div class="tb-sessions">${attendusSans.map((x) => `<div class="tb-passage">
+            <div><p><strong>${echapper(nommer(x.uid).nom)}</strong> · ${echapper(libellePlateforme(x.plateforme))}</p></div>
+            <div class="rang"><span class="etiquette">attendu</span></div>
+          </div>`).join('')}</div>` : ''}
         </div>
         ${c.anomalies.length ? `<div class="fs-bloc"><p class="fs-bloc-sur">Anomalies</p><div class="tb-sessions">${c.anomalies.map((a) => `<div class="tb-passage">
           <p>${echapper(a.titre || 'Anomalie')}${a.scenario && a.scenario !== sc.id ? ` · <span class="ref">${echapper(a.scenario)}</span>` : ''}${Number(a.retours) ? ' · <span class="tb-rouge">revenue</span>' : ''}</p>
