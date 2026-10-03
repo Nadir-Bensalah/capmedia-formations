@@ -52,6 +52,11 @@ export const ETATS_CASE = {
 
 const GRAVES = ['bloquant', 'critique'];
 
+/* Les clés d'un testeur, quel que soit le format de l'affectation : la
+   liste de références d'avant le plan, ou { telephone, web, cles, vague }.
+   La même lecture que clesDe (repartition.js) ; ce fichier n'importe rien. */
+const clesDeLAffectation = (a) => (Array.isArray(a) ? a : (a && Array.isArray(a.cles) ? a.cles : []));
+
 /* Les résultats d'un passage. Le modèle du 03/10/2026 les écrit en toutes
    lettres (reussi, echec, sans-objet) ; les passages d'avant disent ok, ko
    et na. Les deux se lisent ici, ramenés à la forme courte, pour qu'aucun
@@ -208,7 +213,7 @@ export const tableauHumain = ({ scenarios = [], campagne = {}, passages: bruts =
   const passages = bruts.map(enCourt);
   const dedans = new Set(campagne.scenarios || []);
   const affectation = campagne.affectation || {};
-  const attendusDe = (ref) => Object.values(affectation).filter((refs) => Array.isArray(refs) && refs.includes(ref)).length;
+  const attendusDe = (ref) => Object.values(affectation).filter((a) => clesDeLAffectation(a).includes(ref)).length;
   const liste = scenarios.filter((s) => dedans.has(s.ref) && s.actif !== false)
     .sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
 
@@ -764,7 +769,7 @@ export const tableauHumainPlan = ({ sections = [], scenarios = [], campagne = nu
   const hors = [];
   if (campagne) {
     const ici = (p) => !plateforme || p.plateforme === plateforme;
-    const attendusDe = (ref) => Object.values(camp.affectation || {}).filter((refs) => Array.isArray(refs) && refs.includes(ref)).length;
+    const attendusDe = (ref) => Object.values(camp.affectation || {}).filter((a) => clesDeLAffectation(a).includes(ref)).length;
     const dansCampagne = new Set(camp.scenarios || []);
     const parRef = new Map(scenarios.map((s) => [s.ref, s]));
     const cles = Array.from(new Set(lesPassages.filter(ici).map((p) => p.scenario).filter((r) => r && !reprises.has(r))));

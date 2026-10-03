@@ -18,7 +18,7 @@ import {
   tableauTesteur, tableauMachine, rythme, anomalieDeLaCampagne,
   tableauPlan, verdictScenarioPlan, pireEtat,
   tableauHumainPlan, verdictHumainPlan, pireHumain,
-  campagneSurPlan, decouperCle, clePassage, sectionDuScenario, sectionsDesCles, clesDuTesteur, scenariosDuTesteur, affectationPlan, chiffresHumainsDuPlan,
+  campagneSurPlan, decouperCle, clePassage, sectionDuScenario, sectionsDesCles, clesDuTesteur, scenariosDuTesteur, affectationPlan, chiffresHumainsDuPlan, resultatLong, resultatCourt,
 } from '../../agence/suivi/assets/js/verdicts.js';
 
 let echecs = 0;
@@ -347,10 +347,14 @@ console.log('\n== Une campagne sur le plan (modèle du 03/10/2026)');
 
 console.log('\n== Une campagne d avant : l héritage dit');
 {
+  const objet = tableauHumain({ scenarios: [{ ref: 'TA-01', bloc: 'b', ordre: 1 }], campagne: { id: 'c', scenarios: ['TA-01'], affectation: { u1: { telephone: 'ios', web: false, cles: ['TA-01'], vague: 2 } } }, passages: [], anomalies: [] });
+  egal(objet.familles[0].cases[0].etat, 'vide', 'une affectation au nouveau format se lit aussi dans la grille d avant : attendu, pas « non affecté »');
   const H = (scenario, testeur, plateforme, resultat) => ({ scenario, testeur, plateforme, resultat });
   const sc = { id: 'taches-f-001', plateformes: ['ios'], refs: ['TA-01'] };
   const v = verdictHumainPlan({ scenario: sc, passages: [H('TA-01', 'u1', 'ios', 'ok'), H('taches-f-001', 'u2', 'ios', 'ok')] });
   egal(`${v.herite}|${v.passages.map((p) => `${p.origine}:${p.herite}`).join(',')}`, 'true|TA-01:true,taches-f-001:false', 'un résultat repris de la bibliothèque est marqué hérité');
+  egal(['ok', 'ko', 'na'].map(resultatLong).join(','), 'reussi,echec,sans-objet', 'le testeur écrit ses résultats en toutes lettres, comme l exigent les règles');
+  egal(['reussi', 'echec', 'sans-objet', 'ok'].map(resultatCourt).join(','), 'ok,ko,na,ok', 'et l écran les relit en court');
   egal(verdictTesteur({ resultat: 'reussi' }), 'ok', 'chez le testeur aussi, « reussi » se lit réussi');
   egal(verdictTesteur({ resultat: 'echec', aRevoir: true }), 'revoir', 'et « echec » corrigé : à rejouer');
 }

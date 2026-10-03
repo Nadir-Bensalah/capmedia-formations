@@ -37,6 +37,7 @@ import { appelServeur, URL_SUIVI } from '../serveur.js';
 import { tableauHumain, tableauHumainPlan, tableauMachine, tableauPlan, verdictParcours, rythme, ETATS_CASE, campagneSurPlan, affectationPlan, clesDuTesteur, clePassage, resultatCourt } from '../verdicts.js';
 import { barreHtml, famillesHtml } from '../grille.js';
 import { ordonnerSections, GROUPES_PLAN, QUI_PLAN } from './plan-tests.js';
+import { clesDe } from '../repartition.js';
 
 /* Un testeur est « là » si son dernier signe a moins de 75 secondes : il
    en envoie un toutes les 30, et un réseau lent en perd un. */
@@ -444,7 +445,7 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
       const total = sessions.reduce((n, s) => n + Math.max(0, (enDate(s.vu) || 0) - (enDate(s.debut) || 0)), 0);
       /* Sur le plan : ses clés, et ses passages sur ces clés seulement. */
       const sesCles = surPlan ? new Set(clesDuTesteur(campagne, uid)) : null;
-      const miens = surPlan ? sesCles.size : ((campagne.affectation || {})[uid] || []).length;
+      const miens = surPlan ? sesCles.size : clesDe(campagne.affectation, uid).length;
       const siens = passages.filter((x) => x.testeur === uid && (!sesCles || sesCles.has(clePassage(x.scenario, x.plateforme))));
       const enKo = (x) => resultatCourt(x.resultat) === 'ko';
       const faits = siens.filter((x) => !(enKo(x) && x.aRevoir)).length;
@@ -541,7 +542,7 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
     /* L'énoncé, mot pour mot : ce que le testeur a lu. */
     const sc = d.scenarios.find((x) => x.ref === ref && projetDe(x) === pid) || {};
     const nommer = nommeur(d, { equipe, pid });
-    const affectes = Object.entries(campagne.affectation || {}).filter(([, refs]) => Array.isArray(refs) && refs.includes(ref)).map(([uid]) => uid);
+    const affectes = Object.keys(campagne.affectation || {}).filter((uid) => clesDe(campagne.affectation, uid).includes(ref));
     const uids = Array.from(new Set([...affectes, ...c.passages.map((p) => p.testeur)]));
     const presents = equipe ? (magasin.lire(K.presences) || []).filter((p) => estLa(p) && p.scenario === ref && p.campagne === campagne.id).map((p) => p.id) : [];
     const e = ETATS_CASE[c.etat] || {};
