@@ -21,6 +21,7 @@ import {
   GRAVITES_ANOMALIE, STATUTS_ANOMALIE, FAMILLES_AVIS, FAMILLES_REGLE, ETATS_REGLE,
   ETATS_PARCOURS, OUTILS_PARCOURS, PARCOURS_A_REGARDER, RESULTATS_PASSAGE,
   dateHeure, enDate,
+  MOMENTS_AVIS, lireReponse, avisRepondus, resumeQuestionnaire,
 } from '../noyau.js';
 import {
   icone, pastille, ligne, vide, squelette, titrePage, sur, modale, toast, agir, confirmer,
@@ -31,7 +32,7 @@ import {
   K, ecrire, repartir, profilsTesteurs, scenariosHumains, chargeParTesteur, controler, clesDe, lireSectionsPlan,
 } from '../donnees.js';
 import { ordonnerSections } from './plan-tests.js';
-import { bdd, collection } from '../noyau.js';
+import { bdd, collection, doc } from '../noyau.js';
 import { editer } from './editeurs.js';
 import { appelServeur } from '../serveur.js';
 import { filAriane } from '../coquille.js';
@@ -122,7 +123,24 @@ const lireTout = (env) => {
    client. Le magasin garde l'identifiant du testeur (le nom du document)
    et celui de la campagne (son parent). */
 const avisDe = (campagnes) => campagnes.flatMap((c) => (magasin.lire(K.appreciations(c.id)) || [])
-  .map((a) => ({ ...a, testeur: a.id, campagne: c.id })));
+  .map((a) => ({ ...avecRetour(c, a), testeur: a.id, campagne: c.id })));
+/* Les remarques libres, campagne par campagne. Les anciennes, rangées dans
+   l'appréciation après la fin du test, n'ont été écrites que pour
+   l'équipe : elle seule les relit, marquées comme telles. */
+/* La note du test et les anciennes remarques vivent à part, dans
+   appreciations/{uid}/equipe/retour, que seule l'équipe lit (et le
+   testeur pour lui-même) : la page les remet sur l'appréciation. Avant
+   la migration, elles sont encore sur l'appréciation elle-même. */
+const avecRetour = (c, a) => {
+  const r = magasin.lire(K.retourTesteur(c.id, a.id));
+  if (!r) return a;
+  return { ...a, ...(r.noteTest ? { noteTest: r.noteTest } : {}), ...(Array.isArray(r.remarques) ? { remarques: r.remarques } : {}) };
+};
+const remarquesDe = (campagnes, { equipe }) => campagnes.flatMap((c) => [
+  ...(magasin.lire(K.remarques(c.id)) || []).map((r) => ({ ...r, campagne: c.id })),
+  ...(equipe ? (magasin.lire(K.appreciations(c.id)) || []).map((a) => avecRetour(c, a)).flatMap((a) => (Array.isArray(a.remarques) ? a.remarques : [])
+    .map((r) => ({ texte: r.texte, cree: r.le, testeur: a.id, campagne: c.id, ancienne: true }))) : []),
+]).filter((r) => r && r.texte).sort((a, b) => ((enDate(b.cree) || 0) - (enDate(a.cree) || 0)));
 const passagesDe = (c) => (magasin.lire(K.passages(c.id)) || []);
 
 /* Comment on nomme un testeur. L'équipe lit son prénom ; le client lit un
@@ -176,6 +194,11 @@ const etage = (id, sur, resume, corps) => `<div class="etage" id="${echapper(id)
    testé un logiciel. Pas de jargon : si un mot du métier est
    indispensable, il est expliqué dans la phrase qui le porte. Un client
    qui comprend sa page ne demande pas pourquoi elle est rouge. */
+/* Les chiffres du questionnaire, comptés dans sa source unique
+   (questionnaire-avis.js) : ce que lit le client est ce qu'on demande au
+   testeur. */
+const QUESTIONNAIRE = resumeQuestionnaire();
+
 const EXPLICATIONS = {
   'soucis': { titre: 'Bugs à corriger d\'urgence', corps: `
     <p>C'est la liste de ce qui mérite votre attention aujourd'hui, et rien d'autre. Si elle est vide, tout va bien.</p>
@@ -221,10 +244,12 @@ const EXPLICATIONS = {
     <p>Trois niveaux : <b>socle</b>, les vérifications essentielles, faites par deux testeurs sur deux systèmes différents ; <b>transversal</b>, ce qui traverse toute l'application (la langue, le mode hors ligne), aussi en double ; <b>réparti</b>, le reste, fait par une seule personne.</p>` },
   'avis': { titre: 'Le questionnaire', corps: `
     <p>Les scénarios disent si l'application <b>marche</b>. Le questionnaire dit si elle <b>plaît</b>, et c'est la seconde question qui décide si les gens la gardent.</p>
-    <p>Chaque testeur y répond deux fois. Trois questions <b>avant de commencer</b>, en deux minutes : c'est le seul regard qu'on ne retrouve jamais, une fois qu'on connaît l'application. Puis tout le reste <b>après avoir tout déroulé</b> : l'esthétique, la facilité, l'utilité, l'argent, la vitesse ressentie, et quatre questions libres.</p>
+    <p>Chaque testeur y répond en trois temps. ${QUESTIONNAIRE.avant} questions <b>avant de commencer</b>, en deux minutes : c'est le seul regard qu'on ne retrouve jamais, une fois qu'on connaît l'application. Une note sur le test lui-même <b>en terminant</b>, lue par l'équipe Capmedia seule. Puis ${QUESTIONNAIRE.apres} questions <b>après avoir tout déroulé</b> : ${echapper(QUESTIONNAIRE.sujetsApres)}.</p>
+    <p>Ce sont exactement les questions posées au testeur, dans ses mots : la page et son questionnaire lisent la même liste.</p>
     <p>Les notes sont des moyennes. Les réponses libres sont rendues <b>mot pour mot</b>, jamais résumées : c'est là qu'est la vraie information.</p>
     <p>Les quatre questions sur le prix ne sont pas une invention : c'est une méthode connue qui donne une <b>fourchette</b> plutôt qu'un chiffre en l'air. En dessous du bas de la fourchette, les gens se méfient de la qualité ; au-dessus du haut, ils renoncent.</p>
-    <p>Quand personne n'a encore répondu, la page montre quand même toutes les questions : c'est ce qui sera demandé, et vous pouvez le lire avant que la campagne commence.</p>` },
+    <p>Quand personne n'a encore répondu, la page montre quand même toutes les questions : c'est ce qui sera demandé, et vous pouvez le lire avant que la campagne commence.</p>
+    <p>À côté, les <b>remarques libres</b> : ce qu'un testeur écrit quand il veut, sur un scénario ou en général. Elles sont rendues telles quelles ; côté client, sans le nom du testeur.</p>` },
   'resultats': { titre: 'Les résultats, scénario par scénario', corps: `
     <p>Chaque fois qu'un testeur déroule un scénario, il consigne un <b>passage</b> : ce qu'il a obtenu, sur quel appareil, avec un commentaire et une capture s'il y a eu un problème.</p>
     <p><b>OK</b> : ça a marché comme prévu. <b>KO</b> : ça n'a pas marché, et une preuve est jointe. <b>NA</b> : le scénario ne s'appliquait pas sur cet appareil.</p>
@@ -674,12 +699,16 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAU
   /* Le questionnaire : toutes les campagnes du projet confondues. Le
      nommeur donne le même numéro à un testeur partout sur la page. */
   const nommer = nommeur(d, { equipe, pid });
-  const avis = avisDe(camp);
+  /* Ne comptent que les appréciations qui portent une réponse : des
+     premiers pas ou une fin de test seuls ne sont pas un avis. */
+  const avis = avisRepondus(avisDe(camp));
+  const remarques = remarquesDe(camp, { equipe });
   const { recommande, suspect, cher } = mesuresAvis(avis);
-  const nbQuestions = Object.values(FAMILLES_AVIS).reduce((n, f) => n + f.questions.length, 0);
-  const resumeAvis = avis.length
+  const nbQuestions = resumeQuestionnaire({ pourClient: !equipe }).total;
+  const resumeRemarques = remarques.length ? ` <b>${remarques.length}</b> ${remarques.length > 1 ? 'remarques libres' : 'remarque libre'}.` : '';
+  const resumeAvis = (avis.length
     ? `<b>${avis.length}</b> ${avis.length > 1 ? 'testeurs ont répondu' : 'testeur a répondu'} au questionnaire${recommande ? `, recommandation <b>${recommande.v.toFixed(1)}</b> sur 10` : ''}${suspect && cher ? `, prix acceptable entre <b>${suspect.median}</b> et <b>${cher.median} €</b> par mois` : ''}.`
-    : `Personne n'a encore répondu. Les <b>${nbQuestions}</b> questions posées à chaque testeur sont ci-dessous.`;
+    : `Personne n'a encore répondu. Les <b>${nbQuestions}</b> questions posées à chaque testeur sont ci-dessous.`) + resumeRemarques;
 
   /* Les onglets et leur compte : un devis absent n'a pas d'onglet. Le
      compte dit ce qu'il y a dedans, pas ce qui va mal. */
@@ -770,7 +799,7 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAU
   <div id="onglet-tests" data-onglet="${actif}">
     ${actif === 'devis' ? etage('etage-devis', 'Le devis, ligne par ligne', resumeDevis, `<div style="margin-top:20px">${devisProjet.map((dv) => friseDevis(dv, jalonsProjet, { equipe, pid })).join('')}</div>`) : ''}
     ${actif === 'humains' ? `${etage('etage-humain', 'Testeurs humains', humain, `${sectionCampagnes}${sectionAnomalies}${vivierHtml({ ...d, testeurs: gens, profils: gens }, { equipe })}`)}
-      ${etage('etage-avis', 'Ce que les testeurs ont pensé de l\'app', resumeAvis, avisHtml(avis, { nommer }))}` : ''}
+      ${etage('etage-avis', 'Ce que les testeurs ont pensé de l\'app', resumeAvis, `${avisHtml(avis, { nommer, equipe })}${remarquesHtml(remarques, { nommer })}`)}` : ''}
     ${actif === 'automatises' ? etage('etage-machine', 'Tests par robot', machine, `${parcoursHtml(d, { pid, equipe, plateforme })}${reglesHtml(d, { pid, equipe })}`) : ''}
     ${actif === 'bibliotheque' ? etage('etage-bibli', 'Ce qu\'on vérifie', bibli, sectionScenarios) : ''}
   </div>`;
@@ -1006,11 +1035,11 @@ const ouvrirTesteur = (fiche, { env, projets }) => {
    ce qui sera demandé, et le client peut le lire avant la campagne. */
 const mesuresAvis = (avis) => {
   const moyenne = (cle) => {
-    const n = avis.map((a) => Number(a[cle])).filter((x) => !Number.isNaN(x) && x !== null);
+    const n = avis.map((a) => lireReponse(a, cle)).filter((x) => x !== undefined).map(Number).filter((x) => !Number.isNaN(x));
     return n.length ? { v: n.reduce((x, y) => x + y, 0) / n.length, sur: n.length } : null;
   };
   const euros = (cle) => {
-    const n = avis.map((a) => Number(a[cle])).filter((x) => !Number.isNaN(x) && x > 0).sort((x, y) => x - y);
+    const n = avis.map((a) => Number(lireReponse(a, cle))).filter((x) => !Number.isNaN(x) && x > 0).sort((x, y) => x - y);
     return n.length ? { bas: n[0], haut: n[n.length - 1], median: n[Math.floor(n.length / 2)], sur: n.length } : null;
   };
   /* La fourchette acceptable : entre ce qu'on trouve suspect et ce qu'on
@@ -1028,12 +1057,15 @@ const formeDe = (q) => {
   return 'Une réponse libre, rendue mot pour mot';
 };
 
-const restitutionHtml = (avis, { nommer, toutes = false }) => {
+const restitutionHtml = (avis, { nommer, toutes = false, equipe = false }) => {
   const { moyenne, euros } = mesuresAvis(avis);
-  const repondu = (cle) => avis.filter((a) => a[cle] !== undefined && a[cle] !== null && a[cle] !== '');
+  const repondu = (cle) => avis.filter((a) => lireReponse(a, cle) !== undefined);
 
   const questionHtml = (cle, q) => {
     const id = `${cle}.${q.cle}`;
+    /* Une question réservée à l'équipe (ce qui a gêné le testeur dans la
+       campagne) ne s'affiche pas chez le client, même vide. */
+    if (q.equipe && !equipe) return '';
     const enonce = `<span class="avis-question">${echapper(q.libelle)}</span>`;
     if (!repondu(id).length) {
       return toutes ? `<div class="avis-mesure avis-mesure--vide">${enonce}<span class="avis-forme">${echapper(formeDe(q))}</span></div>` : '';
@@ -1050,7 +1082,7 @@ const restitutionHtml = (avis, { nommer, toutes = false }) => {
     }
     if (q.type === 'choix') {
       const comptes = {};
-      avis.forEach((a) => { const v = a[id]; if (v) comptes[v] = (comptes[v] || 0) + 1; });
+      avis.forEach((a) => { const v = lireReponse(a, id); if (v !== undefined) comptes[v] = (comptes[v] || 0) + 1; });
       const lignes = Object.entries(comptes).sort((a, b) => b[1] - a[1]);
       return `<div class="avis-mesure">${enonce}
         <div class="rang" style="gap:8px;flex-wrap:wrap;margin-top:6px">${lignes.map(([v, n]) => `<span class="puce">${echapper(v)} <strong>${n}</strong></span>`).join('')}</div>
@@ -1064,7 +1096,7 @@ const restitutionHtml = (avis, { nommer, toutes = false }) => {
         <p class="aide" style="margin-top:4px">${e.bas === e.haut ? `${pluriel(e.sur, 'réponse', 'réponses')}` : `de ${e.bas} à ${e.haut} €, sur ${pluriel(e.sur, 'réponse', 'réponses')}`}</p>
       </div>`;
     }
-    const dits = avis.map((a) => ({ texte: a[id], uid: a.testeur })).filter((x) => x.texte);
+    const dits = avis.map((a) => ({ texte: lireReponse(a, id), uid: a.testeur })).filter((x) => x.texte !== undefined);
     return `<div class="avis-mesure">${enonce}
       <div class="avis-verbatims">${dits.map((x) => `
         <blockquote class="avis-verbatim">
@@ -1074,9 +1106,9 @@ const restitutionHtml = (avis, { nommer, toutes = false }) => {
     </div>`;
   };
 
-  return Object.entries(FAMILLES_AVIS).map(([cle, f]) => `
+  return Object.entries(FAMILLES_AVIS).filter(([, f]) => equipe || !f.equipe).map(([cle, f]) => `
     <section class="avis-famille">
-      <h3 class="bloc-tete">${echapper(f.libelle)}${toutes ? `<span class="etiquette">${f.quand === 'avant' ? 'Avant de commencer' : 'Après avoir tout déroulé'}</span>` : ''}</h3>
+      <h3 class="bloc-tete">${echapper(f.libelle)}${toutes ? `<span class="etiquette">${echapper((MOMENTS_AVIS[f.quand] || {}).libelle || '')}</span>` : ''}</h3>
       ${toutes && f.aide ? `<p class="aide" style="margin:0 0 10px">${echapper(f.aide)}</p>` : ''}
       ${f.questions.map((q) => questionHtml(cle, q)).join('')}
     </section>`).join('');
@@ -1094,38 +1126,58 @@ const chiffresAvis = (avis) => {
   ${suspect && cher ? `<p class="aide" style="margin-bottom:22px">En dessous de ${suspect.median} €, ils se méfient de la qualité. Au-dessus de ${cher.median} €, ils renoncent. Sur ${pluriel(avis.length, 'réponse', 'réponses')}, c'est une direction, pas une étude de marché.</p>` : ''}`;
 };
 
-const ouvrirAvis = (campagne, { nommer }) => {
-  const avis = campagne._avis || [];
+const ouvrirAvis = (campagne, { nommer, equipe = false }) => {
+  const avis = avisRepondus(campagne._avis || []);
+  const remarques = campagne._remarques || [];
 
-  if (!avis.length) {
+  if (!avis.length && !remarques.length) {
     return modale({
       titre: 'Ce que les testeurs en pensent', feuille: true,
       corps: vide({ icone: 'coeur', titre: 'Aucun avis pour l\'instant',
-        texte: 'Le questionnaire est proposé aux testeurs quand ils ont tout déroulé.', compact: true }),
+        texte: 'Le questionnaire est proposé aux testeurs avant de commencer, puis quand ils ont tout déroulé. Les remarques libres arrivent ici aussi.', compact: true }),
       pied: '<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>',
     }).fin;
   }
 
   return modale({
     titre: 'Ce que les testeurs en pensent',
-    sousTitre: `${pluriel(avis.length, 'réponse', 'réponses')} · ${echapper(campagne.titre || '')}`,
+    sousTitre: `${pluriel(avis.length, 'réponse', 'réponses')}${remarques.length ? ` · ${pluriel(remarques.length, 'remarque', 'remarques')}` : ''} · ${echapper(campagne.titre || '')}`,
     feuille: true,
-    corps: `${chiffresAvis(avis)}${restitutionHtml(avis, { nommer })}`,
+    corps: `${avis.length ? `${chiffresAvis(avis)}${restitutionHtml(avis, { nommer, equipe })}` : ''}${remarquesHtml(remarques, { nommer })}`,
     pied: '<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>',
   }).fin;
 };
 
 /* Le questionnaire sur la page : ce qui sera demandé, et ce qui a été
    répondu, toutes campagnes du projet confondues. */
-const avisHtml = (avis, { nommer }) => {
-  const nbQuestions = Object.values(FAMILLES_AVIS).reduce((n, f) => n + f.questions.length, 0);
+const avisHtml = (avis, { nommer, equipe = false }) => {
+  const q = resumeQuestionnaire({ pourClient: !equipe });
+  const nbQuestions = q.total;
   return `<section class="section" id="avis">
     <div class="section-tete">
-      <div><h2>Le questionnaire ${infoBouton('avis')}</h2><p class="chapo">${nbQuestions} questions en sept familles. Trois avant de commencer, le reste après avoir tout déroulé. ${avis.length ? 'Les réponses libres sont rendues mot pour mot.' : 'Personne n\'a encore répondu : voici ce qui sera demandé.'}</p></div>
+      <div><h2>Le questionnaire ${infoBouton('avis')}</h2><p class="chapo">${nbQuestions} questions en ${q.familles} familles, les mêmes que celles posées au testeur. ${q.avant} avant de commencer, ${equipe ? `${q.fin} en terminant le test (pour l'équipe seule), ` : ''}${q.apres} après avoir tout déroulé. ${avis.length ? 'Les réponses libres sont rendues mot pour mot.' : 'Personne n\'a encore répondu : voici ce qui sera demandé.'}</p></div>
     </div>
-    ${avis.length ? `${chiffresAvis(avis)}${restitutionHtml(avis, { nommer, toutes: true })}`
+    ${avis.length ? `${chiffresAvis(avis)}${restitutionHtml(avis, { nommer, toutes: true, equipe })}`
     : `<button class="btn btn-secondaire btn-petit" type="button" data-plier-questions aria-expanded="false">${icone('deplier')} Voir les ${nbQuestions} questions</button>
-    <div id="questions-avis" hidden style="margin-top:14px">${restitutionHtml(avis, { nommer, toutes: true })}</div>`}
+    <div id="questions-avis" hidden style="margin-top:14px">${restitutionHtml(avis, { nommer, toutes: true, equipe })}</div>`}
+  </section>`;
+};
+
+/* Les remarques libres, rendues telles quelles : qui (le prénom pour
+   l'équipe, « Testeur N » et son profil pour le client, par le même
+   nommeur que le reste de la page), sur quoi, et quand. */
+const remarquesHtml = (remarques, { nommer }) => {
+  const sur = (r) => [r.scenario ? ref(r.scenario) : '', r.plateforme ? echapper((PLATEFORMES_TEST[r.plateforme] || {}).libelle || r.plateforme) : '',
+    enDate(r.cree) ? echapper(dateCourte(enDate(r.cree))) : '', r.ancienne ? 'après le test, pour l\'équipe' : ''].filter(Boolean).join(' · ');
+  return `<section class="section" id="remarques">
+    <div class="section-tete"><div><h2>Remarques libres</h2><p class="chapo">${remarques.length
+      ? `${pluriel(remarques.length, 'remarque', 'remarques')}, écrites par les testeurs quand ils le voulaient, sur un scénario ou en général. Rendues mot pour mot.`
+      : 'Aucune pour l\'instant. Un testeur peut en écrire à tout moment, sur un scénario ou en général.'}</p></div></div>
+    ${remarques.length ? `<div class="avis-verbatims">${remarques.map((r) => `
+      <blockquote class="avis-verbatim avis-remarque">
+        <p>${echapper(String(r.texte))}</p>
+        <cite>${echapper(nommer(r.testeur).libelle)}${sur(r) ? ` · ${sur(r)}` : ''}</cite>
+      </blockquote>`).join('')}</div>` : ''}
   </section>`;
 };
 
@@ -1177,7 +1229,7 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, nommer }) => {
   /* Les premiers pas (l'accueil de l'espace Test) : consignés par le
      testeur dans son appréciation. L'équipe voit qui les a faits, le client
      aussi, sous le numéro. */
-  const avis = magasin.lire(K.appreciations(c.id)) || [];
+  const avis = avisDe([c]);
   /* La fin de test : « termine » sur l'appréciation, la date de fin
      d'accès sur la campagne (fins), posée par le serveur et déplacée par
      l'équipe. Les remarques d'après ne se lisent qu'ici. */
@@ -1187,7 +1239,7 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, nommer }) => {
     return {
       id, nom: nommer(id).nom, mobile: t.mobile || '', n: clesDe(affectation, id).length, accueil: Boolean(a.accueil),
       termine: enDate(a.termine), fin: enDate((c.fins || {})[id]), remarques: Array.isArray(a.remarques) ? a.remarques : [],
-      noteTest: a.noteTest && a.noteTest.note ? a.noteTest : null,
+      noteTest: equipe && a.noteTest && a.noteTest.note ? a.noteTest : null,
     };
   });
   const jourCourt = (d) => (d ? d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '');
@@ -1260,7 +1312,7 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, nommer }) => {
   if (voir) voir.addEventListener('click', () => agir(voir, async () => {
     /* Les avis de la campagne sont déjà dans le magasin, abonnés par la
        page : la feuille les lit tels quels, sans requête de plus. */
-    await ouvrirAvis({ ...c, _avis: avisDe([c]) }, { nommer });
+    await ouvrirAvis({ ...c, _avis: avisDe([c]), _remarques: remarquesDe([c], { equipe }) }, { nommer, equipe });
   }));
 
   /* L'accès d'un testeur après son test : prolonger de sept jours (depuis
@@ -1373,12 +1425,15 @@ export const vue = async (ctx, env) => {
   let tableau = null;
   let pidTableau = null;
   const campagnesSuivies = new Set();
+  /* « campagne/testeur » : la note du test de chacun, pour l'équipe seule. */
+  const retoursSuivis = new Set();
   const clesSuivies = () => [
     ...(env.role === 'equipe'
       ? [K.projets, K.scenariosTous, K.campagnesToutes, K.anomaliesToutes, K.parcoursTous, K.reglesToutes, K.documentsTous, K.jalonsTous, K.montantsTous, K.testeurs, K.profils]
       : [K.projets, ...(magasin.lire(K.projets) || (env.session || {}).projets || [])
           .flatMap((p) => [K.scenarios(p.id), K.campagnes(p.id), K.anomalies(p.id), K.parcours(p.id), K.regles(p.id), K.documents(p.id), K.jalons(p.id), K.montants(p.id), K.profilsTesteurs(p.id), K.planPresentation(p.id)])]),
-    ...[...campagnesSuivies].flatMap((cid) => [K.appreciations(cid), K.passages(cid)]),
+    ...[...campagnesSuivies].flatMap((cid) => [K.appreciations(cid), K.passages(cid), K.remarques(cid)]),
+    ...[...retoursSuivis].map((x) => K.retourTesteur(...x.split('/'))),
   ];
 
   /* Le projet ouvert : celui qu'on a choisi, ou le seul que le client ait.
@@ -1397,12 +1452,23 @@ export const vue = async (ctx, env) => {
     const pid = projetCourant();
     if (!pid) return;
     lireTout(env).campagnes.filter((c) => projetDe(c) === pid).forEach((c) => {
+      if (env.role === 'equipe') {
+        (c.testeurs || []).forEach((uid) => {
+          const cle = `${c.id}/${uid}`;
+          if (retoursSuivis.has(cle)) return;
+          retoursSuivis.add(cle);
+          lot.abonner(K.retourTesteur(c.id, uid), () => doc(bdd, 'projets', pid, 'campagnes', c.id, 'appreciations', uid, 'equipe', 'retour'));
+          lot.sur(K.retourTesteur(c.id, uid), redessiner);
+        });
+      }
       if (campagnesSuivies.has(c.id)) return;
       campagnesSuivies.add(c.id);
       lot.abonner(K.appreciations(c.id), () => collection(bdd, 'projets', pid, 'campagnes', c.id, 'appreciations'));
       lot.abonner(K.passages(c.id), () => collection(bdd, 'projets', pid, 'campagnes', c.id, 'passages'));
+      lot.abonner(K.remarques(c.id), () => collection(bdd, 'projets', pid, 'campagnes', c.id, 'remarques'));
       lot.sur(K.appreciations(c.id), redessiner);
       lot.sur(K.passages(c.id), redessiner);
+      lot.sur(K.remarques(c.id), redessiner);
     });
   };
 

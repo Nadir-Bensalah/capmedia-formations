@@ -54,6 +54,11 @@ export const K = {
      c'est la seule granularité que les règles ouvrent au client. */
   appreciations: (c) => `appreciations:${c}`,
   passages: (c) => `passages:${c}`,
+  /* Les remarques libres des testeurs (campagnes/{c}/remarques). */
+  remarques: (c) => `remarques:${c}`,
+  /* La note du test d'un testeur et ses anciennes remarques
+     (appreciations/{uid}/equipe/retour) : l'équipe seule. */
+  retourTesteur: (c, uid) => `retour:${c}:${uid}`,
   liens: (p) => `liens:${p}`,
   messages: (p) => `messages:${p}`,
   lectures: (p) => `lectures:${p}`,

@@ -116,8 +116,9 @@ let page = null;
   await page.fill('#remarque-texte', 'Le bouton Retour est trop petit sur iPhone SE.');
   await page.click('[data-remarque]'); await pause(1500);
   verifier(/Retour est trop petit/.test(await page.textContent('.remarques-fin')), 'la remarque s affiche sous la page');
-  const appr = await lire(`projets/${PID}/campagnes/${CID}/appreciations/${uid}`);
-  verifier(((champ(appr, 'remarques').arrayValue || {}).values || []).length === 1, 'et vit dans son appréciation');
+  /* Une remarque vit à part (campagnes/{c}/remarques), plus dans l'appréciation. */
+  const rem = (((await lire(`projets/${PID}/campagnes/${CID}/remarques?pageSize=20`)) || {}).documents || []).filter((d) => str(d, 'testeur') === uid);
+  verifier(rem.length === 1 && /Retour est trop petit/.test(str(rem[0], 'texte')), 'et vit dans les remarques de la campagne');
   verifier(await attendre(async () => (await envoisDe('testeur-remarque')).length === 1, 60, 500), 'une lettre « testeur-remarque » part à l équipe');
   verifier(erreurs.length === 0, `aucune erreur de page côté testeur ${erreurs.join(' | ')}`);
 
@@ -140,7 +141,7 @@ let page = null;
   };
   const fiche = await ouvrirFiche(equipe);
   verifier(/Terminé le/.test(fiche) && /accès jusqu'au/.test(fiche), 'la fiche campagne dit « Terminé le … · accès jusqu au … »');
-  verifier(/Retour est trop petit/.test(fiche), 'et montre la remarque');
+  verifier(/Retour est trop petit/.test(await equipe.textContent('#remarques').catch(() => '')), 'la page montre la remarque à l équipe');
   await equipe.click(`[data-prolonger="${uid}"]`); await pause(1500);
   const c2 = await lire(`projets/${PID}/campagnes/${CID}`);
   const fin2 = new Date((((champ(c2, 'fins').mapValue || {}).fields || {})[uid] || {}).timestampValue || 0);
@@ -163,7 +164,9 @@ let page = null;
   await client.waitForSelector('[data-action="ouvrir-campagne"]', { timeout: 20000 });
   const ficheClient = await ouvrirFiche(client);
   verifier(/Terminé le/.test(ficheClient) && !/Karim/.test(ficheClient), 'le client voit « Terminé le … » sous le numéro du testeur, sans nom');
-  verifier(!/Prolonger/.test(ficheClient) && !/Retour est trop petit/.test(ficheClient), 'ni le bouton Prolonger, ni la remarque');
+  verifier(!/Prolonger/.test(ficheClient), 'ni le bouton Prolonger');
+  const remClient = await client.textContent('#remarques').catch(() => '');
+  verifier(/Retour est trop petit/.test(remClient) && !/Karim/.test(remClient) && /Testeur \d/.test(remClient), 'la remarque se lit dans le Hub, sous « Testeur N », sans nom', remClient.slice(0, 120));
 
   await nav.close();
   console.log(`\n${ok} contrôle(s) conforme(s)${ecarts.length ? `, ${ecarts.length} ÉCART(S)` : ''}`);

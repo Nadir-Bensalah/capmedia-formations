@@ -119,7 +119,8 @@ let page = null;
   await page.click('[data-note-test="4"]'); await page.fill('#note-test-texte', 'Le scénario DI-15 manquait d une capture d exemple.');
   await page.click('[data-valider]'); await pause(2000);
   if (await page.$('[data-envoyer]')) { await page.keyboard.press('Escape'); await pause(500); }
-  const appr = await lire(`projets/${PID}/campagnes/${CID}/appreciations/${uid}`);
+  /* La note du test vit à part (equipe/retour), que le client ne lit pas. */
+  const appr = await lire(`projets/${PID}/campagnes/${CID}/appreciations/${uid}/equipe/retour`);
   const nt = (champ(appr, 'noteTest').mapValue || {}).fields || {};
   verifier((nt.note || {}).integerValue === '4' && /DI-15/.test((nt.commentaire || {}).stringValue || ''), 'la note du test est enregistrée avec ses mots');
   verifier(/Noter sur l'App Store/.test(await page.textContent('.page')) && /Noter sur l'Play Store|Play Store/.test(await page.textContent('.page')), 'les deux magasins sont proposés une fois le test fini');
@@ -160,8 +161,8 @@ let page = null;
   await client.evaluate(() => { location.hash = '#/tests?projet=atelier'; window.dispatchEvent(new HashChangeEvent('hashchange')); });
   await client.waitForSelector('[data-action="ouvrir-campagne"]', { timeout: 20000 });
   let fcl = '';
-  for (let i = 0; i < 6; i += 1) { await client.click('[data-action="ouvrir-campagne"]'); await pause(900); fcl = await client.textContent('.feuille .modale-corps').catch(() => ''); if (/Note du test/.test(fcl)) break; await client.keyboard.press('Escape'); await pause(600); }
-  verifier(/Note du test\s*:\s*4\/5/.test(fcl) && !/manquait d une capture/.test(fcl) && !/Karim/.test(fcl), 'le client lit la note, sans les mots ni le nom', fcl.match(/Note du test[^\n]{0,40}/) ? fcl.match(/Note du test[^\n]{0,40}/)[0] : '(pas de note)');
+  for (let i = 0; i < 6; i += 1) { await client.click('[data-action="ouvrir-campagne"]'); await pause(900); fcl = await client.textContent('.feuille .modale-corps').catch(() => ''); if (/Terminé le/.test(fcl)) break; await client.keyboard.press('Escape'); await pause(600); }
+  verifier(/Terminé le/.test(fcl) && !/Note du test/.test(fcl) && !/manquait d une capture/.test(fcl) && !/Karim/.test(fcl), 'le client voit la fin du test, ni la note ni les mots ni le nom (réservés à l équipe)', fcl.match(/Note du test[^\n]{0,40}/) ? fcl.match(/Note du test[^\n]{0,40}/)[0] : '(pas de note)');
   await client.click('[data-voir-avis]').catch(() => null); await pause(900);
   const avisClient = await client.textContent('body');
   verifier(/Pharmacien/.test(avisClient) && /MacBook Air M2/.test(avisClient) && !/Benali/.test(avisClient), 'et un profil enrichi (domaine, appareil) sous un numéro, sans nom', avisClient.match(/Testeur \d[^\n]{0,80}/) ? avisClient.match(/Testeur \d[^\n]{0,80}/)[0] : '(rien)');
