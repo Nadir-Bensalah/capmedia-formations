@@ -456,7 +456,7 @@ const pageCampagne = (moi) => {
       : vide({ icone: 'check', titre: etat.reste ? 'Rien ne reste ici' : 'Aucun scénario',
           texte: etat.reste ? 'Décochez « ce qui reste » pour revoir ce que vous avez déjà coché.' : 'Changez de bloc.', compact: true })}`}
 
-    ${etat.scenarios.some((s) => etat.passages.has(s.ref)) ? chiffresHtml() : ''}
+    ${chiffresHtml()}
     ${aTermine() ? '' : astuceHtml()}
   </div>`;
 
