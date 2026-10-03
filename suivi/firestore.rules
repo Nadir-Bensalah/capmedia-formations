@@ -232,9 +232,13 @@ service cloud.firestore {
              // et sur l'aperçu de chaque projet : le choix suit la personne
              // sur tous ses appareils. { accueil: 'ouvert' | 'replie' |
              // 'ferme', projets: { <projet>: idem } }
-             'pavesAttente'
+             'pavesAttente',
+             // La dernière lecture de la page « Annonces Capmedia » : une
+             // date, rien d'autre. Ce qui a été publié après est « non lu ».
+             'annoncesLues'
            ])
         && (!('accueil' in request.resource.data) || request.resource.data.accueil is timestamp)
+        && (!('annoncesLues' in request.resource.data) || request.resource.data.annoncesLues is timestamp)
         && (!('pavesAttente' in request.resource.data) || pavesAttenteValides(request.resource.data.pavesAttente))
         && (!('email' in request.resource.data) || request.resource.data.email == monEmail())
         && (!('nom' in request.resource.data) || texteBorne(request.resource.data.nom, 120))
@@ -1238,6 +1242,12 @@ service cloud.firestore {
     // finance de l'équipe.
     match /reglages/{cle} {
       allow read: if connecte();
+      // L'introduction de la page « Annonces Capmedia » : un texte, écrit
+      // par l'administrateur.
+      allow write: if cle == 'annonces'
+        && estAdmin()
+        && request.resource.data.keys().hasOnly(['intro', 'maj'])
+        && texteBorne(request.resource.data.get('intro', ''), 600);
       allow write: if cle == 'finance'
         && estEquipe()
         && (ficheEquipe().get('role', '') == 'admin'
@@ -1296,6 +1306,84 @@ service cloud.firestore {
           && request.resource.data.pieces.size() <= 10;
         allow update, delete: if false;
       }
+    }
+
+    // ================================================================
+    // Les annonces de Capmedia
+    //
+    // Ce que Capmedia annonce à ses clients : une nouveauté, une
+    // compétence, un changement, un tarif, une indisponibilité (congés),
+    // une information. L'administrateur les écrit ; un client connecté ne
+    // lit que les PUBLIÉES qui le visent : toutes (« tous ») ou celles qui
+    // nomment son compte. Le Cockpit déplie les sociétés choisies en
+    // comptes (cible.uids) à l'enregistrement : la règle n'a qu'à lire
+    // une liste. Un testeur n'est pas un client : « tous » ne l'inclut pas.
+    // ================================================================
+
+    function cibleAnnonceValide(c) {
+      return c is map
+          && c.keys().hasOnly(['tous', 'organisations', 'uids'])
+          && c.tous is bool
+          && c.organisations is list && c.organisations.size() <= 100
+          && c.uids is list && c.uids.size() <= 500;
+    }
+    function jourIso(v) {
+      return v is string && v.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+    function montantTjm(v) {
+      return (v is int || v is float) && v > 0 && v <= 10000;
+    }
+    function tarifValide(t) {
+      return t is map
+          && t.keys().hasOnly(['tjmLong', 'tjmCourt', 'seuilMois', 'devise', 'taxe', 'texteLong', 'texteCourt'])
+          && montantTjm(t.tjmLong)
+          && montantTjm(t.tjmCourt)
+          && t.seuilMois is int && t.seuilMois >= 1 && t.seuilMois <= 36
+          && t.devise == '€'
+          // Un montant de Capmedia se lit toujours hors taxes.
+          && t.taxe == 'HT'
+          && texteBorne(t.get('texteLong', ''), 400)
+          && texteBorne(t.get('texteCourt', ''), 400);
+    }
+    function indisponibiliteValide(i) {
+      return i is map
+          && i.keys().hasOnly(['du', 'au', 'message'])
+          && jourIso(i.du) && jourIso(i.au) && i.du <= i.au
+          && texteBorne(i.get('message', ''), 300);
+    }
+    function annonceValide(d) {
+      return d.keys().hasOnly(['type', 'titre', 'texte', 'dateEffet', 'publication', 'publieLe', 'epinglee', 'cible',
+                               'tarif', 'indisponibilite', 'cree', 'maj'])
+          && d.type in ['nouveaute', 'competence', 'changement', 'tarif', 'indisponibilite', 'information']
+          && texteRequis(d.titre, 120)
+          && texteBorne(d.texte, 4000)
+          && (d.dateEffet == '' || jourIso(d.dateEffet))
+          && d.publication in ['brouillon', 'publiee']
+          && (d.publieLe == null || d.publieLe is timestamp)
+          && d.epinglee is bool
+          && cibleAnnonceValide(d.cible)
+          // Les règles chiffrées n'existent que sur un tarif, la période
+          // que sur une indisponibilité.
+          && (d.type == 'tarif' ? tarifValide(d.tarif) : d.get('tarif', null) == null)
+          && (d.type == 'indisponibilite' ? indisponibiliteValide(d.indisponibilite) : d.get('indisponibilite', null) == null)
+          && d.maj == request.time;
+    }
+
+    match /annonces/{annonceId} {
+      allow read: if estEquipe()
+        || (connecte()
+            && request.auth.token.get('testeur', false) != true
+            && resource.data.publication == 'publiee'
+            && (resource.data.cible.tous == true || moi() in resource.data.cible.uids));
+      allow create: if estAdmin() && annonceValide(request.resource.data) && request.resource.data.cree == request.time;
+      allow update: if estAdmin() && annonceValide(request.resource.data) && request.resource.data.cree == resource.data.cree;
+      allow delete: if estAdmin();
+    }
+
+    // Les annonces déjà notifiées (hubAnnonceEcrite) : une marque par
+    // annonce, pour ne jamais prévenir deux fois. Le serveur seul.
+    match /annoncesNotifiees/{annonceId} {
+      allow read, write: if false;
     }
 
     // ================================================================

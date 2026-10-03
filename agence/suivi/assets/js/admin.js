@@ -36,6 +36,7 @@ import * as adminEquipe from './vues/admin-equipe.js';
 import * as testeursMessages from './vues/admin-testeurs-messages.js';
 import * as nouveauProjet from './vues/nouveau-projet.js';
 import * as parametres from './vues/parametres.js';
+import * as annonces from './vues/annonces.js';
 
 const session = await exigerSession();
 if (!session) throw new Error('session absente');
@@ -135,6 +136,9 @@ const construireNavigation = () => {
         { chemin: '/finances', libelle: 'Finances', icone: 'finances', compte: { total: piecesDues, neuf: piecesDues }, si: peut(session, 'finance.lecture') },
         { chemin: '/maintenance', libelle: 'Maintenance', icone: 'sante', compte: { total: forfaitsActifs, neuf: forfaitsDemandes } },
         { chemin: '/activite', libelle: 'Activité', icone: 'activite' },
+        /* Ce que Capmedia annonce à ses clients, congés compris : le
+           total gris compte les publiées. */
+        { chemin: '/annonces', libelle: 'Annonces', icone: 'porteVoix', compte: { total: (magasin.lire(K.annonces) || []).filter((a) => a.publication === 'publiee').length }, si: admin },
         { chemin: '/archives', libelle: 'Archives', icone: 'archive', si: admin },
         { chemin: '/equipe', libelle: 'Équipe', icone: 'utilisateurs' },
         { chemin: '/parametres', libelle: 'Paramètres', icone: 'parametres' },
@@ -164,7 +168,7 @@ const suivreConversations = () => {
 
 let minuteurNav = null;
 const planifierNav = () => { clearTimeout(minuteurNav); minuteurNav = setTimeout(() => { suivreConversations(); construireNavigation(); }, 80); };
-[K.ticketsTous, K.tachesToutes, K.validationsToutes, K.documentsTous, K.demandesProjet, K.projets, K.organisations, K.reunionsToutes, K.fichiersTous, K.profil, K.maintenanceToute, K.campagnesToutes, K.anomaliesToutes, K.conversationsTesteurs].forEach((cle) => magasin.sur(cle, planifierNav));
+[K.ticketsTous, K.tachesToutes, K.validationsToutes, K.documentsTous, K.demandesProjet, K.projets, K.organisations, K.reunionsToutes, K.fichiersTous, K.profil, K.maintenanceToute, K.campagnesToutes, K.anomaliesToutes, K.conversationsTesteurs, K.annonces].forEach((cle) => magasin.sur(cle, planifierNav));
 construireNavigation();
 
 enregistrerRecherche((terme) => {
@@ -239,6 +243,7 @@ definir([
   { chemin: '/finances/:did', vue: (ctx) => adminFinances.vue(ctx, env) },
   { chemin: '/maintenance', vue: (ctx) => maintenance.vue(ctx, env) },
   { chemin: '/activite', vue: (ctx) => adminActivite.vue(ctx, env) },
+  { chemin: '/annonces', vue: (ctx) => annonces.vue(ctx, env) },
   { chemin: '/archives', vue: (ctx) => adminArchives.vue(ctx, env) },
   { chemin: '/parametres', vue: (ctx) => adminParametres.vue(ctx, env) },
   { chemin: '/equipe', vue: (ctx) => adminEquipe.vue(ctx, env) },

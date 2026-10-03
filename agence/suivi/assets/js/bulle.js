@@ -24,6 +24,7 @@ import { messageHtml, depot, toast, agir, brancherPieces, avatarProjet, menu, su
 import * as magasin from './magasin.js';
 import { K, ecrire, messagesDuProjet } from './donnees.js';
 import { naviguer } from './routeur.js';
+import { indisponibiliteActuelle, phraseIndisponibilite } from './annonces-format.js';
 
 const CLE_SON = 'suivi:son-messages';
 /* Un état ouvert/fermé par projet : refermer la bulle d'un projet ne
@@ -156,6 +157,7 @@ export const monterBulle = ({ pid, env }) => {
           <button class="btn-icone" type="button" id="bulle-fermer" aria-label="Fermer" data-astuce="Fermer">${icone('fermer')}</button>
         </div>
       </header>
+      <p class="bulle-conge" id="bulle-conge" role="status" hidden></p>
       <div class="bulle-fil" id="bulle-fil"></div>
       <p class="bulle-frappe" id="bulle-frappe" hidden><i></i><i></i><i></i> <span></span></p>
       <form class="bulle-pied" id="bulle-forme" novalidate>
@@ -359,6 +361,17 @@ export const monterBulle = ({ pid, env }) => {
   const arretMessages = magasin.sur(K.messages(pid), surMessages);
   const arretLectures = magasin.sur(K.lectures(pid), () => { rendreFil(); rendreFrappe(); rendrePastille(); });
   const arretProjet = magasin.sur(K.projet(pid), rendreTete);
+  /* Capmedia absente (une annonce « indisponibilité » publiée) : le client
+     le lit au-dessus du fil, avant d'écrire. L'équipe n'en a pas besoin. */
+  const rendreConge = () => {
+    const bloc = $('#bulle-conge');
+    const conge = equipe ? null : indisponibiliteActuelle(magasin.lire(K.annonces) || []);
+    bloc.hidden = !conge;
+    bloc.textContent = conge ? phraseIndisponibilite(conge) : '';
+    if (conge) bloc.dataset.annonce = conge.id;
+  };
+  const arretConge = magasin.sur(K.annonces, rendreConge);
+  rendreConge();
 
   majSon();
   rendreTete();
@@ -377,6 +390,7 @@ export const monterBulle = ({ pid, env }) => {
       if (typeof arretMessages === 'function') arretMessages();
       if (typeof arretLectures === 'function') arretLectures();
       if (typeof arretProjet === 'function') arretProjet();
+      if (typeof arretConge === 'function') arretConge();
       racine.remove();
     },
   };

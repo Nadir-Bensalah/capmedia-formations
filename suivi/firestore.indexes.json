@@ -15,6 +15,22 @@
         { "fieldPath": "projet", "order": "ASCENDING" },
         { "fieldPath": "statut", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "annonces",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "publication", "order": "ASCENDING" },
+        { "fieldPath": "cible.tous", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "annonces",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "publication", "order": "ASCENDING" },
+        { "fieldPath": "cible.uids", "arrayConfig": "CONTAINS" }
+      ]
     }
   ],
   "fieldOverrides": []

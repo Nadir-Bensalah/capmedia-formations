@@ -16,6 +16,7 @@ import { filAriane } from '../coquille.js';
 import { echeance, lienReunion } from '../noyau.js';
 import { monterNotesClient } from './notes-client.js';
 import { etatPave, paveHtml, brancherPaves } from '../pave-attente.js';
+import { indisponibiliteActuelle, phraseIndisponibilite } from '../annonces-format.js';
 
 const iconeActivite = {
   suggestion: 'ampoule', axe: 'ampoule',
@@ -174,6 +175,13 @@ export const vue = async (ctx, env) => {
         </div>
       </div>
 
+      ${(() => {
+        /* Capmedia absente (congés) : un bandeau discret pendant la période
+           et les sept jours d'avant, qui mène à l'annonce. */
+        const conge = indisponibiliteActuelle(magasin.lire(K.annonces) || []);
+        return conge ? `<p class="bandeau-conge" role="status" data-bandeau-indispo="${echapper(conge.id)}"><span>${echapper(phraseIndisponibilite(conge))}</span> <a class="lien" href="#/annonces">Lire l'annonce</a></p>` : '';
+      })()}
+
       ${resumeDepuis}
 
       ${attente.length ? paveHtml({
@@ -266,7 +274,7 @@ export const vue = async (ctx, env) => {
     notes.apres();
   };
 
-  const cles = [K.projets, K.profil, K.notesClient, ...session.projets.flatMap((p) => [
+  const cles = [K.projets, K.profil, K.notesClient, K.annonces, ...session.projets.flatMap((p) => [
     K.jalons(p.id), K.tickets(p.id), K.validations(p.id), K.documents(p.id), K.paiements(p.id),
     K.taches(p.id), K.blocages(p.id), K.reunions(p.id), K.releases(p.id), K.activite(p.id), K.messages(p.id),
     K.composants(p.id),

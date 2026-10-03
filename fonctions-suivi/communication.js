@@ -85,6 +85,9 @@ const EVENEMENTS = {
   'testeur-remarque': { categorie: 'projet' },
   'message-testeur': { categorie: 'messages' },
   'message-testeur-reponse': { categorie: 'messages' },
+  /* Une annonce de Capmedia (nouveauté, tarif, congés) : la notification
+     dans le Hub seulement, jamais d'e-mail. */
+  annonce: { categorie: 'projet' },
 };
 
 const regle = (evenement) => EVENEMENTS[evenement] || { categorie: 'projet' };
