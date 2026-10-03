@@ -156,8 +156,11 @@ let page = null;
   await client.evaluate(() => { location.hash = '#/tests?projet=atelier'; window.dispatchEvent(new HashChangeEvent('hashchange')); });
   await client.waitForSelector('[data-action="ouvrir-campagne"]', { timeout: 20000 });
   let fcl = '';
-  for (let i = 0; i < 6; i += 1) { await client.click('[data-action="ouvrir-campagne"]'); await pause(900); fcl = await client.textContent('.feuille .modale-corps').catch(() => ''); if (/Note du test/.test(fcl)) break; await client.keyboard.press('Escape'); await pause(600); }
-  verifier(/Note du test\s*:\s*4\/5/.test(fcl) && !/manquait d une capture/.test(fcl) && !/Karim/.test(fcl), 'le client lit la note, sans les mots ni le nom', fcl.match(/Note du test[^\n]{0,40}/) ? fcl.match(/Note du test[^\n]{0,40}/)[0] : '(pas de note)');
+  for (let i = 0; i < 6; i += 1) { await client.click('[data-action="ouvrir-campagne"]'); await pause(900); fcl = await client.textContent('.feuille .modale-corps').catch(() => ''); if (/Pharmacien/.test(fcl)) break; await client.keyboard.press('Escape'); await pause(600); }
+  /* Depuis le 03/10/2026, la note du test (la clarté des consignes) est
+     une affaire d'équipe : le client la lirait comme une note de son
+     application. */
+  verifier(fcl.length > 0 && !/Note du test|Clarté des consignes/.test(fcl) && !/manquait d une capture/.test(fcl) && !/Karim/.test(fcl), 'le client ne lit ni la note du test, ni ses mots, ni le nom', fcl.match(/Note du test[^\n]{0,40}/) ? fcl.match(/Note du test[^\n]{0,40}/)[0] : '');
   await client.click('[data-voir-avis]').catch(() => null); await pause(900);
   const avisClient = await client.textContent('body');
   verifier(/Pharmacien/.test(avisClient) && /MacBook Air M2/.test(avisClient) && !/Benali/.test(avisClient), 'et un profil enrichi (domaine, appareil) sous un numéro, sans nom', avisClient.match(/Testeur \d[^\n]{0,80}/) ? avisClient.match(/Testeur \d[^\n]{0,80}/)[0] : '(rien)');

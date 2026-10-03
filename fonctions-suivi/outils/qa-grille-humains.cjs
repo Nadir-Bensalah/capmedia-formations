@@ -307,7 +307,8 @@ const verifierChiffres = (r, quoi) => {
      juste après, se lit sans plan). */
   const avantPlan = fs.mkdtempSync(path.join(os.tmpdir(), 'qa-grille-humains-avant-'));
   SECTIONS.forEach((x) => fs.writeFileSync(path.join(avantPlan, `${x.id}.json`), JSON.stringify(x, null, 2)));
-  importer([P, avantPlan, '--vrai']);
+  const impAvant = importer([P, avantPlan, '--vrai']);
+  verifier(impAvant.code === 0, 'le plan de la suite est en place pour le KO du plan', impAvant.sortie.slice(-300));
   fs.rmSync(avantPlan, { recursive: true, force: true });
   await passage(bruno, 'gh-taches-f-001', 'ko', 'android', 41);
   await passage(celia, 'gh-connexion-t-001', 'ok', 'web', 40);

@@ -273,6 +273,11 @@ const SCENARIOS=[
   verifier(!!(await attendre(async()=>(await lire(`projets/${PID}/anomalies/ko-tbp-f-002`)))),'son échec fait naître son anomalie');
   await poser(`projets/${PID}/anomalies/ko-tbp-f-002`,{statut:S('corrigee')},['statut']);
   verifier(!!(await attendre(async()=>champ(await lire(`projets/${PID}/campagnes/${CIDP}/passages/${u3}__${K8}`),'aRevoir').booleanValue===true)),'corrigée, l échec est marqué « à rejouer »');
+  /* Paul est aussi dans la campagne de la bibliothèque : le temps de sa
+     partie, elle repasse en préparation, pour qu'il n'en ait qu'une en
+     cours (le choix entre deux campagnes est l'affaire de l'écran du
+     testeur, pas de cette suite). */
+  await poser(`projets/${PID}/campagnes/${CID}`,{statut:S('preparation')},['statut']);
 
   const ctxT=await nav.newContext({viewport:{width:390,height:844}});
   const testeur=await ctxT.newPage();
@@ -336,6 +341,7 @@ const SCENARIOS=[
      plan s'en vont, la grille de la bibliothèque reprend. */
   await vider(`projets/${PID}/planTests`);
   await poser(`projets/${PID}/campagnes/${CIDP}`,{statut:S('close')},['statut']);
+  await poser(`projets/${PID}/campagnes/${CID}`,{statut:S('en-cours')},['statut']);
   await allerTableau(equipe,`projet=${PID}&campagne=${CID}`);
 
   console.log('\n== Le client : les résultats en direct, rien d autre');

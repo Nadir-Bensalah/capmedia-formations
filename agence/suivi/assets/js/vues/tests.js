@@ -1280,7 +1280,7 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
         ${charges.length ? `<div class="liste liste--serree">${charges.map((t) => `
           <div style="padding:8px 10px;border-radius:10px;background:var(--fond-2)">
             <div class="rang" style="justify-content:space-between">
-              <span>${echapper(t.nom)}${t.mobile ? ` <span class="puce puce--mini">${echapper((PLATEFORMES_TEST[t.mobile] || {}).court || t.mobile)}</span>` : ''}</span>
+              <span>${echapper(t.nom)}${t.mobile ? ` <span class="puce puce--mini">${echapper(NOMS_PLATEFORMES[t.mobile] || t.mobile)}</span>` : ''}${nommer(t.id).traits ? ` <span class="t-micro t-3" data-profil>${echapper(nommer(t.id).traits)}</span>` : ''}</span>
               <span class="rang" style="gap:10px;align-items:center">
                 ${!equipe ? '' : t.accueil ? '<span class="pastille pastille--vert" title="A parcouru l\'accueil de son espace">Premiers pas faits</span>' : '<span class="t-micro t-3">premiers pas à faire</span>'}
                 <span class="t-micro">${t.n ? pluriel(t.n, 'passage', 'passages') : 'rien encore'}</span>

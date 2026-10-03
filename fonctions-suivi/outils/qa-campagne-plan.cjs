@@ -284,12 +284,14 @@ const SECTIONS = [
   await ouvrir(cl, cid);
   const vc = await cl.evaluate(() => {
     const f = document.querySelector('.voile .feuille');
-    return { texte: f ? f.innerText.replace(/\s+/g, ' ') : '', lancer: !!document.querySelector('[data-lancer], [data-lancement], [data-repartir]'), ident: !!document.querySelector('[data-identifiants], [data-identifiants-de]') };
+    const r = document.querySelector('.voile #resultats');
+    return { texte: f ? f.innerText.replace(/\s+/g, ' ') : '', resultats: r ? r.innerText.replace(/\s+/g, ' ') : '', profils: [...document.querySelectorAll('.voile [data-profil]')].map((x) => x.innerText), lancer: !!document.querySelector('[data-lancer], [data-lancement], [data-repartir]'), ident: !!document.querySelector('[data-identifiants], [data-identifiants-de]') };
   });
   verifier(/Testeur \d · iPhone/.test(vc.texte), 'le client lit « Testeur N · iPhone »', vc.texte.slice(0, 200));
   verifier(!/Karim|Marc|Sonia|Ines/.test(vc.texte), 'jamais un prénom');
   verifier(!/premiers pas/i.test(vc.texte), 'ni « premiers pas », jargon interne');
-  verifier(!/\d{2}-\d{2} ans|Commerce/.test(vc.texte), 'ni le profil répété dans les résultats', vc.texte.slice(0, 260));
+  verifier(!/\d{2}-\d{2} ans|Commerce/.test(vc.resultats), 'ni le profil répété dans les résultats', vc.resultats.slice(0, 260));
+  verifier(vc.profils.length === 4 && vc.profils.every((x) => /\d{2}-\d{2} ans/.test(x)), 'le profil se lit une fois, dans la liste des testeurs', vc.profils.join(' | '));
   verifier(!vc.lancer, 'ni rien pour répartir ou lancer');
   verifier(!vc.ident && !/MotDePasse/.test(vc.texte), 'ni les identifiants de test');
 
