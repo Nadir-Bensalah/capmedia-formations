@@ -25,7 +25,7 @@ import {
   TYPES_ANNONCE, PUBLICATIONS_ANNONCE, BORNES_ANNONCE, PHRASE_LONG, PHRASE_COURT, INTRO_ANNONCES,
   estPubliee, dateFr, grilleALaDate, verdictTarif, projetsTarifables, periode, periodeTexte, parOrdreAnnonce, estNonLue, cibleTexte,
 } from '../annonces-format.js';
-import { grilleDe, periodeA } from '../tarifs.js';
+import { grilleDe, periodeA, prix } from '../tarifs.js';
 
 /* --- Le dessin d'une annonce, le même des deux côtés ---------------------- */
 
@@ -42,8 +42,8 @@ const encartTarif = (a, { projets, grille }) => {
   const r = grilleALaDate(a, grille);
   const seuil = echapper(pluriel(r.seuilMois, 'mois', 'mois'));
   const grilleHtml = `<div class="annonce-tarifs">
-    <div class="annonce-tarif"><p class="annonce-tarif-qui">Projets longs <span class="t-3">(plus de ${seuil})</span></p><p class="annonce-tarif-prix" data-tarif-long>${echapper(montantHT(r.long) || '-')}<span> par jour</span></p></div>
-    <div class="annonce-tarif"><p class="annonce-tarif-qui">Projets courts <span class="t-3">(moins de ${seuil})</span></p><p class="annonce-tarif-prix" data-tarif-court>${echapper(montantHT(r.court) || '-')}<span> par jour</span></p></div>
+    <div class="annonce-tarif"><p class="annonce-tarif-qui">Projets longs <span class="t-3">(plus de ${seuil})</span></p><p class="annonce-tarif-prix" data-tarif-long>${echapper(prix(r.long, grille) || '-')}<span> par jour</span></p></div>
+    <div class="annonce-tarif"><p class="annonce-tarif-qui">Projets courts <span class="t-3">(moins de ${seuil})</span></p><p class="annonce-tarif-prix" data-tarif-court>${echapper(prix(r.court, grille) || '-')}<span> par jour</span></p></div>
   </div>`;
   if (!projets) return grilleHtml;
   const verdicts = projets.map((p) => verdictTarif(a, p, grille)).filter(Boolean);
@@ -270,8 +270,8 @@ const apercu = (a) => {
 
 const ligneDePeriode = (p = {}) => `<div class="grille-periode" data-periode>
     <div class="groupe"><label class="etiquette-champ">À partir du</label><input class="champ" type="date" lang="fr-FR" data-periode-debut value="${echapper(p.debut || '')}"></div>
-    <div class="groupe"><label class="etiquette-champ">Projet long (€ HT par jour)</label><input class="champ" type="number" min="1" max="10000" step="1" data-periode-long value="${echapper(p.long ?? '')}"></div>
-    <div class="groupe"><label class="etiquette-champ">Projet court (€ HT par jour)</label><input class="champ" type="number" min="1" max="10000" step="1" data-periode-court value="${echapper(p.court ?? '')}"></div>
+    <div class="groupe"><label class="etiquette-champ">Projet long (€ par jour)</label><input class="champ" type="number" min="1" max="10000" step="1" data-periode-long value="${echapper(p.long ?? '')}"></div>
+    <div class="groupe"><label class="etiquette-champ">Projet court (€ par jour)</label><input class="champ" type="number" min="1" max="10000" step="1" data-periode-court value="${echapper(p.court ?? '')}"></div>
     <button class="btn-icone" type="button" data-periode-retirer aria-label="Retirer cette période" data-astuce="Retirer">${icone('corbeille')}</button>
   </div>`;
 
@@ -283,7 +283,7 @@ const editerGrille = () => {
     corps: `
       <div class="forme-rang">
         ${champ('seuilMois', 'Seuil d\'un projet long (mois)', g.seuilMois, { type: 'number', attrs: 'min="1" max="24" step="1"', aide: 'Au-delà, le projet est long.' })}
-        ${champ('tva', 'TVA (%)', g.tva, { type: 'number', attrs: 'min="0" max="30" step="0.1"' })}
+        ${champ('tva', 'TVA (%)', g.tva, { type: 'number', attrs: 'min="0" max="30" step="0.1"', aide: '0 : franchise en base de TVA (micro-entreprise), le prix affiché est le prix payé.' })}
       </div>
       <p class="surtitre" style="margin-top:6px">Les périodes</p>
       <div class="grille-periodes" data-periodes>${g.periodes.map(ligneDePeriode).join('')}</div>
@@ -310,7 +310,7 @@ const editerGrille = () => {
         court: Number(l.querySelector('[data-periode-court]').value),
       }));
       const fautive = periodes.find((p) => !/^\d{4}-\d{2}-\d{2}$/.test(p.debut) || !(p.long > 0 && p.long <= 10000) || !(p.court > 0 && p.court <= 10000));
-      if (!periodes.length || fautive) { toast('Chaque période demande une date et deux prix entre 1 et 10 000 € HT.', 'erreur'); return false; }
+      if (!periodes.length || fautive) { toast('Chaque période demande une date et deux prix entre 1 et 10 000 €.', 'erreur'); return false; }
       if (new Set(periodes.map((p) => p.debut)).size !== periodes.length) { toast('Deux périodes ne peuvent pas commencer le même jour.', 'erreur'); return false; }
       periodes.sort((x, y) => x.debut.localeCompare(y.debut));
       await ecrire.poserGrilleTarifs({ seuilMois: v.seuilMois, tva: v.tva, periodes });
@@ -325,10 +325,10 @@ const sectionGrille = () => {
   const enVigueur = periodeA(g, new Date());
   return `<section class="section" data-grille-tarifs>
     <div class="section-tete"><h2>Grille de tarifs</h2><button class="btn btn-secondaire btn-petit" type="button" data-annonce-action="grille">Modifier la grille</button></div>
-    <p class="t-petit t-2">Seuil d'un projet long : ${echapper(pluriel(g.seuilMois, 'mois', 'mois'))} · TVA ${echapper(String(g.tva).replace('.', ','))} % · la source unique des annonces, du calculateur et des devis.${doc && doc.periodes ? '' : ' Grille par défaut, pas encore enregistrée.'}</p>
+    <p class="t-petit t-2">Seuil d'un projet long : ${echapper(pluriel(g.seuilMois, 'mois', 'mois'))} · ${g.tva === 0 ? 'TVA non applicable (franchise)' : `TVA ${echapper(String(g.tva).replace('.', ','))} %`} · la source unique des annonces, du calculateur et des devis.${doc && doc.periodes ? '' : ' Grille par défaut, pas encore enregistrée.'}</p>
     <table class="grille-tarifs">
       <thead><tr><th scope="col">À partir du</th><th scope="col">Projet long</th><th scope="col">Projet court</th><th scope="col"><span class="sr-only">État</span></th></tr></thead>
-      <tbody>${g.periodes.map((p) => `<tr data-grille-periode="${echapper(p.debut)}"><td>${echapper(dateFr(p.debut))}</td><td>${echapper(montantHT(p.long))} par jour</td><td>${echapper(montantHT(p.court))} par jour</td><td class="t-petit">${enVigueur && p.debut === enVigueur.debut ? '<span class="grille-en-vigueur">En vigueur</span>' : (p.debut > (enVigueur ? enVigueur.debut : '') ? '<span class="t-3">À venir</span>' : '<span class="t-3">Passée</span>')}</td></tr>`).join('')}</tbody>
+      <tbody>${g.periodes.map((p) => `<tr data-grille-periode="${echapper(p.debut)}"><td>${echapper(dateFr(p.debut))}</td><td>${echapper(prix(p.long, g))} par jour</td><td>${echapper(prix(p.court, g))} par jour</td><td class="t-petit">${enVigueur && p.debut === enVigueur.debut ? '<span class="grille-en-vigueur">En vigueur</span>' : (p.debut > (enVigueur ? enVigueur.debut : '') ? '<span class="t-3">À venir</span>' : '<span class="t-3">Passée</span>')}</td></tr>`).join('')}</tbody>
     </table>
   </section>`;
 };
@@ -340,7 +340,7 @@ const ligneEquipe = (a, orgs, admin = true) => {
   const details = [
     effet ? `À partir du ${effet}` : '',
     p ? periodeTexte(p).replace(/^./, (c) => c.toUpperCase()) : '',
-    r ? `grille : ${montantHT(r.long) || '-'} long · ${montantHT(r.court) || '-'} court · seuil ${pluriel(r.seuilMois, 'mois', 'mois')}` : '',
+    r ? `grille : ${prix(r.long, magasin.lire(K.tarifs)) || '-'} long · ${prix(r.court, magasin.lire(K.tarifs)) || '-'} court · seuil ${pluriel(r.seuilMois, 'mois', 'mois')}` : '',
     cibleTexte(a, orgs),
     estPubliee(a) ? (enDate(a.publieLe) ? `publiée le ${dateCourte(a.publieLe)}` : 'publiée') : '',
   ].filter(Boolean);

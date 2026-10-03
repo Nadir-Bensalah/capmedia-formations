@@ -127,7 +127,9 @@ const compter = () => {
   const demandesDeProjet = (magasin.lire(K.demandesProjet) || []).length;
   /* Les annonces de Capmedia publiées depuis sa dernière lecture. */
   const annoncesNeuves = annoncesNonLues(magasin.lire(K.annonces) || [], profil);
-  return { projets, attente, nonLus, profil, scenariosDuClient, parcoursDuClient, forfaits, maintenanceConnue, campagnesEnCours, demandesDeProjet, annoncesNeuves };
+  /* Toutes ses annonces : le chiffre reste, sans fond une fois lues. */
+  const annoncesTotal = (magasin.lire(K.annonces) || []).length;
+  return { projets, attente, nonLus, profil, scenariosDuClient, parcoursDuClient, forfaits, maintenanceConnue, campagnesEnCours, demandesDeProjet, annoncesNeuves, annoncesTotal };
 };
 
 /* Le projet où l'on se trouve : /projets/{p}/..., /messages/{p}, ou une
@@ -220,7 +222,7 @@ const entreesProjet = (p, { attente, nonLusP }) => {
 };
 
 const construireNavigation = () => {
-  const { projets, attente, profil, demandesDeProjet, annoncesNeuves } = compter();
+  const { projets, attente, profil, demandesDeProjet, annoncesNeuves, annoncesTotal } = compter();
   const actifs = projets.filter((p) => !p.archive);
   const enCours = actifs.filter(projetEstActif);
   const uid = session.utilisateur.uid;
@@ -253,7 +255,7 @@ const construireNavigation = () => {
         { chemin: '/parametres', libelle: 'Paramètres', icone: 'parametres' },
         /* Ce que Capmedia annonce (nouveautés, tarifs, congés), après les
            paramètres ; le badge compte ce qui n'a pas été lu. */
-        { chemin: '/annonces', libelle: 'Annonces', icone: 'porteVoix', compte: { total: 0, neuf: annoncesNeuves } },
+        { chemin: '/annonces', libelle: 'Annonces', icone: 'porteVoix', compte: { total: annoncesTotal, neuf: annoncesNeuves } },
       ],
     },
   ]);

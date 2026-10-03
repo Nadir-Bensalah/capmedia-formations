@@ -11,7 +11,7 @@
    ========================================================================== */
 
 import { enDate, montantHT, projetEstActif } from './noyau.js';
-import { grilleDe, periodeA, projetLong, tjmA, debutProjet as debutDeLaGrille } from './tarifs.js';
+import { grilleDe, periodeA, projetLong, tjmA, debutProjet as debutDeLaGrille, prix } from './tarifs.js';
 
 /* Le repère de chaque type : un mot, une teinte douce (fond pâle, texte de
    la même famille). Jamais de pictogramme dans une pastille. */
@@ -106,15 +106,15 @@ export const verdictTarif = (a, p, grille, { aujourdHui = new Date() } = {}) => 
   const tjmAvant = tjmA(grille, { long: projetLong(p, grille, jour), date: jour });
   if (tjm === null) return null;
   const debutJour = minuit(debut);
-  const evolution = tjmAvant === null || tjmAvant === tjm ? `reste à ${montantHT(tjm)}` : `passe de ${montantHT(tjmAvant)} à ${montantHT(tjm)}`;
+  const evolution = tjmAvant === null || tjmAvant === tjm ? `reste à ${prix(tjm, grille)}` : `passe de ${prix(tjmAvant, grille)} à ${prix(tjm, grille)}`;
   const phrases = phrasesTarif(a);
   const remplir = (modele) => modele
     .replaceAll('{projet}', p.nom || 'sans nom')
     .replaceAll('{demarrage}', debutJour > jour ? `début prévu le ${dateFr(debutJour)}` : `commencé le ${dateFr(debutJour)}`)
     .replaceAll('{debut}', dateFr(debutJour))
     .replaceAll('{evolution}', evolution)
-    .replaceAll('{tjmAvant}', montantHT(tjmAvant))
-    .replaceAll('{tjm}', montantHT(tjm))
+    .replaceAll('{tjmAvant}', prix(tjmAvant, grille))
+    .replaceAll('{tjm}', prix(tjm, grille))
     .replaceAll('{date}', dateFr(effet))
     .replaceAll('{seuil}', String(grilleDe(grille).seuilMois));
   return { projet: p.id, nom: p.nom || '', debut: debutJour, long, tjm, tjmAvant, phrase: remplir(long ? phrases.texteLong : phrases.texteCourt) };

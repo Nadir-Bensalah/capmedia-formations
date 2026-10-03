@@ -15,14 +15,30 @@
    suivante. « long » : projet de plus de seuilMois mois ; « court » sinon.
    ========================================================================== */
 
+/* Capmedia est une micro-entreprise : franchise en base de TVA, le prix
+   affiché est le prix payé (tva 0). Aujourd'hui 380 € par jour pour tous
+   les projets ; au 1er janvier 2027, 420 € projet long et 480 € projet
+   court. */
 export const GRILLE_DEFAUT = {
   seuilMois: 3,
-  tva: 20,
+  tva: 0,
   devise: 'EUR',
   periodes: [
-    { debut: '2026-01-01', long: 380, court: 420 },
+    { debut: '2026-01-01', long: 380, court: 380 },
     { debut: '2027-01-01', long: 420, court: 480 },
   ],
+};
+
+export const MENTION_FRANCHISE = 'TVA non applicable, article 293 B du CGI';
+
+/** Sans TVA (franchise en base) : le prix affiché est le prix payé. */
+export const franchise = (grille) => grilleDe(grille).tva === 0;
+
+/** Un prix lisible : « 380 € » en franchise, « 380 € HT » sinon. */
+export const prix = (valeur, grille) => {
+  if (typeof valeur !== 'number' || !Number.isFinite(valeur)) return '';
+  const n = `${Math.round(valeur).toLocaleString('fr-FR')} €`.replace(/\u202f|\u00a0/g, ' ');
+  return franchise(grille) ? n : `${n} HT`;
 };
 
 const enDateLocale = (iso) => { const [a, m, j] = String(iso || '').split('-').map(Number); return a && m && j ? new Date(a, m - 1, j) : null; };
@@ -77,6 +93,7 @@ export const tjmA = (grille, { long, date = new Date() }) => {
 export const montants = (jours, tjm, grille) => {
   const ht = Math.round((Number(jours) || 0) * (Number(tjm) || 0));
   const taux = grilleDe(grille).tva;
+  /* En franchise : pas de TVA, le hors taxes est le prix payé. */
   const tva = Math.round(ht * taux / 100);
   return { ht, tva, ttc: ht + tva, taux };
 };

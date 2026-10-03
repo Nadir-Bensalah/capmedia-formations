@@ -83,7 +83,7 @@ const axe = (id, o) => poser(`${AXES}/${id}`, {
   ...(o.jours !== undefined ? { jours: Number.isInteger(o.jours) ? I(o.jours) : D(o.jours) } : {}),
   etat: S(o.etat || 'propose'), publication: S(o.publication || 'publiee'), publieLe: NUL, ordre: I(o.ordre || 1), devis: S(''), reponse: NUL, cree: T(new Date()), maj: T(new Date()),
 });
-const grille = (periodes) => poser('reglages/tarifs', { seuilMois: I(3), tva: I(20), devise: S('EUR'), periodes: L(periodes.map((p) => M({ debut: S(p[0]), long: I(p[1]), court: I(p[2]) }))), maj: T(new Date()) });
+const grille = (periodes, tva = 20) => poser('reglages/tarifs', { seuilMois: I(3), tva: I(tva), devise: S('EUR'), periodes: L(periodes.map((p) => M({ debut: S(p[0]), long: I(p[1]), court: I(p[2]) }))), maj: T(new Date()) });
 const DEUX_PERIODES = [['2026-01-01', 380, 420], ['2027-01-01', 420, 480]];
 const demandes = async () => (await docs('documents?pageSize=300')).filter((d) => str(d, 'origine') === 'panier');
 const notifs = async (uid, titre) => (await docs(`boites/${uid}/notifications?pageSize=300`)).filter((n) => str(n, 'titre') === titre);
@@ -95,7 +95,7 @@ const lireModale = async (p) => p.evaluate(() => {
   if (!voile) return null;
   const periodes = Array.from(voile.querySelectorAll('[data-panier-periode]')).map((b) => ({
     debut: b.dataset.panierPeriode, titre: b.querySelector('.panier-periode-titre').textContent, tjm: b.querySelector('.panier-periode-tjm').textContent,
-    ht: b.querySelector('[data-panier-ht]').textContent, tva: b.querySelector('[data-panier-tva]').textContent, ttc: b.querySelector('[data-panier-ttc]').textContent,
+    ht: (b.querySelector('[data-panier-ht]') || {}).textContent || '', tva: (b.querySelector('[data-panier-tva]') || {}).textContent || '', ttc: (b.querySelector('[data-panier-ttc]') || {}).textContent || '',
   }));
   return { lignes: Array.from(voile.querySelectorAll('[data-panier-ligne]')).map((l) => l.dataset.panierLigne), jours: (voile.querySelector('[data-panier-jours]') || {}).textContent || '', periodes, texte: voile.textContent };
 });
@@ -208,6 +208,12 @@ const ajouter = async (p, id) => {
   await pause(1500);
   m = await ouvrirModale(page);
   verifier(m && m.periodes.length === 1 && /Estimation/.test(m.periodes[0].titre) && !/1er janvier/.test(m.texte), 'sans période suivante annoncée : une seule estimation', m && m.periodes.map((x) => x.titre).join(' | '));
+  await fermerModale(page);
+  /* Micro-entreprise (03/10) : franchise de TVA, le prix affiché est le prix payé. */
+  await grille([['2026-01-01', 380, 380], ['2027-01-01', 420, 480]], 0);
+  await pause(1500);
+  m = await ouvrirModale(page);
+  verifier(m && !/TTC|TVA 20|Hors taxes/.test(m.texte) && /TVA non applicable, article 293 B du CGI/.test(m.texte) && /380 € par jour/.test(m.texte.replace(/\s+/g, ' ').replace(/[\u202f\u00a0]/g, ' ')), 'en franchise de TVA : un seul total, sans HT ni TTC, avec la mention légale', m && m.texte.slice(0, 200));
   await fermerModale(page);
   await grille(DEUX_PERIODES);
   await pause(1500);
