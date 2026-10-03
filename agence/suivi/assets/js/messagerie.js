@@ -45,7 +45,7 @@ const deMoi = (m, uid) => Boolean(m && m.de && m.de.uid === uid);
 export const nomAuteur = (m, uid) => {
   if (!m || !m.de) return '';
   if (m.de.uid === uid) return 'Vous';
-  return m.de.nom || (m.de.cote === 'equipe' ? 'Capmedia' : 'Client');
+  return m.de.nom || ({ equipe: 'Capmedia', testeur: 'Testeur' }[m.de.cote] || 'Client');
 };
 
 /** Un extrait d'une ligne : le texte, sinon ce que portent les pièces. */
@@ -104,9 +104,10 @@ const citationHtml = (m, tous, uid) => {
 /**
  * Un message du fil, avec ses gestes. `classe` : « bulle-message » ou
  * « fil-message ». `tous` : les messages chargés, pour lire une citation.
+ * `transformer: false` : pas de « En faire une demande » (un fil hors projet).
  */
-export const messageDuFil = (m, { uid, equipe, classe, tous }) => {
-  const transformer = vientDEnFace(m, { uid, equipe })
+export const messageDuFil = (m, { uid, equipe, classe, tous, transformer: avecDemande = true }) => {
+  const transformer = avecDemande && vientDEnFace(m, { uid, equipe })
     ? `<button class="bulle-action" type="button" data-transformer="${echapper(m.id || '')}" aria-label="${equipe ? 'En faire une demande' : 'En faire un ticket'}" data-astuce="${equipe ? 'En faire une demande' : 'En faire un ticket'}">${icone('sparkle')}</button>`
     : '';
   const gestes = m.supprime ? '' : `<div class="message-gestes">${transformer}<button class="bulle-action" type="button" data-menu-message aria-haspopup="menu" aria-label="Réagir, répondre et autres actions" data-astuce="Réagir, répondre">${icone('points')}</button></div>`;
@@ -272,10 +273,12 @@ export const brancherAppuiLong = (racine, selecteur, action) => {
  * Branche sur `racine` le bouton « Plus d'actions », les réactions, les
  * citations et l'appui long. `c` : { uid, equipe, session, pid(), trouver(id),
  * repondre(m), modifier(m), transformer(ancre, m) | null, allerA(id) }.
+ * `c.fil` (facultatif) : les écritures d'un autre fil que celui du projet
+ * (filDeMessages, donnees.js), comme la conversation d'un testeur.
  * Rend le retrait.
  */
 export const brancherGestesMessages = (racine, c) => {
-  const reagir = (m, cle, oui) => ecrire.reagir(c.session, c.pid(), m.id, cle, oui).catch((e) => toast(lisible(e), 'erreur'));
+  const reagir = (m, cle, oui) => (c.fil ? c.fil.reagir(m.id, cle, oui) : ecrire.reagir(c.session, c.pid(), m.id, cle, oui)).catch((e) => toast(lisible(e), 'erreur'));
   const supprimer = async (m) => {
     const ok = await confirmer({
       titre: 'Supprimer ce message ?',
@@ -286,7 +289,7 @@ export const brancherGestesMessages = (racine, c) => {
       danger: true,
     });
     if (!ok) return;
-    try { await ecrire.supprimerMessage(c.pid(), m.id); } catch (e) { toast(lisible(e), 'erreur'); }
+    try { await (c.fil ? c.fil.supprimer(m.id) : ecrire.supprimerMessage(c.pid(), m.id)); } catch (e) { toast(lisible(e), 'erreur'); }
   };
   const actions = (m) => ({
     uid: c.uid,

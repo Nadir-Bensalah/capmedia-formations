@@ -33,6 +33,7 @@ import { ouvrirFiche, consignerAppareil } from './fiche-testeur.js';
 import { monterBulleTesteur } from './bulle-testeur.js';
 import { squelette } from './ui.js';
 import { definirRetoucheAriane } from './coquille.js';
+import { demarrerPush } from './notifications-push.js';
 
 /* Le testeur dit « iPhone », jamais « iOS », comme le client du Hub (03/10) :
    les libellés partagés avec le Cockpit prennent son mot ici seulement. */
@@ -1520,6 +1521,9 @@ const monter = async () => {
      rien ne doit passer devant elle. */
   const monterBulle = () => { try { bulle = monterBulleTesteur({ testeur }); } catch (e) { console.warn('[testeur] bulle non montée', e); } };
   if (fiche) fiche.then(monterBulle); else monterBulle();
+  /* Les notifications push : la proposition après son premier message, le
+     clic sur une notification qui ouvre la bulle (notifications-push.js). */
+  demarrerPush({ session: sess, role: 'testeur' });
   document.addEventListener('suivi:accueil-revoir', () => lancerAccueil(testeur, { demande: true }));
   majNavigation();
   definir(Object.keys(PAGES).map((chemin) => ({ chemin, vue: () => { rendre(testeur); } })), { defaut: '/', cible: vue });

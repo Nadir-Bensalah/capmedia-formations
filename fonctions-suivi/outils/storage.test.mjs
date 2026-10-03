@@ -307,6 +307,35 @@ await doit('L équipe efface un fichier du projet', deleteObject(ref(equipe(), `
 if (/auteurDuFichier\(projetId, fichierId\)/.test(readFileSync(new URL('../../suivi/storage.transition.rules', import.meta.url), 'utf8'))) { ok += 1; console.log('  ok     la règle « retirer le sien » est aussi dans storage.transition.rules'); }
 else { ecarts.push('storage.transition.rules n a pas la règle « retirer le sien »'); console.log('  ÉCART  storage.transition.rules n a pas la règle « retirer le sien »'); }
 
+console.log('\n== La conversation d un testeur avec l équipe (octobre 2026)');
+/* Le testeur joint une capture dans SA conversation, en disant qu'elle est
+   de lui (métadonnée « par ») ; l'équipe la lit et en joint aussi. Un autre
+   testeur, un client, un visiteur ne lisent rien ; un testeur retiré non
+   plus ; personne d'autre que l'équipe ne remplace ni n'efface. */
+const parMoi = (uid) => ({ contentType: 'image/png', customMetadata: { par: uid } });
+await env.withSecurityRulesDisabled(async (ctx) => {
+  await setDoc(doc(ctx.firestore(), 'testeurs/st-retire'), { prenom: 'Retiré', actif: false, projets: [P] });
+  await uploadString(ref(ctx.storage(), 'conversationsTesteurs/st-testeur/equipe.png'), 'x', 'raw', parMoi('st-agent'));
+});
+const retire = () => env.authenticatedContext('st-retire', jeton('st-retire', { testeur: true })).storage();
+await doit('Le testeur joint une capture à sa conversation', uploadString(ref(testeur(), 'conversationsTesteurs/st-testeur/capture.png'), 'x', 'raw', parMoi('st-testeur')));
+await refuse('mais pas sans dire qu elle est de lui', uploadString(ref(testeur(), 'conversationsTesteurs/st-testeur/anonyme.png'), 'x', 'raw', png));
+await refuse('ni au nom d un autre', uploadString(ref(testeur(), 'conversationsTesteurs/st-testeur/faux.png'), 'x', 'raw', parMoi('st-agent')));
+await refuse('ni dans la conversation d un autre testeur', uploadString(ref(intrus(), 'conversationsTesteurs/st-testeur/x.png'), 'x', 'raw', parMoi('st-intrus')));
+await refuse('ni un exécutable', uploadString(ref(testeur(), 'conversationsTesteurs/st-testeur/x.exe'), 'x', 'raw', { contentType: 'application/x-msdownload', customMetadata: { par: 'st-testeur' } }));
+await doit('Il lit la pièce de l équipe', getBytes(ref(testeur(), 'conversationsTesteurs/st-testeur/equipe.png')));
+await refuse('Un autre testeur ne la lit pas', getBytes(ref(intrus(), 'conversationsTesteurs/st-testeur/equipe.png')));
+await refuse('ni un client', getBytes(ref(client(), 'conversationsTesteurs/st-testeur/equipe.png')));
+await refuse('ni un testeur retiré, même dans son dossier', uploadString(ref(retire(), 'conversationsTesteurs/st-retire/x.png'), 'x', 'raw', parMoi('st-retire')));
+await refuse('Le testeur ne parcourt pas le dossier', listAll(ref(testeur(), 'conversationsTesteurs/st-testeur')));
+await refuse('Le testeur n efface pas une pièce', deleteObject(ref(testeur(), 'conversationsTesteurs/st-testeur/capture.png')));
+await ecrasement('ni n écrase celle de l équipe', uploadString(ref(testeur(), 'conversationsTesteurs/st-testeur/equipe.png'), 'y', 'raw', parMoi('st-testeur')));
+await doit('L équipe lit la capture du testeur', getBytes(ref(equipe(), 'conversationsTesteurs/st-testeur/capture.png')));
+await doit('L équipe joint une pièce dans sa conversation', uploadString(ref(equipe(), 'conversationsTesteurs/st-testeur/reponse.png'), 'x', 'raw', parMoi('st-agent')));
+await doit('L équipe efface une pièce', deleteObject(ref(equipe(), 'conversationsTesteurs/st-testeur/reponse.png')));
+if (/match \/conversationsTesteurs\/\{testeurId\}\/\{nom\}/.test(readFileSync(new URL('../../suivi/storage.transition.rules', import.meta.url), 'utf8'))) { ok += 1; console.log('  ok     la règle des conversations de testeurs est aussi dans storage.transition.rules'); }
+else { ecarts.push('storage.transition.rules n a pas la règle des conversations de testeurs'); console.log('  ÉCART  storage.transition.rules n a pas la règle des conversations de testeurs'); }
+
 console.log(`\n${ok} contrôle(s) conforme(s)${ecarts.length ? `, ${ecarts.length} ÉCART(S) :\n  - ${ecarts.join('\n  - ')}` : ''}`);
 await env.cleanup();
 process.exit(ecarts.length ? 1 : 0);

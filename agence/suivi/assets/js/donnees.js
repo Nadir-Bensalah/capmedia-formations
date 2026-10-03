@@ -566,6 +566,30 @@ export const prochainIdPlan = (sid, aspect, aspects) => {
   return `${prefixe}${String(max + 1).padStart(3, '0')}`;
 };
 
+/* Les écritures d'un fil de messages, où qu'il vive : la conversation d'un
+   projet (projets/{p}/messages) ou celle d'un testeur avec l'équipe
+   (conversationsTesteurs/{uid}/messages). Les mêmes formes partout, que
+   les mêmes règles tiennent : `reponseA` borné, date du serveur, une
+   suppression qui vide le message sans l'effacer. `de` : { uid, nom, cote }. */
+const NOM_PAR_COTE = { equipe: 'Capmedia', client: 'Client', testeur: 'Testeur' };
+export const filDeMessages = (segments, de = null) => {
+  const ref = (mid) => doc(bdd, ...segments, mid);
+  return {
+    async envoyer(texte, pieces = [], reponseA = null) {
+      const message = { de: { uid: de.uid, nom: de.nom, cote: de.cote }, texte: String(texte || ''), pieces, date: serverTimestamp() };
+      if (reponseA && reponseA.id) {
+        message.reponseA = { id: String(reponseA.id), nom: String(reponseA.nom || '').slice(0, 120), extrait: String(reponseA.extrait || '').slice(0, 200) };
+      }
+      await addDoc(collection(bdd, ...segments), message);
+    },
+    modifier: (mid, texte) => updateDoc(ref(mid), { texte: String(texte || ''), modifie: serverTimestamp() }),
+    supprimer: (mid) => updateDoc(ref(mid), {
+      texte: '', pieces: [], supprime: serverTimestamp(), reactions: deleteField(), reponseA: deleteField(),
+    }),
+    reagir: (mid, cle, oui) => updateDoc(ref(mid), { [`reactions.${cle}_${de.uid}`]: oui ? (String(de.nom || '').trim() || NOM_PAR_COTE[de.cote] || 'Client').slice(0, 120) : deleteField() }),
+  };
+};
+
 export const ecrire = {
   /* --- Les demandes -------------------------------------------------- */
   async creerDemande(session, pid, d, pieces = []) {
@@ -630,32 +654,20 @@ export const ecrire = {
      mot inventé à la place. La règle l'accepte quand `pieces` n'est pas vide. */
   /* `reponseA` : le message auquel on répond ({ id, nom, extrait }), cité
      au-dessus du nouveau. */
-  async messageProjet(session, pid, texte, pieces = [], reponseA = null) {
-    const de = auteurDe(session);
-    const message = { de: { uid: de.uid, nom: de.nom, cote: de.cote }, texte: String(texte || ''), pieces, date: serverTimestamp() };
-    if (reponseA && reponseA.id) {
-      message.reponseA = { id: String(reponseA.id), nom: String(reponseA.nom || '').slice(0, 120), extrait: String(reponseA.extrait || '').slice(0, 200) };
-    }
-    await addDoc(col('projets', pid, 'messages'), message);
-  },
+  messageProjet: (session, pid, texte, pieces = [], reponseA = null) => filDeMessages(['projets', pid, 'messages'], auteurDe(session)).envoyer(texte, pieces, reponseA),
 
   /* L'auteur corrige son message : quinze minutes au plus après l'envoi
      (la règle le tient, avec l'heure du serveur). */
-  modifierMessage: (pid, mid, texte) => updateDoc(doc(bdd, 'projets', pid, 'messages', mid), { texte: String(texte || ''), modifie: serverTimestamp() }),
+  modifierMessage: (pid, mid, texte) => filDeMessages(['projets', pid, 'messages']).modifier(mid, texte),
 
   /* L'auteur supprime son message : il reste à sa place, vidé. Le serveur
      efface ses pièces du stockage et son extrait partout où il était cité
      (hubMessageProjetModifie). */
-  supprimerMessage: (pid, mid) => updateDoc(doc(bdd, 'projets', pid, 'messages', mid), {
-    texte: '', pieces: [], supprime: serverTimestamp(), reactions: deleteField(), reponseA: deleteField(),
-  }),
+  supprimerMessage: (pid, mid) => filDeMessages(['projets', pid, 'messages']).supprimer(mid),
 
   /* Une réaction : la mienne, posée ou retirée. Une par personne et par
      emoji ; la clé porte mon identifiant, la valeur mon nom. */
-  reagir: (session, pid, mid, cle, oui) => {
-    const de = auteurDe(session);
-    return updateDoc(doc(bdd, 'projets', pid, 'messages', mid), { [`reactions.${cle}_${de.uid}`]: oui ? (String(de.nom || '').trim() || (de.cote === 'equipe' ? 'Capmedia' : 'Client')).slice(0, 120) : deleteField() });
-  },
+  reagir: (session, pid, mid, cle, oui) => filDeMessages(['projets', pid, 'messages'], auteurDe(session)).reagir(mid, cle, oui),
 
   /* L'accusé de lecture d'un projet : l'instant lu, et l'instant de la
      dernière frappe pour dire à l'autre qu'une réponse s'écrit. */

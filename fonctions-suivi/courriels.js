@@ -34,6 +34,10 @@ const SITE = 'https://capmedia.app';
 const BASE = `${SITE}/suivi/`;
 const SIGNATURE = 'Capmedia Digital';
 
+/* Les lettres aux testeurs portent la marque de leur espace, Capmedia Test :
+   un testeur n'a pas de projet chez nous, il a une mission de test. */
+const MARQUE_TEST = { signature: 'Capmedia Test', pied: 'Cet e-mail vous est adressé au titre de votre mission de test.' };
+
 /* --- Les liens directs, une seule source ------------------------------- */
 const lienEspace = () => BASE;
 const lienTicket = (ticketId) => `${BASE}ticket?t=${encodeURIComponent(String(ticketId || ''))}`;
@@ -249,8 +253,13 @@ const S = {
  *   citation string          un message repris tel quel, encadré
  *   bouton   { libelle, url } l'unique bouton bleu
  *   note     string          la précision en petits caractères
+ *   marque   { signature, pied } facultatif : la marque d'en-tête et la
+ *            phrase du pied, « Capmedia Test » pour les lettres aux testeurs
+ *            (MARQUE_TEST). Sans elle, Capmedia Digital et le suivi du projet.
  */
 function rendreGabarit(bloc) {
+  const signature = valeurTexte((bloc.marque || {}).signature).trim() || SIGNATURE;
+  const pied = valeurTexte((bloc.marque || {}).pied).trim() || 'Cet e-mail vous est adressé au titre du suivi de votre projet.';
   const faits = (bloc.faits || [])
     .map(([cle, valeur]) => [valeurTexte(cle), valeurTexte(valeur).trim()])
     .filter(([cle, valeur]) => cle && valeur);
@@ -291,7 +300,7 @@ function rendreGabarit(bloc) {
              style="border-collapse:collapse;width:100%;max-width:${LARGEUR}px;background:${TEINTES.lettre};border:1px solid ${TEINTES.trait};border-radius:6px;">
         <tr>
           <td style="padding:28px 32px 0;">
-            <p style="margin:0;font:600 14px/1 ${POLICE};color:${TEINTES.texte};letter-spacing:0.02em;">${echapper(SIGNATURE)}</p>
+            <p style="margin:0;font:600 14px/1 ${POLICE};color:${TEINTES.texte};letter-spacing:0.02em;">${echapper(signature)}</p>
           </td>
         </tr>
         <tr>
@@ -310,8 +319,8 @@ function rendreGabarit(bloc) {
              style="border-collapse:collapse;width:100%;max-width:${LARGEUR}px;">
         <tr>
           <td style="padding:20px 32px 0;">
-            <p style="${S.pied}">${echapper(SIGNATURE)} · <a href="${SITE}" style="${S.lienPied}">capmedia.app</a><br>
-            Cet e-mail vous est adressé au titre du suivi de votre projet.</p>
+            <p style="${S.pied}">${echapper(signature)} · <a href="${SITE}" style="${S.lienPied}">capmedia.app</a><br>
+            ${echapper(pied)}</p>
           </td>
         </tr>
       </table>
@@ -319,12 +328,12 @@ function rendreGabarit(bloc) {
   </tr>
 </table>`;
 
-  return { html, texte: rendreTexte(bloc, faits) };
+  return { html, texte: rendreTexte(bloc, faits, signature) };
 }
 
 /** La même lettre, en texte brut. Jamais vide : l'objet sert de secours. */
-function rendreTexte(bloc, faits) {
-  const lignes = [valeurTexte(SIGNATURE).toUpperCase(), ''];
+function rendreTexte(bloc, faits, signature = SIGNATURE) {
+  const lignes = [valeurTexte(signature).toUpperCase(), ''];
 
   const titre = valeurTexte(bloc.titre).trim();
   if (titre) lignes.push(titre, '');
@@ -347,7 +356,7 @@ function rendreTexte(bloc, faits) {
   const note = valeurTexte(bloc.note).trim();
   if (note) lignes.push(note, '');
 
-  lignes.push(`${SIGNATURE} · ${SITE}`);
+  lignes.push(`${signature} · ${SITE}`);
   return lignes.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
@@ -419,6 +428,7 @@ function invitationTesteur(v) {
       ],
       bouton: { libelle: 'Ouvrir mon espace de test', url: valeurTexte(v.lien) || lienEspace() },
       note: "Utilisez bien l'adresse à laquelle vous avez reçu cet e-mail : c'est elle qui ouvre votre espace. Vous ne voyez que les scénarios qui vous sont confiés, et vous n'avez accès à rien d'autre du projet.",
+      marque: MARQUE_TEST,
     }),
   };
 }
@@ -1218,11 +1228,40 @@ function messageTesteurReponse(v) {
   return {
     objet: `${valeurTexte(v.auteur) || 'Capmedia'} vous a répondu`,
     ...rendreGabarit({
-      titre: 'Une réponse de Capmedia',
+      titre: "Une réponse de l'équipe",
       intro: `${prenom ? `Bonjour ${prenom},` : 'Bonjour,'}\n\n${valeurTexte(v.auteur) || 'Capmedia'} vous a répondu dans votre espace de test.`,
       citation: valeurTexte(v.texte),
       bouton: { libelle: 'Ouvrir la conversation', url: valeurTexte(v.lien) || lienEspace() },
       note: 'Vous pouvez répondre depuis la bulle en bas à droite de votre espace.',
+      marque: MARQUE_TEST,
+    }),
+  };
+}
+
+/* La campagne commence : la lettre à chaque testeur qu'on y a mis, au
+   moment où elle s'ouvre (ou où on l'y ajoute, campagne déjà ouverte).
+   Jusqu'ici il ne recevait que l'invitation, parfois des semaines avant. */
+function campagneTesteur(v) {
+  const prenom = valeurTexte(v.prenom).trim();
+  const application = valeurTexte(v.application).trim();
+  const n = Number(v.scenarios) || 0;
+  const fin = valeurTexte(v.fin).trim();
+  return {
+    objet: application ? `Vous testez ${application} : votre campagne commence` : 'Votre campagne de tests commence',
+    ...rendreGabarit({
+      titre: 'Votre campagne commence',
+      intro: `${prenom ? `Bonjour ${prenom},` : 'Bonjour,'}\n\n`
+        + `La campagne « ${valeurTexte(v.titre) || 'de tests'} » est ouverte${application ? ` : vous testez ${application}` : ''}. `
+        + (n ? `${n > 1 ? `${n} scénarios vous attendent` : 'Un scénario vous attend'} dans votre espace.` : 'Vos scénarios arrivent dans votre espace : vous les verrez dès qu\'ils vous seront confiés.')
+        + "\n\nPour chacun, dites ce que vous avez obtenu : Réussi, Échec ou Sans objet. Un souci, une question : la bulle en bas à droite de votre espace vous met en contact avec l'équipe.",
+      faits: [
+        ['Application', application],
+        ['Vos scénarios', n ? String(n) : ''],
+        ['Fin prévue', fin],
+      ],
+      bouton: { libelle: 'Commencer mes tests', url: valeurTexte(v.lien) || lienEspace() },
+      note: "La connexion se fait avec l'adresse à laquelle vous avez reçu cet e-mail, et un code à six chiffres.",
+      marque: MARQUE_TEST,
     }),
   };
 }
@@ -1274,6 +1313,7 @@ const MODELES = {
   'testeur-remarque': testeurRemarque,
   'message-testeur': messageTesteur,
   'message-testeur-reponse': messageTesteurReponse,
+  'campagne-testeur': campagneTesteur,
   'invitation-testeur': invitationTesteur,
   'invitation-equipe': invitationEquipe,
   'ouverture': ouverture,
@@ -1322,6 +1362,7 @@ function rendre(modele, variables) {
 module.exports = {
   rendre,
   MODELES,
+  MARQUE_TEST,
   echapper,
   valeurTexte,
   dateFr,
