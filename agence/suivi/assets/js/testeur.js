@@ -188,7 +188,7 @@ const finTestHtml = () => {
   }
   if (toutFait()) {
     /* Un seul bouton à la fin : terminer ouvre l'avis tout seul. */
-    const avisDonne = Object.keys(etat.avis || {}).some((k) => k.startsWith('esthetique.'));
+    const avisDonne = aRepondu(etat.avis || {}, 'apres');
     return `<div class="fin-test">
       <h2>Tout est déroulé. Il reste à le dire.</h2>
       <p>Vos résultats partent à l'équipe et sont figés. Relisez d'abord vos échecs si vous avez un doute : après, vous ne pourrez plus les changer.</p>
@@ -399,7 +399,7 @@ const suiteHtml = () => {
   const p = etat.passages.get(s.ref);
   const rejouer = Boolean(p) && estEchec(p.resultat) && p.aRevoir === true;
   const entame = etat.scenarios.some((x) => etat.passages.has(x.ref));
-  const avantFait = Object.keys(etat.avis || {}).some((k) => k.startsWith('impression.'));
+  const avantFait = aRepondu(etat.avis || {}, 'avant');
   return `<section class="t-suite" aria-label="Votre prochain scénario">
     <p class="t-suite-sur">${rejouer ? 'À rejouer' : entame ? 'À vous' : 'Pour commencer'} · <span class="t-scenario-ref">${echapper(s.id || s.ref)}</span>${plateformeImposee(s) ? ` · sur ${echapper(PLATEFORMES_TESTEUR[s.plateforme] || s.plateforme)}` : ''}</p>
     <p class="t-suite-titre">${echapper(s.titre || '')}</p>
