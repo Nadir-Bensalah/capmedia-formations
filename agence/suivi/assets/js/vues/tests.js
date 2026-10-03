@@ -27,7 +27,10 @@ import {
   brancherPieces, lisible, menu, reglerBarreOnglets,
 } from '../ui.js';
 import * as magasin from '../magasin.js';
-import { K, ecrire, repartir, profilsTesteurs } from '../donnees.js';
+import {
+  K, ecrire, repartir, profilsTesteurs, scenariosHumains, chargeParTesteur, controler, clesDe, lireSectionsPlan,
+} from '../donnees.js';
+import { ordonnerSections } from './plan-tests.js';
 import { bdd, collection } from '../noyau.js';
 import { editer } from './editeurs.js';
 import { appelServeur } from '../serveur.js';
@@ -559,7 +562,7 @@ const vivierHtml = (d, { equipe }) => {
   const charge = (t) => {
     let du = 0;
     d.campagnes.filter((c) => c.statut === 'en-cours').forEach((c) => {
-      du += ((c.affectation || {})[t.id] || []).length;
+      du += clesDe(c.affectation, t.id).length;
     });
     return du;
   };
@@ -1139,7 +1142,7 @@ const avisHtml = (avis, { nommer }) => {
 const quandPassage = (x) => enDate(x.maj) || enDate(x.cree) || enDate(x.le);
 const resultatsHtml = (c, { dedans, nommer }) => {
   const passages = passagesDe(c).slice().sort((a, b) => (quandPassage(b) || 0) - (quandPassage(a) || 0));
-  const attendus = Object.values(c.affectation || {}).reduce((n, r) => n + r.length, 0);
+  const attendus = Object.keys(c.affectation || {}).reduce((n, uid) => n + clesDe(c.affectation, uid).length, 0);
   const compte = (r) => passages.filter((x) => verdictDe(x.resultat) === r).length;
   const parScenario = dedans.map((s) => ({ s, p: passages.filter((x) => x.scenario === s.ref) })).filter((x) => x.p.length);
   return `<div class="groupe" id="resultats">
@@ -1200,7 +1203,7 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
     const t = vivier.find((x) => x.id === id) || { id };
     const a = avis.find((x) => x.id === id) || {};
     return {
-      id, nom: nommer(id).nom, mobile: t.mobile || '', n: (affectation[id] || []).length, accueil: Boolean(a.accueil),
+      id, nom: nommer(id).nom, mobile: t.mobile || '', n: clesDe(affectation, id).length, accueil: Boolean(a.accueil),
       termine: enDate(a.termine), fin: enDate((c.fins || {})[id]), remarques: Array.isArray(a.remarques) ? a.remarques : [],
       noteTest: a.noteTest && a.noteTest.note ? a.noteTest : null,
     };
@@ -1304,7 +1307,7 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
         <span class="etiquette-champ">Le vivier</span>
         <div class="cases-blocs">${vivier.map((t) => `
           <label class="case"><input type="checkbox" data-testeur="${echapper(t.id)}" ${(c.testeurs || []).includes(t.id) ? 'checked' : ''}> ${echapper(t.prenom || t.email || t.id)}${t.mobile ? ` · ${echapper((PLATEFORMES_TEST[t.mobile] || {}).court || t.mobile)}` : ''}</label>`).join('')}</div>
-        <p class="aide">Chaque testeur couvre le web plus un mobile. Un scénario dont le comportement dépend du système part chez un testeur iOS et un testeur Android : c'est la seule chose qu'on paie deux fois.</p>
+        <p class="aide">Chacun fait son téléphone et le web. Un passage « humain seul » part chez deux testeurs, un passage « humain et robot » chez un seul. Répartir montre la charge de chacun avant d'enregistrer.</p>
       </div>` : ''}`,
     pied: `<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>
       <button class="btn btn-secondaire" type="button" data-voir-avis>${icone('coeur')} Leur avis</button>
@@ -1384,16 +1387,67 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
     });
   });
 
+  /* Répartir : la règle de repartition.js, sur le plan de tests du projet
+     (scénarios humains seuls). Rien n'est écrit avant l'aperçu : la charge
+     de chacun, vague par vague, ce qui ne trouve personne, et ce que
+     devient la répartition déjà en place. Les passages déjà consignés
+     restent chez leur auteur. Le serveur inscrit ensuite chaque testeur
+     au projet (hubCampagneEcrite), sans quoi il ne verrait rien. */
   const bouton = m.el.querySelector('[data-repartir]');
   if (bouton) bouton.addEventListener('click', () => agir(bouton, async () => {
     const ids = [...m.el.querySelectorAll('[data-testeur]')].filter((x) => x.checked).map((x) => x.dataset.testeur);
     if (!ids.length) { toast('Choisissez au moins un testeur.', 'erreur'); return; }
-    const gens = ids.map((id) => { const t = vivier.find((x) => x.id === id) || {}; return { id, mobile: t.mobile || 'ios' }; });
-    const plan = repartir(dedans, gens);
-    await ecrire.majCampagne(pid, c.id, { testeurs: ids, affectation: plan });
-    const n = Object.values(plan).reduce((a, r) => a + r.length, 0);
-    toast(`${n} passages répartis entre ${pluriel(ids.length, 'testeur', 'testeurs')}.`);
-    m.fermer(true);
+    const toutLePlan = scenariosHumains(ordonnerSections(await lireSectionsPlan(pid)));
+    if (!toutLePlan.length) { toast('Le plan de tests de ce projet n\'a aucun scénario pour un humain.', 'erreur'); return; }
+    /* Seulement ce que la campagne retient : ses sections, choisies dans
+       la feuille. Une campagne d'avant le plan se passe d'abord sur le plan. */
+    if (!estSurLePlan(c, toutLePlan)) { toast('Cette campagne reprend l\'ancienne bibliothèque : modifiez-la pour choisir les sections du plan, puis répartissez.', 'erreur'); return; }
+    const scenariosPlan = toutLePlan.filter((s) => (c.scenarios || []).includes(s.id));
+    const gens = ids.map((id) => {
+      const t = vivier.find((x) => x.id === id) || {};
+      const siennes = Array.isArray(t.plateformes) ? t.plateformes : [];
+      return { id, mobile: t.mobile || '', web: !siennes.length || siennes.includes('web') };
+    });
+    const garder = {};
+    passagesDe(c).forEach((x) => {
+      if (!x.testeur || !x.scenario || !x.plateforme) return;
+      (garder[x.testeur] = garder[x.testeur] || []).push(`${x.scenario}__${x.plateforme}`);
+    });
+    const { affectation, manques, ecartes, attendus } = repartir(scenariosPlan, gens, { garder });
+    const controle = controler(affectation, scenariosPlan);
+    /* Un manque se voit et s'accepte ; un écart du contrôle qui n'est pas un
+       manque annoncé (une clé en trop, une clé perdue) bloque l'écriture. */
+    const bloque = controle.enTrop.length > 0 || controle.oubliees.length + controle.malCouvertes.length !== manques.length;
+    const nom = (id) => nommer(id).nom;
+    const PLAT = { ios: 'iPhone', android: 'Android', web: 'Web' };
+    const charges = chargeParTesteur(affectation, scenariosPlan);
+    const total = charges.reduce((n, x) => n + x.total, 0);
+    const avant = Object.keys(c.affectation || {});
+    const dejaFaits = passagesDe(c).length;
+    const parPlateforme = (p) => manques.filter((x) => x.plateforme === p).length;
+    const corps = `
+      <p class="t-corps t-2" style="margin:0 0 14px">${pluriel(attendus, 'passage du plan', 'passages du plan')}, ${pluriel(total, 'affectation', 'affectations')} : un passage « humain seul » part chez deux testeurs, un passage « humain et robot » chez un seul. Chacun fait son téléphone et le web. La vague 1 réunit la priorité haute.</p>
+      <table class="tableau" data-apercu-charges>
+        <thead><tr><th>Testeur</th><th>Téléphone</th><th class="droite">Sur le téléphone</th><th class="droite">Web</th><th class="droite">Vague 1</th><th class="droite">Vague 2</th><th class="droite">Total</th></tr></thead>
+        <tbody>${charges.map((x) => `<tr data-charge="${echapper(x.id)}"><td>${echapper(nom(x.id))}</td><td>${echapper(PLAT[x.telephone] || '-')}</td><td class="droite">${x.telephoneN}</td><td class="droite">${x.webN}</td><td class="droite">${x.vague1}</td><td class="droite">${x.vague2}</td><td class="droite"><b>${x.total}</b></td></tr>`).join('')}</tbody>
+      </table>
+      ${ecartes.length ? `<p class="aide" data-apercu-ecartes style="margin-top:12px">Sans téléphone dans sa fiche, donc laissé de côté : ${ecartes.map((id) => echapper(nom(id))).join(', ')}.</p>` : ''}
+      ${manques.length ? `<p class="aide t-alerte" data-apercu-manques style="margin-top:12px">${pluriel(manques.length, 'passage n\'a', 'passages n\'ont')} pas tous ses testeurs${['ios', 'android', 'web'].filter(parPlateforme).map((p) => ` · ${PLAT[p]} : ${parPlateforme(p)}`).join('')}. Cochez un testeur de plus sur cette plateforme, ou acceptez ce manque.</p>` : ''}
+      ${!bloque ? '' : '<p class="aide t-alerte" data-apercu-controle style="margin-top:12px">Le contrôle a trouvé un écart dans ce calcul. Rien ne sera enregistré.</p>'}
+      ${avant.length ? `<p class="aide" data-apercu-ecrase style="margin-top:12px">Une répartition existe déjà (${pluriel(avant.length, 'testeur', 'testeurs')}${dejaFaits ? `, ${pluriel(dejaFaits, 'passage déjà consigné', 'passages déjà consignés')}, qui restent chez leur auteur` : ''}). Elle sera remplacée par celle-ci.</p>` : ''}`;
+    const apercu = modale({
+      titre: 'Aperçu de la répartition', sousTitre: c.titre || 'Campagne', large: true, corps,
+      pied: `<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button>
+        <button class="btn btn-principal" type="button" data-enregistrer-repartition ${bloque ? 'disabled' : ''}>${avant.length ? 'Remplacer la répartition' : 'Enregistrer la répartition'}</button>`,
+    });
+    const valider = apercu.el.querySelector('[data-enregistrer-repartition]');
+    valider.addEventListener('click', () => agir(valider, async () => {
+      await ecrire.majCampagne(pid, c.id, { testeurs: Object.keys(affectation), affectation });
+      toast(`${total} passages répartis entre ${pluriel(Object.keys(affectation).length, 'testeur', 'testeurs')}.`);
+      apercu.fermer(true);
+      m.fermer(true);
+    }));
+    await apercu.fin;
   }));
   return m.fin;
 };
