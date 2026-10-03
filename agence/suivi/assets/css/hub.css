@@ -2623,3 +2623,72 @@ p.axe-titre { cursor: default; }
   .panier-ligne-plateforme { grid-column: 1; }
   .panier-periodes--deux { grid-template-columns: minmax(0, 1fr); }
 }
+/* Annonces de Capmedia (03/10). Le type se lit à un mot teinté (fond pâle,
+   texte de la même famille), sans pictogramme ; l'encart du tarif est un
+   fond calme, sans bordure ni trait de côté. Le bandeau des congés est une
+   ligne discrète en tête de l'accueil et de la bulle. */
+.annonces-liste { display: flex; flex-direction: column; gap: var(--e-5, 20px); max-width: 760px; }
+.annonce { display: flex; flex-direction: column; gap: 10px; }
+.annonce-tete { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.annonce-type { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 980px; font: 600 12px/1.4 var(--police);
+  color: var(--an-t, var(--encre-2)); background: color-mix(in srgb, var(--an-t, var(--encre-3)) 13%, transparent); }
+.annonce-type--bleu { --an-t: var(--bleu); }
+.annonce-type--vert { --an-t: var(--vert); }
+.annonce-type--violet { --an-t: var(--violet-desk); }
+.annonce-type--ambre { --an-t: var(--ambre); }
+.annonce-type--ardoise { --an-t: #5B6B8C; }
+.annonce-type--ciel { --an-t: #0A84A8; }
+:root[data-theme="dark"] .annonce-type--ardoise { --an-t: #A3B1CC; }
+:root[data-theme="dark"] .annonce-type--ciel { --an-t: #5AC8E8; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .annonce-type--ardoise { --an-t: #A3B1CC; } :root:not([data-theme="light"]) .annonce-type--ciel { --an-t: #5AC8E8; } }
+.annonce-marque { font: 600 12px/1.4 var(--police); color: var(--encre-2); }
+.annonce-marque--neuve { color: var(--bleu); }
+.annonce-effet { margin-left: auto; font: 500 12.5px/1.4 var(--police); color: var(--encre-2); font-variant-numeric: tabular-nums; }
+.annonce-titre { margin: 0; font: var(--t-titre-3, 600 19px/1.3 var(--titre)); color: var(--encre); overflow-wrap: anywhere; }
+.annonce-texte { color: var(--encre-2); }
+.annonce-pied { margin: 2px 0 0; font: 400 12px/1.4 var(--police); color: var(--encre-3); }
+.annonce-tarifs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 4px; }
+.annonce-tarif { padding: 12px 14px; border-radius: 12px; background: color-mix(in srgb, var(--encre) 5%, transparent); }
+.annonce-tarif-qui { margin: 0; font: 500 12.5px/1.4 var(--police); color: var(--encre-2); }
+.annonce-tarif-prix { margin: 4px 0 0; font: 600 20px/1.2 var(--titre); color: var(--encre); font-variant-numeric: tabular-nums; }
+.annonce-tarif-prix span { font: 500 12.5px var(--police); color: var(--encre-2); }
+.annonce-encart { padding: 14px 16px; border-radius: 12px; background: color-mix(in srgb, var(--vert) 8%, transparent); }
+.annonce-verdicts { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.annonce-verdicts li { display: flex; flex-direction: column; gap: 3px; font: var(--t-petit); color: var(--encre); }
+.annonce-duree { font: 600 11.5px/1.4 var(--police); letter-spacing: .02em; color: var(--encre-2); }
+.annonce-duree--long { color: var(--vert); }
+.annonce-duree--court { color: var(--bleu); }
+.annonce-periode { padding: 12px 14px; border-radius: 12px; background: color-mix(in srgb, #5B6B8C 10%, transparent); }
+.annonce-periode-dates { margin: 0; font: 600 15px/1.4 var(--police); color: var(--encre); }
+.annonces-lignes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.annonce-ligne { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 14px 18px; border-radius: 14px; background: var(--fond-eleve); box-shadow: var(--ombre-sm); }
+.annonce-ligne--brouillon { background: var(--fond-2); box-shadow: none; }
+.annonce-ligne-corps { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.annonce-ligne-titre { margin: 0; font: var(--t-corps-fort); font-weight: 600; color: var(--encre); overflow-wrap: anywhere; }
+.annonce-ligne-gestes { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.annonce-cible-choix { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; }
+.bandeau-conge { margin: 0 0 var(--e-5, 20px); padding: 10px 14px; border-radius: 12px; font: 500 13.5px/1.5 var(--police); color: var(--encre);
+  background: color-mix(in srgb, #5B6B8C 11%, transparent); }
+.bandeau-conge .lien { margin-left: 6px; white-space: nowrap; }
+.bulle-conge { margin: 0; padding: 8px 14px; font: 500 12.5px/1.45 var(--police); color: var(--encre-2); background: color-mix(in srgb, #5B6B8C 10%, transparent); }
+@media (max-width: 720px) {
+  .annonce-ligne { grid-template-columns: minmax(0, 1fr); }
+  .annonce-ligne-gestes { justify-content: flex-start; }
+  .annonce-tarifs { grid-template-columns: minmax(0, 1fr); }
+  .annonce-effet { margin-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .annonce, .annonce-ligne { transition: none; animation: none; }
+}
+/* La grille de tarifs du Cockpit : un tableau sobre, la période en vigueur
+   dite en vert ; dans l'éditeur, une ligne par période. */
+.grille-tarifs { width: 100%; max-width: 760px; margin-top: 12px; border-collapse: collapse; font: 400 13.5px/1.5 var(--police); font-variant-numeric: tabular-nums; }
+.grille-tarifs th { text-align: left; font: 600 12px/1.4 var(--police); color: var(--encre-3); padding: 6px 10px; }
+.grille-tarifs td { padding: 9px 10px; color: var(--encre); }
+.grille-tarifs tbody tr:nth-child(odd) td { background: color-mix(in srgb, var(--encre) 4%, transparent); }
+.grille-tarifs tbody tr td:first-child { border-radius: 10px 0 0 10px; }
+.grille-tarifs tbody tr td:last-child { border-radius: 0 10px 10px 0; }
+.grille-en-vigueur { color: var(--vert); font-weight: 600; }
+.grille-periodes { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.grille-periode { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: 10px; align-items: end; }
+@media (max-width: 720px) { .grille-periode { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }

@@ -1755,3 +1755,46 @@ n'est pas réécrit sans `--ecraser`. `--convertir` fait de chaque
 suggestion l'axe `sugg-<id>` de sa plateforme (« general » si aucune ou
 plusieurs), publié si elle l'était, avec son prix et la réponse
 « intéressé ». Épreuves : qa-axes.cjs, regles.test.mjs (section axes).
+
+## 34. Les annonces de Capmedia (03/10/2026)
+
+Ce que Capmedia annonce à ses clients : une nouveauté, une compétence, un
+changement, un tarif, une indisponibilité (congés), une information.
+
+- **Données.** `annonces/{id}` : `type`, `titre`, `texte`, `dateEffet`
+  (« AAAA-MM-JJ » ou vide), `publication` (`brouillon` | `publiee`),
+  `publieLe`, `epinglee`, `cible { tous, organisations, uids }`, et selon le
+  type `tarif { texteLong, texteCourt }` (les deux phrases de l'encart,
+  aucun prix) ou `indisponibilite { du, au, message }`.
+  L'introduction de la page vit dans `reglages/annonces.intro`.
+- **Qui lit.** L'équipe lit tout ; l'administrateur seul écrit. Un client
+  connecté ne lit que les publiées qui le visent : `cible.tous`, ou son uid
+  dans `cible.uids`. Le Cockpit déplie les sociétés choisies en comptes à
+  l'enregistrement (membres de la société et de ses projets) : une personne
+  ajoutée plus tard à la société lit l'annonce une fois celle-ci
+  réenregistrée. Un testeur n'est pas un client. Deux requêtes côté client
+  (index composites dans `suivi/firestore.indexes.json`).
+- **Non lues.** `profils/{uid}.annoncesLues` (une date) : ouvrir la page
+  marque tout comme lu ; le badge du rail compte ce qui a été publié après.
+- **Tarif.** Les prix ne vivent pas dans l'annonce : ils viennent de la
+  grille unique `reglages/tarifs` (`tarifs.js`), réglée dans le Cockpit,
+  section « Grille de tarifs » de la page Annonces (admin ou finance).
+  L'encart de chaque client se calcule projet par projet avec `projetLong`
+  et `tjmA`, à la date d'effet, et dit l'avant et l'après (« reste à … »
+  ou « passe de … à … »). Les deux phrases se modifient dans le Cockpit
+  (repères `{projet}`, `{demarrage}`, `{evolution}`, `{tjm}`,
+  `{tjmAvant}`, `{date}`, `{seuil}`).
+- **Indisponibilité.** Un bandeau sur l'accueil et dans la bulle du client,
+  pendant la période et les sept jours d'avant.
+- **Notification.** `hubAnnonceEcrite` : à la publication, une notification
+  `annonce` dans la boîte de chaque client visé (projets ouverts), une seule
+  fois par annonce (marque `annoncesNotifiees/{id}`, serveur seul). Pas
+  d'e-mail.
+- **Première annonce.** `fonctions-suivi/outils/annonces-semer.mjs` crée en
+  brouillon « Nouvelle tarification au 1er janvier 2027 », sans prix, et
+  sème `reglages/tarifs` avec `GRILLE_DEFAUT` (380 / 420 € HT, puis
+  420 / 480 € HT au 1er janvier 2027). À blanc par défaut ; `--vrai` sur
+  l'émulateur ; `--vrai --production` sauvegarde d'abord `annonces/` et la
+  grille dans `~/Capmedia/sauvegardes/annonces/`.
+- **Épreuves.** `qa-annonces.cjs`, et la section « Les annonces de
+  Capmedia » de `regles.test.mjs`.

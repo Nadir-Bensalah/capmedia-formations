@@ -1100,6 +1100,63 @@ await refuse('Léa ne l annule pas', updateDoc(doc(lea(), 'documents/dem-1'), { 
 await doit('Camille l annule, datée par le serveur', updateDoc(doc(camille(), 'documents/dem-1'), { statut: 'annule', annuleLe: serverTimestamp() }));
 await refuse('une demande annulée ne revient pas', updateDoc(doc(camille(), 'documents/dem-1'), { statut: 'demande' }));
 await refuse('un devis envoyé ne s annule pas côté client', updateDoc(doc(camille(), 'documents/d-perime'), { statut: 'annule', annuleLe: serverTimestamp() }));
+console.log('\n== Les annonces de Capmedia');
+const annonce = (o = {}) => ({
+  type: 'information', titre: 'Nouveau : les applications de bureau', texte: 'Deux lignes.', dateEffet: '', publication: 'publiee', publieLe: serverTimestamp(),
+  epinglee: false, cible: { tous: true, organisations: [], uids: [] }, tarif: null, indisponibilite: null, cree: serverTimestamp(), maj: serverTimestamp(), ...o,
+});
+const tarif = { texteLong: '', texteCourt: 'Votre projet {projet} : {evolution}.' };
+const conge = { du: '2026-12-21', au: '2027-01-03', message: 'réponses sous 48 h' };
+await env.withSecurityRulesDisabled(async (ctx) => {
+  const b = ctx.firestore();
+  const fixe = (o) => ({ ...annonce(o), publieLe: Timestamp.now(), cree: Timestamp.now(), maj: Timestamp.now() });
+  await setDoc(doc(b, 'annonces/an-tous'), fixe({}));
+  await setDoc(doc(b, 'annonces/an-camille'), fixe({ cible: { tous: false, organisations: ['atelier-nord'], uids: [CAMILLE] } }));
+  await setDoc(doc(b, 'annonces/an-brouillon'), fixe({ publication: 'brouillon', publieLe: null }));
+});
+await doit('L administrateur crée une annonce dans les bornes', setDoc(doc(equipe(), 'annonces/an-neuve'), annonce()));
+await doit('et une annonce « tarif » avec ses deux phrases', setDoc(doc(equipe(), 'annonces/an-tarif'), annonce({ type: 'tarif', dateEffet: '2027-01-01', tarif })));
+await doit('ou sans phrase (celles de la page reviennent)', setDoc(doc(equipe(), 'annonces/an-tarif-nu'), annonce({ type: 'tarif', dateEffet: '2027-01-01' })));
+await doit('et une indisponibilité avec sa période', setDoc(doc(equipe(), 'annonces/an-conge'), annonce({ type: 'indisponibilite', indisponibilite: conge })));
+await refuse('mais pas de prix dans l annonce : ils vivent dans la grille', setDoc(doc(equipe(), 'annonces/an-x'), annonce({ type: 'tarif', tarif: { ...tarif, tjmLong: 420 } })));
+await refuse('ni des phrases de tarif sur une autre annonce', setDoc(doc(equipe(), 'annonces/an-x'), annonce({ tarif })));
+await refuse('ni une phrase de plus de 400 caractères', setDoc(doc(equipe(), 'annonces/an-x'), annonce({ type: 'tarif', tarif: { ...tarif, texteLong: 'x'.repeat(401) } })));
+await refuse('ni une période à l envers', setDoc(doc(equipe(), 'annonces/an-x'), annonce({ type: 'indisponibilite', indisponibilite: { ...conge, au: '2026-12-01' } })));
+await refuse('ni une date qui n en est pas une', setDoc(doc(equipe(), 'annonces/an-x'), annonce({ dateEffet: 'lundi' })));
+await refuse('ni un type inconnu', setDoc(doc(equipe(), 'annonces/an-x'), annonce({ type: 'promo' })));
+await refuse('ni sans titre', setDoc(doc(equipe(), 'annonces/an-x'), annonce({ titre: '' })));
+await refuse('ni un champ inconnu', setDoc(doc(equipe(), 'annonces/an-x'), annonce({ couleur: 'rouge' })));
+await refuse('ni une cible qui n est pas bornée', setDoc(doc(equipe(), 'annonces/an-x'), annonce({ cible: { tous: false, organisations: [], uids: [], role: 'admin' } })));
+await doit('L administrateur épingle et retire', updateDoc(doc(equipe(), 'annonces/an-neuve'), { epinglee: true, publication: 'brouillon', publieLe: null, maj: serverTimestamp() }));
+await doit('et supprime', deleteDoc(doc(equipe(), 'annonces/an-neuve')));
+await doit('Camille lit une annonce pour tous', getDoc(doc(camille(), 'annonces/an-tous')));
+await doit('et celle qui la nomme', getDoc(doc(camille(), 'annonces/an-camille')));
+await refuse('mais pas un brouillon', getDoc(doc(camille(), 'annonces/an-brouillon')));
+await refuse('Léa ne lit pas celle qui nomme Camille', getDoc(doc(lea(), 'annonces/an-camille')));
+await doit('Camille liste les publiées pour tous', getDocs(query(collection(camille(), 'annonces'), where('publication', '==', 'publiee'), where('cible.tous', '==', true))));
+await doit('et les publiées qui la nomment', getDocs(query(collection(camille(), 'annonces'), where('publication', '==', 'publiee'), where('cible.uids', 'array-contains', CAMILLE))));
+await refuse('mais pas toutes les annonces', getDocs(collection(camille(), 'annonces')));
+await refuse('ni les publiées sans dire lesquelles la visent', getDocs(query(collection(camille(), 'annonces'), where('publication', '==', 'publiee'))));
+await refuse('ni celles qui nomment Léa', getDocs(query(collection(camille(), 'annonces'), where('publication', '==', 'publiee'), where('cible.uids', 'array-contains', LEA))));
+await refuse('Un testeur ne lit pas une annonce pour tous', getDoc(doc(karim(), 'annonces/an-tous')));
+await refuse('Un anonyme non plus', getDoc(doc(anonyme(), 'annonces/an-tous')));
+await refuse('Camille n écrit pas d annonce', setDoc(doc(camille(), 'annonces/an-cliente'), annonce()));
+await refuse('ni ne retouche un titre', updateDoc(doc(camille(), 'annonces/an-tous'), { titre: 'Autre', maj: serverTimestamp() }));
+await refuse('ni ne supprime une annonce', deleteDoc(doc(camille(), 'annonces/an-tous')));
+await refuse('ni ne lit les marques de notification', getDoc(doc(camille(), 'annoncesNotifiees/an-tous')));
+await doit('Camille marque ses annonces lues (une date)', setDoc(doc(camille(), `profils/${CAMILLE}`), { annoncesLues: serverTimestamp(), maj: serverTimestamp() }, { merge: true }));
+await refuse('mais pas autre chose qu une date', setDoc(doc(camille(), `profils/${CAMILLE}`), { annoncesLues: ['an-tous'] }, { merge: true }));
+await refuse('ni dans le profil de Léa', setDoc(doc(camille(), `profils/${LEA}`), { annoncesLues: serverTimestamp() }, { merge: true }));
+await doit('Camille lit l introduction des annonces', getDoc(doc(camille(), 'reglages/annonces')));
+await refuse('mais ne l écrit pas', setDoc(doc(camille(), 'reglages/annonces'), { intro: 'Moi', maj: serverTimestamp() }));
+await doit('L administrateur écrit l introduction', setDoc(doc(equipe(), 'reglages/annonces'), { intro: 'Nos nouvelles.', maj: serverTimestamp() }));
+await refuse('mais pas plus de 600 caractères', setDoc(doc(equipe(), 'reglages/annonces'), { intro: 'x'.repeat(601), maj: serverTimestamp() }));
+const grilleTarifs = { seuilMois: 3, tva: 20, devise: 'EUR', periodes: [{ debut: '2026-01-01', long: 380, court: 420 }, { debut: '2027-01-01', long: 420, court: 480 }], maj: serverTimestamp() };
+await doit('L administrateur écrit la grille de tarifs', setDoc(doc(equipe(), 'reglages/tarifs'), grilleTarifs));
+await doit('Camille lit la grille (l encart de l annonce en a besoin)', getDoc(doc(camille(), 'reglages/tarifs')));
+await refuse('mais ne l écrit pas', setDoc(doc(camille(), 'reglages/tarifs'), grilleTarifs));
+await refuse('Un anonyme ne la lit pas', getDoc(doc(anonyme(), 'reglages/tarifs')));
+await refuse('Une grille avec un champ inconnu est refusée', setDoc(doc(equipe(), 'reglages/tarifs'), { ...grilleTarifs, remise: 5 }));
 
 console.log(`\n${ok} contrôle(s) conforme(s)${ecarts.length ? `, ${ecarts.length} ÉCART(S) :\n  - ${ecarts.join('\n  - ')}` : ''}`);
 await env.cleanup();
