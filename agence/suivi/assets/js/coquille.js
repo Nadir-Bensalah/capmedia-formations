@@ -82,12 +82,13 @@ export const monterCoquille = ({ session, role, groupes, sortie }) => {
         <header class="haut" id="haut">
           <button class="btn-icone btn-menu" type="button" id="bouton-menu" aria-label="Ouvrir la navigation" aria-controls="lat" aria-expanded="false">${icone('menu')}</button>
           <button class="btn-icone btn-deplier" type="button" id="bouton-deplier" aria-label="Déplier la navigation" data-astuce="Déplier">${icone('hub')}</button>
-          ${role === 'client' ? `<button class="btn btn-fantome btn-petit btn-retour" type="button" id="bouton-retour" hidden>${icone('retour')}<span>Retour</span></button>` : ''}
+          ${role === 'client' || role === 'testeur' ? `<button class="btn btn-fantome btn-petit btn-retour" type="button" id="bouton-retour" hidden>${icone('retour')}<span>Retour</span></button>` : ''}
           <nav class="ariane" id="ariane" aria-label="Fil d'Ariane"></nav>
           <div class="fin">
             ${suite ? '' : recherche}
             <button class="btn-icone" type="button" id="bouton-recherche-mobile" aria-label="Rechercher" style="display:inline-grid">${icone('recherche')}</button>
             ${role === 'client' ? '<span class="pastille-beta" data-beta data-astuce="Votre espace est en version bêta : il s\'améliore chaque semaine. Une remarque ? Écrivez-nous.">Bêta</span>' : ''}
+            ${role === 'testeur' ? '<span class="pastille-beta" data-beta data-astuce="Capmedia Test est en version bêta : il s\'améliore chaque semaine. Une remarque ? Écrivez à l\'équipe.">Bêta</span>' : ''}
             <button class="btn-icone" type="button" id="bouton-notifs" aria-label="Notifications" data-astuce="Notifications">${icone('notifications')}<span class="point masque" id="point-notifs"></span></button>
           </div>
         </header>
@@ -98,7 +99,7 @@ export const monterCoquille = ({ session, role, groupes, sortie }) => {
   rendreNavigation();
   brancherTiroir();
   brancherHaut();
-  if (role === 'client') brancherRetour();
+  if (role === 'client' || role === 'testeur') brancherRetour();
   brancherCompte();
   brancherNotifications();
   brancherPalette();
@@ -371,7 +372,7 @@ const brancherTiroir = () => {
   $('#bouton-deplier').addEventListener('click', () => plier(false));
 };
 
-/* Le retour, sur toutes les pages du client sauf l'accueil. Il revient à
+/* Le retour, sur toutes les pages du client et du testeur sauf l'accueil. Il revient à
    la page d'avant quand on l'a vue dans cette visite ; sinon (une adresse
    ouverte depuis un e-mail, un favori), il remonte d'un cran dans le fil
    d'Ariane, et au pire à l'accueil. Jamais hors de l'espace. */

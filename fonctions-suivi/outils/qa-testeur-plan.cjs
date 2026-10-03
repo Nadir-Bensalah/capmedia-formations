@@ -228,6 +228,8 @@ const fiche = async (page, cle) => {
   verifier(ecrit && fx.cree && fx.maj && !fx.le, 'avec cree et maj, sans l\'ancien « le »', Object.keys(fx).join(','));
   const apres = await attendre(async () => (await t.$eval('.tb-case[data-case="tp-compte-s-001__ios"]', (x) => x.dataset.e).catch(() => '')) === 'ok', 20, 500);
   verifier(apres, 'et la case passe au vert chez lui');
+  /* Le résultat posé ouvre la feuille du scénario suivant (lot parcours) : on la referme. */
+  if (await t.$('.modale--scenario')) { await t.keyboard.press('Escape'); await pause(600); }
   await t.click('[data-vue="liste"]').catch(() => {}); await pause(600);
   const liste = await t.evaluate(() => ({ titres: [...document.querySelectorAll('.bloc-tete')].map((h) => h.firstChild.textContent.trim()), filtre: ((document.querySelector('#f-bloc option') || {}).textContent || '').trim() }));
   verifier(liste.filtre === 'Toutes les sections', 'la vue Liste parle de sections', liste.filtre);

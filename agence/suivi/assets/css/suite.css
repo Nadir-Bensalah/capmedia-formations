@@ -970,6 +970,47 @@ main.porte { display: flex; flex-direction: column; align-items: center; justify
 
 .page--testeur > .encart, .page--testeur > .aide { margin-top: 18px; }
 
+/* Le geste suivant, juste sous la jauge (testeur.js, suiteHtml) : sur un
+   téléphone, il se voit sans défiler. Une carte, pas d'encadré. */
+.t-suite { margin: 18px 0 20px; padding: 16px 18px 18px; border-radius: var(--r-carte); background: var(--blanc); box-shadow: var(--ombre-sm), 0 0 0 1px var(--lisere-carte); }
+.t-suite-sur { margin: 0; font: 500 11.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--bleu); }
+.t-suite-sur .t-scenario-ref { color: inherit; }
+.t-suite-titre { margin: 6px 0 14px; font: 600 18px/1.3 var(--titre); letter-spacing: -.015em; text-wrap: pretty; }
+.t-suite-gestes { display: flex; gap: 10px; flex-wrap: wrap; }
+@media (max-width: 640px) { .t-suite-gestes .btn { flex: 1 1 100%; justify-content: center; height: 44px; } }
+.page--testeur > .fin-test { margin-top: 18px; }
+
+/* La plateforme : une vérification préremplie, dans l'en-tête et dans la
+   feuille d'un scénario quand il ne la porte pas lui-même. */
+.t-plateforme { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.t-plateforme-sur { font: 400 13px var(--police); color: var(--encre-2); }
+.t-plateforme--feuille { justify-content: center; margin: 16px 0 0; }
+.fs-plateforme { margin: 16px 0 0; text-align: center; font: 400 14px var(--police); color: var(--encre-2); }
+.fs-plateforme strong { color: var(--encre); font-weight: 600; }
+.fs-enchaine { margin: 0 0 8px; text-align: center; font: 500 13px var(--police); color: var(--vert); }
+
+.t-vues { margin: 0 0 16px; }
+.page--testeur > .testeur-chiffres { margin-top: 24px; }
+.page--testeur > .astuce-testeur { margin-top: 14px; }
+/* La case qui attend le testeur : un contour plein, lisible sur un
+   téléphone où le survol n'existe pas. */
+.tb--testeur .tb-case[data-suivant] { box-shadow: 0 0 0 2px var(--page), 0 0 0 4px var(--bleu); }
+
+/* Les captures d'un échec : de vraies vignettes et un bouton d'ajout, à la
+   place du champ fichier du navigateur. */
+.t-preuves { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
+.t-preuve { position: relative; display: grid; gap: 4px; min-width: 0; }
+.t-preuve img, .t-preuve-video { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 10px; background: var(--fond-2); display: grid; place-items: center; color: var(--encre-3); }
+.t-preuve-video svg { width: 24px; height: 24px; }
+.t-preuve-nom { font: 400 11.5px var(--police); color: var(--encre-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.t-preuve-retirer { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; border-radius: 50%; background: rgba(0, 0, 0, .62); color: #FFFFFF; }
+.t-preuve-retirer svg { width: 14px; height: 14px; }
+.t-preuve-ajout { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; aspect-ratio: 3 / 4; padding: 8px; border-radius: 10px; background: var(--fond-2); color: var(--encre-2); font: 500 12.5px/1.3 var(--police); text-align: center; cursor: pointer; transition: background .15s var(--courbe); }
+.t-preuve-ajout:hover { background: var(--actif); color: var(--encre); }
+.t-preuve-ajout:focus-within { outline: 2px solid var(--bleu); outline-offset: 2px; }
+.t-preuve-ajout svg { width: 20px; height: 20px; }
+.t-preuve-fichier { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; clip: rect(0 0 0 0); }
+
 .installations { display: grid; }
 .installation { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-top: 1px solid var(--trait-fin); }
 .installation:first-child { border-top: 0; }
@@ -1683,9 +1724,9 @@ a.coffre-lien:hover { color: var(--accent); }
 .accueil-mascotte--fin { width: 260px; height: 260px; margin: 0; }
 @keyframes mascotte-arrive { from { opacity: 0; transform: translateY(18px) scale(.86); } to { opacity: 1; transform: none; } }
 @keyframes mascotte-flotte { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
-.accueil-porte--hub .accueil-marque { margin-top: 6px; font: 600 22px var(--titre); letter-spacing: -.02em; color: var(--encre); }
-.accueil-porte--hub .accueil-marque span { margin-left: 9px; padding: 3px 11px; font-size: 13px; vertical-align: 3px; }
-.accueil-porte--hub h1 { margin-top: 18px; }
+.accueil-porte--hub .accueil-marque, .accueil-porte--test .accueil-marque { margin-top: 6px; font: 600 22px var(--titre); letter-spacing: -.02em; color: var(--encre); }
+.accueil-porte--hub .accueil-marque span, .accueil-porte--test .accueil-marque span { margin-left: 9px; padding: 3px 11px; font-size: 13px; vertical-align: 3px; }
+.accueil-porte--hub h1, .accueil-porte--test h1 { margin-top: 18px; }
 .accueil-appli { display: grid; justify-items: center; gap: 14px; }
 .accueil-appli-icone { display: grid; place-items: center; width: 132px; height: 132px; border-radius: 30px; overflow: hidden; background: var(--fond-2); box-shadow: 0 20px 44px rgba(0, 0, 0, .22), 0 2px 6px rgba(0, 0, 0, .12); }
 .accueil-appli-icone img { width: 100%; height: 100%; object-fit: cover; }
@@ -2088,3 +2129,14 @@ body:has(.bulle) #vue .page { padding-bottom: 104px; }
 /* Une modification ne joint pas de pièce : elle corrige le texte. */
 .composer.en-modification #zone-pieces, .bulle--modification .bulle-joindre, .bulle--modification #bulle-pieces { display: none; }
 
+
+/* ==========================================================================
+   L'espace Test au niveau du Hub (03/10) : les états en texte courant,
+   comme les cartes des plateformes. Un point de couleur douce, le mot en
+   gris ; jamais une pastille rouge pour un fait qui n'alarme personne.
+   ========================================================================== */
+.etat-courant { display: inline-flex; align-items: baseline; gap: 6px; font: 400 12.5px/1.4 var(--police); color: var(--encre-3); white-space: normal; text-align: right; }
+.etat-courant i { flex: none; width: 6px; height: 6px; border-radius: 50%; align-self: center; background: var(--encre-3); }
+.etat-courant--ambre i { background: var(--ambre); }
+.etat-courant--bleu i { background: var(--accent, var(--bleu)); }
+.etat-courant--vert i { background: var(--vert); }

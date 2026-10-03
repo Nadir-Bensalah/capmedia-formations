@@ -65,12 +65,14 @@ let page = null;
   verifier(await page.$(`[data-case="${second}"][data-verrou]`), 'le second est verrouillé tant que le premier n a pas de résultat');
   verifier(!(await page.$(`[data-case="${premier}"][data-verrou]`)), 'le premier est ouvrable');
   await page.click(`[data-case="${second}"]`); await pause(700);
-  verifier(new RegExp(`Déroulez d'abord ${premier}`).test(await toast(page)), 'toucher le second dit de dérouler le premier', await toast(page));
+  verifier(new RegExp(`${premier} d'abord`).test(await toast(page)), 'toucher le second dit de dérouler le premier', await toast(page));
   verifier(!(await page.$('.modale--scenario, .feuille')), 'et n ouvre pas sa feuille');
   await page.click('[data-sur="ios"]'); await pause(500);
   await page.click(`[data-case="${premier}"]`); await page.waitForSelector('[data-feuille-poser="ok"]', { timeout: 10000 });
   await page.click('[data-feuille-poser="ok"]'); await pause(1500);
   verifier(!(await page.$(`[data-case="${second}"][data-verrou]`)), 'le premier réussi, le second s ouvre');
+  /* Le résultat posé enchaîne sur la feuille du suivant : on la referme. */
+  if (await page.$('.modale--scenario')) { await page.keyboard.press('Escape'); await pause(600); }
   verifier(!(await page.$('[data-terminer]')), 'pas de bouton « J ai terminé » tant qu il reste des scénarios');
 
   console.log('\n== Tout déroulé : « J ai terminé »');

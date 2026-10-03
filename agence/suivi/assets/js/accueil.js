@@ -15,6 +15,8 @@
    ========================================================================== */
 
 import { echapper } from './noyau.js';
+import { icone } from './ui.js';
+import { systemeCourant, lienInstalleur } from './installer.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -36,6 +38,44 @@ export const logoHtml = (petit = false) => `<div class="accueil-logo${petit ? ' 
 
 export const paragraphes = (texte, max = 1) => String(texte || '').split(/\n{2,}/).map((x) => x.trim()).filter(Boolean).slice(0, max)
   .map((x) => `<p>${echapper(x).replace(/\n/g, '<br>')}</p>`).join('');
+
+/* La mascotte de Capmedia, la même pour le Hub et pour Test : elle accueille
+   sur la porte et dit « tout est prêt » au dernier écran. */
+export const mascotteHtml = (fin = false) => (fin
+  ? '<img class="accueil-mascotte accueil-mascotte--fin" src="./assets/img/hub-pret.png" alt="" width="260" height="260">'
+  : '<img class="accueil-mascotte" src="./assets/img/hub-bienvenue.png" alt="" width="220" height="220">');
+
+const NOMS_APPS = { hub: 'Capmedia Hub', test: 'Capmedia Test', cockpit: 'Capmedia Cockpit' };
+
+/* L'application de l'espace, pour qui peut l'installer (sur le web, depuis
+   un Mac ou un PC : l'appelant le vérifie par installable()). Le bouton vise
+   directement le bon fichier pour son système. `texte` : ce qu'elle apporte. */
+export const ecranInstallerApp = (app, { texte = 'Les notifications de votre ordinateur, à chaque nouveauté.' } = {}) => {
+  const systeme = systemeCourant();
+  const libelle = systeme === 'mac' ? 'Mac' : 'Windows';
+  const nom = NOMS_APPS[app] || NOMS_APPS.hub;
+  return {
+    cle: `application-${app}`,
+    visuel: `<div class="accueil-appli">
+        <span class="accueil-appli-icone accueil-appli-icone--app"><img src="./assets/img/app-${echapper(app)}.png" alt=""></span>
+        <p class="accueil-appli-nom">${echapper(nom)}</p>
+        <p class="accueil-appli-type">pour ${echapper(libelle)}</p>
+      </div>`,
+    texte: `<p class="surtitre">L'application</p>
+      <h2>Installez-la sur votre ${echapper(libelle)}</h2>
+      <p>${echapper(texte)}</p>
+      <p class="accueil-telecharger"><a class="btn btn-principal" href="${echapper(lienInstalleur(app, systeme))}" download data-installer="${echapper(app)}" data-systeme="${echapper(systeme)}">${icone(systeme === 'mac' ? 'apple' : 'composants')} Télécharger pour ${echapper(libelle)}</a></p>`,
+  };
+};
+
+/* Le dernier écran : « Tout est prêt », avec la mascotte. */
+export const ecranPret = ({ prenom = '', texte = 'Ces écrans se revoient depuis le menu de votre compte.' } = {}) => ({
+  cle: 'fin',
+  visuel: mascotteHtml(true),
+  texte: `<p class="surtitre">C'est fait</p>
+    <h2>Tout est prêt${prenom ? `, ${echapper(prenom)}` : ''}</h2>
+    <p>${echapper(texte)}</p>`,
+});
 
 /* Le chronomètre de démonstration : ce qu'il affiche en comptant. */
 const duree = (s) => {
