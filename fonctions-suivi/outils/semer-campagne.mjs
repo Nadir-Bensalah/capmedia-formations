@@ -1,9 +1,16 @@
 /* ==========================================================================
    CAPMEDIA CLIENT HUB · une campagne en cours, pour le banc
 
-   Ce qu'attendent qa-testeur et les suites de l'espace testeur : le plan
-   de tests importé sur « atelier », six testeurs au vivier, une campagne
-   « c-oct » EN COURS, et Karim avec 43 scénarios.
+   Ce qu'attendent qa-testeur et les suites de l'espace testeur : la
+   bibliothèque importée sur « atelier », et depuis le 03/10/2026 son plan
+   de tests (planTests), six testeurs au vivier, une campagne « c-oct »
+   EN COURS sur le plan, et une affectation au modèle commun
+   ({ telephone, web, cles, vague }) calculée par la vraie règle
+   (repartition.js). Le plan reprend la bibliothèque, une section par
+   bloc et un scénario par référence (identifiant du plan, la référence
+   dans « refs ») : un scénario
+   doublé (socle, transversal) devient « humain » seul, passé par deux
+   testeurs ; les autres « les-deux », passés par un seul.
 
    ÉMULATEUR SEULEMENT. Le script refuse de tourner sans
    FIRESTORE_EMULATOR_HOST : le 18/09/2026, un script lancé sans garde a
@@ -18,6 +25,7 @@ import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { getStorage } from 'firebase-admin/storage';
+import { repartir, scenariosHumains } from '../../agence/suivi/assets/js/repartition.js';
 
 if (!process.env.FIRESTORE_EMULATOR_HOST || !process.env.FIREBASE_AUTH_EMULATOR_HOST) {
   console.error('Refusé : FIRESTORE_EMULATOR_HOST et FIREBASE_AUTH_EMULATOR_HOST sont requis. Ce script ne touche que les émulateurs.');
@@ -70,16 +78,44 @@ for (const [email, prenom, mobile] of GENS) {
   uids.push(u.uid);
 }
 
-const refs = (await bdd.collection('projets/atelier/scenarios').get()).docs
+const biblio = (await bdd.collection('projets/atelier/scenarios').get()).docs
   .map((d) => ({ ref: d.id, ...d.data() })).filter((s) => s.actif !== false)
-  .sort((a, b) => (a.ordre || 0) - (b.ordre || 0)).map((s) => s.ref);
-const affectation = {};
-uids.forEach((u) => { affectation[u] = []; });
-affectation[uids[0]] = refs.slice(0, 43);
-refs.slice(43).forEach((r, i) => { affectation[uids[1 + (i % 5)]].push(r); });
+  .sort((a, b) => (a.ordre || 0) - (b.ordre || 0));
+
+/* Le plan, tiré de la bibliothèque : une section par bloc, dans l'ordre. */
+const DOUBLES = ['socle', 'transversal'];
+const sections = [];
+biblio.forEach((s) => {
+  let sec = sections.find((x) => x.bloc === s.bloc);
+  if (!sec) {
+    sec = { bloc: s.bloc, id: `banc-${s.bloc || 'divers'}`, groupe: 'fonctionnalites', ordre: sections.length + 1,
+      titre: s.blocLibelle || s.bloc || 'Divers', resume: 'Section du banc, tirée de la bibliothèque.',
+      plateformes: ['ios', 'android', 'web'], aspects: { fonctionnel: [], technique: [], ux: [], securite: [] } };
+    sections.push(sec);
+  }
+  /* L'identifiant suit la forme du plan (« section-f-001 ») : le testeur en
+     déduit la section à lire. La référence de la bibliothèque reste dans
+     « refs ». */
+  sec.aspects.fonctionnel.push({
+    id: `${sec.id}-f-${String(sec.aspects.fonctionnel.length + 1).padStart(3, '0')}`, titre: s.titre || s.ref, etapes: s.options || '', attendu: s.attendu || '',
+    plateformes: (s.plateformes && s.plateformes.length) ? s.plateformes : ['ios', 'android', 'web'],
+    type: 'normal', priorite: s.niveau === 'socle' ? 'haute' : 'moyenne', refs: [s.ref],
+    qui: DOUBLES.includes(s.niveau) ? 'humain' : 'les-deux', parcours: [],
+  });
+});
+const anciens = await bdd.collection('projets/atelier/planTests').get();
+for (const d of anciens.docs) await d.ref.delete();
+for (const { bloc, ...sec } of sections) await bdd.doc(`projets/atelier/planTests/${sec.id}`).set({ ...sec, maj: FieldValue.serverTimestamp() });
+await bdd.doc('projets/atelier/planTests/presentation').set({ genre: 'presentation', intro: 'Le plan du banc, tiré de la bibliothèque.', plateformes: ['ios', 'android', 'web'], aspects: [], maj: FieldValue.serverTimestamp() });
+
+/* La répartition, par la règle de la page. */
+const humains = scenariosHumains(sections);
+const refs = humains.map((s) => s.id);
+const { affectation, manques } = repartir(humains, GENS.map(([, , mobile], i) => ({ id: uids[i], mobile, web: true })));
+if (manques.length) { console.error(`Répartition incomplète : ${manques.length} passage(s) sans testeur.`); process.exit(1); }
 
 await bdd.doc('projets/atelier/campagnes/c-oct').set({
-  titre: 'Campagne du banc', statut: 'en-cours', testeurs: uids, scenarios: refs, affectation,
+  titre: 'Campagne du banc', statut: 'en-cours', testeurs: uids, scenarios: refs, plan: true, affectation,
   builds: { ios: '24', android: '31', web: 'qa-1.2.0' },
   /* Ce que le testeur lit dans « L'application » : de quoi découvrir, et
      de quoi installer. Des liens d'exemple, jamais de vrais. */
@@ -93,4 +129,4 @@ await bdd.doc('projets/atelier/campagnes/c-oct').set({
   fin: new Date(Date.now() + 10 * 24 * 3600 * 1000),
   cree: FieldValue.serverTimestamp(), maj: FieldValue.serverTimestamp(),
 });
-console.log(`${refs.length} scénarios, ${uids.length} testeurs, Karim en a ${affectation[uids[0]].length}, ${visuels.length} écran(s) déposé(s).`);
+console.log(`${sections.length} sections, ${refs.length} scénarios, ${uids.length} testeurs, Karim a ${affectation[uids[0]].cles.length} passages, ${visuels.length} écran(s) déposé(s).`);

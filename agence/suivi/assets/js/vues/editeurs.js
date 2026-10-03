@@ -19,6 +19,7 @@ import { icone, modale, confirmer, toast, lireForme, valider, obligatoire, longu
 import { appelServeur } from '../serveur.js';
 import * as magasin from '../magasin.js';
 import { K, ecrire, nouvelId, interneDuProjet, montantDe, horodatage } from '../donnees.js';
+import { scenariosHumainsDuPlan, estSurLePlan, sectionsCochees, scenariosAEcrire, clesAttendues, nombreDeCles, pretALancer, NOMS_PLATEFORMES } from '../campagne-plan.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 
@@ -497,7 +498,21 @@ const editeurs = {
      de dire « DI-15 est tombé trois fois sur quatre campagnes ». Une
      campagne qui posséderait ses scénarios obligerait à tout réécrire à
      chaque version, et perdrait l'histoire au passage. */
-  campagne: (env, { pid, fiche }) => {
+  campagne: (env, { pid, fiche, sections = [] }) => {
+    /* Le plan de tests, quand le projet en a un : la campagne y prend ses
+       scénarios d'humains, section par section. La bibliothèque ne sert
+       plus qu'aux projets qui n'ont pas encore de plan. Les sections
+       arrivent de la page des tests, déjà rangées. */
+    const humains = scenariosHumainsDuPlan(sections);
+    const surPlan = humains.length > 0;
+    const sectionsPlan = [];
+    humains.forEach((x) => {
+      let g = sectionsPlan.find((y) => y.cle === x.section);
+      if (!g) { g = { cle: x.section, libelle: x.sectionTitre, n: 0 }; sectionsPlan.push(g); }
+      g.n += 1;
+    });
+    const cochees = sectionsCochees(fiche, humains);
+    const ancienne = Boolean(fiche) && surPlan && !estSurLePlan(fiche, humains);
     /* L'équipe lit les scénarios en groupe, tous projets confondus : la
        clé par projet n'est alimentée que côté client. On prend la première
        qui répond, et on retient ceux de ce projet. */
@@ -512,6 +527,16 @@ const editeurs = {
       g.n += 1;
     });
     const choisis = new Set(fiche ? (fiche.scenarios || []) : tous.map((x) => x.ref));
+    /* Sans plan : un bloc est coché s'il porte au moins un scénario de la
+       campagne, et « socle seul » l'est si la campagne ne retient que des
+       scénarios doublés alors que ses blocs en ont d'autres. Avant, tout
+       était coché d'office : enregistrer la feuille remettait la campagne
+       sur tous les scénarios. */
+    const blocsCoches = new Set(tous.filter((x) => choisis.has(x.ref)).map((x) => x.bloc));
+    const doubleDe = (x) => Boolean((NIVEAUX_SCENARIO[x.niveau] || {}).double);
+    const socleCoche = Boolean(fiche) && choisis.size > 0
+      && tous.filter((x) => choisis.has(x.ref)).every(doubleDe)
+      && tous.some((x) => blocsCoches.has(x.bloc) && !doubleDe(x));
 
     return feuille({
       titre: fiche ? 'La campagne' : 'Nouvelle campagne',
@@ -543,7 +568,7 @@ const editeurs = {
           ${zone('atouts', 'Points forts', (fiche ? (fiche.atouts || []) : []).join('\n'), { facultatif: true, lignes: 3, placeholder: 'Un par ligne, quatre au plus.', aide: 'Ce que le testeur retient de l\'application avant de l\'ouvrir.' })}
           ${zone('consignes', "Ce qu'on attend d'eux", fiche ? (fiche.consignes || '') : '', { facultatif: true, lignes: 3, placeholder: 'Consignes particulières de la campagne.' })}
           ${zone('acces_instructions', "Pour entrer dans l'application", fiche ? ((fiche.acces || {}).instructions || '') : '', { facultatif: true, lignes: 3, placeholder: "Comment s'inscrire ou se connecter : les étapes, le code d'invitation, ce qu'il faut accepter.", aide: 'Dans « L\'application » de leur espace, avec les identifiants.' })}
-          ${zone('acces_identifiants', 'Identifiants de test', fiche ? ((fiche.acces || {}).identifiants || '') : '', { facultatif: true, lignes: 3, placeholder: 'test1@exemple.test · MotDePasse1\ntest2@exemple.test · MotDePasse2', aide: 'Des comptes de test seulement : le testeur les copie d\'un clic.' })}
+          <p class="aide">Les identifiants de test se posent testeur par testeur, dans la fiche de la campagne : chacun ne lit que les siens.</p>
           <div class="forme-rang">
             ${champ('magasin_ios', 'Fiche App Store', fiche ? ((fiche.magasins || {}).ios || '') : '', { type: 'url', facultatif: true, placeholder: 'https://apps.apple.com/…', aide: 'Après son test, on lui propose d\'y laisser un vrai avis.' })}
             ${champ('magasin_android', 'Fiche Play Store', fiche ? ((fiche.magasins || {}).android || '') : '', { type: 'url', facultatif: true, placeholder: 'https://play.google.com/store/apps/details?id=…' })}
@@ -563,17 +588,28 @@ const editeurs = {
           ${champ('lien_web', 'Lien web', fiche ? ((fiche.installation || {}).web || '') : '', { type: 'url', facultatif: true, placeholder: 'https://…' })}
         </div>
 
-        <div class="groupe">
+        ${surPlan ? `<div class="groupe">
+          <span class="etiquette-champ">Scénarios déroulés</span>
+          <p class="aide">Ceux du plan de tests qu'un humain passe, section par section.</p>
+          ${ancienne ? `<p class="aide" data-ancienne>Cette campagne reprend l'ancienne bibliothèque (${(fiche.scenarios || []).length} scénarios). Cochez des sections pour la passer sur le plan ; sans rien cocher, elle reste telle quelle.</p>` : ''}
+          <div class="rang" style="gap:8px;flex-wrap:wrap;margin-bottom:10px">
+            <button class="btn btn-secondaire btn-petit" type="button" data-tout>Toutes les sections</button>
+            <button class="btn btn-secondaire btn-petit" type="button" data-rien>Aucune section</button>
+          </div>
+          <div class="cases-blocs">${sectionsPlan.map((b) => `
+            <label class="case"><input type="checkbox" data-section="${echapper(b.cle)}"${cochees.has(b.cle) ? ' checked' : ''}> ${echapper(b.libelle)} <span class="badge">${b.n}</span></label>`).join('')}</div>
+          <p class="aide" id="compte-scenarios"></p>
+        </div>` : `<div class="groupe">
           <span class="etiquette-champ">Scénarios déroulés</span>
           <div class="rang" style="gap:8px;flex-wrap:wrap;margin-bottom:10px">
             <button class="btn btn-secondaire btn-petit" type="button" data-tout>Tous les blocs</button>
             <button class="btn btn-secondaire btn-petit" type="button" data-rien>Aucun bloc</button>
           </div>
-          <label class="case" style="margin-bottom:10px"><input type="checkbox" id="ed-socle-seul"> Ne garder que les scénarios du socle et transversaux</label>
+          <label class="case" style="margin-bottom:10px"><input type="checkbox" id="ed-socle-seul"${socleCoche ? ' checked' : ''}> Ne garder que les scénarios du socle et transversaux</label>
           <div class="cases-blocs">${blocs.map((b) => `
-            <label class="case"><input type="checkbox" data-bloc="${echapper(b.cle)}" checked> ${echapper(b.libelle)} <span class="badge">${b.n}</span></label>`).join('')}</div>
+            <label class="case"><input type="checkbox" data-bloc="${echapper(b.cle)}"${!fiche || blocsCoches.has(b.cle) ? ' checked' : ''}> ${echapper(b.libelle)} <span class="badge">${b.n}</span></label>`).join('')}</div>
           <p class="aide" id="compte-scenarios"></p>
-        </div>`,
+        </div>`}`,
       /* Les captures se déposent dans le dossier de la campagne : l'équipe
          écrit, le testeur de la campagne et le client lisent (storage.rules). */
       avecDepot: fiche ? {
@@ -581,8 +617,10 @@ const editeurs = {
         texte: 'Déposez les écrans de l\'application ici, ou <strong>choisissez-les</strong>.', aide: 'Images seulement, 10 Mo par fichier.',
       } : null,
       surMontage: (racine) => {
-        const cases = [...racine.querySelectorAll('[data-bloc]')];
+        const cases = [...racine.querySelectorAll(surPlan ? '[data-section]' : '[data-bloc]')];
         const compte = racine.querySelector('#compte-scenarios');
+        /* Une case touchée, et seulement alors, la sélection se réécrit. */
+        const toucher = () => { racine.dataset.selectionTouchee = '1'; };
 
         /* La zone de dépôt naît en bas de la feuille : on la range avec
            les écrans, là où l'équipe la cherche. */
@@ -592,7 +630,7 @@ const editeurs = {
         /* Le nombre de passages, pas le nombre de scénarios : c'est lui qui
            dit ce que la campagne coûte en temps de testeur, puisqu'un
            scénario du socle est déroulé deux fois. */
-        const socleSeul = racine.querySelector('#ed-socle-seul');
+        const socleSeul = racine.querySelector('#ed-socle-seul') || { checked: false, addEventListener: () => {} };
 
         /* Deux filtres qui se croisent : les blocs disent QUOI tester, le
            socle dit À QUELLE PROFONDEUR. Les confondre donnait un bouton
@@ -604,7 +642,22 @@ const editeurs = {
             && (!socleSeul.checked || (NIVEAUX_SCENARIO[x.niveau] || {}).double));
         };
 
+        /* Sur le plan, on compte en passages : un scénario « humain » seul
+           se passe par deux testeurs, et chacun sur chaque plateforme. */
+        const majComptePlan = () => {
+          const pris = new Set(cases.filter((c) => c.checked).map((c) => c.dataset.section));
+          const liste = humains.filter((x) => pris.has(x.section));
+          const cles = clesAttendues(liste);
+          const par = { ios: 0, android: 0, web: 0 };
+          let total = 0;
+          cles.forEach((requis, k) => { const p = k.split('__')[1]; total += requis; if (par[p] !== undefined) par[p] += requis; });
+          compte.textContent = liste.length
+            ? `${liste.length} scénarios, soit ${total} passages : ${par.ios} sur ${NOMS_PLATEFORMES.ios}, ${par.android} sur ${NOMS_PLATEFORMES.android}, ${par.web} sur le ${NOMS_PLATEFORMES.web.toLowerCase()}.`
+            : (ancienne ? 'Aucune section cochée : la campagne garde sa sélection d\'avant.' : 'Aucun scénario : la campagne n\'aurait rien à distribuer.');
+        };
+
         const majCompte = () => {
+          if (surPlan) { majComptePlan(); return; }
           const liste = retenus();
           const doubles = liste.filter((x) => (NIVEAUX_SCENARIO[x.niveau] || {}).double).length;
           compte.textContent = liste.length
@@ -612,10 +665,10 @@ const editeurs = {
             : 'Aucun scénario : la campagne n\'aurait rien à distribuer.';
         };
 
-        cases.forEach((c) => c.addEventListener('change', majCompte));
-        socleSeul.addEventListener('change', majCompte);
-        racine.querySelector('[data-tout]').addEventListener('click', () => { cases.forEach((c) => { c.checked = true; }); majCompte(); });
-        racine.querySelector('[data-rien]').addEventListener('click', () => { cases.forEach((c) => { c.checked = false; }); majCompte(); });
+        cases.forEach((c) => c.addEventListener('change', () => { toucher(); majCompte(); }));
+        socleSeul.addEventListener('change', () => { toucher(); majCompte(); });
+        racine.querySelector('[data-tout]').addEventListener('click', () => { toucher(); cases.forEach((c) => { c.checked = true; }); majCompte(); });
+        racine.querySelector('[data-rien]').addEventListener('click', () => { toucher(); cases.forEach((c) => { c.checked = false; }); majCompte(); });
         majCompte();
       },
       regles: { titre: obligatoire() },
@@ -630,10 +683,22 @@ const editeurs = {
         if ((pieces || []).length !== deposes.length) { toast('Seules des images peuvent servir d\'écrans de l\'application.', 'erreur'); return false; }
         const atouts = String(d.atouts || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 4).map((x) => x.slice(0, 90));
         const seulementSocle = Boolean((boite.querySelector('#ed-socle-seul') || {}).checked);
-        const refs = tous
-          .filter((x) => pris.has(x.bloc) && (!seulementSocle || (NIVEAUX_SCENARIO[x.niveau] || {}).double))
-          .map((x) => x.ref);
-        if (!refs.length) { toast('Choisissez au moins un bloc de scénarios.', 'erreur'); return false; }
+        const sectionsPrises = new Set([...boite.querySelectorAll('[data-section]')].filter((c) => c.checked).map((c) => c.dataset.section));
+        const choisies = surPlan
+          ? humains.filter((x) => sectionsPrises.has(x.section)).map((x) => x.id)
+          : tous.filter((x) => pris.has(x.bloc) && (!seulementSocle || (NIVEAUX_SCENARIO[x.niveau] || {}).double)).map((x) => x.ref);
+        const touche = Boolean((boite.dataset || {}).selectionTouchee);
+        /* null : la sélection n'a pas bougé, on ne la réécrit pas. */
+        const refs = scenariosAEcrire({ fiche, touche, choisies, avant: fiche ? fiche.scenarios : [] });
+        if (refs && !refs.length) { toast(surPlan ? 'Choisissez au moins une section du plan.' : 'Choisissez au moins un bloc de scénarios.', 'erreur'); return false; }
+        /* Lancer, c'est la fiche de la campagne qui le fait, une fois tout
+           prêt. La feuille refuse de passer « En cours » une campagne à
+           laquelle il manque quelque chose : le client lirait « Testeurs 0 ». */
+        if (d.statut === 'en-cours' && (!fiche || fiche.statut !== 'en-cours')) {
+          const apres = { ...(fiche || {}), scenarios: refs || (fiche ? fiche.scenarios : []), plan: surPlan || (fiche || {}).plan, application: (d.application || '').trim(), installation: { ios: (d.lien_ios || '').trim(), android: (d.lien_android || '').trim(), web: (d.lien_web || '').trim() } };
+          const manque = surPlan ? pretALancer(apres, { humains }).filter((x) => !x.ok) : (nombreDeCles(apres.affectation) ? [] : [{ libelle: 'Les testeurs, répartis' }]);
+          if (manque.length) { toast(`Pas encore prête à lancer : ${manque.map((x) => x.libelle.toLowerCase()).join(', ')}.`, 'erreur'); return false; }
+        }
         /* Une fin avant le début : le tableau ne saurait plus dire quel
            jour on est ni ce qu'il reste. Une vraie campagne est née ainsi,
            du 1er octobre au 30 septembre. */
@@ -660,18 +725,27 @@ const editeurs = {
           presentation: (d.presentation || '').trim(),
           atouts,
           consignes: (d.consignes || '').trim(),
-          acces: { instructions: (d.acces_instructions || '').trim().slice(0, 4000), identifiants: (d.acces_identifiants || '').trim().slice(0, 2000) },
+          /* Les instructions seules : les identifiants vivent par testeur
+             (campagnes/{c}/acces/{uid}), et l'ancien bloc commun se vide
+             depuis la fiche de la campagne, une fois ressaisi. */
+          ...(fiche ? { 'acces.instructions': (d.acces_instructions || '').trim().slice(0, 4000) } : { acces: { instructions: (d.acces_instructions || '').trim().slice(0, 4000) } }),
           magasins,
           installation: liens,
           visuels: [...gardes, ...deposes].slice(0, 8),
           debut: d.debut ? new Date(d.debut) : null,
           fin: d.fin ? new Date(d.fin) : null,
           builds: { ios: d.build_ios || '', android: d.build_android || '', web: d.build_web || '' },
-          scenarios: refs,
         };
+        if (refs) {
+          donnees.scenarios = refs;
+          if (surPlan) donnees.plan = true;
+        }
         if (fiche) await ecrire.majCampagne(pid, fiche.id, donnees);
         else await ecrire.creerCampagne(pid, { ...donnees, testeurs: [], affectation: {} });
-        toast(fiche ? 'Campagne enregistrée.' : `Campagne créée, ${refs.length} scénarios retenus.`);
+        /* La sélection a changé sous une affectation existante : celle-ci
+           ne correspond plus, il faut répartir de nouveau. */
+        const reRepartir = Boolean(fiche && refs && nombreDeCles(fiche.affectation));
+        toast(fiche ? (reRepartir ? 'Campagne enregistrée. La sélection a changé : répartissez de nouveau.' : 'Campagne enregistrée.') : `Campagne créée, ${refs.length} scénarios retenus.`);
         return true;
       },
     });

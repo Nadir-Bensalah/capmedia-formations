@@ -52,6 +52,19 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   const err=[]; page.on('pageerror',e=>err.push('PAGE: '+e.message.slice(0,180)));
   page.on('console',m=>{if(m.type()==='error')err.push(m.text().slice(0,180));});
 
+  /* Ce que l'affectation lui confie (modèle du 03/10/2026) : des clés
+     « scénario du plan, plateforme ». Le compte se lit en base, jamais en
+     dur : il dépend de la répartition. */
+  const vivier = ((await lire('testeurs?pageSize=50'))||{}).documents||[];
+  const fK = vivier.find(d=>((d.fields.prenom||{}).stringValue)==='Karim');
+  const karim = fK ? fK.name.split('/').pop() : '';
+  const oct = await lire('projets/atelier/campagnes/c-oct');
+  const aK = (((((oct||{}).fields||{}).affectation||{}).mapValue||{}).fields||{})[karim];
+  const sesCles = ((((((aK||{}).mapValue||{}).fields||{}).cles||{}).arrayValue||{}).values||[]).map(v=>v.stringValue);
+  const N = sesCles.length;
+  const tout = Object.values(((((oct||{}).fields||{}).affectation||{}).mapValue||{}).fields||{}).reduce((n,e)=>n+((((((e.mapValue||{}).fields||{}).cles||{}).arrayValue||{}).values||[]).length),0);
+  verifier(N>0&&N<tout,`son affectation lui confie ${N} passages sur ${tout}`);
+
   console.log('\n== Le testeur arrive sur son espace');
   await connecter(page,'karim.testeur@essai.test');
   /* La première fois, l'accueil passe devant tout : cette suite ne le teste pas (qa-espace-testeur), elle va droit à la campagne. */
@@ -65,61 +78,60 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
      scénario. La liste, elle, reste à un geste. */
   await page.waitForSelector('.tb-case',{timeout:20000}).catch(()=>{});
   const cases = await page.$$eval('.tb-case',x=>x.length);
-  verifier(cases===43,'son tableau a 43 cases, pas 173',`${cases}`);
+  verifier(cases===N,`son tableau a ${N} cases, les siennes seulement`,`${cases}`);
   verifier(await page.$$eval('.tb-case',x=>x.every(b=>b.dataset.e==='vide')),'toutes à faire, en contour, aucune orange le premier jour');
   await page.click('[data-vue="liste"]'); await pause(800);
 
   const v = await page.evaluate(()=>({
     scenarios: document.querySelectorAll('.t-scenario').length,
-    choix: document.querySelectorAll('.t-choix').length,
+    ouvrir: document.querySelectorAll('.t-scenario [data-ouvrir]').length,
+    choix: document.querySelectorAll('.t-choix, [data-poser]').length,
     jauge: !!document.querySelector('.testeur-tete .tb-barre'),
-    plateformes: [...document.querySelectorAll('[data-sur]')].map(b=>b.textContent.trim()),
+    suite: (document.querySelector('.t-suite-sur')||{}).innerText||'',
     chapo:(document.querySelector('.chapo')||{}).innerText||'',
     autres: /Sonia|Marc|Ines|Hugo|Leila/.test(document.body.innerText),
   }));
   console.log('    ', v.chapo);
-  verifier(v.scenarios===43,'il voit ses 43 scénarios, pas les 173',`${v.scenarios}`);
-  verifier(v.choix===v.scenarios*3,'chacun a ses trois boutons',`${v.choix}`);
+  verifier(v.scenarios===N,`il voit ses ${N} passages, pas toute la campagne`,`${v.scenarios}`);
+  /* Depuis le 03/10/2026, une ligne ouvre la feuille : on ne pose pas un
+     résultat sans avoir lu ce qui doit se passer. */
+  verifier(v.ouvrir===N&&v.choix===0,'chaque ligne ouvre sa feuille, sans bouton de résultat',`${v.ouvrir} / ${v.choix}`);
   verifier(v.jauge,'sa jauge d\'avancement est là');
-  verifier(v.plateformes.length===3,'il choisit sur quoi il teste',v.plateformes.join('/'));
+  verifier(/sur (iPhone|Android|Web)/i.test(v.suite),'le geste suivant dit sur quoi, imposé par son affectation',v.suite);
   verifier(!v.autres,'il ne voit AUCUN autre testeur');
 
-  console.log('\n== Cocher sans dire sur quoi');
-  const premier = await page.$('[data-poser]');
-  await premier.click(); await pause(800);
-  const t1 = await page.evaluate(()=>((document.querySelector('.toasts')||{}).innerText||'').trim());
-  verifier(/sur quoi/i.test(t1),'on lui demande d\'abord sa plateforme',t1||'(rien)');
-  await pause(1000);
-
-  console.log('\n== Un OK');
-  await page.click('[data-sur="ios"]'); await pause(900);
-  const ref = await page.evaluate(()=>(document.querySelector('[data-poser]')||{}).dataset.poser);
-  await page.click(`[data-poser="${ref}"][data-resultat="ok"]`); await pause(2200);
+  console.log('\n== La plateforme vient de son affectation');
+  /* Il n'a rien choisi (stockage neuf) : le résultat part quand même sur
+     la plateforme de sa clé, jamais sur un choix libre. */
+  const cle1 = await page.evaluate(()=>(document.querySelector('[data-continuer]')||{}).dataset.continuer||'');
+  verifier(sesCles.includes(cle1),'le premier passage proposé est une de ses clés',cle1);
+  await page.click('[data-continuer]'); await page.waitForSelector('[data-feuille-poser="ok"]',{timeout:10000}).catch(()=>{});
+  await page.click('[data-feuille-poser="ok"]'); await pause(2200);
   const enBase = await lire(`projets/atelier/campagnes/c-oct/passages?pageSize=100`);
   const docs = ((enBase&&enBase.documents)||[]);
   verifier(docs.length===1,'le passage est enregistré',`${docs.length}`);
   if (docs.length) {
     const f = docs[0].fields;
-    verifier((f.resultat||{}).stringValue==='ok','avec le bon résultat');
-    verifier((f.plateforme||{}).stringValue==='ios','et la bonne plateforme');
+    verifier((f.resultat||{}).stringValue==='reussi','avec le résultat en toutes lettres (reussi)',(f.resultat||{}).stringValue);
+    verifier((f.plateforme||{}).stringValue===cle1.split('__')[1],'et la plateforme de sa clé',(f.plateforme||{}).stringValue);
+    verifier((f.scenario||{}).stringValue===cle1.split('__')[0],'sur le scénario du plan',(f.scenario||{}).stringValue);
     const ctx = ((f.contexte||{}).mapValue||{}).fields||{};
     verifier(Object.keys(ctx).length>=4,'le contexte de l\'appareil est relevé',Object.keys(ctx).join(','));
-    verifier(docs[0].name.includes('__'),'l\'identifiant porte son uid');
+    verifier(docs[0].name.endsWith(`/${karim}__${cle1}`),'l\'identifiant est uid__scénario__plateforme',docs[0].name.split('/').pop());
   }
 
-  console.log('\n== Un KO sans preuve');
-  const ref2 = await page.evaluate(()=>{
-    const l=[...document.querySelectorAll('[data-poser][data-resultat="ko"]')];
-    return l.length?l[0].dataset.poser:'';
-  });
-  await page.click(`[data-poser="${ref2}"][data-resultat="ko"]`); await pause(1300);
-  verifier(await page.evaluate(()=>!!document.querySelector('.feuille')),'une feuille demande ce qui s\'est passé');
+  console.log('\n== Un échec sans preuve');
+  /* Un résultat posé ouvre la feuille du suivant. */
+  await page.waitForSelector('[data-feuille-poser="ko"]',{timeout:10000}).catch(()=>{});
+  await page.click('[data-feuille-poser="ko"]'); await pause(1300);
+  verifier(await page.evaluate(()=>!!document.querySelector('#t-quoi')),'une feuille demande ce qui s\'est passé');
   await page.fill('#t-quoi','Rien ne se passe quand j\'appuie sur Valider.');
-  await page.click('[data-valider]'); await pause(900);
+  await page.evaluate(()=>{const v=[...document.querySelectorAll('.voile')].pop();const b=v&&v.querySelector('[data-valider]');if(b)b.click();}); await pause(900);
   const t2 = await page.evaluate(()=>((document.querySelector('.toasts')||{}).innerText||'').trim());
-  verifier(/preuve/i.test(t2),'un échec sans preuve est refusé',t2||'(rien)');
-  verifier(await page.evaluate(()=>!!document.querySelector('.feuille')),'et la feuille reste ouverte');
+  verifier(/preuve|capture/i.test(t2),'un échec sans preuve est refusé',t2||'(rien)');
+  verifier(await page.evaluate(()=>!!document.querySelector('#t-quoi')),'et la feuille reste ouverte');
   await page.keyboard.press('Escape'); await pause(700);
+  verifier(((await lire(`projets/atelier/campagnes/c-oct/passages?pageSize=100`))||{documents:[]}).documents.length===1,'et rien d\'autre n\'est enregistré');
 
   console.log('\n== Ce qu\'il ne peut pas atteindre');
   const interdit = await page.evaluate(async () => {

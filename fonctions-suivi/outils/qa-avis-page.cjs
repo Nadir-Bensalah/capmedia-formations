@@ -102,13 +102,13 @@ const nombre=(page,sel)=>page.evaluate((s)=>document.querySelectorAll(s).length,
   await page.click(`[data-action="ouvrir-campagne"][data-id="${cid}"] .ligne-titre, [data-action="ouvrir-campagne"][data-id="${cid}"]`).catch(()=>{}); await pause(1500);
   verifier(await page.evaluate(()=>!!document.querySelector('.voile #resultats')),'la feuille de campagne porte les résultats');
   const res=await texte(page,'.voile #resultats');
-  verifier(/2\s+réussis/.test(res)&&/1\s+échoué/.test(res),'deux réussis, un échoué',res.slice(0,120));
+  verifier(/2\s+réussis/.test(res)&&/1\s+en échec/.test(res),'deux réussis, un en échec',res.slice(0,120));
   verifier(/3 passages consignés sur 3 attendus/.test(res),'trois passages sur trois attendus',res.slice(0,160));
   verifier(/DI-06/.test(res)&&/DI-07/.test(res),'les deux scénarios sont listés');
   verifier(/Sonia · [^\n]*iPhone 15/.test(res),'Sonia, iPhone, avec son appareil');
   verifier(/affiche 00:00/.test(res),'et son commentaire');
   verifier(await page.evaluate(()=>[...document.querySelectorAll('.voile #resultats [data-piece]')].length===1),'sa preuve est un bouton');
-  verifier(await page.evaluate(()=>[...document.querySelectorAll('.voile #resultats .pastille, .voile #resultats .puce')].some(p=>/KO/.test(p.innerText))),'le KO est marqué');
+  verifier(await page.evaluate(()=>[...document.querySelectorAll('.voile #resultats .pastille, .voile #resultats .puce')].some(p=>/^Échec$/.test(p.innerText.trim()))),'l échec est marqué « Échec » (plus « KO »)');
   await page.click('.voile [data-voir-avis]'); await pause(1800);
   const modal=await page.evaluate(()=>{const v=[...document.querySelectorAll('.voile')].pop();return v?v.innerText:'';});
   verifier(/Ce que les testeurs en pensent/.test(modal)&&/recommandation sur 10/.test(modal),'« Leur avis » ouvre toujours la restitution');
@@ -148,7 +148,7 @@ const nombre=(page,sel)=>page.evaluate((s)=>document.querySelectorAll(s).length,
   await aller(cl,'/tests?projet=atelier','#campagnes'); await pause(800);
   await cl.click(`[data-action="ouvrir-campagne"][data-id="${cid}"] .ligne-titre, [data-action="ouvrir-campagne"][data-id="${cid}"]`).catch(()=>{}); await pause(1500);
   const resC=await texte(cl,'.voile #resultats');
-  verifier(/2\s+réussis/.test(resC)&&/1\s+échoué/.test(resC),'le client lit les résultats scénario par scénario');
+  verifier(/2\s+réussis/.test(resC)&&/1\s+en échec/.test(resC),'le client lit les résultats scénario par scénario');
   verifier(!/Karim|Sonia/.test(resC)&&/Testeur \d/.test(resC),'sans nom, avec le numéro');
   verifier(/affiche 00:00/.test(resC),'avec le commentaire du KO');
   verifier(await cl.evaluate(()=>[...document.querySelectorAll('.voile #resultats [data-piece]')].length===1),'et le bouton de la preuve');

@@ -65,9 +65,13 @@ let page = null;
   verifier(await page.$(`[data-case="${second}"][data-verrou]`), 'le second est verrouillé tant que le premier n a pas de résultat');
   verifier(!(await page.$(`[data-case="${premier}"][data-verrou]`)), 'le premier est ouvrable');
   await page.click(`[data-case="${second}"]`); await pause(700);
-  verifier(new RegExp(`${premier} d'abord`).test(await toast(page)), 'toucher le second dit de dérouler le premier', await toast(page));
+  /* Un autre message peut passer devant (la clé d'accès proposée après la
+     connexion) : on attend celui du verrou. */
+  const verrouDit = await attendre(async () => new RegExp(`${premier} d'abord`).test(await toast(page)), 10, 300);
+  verifier(verrouDit, 'toucher le second dit de dérouler le premier', await toast(page));
   verifier(!(await page.$('.modale--scenario, .feuille')), 'et n ouvre pas sa feuille');
-  await page.click('[data-sur="ios"]'); await pause(500);
+  /* La plateforme vient de sa clé : le choix n'apparaît que s'il manque. */
+  if (await page.$('[data-sur="ios"]')) { await page.click('[data-sur="ios"]'); await pause(500); }
   await page.click(`[data-case="${premier}"]`); await page.waitForSelector('[data-feuille-poser="ok"]', { timeout: 10000 });
   await page.click('[data-feuille-poser="ok"]'); await pause(1500);
   verifier(!(await page.$(`[data-case="${second}"][data-verrou]`)), 'le premier réussi, le second s ouvre');
@@ -79,7 +83,10 @@ let page = null;
   const dossierPreuve = `campagnes/${PID}/${CID}/${uid}/preuve.png`;
   for (const ref of refs.slice(1)) {
     const ko = ref === refs[2];
-    await poser(`${passages}/${uid}__${ref}`, { scenario: S(ref), testeur: S(uid), plateforme: S('ios'), resultat: S(ko ? 'ko' : 'ok'), commentaire: S(ko ? 'Rien ne se passe.' : ''), preuves: L(ko ? [S(dossierPreuve)] : []), contexte: { mapValue: { fields: {} } }, le: T(new Date()) });
+    /* Une case est une clé « scénario du plan, plateforme » : le passage
+       porte l'une et l'autre, et son résultat en toutes lettres. */
+    const [scen, plat] = ref.split('__');
+    await poser(`${passages}/${uid}__${ref}`, { scenario: S(scen), testeur: S(uid), plateforme: S(plat), resultat: S(ko ? 'echec' : 'reussi'), commentaire: S(ko ? 'Rien ne se passe.' : ''), preuves: L(ko ? [S(dossierPreuve)] : []), contexte: { mapValue: { fields: {} } }, cree: T(new Date()), maj: T(new Date()) });
   }
   await attendre(async () => page.$('[data-terminer]'), 30, 500);
   verifier(await page.$('[data-terminer]'), 'tout déroulé, le bouton « J ai terminé » apparaît');

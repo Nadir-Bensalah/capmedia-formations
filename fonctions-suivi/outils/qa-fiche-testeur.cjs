@@ -111,7 +111,8 @@ let page = null;
   console.log('\n== J ai terminé : la note du test, puis les magasins');
   await page.evaluate(() => { location.hash = '#/'; }); await page.waitForSelector('.tb--testeur [data-case]', { timeout: 10000 });
   const refs = await page.$$eval('.tb--testeur [data-case]', (l) => l.map((c) => c.dataset.case));
-  for (const ref of refs) await poser(`projets/${PID}/campagnes/${CID}/passages/${uid}__${ref}`, { scenario: S(ref), testeur: S(uid), plateforme: S('ios'), resultat: S('ok'), commentaire: S(''), preuves: L([]), contexte: { mapValue: { fields: {} } }, le: T(new Date()) });
+  /* Une case est une clé « scénario du plan, plateforme » (03/10/2026). */
+  for (const ref of refs) { const [scen, plat] = ref.split('__'); await poser(`projets/${PID}/campagnes/${CID}/passages/${uid}__${ref}`, { scenario: S(scen), testeur: S(uid), plateforme: S(plat), resultat: S('reussi'), commentaire: S(''), preuves: L([]), contexte: { mapValue: { fields: {} } }, cree: T(new Date()), maj: T(new Date()) }); }
   await attendre(async () => page.$('[data-terminer]'), 30, 500);
   await page.click('[data-terminer]'); await page.waitForSelector('[data-note-test]', { timeout: 10000 });
   await page.click('[data-valider]'); await pause(400);
@@ -161,8 +162,11 @@ let page = null;
   await client.evaluate(() => { location.hash = '#/tests?projet=atelier'; window.dispatchEvent(new HashChangeEvent('hashchange')); });
   await client.waitForSelector('[data-action="ouvrir-campagne"]', { timeout: 20000 });
   let fcl = '';
-  for (let i = 0; i < 6; i += 1) { await client.click('[data-action="ouvrir-campagne"]'); await pause(900); fcl = await client.textContent('.feuille .modale-corps').catch(() => ''); if (/Terminé le/.test(fcl)) break; await client.keyboard.press('Escape'); await pause(600); }
-  verifier(/Terminé le/.test(fcl) && !/Note du test/.test(fcl) && !/manquait d une capture/.test(fcl) && !/Karim/.test(fcl), 'le client voit la fin du test, ni la note ni les mots ni le nom (réservés à l équipe)', fcl.match(/Note du test[^\n]{0,40}/) ? fcl.match(/Note du test[^\n]{0,40}/)[0] : '(pas de note)');
+  for (let i = 0; i < 6; i += 1) { await client.click('[data-action="ouvrir-campagne"]'); await pause(900); fcl = await client.textContent('.feuille .modale-corps').catch(() => ''); if (/Pharmacien/.test(fcl)) break; await client.keyboard.press('Escape'); await pause(600); }
+  /* Depuis le 03/10/2026, la note du test (la clarté des consignes) est
+     une affaire d'équipe : le client la lirait comme une note de son
+     application. */
+  verifier(fcl.length > 0 && !/Note du test|Clarté des consignes/.test(fcl) && !/manquait d une capture/.test(fcl) && !/Karim/.test(fcl), 'le client ne lit ni la note du test, ni ses mots, ni le nom', fcl.match(/Note du test[^\n]{0,40}/) ? fcl.match(/Note du test[^\n]{0,40}/)[0] : '');
   await client.click('[data-voir-avis]').catch(() => null); await pause(900);
   const avisClient = await client.textContent('body');
   verifier(/Pharmacien/.test(avisClient) && /MacBook Air M2/.test(avisClient) && !/Benali/.test(avisClient), 'et un profil enrichi (domaine, appareil) sous un numéro, sans nom', avisClient.match(/Testeur \d[^\n]{0,80}/) ? avisClient.match(/Testeur \d[^\n]{0,80}/)[0] : '(rien)');

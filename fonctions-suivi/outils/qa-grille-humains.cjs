@@ -513,6 +513,18 @@ const verifierChiffres = (r, quoi) => {
 
     /* Des résultats humains : chaque testeur de c-oct rend ses scénarios,
        un KO tous les neuf, un sans objet tous les treize. */
+    /* Ce qui est éprouvé ici, c'est l'héritage d'une campagne d'avant le
+       plan (des résultats rendus sur la bibliothèque, lus par les refs).
+       Depuis le 03/10/2026, le semis met c-oct sur le plan du banc : on la
+       repasse à l'ancienne, références de la bibliothèque réparties entre
+       ses testeurs, le temps de cette partie. */
+    const biblioRefs = ((((await lire(`projets/${P}/scenarios?pageSize=400`)) || {}).documents) || []).map((d) => d.name.split('/').pop()).filter((r) => !/^GH-/.test(r));
+    const campAvant = await lire(`projets/${P}/campagnes/c-oct`);
+    const ids = valeurs(champ(campAvant, 'testeurs')).map((v) => v.stringValue);
+    const ancienne = Object.fromEntries(ids.map((u) => [u, []]));
+    biblioRefs.forEach((r, i) => ancienne[ids[i % ids.length]].push(r));
+    await fetch(`${bdd(`projets/${P}/campagnes/c-oct`)}?updateMask.fieldPaths=affectation&updateMask.fieldPaths=scenarios&updateMask.fieldPaths=plan`, { method: 'PATCH', headers: { ...prop, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: { plan: B(false), scenarios: L(biblioRefs.map(S)), affectation: M(Object.fromEntries(Object.entries(ancienne).map(([u, r]) => [u, L(r.map(S))]))) } }) });
     const camp = await lire(`projets/${P}/campagnes/c-oct`);
     const aff = (champ(camp, 'affectation').mapValue || {}).fields || {};
     const gens = (((await lire('testeurs?pageSize=100')) || {}).documents || []);

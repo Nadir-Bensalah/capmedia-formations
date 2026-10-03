@@ -59,7 +59,9 @@ let page = null;
   await page.click('[data-accueil="fin"]'); await pause(900);
   verifier(!(await page.$('.accueil')), 'C est parti efface l accueil');
   verifier(await page.isVisible('.testeur-tete .tb-barre'), 'et la campagne est là, avec sa jauge');
-  verifier(/0 sur 43/.test(await page.textContent('.chapo')), 'le premier chapeau dit la progression');
+  /* Le compte vient de son affectation (clés du plan), lu en base. */
+  const nCles = await (async () => { const t = ((await (await fetch(`${BANC.firestore}/v1/projects/capmedia-1f90d/databases/(default)/documents/testeurs?pageSize=50`, { headers: prop })).json()).documents || []).find((d) => ((d.fields.prenom || {}).stringValue) === 'Karim'); const c = await (await fetch(`${BANC.firestore}/v1/projects/capmedia-1f90d/databases/(default)/documents/projets/atelier/campagnes/c-oct`, { headers: prop })).json(); const e = ((((c.fields || {}).affectation || {}).mapValue || {}).fields || {})[t ? t.name.split('/').pop() : '']; return (((((e || {}).mapValue || {}).fields || {}).cles || {}).arrayValue || {}).values ? e.mapValue.fields.cles.arrayValue.values.length : 0; })();
+  verifier(nCles > 0 && new RegExp(`0 sur ${nCles}\\b`).test(await page.textContent('.chapo')), `le premier chapeau dit la progression (0 sur ${nCles})`);
   await pause(1200);
   verifier((await appreciations()).some((d) => d.fields && d.fields.accueil), 'les premiers pas sont consignés dans son appréciation');
   await page.reload(); await page.waitForSelector('.testeur-tete'); await pause(1200);
