@@ -496,6 +496,33 @@ Les champs `membres`, `roles` et `personnes` du projet sont **dérivés**
 de ces fiches par `acces.recalculerAcces`, seul chemin qui les écrit
 (`accesVersion: 2`). Fermé, un projet n'a aucun membre.
 
+### La présence et le journal des connexions (équipe seule)
+
+`projets/{p}/presencesClient/{uid}` : le battement du Hub ouvert et
+visible, une fois par minute (`presence-client.js`), un document par
+projet dont le client est membre.
+
+```
+vu        heure du serveur (request.time), rien d'autre
+enLigne   bool : false quand l'onglet se cache ou se ferme
+```
+
+Écrit par le client lui-même (son uid, ses projets, champs fermés), lu par
+l'équipe du projet seule. Le client ne relit ni la sienne ni celle d'un
+autre. « En ligne » = `enLigne` et battement de moins de deux minutes ;
+sinon « Vu il y a… ». La pastille de l'onglet Accès client se patche en
+place (`brancherPresences`), la page ne se redessine pas.
+
+`journalConnexions/{uid}/entrees/{id}` : `le`, `mode` (`code`, `cle`,
+`reprise`, `lien`), `appareil` (« Mac · Safari », « App Mac »…), sans
+adresse IP. Écrit par le serveur seul (`journal-connexions.js`) : à
+l'ouverture de session par code ou clé (`ouvrirSession`), et sur
+`noterConnexion` (suiviConnexion) quand le Hub reprend une session. Les
+200 dernières par personne. Fermé au navigateur ; l'équipe le lit par
+`historiqueConnexions` (suiviAdmin, `projet.voir` sur le projet, la
+personne doit en être l'interlocutrice). Reprise du passé depuis l'audit :
+`outils/reprise-journal-connexions.mjs` (à blanc sans `--vrai`).
+
 ### Ouvert au client, e-mails au client
 
 ```

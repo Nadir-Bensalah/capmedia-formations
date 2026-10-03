@@ -177,7 +177,7 @@ async function verifier(req, res, o) {
 
   /* La clé prouve l'appareil ; l'accès, lui, se relit maintenant, comme
      après un code : un compte retiré ne rouvre rien, clé ou pas. */
-  return o.ouvrirSession({ uid: defi.uid, email, adresseIp, res, mode: 'cle' });
+  return o.ouvrirSession({ uid: defi.uid, email, adresseIp, res, mode: 'cle', req });
 }
 
 module.exports = { optionsEnregistrement, enregistrer, lister, retirer, optionsConnexion, verifier, clesDe, RP };

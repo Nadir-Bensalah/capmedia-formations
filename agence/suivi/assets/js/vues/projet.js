@@ -28,7 +28,7 @@ import { editer, supprimer } from './editeurs.js';
 import { appelServeur } from '../serveur.js';
 import { activiteHtml } from './accueil.js';
 import { basculerAFaire } from './admin-a-faire.js';
-import { accesHtml, gesteAcces } from './acces-client.js';
+import { accesHtml, gesteAcces, brancherPresences } from './acces-client.js';
 import { personnesHtml } from './personnes.js';
 import { telechargerICS } from './calendrier.js';
 import { etatPave, paveHtml, reafficherHtml, brancherPaves } from '../pave-attente.js';
@@ -388,6 +388,9 @@ export const vue = async (ctx, env) => {
      quand ce choix change, et seulement alors (l'empreinte le contient). */
   if (!equipe) lot.sur(K.profil, planifier);
   planifier();
+  /* La pastille de présence des interlocuteurs (onglet Accès client) se
+     patche en place : un battement du client ne redessine pas la page. */
+  const arretPresences = equipe ? brancherPresences(sortie, pid) : () => {};
   /* « En faire une demande » sur une note partagée par le client (équipe). */
   const gesteNotes = gesteNoteDemande(sortie, () => lireTout(pid).notesPartagees);
 
@@ -396,7 +399,7 @@ export const vue = async (ctx, env) => {
      ici : changer d'onglet ou de page ne la referme pas. */
 
   return {
-    fin: () => { demonterCoffre(); planifier.arreter(); gestes(); gestesPaves(); gestesSansLien(); sortie.removeEventListener('click', sansPropagation, true); gestesFichiers(); gestesFiltres(); gesteNotes(); lot.fin(); },
+    fin: () => { arretPresences(); demonterCoffre(); planifier.arreter(); gestes(); gestesPaves(); gestesSansLien(); sortie.removeEventListener('click', sansPropagation, true); gestesFichiers(); gestesFiltres(); gesteNotes(); lot.fin(); },
     /* Changer d'onglet ne recharge pas la page : on redessine, les écoutes
        restent ouvertes et le défilement ne saute pas. */
     maj: (suite) => {

@@ -13,10 +13,101 @@
    demande.
    ========================================================================== */
 
-import { echapper, dateCourte, dateHeure, peut, ROLES_CLIENT, ETATS_INVITATION, etatInvitation } from '../noyau.js';
-import { icone, avatar, ligne, vide, modale, agir, lireForme, valider, obligatoire, emailValide, encart, confirmer, menu, pastilleTexte, copier, toast } from '../ui.js';
+import { echapper, dateCourte, dateHeure, peut, ROLES_CLIENT, ETATS_INVITATION, etatInvitation, enDate, depuis } from '../noyau.js';
+import { icone, avatar, ligne, vide, modale, agir, lireForme, valider, obligatoire, emailValide, encart, confirmer, menu, pastilleTexte, copier, toast, squelette } from '../ui.js';
 import { appelServeur } from '../serveur.js';
-import { interneDuProjet } from '../donnees.js';
+import { interneDuProjet, K } from '../donnees.js';
+import * as magasin from '../magasin.js';
+
+/* --------------------------------------------------------------------------
+   La présence d'un interlocuteur (équipe seule)
+
+   Le Hub du client bat une fois par minute tant qu'il est ouvert et
+   visible (presence-client.js). En ligne : un battement de moins de deux
+   minutes, et pas de « parti » depuis. Sinon « Vu il y a… », ou « Jamais
+   connecté ». La pastille se patche en place, sans redessiner la page :
+   un battement qui ne change pas le libellé ne touche à rien.
+   -------------------------------------------------------------------------- */
+
+const EN_LIGNE_MS = 2 * 60 * 1000;
+
+export const etatPresence = (i, presences, maintenant = Date.now()) => {
+  const p = i && i.uid ? (presences || []).find((x) => x.id === i.uid) : null;
+  const vu = p ? enDate(p.vu) : null;
+  if (vu && p.enLigne === true && maintenant - vu.getTime() < EN_LIGNE_MS) return { libelle: 'En ligne', voile: 'vert' };
+  if (vu) {
+    const d = depuis(vu);
+    return { libelle: d === "à l'instant" ? "Vu à l'instant" : (/^il y a/.test(d) ? `Vu ${d}` : `Vu le ${d}`), voile: 'gris' };
+  }
+  if (!i || !i.uid || etatInvitation(i) !== 'acceptee') return { libelle: 'Jamais connecté', voile: 'gris' };
+  return { libelle: 'Dernière visite inconnue', voile: 'gris' };
+};
+
+const pucePresence = (e) => `<span class="puce puce--${e.voile}"><i aria-hidden="true"></i>${echapper(e.libelle)}</span>`;
+
+const presenceHtml = (i, pid) => {
+  const e = etatPresence(i, magasin.lire(K.presencesClient(pid)));
+  return `<span class="presence-client" data-presence="${echapper(i.id)}" data-libelle="${echapper(e.libelle)}">${pucePresence(e)}</span>`;
+};
+
+/**
+ * Tient les pastilles de présence à jour sur la page : à chaque battement
+ * reçu, et toutes les quinze secondes (un battement qui vieillit fait
+ * passer « En ligne » à « Vu il y a » sans que rien n'arrive). Ne réécrit
+ * qu'une pastille dont le libellé change. Rend la fonction qui arrête.
+ */
+export const brancherPresences = (racine, pid) => {
+  const maj = () => {
+    const spans = racine.querySelectorAll('[data-presence]');
+    if (!spans.length) return;
+    const tous = magasin.lire(K.interlocuteurs(pid)) || [];
+    const presences = magasin.lire(K.presencesClient(pid));
+    spans.forEach((el) => {
+      const i = tous.find((x) => x.id === el.dataset.presence);
+      if (!i) return;
+      const e = etatPresence(i, presences);
+      if (el.dataset.libelle === e.libelle) return;
+      el.dataset.libelle = e.libelle;
+      el.innerHTML = pucePresence(e);
+    });
+  };
+  const retrait = magasin.sur(K.presencesClient(pid), maj);
+  const minuterie = setInterval(maj, 15000);
+  return () => { retrait(); clearInterval(minuterie); };
+};
+
+/* --------------------------------------------------------------------------
+   L'historique des connexions (menu ⋯), lu par le serveur
+   -------------------------------------------------------------------------- */
+
+const MODES_CONNEXION = {
+  code: 'Code reçu par e-mail',
+  cle: "Clé d'accès (Touch ID, Windows Hello)",
+  reprise: "Session reprise à l'ouverture",
+  lien: 'Lien de connexion',
+};
+
+const ouvrirHistorique = async (i, pid) => {
+  const nom = i.nom || i.email;
+  const m = modale({
+    titre: 'Historique des connexions', sousTitre: `${nom} · les 200 dernières, la plus récente en haut.`,
+    corps: `<div id="historique-connexions">${squelette('lignes', 4)}</div>`,
+    pied: '<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>',
+  });
+  const zone = m.el.querySelector('#historique-connexions');
+  try {
+    const r = await appelServeur('historiqueConnexions', { projet: pid, cle: i.id });
+    const entrees = (r && r.entrees) || [];
+    zone.innerHTML = entrees.length
+      ? `<div class="liste">${entrees.map((x) => ligne({
+        titre: echapper(dateHeure(x.le ? new Date(x.le) : null) || 'Date inconnue'),
+        sous: `${echapper(x.appareil || 'Appareil inconnu')} · ${echapper(MODES_CONNEXION[x.mode] || 'Mode inconnu')}`,
+      })).join('')}</div>`
+      : vide({ icone: 'utilisateurs', titre: 'Aucune connexion relevée', texte: i.uid ? "Rien n'a encore été noté pour cette personne." : "Elle ne s'est encore jamais connectée.", compact: true });
+  } catch (e) {
+    zone.innerHTML = encart(e.message || "L'historique n'a pas pu être lu.", 'alerte');
+  }
+};
 
 const pastilleRole = (role) => (ROLES_CLIENT[role]
   ? pastilleTexte(ROLES_CLIENT[role], role === 'responsable' ? 'violet' : 'bleu')
@@ -71,7 +162,7 @@ export const accesHtml = (d, { pid, env }) => {
   </div>`;
 
   const lignePersonne = (i) => ligne({
-    titre: `<span class="rang" style="gap:10px">${avatar(i.nom || i.email)} ${echapper(i.nom || i.email)} ${pastilleRole(i.role)} ${i.statut === 'actif' ? pastilleInvitation(i) : pastilleTexte('Accès retiré', 'gris')}</span>`,
+    titre: `<span class="rang" style="gap:10px">${avatar(i.nom || i.email)} ${echapper(i.nom || i.email)} ${i.statut === 'actif' ? presenceHtml(i, pid) : ''} ${pastilleRole(i.role)} ${i.statut === 'actif' ? pastilleInvitation(i) : pastilleTexte('Accès retiré', 'gris')}</span>`,
     sous: `${echapper(i.email)}${i.statut !== 'actif' && dateCourte(i.retireLe) ? ` · retiré le ${echapper(dateCourte(i.retireLe))}` : ''}${i.statut === 'actif' && i.invitation && dateHeure(i.invitation.envoyee) ? ` · invitée le ${echapper(dateHeure(i.invitation.envoyee))}` : ''}`,
     fin: gererAcces ? `<button class="btn-icone" type="button" data-action="acces-menu" data-cle="${echapper(i.id)}" aria-label="Gérer l'accès de ${echapper(i.nom || i.email)}">${icone('points')}</button>` : '',
     attrs: `data-interlocuteur="${echapper(i.id)}"`,
@@ -168,9 +259,12 @@ export const gesteAcces = async (el, d, { pid }) => {
       /* Un rôle se choisit, il ne se devine pas : sans rôle connu, deux
          gestes explicites. */
       const redonner = (role, libelle) => ({ libelle, icone: 'utilisateurs', action: () => agir(null, () => appelServeur('ajouterInterlocuteur', { projet: pid, email: i.email, nom: i.nom, role }), 'Accès rendu.') });
-      menu(el, ROLES_CLIENT[i.role]
-        ? [redonner(i.role, "Redonner l'accès")]
-        : [redonner('responsable', "Redonner l'accès, comme responsable"), redonner('collaborateur', "Redonner l'accès, comme collaborateur")]);
+      menu(el, [
+        ...(ROLES_CLIENT[i.role]
+          ? [redonner(i.role, "Redonner l'accès")]
+          : [redonner('responsable', "Redonner l'accès, comme responsable"), redonner('collaborateur', "Redonner l'accès, comme collaborateur")]),
+        { libelle: 'Historique des connexions', icone: 'horloge', action: () => ouvrirHistorique(i, pid) },
+      ]);
       return true;
     }
     const roles = ROLES_CLIENT[i.role] ? [i.role === 'responsable' ? 'collaborateur' : 'responsable'] : ['responsable', 'collaborateur'];
@@ -193,6 +287,7 @@ export const gesteAcces = async (el, d, { pid }) => {
           }
         });
       } },
+      { libelle: 'Historique des connexions', icone: 'horloge', action: () => ouvrirHistorique(i, pid) },
       ...roles.map((autreRole) => ({ libelle: `Passer ${ROLES_CLIENT[autreRole].toLowerCase()}`, icone: 'edit', action: () => agir(null, () => appelServeur('modifierInterlocuteur', { projet: pid, cle, role: autreRole }), 'Rôle choisi.') })),
       ...(ouvert ? [
         { libelle: "Renvoyer l'invitation", icone: 'mail', action: () => agir(null, async () => {

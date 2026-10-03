@@ -466,6 +466,15 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 /* Une activité, c'est un geste : la souris, le clavier, le doigt. */
 ['pointerdown', 'keydown'].forEach((type) => document.addEventListener(type, () => poserDerniereVisite(), { passive: true }));
 
+/* La présence, pour l'équipe seule : un battement par minute tant que le
+   Hub est visible, et l'ouverture d'une session reprise au journal des
+   connexions (presence-client.js). Rien ne s'en affiche ici. */
+import('./presence-client.js').then((m) => {
+  const uid = session.utilisateur.uid;
+  m.demarrerPresenceClient({ uid, projets: () => (magasin.lire(K.projets) || session.projets || []).filter((p) => !Array.isArray(p.membres) || p.membres.includes(uid)).map((p) => p.id) });
+  m.noterOuverture();
+}).catch((e) => console.error('[presence]', e));
+
 demarrer();
 /* La bulle de conversation est sur toutes les pages du client : celle du
    projet de l'adresse, sinon celle du dernier projet ouvert, sinon celle

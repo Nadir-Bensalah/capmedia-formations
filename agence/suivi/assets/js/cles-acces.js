@@ -113,7 +113,7 @@ export const tenterConnexion = async (email) => {
     return null;
   }
   if (!cred) return null;
-  const v = await appeler('cleVerifier', { email, reponse: reponseDemande(cred) });
+  const v = await appeler('cleVerifier', { email, reponse: reponseDemande(cred), bureau: Boolean(window.capmediaBureau) });
   if (!v.ok || !v.lien) throw new Error(v.message || "La clé n'a pas pu être vérifiée.");
   return v;
 };
