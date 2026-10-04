@@ -125,6 +125,11 @@ await env.withSecurityRulesDisabled(async (ctx) => {
   await setDoc(doc(b, `projets/atelier/campagnes/close/passages/${KARIM}__ID-01`), { scenario: 'ID-01', testeur: KARIM, plateforme: 'ios', resultat: 'ok', commentaire: '', preuves: [], contexte: {} });
   await setDoc(doc(b, `projets/atelier/campagnes/c1/appreciations/${KARIM}`), { beaute: 4, prix: 5 });
   await setDoc(doc(b, 'projets/atelier/anomalies/a1'), { titre: 'Rappel decale', gravite: 'critique', statut: 'confirmee', passages: [`${KARIM}__DI-15`] });
+  /* Un problème relevé par les tests automatiques, et sa note interne. */
+  await setDoc(doc(b, 'projets/atelier/anomalies/robot-BUG-001'), { titre: 'La page Tâches ne s ouvre pas', gravite: 'critique', statut: 'nouvelle', origine: 'robot', scenarios: ['taches-f-001'], plateformes: ['web'] });
+  await setDoc(doc(b, 'projets/atelier/anomalies/robot-BUG-001/equipe/note'), { source: 'BUG-001', constats: [{ plateforme: 'web', piste: 'src/pages/tasks.tsx:12' }] });
+  await setDoc(doc(b, 'projets/boutique/anomalies/robot-BUG-002'), { titre: 'Autre projet', gravite: 'mineur', statut: 'nouvelle', origine: 'robot' });
+  await setDoc(doc(b, 'projets/boutique/anomalies/robot-BUG-002/equipe/note'), { source: 'BUG-002', constats: [] });
 });
 
 console.log('\n== Cloisonnement entre clients');
@@ -467,6 +472,24 @@ await doit("L'équipe classe une anomalie", updateDoc(doc(equipe(), 'projets/ate
 await refuse('Karim ne lit pas les anomalies', getDocs(collection(karim(), 'projets/atelier/anomalies')));
 await refuse('Camille ne classe pas une anomalie', updateDoc(doc(camille(), 'projets/atelier/anomalies/a1'), { statut: 'sans-suite' }));
 await refuse('Léa ne lit pas les anomalies d un autre projet', getDocs(collection(lea(), 'projets/atelier/anomalies')));
+
+console.log('\n== Les problèmes relevés par les tests automatiques : statut au client, note à l équipe');
+/* Règle du 04/10/2026 : le client lit le problème et son statut ; la
+   piste technique vit dans un sous-document que seule l'équipe lit. */
+await doit('Camille lit un problème relevé par les robots, avec son statut', getDoc(doc(camille(), 'projets/atelier/anomalies/robot-BUG-001')));
+await refuse('Camille ne lit pas la note interne du problème', getDoc(doc(camille(), 'projets/atelier/anomalies/robot-BUG-001/equipe/note')));
+await refuse('Camille ne liste pas les notes internes', getDocs(collection(camille(), 'projets/atelier/anomalies/robot-BUG-001/equipe')));
+await refuse('Camille ne change pas un statut (À confirmer vers Fausse alerte)', updateDoc(doc(camille(), 'projets/atelier/anomalies/robot-BUG-001'), { statut: 'sans-suite' }));
+await refuse('Camille ne se crée pas un problème', setDoc(doc(camille(), 'projets/atelier/anomalies/robot-BUG-999'), { titre: 'x', statut: 'confirmee', origine: 'robot' }));
+await refuse('Camille n écrit pas la note interne', setDoc(doc(camille(), 'projets/atelier/anomalies/robot-BUG-001/equipe/note'), { texte: 'x' }));
+await refuse('Karim (testeur) ne lit pas la note interne', getDoc(doc(karim(), 'projets/atelier/anomalies/robot-BUG-001/equipe/note')));
+await refuse('Léa ne lit pas la note d un problème d un autre projet', getDoc(doc(lea(), 'projets/atelier/anomalies/robot-BUG-001/equipe/note')));
+await refuse('Léa ne lit pas sa propre note interne non plus', getDoc(doc(lea(), 'projets/boutique/anomalies/robot-BUG-002/equipe/note')));
+await refuse('Un anonyme ne lit pas la note interne', getDoc(doc(anonyme(), 'projets/atelier/anomalies/robot-BUG-001/equipe/note')));
+await doit('L équipe lit la note interne', getDoc(doc(equipe(), 'projets/atelier/anomalies/robot-BUG-001/equipe/note')));
+await doit('L équipe écrit la note interne', setDoc(doc(equipe(), 'projets/atelier/anomalies/robot-BUG-001/equipe/note'), { texte: 'reproduit sur iPhone 15' }, { merge: true }));
+await doit('L équipe confirme le problème', updateDoc(doc(equipe(), 'projets/atelier/anomalies/robot-BUG-001'), { statut: 'confirmee' }));
+await doit('L équipe le passe à revérifier', updateDoc(doc(equipe(), 'projets/atelier/anomalies/robot-BUG-001'), { statut: 'a-reverifier' }));
 
 console.log('\n== La plateforme de tests : ce que la page testeur demande');
 /* Les requêtes exactes que fait l'espace testeur. Une règle peut être

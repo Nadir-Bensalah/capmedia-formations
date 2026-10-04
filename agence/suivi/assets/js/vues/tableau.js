@@ -32,7 +32,7 @@ import { icone, pastille, vide, sur, modale, agir, brancherPieces, copier } from
 import * as magasin from '../magasin.js';
 import { K, profilsTesteurs } from '../donnees.js';
 import { editer } from './editeurs.js';
-import { nommeur } from './tests.js';
+import { nommeur, explicationStatut } from './tests.js';
 import { appelServeur, URL_SUIVI } from '../serveur.js';
 import { tableauHumain, tableauHumainPlan, tableauMachine, tableauPlan, verdictParcours, rythme, ETATS_CASE, campagneSurPlan, affectationPlan, clesDuTesteur, clePassage, resultatCourt } from '../verdicts.js';
 import { barreHtml, famillesHtml } from '../grille.js';
@@ -69,7 +69,7 @@ const pourquoi = (c) => {
   const aRejouer = (p) => resultatCourt(p.resultat) === 'ko' && p.aRevoir === true;
   const echecs = c.passages.filter((p) => resultatCourt(p.resultat) === 'ko' && !aRejouer(p)).length;
   const faits = c.passages.filter((p) => !aRejouer(p)).length;
-  const ouverte = c.anomalies.find((a) => ['nouvelle', 'confirmee'].includes(a.statut));
+  const ouverte = c.anomalies.find((a) => ['nouvelle', 'a-reverifier', 'confirmee'].includes(a.statut));
   const gravite = ouverte ? ((GRAVITES_ANOMALIE[ouverte.gravite] || {}).libelle || '').toLowerCase() : '';
   switch (c.etat) {
     case 'casse':
@@ -167,7 +167,7 @@ const marquer = (t) => {
   return t;
 };
 
-export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme: plateformeChoisie = () => '' } = {}) => {
+export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme: plateformeChoisie = () => '', ouvrirProbleme = null } = {}) => {
   const equipe = env.role === 'equipe';
   const lot = magasin.lot();
   const sortie = boite;
@@ -676,11 +676,23 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
         ${!regle ? `<p class="aide">${x.mutation ? 'Contre-épreuve faite : on a cassé l\'app exprès, ce robot l\'a vu.' : 'Contre-épreuve à faire : on n\'a pas encore vérifié que ce robot repère une vraie panne.'}</p>` : ''}
         ${detail ? `<div class="fs-bloc"><p class="fs-bloc-sur">Ce que le robot a fait, et ce qu'il a trouvé</p>
           <p>${detail.message ? echapper(detail.message) : 'Aucun message.'}</p>
-          <p class="aide">${detail.essais > 1 ? `${detail.essais} essais · ` : ''}exécution ${echapper(der.execution)}${detail.lien ? ` · <a href="${echapper(detail.lien)}" target="_blank" rel="noopener">voir le rapport</a>` : ''}</p></div>` : ''}`,
+          <p class="aide">${detail.essais > 1 ? `${detail.essais} essais · ` : ''}exécution ${echapper(der.execution)}${detail.lien ? ` · <a href="${echapper(detail.lien)}" target="_blank" rel="noopener">voir le rapport</a>` : ''}</p></div>` : ''}
+        ${regle ? '' : problemesCaseHtml(problemesDesCases(pid, planDuParcours(pid, ref).map((sc) => sc.id)))}`,
       pied: `<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>${equipe && !regle ? '<button class="btn btn-principal" type="button" data-modifier>Modifier</button>' : ''}`,
     });
     sur(m.el, 'click', '[data-modifier]', async () => { m.fermer(); await editer('parcours', env, { pid, fiche: x }); });
+    brancherProblemes(m, pid);
   };
+
+  /* Les problèmes relevés par les tests automatiques sur ces scénarios du
+     plan : la case dit ce qu'on a trouvé, et mène à la fiche du problème. */
+  const problemesDesCases = (pid, ids) => ((dernier && dernier.d && dernier.d.anomalies) || [])
+    .filter((a) => projetDe(a) === pid && a.origine === 'robot' && (a.scenarios || []).some((x) => ids.includes(x)));
+  const problemesCaseHtml = (liste) => (liste.length ? `<div class="fs-bloc"><p class="fs-bloc-sur">${liste.length > 1 ? 'Problèmes relevés' : 'Problème relevé'}</p><div class="tb-sessions">${liste.map((a) => `<div class="tb-passage">
+          <div><p><strong>${echapper(a.titre || 'Problème')}</strong></p><p class="aide">${echapper(explicationStatut(a))}</p></div>
+          <div class="rang">${pastille(STATUTS_ANOMALIE, a.statut || 'nouvelle')}${pastille(GRAVITES_ANOMALIE, a.gravite || 'important')}${ouvrirProbleme ? `<button class="btn btn-doux btn-petit" type="button" data-ouvrir-probleme="${echapper(a.id)}">Voir</button>` : ''}</div>
+        </div>`).join('')}</div></div>` : '');
+  const brancherProblemes = (m, pid) => sur(m.el, 'click', '[data-ouvrir-probleme]', (el) => { m.fermer(); if (ouvrirProbleme) ouvrirProbleme(el.dataset.ouvrirProbleme, pid); });
 
   /* Les scénarios du plan (faits par un robot) auxquels un test est rattaché. */
   const planDuParcours = (pid, ref) => sectionsDuPlan(pid)
@@ -721,10 +733,12 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
           </div>`;
   }).join('')}</div>` : '<p>Pas encore de test robot écrit.</p>'}
           ${equipe && c.inconnus.length ? `<p class="aide">Introuvable${c.inconnus.length > 1 ? 's' : ''} parmi les tests robot actifs du projet : ${listeRefs(c.inconnus)}.</p>` : ''}
-        </div>`,
+        </div>
+        ${problemesCaseHtml(problemesDesCases(pid, [sc.id]))}`,
       pied: '<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>',
     });
     sur(m.el, 'click', '[data-ouvrir-parcours]', async (el) => { m.fermer(); await ouvrirCaseMachine(el.dataset.ouvrirParcours); });
+    brancherProblemes(m, pid);
   };
 
   const ouvrirPersonne = (uid) => {
@@ -823,7 +837,29 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
   const horloge = equipe ? setInterval(() => rendre(), 15000) : null;
   planifier();
 
+  /* Ouvre la case d'un scénario du plan (depuis la fiche d'un problème, ou
+     « ?case= » dans l'adresse) : le tableau se déplie sur la voie des
+     robots, ou sur celle des humains si le scénario n'a pas de case robot.
+     Rend faux tant que le tableau n'est pas dessiné ou que la case manque. */
+  const ouvrirCase = (id) => {
+    const cle = `plan:${id}`;
+    const trouve = (t) => Boolean(t && t.plan && t.familles.some((f) => f.cases.some((c) => c.cle === cle)));
+    if (!dernier) return false;
+    for (const voie of ['machine', 'humains']) {
+      etat.voie = voie; memoire.voie = voie; etat.deplie = true;
+      rendre(true);
+      if (!dernier) return false;
+      if (trouve(voie === 'machine' ? dernier.tm : dernier.th)) {
+        boite.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        if (voie === 'machine') ouvrirCasePlan(cle); else ouvrirCaseHumainePlan(cle);
+        return true;
+      }
+    }
+    return false;
+  };
+
   return {
+    ouvrirCase,
     /* La page Tests a changé de projet : on redessine tout de suite. */
     rafraichir: () => rendre(true),
     /* Pour la page qui nous accueille : son premier dessin attend nos clés. */

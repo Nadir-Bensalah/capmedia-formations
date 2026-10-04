@@ -472,11 +472,31 @@ export const GRAVITES_ANOMALIE = {
   'mineur':    { libelle: 'Mineur',    voile: 'gris',  rang: 4, aide: 'Détail, confort ou apparence.' },
 };
 
+/* Le statut d'un problème, lisible des deux côtés (règle du 04/10/2026 :
+   tout se montre, ce qui n'est pas confirmé est signalé comme tel). Les
+   clés restent celles d'avant, seuls les mots changent ; « a-reverifier »
+   s'ajoute. « explication » est la phrase lue sous le statut. */
 export const STATUTS_ANOMALIE = {
-  'nouvelle':   { libelle: 'Nouvelle',   voile: 'ambre',  ordre: 1 },
-  'confirmee':  { libelle: 'Confirmée',  voile: 'rouge',  ordre: 2 },
-  'corrigee':   { libelle: 'Corrigée',   voile: 'vert',   ordre: 3 },
-  'sans-suite': { libelle: 'Sans suite', voile: 'gris',   ordre: 4 },
+  'nouvelle':     { libelle: 'À confirmer',   voile: 'ambre', ordre: 1, explication: 'Relevé par les tests, en cours de vérification par l\'équipe.' },
+  'a-reverifier': { libelle: 'À revérifier',  voile: 'ambre', ordre: 2, explication: 'L\'équipe vérifie de nouveau ce point avant de trancher.' },
+  'confirmee':    { libelle: 'Confirmé',      voile: 'rouge', ordre: 3, explication: 'L\'équipe a reproduit le problème : il est réel.' },
+  'corrigee':     { libelle: 'Corrigé',       voile: 'vert',  ordre: 4, explication: 'Corrigé par l\'équipe. Une nouvelle vérification suit.' },
+  'sans-suite':   { libelle: 'Fausse alerte', voile: 'gris',  ordre: 5, explication: 'Vérifié par l\'équipe : ce n\'était pas un défaut de l\'application.' },
+};
+/* « À confirmer », dit selon d'où vient le problème. */
+export const EXPLICATION_A_CONFIRMER = {
+  robot: 'Relevé par les tests automatiques, en cours de vérification par l\'équipe.',
+  testeur: 'Signalé par un testeur, en cours de vérification par l\'équipe.',
+  equipe: 'Relevé par l\'équipe, en cours de vérification.',
+};
+/* Un problème encore ouvert : ni corrigé, ni fausse alerte. */
+export const ANOMALIE_OUVERTE = ['nouvelle', 'a-reverifier', 'confirmee'];
+export const anomalieOuverte = (a) => ANOMALIE_OUVERTE.includes((a && a.statut) || 'nouvelle');
+/* D'où vient un problème, dit au client. */
+export const ORIGINES_ANOMALIE = {
+  robot:   { libelle: 'Tests automatiques' },
+  testeur: { libelle: 'Testeurs' },
+  equipe:  { libelle: 'Équipe' },
 };
 
 /* Une référence de scénario : deux lettres, un tiret, un numéro. Le « R »

@@ -19,6 +19,7 @@ import {
   echapper, dateCourte, depuis, pluriel, joursAvant, parDateDesc,
   NIVEAUX_SCENARIO, BLOCS_SCENARIO, PLATEFORMES_TEST, STATUTS_CAMPAGNE,
   GRAVITES_ANOMALIE, STATUTS_ANOMALIE, FAMILLES_AVIS, FAMILLES_REGLE, ETATS_REGLE,
+  EXPLICATION_A_CONFIRMER, ORIGINES_ANOMALIE, anomalieOuverte, STATUTS, TERMINES, getDoc,
   ETATS_PARCOURS, OUTILS_PARCOURS, PARCOURS_A_REGARDER, RESULTATS_PASSAGE,
   dateHeure, enDate,
   MOMENTS_AVIS, lireReponse, avisRepondus, resumeQuestionnaire,
@@ -71,6 +72,10 @@ const ONGLETS_TESTS = [
   { cle: 'devis', libelle: 'Le devis' },
   { cle: 'humains', libelle: 'Testeurs humains' },
   { cle: 'automatises', libelle: 'Tests par robot' },
+  /* Tout ce que les tests ont relevé, robots, testeurs et équipe, avec son
+     statut : « À confirmer » tant que l'équipe n'a pas tranché (règle du
+     04/10/2026). */
+  { cle: 'problemes', libelle: 'Problèmes' },
   { cle: 'bibliotheque', libelle: 'Ce qu\'on vérifie' },
 ];
 const ONGLET_DEFAUT = 'humains';
@@ -88,6 +93,7 @@ const ONGLET_DE_SECTION = {
   'etage-avis': 'humains', avis: 'humains',
   'etage-machine': 'automatises', parcours: 'automatises', regles: 'automatises',
   'etage-bibli': 'bibliotheque', scenarios: 'bibliotheque', bibliotheque: 'bibliotheque',
+  problemes: 'problemes',
 };
 
 /* --------------------------------------------------------------------------
@@ -111,6 +117,9 @@ const lireTout = (env) => {
     anomalies: rassembler(K.anomaliesToutes, K.anomalies),
     parcours: rassembler(K.parcoursTous, K.parcours),
     regles: rassembler(K.reglesToutes, K.regles),
+    /* Les tickets : un problème relevé peut en avoir un, et son état dit
+       où en est la correction. */
+    tickets: rassembler(K.ticketsTous, K.tickets),
     /* Le devis de la campagne et ses étapes : ce que le client a acheté,
        ligne par ligne, et ce qu'il vient vérifier en premier. */
     documents: rassembler(K.documentsTous, K.documents),
@@ -220,7 +229,13 @@ const EXPLICATIONS = {
     <p>Une anomalie, c'est un problème réel, constaté et reproduit : l'application ne fait pas ce qu'elle devrait.</p>
     <p>Quand plusieurs testeurs échouent sur la même vérification, ça ne fait qu'une seule anomalie, pas une par personne.</p>
     <p>Chacune a une gravité : <b>bloquant</b> (on ne peut pas continuer), <b>critique</b> (une fonction importante est cassée), <b>important</b> (gênant, mais on peut contourner), <b>mineur</b> (un détail, souvent d'apparence).</p>
-    <p>Et un statut : nouvelle, confirmée, corrigée, ou sans suite si ce n'était finalement pas un défaut.</p>` },
+    <p>Et un statut : à confirmer, à revérifier, confirmé, corrigé, ou fausse alerte si ce n'était finalement pas un défaut.</p>` },
+  'problemes': { titre: 'Les problèmes relevés', corps: `
+    <p>Tout ce que les tests ont relevé sur l'application : les tests automatiques, les testeurs et l'équipe. Rien n'est caché, et chaque problème dit où il en est.</p>
+    <p><b>À confirmer</b> : relevé par les tests, en cours de vérification par l'équipe. Un test automatique peut se tromper : c'est pourquoi l'équipe reproduit chaque problème avant de le confirmer.</p>
+    <p><b>À revérifier</b> : l'équipe vérifie de nouveau ce point avant de trancher. <b>Confirmé</b> : l'équipe l'a reproduit, il est réel. <b>Fausse alerte</b> : ce n'était pas un défaut de l'application.</p>
+    <p>Quand une correction est lancée, le problème porte son ticket, puis passe à <b>corrigé</b>.</p>
+    <p>La gravité suit la même échelle que vos tickets : <b>bloquant</b>, <b>critique</b>, <b>important</b>, <b>mineur</b>.</p>` },
   'testeurs': { titre: 'Les testeurs', corps: `
     <p>Les personnes qui utilisent l'application pour de vrai et notent ce qui cloche. Elles ne travaillent pas sur le projet : c'est justement ce qui rend leur regard utile.</p>
     <p>Chacune teste sur son propre téléphone, iPhone ou Android, et sur le web. On s'arrange pour que les vérifications importantes soient faites par au moins deux personnes sur deux systèmes différents.</p>
@@ -639,18 +654,135 @@ const vivierClientHtml = (d) => {
 };
 
 /* --------------------------------------------------------------------------
+   Les problèmes relevés
+
+   Règle du 04/10/2026 : tout ce que les tests trouvent se montre, au
+   Cockpit comme au Hub, et ce qui n'est pas confirmé est signalé comme
+   tel. Une seule collection, celle des anomalies ; l'origine dit d'où vient
+   le problème (« robot » : les tests automatiques, versés par l'outil
+   bugs-importer). Le technique (fichier, ligne, preuve) vit dans un
+   sous-document que seule l'équipe lit (anomalies/{id}/equipe/note) : ce
+   n'est pas un champ masqué à l'écran, les règles le ferment au client.
+   -------------------------------------------------------------------------- */
+
+const rangGravite = (a) => (GRAVITES_ANOMALIE[a.gravite] || {}).rang || 9;
+const dateProbleme = (a) => enDate(a.cree) || enDate(a.maj);
+/* Par gravité, puis du plus récent au plus ancien. */
+export const trierProblemes = (liste) => liste.slice().sort((a, b) => rangGravite(a) - rangGravite(b)
+  || ((dateProbleme(b) || 0) - (dateProbleme(a) || 0))
+  || String(a.titre || '').localeCompare(String(b.titre || ''), 'fr'));
+
+/* La phrase sous un statut. « À confirmer » se dit selon l'origine. */
+export const explicationStatut = (a) => ((a.statut || 'nouvelle') === 'nouvelle'
+  ? (EXPLICATION_A_CONFIRMER[a.origine] || EXPLICATION_A_CONFIRMER.equipe)
+  : ((STATUTS_ANOMALIE[a.statut] || {}).explication || ''));
+
+/* Le ticket d'un problème : celui qu'il porte, sinon une demande née de lui. */
+const ticketDe = (a, tickets = []) => tickets.find((t) => a.ticket && t.id === a.ticket)
+  || tickets.find((t) => t.anomalie === a.id && !t.archive) || null;
+
+/* Où en est la correction, en deux mots ; rien tant que rien n'est lancé. */
+const CORRECTION = {
+  ouvert: { libelle: 'Ticket ouvert', voile: 'bleu' },
+  resolu: { libelle: 'Ticket résolu', voile: 'vert' },
+  ferme:  { libelle: 'Ticket fermé', voile: 'gris' },
+};
+const correctionDe = (a, tickets) => {
+  const t = ticketDe(a, tickets);
+  if (!t) return a.ticket ? 'ouvert' : '';
+  if (t.statut === 'resolu') return 'resolu';
+  return TERMINES.includes(t.statut) ? 'ferme' : 'ouvert';
+};
+
+/* Les scénarios du plan, à plat, et le nom de chaque section. */
+const ASPECTS_PLAN = ['fonctionnel', 'technique', 'ux', 'securite'];
+const scenariosDuPlan = (pid) => new Map(sectionsDuPlan(pid)
+  .flatMap((s) => ASPECTS_PLAN.flatMap((x) => ((s.aspects || {})[x] || []).map((sc) => [sc && sc.id, { ...sc, section: s.id }])))
+  .filter(([id]) => id));
+const nomsSections = (pid) => new Map(sectionsDuPlan(pid).map((s) => [s.id, s.titre || s.id]));
+const sectionsDe = (a) => ((a.sections || []).length ? a.sections : (a.bloc ? [a.bloc] : []));
+const nomPlateforme = (p) => (PLATEFORMES_TEST[p] || {}).libelle || p;
+
+/* Les filtres de la liste vivent dans l'adresse, comme la plateforme. */
+const FILTRES_PROBLEMES = ['gravite', 'statut', 'section', 'origine'];
+
+const problemesHtml = (tous, { pid, equipe, filtres = {}, plateforme = '', tickets = [] }) => {
+  const noms = nomsSections(pid);
+  const garde = tous.filter((a) => (!filtres.gravite || a.gravite === filtres.gravite)
+    && (!filtres.statut || (a.statut || 'nouvelle') === filtres.statut)
+    && (!filtres.section || sectionsDe(a).includes(filtres.section))
+    && (!filtres.origine || (a.origine || 'equipe') === filtres.origine));
+  const liste = trierProblemes(garde);
+  const filtre = FILTRES_PROBLEMES.some((f) => filtres[f]);
+
+  /* Le compte par statut, en clair : « À confirmer 12 · Confirmé 3 ». */
+  const resume = Object.entries(STATUTS_ANOMALIE)
+    .map(([cle, x]) => [x.libelle, tous.filter((a) => (a.statut || 'nouvelle') === cle).length])
+    .filter(([, n]) => n).map(([l, n]) => `${echapper(l)} <b>${n}</b>`).join(' · ');
+
+  const ordre = [...noms.keys()];
+  const sections = [...new Set(tous.flatMap(sectionsDe))]
+    .sort((x, y) => ((ordre.indexOf(x) + 1) || 999) - ((ordre.indexOf(y) + 1) || 999) || x.localeCompare(y));
+  const origines = [...new Set(tous.map((a) => a.origine || 'equipe'))];
+  const choix = (nom, aria, tousLibelle, options, valeur) => `<select class="select" style="width:auto" data-filtre-probleme="${nom}" aria-label="${echapper(aria)}">
+    <option value="">${echapper(tousLibelle)}</option>
+    ${options.map(([v, l]) => `<option value="${echapper(v)}"${v === valeur ? ' selected' : ''}>${echapper(l)}</option>`).join('')}
+  </select>`;
+  const filtresHtml = `<div class="rang pb-filtres">
+    ${choix('gravite', 'Gravité', 'Toutes les gravités', Object.entries(GRAVITES_ANOMALIE).map(([k, x]) => [k, x.libelle]), filtres.gravite || '')}
+    ${choix('plateforme', 'Plateforme', 'Toutes les plateformes', Object.entries(PLATEFORMES_TEST).map(([k, x]) => [k, x.libelle]), plateforme || '')}
+    ${choix('statut', 'Statut', 'Tous les statuts', Object.entries(STATUTS_ANOMALIE).map(([k, x]) => [k, x.libelle]), filtres.statut || '')}
+    ${sections.length ? choix('section', 'Section', 'Toutes les sections', sections.map((x) => [x, noms.get(x) || x]), filtres.section || '') : ''}
+    ${origines.length > 1 ? choix('origine', 'Origine', 'Toutes les origines', origines.map((x) => [x, (ORIGINES_ANOMALIE[x] || {}).libelle || x]), filtres.origine || '') : ''}
+  </div>`;
+
+  const ligneProbleme = (a) => {
+    const corr = correctionDe(a, tickets);
+    const quand = dateProbleme(a);
+    return ligne({
+      titre: echapper(a.titre || 'Problème'),
+      sous: [sectionsDe(a).map((x) => noms.get(x) || x).join(', '), (a.plateformes || []).map(nomPlateforme).join(', '),
+        (ORIGINES_ANOMALIE[a.origine] || ORIGINES_ANOMALIE.equipe).libelle, quand ? `relevé le ${dateCourte(quand)}` : '']
+        .filter(Boolean).map(echapper).join(' · '),
+      fin: `${pastille(GRAVITES_ANOMALIE, a.gravite || 'important')}${pastille(STATUTS_ANOMALIE, a.statut || 'nouvelle')}${corr ? pastille(CORRECTION, corr) : ''}`,
+      action: 'ouvrir-anomalie', attrs: `data-id="${echapper(a.id)}" data-probleme`,
+    });
+  };
+
+  return `<section class="section" id="problemes">
+    <div class="section-tete">
+      <div><h2>Problèmes relevés ${infoBouton('problemes')}</h2><p class="chapo">${equipe
+    ? 'Tout ce que les tests ont relevé, confirmé ou non, par gravité puis du plus récent au plus ancien. Le client lit la même liste, sans la note interne.'
+    : 'Tout ce que les tests ont relevé sur votre application, confirmé ou non. Chaque problème dit où il en est.'}</p></div>
+      ${equipe ? `<button class="btn btn-principal btn-petit" type="button" data-nouvelle-anomalie="${echapper(pid)}">${icone('plus')} Nouvelle anomalie</button>` : ''}
+    </div>
+    <p class="pb-explication"><b>À confirmer</b> : relevé par les tests automatiques, en cours de vérification par l'équipe.</p>
+    ${resume ? `<p class="pb-compte">${resume}</p>` : ''}
+    ${tous.length ? filtresHtml : ''}
+    ${liste.length
+    ? `${filtre || plateforme ? `<p class="aide pb-affiches">${pluriel(liste.length, 'problème affiché', 'problèmes affichés')}${plateforme ? ` sur ${echapper(nomPlateforme(plateforme))}` : ''}.</p>` : ''}<div class="liste">${liste.map(ligneProbleme).join('')}</div>`
+    : `<p class="calme">${tous.length ? 'Aucun problème avec ces filtres.' : 'Aucun problème relevé pour l\'instant.'}</p>`}
+  </section>`;
+};
+
+/* --------------------------------------------------------------------------
    Un projet choisi : toute la panoplie
    -------------------------------------------------------------------------- */
 
-const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAUT }) => {
+const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAUT, filtres = {} }) => {
   const projet = d.projets.find((p) => p.id === pid);
   if (!projet) return vide({ icone: 'bug', titre: 'Projet introuvable', texte: 'Il a peut-être été archivé.' });
 
   const scen = d.scenarios.filter((s) => projetDe(s) === pid && s.actif !== false && dansPlateforme(s, plateforme));
   const camp = d.campagnes.filter((c) => projetDe(c) === pid)
     .sort((a, b) => ((STATUTS_CAMPAGNE[a.statut] || {}).ordre || 9) - ((STATUTS_CAMPAGNE[b.statut] || {}).ordre || 9));
-  const ano = d.anomalies.filter((a) => projetDe(a) === pid && dansPlateforme(a, plateforme))
+  /* Tous les problèmes du projet (onglet Problèmes), et ceux des testeurs
+     et de l'équipe dans l'onglet des tests humains : les relevés des tests
+     automatiques n'ont rien à faire au milieu des campagnes. */
+  const tousProblemes = d.anomalies.filter((a) => projetDe(a) === pid && dansPlateforme(a, plateforme));
+  const ano = tousProblemes.filter((a) => a.origine !== 'robot')
     .sort((a, b) => ((GRAVITES_ANOMALIE[a.gravite] || {}).rang || 9) - ((GRAVITES_ANOMALIE[b.gravite] || {}).rang || 9));
+  const problemesOuverts = tousProblemes.filter(anomalieOuverte).length;
 
   const parNiveau = { socle: 0, transversal: 0, reparti: 0 };
   scen.forEach((s) => { parNiveau[s.niveau] = (parNiveau[s.niveau] || 0) + 1; });
@@ -721,9 +853,13 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAU
     devis: devisProjet.length ? `${etapesFaites.length}/${etapesDevis.length}` : '',
     humains: ouvertes ? pluriel(ouvertes, 'problème', 'problèmes') : '',
     automatises: nRobots ? `${parcVerts + reglVertes}/${nRobots}` : '',
+    problemes: problemesOuverts || '',
     bibliotheque: scen.length,
   };
-  const onglets = ONGLETS_TESTS.filter((o) => o.cle !== 'devis' || devisProjet.length);
+  /* Un onglet vide ne se montre pas au client ; l'équipe garde « Problèmes »
+     pour y poser une anomalie à la main. */
+  const onglets = ONGLETS_TESTS.filter((o) => (o.cle !== 'devis' || devisProjet.length)
+    && (o.cle !== 'problemes' || equipe || d.anomalies.some((a) => projetDe(a) === pid)));
   const actif = onglets.some((o) => o.cle === onglet) ? onglet : ONGLET_DEFAUT;
 
   const sectionCampagnes = `<section class="section" id="campagnes">
@@ -798,7 +934,7 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAU
   return `
   <div id="tableau-ici"></div>
 
-  ${alertes({ ...d, anomalies: ano, campagnes: camp, parcours: parc, scenarios: scen }, { nomProjet, plateforme })}
+  ${alertes({ ...d, anomalies: tousProblemes, campagnes: camp, parcours: parc, scenarios: scen }, { nomProjet, plateforme })}
 
   <div class="onglets-enveloppe"><nav class="onglets" id="onglets-tests" aria-label="Sections des tests">
     ${onglets.map((o) => `<a class="onglet${o.cle === actif ? ' actif' : ''}" href="#${adresse({ projet: pid, plateforme, onglet: o.cle === ONGLET_DEFAUT ? '' : o.cle })}" data-onglet="${o.cle}">${o.libelle}${comptes[o.cle] ? `<span class="badge">${echapper(String(comptes[o.cle]))}</span>` : ''}</a>`).join('')}
@@ -809,6 +945,7 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAU
     ${actif === 'humains' ? `${etage('etage-humain', 'Testeurs humains', humain, `${sectionCampagnes}${sectionAnomalies}${vivierHtml({ ...d, testeurs: gens, profils: gens }, { equipe })}`)}
       ${etage('etage-avis', 'Ce que les testeurs ont pensé de l\'app', resumeAvis, `${avisHtml(avis, { nommer, equipe })}${remarquesHtml(remarques, { nommer })}`)}` : ''}
     ${actif === 'automatises' ? etage('etage-machine', 'Tests par robot', machine, `${parcoursHtml(d, { pid, equipe, plateforme })}${reglesHtml(d, { pid, equipe })}`) : ''}
+    ${actif === 'problemes' ? problemesHtml(tousProblemes, { pid, equipe, filtres, plateforme, tickets: (d.tickets || []).filter((t) => t.projet === pid) }) : ''}
     ${actif === 'bibliotheque' ? etage('etage-bibli', 'Ce qu\'on vérifie', bibli, sectionScenarios) : ''}
   </div>`;
 };
@@ -819,36 +956,123 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAU
    balise venue de la fiche ne peut s'ouvrir ici. */
 const gras = (texte) => echapper(texte || '').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
 
-/* La fiche d'une anomalie : la gravité, l'état, ce qu'on sait, et chaque
-   témoin, avec sa preuve. C'est ce que l'équipe lit avant de reproduire,
-   et ce que le client lit pour savoir où on en est. */
-const ouvrirAnomalie = (a, { equipe, pid, env, scenarios }) => {
+/* La fiche d'une anomalie : la gravité, le statut et ce qu'il veut dire,
+   ce qui se passe, les cases de test concernées, et chaque témoin avec sa
+   preuve. C'est ce que l'équipe lit avant de reproduire, et ce que le
+   client lit pour savoir où on en est. L'équipe y tranche (confirmer,
+   fausse alerte, à revérifier), y crée le ticket de correction, et lit la
+   note interne (fichier, ligne, preuve), chargée à part : les règles la
+   ferment au client. */
+const ouvrirAnomalie = (a, { equipe, pid, scenarios, tickets = [] }) => {
+  const robot = a.origine === 'robot';
   const s = (scenarios || []).find((x) => x.ref === a.scenario);
   const temoins = (a.temoins || []).slice().sort((x, y) => (enDate(y.le) || 0) - (enDate(x.le) || 0));
+  const plan = scenariosDuPlan(pid);
+  const noms = nomsSections(pid);
+  const statut = a.statut || 'nouvelle';
+  const t = ticketDe(a, tickets);
+  const corr = correctionDe(a, tickets);
+  const cases = (a.scenarios || []).filter(Boolean);
+  const texte = (titre, v) => (v ? `<div class="groupe"><span class="etiquette-champ">${titre}</span><p class="t-corps">${echapper(v).replace(/\n/g, '<br>')}</p></div>` : '');
+  const lienTicket = t ? `#/projets/${encodeURIComponent(pid)}/demandes/${encodeURIComponent(t.id)}` : '';
+  const ticketHtml = t
+    ? `<p class="pb-ticket">${pastille(CORRECTION, corr)} <span>Ticket${t.numero ? ` ${echapper(t.numero)}` : ''} : ${echapper((STATUTS[t.statut] || {}).client || (STATUTS[t.statut] || {}).libelle || '')}.</span></p>`
+    : (corr ? `<p class="pb-ticket">${pastille(CORRECTION, corr)}</p>` : '');
+  const decision = (cle, libelle) => `<button class="btn ${statut === cle ? 'btn-principal' : 'btn-secondaire'} btn-petit" type="button" data-statut-anomalie="${cle}" aria-pressed="${statut === cle}">${libelle}</button>`;
   return modale({
-    titre: a.titre || 'Anomalie', sousTitre: [a.scenario, (BLOCS_SCENARIO[a.bloc] || {}).libelle].filter(Boolean).join(' · '), feuille: true,
-    corps: `
-      <div class="rang" style="gap:8px;flex-wrap:wrap;margin-bottom:16px">
-        ${pastille(GRAVITES_ANOMALIE, a.gravite || 'important')}${pastille(STATUTS_ANOMALIE, a.statut || 'nouvelle')}
+    titre: a.titre || 'Anomalie',
+    sousTitre: robot
+      ? [sectionsDe(a).map((x) => noms.get(x) || x).join(', '), 'Relevé par les tests automatiques'].filter(Boolean).join(' · ')
+      : [a.scenario, (BLOCS_SCENARIO[a.bloc] || {}).libelle].filter(Boolean).join(' · '),
+    feuille: true,
+    corps: `<div class="pb-fiche">
+      <div class="rang" style="gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        ${pastille(GRAVITES_ANOMALIE, a.gravite || 'important')}${pastille(STATUTS_ANOMALIE, statut)}
         ${Number(a.retours) ? `<span class="etiquette">Revenue ${a.retours > 1 ? `${a.retours} fois` : 'une fois'} après correction</span>` : ''}
-        ${(a.plateformes || []).map((p) => `<span class="puce">${echapper((PLATEFORMES_TEST[p] || {}).libelle || p)}</span>`).join('')}
+        ${(a.plateformes || []).map((p) => `<span class="puce">${echapper(nomPlateforme(p))}</span>`).join('')}
       </div>
+      <p class="pb-explication" data-explication-statut><b>${echapper((STATUTS_ANOMALIE[statut] || {}).libelle || statut)}</b> : ${echapper(explicationStatut(a).replace(/^./, (c) => c.toLowerCase()))}</p>
+      ${ticketHtml}
       <p class="aide" style="margin-bottom:16px">${echapper((GRAVITES_ANOMALIE[a.gravite] || {}).aide || '')}</p>
+      ${texte('Ce qui se passe', a.obtenu)}
+      ${texte('Ce qui devrait se passer', a.attendu)}
+      ${texte('Pour le voir', a.etapes)}
       ${a.description ? `<div class="groupe"><span class="etiquette-champ">Ce qu'on sait</span><div class="prose"><p>${echapper(a.description).replace(/\n/g, '<br>')}</p></div></div>` : ''}
       ${s ? `<div class="groupe"><span class="etiquette-champ">Le scénario</span><p class="t-corps">${gras(s.attendu)}</p></div>` : ''}
-      <div class="groupe"><span class="etiquette-champ">${temoins.length ? pluriel(temoins.length, 'témoin', 'témoins') : 'Aucun témoin'}</span>
-        ${temoins.length ? `<div class="liste liste--serree">${temoins.map((t) => ligne({
+      ${cases.length ? `<div class="groupe"><span class="etiquette-champ">${cases.length > 1 ? 'Les cases de test concernées' : 'La case de test concernée'}</span>
+        <div class="liste liste--serree">${cases.map((id) => {
+    const sc = plan.get(id);
+    return ligne({
+      titre: echapper((sc && sc.titre) || id),
+      sous: echapper([id, sc ? noms.get(sc.section) || sc.section : ''].filter(Boolean).join(' · ')),
+      action: 'voir-case', attrs: `data-voir-case="${echapper(id)}"`,
+    });
+  }).join('')}</div></div>` : ''}
+      ${robot ? '' : `<div class="groupe"><span class="etiquette-champ">${temoins.length ? pluriel(temoins.length, 'témoin', 'témoins') : 'Aucun témoin'}</span>
+        ${temoins.length ? `<div class="liste liste--serree">${temoins.map((x) => ligne({
           icone: 'utilisateur', ton: 'ambre',
-          titre: `${echapper((PLATEFORMES_TEST[t.plateforme] || {}).libelle || t.plateforme || 'Plateforme inconnue')}${t.appareil ? ` · ${echapper(t.appareil)}` : ''}`,
-          sous: `${dateHeure(t.le) ? `${echapper(dateHeure(t.le))} · ` : ''}${echapper(t.commentaire || 'Sans commentaire')}`,
-          fin: (t.preuves || []).map((c, i) => `<button class="btn btn-doux btn-petit" type="button" data-piece="${echapper(c)}">${icone('image')} Preuve ${i + 1}</button>`).join(''),
+          titre: `${echapper(nomPlateforme(x.plateforme) || 'Plateforme inconnue')}${x.appareil ? ` · ${echapper(x.appareil)}` : ''}`,
+          sous: `${dateHeure(x.le) ? `${echapper(dateHeure(x.le))} · ` : ''}${echapper(x.commentaire || 'Sans commentaire')}`,
+          fin: (x.preuves || []).map((c, i) => `<button class="btn btn-doux btn-petit" type="button" data-piece="${echapper(c)}">${icone('image')} Preuve ${i + 1}</button>`).join(''),
         })).join('')}</div>` : `<p class="aide">Posée à la main, sans échec de testeur derrière.</p>`}
-      </div>`,
-    /* Le client en fait une demande : elle est alors suivie comme
-       n'importe quel signalement, avec le lien vers l'anomalie. */
-    pied: `${equipe ? `<button class="btn btn-secondaire" type="button" data-qualifier>${icone('edit')} Qualifier</button>`
-      : `<a class="btn btn-secondaire" href="#/projets/${echapper(pid)}/nouvelle-demande?type=bug&titre=${encodeURIComponent(String(a.titre || a.scenario || 'Anomalie').slice(0, 120))}&anomalie=${encodeURIComponent(a.id || '')}" data-demande-anomalie>${icone('demandes')} En faire une demande</a>`}<span class="pousse"></span><button class="btn btn-principal" type="button" data-fermer>Fermer</button>`,
+      </div>`}
+      ${equipe ? `<div class="groupe pb-decision"><span class="etiquette-champ">La décision de l'équipe</span>
+        <div class="rang" style="gap:8px;flex-wrap:wrap">${decision('confirmee', 'Confirmer')}${decision('sans-suite', 'Fausse alerte')}${decision('a-reverifier', 'À revérifier')}</div>
+        <p class="aide">Le client voit le statut changer aussitôt.</p></div>
+      <div class="groupe pb-interne" data-note-interne><span class="etiquette-champ">Note interne, équipe seule</span><p class="aide">Lecture de la note…</p></div>` : ''}
+    </div>`,
+    pied: `${equipe
+      ? `${t ? `<a class="btn btn-secondaire" href="${lienTicket}" data-voir-ticket>Voir le ticket</a>` : `<button class="btn btn-secondaire" type="button" data-creer-ticket>Créer un ticket</button>`}<button class="btn btn-secondaire" type="button" data-qualifier>${icone('edit')} Qualifier</button>`
+      /* Le client en fait une demande : elle est alors suivie comme
+         n'importe quel signalement, avec le lien vers l'anomalie. Un
+         problème qui a déjà son ticket mène à lui. */
+      : t ? `<a class="btn btn-secondaire" href="${lienTicket}" data-voir-ticket>Voir le ticket</a>`
+        : `<a class="btn btn-secondaire" href="#/projets/${echapper(pid)}/nouvelle-demande?type=bug&titre=${encodeURIComponent(String(a.titre || a.scenario || 'Anomalie').slice(0, 120))}&anomalie=${encodeURIComponent(a.id || '')}" data-demande-anomalie>${icone('demandes')} En faire une demande</a>`}<span class="pousse"></span><button class="btn btn-principal" type="button" data-fermer>Fermer</button>`,
   });
+};
+
+/* La note interne d'un problème, en texte : ce qui part dans le ticket
+   (message interne) et ce que la fiche montre à l'équipe. */
+const lignesNote = (n) => [
+  n.source ? `Source : ${n.source}${n.graviteSource ? `, gravité d'origine « ${n.graviteSource} »` : ''}` : '',
+  n.decision ? `Décision : ${n.decision}` : '',
+  ...(n.constats || []).flatMap((c) => [
+    `${nomPlateforme(c.plateforme || '') || 'Plateforme ?'}${c.section ? ` · ${c.section}` : ''}${c.titre ? ` · ${c.titre}` : ''}`,
+    c.piste ? `  Piste : ${c.piste}` : '',
+    c.obtenu ? `  Obtenu : ${c.obtenu}` : '',
+    c.preuve ? `  Preuve : ${c.preuve}` : '',
+  ]),
+  n.texte ? `Note : ${n.texte}` : '',
+].filter(Boolean);
+
+const noteHtml = (n) => {
+  if (!n) return '<p class="aide">Aucune note interne.</p>';
+  return `${n.source || n.decision ? `<p class="aide">${echapper([n.source ? `Source ${n.source}` : '', n.graviteSource ? `gravité d'origine « ${n.graviteSource} »` : '', n.decision || ''].filter(Boolean).join(' · '))}</p>` : ''}
+    ${(n.constats || []).map((c) => `<div class="pb-constat">
+      <p><b>${echapper(nomPlateforme(c.plateforme || '') || 'Plateforme ?')}</b>${c.titre ? ` · ${echapper(c.titre)}` : ''}</p>
+      ${c.piste ? `<p class="pb-piste"><span class="etiquette-champ">Piste</span> <code>${echapper(c.piste)}</code></p>` : ''}
+      ${c.obtenu ? `<p class="aide">Obtenu : ${echapper(c.obtenu)}</p>` : ''}
+      ${c.preuve ? `<p class="aide">Preuve : ${echapper(c.preuve)}</p>` : ''}
+    </div>`).join('')}
+    ${n.texte ? `<p class="t-corps">${echapper(n.texte)}</p>` : ''}`;
+};
+
+/* Le ticket de correction d'un problème : écrit pour le client (ce sont
+   les textes de la fiche), la piste technique en message interne. */
+const creerTicketProbleme = async (a, { pid, env, note }) => {
+  const plats = a.plateformes || [];
+  const titre = String(a.titre || 'Problème relevé par les tests').slice(0, 120);
+  const description = [a.obtenu || a.description || titre, a.origine === 'robot' ? 'Relevé par les tests automatiques.' : ''].filter(Boolean).join('\n\n').slice(0, 6000);
+  const tid = await ecrire.creerDemande(env.session, pid, {
+    titre, description, type: 'bug', urgence: GRAVITES_ANOMALIE[a.gravite] ? a.gravite : 'important',
+    plateforme: plats.length === 1 ? plats[0] : '',
+    etapes: String(a.etapes || '').slice(0, 4000), attendu: String(a.attendu || '').slice(0, 2000), obtenu: String(a.obtenu || '').slice(0, 2000),
+    anomalie: a.id,
+  });
+  const lignes = note ? lignesNote(note) : [];
+  if (lignes.length) await ecrire.messageDemande(env.session, tid, `Né du problème ${a.id}.\n${lignes.join('\n')}`.slice(0, 6000), [], true);
+  await ecrire.majAnomalie(pid, a.id, { ticket: tid });
+  return tid;
 };
 
 /* Le détail d'un scénario : ce que le testeur lira, mot pour mot. */
@@ -1520,6 +1744,8 @@ export const vue = async (ctx, env) => {
     projet: lire(ctx, 'projet', ''),
     plateforme: lire(ctx, 'plateforme', ''),
     onglet: ongletValide(lire(ctx, 'onglet', '')),
+    /* Les filtres de la liste des problèmes. */
+    filtres: Object.fromEntries(FILTRES_PROBLEMES.map((f) => [f, lire(ctx, f, '')])),
   };
   /* Une section visée par un lien, à faire défiler une fois l'onglet ouvert. */
   let allerA = '';
@@ -1540,9 +1766,9 @@ export const vue = async (ctx, env) => {
   const retoursSuivis = new Set();
   const clesSuivies = () => [
     ...(env.role === 'equipe'
-      ? [K.projets, K.scenariosTous, K.campagnesToutes, K.anomaliesToutes, K.parcoursTous, K.reglesToutes, K.documentsTous, K.jalonsTous, K.montantsTous, K.testeurs, K.profils]
+      ? [K.projets, K.scenariosTous, K.campagnesToutes, K.anomaliesToutes, K.parcoursTous, K.reglesToutes, K.documentsTous, K.jalonsTous, K.montantsTous, K.testeurs, K.profils, K.ticketsTous]
       : [K.projets, ...(magasin.lire(K.projets) || (env.session || {}).projets || [])
-          .flatMap((p) => [K.scenarios(p.id), K.campagnes(p.id), K.anomalies(p.id), K.parcours(p.id), K.regles(p.id), K.documents(p.id), K.jalons(p.id), K.montants(p.id), K.profilsTesteurs(p.id), K.planPresentation(p.id)])]),
+          .flatMap((p) => [K.scenarios(p.id), K.campagnes(p.id), K.anomalies(p.id), K.parcours(p.id), K.regles(p.id), K.documents(p.id), K.jalons(p.id), K.montants(p.id), K.profilsTesteurs(p.id), K.planPresentation(p.id), K.tickets(p.id)])]),
     ...[...campagnesSuivies].flatMap((cid) => [K.appreciations(cid), K.passages(cid), K.remarques(cid)]),
     ...[...retoursSuivis].map((x) => K.retourTesteur(...x.split('/'))),
   ];
@@ -1594,7 +1820,7 @@ export const vue = async (ctx, env) => {
 
   const rendre = (force = false) => {
     suivreCampagnes();
-    const sceau = magasin.empreinte([...clesSuivies(), ...clesDesPlans()]) + '|' + etat.projet + '|' + etat.plateforme + '|' + etat.onglet;
+    const sceau = magasin.empreinte([...clesSuivies(), ...clesDesPlans()]) + '|' + etat.projet + '|' + etat.plateforme + '|' + etat.onglet + '|' + JSON.stringify(etat.filtres);
     if (!force && sceau === empreinte) return;
     empreinte = sceau;
 
@@ -1639,7 +1865,7 @@ export const vue = async (ctx, env) => {
       </div>
 
       ${pid
-        ? unProjet(d, { pid, nomProjet, plateforme: etat.plateforme, equipe: env.role === 'equipe', onglet: etat.onglet })
+        ? unProjet(d, { pid, nomProjet, plateforme: etat.plateforme, equipe: env.role === 'equipe', onglet: etat.onglet, filtres: etat.filtres })
         : `<div id="tableau-ici"></div>
           ${alertes(d, { nomProjet, plateforme: etat.plateforme })}
           ${etage('etage-projets', 'Projets', `<b>${d.projets.length}</b> ${d.projets.length > 1 ? 'projets' : 'projet'}, <b>${d.campagnes.filter((c) => c.statut === 'en-cours').length}</b> ${d.campagnes.filter((c) => c.statut === 'en-cours').length > 1 ? 'campagnes en cours' : 'campagne en cours'}.`, avancement(d, { nomProjet, plateforme: etat.plateforme, equipe: env.role === 'equipe' }))}
@@ -1654,7 +1880,7 @@ export const vue = async (ctx, env) => {
     const ici = sortie.querySelector('#tableau-ici');
     if (ici) {
       ici.replaceWith(boiteTableau);
-      if (!tableau) tableau = monterTableau(boiteTableau, env, { projet: projetCourant, plateforme: () => etat.plateforme });
+      if (!tableau) tableau = monterTableau(boiteTableau, env, { projet: projetCourant, plateforme: () => etat.plateforme, ouvrirProbleme: (id, pid) => ouvrirProblemeParId(id, pid) });
       else if (`${pid}|${etat.plateforme}` !== pidTableau) tableau.rafraichir();
       pidTableau = `${pid}|${etat.plateforme}`;
     }
@@ -1673,7 +1899,58 @@ export const vue = async (ctx, env) => {
     if (sel) sel.addEventListener('change', (e) => { poser({ projet: e.target.value, plateforme: etat.plateforme, onglet: '' }); });
   };
 
+  /* La fiche d'une anomalie et ses gestes : trancher, créer le ticket,
+     ouvrir la case de test, lire la note interne (équipe). */
+  const ficheAnomalie = (a, pid) => {
+    const equipe = env.role === 'equipe';
+    const d = lireTout(env);
+    const tickets = (d.tickets || []).filter((t) => t.projet === pid);
+    const m = ouvrirAnomalie(a, { equipe, pid, env, scenarios: d.scenarios.filter((x) => projetDe(x) === pid), tickets });
+    brancherPieces(m.el);
+    let note = null;
+    if (equipe) {
+      const boite = m.el.querySelector('[data-note-interne]');
+      getDoc(doc(bdd, 'projets', pid, 'anomalies', a.id, 'equipe', 'note'))
+        .then((snap) => { note = snap.exists() ? snap.data() : null; if (boite) boite.insertAdjacentHTML('beforeend', noteHtml(note)); })
+        .catch(() => { if (boite) boite.insertAdjacentHTML('beforeend', '<p class="aide">La note interne est illisible.</p>'); })
+        .finally(() => { const attente = boite && boite.querySelector('p.aide'); if (attente && /Lecture de la note/.test(attente.textContent)) attente.remove(); });
+    }
+    sur(m.el, 'click', '[data-qualifier]', async () => { m.fermer(); await editer('anomalie', env, { pid, fiche: a }); });
+    sur(m.el, 'click', '[data-statut-anomalie]', async (b) => {
+      const statut = b.dataset.statutAnomalie;
+      if (statut === (a.statut || 'nouvelle')) return;
+      await agir(b, async () => {
+        await ecrire.majAnomalie(pid, a.id, { statut });
+        m.fermer();
+      }, `Statut : ${(STATUTS_ANOMALIE[statut] || {}).libelle || statut}.`);
+    });
+    sur(m.el, 'click', '[data-creer-ticket]', async (b) => {
+      await agir(b, async () => {
+        const tid = await creerTicketProbleme(a, { pid, env, note });
+        m.fermer();
+        location.hash = `#/projets/${encodeURIComponent(pid)}/demandes/${encodeURIComponent(tid)}`;
+      }, 'Ticket créé, la piste technique en note interne.');
+    });
+    sur(m.el, 'click', '[data-voir-case]', (b) => {
+      m.fermer();
+      if (tableau) tableau.ouvrirCase(b.dataset.voirCase);
+    });
+  };
+
+  const ouvrirProblemeParId = (id, pid) => {
+    const a = lireTout(env).anomalies.find((x) => x.id === id && projetDe(x) === pid);
+    if (a) ficheAnomalie(a, pid);
+  };
+
   brancherFrise(sortie, env);
+  /* Les filtres de la liste des problèmes : un changement d'adresse, comme
+     la plateforme. */
+  const changeFiltre = (e) => {
+    const sel = e.target.closest && e.target.closest('[data-filtre-probleme]');
+    if (!sel) return;
+    poser({ [sel.dataset.filtreProbleme]: sel.value, onglet: 'problemes' });
+  };
+  sortie.addEventListener('change', changeFiltre);
   const gestes = sur(sortie, 'click', '[data-info], [data-aller], [data-nouvelle-anomalie], [data-editer-anomalie], [data-action="ouvrir-anomalie"], [data-plateforme], [data-scenario], [data-plier-bugs], [data-plier-scenarios], [data-plier-parcours], [data-plier-regles], [data-plier-questions], [data-nouvelle-regle], [data-editer-regle], [data-nouvelle-campagne], [data-editer-campagne], [data-action="ouvrir-campagne"], [data-nouveau-testeur], [data-action="ouvrir-testeur"], [data-nouveau-parcours], [data-editer-parcours]', async (el) => {
     /* Une référence n'est unique qu'à l'intérieur d'un projet : deux plans
        de tests portent chacun leur « DI-15 ». Chercher sans le projet
@@ -1767,12 +2044,8 @@ export const vue = async (ctx, env) => {
     }
     if (el.dataset.action === 'ouvrir-anomalie') {
       const pid = projetCourant();
-      const d = lireTout(env);
-      const a = d.anomalies.find((x) => x.id === el.dataset.id && projetDe(x) === pid);
-      if (!a) return;
-      const m = ouvrirAnomalie(a, { equipe: env.role === 'equipe', pid, env, scenarios: d.scenarios.filter((x) => projetDe(x) === pid) });
-      brancherPieces(m.el);
-      sur(m.el, 'click', '[data-qualifier]', async () => { m.fermer(); await editer('anomalie', env, { pid, fiche: a }); });
+      const a = lireTout(env).anomalies.find((x) => x.id === el.dataset.id && projetDe(x) === pid);
+      if (a) ficheAnomalie(a, pid);
       return;
     }
     if (el.dataset.nouvelleCampagne) { await editer('campagne', env, { pid: el.dataset.nouvelleCampagne, sections: sectionsDuPlan(el.dataset.nouvelleCampagne) }); return; }
@@ -1826,7 +2099,7 @@ export const vue = async (ctx, env) => {
   /* Le tableau des tests est dans les deux vues (un projet, tous les
      projets) : on le monte avant le premier dessin, dans sa boîte encore
      détachée, pour que la page n'apparaisse qu'une fois lui aussi prêt. */
-  if (!tableau) tableau = monterTableau(boiteTableau, env, { projet: projetCourant, plateforme: () => etat.plateforme });
+  if (!tableau) tableau = monterTableau(boiteTableau, env, { projet: projetCourant, plateforme: () => etat.plateforme, ouvrirProbleme: (id, pid) => ouvrirProblemeParId(id, pid) });
   /* Tout est là quand aucune clé suivie (campagnes comprises) ni le tableau
      n'attend plus sa première valeur. */
   const clesAttendues = () => { suivreCampagnes(); suivre(); return toutesLesCles(); };
@@ -1841,8 +2114,10 @@ export const vue = async (ctx, env) => {
      « ?campagne= » dans l'adresse ouvre l'anomalie ou la campagne dès
      qu'elle est là, une seule fois. */
   const aOuvrir = { anomalie: lire(ctx, 'anomalie', ''), campagne: lire(ctx, 'campagne', '') };
-  /* Une anomalie ou une campagne à ouvrir vit dans l'onglet des tests humains. */
-  if (aOuvrir.anomalie || aOuvrir.campagne) etat.onglet = ONGLET_DEFAUT;
+  /* Une anomalie à ouvrir vit dans l'onglet Problèmes (toutes y sont, sans
+     filtre), une campagne dans celui des tests humains. */
+  if (aOuvrir.anomalie) { etat.onglet = 'problemes'; FILTRES_PROBLEMES.forEach((f) => { etat.filtres[f] = ''; }); }
+  else if (aOuvrir.campagne) etat.onglet = ONGLET_DEFAUT;
   let essais = 0;
   const ouvrirDepuisAdresse = () => {
     if (!aOuvrir.anomalie && !aOuvrir.campagne) return;
@@ -1853,9 +2128,17 @@ export const vue = async (ctx, env) => {
     if (essais < 20) setTimeout(ouvrirDepuisAdresse, 500);
   };
   ouvrirDepuisAdresse();
+  /* « ?case=<scénario du plan> » : la case de test s'ouvre dans le tableau,
+     une fois qu'il est dessiné. */
+  const caseAOuvrir = lire(ctx, 'case', '');
+  if (caseAOuvrir) {
+    let n = 0;
+    const essayer = () => { n += 1; if (tableau && tableau.ouvrirCase(caseAOuvrir)) return; if (n < 20) setTimeout(essayer, 500); };
+    setTimeout(essayer, 300);
+  }
 
   return {
-    fin: () => { planifier.arreter(); gestes(); lot.fin(); if (tableau) tableau.fin(); },
+    fin: () => { planifier.arreter(); gestes(); sortie.removeEventListener('change', changeFiltre); lot.fin(); if (tableau) tableau.fin(); },
     /* Même adresse, autres filtres : on lit le projet et la plateforme dans
        la nouvelle adresse et on redessine en place, sans squelette ni
        retour en haut de page. */
@@ -1863,7 +2146,9 @@ export const vue = async (ctx, env) => {
       const projet = lire(suite, 'projet', '');
       const plateforme = lire(suite, 'plateforme', '');
       const onglet = ongletValide(lire(suite, 'onglet', ''));
-      if (projet === etat.projet && plateforme === etat.plateforme && onglet === etat.onglet) return;
+      const filtres = Object.fromEntries(FILTRES_PROBLEMES.map((f) => [f, lire(suite, f, '')]));
+      if (projet === etat.projet && plateforme === etat.plateforme && onglet === etat.onglet && JSON.stringify(filtres) === JSON.stringify(etat.filtres)) return;
+      etat.filtres = filtres;
       const changeOnglet = onglet !== etat.onglet;
       etat.projet = projet;
       etat.plateforme = plateforme;
