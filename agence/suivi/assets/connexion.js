@@ -147,6 +147,10 @@ const lireInvitation = async () => {
   }
   champ.value = r.email;
   champ.readOnly = true;
+  /* Un testeur invité arrive sur la porte de Capmedia Test : le badge du
+     service le dit (porte-service.js fait de même pour ?espace=test). */
+  const badge = document.getElementById('porte-service');
+  if (badge && r.type === 'testeur') badge.textContent = 'Test';
   const aide = $('#aide-invitation');
   aide.classList.remove('masque');
   aide.textContent = r.projet

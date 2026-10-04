@@ -186,6 +186,43 @@ const entrer=async(nav,email)=>{
     verifier(/id="surtitre-porte"/.test(src),'son surtitre est neutre et nommé');
   }
 
+  console.log('\n== 6 · Le badge du service sur la porte');
+  {
+    /* Règle de Nadir : le badge bleu du service accompagne toujours la
+       marque. Un testeur lit « Test », jamais « Suite » : sur la porte où le
+       renvoie son espace, et par son lien d'invitation. Le Hub et le
+       Cockpit gardent leur comportement du web (« Suite »). */
+    const nav=await chromium.launch();
+    const page=await (await nav.newContext({viewport:{width:1200,height:900}})).newPage();
+    const badge=async(chemin,attendreAide=false)=>{
+      await page.goto(`${SITE}${chemin}`,{waitUntil:'domcontentloaded'});
+      await page.waitForSelector('#forme:not(.masque)',{timeout:25000}).catch(()=>{});
+      if(attendreAide) await page.waitForSelector('#aide-invitation:not(.masque)',{timeout:20000}).catch(()=>{});
+      await pause(400);
+      return ((await page.textContent('#porte-service').catch(()=>''))||'').trim();
+    };
+    let b=await badge('/suivi/?espace=test&emul'); verifier(b==='Test','la porte de l espace Test : « Test »',b);
+    b=await badge('/suivi/testeur?emul'); verifier(b==='Test','le testeur renvoyé à la porte par son espace : « Test »',`${b} · ${page.url()}`);
+    b=await badge('/suivi/?espace=hub&emul'); verifier(b==='Suite','la porte du Hub garde « Suite »',b);
+    b=await badge('/suivi/?espace=cockpit&emul'); verifier(b==='Suite','la porte du Cockpit garde « Suite »',b);
+    b=await badge('/suivi/?emul'); verifier(b==='Suite','la porte sans espace garde « Suite »',b);
+    const crypto=require('crypto');
+    const inviter=async(type,email)=>{
+      const jeton=crypto.randomBytes(24).toString('base64url');
+      const id=crypto.createHash('sha256').update(jeton).digest('hex');
+      await fetch(bdd(`invitations/${id}`),{method:'PATCH',headers:{...prop,'Content-Type':'application/json'},body:JSON.stringify({fields:{
+        type:{stringValue:type}, email:{stringValue:email}, nom:{stringValue:'Essai'}, etat:{stringValue:'envoyee'},
+        revoquee:{booleanValue:false}, expire:{timestampValue:new Date(Date.now()+86400000).toISOString()},
+      }})});
+      return jeton;
+    };
+    b=await badge(`/suivi/?i=${await inviter('testeur','karim.essai@exemple.test')}&emul`,true);
+    verifier(b==='Test','le lien d invitation d un testeur : « Test »',b);
+    b=await badge(`/suivi/?i=${await inviter('client','camille.essai@exemple.test')}&emul`,true);
+    verifier(b==='Suite','le lien d invitation d un client garde « Suite »',b);
+    await nav.close();
+  }
+
   /* Ménage : l'inscription d'essai laissait une SECONDE fiche à côté de
      celle du semis, et les suites voisines qui numérotent les testeurs
      comptaient alors trois personnes au lieu de deux. Une passe ne doit

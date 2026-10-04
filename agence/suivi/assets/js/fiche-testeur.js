@@ -121,7 +121,7 @@ export const ouvrirFiche = async (testeur) => {
   }
   m.el.querySelector('[data-sortir-fiche]').addEventListener('click', async () => {
     try { effacerSecretsLocaux(); await signOut(auth); } catch (e) { /* on part quand même */ }
-    location.replace('./');
+    location.replace('./?espace=test');
   });
 
   return new Promise((resoudre) => {

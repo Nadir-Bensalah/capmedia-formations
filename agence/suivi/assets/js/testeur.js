@@ -1505,7 +1505,9 @@ const ecouterCampagnes = (moi, redessiner) => {
 const monter = async () => {
   const sess = await session();
   const { utilisateur, testeur } = sess;
-  if (!utilisateur || !testeur) { location.replace('./'); return; }
+  /* Sans session, la porte de l'espace Test : son badge dit « Test ». */
+  if (!utilisateur) { location.replace('./?espace=test'); return; }
+  if (!testeur) { location.replace('./'); return; }
 
   /* Un seul dessin par image : dix instantanés qui arrivent d'un coup ne
      redessinent pas dix fois. */
@@ -1604,7 +1606,7 @@ const monter = async () => {
       return;
     }
 
-    if (el.hasAttribute('data-sortir')) { await signe(false); effacerSecretsLocaux(); await signOut(auth); location.replace('./'); return; }
+    if (el.hasAttribute('data-sortir')) { await signe(false); effacerSecretsLocaux(); await signOut(auth); location.replace('./?espace=test'); return; }
 
     if (el.dataset.vue) {
       vueCourante = el.dataset.vue;

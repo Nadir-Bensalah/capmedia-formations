@@ -199,7 +199,7 @@ exports.suiviConnexion = onRequest(
 async function lireInvitation(req, res) {
   const inv = await invitations.lire(String((req.body || {}).jeton || '').trim());
   if (!inv) return res.json({ ok: false });
-  return res.json({ ok: true, email: inv.email || '', nom: inv.nom || '', projet: inv.projet || '' });
+  return res.json({ ok: true, email: inv.email || '', nom: inv.nom || '', projet: inv.projet || '', type: inv.type || 'client' });
 }
 
 /* --- 2. La demande de code ----------------------------------------------- */
