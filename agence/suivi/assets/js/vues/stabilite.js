@@ -35,7 +35,7 @@ export const pourcent = (t) => {
   return `${bas.toLocaleString('fr-FR', { minimumFractionDigits: bas === 100 ? 0 : 1, maximumFractionDigits: 1 })}${ESPACE}%`;
 };
 const nombre = (n) => Number(n || 0).toLocaleString('fr-FR');
-const LIBELLES_APP = { web: 'Web', mobile: 'Mobile', ios: 'iPhone', android: 'Android', autre: 'Autre système' };
+const LIBELLES_APP = { web: 'Web', mobile: 'Mobile', ios: 'iPhone', android: 'Android', autre: 'Autre système', landing: 'Landing', fonctions: 'Firebase et fonctions', hub: 'Hub Capmedia' };
 const APPS_CLIENT = { web: 'Site web', mobile: 'Application mobile' };
 const TYPES_ALERTE = {
   nouvelle: { libelle: 'Nouvelle', voile: 'rouge' },
@@ -45,6 +45,9 @@ const TYPES_ALERTE = {
   rouverte: { libelle: 'Rouverte', voile: 'gris' },
   resolue: { libelle: 'Corrigée', voile: 'vert' },
   calme: { libelle: 'Calme', voile: 'vert' },
+  /* Les sondes de la salle de contrôle (controle.js) : un site qui tombe, qui revient. */
+  panne: { libelle: 'Panne', voile: 'rouge' },
+  retabli: { libelle: 'Rétabli', voile: 'vert' },
 };
 const ETATS_ERREUR = {
   nouvelle: { libelle: 'Nouvelle', voile: 'rouge' },
@@ -181,6 +184,7 @@ const pageEquipe = (d, env) => {
       <p class="chapo">${lie ? `Ce que Sentry voit de l'application, relevé toutes les quinze minutes${r.le ? ` · dernier relevé <span data-stab-releve>${echapper(depuis(r.le))}</span>` : ''}.` : 'Ce projet n\'est pas encore relié à Sentry.'}</p>
     </div>
     <div class="actions">
+      ${lie ? `<a class="btn btn-secondaire" href="#/projets/${echapper(d.projet.id)}/controle">Salle de contrôle</a>` : ''}
       ${lie ? '<button class="btn btn-secondaire" type="button" data-stab-action="actualiser">Actualiser</button>' : ''}
       ${admin ? `<button class="btn ${lie ? 'btn-fantome' : 'btn-principal'}" type="button" data-stab-action="lier">${lie ? 'Liaison Sentry' : 'Relier à Sentry'}</button>` : ''}
     </div>
@@ -224,40 +228,65 @@ const editerLiaison = (pid, liaison) => feuille({
     <div class="forme-rang">
       ${champ('web', 'Projet web', (liaison && liaison.web) || '', { placeholder: 'forgeme-web', facultatif: true })}
       ${champ('mobile', 'Projet mobile', (liaison && liaison.mobile) || '', { placeholder: 'forgeme-mobile', facultatif: true })}
-    </div>`,
+    </div>
+    <p class="etiquette-champ">La salle de contrôle sonde ces adresses chaque minute</p>
+    ${champ('sondeWeb', 'App web', ((liaison && liaison.sondes) || {}).web || '', { placeholder: 'https://app.forgeme.net/', facultatif: true })}
+    ${champ('sondeLanding', 'Landing', ((liaison && liaison.sondes) || {}).landing || '', { placeholder: 'https://forgeme.net/', facultatif: true })}
+    ${champ('sondeFonctions', 'Fonction publique, en lecture seule', ((liaison && liaison.sondes) || {}).fonctions || '', { placeholder: 'https://us-central1-forgeme-project.cloudfunctions.net/getLegalTextPublic?type=legal-mentions&locale=fr', facultatif: true })}
+    <p class="aide">Un simple GET, sans jeton : jamais une adresse qui écrit chez l'application. https et un nom de domaine public seulement.</p>`,
   libelle: 'Relier et relever',
   regles: {
     org: (v) => (!/^[a-z0-9][a-z0-9_-]{0,49}$/.test(v || '') ? 'Lettres minuscules, chiffres et tirets.' : ''),
     web: (v) => (v && !/^[a-z0-9][a-z0-9_-]{0,49}$/.test(v) ? 'Lettres minuscules, chiffres et tirets.' : ''),
     mobile: (v) => (v && !/^[a-z0-9][a-z0-9_-]{0,49}$/.test(v) ? 'Lettres minuscules, chiffres et tirets.' : ''),
+    sondeWeb: (v) => (v && !/^https:\/\/[^\s/@]+\.[^\s/@]+/.test(v) ? 'Une adresse en https.' : ''),
+    sondeLanding: (v) => (v && !/^https:\/\/[^\s/@]+\.[^\s/@]+/.test(v) ? 'Une adresse en https.' : ''),
+    sondeFonctions: (v) => (v && !/^https:\/\/[^\s/@]+\.[^\s/@]+/.test(v) ? 'Une adresse en https.' : ''),
   },
   enregistrer: async (v) => {
     if (!v.web && !v.mobile) { toast('Nommez au moins un projet Sentry.', 'erreur'); return false; }
-    const r = await appelServeur('sentryLier', { projet: pid, org: v.org, web: v.web || '', mobile: v.mobile || '' });
+    const r = await appelServeur('sentryLier', { projet: pid, org: v.org, web: v.web || '', mobile: v.mobile || '', sondeWeb: v.sondeWeb || '', sondeLanding: v.sondeLanding || '', sondeFonctions: v.sondeFonctions || '' });
     toast(r.releve && r.releve.ok ? 'Projet relié : premier relevé fait.' : 'Projet relié. Le premier relevé n\'a pas tout lu : voyez l\'encart.');
     return true;
   },
 });
 
-/* Une erreur devient un ticket : le client lira ce titre et ce texte. */
-const creerTicket = (pid, p) => feuille({
+/**
+ * Une erreur devient un ticket : le client lira ce titre et ce texte. La
+ * salle de contrôle (vues/controle.js) ouvre la même feuille, pour une
+ * erreur, une alerte, ou un incident de disponibilité (incident: true :
+ * action controleVersTicket). Une erreur qui a déjà son ticket ouvert :
+ * le serveur répond 409, la feuille se ferme sur « Ticket déjà ouvert ».
+ */
+export const creerTicket = (pid, p, { incident = false, naviguerApres = true, apres = null } = {}) => feuille({
   titre: 'Créer un ticket',
   sousTitre: 'Le client lit le titre et le texte tels quels : écrivez-les pour lui, sans jargon.',
   corps: `
-    <div class="stab-reference"><p class="etiquette-champ">L'erreur dans Sentry</p><p class="stab-mono">${echapper(p.court ? `${p.court} · ` : '')}${echapper(p.titre)}</p></div>
-    ${champ('titre', 'Titre, pour le client', '', { placeholder: 'Ex. : L\'écran Tâches se ferme parfois à l\'ouverture' })}
-    ${zone('description', 'Ce que le client lira', `Nous avons repéré une erreur sur ${p.app === 'mobile' ? "l'application mobile" : 'le site web'} et nous la corrigeons. Rien à faire de votre côté.`, { lignes: 3 })}
-    ${choix('urgence', 'Urgence', URGENCES_TICKET, p.etat === 'nouvelle' || p.etat === 'regression' ? 'critique' : 'important')}
-    <p class="aide">Le lien Sentry, le nombre d'occurrences, les versions et les plateformes partent dans une note interne du ticket, invisible au client.</p>`,
+    <div class="stab-reference"><p class="etiquette-champ">${incident ? "L'incident" : "L'erreur dans Sentry"}</p><p class="stab-mono">${echapper(p.court ? `${p.court} · ` : '')}${echapper(p.titre)}</p></div>
+    ${champ('titre', 'Titre, pour le client', '', { placeholder: incident ? 'Ex. : Le site a été inaccessible quelques minutes' : 'Ex. : L\'écran Tâches se ferme parfois à l\'ouverture' })}
+    ${zone('description', 'Ce que le client lira', incident
+    ? `Nous avons repéré que ${p.app === 'landing' ? 'le site vitrine' : p.app === 'web' ? "l'application web" : "un service de l'application"} ne répondait plus, et nous nous en occupons. Rien à faire de votre côté.`
+    : `Nous avons repéré une erreur sur ${p.app === 'mobile' ? "l'application mobile" : 'le site web'} et nous la corrigeons. Rien à faire de votre côté.`, { lignes: 3 })}
+    ${choix('urgence', 'Urgence', URGENCES_TICKET, incident || p.etat === 'nouvelle' || p.etat === 'regression' ? 'critique' : 'important')}
+    <p class="aide">${incident ? "L'adresse, le code de réponse et les heures de l'incident partent" : "Le lien Sentry, le nombre d'occurrences, les versions et les plateformes partent"} dans une note interne du ticket, invisible au client.</p>`,
   libelle: 'Créer le ticket',
   regles: {
     titre: (v) => (!v ? 'Un titre en clair, s\'il vous plaît.' : (v.length > 120 ? '120 caractères au plus.' : '')),
     description: (v) => (!v ? 'Une phrase pour le client.' : ''),
   },
   enregistrer: async (v) => {
-    const r = await appelServeur('sentryVersTicket', { projet: pid, issue: p.id, titre: v.titre, description: v.description, urgence: v.urgence });
+    let r;
+    try {
+      r = await appelServeur(incident ? 'controleVersTicket' : 'sentryVersTicket', { projet: pid, ...(incident ? { incident: p.id } : { issue: p.id }), titre: v.titre, description: v.description, urgence: v.urgence });
+    } catch (e) {
+      /* Un ticket déjà ouvert (créé ailleurs entre-temps) : on le dit, et
+         la ligne montre son lien dès que la liste se met à jour. */
+      if (/déjà son ticket/.test(String(e && e.message))) { toast(`Ticket déjà ouvert : ${String(e.message).replace(/^.*déjà son ticket\s*/, '').replace(/\.$/, '') || 'voyez la liste'}.`, 'erreur'); return true; }
+      throw e;
+    }
     toast('Ticket créé : le client le suit.');
-    if (r && r.id) naviguer(`/projets/${pid}/demandes/${r.id}`);
+    if (apres) apres(r);
+    if (naviguerApres && r && r.id) naviguer(`/projets/${pid}/demandes/${r.id}`);
     return true;
   },
 });

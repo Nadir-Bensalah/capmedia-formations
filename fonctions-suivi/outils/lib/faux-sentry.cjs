@@ -27,13 +27,22 @@ const lire = (nom) => JSON.parse(readFileSync(join(DOSSIER, `${nom}.json`), 'utf
 const UNITES = { m: 60e3, h: 3600e3, d: 86400e3 };
 /* « @-3d » : il y a trois jours. « @heures:a,b,... » : 24 tranches horaires
    finissant à l'heure en cours. « @jours:14 » : 14 jours finissant
-   aujourd'hui. « @jour:-14 » : le jour d'il y a 14 jours. */
+   aujourd'hui. « @jour:-14 » : le jour d'il y a 14 jours. « @tranches:a,b,... »
+   (events-stats) : des tranches de dix minutes finissant à la tranche en
+   cours, au format [[horodatage, [{ count }]], ...] ; « 6x0 » répète six
+   fois zéro. */
 function vivifier(v, maintenant) {
   if (Array.isArray(v)) return v.map((x) => vivifier(x, maintenant));
   if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, vivifier(x, maintenant)]));
   if (typeof v !== 'string' || !v.startsWith('@')) return v;
   let m = v.match(/^@-(\d+)([mhd])$/);
   if (m) return new Date(maintenant - Number(m[1]) * UNITES[m[2]]).toISOString();
+  m = v.match(/^@tranches:(.+)$/);
+  if (m) {
+    const valeurs = m[1].split(',').flatMap((x) => { const r = x.match(/^(\d+)x(\d+)$/); return r ? Array.from({ length: Number(r[1]) }, () => Number(r[2])) : [Number(x)]; });
+    const tranche = Math.floor(maintenant / 600e3) * 600;
+    return valeurs.map((n, i) => [tranche - (valeurs.length - 1 - i) * 600, [{ count: n }]]);
+  }
   m = v.match(/^@heures:(.+)$/);
   if (m) {
     const valeurs = m[1].split(',').map(Number);
@@ -54,6 +63,7 @@ const ETAPES = [
   ['erreurs', /^\/api\/0\/organizations\/[^/]+\/issues\/$/],
   ['jour', /^\/api\/0\/organizations\/[^/]+\/events\/$/],
   ['sessions', /^\/api\/0\/organizations\/[^/]+\/sessions\/$/],
+  ['heures', /^\/api\/0\/organizations\/[^/]+\/events-stats\/$/],
   ['versions', /^\/api\/0\/organizations\/[^/]+\/releases\/$/],
   ['erreur', /^\/api\/0\/organizations\/[^/]+\/issues\/\d+\/$/],
   ['tags', /^\/api\/0\/organizations\/[^/]+\/issues\/\d+\/tags\/[^/]+\/$/],
@@ -79,7 +89,15 @@ async function demarrer({ port = 9877 } = {}) {
     if (etape === 'projets') return v(lire('projets'));
     if (etape === 'erreurs') return v(lire('erreurs').filter((i) => !projets.length || projets.includes(String(i.project.id))));
     if (etape === 'jour') return v(lire('jour'));
-    if (etape === 'sessions') return v(lire('sessions'));
+    /* Les sessions des 24 h (salle de contrôle) ou des 14 jours (relevé). */
+    if (etape === 'sessions') return v(lire(url.searchParams.get('statsPeriod') === '24h' ? 'sessions-24h' : 'sessions'));
+    /* Les erreurs par tranche de dix minutes : le web d'un bloc, le mobile par système. */
+    if (etape === 'heures') {
+      const p = projets[0] || '';
+      if (p === '4512197441683536') return v(lire('heures-web'));
+      if (p === '4512197449351248') return v(lire('heures-mobile'));
+      return v({ data: [] });
+    }
     if (etape === 'versions') {
       const p = projets[0] || '';
       return v(p === '4512197449351248' ? lire('versions-mobile') : p === '4512197441683536' ? lire('versions-web') : []);

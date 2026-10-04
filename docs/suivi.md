@@ -2054,7 +2054,9 @@ projets/{p}/stabilite/resume  la vue du client : apps [{ cle, taux, tendance,
                               reperee }], maj ; seul document lisible par lui
 ```
 
-**Le relevé.** `sentryReleve` (toutes les quinze minutes, Europe/Paris)
+**Le relevé.** `sentryReleve` (toutes les quinze minutes, Europe/Paris ;
+depuis la salle de contrôle, section 38, le battement de chaque minute
+le fait au quart d'heure)
 et « Actualiser » dans le Cockpit (`sentryActualiser`, une fois par
 minute au plus) : erreurs ouvertes, erreurs du jour (Discover, groupé
 par projet, système et erreur), sessions (`crash_free_rate(session)` par
@@ -2114,3 +2116,127 @@ navigateurs), le bloc « Sentry » de `regles.test.mjs`.
    `suiviAdmin` (trois actions).
 5. Le site (`agence/suivi/`).
 6. Relier ForgeMe depuis le Cockpit (menu du projet, « Relier à Sentry »).
+
+## 38. La salle de contrôle (04/10/2026)
+
+Un écran de salle des marchés pour la santé d'une application reliée à
+Sentry (ForgeMe) : un voyant par service, les erreurs de l'heure et du
+jour, la disponibilité des sites minute par minute, le fil des alertes en
+direct. Dans le Cockpit (`#/projets/{p}/controle`, onglet « Salle de
+contrôle » du projet, et entrée « Salle de contrôle » de la barre pour un
+administrateur, `#/controle`) et dans le Hub (entrée du rail, version
+épurée). Serveur : `fonctions-suivi/controle.js` ; page :
+`vues/controle.js`.
+
+```
+sentryLiaisons/{p}.sondes      web, landing, fonctions : les adresses sondées
+                               (https, nom de domaine public), posées par
+                               « Relier à Sentry » (administrateur)
+controle/{p}                   l'équipe du projet : sondes (état, code HTTP,
+                               temps, 288 cases de 5 min : n, ko, somme, dispo,
+                               panne, incident), erreurs (web, ios, android,
+                               autre : 144 tranches de 10 min et leur fin),
+                               sessions24 (sessions, utilisateurs, taux, série),
+                               voyants (etat, genre, raison, depuis), global,
+                               battement, calcule, rapide, ecranVu
+controle/{p}/incidents/{id}    cible, hote, debut, fin, code, raison, minutes,
+                               ticket ; les trente derniers
+projets/{p}/stabilite/salle    la vue du client : global { etat, phrase },
+                               services [{ cle, nom, etat, phrase }],
+                               dispo [{ cle, nom, pct, bande }] ; lisible par
+                               le client membre, comme « resume »
+sentry/{p}/tickets/incident-{id}  l'incident devenu ticket (comme une erreur)
+```
+
+**Le battement.** `sentryReleve` bat désormais chaque minute (la même
+tâche Cloud Scheduler qu'avant, aucune de plus). À chaque battement :
+
+1. **Les sondes** : chaque adresse (et le Hub, `https://capmedia.app/suivi/`)
+   reçoit un GET sans jeton, sans cookie, sans corps, sans suivre de
+   redirection, avec dix secondes au plus ; la réponse n'est pas lue. Une
+   adresse est en https, port 443, sur un nom de domaine public (ni
+   adresse IP, ni nom local) et l'hôte qui répond n'est pas une adresse
+   privée. Un échec : orange (« revérifié dans une minute ») ; deux de
+   suite : panne, un incident s'ouvre (daté du premier échec), l'alerte
+   « Site en panne » (ou « Service en panne ») entre dans le fil et sonne
+   la cloche de l'équipe (une par service et par demi-heure) ; le premier
+   succès referme l'incident (« Site rétabli », sa durée). Deux réponses
+   de suite au-delà de 3 s (6 s pour la fonction, qui démarre à froid) :
+   « lente ».
+2. **Sentry** : le relevé complet (section 37) garde son quart d'heure.
+   Le relevé rapide (`events-stats`, erreurs par tranche de dix minutes
+   sur 24 h, le web d'un bloc et le mobile par système ; et toutes les
+   cinq minutes au plus, les sessions des 24 h avec les utilisateurs
+   actifs) suit le même quart d'heure, ou chaque minute tant qu'un écran
+   de contrôle est OUVERT et visible : la page le signale chaque minute
+   (`controleEcran`, permission `projet.voir`), et le premier signal relève
+   tout de suite. Personne devant l'écran : aucun relevé à la minute. Un
+   relevé rapide à la fois (réservation en transaction). Coût Sentry : cinq
+   appels par quart d'heure, plus deux (trois toutes les cinq minutes) par
+   minute d'écran ouvert, au plus 4 000 par jour.
+3. **Les voyants** (`voyantsDe`, le pire l'emporte) : App web (sonde,
+   erreurs, sans plantage), Landing (sonde), iPhone et Android (erreurs du
+   système, sessions sans plantage du projet mobile, alertes du mobile),
+   Firebase et fonctions (la sonde de la fonction publique, si elle est
+   donnée), Hub Capmedia (sa sonde). Orange : un échec, une lenteur, un
+   pic (au moins dix erreurs dans l'heure et trois fois la moyenne
+   horaire), une alerte de Sentry dans l'heure, moins de 99 % sans
+   plantage sur 24 h (à partir de vingt sessions). Rouge : une panne, moins
+   de 97 % sans plantage. Gris : pas de mesure, ou une sonde muette depuis
+   cinq minutes. Le webhook de Sentry les recalcule aussitôt, sans attendre
+   la minute. L'état global : « Tout fonctionne », « 2 points à surveiller »,
+   « 1 incident · 1 à surveiller ».
+
+**La fonction publique de ForgeMe.** `getLegalTextPublic` (us-central1,
+GET seul, lecture de `legalTexts`, réponse gardée cinq minutes par
+instance) : la seule fonction publique qui ne fait que lire. Adresse à
+donner : `https://us-central1-forgeme-project.cloudfunctions.net/getLegalTextPublic?type=legal-mentions&locale=fr`.
+Coût chez ForgeMe : 1 440 appels par jour (gratuit jusqu'à deux millions
+par mois), une lecture Firestore toutes les cinq minutes au plus. Sans
+elle, pas de voyant « Firebase et fonctions » : rien d'inventé.
+
+**Créer un ticket.** Chaque erreur ouverte, chaque alerte du fil née d'une
+erreur et chaque incident (et son alerte) a son « Créer un ticket » : la
+feuille de la page Stabilité (titre et texte écrits pour le client, le
+technique en note interne). Une erreur ou un incident qui a déjà son
+ticket ouvert montre « Ticket déjà ouvert » et son lien ; un 409 (ticket
+ouvert ailleurs entre-temps) referme la feuille sur le même message. Un
+incident devient ticket par `controleVersTicket` (permission
+`demandes.gerer`) : type bug, en cours, critique par défaut ; l'adresse,
+le code HTTP et les heures partent dans la note interne. Le client le lit
+parmi « En cours de correction ».
+
+**L'écran.** Sombre quel que soit le thème, chiffres en chasse fixe et
+`tabular-nums`, couleur réservée aux états. Il se dessine une fois ;
+ensuite seules les régions qui changent sont récrites, une valeur qui
+change clignote une fois, une alerte arrive en glissant. Le son (deux
+notes douces générées, à chaque mauvaise nouvelle) est coupé par défaut ;
+l'interrupteur est mémorisé dans ce navigateur (`suivi:controle-son`).
+« Plein écran » (Fullscreen API ; à défaut, la page seule) passe en mode
+télé : gros chiffres, une application à la fois qui défile seule toutes
+les huit secondes ; Échap ou le bouton en sortent ; la feuille d'un
+ticket passe au-dessus. Lisible à 390 px.
+
+**Le client** lit des phrases (« Fonctionne normalement »,
+« Inaccessible depuis 14 h 02. Nous sommes dessus. », « Quelques erreurs
+repérées, nous les suivons »), la disponibilité des 24 h (un pourcentage
+et 48 demi-heures), les utilisations sans plantage sur sept jours, et les
+corrections en cours avec les titres écrits pour lui. Ni adresse, ni code,
+ni temps de réponse, ni lien vers Sentry ; pas de son.
+
+### Les épreuves
+
+`controle.test.mjs` (sans émulateur : adresses, historique, vie d'une
+sonde, tranches, sessions, voyants, vue du client), `qa-controle.cjs`
+(faux Sentry et faux sites, battement par son sujet Pub/Sub, présence,
+panne et retour, ticket, Cockpit, plein écran, Hub), le bloc « La salle
+de contrôle » de `regles.test.mjs`.
+
+### À la mise en ligne
+
+1. Les règles Firestore.
+2. Les fonctions : `sentryReleve` (chaque minute désormais),
+   `sentryWebhook`, `suiviAdmin`.
+3. Le site (`agence/suivi/`).
+4. Dans le Cockpit, « Liaison Sentry » de la page Stabilité : les trois
+   adresses (app web, landing, fonction publique).

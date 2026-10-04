@@ -71,6 +71,9 @@ const ONGLETS = [
   /* Ce que Sentry voit de l'application : sa page (vues/stabilite.js),
      dans le Cockpit, pour un projet relié. Le client y entre par le rail. */
   { cle: 'stabilite', libelle: 'Stabilité', icone: 'activite', equipeSeule: true },
+  /* La salle de contrôle (vues/controle.js) : la santé en direct, pour un
+     projet relié. Le client y entre par le rail. */
+  { cle: 'controle', libelle: 'Salle de contrôle', icone: 'sante', equipeSeule: true },
 ];
 /* Le nom d'une section dans les mots du client (Planning, Tickets...) ;
    l'équipe garde les siens. */
@@ -83,7 +86,7 @@ const ongletsVisibles = (d, equipe, env) => ONGLETS.filter((o) => (equipe || (!o
   && (o.cle !== 'tests' || equipe || (d && (d.scenarios.length || d.campagnes.length)))
   && (o.cle !== 'coffre' || (env && voitLeCoffre(env, d && d.projet)))
   && (o.cle !== 'evolutions' || equipe)
-  && (o.cle !== 'stabilite' || (equipe && d && d.liaisonSentry && d.liaisonSentry.actif !== false)));
+  && (!['stabilite', 'controle'].includes(o.cle) || (equipe && d && d.liaisonSentry && d.liaisonSentry.actif !== false)));
 
 /* La conversation vit en bulle, montée pour toutes les pages d'un projet
    par un module global. Depuis une fiche, on lui passe un début de

@@ -2246,13 +2246,15 @@ service cloud.firestore {
       }
 
       // La stabilité de l'application, relevée dans Sentry par le serveur
-      // (sentry.js). Le client membre ne lit que « resume » : un taux par
-      // plateforme, une tendance, et les tickets ouverts nés d'une erreur.
+      // (sentry.js). Le client membre ne lit que « resume » (un taux par
+      // plateforme, une tendance, les tickets ouverts nés d'une erreur) et
+      // « salle », sa salle de contrôle (controle.js : des voyants et des
+      // phrases, la disponibilité, sans adresse, sans code, sans lien).
       // Aucun autre document de cette sous-collection ne lui est ouvert, et
       // personne n'y écrit depuis un navigateur.
       match /stabilite/{docId} {
         allow read:   if equipeSurProjet(projetId)
-                      || (docId == 'resume' && membreDuProjet(projetId));
+                      || (docId in ['resume', 'salle'] && membreDuProjet(projetId));
         allow write:  if false;
       }
     }
@@ -2292,6 +2294,21 @@ service cloud.firestore {
       }
       match /debits/{cle} {
         allow read, write: if false;
+      }
+    }
+
+    // La salle de contrôle (controle.js) : les sondes des sites (adresses,
+    // codes HTTP, temps de réponse), les erreurs par tranche, les voyants
+    // avec leur raison technique, les incidents de disponibilité. L'équipe
+    // du projet les lit ; le client lit sa vue épurée (stabilite/salle),
+    // jamais ceci. Le serveur seul écrit, y compris le signal de présence
+    // d'un écran ouvert (action controleEcran).
+    match /controle/{projetId} {
+      allow read:   if equipeSurProjet(projetId);
+      allow write:  if false;
+      match /incidents/{incidentId} {
+        allow read:   if equipeSurProjet(projetId);
+        allow write:  if false;
       }
     }
 

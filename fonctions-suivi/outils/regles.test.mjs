@@ -1464,6 +1464,41 @@ await refuse('ni un lien erreur-ticket', setDoc(doc(equipe(), 'sentry/atelier/ti
 await refuse('L administrateur ne relie pas un projet depuis le navigateur (hôte, jeton)', setDoc(doc(equipe(), 'sentryLiaisons/atelier'), { org: 'forgeme', web: 'x', hote: 'https://ailleurs.exemple' }));
 await refuse('Les marques de débit restent fermées, même à l équipe', getDoc(doc(equipe(), 'sentry/atelier/debits/nouvelle-1')));
 
+/* ==========================================================================
+   La salle de contrôle (controle.js) : les sondes, les voyants et les
+   incidents pour l'équipe du projet ; la vue épurée « salle » pour le
+   client membre ; le serveur seul écrit, signal de présence compris.
+   ========================================================================== */
+console.log('\n== La salle de contrôle');
+await env.withSecurityRulesDisabled(async (ctx) => {
+  const b = ctx.firestore();
+  await setDoc(doc(b, 'controle/atelier'), { sondes: { web: { hote: 'app.forgeme.net', code: 200, ms: 180, etat: 'ok' } }, voyants: { web: { etat: 'vert', raison: 'Répond en 180 ms' } }, ecranVu: new Date() });
+  await setDoc(doc(b, 'controle/atelier/incidents/i1'), { cible: 'web', hote: 'app.forgeme.net', code: 503, debut: new Date(), fin: null });
+  await setDoc(doc(b, 'projets/atelier/stabilite/salle'), { global: { etat: 'vert', phrase: 'Tout fonctionne' }, services: [{ cle: 'web', nom: 'Application web', etat: 'vert', phrase: 'Fonctionne normalement' }], dispo: [] });
+  await setDoc(doc(b, 'projets/boutique/stabilite/salle'), { global: { etat: 'vert', phrase: 'Tout fonctionne' }, services: [], dispo: [] });
+  await setDoc(doc(b, 'projets/ferme/stabilite/salle'), { global: { etat: 'vert', phrase: 'Tout fonctionne' }, services: [], dispo: [] });
+});
+await doit('L équipe lit la salle de contrôle du projet (sondes, voyants)', getDoc(doc(equipe(), 'controle/atelier')));
+await doit('et ses incidents', getDocs(collection(equipe(), 'controle/atelier/incidents')));
+await doit('Un agent du projet la lit aussi', getDoc(doc(agentSansFinance(), 'controle/atelier')));
+await refuse('Un agent d un autre projet ne la lit pas', getDoc(doc(agentAilleurs(), 'controle/atelier')));
+await refuse('ni ses incidents', getDocs(collection(agentAilleurs(), 'controle/atelier/incidents')));
+await refuse('Camille, cliente, ne lit pas la salle de l équipe (adresses, codes, temps)', getDoc(doc(camille(), 'controle/atelier')));
+await refuse('ni un incident par son identifiant', getDoc(doc(camille(), 'controle/atelier/incidents/i1')));
+await doit('Camille lit sa salle de contrôle épurée', getDoc(doc(camille(), 'projets/atelier/stabilite/salle')));
+await refuse('Léa ne lit pas la salle d un projet qui n est pas le sien', getDoc(doc(lea(), 'projets/atelier/stabilite/salle')));
+await refuse('Camille ne lit pas celle d un projet fermé au client', getDoc(doc(camille(), 'projets/ferme/stabilite/salle')));
+await refuse('Un testeur ne la lit pas', getDoc(doc(karim(), 'projets/atelier/stabilite/salle')));
+await refuse('ni la salle de l équipe', getDoc(doc(karim(), 'controle/atelier')));
+await refuse('Un anonyme ne lit rien', getDoc(doc(anonyme(), 'controle/atelier')));
+await refuse('Camille n écrit pas sa salle (tout au vert)', setDoc(doc(camille(), 'projets/atelier/stabilite/salle'), { global: { etat: 'vert', phrase: 'Tout fonctionne' }, services: [], dispo: [] }));
+await refuse('L équipe n écrit pas la salle du client : le serveur seul', setDoc(doc(equipe(), 'projets/atelier/stabilite/salle'), { global: { etat: 'vert' }, services: [], dispo: [] }));
+await refuse('L équipe n écrit pas les voyants', updateDoc(doc(equipe(), 'controle/atelier'), { voyants: {} }));
+await refuse('ni le signal de présence d un écran (il passe par le serveur)', updateDoc(doc(equipe(), 'controle/atelier'), { ecranVu: serverTimestamp() }));
+await refuse('ni un incident', setDoc(doc(equipe(), 'controle/atelier/incidents/i2'), { cible: 'web', fin: null }));
+await refuse('ni la fin d un incident', updateDoc(doc(equipe(), 'controle/atelier/incidents/i1'), { fin: new Date() }));
+await refuse('L administrateur ne pose pas les adresses sondées depuis le navigateur', updateDoc(doc(equipe(), 'sentryLiaisons/atelier'), { sondes: { web: 'https://169.254.169.254/' } }));
+
 console.log(`\n${ok} contrôle(s) conforme(s)${ecarts.length ? `, ${ecarts.length} ÉCART(S) :\n  - ${ecarts.join('\n  - ')}` : ''}`);
 await env.cleanup();
 process.exit(ecarts.length ? 1 : 0);

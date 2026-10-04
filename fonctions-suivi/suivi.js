@@ -47,6 +47,7 @@ const onDocumentUpdated = (o, fn) => v2firestore.onDocumentUpdated(o, auMomentDe
 const onDocumentWritten = (o, fn) => v2firestore.onDocumentWritten(o, auMomentDe(fn));
 const invitations = require('./invitations');
 const sentry = require('./sentry');
+const controle = require('./controle');
 const { Refus, cleEmail } = require('./commun');
 
 /* index.js initialise déjà l'application ; la garde permet de charger ce
@@ -1660,6 +1661,10 @@ const ACTIONS = {
   sentryLier: { permission: 'systeme', projet: (c) => c.projet },
   sentryActualiser: { permission: 'projet.voir', projet: (c) => c.projet },
   sentryVersTicket: { permission: 'demandes.gerer', projet: (c) => c.projet },
+  /* La salle de contrôle (controle.js) : l'écran ouvert le signale chaque
+     minute ; un incident de disponibilité devient un ticket. */
+  controleEcran: { permission: 'projet.voir', projet: (c) => c.projet },
+  controleVersTicket: { permission: 'demandes.gerer', projet: (c) => c.projet },
 };
 
 /* Exposé pour l'épreuve : le registre, sans rien exécuter. */
@@ -1667,7 +1672,8 @@ exports._actions = ACTIONS;
 
 exports.suiviAdmin = onRequest(
   /* SENTRY_JETON : « Actualiser » et « Créer un ticket » de la page
-     Stabilité lisent Sentry depuis cette porte. */
+     Stabilité, et l'écran de la salle de contrôle qui s'ouvre, lisent
+     Sentry depuis cette porte. */
   { region: REGION, cors: true, secrets: ['SENTRY_JETON'] },
   async (req, res) => {
     if (req.method === 'OPTIONS') return res.status(204).send('');
@@ -2269,6 +2275,8 @@ exports.suiviAdmin = onRequest(
       if (action === 'sentryLier') return res.json(await sentry.lier(identite, req.body || {}));
       if (action === 'sentryActualiser') return res.json(await sentry.actualiser(identite, req.body || {}));
       if (action === 'sentryVersTicket') return res.json(await sentry.versTicket(identite, req.body || {}));
+      if (action === 'controleEcran') return res.json(await controle.ecran(identite, req.body || {}));
+      if (action === 'controleVersTicket') return res.json(await controle.versTicket(identite, req.body || {}));
 
       /* --- Poser une demande depuis le cockpit -----------------------------
          Une anomalie remontée par message ou par téléphone doit rejoindre

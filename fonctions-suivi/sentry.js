@@ -4,9 +4,9 @@
    Ce que Sentry voit d'une application, ramené dans le Hub sans que le
    navigateur touche jamais au jeton. Trois portes :
 
-   1. Le relevé (sentryReleve, toutes les quinze minutes, et « Actualiser »
-      dans le Cockpit par suiviAdmin) lit l'API de Sentry et écrit deux
-      synthèses :
+   1. Le relevé (toutes les quinze minutes, par le battement de la salle
+      de contrôle, controle.js ; et « Actualiser » dans le Cockpit par
+      suiviAdmin) lit l'API de Sentry et écrit deux synthèses :
         sentry/{p}                     le détail, pour l'équipe du projet ;
         projets/{p}/stabilite/resume   la vue du client : un taux par
                                        plateforme, une tendance, et les
@@ -42,7 +42,6 @@
 
 const crypto = require('node:crypto');
 const { onRequest } = require('firebase-functions/v2/https');
-const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { defineSecret } = require('firebase-functions/params');
 const { bdd, REGION, FieldValue, Refus, audit, enMillis } = require('./commun');
 const communication = require('./communication');
@@ -340,6 +339,7 @@ exports._resumeClient = resumeClient;
 exports._signatureValide = signatureValide;
 exports._alerteDe = alerteDe;
 exports._lienSentry = lienSentry;
+exports._plateformeDeSysteme = plateformeDeSysteme;
 exports.SESSIONS_MINIMUM = SESSIONS_MINIMUM;
 
 /* ==========================================================================
@@ -389,6 +389,21 @@ async function lireLiaison(pid) {
   const d = await bdd.doc(`sentryLiaisons/${pid}`).get();
   return d.exists ? { projet: pid, ...d.data() } : null;
 }
+
+/* La salle de contrôle (controle.js) relève aussi Sentry, avec les mêmes
+   portes : l'hôte fixe, le jeton du serveur, l'appel borné. */
+exports.appel = appel;
+exports.hoteDe = hoteDe;
+exports.jetonSentry = jetonSentry;
+exports.lireLiaison = lireLiaison;
+
+/** Une alerte de plus dans le fil d'un projet ; on garde les cinquante dernières. */
+async function ajouterAlerte(pid, fiche) {
+  await bdd.collection(`sentry/${pid}/alertes`).add(fiche);
+  const vieilles = await bdd.collection(`sentry/${pid}/alertes`).orderBy('le', 'desc').offset(ALERTES_GARDEES).limit(20).get();
+  if (!vieilles.empty) { const lot = bdd.batch(); vieilles.docs.forEach((d) => lot.delete(d.ref)); await lot.commit(); }
+}
+exports.ajouterAlerte = ajouterAlerte;
 
 async function liensTickets(pid) {
   const q = await bdd.collection(`sentry/${pid}/tickets`).get();
@@ -527,7 +542,17 @@ exports.lier = async (identite, corps) => {
   if (!SLUG.test(org)) throw new Refus(400, "L'organisation Sentry : lettres minuscules, chiffres et tirets.");
   if (!web && !mobile) throw new Refus(400, 'Nommez au moins un projet Sentry (web ou mobile).');
   if ((web && !SLUG.test(web)) || (mobile && !SLUG.test(mobile))) throw new Refus(400, 'Un projet Sentry : lettres minuscules, chiffres et tirets.');
-  const fiche = { org, web, mobile, actif: true, ids: null, par: { uid: identite.uid, nom: String((identite.fiche || {}).nom || '').slice(0, 120) }, maj: FieldValue.serverTimestamp() };
+  /* Les adresses que la salle de contrôle sonde chaque minute (controle.js) :
+     https, nom de domaine public, et rien qui écrive chez l'application. */
+  const { adresseSondable } = require('./controle');
+  const sondes = {};
+  const champsSondes = { web: corps.sondeWeb, landing: corps.sondeLanding, fonctions: corps.sondeFonctions, ...(SUR_EMULATEUR ? { hub: corps.sondeHub } : {}) };
+  for (const [cle, brut] of Object.entries(champsSondes)) {
+    const u = adresseSondable(brut);
+    if (u === null) throw new Refus(400, 'Une adresse à surveiller : https, un nom de domaine public, sans identifiants.');
+    if (u) sondes[cle] = u;
+  }
+  const fiche = { org, web, mobile, sondes, actif: true, ids: null, par: { uid: identite.uid, nom: String((identite.fiche || {}).nom || '').slice(0, 120) }, maj: FieldValue.serverTimestamp() };
   if (SUR_EMULATEUR && corps.hote) fiche.hote = String(corps.hote);
   await bdd.doc(`sentryLiaisons/${pid}`).set(fiche);
   await audit('sentry.lie', { projet: pid, org, web, mobile, par: identite.uid });
@@ -628,16 +653,8 @@ exports.versTicket = async (identite, corps) => {
    5. Les fonctions déployées
    ========================================================================== */
 
-/** Toutes les quinze minutes, chaque projet relié. */
-exports.sentryReleve = onSchedule(
-  { region: REGION, schedule: 'every 15 minutes', timeZone: 'Europe/Paris', secrets: [SENTRY_JETON], timeoutSeconds: 120 },
-  async () => {
-    const q = await bdd.collection('sentryLiaisons').where('actif', '==', true).get();
-    for (const d of q.docs) {
-      try { await synchroniser(d.id, { liaison: { projet: d.id, ...d.data() } }); } catch (err) { console.error(`Sentry : relevé de ${d.id} en échec`, err); }
-    }
-  },
-);
+/* Le relevé planifié vit dans controle.js (sentryReleve, le battement de
+   la salle de contrôle) : il appelle « synchroniser » au quart d'heure. */
 
 /* Le projet du Hub d'un envoi de Sentry, d'après les liaisons. */
 async function projetDeLAlerte(alerte) {
@@ -696,10 +713,7 @@ exports.sentryWebhook = onRequest(
         regle: alerte.regle || '', lien: lienSentry(alerte.lien, { org: cible.liaison.org, id: alerte.issue }),
         le: FieldValue.serverTimestamp(), source: ressource,
       };
-      await bdd.collection(`sentry/${pid}/alertes`).add(fiche);
-      /* Garder les cinquante dernières. */
-      const vieilles = await bdd.collection(`sentry/${pid}/alertes`).orderBy('le', 'desc').offset(ALERTES_GARDEES).limit(20).get();
-      if (!vieilles.empty) { const lot = bdd.batch(); vieilles.docs.forEach((d) => lot.delete(d.ref)); await lot.commit(); }
+      await ajouterAlerte(pid, fiche);
       if (ALERTES_SONNANTES.includes(fiche.type) && await reserverCloche(pid, fiche)) {
         const projet = (await bdd.doc(`projets/${pid}`).get()).data() || {};
         await communication.notifierEquipe(pid, {
@@ -714,6 +728,8 @@ exports.sentryWebhook = onRequest(
       if (Date.now() - enMillis(s.releve && s.releve.le) > PAUSE_WEBHOOK_MS) {
         await synchroniser(pid, { liaison: cible.liaison, raison: 'alerte' }).catch((err) => console.error('Sentry : relevé après alerte', err));
       }
+      /* Le voyant de la salle de contrôle passe à l'orange sans attendre la minute. */
+      await require('./controle').recalculer(pid, { liaison: cible.liaison }).catch((err) => console.error('Salle de contrôle : voyants après alerte', err));
       return res.status(200).json({ ok: true });
     } catch (err) {
       console.error('Sentry : webhook', err);

@@ -2197,3 +2197,295 @@ body:has(.bulle) #vue .page { padding-bottom: 104px; }
   .stab-erreur-fin { justify-content: flex-start; }
   .stab-app-taux { font-size: 34px; }
 }
+
+/* ==========================================================================
+   La salle de contrôle (vues/controle.js, 04/10)
+   Un écran de salle des marchés : sombre quel que soit le thème, dense,
+   des chiffres en chasse fixe qui ne dansent pas (tabular-nums). Le seul
+   repère coloré est un état : un feu, une valeur, une courbe. Les cases
+   sont séparées par la grille elle-même (un pixel d'écart sur un fond plus
+   clair), jamais par une bordure de couleur. Une valeur qui change
+   clignote une fois ; une alerte arrive en glissant ; rien d'autre ne bouge.
+   ========================================================================== */
+.page-salle { max-width: none; }
+.salle {
+  --s-fond: #0A0B0D; --s-case: #121317; --s-case-2: #17191E; --s-grille: #22252C; --s-survol: #1D2026;
+  --s-encre: #ECEDEF; --s-encre-2: #A2A6AF; --s-encre-3: #6D717B;
+  --s-vert: #30D158; --s-orange: #FF9F0A; --s-rouge: #FF453A; --s-gris: #5A5E67; --s-bleu: #64A8FF;
+  --s-chiffres: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace;
+  color-scheme: dark;
+  display: flex; flex-direction: column; gap: 14px;
+  padding: 18px; border-radius: 18px; background: var(--s-fond); color: var(--s-encre);
+  font: 400 13px/1.45 var(--police); font-variant-numeric: tabular-nums;
+}
+.salle [data-etat="vert"] { --s-ton: var(--s-vert); }
+.salle [data-etat="orange"] { --s-ton: var(--s-orange); }
+.salle [data-etat="rouge"] { --s-ton: var(--s-rouge); }
+.salle [data-etat="gris"] { --s-ton: var(--s-gris); }
+.salle a { color: var(--s-bleu); }
+.salle :focus-visible { outline: 2px solid var(--s-bleu); outline-offset: 2px; border-radius: 6px; }
+
+/* La tête : où l'on est, l'état global en gros, l'heure, les commandes. */
+.salle-tete { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px 24px; align-items: end; }
+.salle-surtitre { margin: 0; font: 500 11px/1.3 var(--s-chiffres); letter-spacing: .12em; text-transform: uppercase; color: var(--s-encre-3); }
+.salle-global { display: flex; align-items: center; gap: 12px; margin: 6px 0 0; min-height: 40px; }
+.salle-global-feu { flex: none; width: 14px; height: 14px; border-radius: 50%; background: var(--s-ton, var(--s-gris)); box-shadow: 0 0 0 4px color-mix(in srgb, var(--s-ton, var(--s-gris)) 22%, transparent); }
+.salle-global-texte { font: 600 32px/1.1 var(--titre); letter-spacing: -.025em; color: var(--s-encre); }
+.salle-global-texte[data-etat="rouge"] { color: var(--s-rouge); }
+.salle-global-texte[data-etat="orange"] { color: var(--s-orange); }
+.salle-tete-heure { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.salle-horloge { font: 500 26px/1 var(--s-chiffres); letter-spacing: -.02em; color: var(--s-encre); }
+.salle-frais { font: 400 12px/1.3 var(--s-chiffres); color: var(--s-encre-3); white-space: nowrap; }
+.salle-frais[data-retard="oui"] { color: var(--s-orange); }
+.salle-tete-actions { display: flex; gap: 8px; align-items: center; }
+.salle-btn {
+  appearance: none; border: 0; cursor: pointer; padding: 8px 13px; border-radius: 9px;
+  background: var(--s-case-2); color: var(--s-encre); font: 500 13px/1.2 var(--police); white-space: nowrap;
+  transition: background var(--vite);
+}
+.salle-btn:hover { background: var(--s-survol); }
+.salle-btn[aria-pressed="true"] { background: #2A2D35; }
+.salle-btn--petit { padding: 5px 10px; font-size: 12px; border-radius: 7px; }
+.salle-lien { font: 500 12.5px/1.3 var(--police); color: var(--s-bleu); text-decoration: none; white-space: nowrap; }
+.salle-lien:hover { text-decoration: underline; }
+.salle-cache { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Les voyants : une case par service, la grille fait le trait. */
+.salle-voyants { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1px; background: var(--s-grille); border-radius: 12px; overflow: hidden; }
+.voyant { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "feu nom" "etat etat" "raison raison" "depuis depuis"; gap: 3px 9px; align-content: start; padding: 12px 14px 13px; background: var(--s-case); min-width: 0; }
+.voyant-feu { grid-area: feu; align-self: center; width: 10px; height: 10px; border-radius: 50%; background: var(--s-ton); box-shadow: 0 0 0 3px color-mix(in srgb, var(--s-ton) 20%, transparent); }
+.voyant[data-etat="rouge"] .voyant-feu, .salle-global-feu[data-etat="rouge"] { animation: salle-pouls 1.6s ease-in-out infinite; }
+.voyant-nom { grid-area: nom; font: 600 14px/1.25 var(--police); color: var(--s-encre); overflow-wrap: anywhere; }
+.voyant-etat { grid-area: etat; margin-top: 4px; font: 600 10.5px/1.2 var(--s-chiffres); letter-spacing: .1em; text-transform: uppercase; color: var(--s-ton); }
+.voyant-raison { grid-area: raison; font: 400 12.5px/1.4 var(--police); color: var(--s-encre-2); overflow-wrap: anywhere; }
+.voyant-depuis { grid-area: depuis; font: 400 12px/1.3 var(--s-chiffres); color: var(--s-encre-3); }
+
+/* Le corps : les applications, et le fil à droite. */
+.salle-corps { display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); gap: 14px; align-items: start; }
+.salle-tuiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--s-grille); border-radius: 12px; overflow: hidden; }
+.tuile { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px 15px; background: var(--s-case); min-width: 0; }
+.tuile-tete { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.tuile-feu { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--s-ton); }
+.tuile-nom { margin: 0; font: 600 15px/1.2 var(--titre); letter-spacing: -.01em; color: var(--s-encre); }
+.tuile-rang { font: 400 11px var(--s-chiffres); color: var(--s-encre-3); }
+.tuile-version { margin-left: auto; font: 400 11.5px var(--s-chiffres); color: var(--s-encre-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tuile-chiffres { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; margin: 0; }
+.schiffre { display: flex; flex-direction: column; gap: 3px; margin: 0; min-width: 0; }
+.schiffre-v { font: 600 22px/1 var(--s-chiffres); letter-spacing: -.02em; color: var(--s-encre); white-space: nowrap; }
+.schiffre--grand .schiffre-v { font-size: 32px; }
+.tuile[data-etat="orange"] .schiffre--grand .schiffre-v { color: var(--s-orange); }
+.tuile[data-etat="rouge"] .schiffre--grand .schiffre-v { color: var(--s-rouge); }
+.schiffre-l { font: 400 11.5px/1.3 var(--police); color: var(--s-encre-3); }
+.tuile-courbe { margin: 0; }
+.tuile-courbe figcaption { display: flex; justify-content: space-between; margin-top: 4px; font: 400 10.5px var(--s-chiffres); color: var(--s-encre-3); }
+.tuile-pied { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; font: 400 12px/1.4 var(--police); color: var(--s-encre-3); }
+.tendance[data-tendance="mieux"] { color: var(--s-vert); }
+.tendance[data-tendance="moins"] { color: var(--s-orange); }
+
+/* Les courbes : une ligne, une aire très douce, l'heure écoulée éclairée. */
+.courbe { display: block; width: 100%; height: 56px; overflow: visible; }
+.courbe-ligne { fill: none; stroke: var(--s-encre-2); stroke-width: 1.4; stroke-linejoin: round; }
+.courbe-aire { fill: color-mix(in srgb, var(--s-encre-2) 12%, transparent); }
+.courbe-heure { fill: rgba(255, 255, 255, .045); }
+.tuile[data-etat="orange"] .courbe-ligne { stroke: var(--s-orange); }
+.tuile[data-etat="orange"] .courbe-aire { fill: color-mix(in srgb, var(--s-orange) 14%, transparent); }
+.tuile[data-etat="rouge"] .courbe-ligne { stroke: var(--s-rouge); }
+.tuile[data-etat="rouge"] .courbe-aire { fill: color-mix(in srgb, var(--s-rouge) 14%, transparent); }
+.courbe--reponse { height: 40px; }
+.courbe--reponse .courbe-ligne { stroke: var(--s-bleu); stroke-width: 1.2; }
+.courbe-ko { fill: var(--s-rouge); }
+
+/* Les blocs : un fond de case, un titre en chasse fixe. */
+.salle-bloc { padding: 14px 16px 16px; border-radius: 12px; background: var(--s-case); min-width: 0; }
+.salle-bloc-tete { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.salle-h { margin: 0; font: 600 11px/1.3 var(--s-chiffres); letter-spacing: .12em; text-transform: uppercase; color: var(--s-encre-2); }
+.salle-mini { font: 400 11.5px/1.3 var(--s-chiffres); color: var(--s-encre-3); text-align: right; }
+.salle-vide { margin: 0; font: 400 13px/1.45 var(--police); color: var(--s-encre-3); }
+.salle-pied { margin: 0; text-align: right; }
+
+/* Le fil en direct : l'heure, le genre, le texte, le geste. */
+.salle-fil { max-height: 640px; overflow: auto; overscroll-behavior: contain; }
+.sfil { list-style: none; margin: 0; padding: 0; }
+.sfil-ligne { display: grid; grid-template-columns: auto auto minmax(0, 1fr); grid-template-areas: "heure type corps" ". . fin"; gap: 4px 10px; align-items: baseline; padding: 9px 4px; border-radius: 8px; }
+.sfil-ligne + .sfil-ligne { margin-top: 1px; }
+.sfil-ligne:nth-child(odd) { background: rgba(255, 255, 255, .018); }
+.sfil-heure { grid-area: heure; font: 400 11.5px/1.4 var(--s-chiffres); color: var(--s-encre-3); }
+.sfil-type { grid-area: type; font: 600 10.5px/1.4 var(--s-chiffres); letter-spacing: .08em; text-transform: uppercase; }
+.sfil-ligne[data-ton="rouge"] .sfil-type { color: var(--s-rouge); }
+.sfil-ligne[data-ton="orange"] .sfil-type { color: var(--s-orange); }
+.sfil-ligne[data-ton="vert"] .sfil-type { color: var(--s-vert); }
+.sfil-ligne[data-ton="gris"] .sfil-type { color: var(--s-encre-3); }
+.sfil-corps { grid-area: corps; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.sfil-titre { font: 600 13px/1.35 var(--police); color: var(--s-encre); }
+.sfil-texte { font: 400 12.5px/1.4 var(--police); color: var(--s-encre-2); overflow-wrap: anywhere; }
+.sfil-fin { grid-area: fin; display: flex; justify-content: flex-start; }
+.sfil-ligne.neuf { animation: salle-arrivee .7s var(--ressort) 1; }
+
+/* La disponibilité : une ligne par adresse, la courbe des 24 h au bout. */
+.salle-bas { display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); gap: 14px; align-items: start; }
+.dispo-liste { display: flex; flex-direction: column; gap: 1px; background: var(--s-grille); border-radius: 9px; overflow: hidden; }
+.dispo { display: grid; grid-template-columns: minmax(150px, 1.2fr) repeat(3, minmax(74px, auto)) minmax(120px, 2fr); gap: 6px 16px; align-items: center; padding: 10px 12px; background: var(--s-case-2); }
+.dispo-nom { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font: 600 13px/1.3 var(--police); min-width: 0; }
+.dispo-feu { flex: none; align-self: center; width: 8px; height: 8px; border-radius: 50%; background: var(--s-ton); }
+.dispo-hote { font: 400 11.5px/1.3 var(--s-chiffres); color: var(--s-encre-3); overflow-wrap: anywhere; }
+.dispo-schiffre { display: flex; flex-direction: column; gap: 2px; }
+.dispo-v { font: 600 15px/1.1 var(--s-chiffres); color: var(--s-encre); white-space: nowrap; }
+.dispo[data-etat="rouge"] .dispo-v { color: var(--s-rouge); }
+.dispo-l { font: 400 10.5px/1.2 var(--police); color: var(--s-encre-3); }
+.dispo-courbe { min-width: 0; }
+.dispo--client { grid-template-columns: minmax(150px, 1fr) minmax(110px, auto) minmax(0, 2fr); }
+.bande { display: grid; grid-template-columns: repeat(48, minmax(0, 1fr)); gap: 2px; height: 22px; }
+.bande i, .salle-legende i { display: block; border-radius: 2px; background: var(--s-grille); }
+.bande i[data-b="v"], .salle-legende i[data-b="v"] { background: color-mix(in srgb, var(--s-vert) 70%, transparent); }
+.bande i[data-b="o"], .salle-legende i[data-b="o"] { background: var(--s-orange); }
+.bande i[data-b="r"], .salle-legende i[data-b="r"] { background: var(--s-rouge); }
+.salle-legende { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 10px 0 0; font: 400 11.5px/1.3 var(--police); color: var(--s-encre-3); }
+.salle-legende i { display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px; }
+
+/* Les versions en service. */
+.versions-app + .versions-app { margin-top: 12px; }
+.versions-nom { margin: 0 0 6px; font: 600 12.5px/1.3 var(--police); color: var(--s-encre-2); }
+.versions-app ul { list-style: none; margin: 0; padding: 0; }
+.versions-app li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 12px; padding: 5px 0; }
+.versions-num { font: 600 13px/1.35 var(--s-chiffres); color: var(--s-encre); }
+.versions-part { font: 500 13px/1.35 var(--s-chiffres); color: var(--s-encre-2); text-align: right; }
+.versions-date { grid-column: 1 / -1; font: 400 11.5px/1.3 var(--police); color: var(--s-encre-3); }
+
+/* Les erreurs ouvertes, et les incidents. */
+.erreurs-defile { overflow-x: auto; }
+.erreurs { width: 100%; border-collapse: collapse; font: 400 12.5px/1.4 var(--police); }
+.erreurs th { padding: 0 10px 8px 0; font: 600 10.5px/1.2 var(--s-chiffres); letter-spacing: .08em; text-transform: uppercase; color: var(--s-encre-3); text-align: left; white-space: nowrap; }
+.erreurs td { padding: 9px 10px 9px 0; color: var(--s-encre-2); vertical-align: top; }
+.erreurs tbody tr:nth-child(odd) td { background: rgba(255, 255, 255, .018); }
+.erreurs .nb { text-align: right; font-family: var(--s-chiffres); white-space: nowrap; }
+.erreur-titre { display: flex; flex-direction: column; gap: 2px; min-width: 220px; color: var(--s-encre) !important; font-weight: 500; overflow-wrap: anywhere; }
+.erreur-lieu { font: 400 11.5px/1.35 var(--s-chiffres); color: var(--s-encre-3); }
+.erreur-etat { font: 600 10.5px/1.4 var(--s-chiffres); letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+.erreur-etat[data-ton="rouge"] { color: var(--s-rouge); }
+.erreur-etat[data-ton="orange"] { color: var(--s-orange); }
+.erreur-etat[data-ton="gris"] { color: var(--s-encre-3); }
+.erreur-fin { text-align: right; white-space: nowrap; }
+.incidents { list-style: none; margin: 0; padding: 0; }
+.incident { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(80px, auto) minmax(150px, auto) minmax(90px, auto) auto; gap: 4px 16px; align-items: baseline; padding: 8px 4px; border-radius: 7px; font: 400 12.5px/1.4 var(--police); color: var(--s-encre-2); }
+.incident:nth-child(odd) { background: rgba(255, 255, 255, .018); }
+.incident-nom { font-weight: 600; color: var(--s-encre); }
+.incident-quoi, .incident-quand, .incident-duree { font-family: var(--s-chiffres); font-size: 12px; }
+.incident[data-ouvert="oui"] .incident-duree { color: var(--s-rouge); }
+.incident-fin { text-align: right; }
+
+/* Le Hub : des phrases et des taux. */
+.salle--client .voyant-raison { font-size: 13px; color: var(--s-encre); }
+.salle-bas--client { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
+.salle-apps { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+.salle-app-nom { display: flex; gap: 8px; align-items: baseline; margin: 0; font: 400 13px/1.35 var(--police); color: var(--s-encre-2); }
+.salle-app-taux { margin: 6px 0 0; font: 600 38px/1.05 var(--s-chiffres); letter-spacing: -.03em; color: var(--s-encre); }
+.salle-app-phrase { margin: 8px 0 0; font: 400 12.5px/1.45 var(--police); color: var(--s-encre-3); }
+.salle-app-phrase[data-tendance="mieux"] { color: var(--s-vert); }
+.salle-app-phrase[data-tendance="moins"] { color: var(--s-orange); }
+.corrections { list-style: none; margin: 0; padding: 0; }
+.correction { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 14px; align-items: center; padding: 10px 4px; border-radius: 8px; color: inherit; text-decoration: none; }
+.correction:hover { background: var(--s-survol); }
+.correction-titre { font: 600 13.5px/1.4 var(--police); color: var(--s-encre); overflow-wrap: anywhere; }
+.correction-sous { grid-row: 2; font: 400 12px/1.35 var(--s-chiffres); color: var(--s-encre-3); }
+.correction .pastille { grid-row: 1 / span 2; grid-column: 2; }
+
+/* Une valeur qui change clignote une fois ; une alerte arrive en glissant. */
+@keyframes salle-clignote { 0% { background: rgba(255, 255, 255, .22); color: #FFFFFF; } 100% { background: transparent; } }
+@keyframes salle-arrivee { from { opacity: 0; transform: translateY(-8px); background: rgba(255, 255, 255, .09); } to { opacity: 1; transform: none; } }
+@keyframes salle-pouls { 50% { opacity: .35; } }
+.salle .clignote { animation: salle-clignote 1.3s var(--courbe) 1; border-radius: 4px; }
+
+/* Le plein écran, mode télé : la salle seule, gros chiffres, une
+   application à la fois qui défile seule. La feuille d'un ticket (z 100)
+   et les toasts passent au-dessus. */
+html.salle-plein, html.salle-plein body { overflow: hidden; }
+/* Le reste de l'espace s'efface : la barre, le rail, la bulle. #vue fait
+   un contexte d'empilement à part (transition de vue), la salle ne
+   pourrait pas passer au-dessus d'eux. */
+html.salle-plein .lat, html.salle-plein .haut, html.salle-plein .voile-lat, html.salle-plein .bulle, html.salle-plein .saut { display: none !important; }
+.salle > * { flex-shrink: 0; }
+.salle--tv { position: fixed; inset: 0; z-index: 80; overflow: auto; gap: 14px; padding: 22px 34px 26px; border-radius: 0; }
+.salle--tv .salle-surtitre { font-size: 14px; }
+.salle--tv .salle-global { min-height: 64px; }
+.salle--tv .salle-global-feu { width: 22px; height: 22px; }
+.salle--tv .salle-global-texte { font-size: 56px; }
+.salle--tv .salle-horloge { font-size: 44px; }
+.salle--tv .salle-frais { font-size: 14px; }
+.salle--tv .voyant { padding: 16px 18px; }
+.salle--tv .voyant-nom { font-size: 19px; }
+.salle--tv .voyant-feu { width: 14px; height: 14px; }
+.salle--tv .voyant-etat { font-size: 13px; }
+.salle--tv .voyant-raison { font-size: 15px; }
+.salle--tv .salle-corps { grid-template-columns: minmax(0, 1.7fr) minmax(380px, 1fr); }
+.salle--tv .salle-tuiles { grid-template-columns: minmax(0, 1fr); }
+.salle--tv [data-tv-cycle] [data-tuile]:not(.tv-actif) { display: none; }
+.salle--tv .tuile { padding: 22px 26px; gap: 18px; }
+.salle--tv .tuile-nom { font-size: 26px; }
+.salle--tv .tuile-rang, .salle--tv .tuile-version { font-size: 15px; }
+.salle--tv .tuile-chiffres { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.salle--tv .schiffre-v { font-size: 46px; }
+.salle--tv .schiffre--grand .schiffre-v { font-size: 92px; }
+.salle--tv .schiffre-l { font-size: 15px; }
+.salle--tv .courbe { height: 120px; }
+.salle--tv .courbe--reponse { height: 40px; }
+.salle--tv .dispo { padding: 8px 12px; }
+.salle--tv .tuile-courbe figcaption, .salle--tv .tuile-pied { font-size: 14px; }
+.salle--tv .salle-corps { height: max(420px, calc(100vh - 560px)); }
+.salle--tv .salle-tuiles, .salle--tv .tuile { height: 100%; }
+.salle--tv .tuile-courbe { margin-top: auto; }
+.salle--tv .salle-fil { max-height: none; height: 100%; overflow: hidden; }
+.salle--tv .sfil-titre { font-size: 15px; }
+.salle--tv .sfil-texte { font-size: 14px; }
+.salle--tv .salle-bas { grid-template-columns: minmax(0, 1fr); }
+.salle--tv [data-region="versions"], .salle--tv [data-region="erreurs"], .salle--tv [data-region="incidents"], .salle--tv .salle-pied { display: none; }
+.salle--tv .dispo-v { font-size: 20px; }
+.salle--tv .salle-app-taux { font-size: 84px; }
+.salle--tv.salle--client .salle-bas--client { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
+.salle--tv.salle--client .salle-apps { grid-template-columns: minmax(0, 1fr); }
+
+@media (max-width: 1280px) {
+  .salle-corps, .salle--tv .salle-corps { grid-template-columns: minmax(0, 1fr); }
+  .salle--tv .salle-corps, .salle--tv .salle-tuiles, .salle--tv .tuile, .salle--tv .salle-fil { height: auto; }
+  .salle--tv .salle-fil { max-height: 420px; overflow: auto; }
+}
+@media (max-width: 1100px) {
+  .salle-bas, .salle-bas--client { grid-template-columns: minmax(0, 1fr); }
+  .salle-fil { max-height: 460px; }
+}
+@media (max-width: 720px) {
+  .salle { padding: 14px 12px; gap: 12px; border-radius: 14px; }
+  .salle-tuiles { grid-template-columns: minmax(0, 1fr); }
+  .sfil-ligne { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "heure type" "corps corps" "fin fin"; }
+  .salle-lien { white-space: normal; }
+  .salle-tete { grid-template-columns: minmax(0, 1fr) auto; }
+  .salle-tete-actions { grid-column: 1 / -1; }
+  .salle-global-texte { font-size: 24px; }
+  .salle-horloge { font-size: 20px; }
+  .salle-voyants { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tuile-chiffres { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .schiffre--grand .schiffre-v { font-size: 30px; }
+  .dispo, .dispo--client { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .dispo-nom, .dispo-courbe, .dispo .bande { grid-column: 1 / -1; }
+  .erreurs, .erreurs tbody, .erreurs tr, .erreurs td { display: block; }
+  .erreurs thead { display: none; }
+  .erreurs tr { padding: 8px 0; }
+  .erreurs td { padding: 2px 0; }
+  .erreurs .nb, .erreur-fin { text-align: left; }
+  .erreur-titre { min-width: 0; }
+  .incident { grid-template-columns: minmax(0, 1fr) auto; }
+  .incident-quand, .incident-fin { grid-column: 1 / -1; text-align: left; }
+  .salle--tv { padding: 16px 14px; }
+  .salle--tv .salle-global-texte { font-size: 32px; }
+  .salle--tv .salle-horloge { font-size: 24px; }
+  .salle--tv .tuile-chiffres { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .salle--tv .schiffre--grand .schiffre-v { font-size: 56px; }
+  .salle--tv .schiffre-v { font-size: 30px; }
+  .salle--tv .salle-corps { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 420px) {
+  .salle-voyants { grid-template-columns: minmax(0, 1fr); }
+  .voyant { grid-template-areas: "feu nom" ". etat" ". raison" ". depuis"; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .salle .clignote, .sfil-ligne.neuf, .voyant .voyant-feu, .salle-global-feu { animation: none !important; }
+}

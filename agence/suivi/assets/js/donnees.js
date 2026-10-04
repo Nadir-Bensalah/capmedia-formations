@@ -59,6 +59,14 @@ export const K = {
   sentry: (p) => `sentry:${p}`,
   sentryAlertes: (p) => `sentry-alertes:${p}`,
   sentryTickets: (p) => `sentry-tickets:${p}`,
+  /* La salle de contrôle (controle.js, serveur seul) : la vue du client
+     (projets/{p}/stabilite/salle), et pour l'équipe les sondes, les
+     erreurs par tranche, les voyants, les incidents ; les liaisons, pour
+     l'entrée du Cockpit (administrateur). */
+  salle: (p) => `salle:${p}`,
+  controle: (p) => `controle:${p}`,
+  incidents: (p) => `incidents:${p}`,
+  liaisonsSentry: 'sentry-liaisons',
   /* Les avis et les passages vivent sous une campagne, pas sous un projet :
      c'est la seule granularité que les règles ouvrent au client. */
   appreciations: (c) => `appreciations:${c}`,
@@ -276,6 +284,7 @@ export const abonnerProjet = (lot, pid, role) => {
   /* La stabilité : un seul document épuré, lisible des deux côtés. La
      liaison Sentry (équipe seule) dit si l'onglet Stabilité a lieu d'être. */
   lot.abonner(K.stabilite(pid), () => doc(bdd, 'projets', pid, 'stabilite', 'resume'));
+  lot.abonner(K.salle(pid), () => doc(bdd, 'projets', pid, 'stabilite', 'salle'));
   if (!client) lot.abonner(K.sentryLiaison(pid), () => doc(bdd, 'sentryLiaisons', pid));
   lot.abonner(K.taches(pid), () => surProjetVisible('taches'));
   lot.abonner(K.tickets(pid), () => surProjet('tickets'));
@@ -310,6 +319,20 @@ export const abonnerSentry = (lot, pid) => {
   lot.abonner(K.sentry(pid), () => doc(bdd, 'sentry', pid));
   lot.abonner(K.sentryAlertes(pid), () => query(col('sentry', pid, 'alertes'), orderBy('le', 'desc'), limit(20)));
   lot.abonner(K.sentryTickets(pid), () => col('sentry', pid, 'tickets'));
+};
+
+/** La salle de contrôle d'un projet (équipe seule) : le détail Sentry, les
+    sondes et les voyants, les dix derniers incidents de disponibilité. */
+export const abonnerControle = (lot, pid) => {
+  abonnerSentry(lot, pid);
+  lot.abonner(K.controle(pid), () => doc(bdd, 'controle', pid));
+  lot.abonner(K.incidents(pid), () => query(col('controle', pid, 'incidents'), orderBy('debut', 'desc'), limit(10)));
+};
+
+/** Les projets reliés à la salle de contrôle (administrateur : les règles
+    n'ouvrent la liste qu'à lui). */
+export const abonnerLiaisons = (lot) => {
+  lot.abonner(K.liaisonsSentry, () => query(col('sentryLiaisons'), where('actif', '==', true)));
 };
 
 /** Le plan de tests d'un projet, toutes ses sections (lourd : à la demande). */

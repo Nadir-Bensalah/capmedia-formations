@@ -38,6 +38,7 @@ import * as nouveauProjet from './vues/nouveau-projet.js';
 import * as parametres from './vues/parametres.js';
 import * as annonces from './vues/annonces.js';
 import * as stabilite from './vues/stabilite.js';
+import * as controle from './vues/controle.js';
 
 const session = await exigerSession();
 if (!session) throw new Error('session absente');
@@ -137,6 +138,9 @@ const construireNavigation = () => {
         { chemin: '/finances', libelle: 'Finances', icone: 'finances', compte: { total: piecesDues, neuf: piecesDues }, si: peut(session, 'finance.lecture') },
         { chemin: '/maintenance', libelle: 'Maintenance', icone: 'sante', compte: { total: forfaitsActifs, neuf: forfaitsDemandes } },
         { chemin: '/activite', libelle: 'Activité', icone: 'activite' },
+        /* La santé en direct des applications reliées à Sentry : l'administrateur
+           y entre d'ici ; un agent, par la page du projet. */
+        { chemin: '/controle', libelle: 'Salle de contrôle', icone: 'sante', si: admin },
         /* Ce que Capmedia annonce à ses clients, congés compris : le
            total gris compte les publiées. */
         { chemin: '/annonces', libelle: 'Annonces', icone: 'porteVoix', compte: { total: (magasin.lire(K.annonces) || []).filter((a) => a.publication === 'publiee').length }, si: admin || peut(session, 'finance.gerer') },
@@ -221,6 +225,9 @@ definir([
   { chemin: '/projets/:id/evolutions', vue: (ctx) => evolutions.vue(ctx, env) },
   /* Ce que Sentry voit de l'application (vues/stabilite.js). */
   { chemin: '/projets/:id/stabilite', vue: (ctx) => stabilite.vue(ctx, env) },
+  /* La salle de contrôle : la santé en direct, plein écran possible (vues/controle.js). */
+  { chemin: '/projets/:id/controle', vue: (ctx) => controle.vue(ctx, env) },
+  { chemin: '/controle', vue: (ctx) => controle.entree(ctx, env) },
   { chemin: '/projets/:id/suggestions', vue: (ctx) => { naviguer(`/projets/${ctx.params.id}/evolutions`, { remplacer: true }); } },
   { chemin: '/projets/:id/:onglet', cle: (c) => `projet:${c.params.id}`, vue: (ctx) => projet.vue({ ...ctx, onglet: ctx.params.onglet }, env) },
   { chemin: '/nouveaux-projets', vue: (ctx) => nouveauProjet.liste(ctx, env) },
