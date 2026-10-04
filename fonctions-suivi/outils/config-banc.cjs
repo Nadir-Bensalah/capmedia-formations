@@ -6,7 +6,8 @@
    historiques. Un banc N (N >= 2) en reprend tout (règles, index,
    fonctions) et décale chaque port de (N - 1) x 10000, y compris ceux que
    Firebase réserve sans les écrire (hub 4400, journaux 4500, websocket de
-   Firestore 9150) : deux bancs ne se croisent sur aucun port.
+   Firestore 9150, Eventarc 9299, Cloud Tasks 9499) : deux bancs ne se
+   croisent sur aucun port.
 
      node fonctions-suivi/outils/config-banc.cjs 2
        -> écrit firebase.suivi.banc2.json à la racine du dépôt (non suivi)
@@ -41,6 +42,10 @@ source.emulators = {
   ui: { enabled: true, ...e.ui, port: port('ui', 4000) },
   hub: { ...e.hub, port: port('hub', 4400) },
   logging: { ...e.logging, port: port('logging', 4500) },
+  /* Eventarc et Cloud Tasks : sans port écrit, deux bancs qui démarrent
+     ensemble se disputaient 9299 et 9499 (EADDRINUSE, émulateurs absents). */
+  eventarc: { ...e.eventarc, port: port('eventarc', 9299) },
+  tasks: { ...e.tasks, port: port('tasks', 9499) },
 };
 
 const cible = path.join(racine, `firebase.suivi.banc${numero}.json`);
