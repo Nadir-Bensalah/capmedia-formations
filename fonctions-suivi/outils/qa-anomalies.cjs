@@ -66,7 +66,7 @@ const str=(d,k)=>champ(d,k).stringValue||'';
   const f=await page.evaluate(()=>({feuille:!!document.querySelector('.feuille'),gravites:document.querySelectorAll('#ed-gravite option').length,statuts:document.querySelectorAll('#ed-statut option').length,scen:document.querySelectorAll('#ed-scenario option').length,plat:document.querySelectorAll('[data-plateforme-a]').length}));
   verifier(f.feuille,'la feuille s ouvre');
   verifier(f.gravites===4,'les quatre gravités',`${f.gravites}`);
-  verifier(f.statuts===4,'les quatre statuts',`${f.statuts}`);
+  verifier(f.statuts===5,'les cinq statuts (à confirmer, à revérifier, confirmé, corrigé, fausse alerte)',`${f.statuts}`);
   verifier(f.scen>100,`le scénario concerné, au choix (${f.scen})`);
   verifier(f.plat===3,'les trois plateformes à cocher',`${f.plat}`);
   // Sans titre : refusé.

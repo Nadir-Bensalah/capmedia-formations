@@ -2062,9 +2062,22 @@ service cloud.firestore {
       // Les anomalies : le regroupement des échecs. Trois testeurs qui
       // tombent sur le même scénario font une anomalie, pas trois.
       // Le testeur ne les voit pas : il rapporte, il ne juge pas.
+      // Depuis le 04/10/2026, les problèmes relevés par les tests
+      // automatiques y sont aussi (origine « robot »), avec leur statut :
+      // le client lit tout, ce qui n'est pas confirmé est dit « À
+      // confirmer ». Il ne change jamais un statut : l'écriture est à
+      // l'équipe.
       match /anomalies/{anomalieId} {
         allow read:   if accesProjet(projetId);
         allow write:  if equipeSurProjet(projetId);
+
+        // La note interne : la piste technique (fichier, ligne, preuve) et
+        // la décision en cours. Un sous-document que les règles ferment au
+        // client, et non un champ que l'écran tairait : un affichage ne
+        // protège rien.
+        match /equipe/{docId} {
+          allow read, write: if equipeSurProjet(projetId);
+        }
       }
 
       // Les parcours automatisés. Le client les lit : savoir que quarante

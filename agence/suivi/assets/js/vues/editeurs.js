@@ -905,17 +905,21 @@ const editeurs = {
 
     return feuille({
       titre: fiche ? "L'anomalie" : 'Nouvelle anomalie',
-      sousTitre: fiche ? (fiche.origine === 'testeur' ? 'Venue d\'un échec de testeur.' : 'Posée par l\'équipe.') : 'Un défaut constaté, à reproduire puis à trancher.',
+      sousTitre: fiche ? (fiche.origine === 'testeur' ? 'Venue d\'un échec de testeur.' : fiche.origine === 'robot' ? 'Relevée par les tests automatiques. Les textes sont ceux que lit le client.' : 'Posée par l\'équipe.') : 'Un défaut constaté, à reproduire puis à trancher.',
       corps: `
         ${champ('titre', 'Ce qui ne va pas', fiche ? fiche.titre : (defaut.titre || ''), { placeholder: 'Le rappel de fin de mois ne part jamais' })}
         <div class="forme-rang">
           ${select('gravite', 'Gravité', GRAVITES_ANOMALIE, fiche ? fiche.gravite : 'important', { aide: 'Bloquant : on ne peut pas continuer. Critique : une fonction importante est cassée. Important : gênant, mais on contourne. Mineur : un détail.' })}
-          ${select('statut', 'Statut', STATUTS_ANOMALIE, fiche ? fiche.statut : 'nouvelle', { aide: 'Confirmée seulement après l\'avoir reproduite. Sans suite si ce n\'était pas un défaut.' })}
+          ${select('statut', 'Statut', STATUTS_ANOMALIE, fiche ? fiche.statut : 'nouvelle', { aide: 'Confirmé seulement après l\'avoir reproduit. Fausse alerte si ce n\'était pas un défaut.' })}
         </div>
         <div class="groupe"><label class="etiquette-champ" for="ed-scenario">Scénario concerné <span class="facultatif">(facultatif)</span></label>
           <select class="select" id="ed-scenario" name="scenario"><option value="">Aucun</option>${scen.map((x) => `<option value="${echapper(x.ref)}"${fiche && fiche.scenario === x.ref ? ' selected' : ''}>${echapper(x.ref)} · ${echapper(x.titre)}</option>`).join('')}</select></div>
         <div class="groupe"><span class="etiquette-champ">Sur quoi</span>
           <div class="cases-blocs">${Object.entries(PLATEFORMES_TEST).map(([cle, x]) => `<label class="case"><input type="checkbox" data-plateforme-a="${echapper(cle)}"${prises.includes(cle) ? ' checked' : ''}> ${echapper(x.libelle)}</label>`).join('')}</div></div>
+        ${fiche && fiche.origine === 'robot' ? `
+        ${zone('obtenu', 'Ce qui se passe', fiche.obtenu || '', { facultatif: true, lignes: 3 })}
+        ${zone('attendu', 'Ce qui devrait se passer', fiche.attendu || '', { facultatif: true, lignes: 2 })}
+        ${zone('etapes', 'Pour le voir', fiche.etapes || '', { facultatif: true, lignes: 3, aide: 'Lu par le client : des mots simples, ni fichier ni nom d\'outil. Un texte changé ici n\'est plus réécrit par l\'import.' })}` : ''}
         ${zone('description', 'Ce qu\'on sait', fiche ? fiche.description : '', { facultatif: true, lignes: 5, placeholder: 'Les étapes pour la reproduire, dans l\'ordre. Ce qui se passe, ce qui devrait se passer.' })}
         ${fiche && (fiche.temoins || []).length ? `<p class="aide">${(fiche.temoins || []).length} témoin${(fiche.temoins || []).length > 1 ? 's' : ''} venu${(fiche.temoins || []).length > 1 ? 's' : ''} des testeurs : ils restent attachés, quoi que vous changiez ici.</p>` : ''}
         ${fiche ? `<div class="groupe" style="margin-top:8px"><button class="btn btn-doux btn-petit" type="button" data-supprimer>${icone('corbeille')} Supprimer cette anomalie</button></div>` : ''}`,
@@ -937,6 +941,7 @@ const editeurs = {
         const donnees = {
           titre: d.titre, gravite: d.gravite, statut: d.statut,
           scenario: d.scenario || '', plateformes, description: d.description || '',
+          ...(fiche && fiche.origine === 'robot' ? { obtenu: d.obtenu || '', attendu: d.attendu || '', etapes: d.etapes || '' } : {}),
         };
         if (fiche) await ecrire.majAnomalie(pid, fiche.id, donnees);
         else await ecrire.creerAnomalie(pid, donnees);

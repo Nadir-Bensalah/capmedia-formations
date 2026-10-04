@@ -67,7 +67,7 @@ export const resultatCourt = (r) => RESULTATS_LONGS[r] || r;
 const RESULTATS_COURTS = Object.fromEntries(Object.entries(RESULTATS_LONGS).map(([l, c]) => [c, l]));
 export const resultatLong = (r) => RESULTATS_COURTS[r] || r;
 const enCourt = (p) => (p && RESULTATS_LONGS[p.resultat] ? { ...p, resultat: RESULTATS_LONGS[p.resultat] } : p);
-const OUVERTES = ['nouvelle', 'confirmee'];
+const OUVERTES = ['nouvelle', 'a-reverifier', 'confirmee'];
 
 /* Une anomalie compte pour CETTE campagne si un de ses témoins y a été
    pris, ou si l'équipe l'a posée elle-même (sans témoin). Une anomalie

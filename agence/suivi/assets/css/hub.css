@@ -2692,3 +2692,22 @@ p.axe-titre { cursor: default; }
 .grille-periodes { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
 .grille-periode { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: 10px; align-items: end; }
 @media (max-width: 720px) { .grille-periode { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+
+/* ---------------------------------------------------------------------
+   Les problèmes relevés (onglet Problèmes de la page Tests, 04/10/2026).
+   Le statut porte la couleur (sa pastille) ; le reste est du texte. La
+   phrase « À confirmer » est dite une fois, en tête, pas sur chaque ligne.
+   --------------------------------------------------------------------- */
+.pb-explication { font: var(--t-petit); color: var(--encre-2); margin: 4px 0 8px; }
+.pb-compte { font: var(--t-petit); color: var(--encre-2); margin: 0 0 12px; }
+.pb-compte b { color: var(--encre); font-weight: 600; }
+.pb-filtres { gap: 8px; flex-wrap: wrap; margin: 0 0 12px; }
+.pb-filtres .select { min-width: 0; max-width: 100%; }
+.pb-affiches { margin: 0 0 8px; }
+.pb-ticket { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font: var(--t-petit); color: var(--encre-2); margin: 0 0 8px; }
+.pb-constat { margin: 10px 0 0; }
+.pb-constat p { margin: 2px 0; overflow-wrap: anywhere; }
+.pb-piste code { font-size: 12.5px; overflow-wrap: anywhere; }
+.pb-fiche > .groupe { margin-bottom: 16px; }
+.pb-fiche > .groupe > .etiquette-champ { display: block; margin-bottom: 4px; }
+.pb-fiche .pb-decision, .pb-fiche .pb-interne { padding-top: 4px; }

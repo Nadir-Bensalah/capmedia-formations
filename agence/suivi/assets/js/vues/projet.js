@@ -12,7 +12,7 @@ import {
   STATUTS_PROJET, STATUTS_COMPOSANT, TYPES_COMPOSANT, STATUTS_ETAPE, STATUTS_TACHE, PRIORITES, STATUTS, TYPES, URGENCES, OUVERTS, ATTEND_CLIENT,
   CATEGORIES_FICHIER, CATEGORIES_CLIENT, CATEGORIES_LIEN, STATUTS_RELEASE, TYPES_CHANGEMENT, TYPES_NOTE, SANTES, STATUTS_VALIDATION, QUALIFICATIONS, statutProjet, PLATEFORMES, nomsContacts, contactsProjet, PORTEES_DEVIS, age,
   verdictDelai, reportsDe, dateOrigine, MOTIFS_REPORT, dateLongue, enDate,
-  STATUTS_CAMPAGNE, STATUTS_ANOMALIE, peut, libellePlateforme, estResponsable, typeProjetAffiche
+  STATUTS_CAMPAGNE, STATUTS_ANOMALIE, PLATEFORMES_TEST, peut, libellePlateforme, estResponsable, typeProjetAffiche
 } from '../noyau.js';
 import {
   icone, pastille, pastilleTexte, puce, pucePlateforme, iconePlateforme, tonPlateforme, avatarProjet, avatar, progression, anneau, ligne, vide, fait, chronoItem, parJour, squelette, titrePage,
@@ -597,12 +597,13 @@ const tests = (d, { pid, env }) => {
       <div class="chiffre"><span class="chiffre-valeur">${chiffre(nScenarios)}</span><span class="chiffre-nom">${nomScenarios}</span></div>
       <div class="chiffre"><span class="chiffre-valeur">${chiffre(nMobiles)}</span><span class="chiffre-nom">${equipe && plan === undefined ? 'passés deux fois' : 'testés sur iPhone et Android'}</span></div>
       <div class="chiffre"><span class="chiffre-valeur">${enCours.length}</span><span class="chiffre-nom">campagnes en cours</span></div>
-      <div class="chiffre${ouvertes.length ? ' chiffre--alerte' : ''}"><span class="chiffre-valeur">${ouvertes.length}</span><span class="chiffre-nom">${equipe ? 'anomalies ouvertes' : 'problèmes à corriger'}</span></div>
+      <div class="chiffre${ouvertes.length ? ' chiffre--alerte' : ''}"><span class="chiffre-valeur">${ouvertes.length}</span><span class="chiffre-nom">${equipe ? 'anomalies ouvertes' : 'problèmes relevés, confirmés ou non'}</span></div>
     </div>
 
     ${bloquantes.length ? `<div class="liste" style="margin-top:16px">${bloquantes.slice(0, 3).map((a) => ligne({
+      href: `#/tests?projet=${encodeURIComponent(pid)}&anomalie=${encodeURIComponent(a.id || '')}`,
       icone: 'alerte', ton: 'rouge', titre: echapper(a.titre || 'Anomalie bloquante'),
-      sous: (a.plateformes || []).join(', ') || 'Bloquant', fin: pastille(STATUTS_ANOMALIE, a.statut || 'nouvelle'),
+      sous: echapper((a.plateformes || []).map((x) => (PLATEFORMES_TEST[x] || {}).libelle || x).join(', ') || 'Bloquant'), fin: pastille(STATUTS_ANOMALIE, a.statut || 'nouvelle'),
     })).join('')}</div>` : ''}
 
     ${enCours.length ? `<div class="liste" style="margin-top:16px">${enCours.map((c) => ligne({
