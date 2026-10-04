@@ -37,6 +37,7 @@ import * as testeursMessages from './vues/admin-testeurs-messages.js';
 import * as nouveauProjet from './vues/nouveau-projet.js';
 import * as parametres from './vues/parametres.js';
 import * as annonces from './vues/annonces.js';
+import * as stabilite from './vues/stabilite.js';
 
 const session = await exigerSession();
 if (!session) throw new Error('session absente');
@@ -218,6 +219,8 @@ definir([
   { chemin: '/projets/:id/brique/:cid', vue: (ctx) => brique.vue(ctx, env) },
   { chemin: '/projets/:id/notes', vue: (ctx) => notesProjet.vue(ctx, env) },
   { chemin: '/projets/:id/evolutions', vue: (ctx) => evolutions.vue(ctx, env) },
+  /* Ce que Sentry voit de l'application (vues/stabilite.js). */
+  { chemin: '/projets/:id/stabilite', vue: (ctx) => stabilite.vue(ctx, env) },
   { chemin: '/projets/:id/suggestions', vue: (ctx) => { naviguer(`/projets/${ctx.params.id}/evolutions`, { remplacer: true }); } },
   { chemin: '/projets/:id/:onglet', cle: (c) => `projet:${c.params.id}`, vue: (ctx) => projet.vue({ ...ctx, onglet: ctx.params.onglet }, env) },
   { chemin: '/nouveaux-projets', vue: (ctx) => nouveauProjet.liste(ctx, env) },

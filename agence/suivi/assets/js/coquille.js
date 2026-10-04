@@ -490,6 +490,7 @@ const ICONE_NOTIF = {
   demande: 'demandes', validation: 'valider', message: 'messages', facture: 'euro', paiement: 'paiement',
   reunion: 'reunions', release: 'releases', tache: 'taches', blocage: 'alerte', test: 'bug',
   maintenance: 'sante', projet: 'projets', jalon: 'drapeau', fichier: 'fichiers', note: 'note', devis: 'receipt',
+  sentry: 'activite',
 };
 const nomProjetNotif = (n) => {
   if (!n || !n.projet) return '';

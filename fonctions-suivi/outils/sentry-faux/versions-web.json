@@ -1,0 +1,19 @@
+[
+  {
+    "id": 144751020, "version": "forgeme-web@1.0.0+cd4fa92", "status": "open", "shortVersion": "forgeme-web@1.0.0+cd4fa92",
+    "versionInfo": { "package": "forgeme-web", "version": { "raw": "1.0.0+cd4fa92", "major": 1, "minor": 0, "patch": 0, "pre": null, "buildCode": "cd4fa92", "components": 3 }, "description": "1.0.0 (cd4fa92)", "buildHash": null },
+    "ref": null, "url": null, "dateReleased": null, "dateCreated": "@-1d", "data": {}, "newGroups": 0, "owner": null,
+    "commitCount": 0, "lastCommit": null, "deployCount": 0, "lastDeploy": null, "authors": [],
+    "projects": [ { "id": 4512197441683536, "slug": "forgeme-web", "name": "forgeme-web", "newGroups": 0, "platform": "javascript-react", "platforms": [], "hasHealthData": true,
+      "healthData": { "durationP50": null, "durationP90": null, "crashFreeUsers": 99.8, "crashFreeSessions": 99.7, "sessionsCrashed": 4, "sessionsErrored": 30, "totalUsers": 640, "totalUsers24h": 190, "totalProjectUsers24h": 200, "totalSessions": 1540, "totalSessions24h": 220, "totalProjectSessions24h": 230, "adoption": 95.6, "sessionsAdoption": 95.6, "stats": { "24h": [] } } } ],
+    "firstEvent": "@-1d", "lastEvent": "@-25m", "currentProjectMeta": {}, "userAgent": null
+  },
+  {
+    "id": 144750999, "version": "forgeme-web@1.0.0+d1dac23", "status": "open", "shortVersion": "forgeme-web@1.0.0+d1dac23",
+    "versionInfo": { "package": "forgeme-web", "version": { "raw": "1.0.0+d1dac23", "major": 1, "minor": 0, "patch": 0, "pre": null, "buildCode": "d1dac23", "components": 3 }, "description": "1.0.0 (d1dac23)", "buildHash": null },
+    "ref": null, "url": null, "dateReleased": null, "dateCreated": "@-8d", "data": {}, "newGroups": 1, "owner": null,
+    "commitCount": 0, "lastCommit": null, "deployCount": 0, "lastDeploy": null, "authors": [],
+    "projects": [ { "id": 4512197441683536, "slug": "forgeme-web", "name": "forgeme-web", "newGroups": 1, "platform": "javascript-react", "platforms": [], "hasHealthData": false } ],
+    "firstEvent": "@-8d", "lastEvent": "@-2d", "currentProjectMeta": {}, "userAgent": null
+  }
+]

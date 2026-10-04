@@ -2142,3 +2142,58 @@ body:has(.bulle) #vue .page { padding-bottom: 104px; }
 .etat-courant--ambre i { background: var(--ambre); }
 .etat-courant--bleu i { background: var(--accent, var(--bleu)); }
 .etat-courant--vert i { background: var(--vert); }
+
+/* ==========================================================================
+   La stabilité d'une application (vues/stabilite.js, 04/10)
+   Le repère vient de la forme : un grand chiffre, des lignes alignées, la
+   chasse fixe pour ce qui est technique. Aucune pastille d'icône.
+   ========================================================================== */
+.page-stabilite .stab-note { margin-top: 10px; }
+.stab-sous-titre { margin: 22px 0 10px; font: 600 14px/1.3 var(--titre); letter-spacing: -.01em; color: var(--encre-2); }
+.stab-mono { font: 400 12.5px/1.45 var(--mono); color: var(--encre-2); overflow-wrap: anywhere; }
+.stab-versions td.nb, .stab-versions th.nb { text-align: right; white-space: nowrap; }
+.stab-sentry { font: 500 12.5px var(--police); white-space: nowrap; }
+
+.stab-alertes, .stab-erreurs, .stab-corrections { list-style: none; margin: 0; padding: 0; }
+.stab-alerte, .stab-erreur { display: grid; gap: 4px 14px; padding: 12px 0; border-bottom: 1px solid var(--trait-fin); }
+.stab-alerte:last-child, .stab-erreur:last-child { border-bottom: 0; }
+.stab-alerte { grid-template-columns: auto minmax(0, 1fr) auto; align-items: baseline; }
+.stab-alerte-corps { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.stab-alerte-titre { font: 600 14px/1.35 var(--police); }
+.stab-alerte-texte { font: 400 13px/1.4 var(--police); color: var(--encre-2); overflow-wrap: anywhere; }
+.stab-alerte-fin { display: flex; gap: 12px; align-items: baseline; font-size: 12.5px; white-space: nowrap; }
+
+.stab-erreur { grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
+.stab-erreur-titre { margin: 0; font: 600 14px/1.4 var(--police); overflow-wrap: anywhere; }
+.stab-erreur-lieu { margin: 3px 0 0; }
+.stab-erreur-faits { margin: 4px 0 0; font: 400 12.5px/1.4 var(--police); color: var(--encre-3); }
+.stab-erreur-fin { display: flex; gap: 10px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+
+.stab-reference { margin-bottom: 14px; }
+.stab-reference .stab-mono { margin-top: 4px; }
+
+.stab-apps { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
+.stab-app-nom { margin: 0; font: 400 13px/1.35 var(--police); color: var(--encre-2); }
+.stab-app-taux { margin: 8px 0 0; font: 600 40px/1.05 var(--titre); letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+.stab-app-taux--vide { font-size: 22px; color: var(--encre-3); }
+.stab-app-legende { margin: 4px 0 0; font: 400 14px/1.4 var(--police); color: var(--encre-2); }
+.stab-app-tendance { margin: 12px 0 0; font: 400 13px/1.45 var(--police); color: var(--encre-3); }
+.stab-app-tendance[data-tendance="mieux"] { color: var(--vert); }
+.stab-app-tendance[data-tendance="moins"] { color: var(--orange); }
+
+.stab-correction { display: flex; gap: 14px; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--trait-fin); color: inherit; text-decoration: none; }
+.stab-corrections li:last-child .stab-correction { border-bottom: 0; }
+.stab-correction:hover .stab-correction-titre { text-decoration: underline; }
+.stab-correction:focus-visible { outline: 2px solid var(--anneau); outline-offset: 2px; border-radius: 6px; }
+.stab-correction-corps { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.stab-correction-titre { font: 600 14px/1.4 var(--police); overflow-wrap: anywhere; }
+.stab-correction-sous { font: 400 12.5px/1.4 var(--police); color: var(--encre-3); }
+.stab-pied { margin-top: 14px; }
+
+@media (max-width: 640px) {
+  .stab-alerte { grid-template-columns: minmax(0, 1fr); }
+  .stab-alerte-fin { white-space: normal; }
+  .stab-erreur { grid-template-columns: minmax(0, 1fr); }
+  .stab-erreur-fin { justify-content: flex-start; }
+  .stab-app-taux { font-size: 34px; }
+}

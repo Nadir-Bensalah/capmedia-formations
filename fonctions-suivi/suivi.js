@@ -46,6 +46,7 @@ const onDocumentCreated = (o, fn) => v2firestore.onDocumentCreated(o, auMomentDe
 const onDocumentUpdated = (o, fn) => v2firestore.onDocumentUpdated(o, auMomentDe(fn));
 const onDocumentWritten = (o, fn) => v2firestore.onDocumentWritten(o, auMomentDe(fn));
 const invitations = require('./invitations');
+const sentry = require('./sentry');
 const { Refus, cleEmail } = require('./commun');
 
 /* index.js initialise déjà l'application ; la garde permet de charger ce
@@ -1654,6 +1655,11 @@ const ACTIONS = {
   verifierSignature: { permission: 'systeme' },
   diagnostic: { permission: 'systeme' },
   remplirProjet: { permission: 'systeme', projet: (c) => c.id },
+  /* Sentry (sentry.js) : relier un projet, relever tout de suite, faire
+     d'une erreur un ticket. Le jeton ne quitte jamais le serveur. */
+  sentryLier: { permission: 'systeme', projet: (c) => c.projet },
+  sentryActualiser: { permission: 'projet.voir', projet: (c) => c.projet },
+  sentryVersTicket: { permission: 'demandes.gerer', projet: (c) => c.projet },
 };
 
 /* Exposé pour l'épreuve : le registre, sans rien exécuter. */
@@ -2257,6 +2263,11 @@ exports.suiviAdmin = onRequest(
       }
 
       /* --- Un etat des lieux, pour verifier sans deviner -------------------- */
+      /* --- Sentry : relier, relever, faire un ticket (sentry.js) ----------- */
+      if (action === 'sentryLier') return res.json(await sentry.lier(identite, req.body || {}));
+      if (action === 'sentryActualiser') return res.json(await sentry.actualiser(identite, req.body || {}));
+      if (action === 'sentryVersTicket') return res.json(await sentry.versTicket(identite, req.body || {}));
+
       /* --- Poser une demande depuis le cockpit -----------------------------
          Une anomalie remontée par message ou par téléphone doit rejoindre
          le fil des demandes, sinon elle vit dans une boîte mail et le

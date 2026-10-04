@@ -1,0 +1,11 @@
+{
+  "data": [
+    { "project": "forgeme-web", "os.name": "Mac OS X", "issue": "FORGEME-WEB-3", "count()": 18 },
+    { "project": "forgeme-web", "os.name": "Windows", "issue": "FORGEME-WEB-3", "count()": 9 },
+    { "project": "forgeme-web", "os.name": "Mac OS X", "issue": "FORGEME-WEB-1", "count()": 4 },
+    { "project": "forgeme-mobile", "os.name": "iOS", "issue": "FORGEME-MOBILE-7", "count()": 41 },
+    { "project": "forgeme-mobile", "os.name": "iOS", "issue": "FORGEME-MOBILE-4", "count()": 3 },
+    { "project": "forgeme-mobile", "os.name": "Android", "issue": "FORGEME-MOBILE-7", "count()": 23 }
+  ],
+  "meta": { "fields": { "project": "string", "os.name": "string", "issue": "string", "count()": "integer" } }
+}

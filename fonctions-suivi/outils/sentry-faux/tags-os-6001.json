@@ -1,0 +1,5 @@
+{ "key": "os.name", "name": "Os.Name", "uniqueValues": 2, "totalValues": 182,
+  "topValues": [
+    { "key": "os.name", "name": "iOS", "value": "iOS", "count": 120, "lastSeen": "@-10m", "firstSeen": "@-3d" },
+    { "key": "os.name", "name": "Android", "value": "Android", "count": 62, "lastSeen": "@-1h", "firstSeen": "@-3d" }
+  ] }

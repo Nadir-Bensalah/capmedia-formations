@@ -48,3 +48,9 @@ exports.hubPushMessageTesteur = require('./push').hubPushMessageTesteur;
 
 /* La campagne commence : chaque testeur prévenu (lettre, cloche, push). */
 exports.hubCampagneTesteurs = require('./testeurs-lettres').hubCampagneTesteurs;
+
+/* Sentry : le relevé toutes les quinze minutes, et les alertes en direct
+   (intégration interne, signature vérifiée). Voir sentry.js. */
+const sentry = require('./sentry');
+exports.sentryReleve = sentry.sentryReleve;
+exports.sentryWebhook = sentry.sentryWebhook;

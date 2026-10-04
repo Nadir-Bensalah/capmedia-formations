@@ -1,0 +1,4 @@
+[
+  { "id": "4512197441683536", "slug": "forgeme-web", "name": "forgeme-web", "platform": "javascript-react", "hasSessions": true },
+  { "id": "4512197449351248", "slug": "forgeme-mobile", "name": "forgeme-mobile", "platform": "react-native", "hasSessions": true }
+]

@@ -1,0 +1,38 @@
+[
+  {
+    "id": "6001", "shortId": "FORGEME-MOBILE-7", "title": "TypeError: Cannot read property 'id' of undefined",
+    "culprit": "TachesScreen(src/ecrans/Taches.tsx)", "level": "error", "status": "unresolved", "substatus": "escalating",
+    "isUnhandled": true, "count": "182", "userCount": 37, "firstSeen": "@-3d", "lastSeen": "@-10m",
+    "permalink": "https://forgeme.sentry.io/issues/6001/",
+    "project": { "id": "4512197449351248", "name": "forgeme-mobile", "slug": "forgeme-mobile", "platform": "react-native" },
+    "metadata": { "type": "TypeError", "value": "Cannot read property 'id' of undefined" }, "type": "error",
+    "stats": { "24h": "@heures:4,6,3,2,1,0,0,0,1,2,5,8,9,7,6,5,4,6,7,8,9,6,5,4" }
+  },
+  {
+    "id": "6002", "shortId": "FORGEME-WEB-3", "title": "Error: Échec de la connexion pour jean.dupont@exemple.fr depuis 192.168.1.20",
+    "culprit": "connexion(src/auth.ts)", "level": "error", "status": "unresolved", "substatus": "new",
+    "isUnhandled": false, "count": "40", "userCount": 12, "firstSeen": "@-5h", "lastSeen": "@-25m",
+    "permalink": "https://forgeme.sentry.io/issues/6002/?query=user.email%3Ajean.dupont%40exemple.fr",
+    "project": { "id": "4512197441683536", "name": "forgeme-web", "slug": "forgeme-web", "platform": "javascript-react" },
+    "metadata": { "type": "Error", "value": "Échec de la connexion" }, "type": "error",
+    "stats": { "24h": "@heures:0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,8,10,9,7,6" }
+  },
+  {
+    "id": "6003", "shortId": "FORGEME-MOBILE-4", "title": "Network request failed",
+    "culprit": "fetch(src/api/client.ts)", "level": "error", "status": "unresolved", "substatus": "regressed",
+    "isUnhandled": true, "count": "15", "userCount": 9, "firstSeen": "@-12d", "lastSeen": "@-2h",
+    "permalink": "https://forgeme.sentry.io/issues/6003/",
+    "project": { "id": "4512197449351248", "name": "forgeme-mobile", "slug": "forgeme-mobile", "platform": "react-native" },
+    "metadata": { "type": "TypeError", "value": "Network request failed" }, "type": "error",
+    "stats": { "24h": "@heures:0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,1,0" }
+  },
+  {
+    "id": "6004", "shortId": "FORGEME-WEB-1", "title": "ResizeObserver loop limit exceeded",
+    "culprit": "?(src/composants/Grille.tsx)", "level": "warning", "status": "unresolved", "substatus": "ongoing",
+    "isUnhandled": false, "count": "1200", "userCount": 310, "firstSeen": "@-40d", "lastSeen": "@-1h",
+    "permalink": "https://forgeme.sentry.io/issues/6004/",
+    "project": { "id": "4512197441683536", "name": "forgeme-web", "slug": "forgeme-web", "platform": "javascript-react" },
+    "metadata": { "type": "Error", "value": "ResizeObserver loop limit exceeded" }, "type": "error",
+    "stats": { "24h": "@heures:2,1,1,0,0,0,0,1,2,3,4,3,2,2,1,1,2,3,2,1,1,2,1,1" }
+  }
+]

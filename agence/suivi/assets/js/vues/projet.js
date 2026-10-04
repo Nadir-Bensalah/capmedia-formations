@@ -68,6 +68,9 @@ const ONGLETS = [
      l'onglet, marqué « À venir » ; le client ne le voit pas tant qu'il n'y
      a rien dedans (marketing.js, aDuContenu). */
   { cle: 'marketing', libelle: 'Marketing', icone: 'trend', equipeSeule: true },
+  /* Ce que Sentry voit de l'application : sa page (vues/stabilite.js),
+     dans le Cockpit, pour un projet relié. Le client y entre par le rail. */
+  { cle: 'stabilite', libelle: 'Stabilité', icone: 'activite', equipeSeule: true },
 ];
 /* Le nom d'une section dans les mots du client (Planning, Tickets...) ;
    l'équipe garde les siens. */
@@ -79,7 +82,8 @@ const HORS_CLIENT = ['releases', 'suggestions', 'notes'];
 const ongletsVisibles = (d, equipe, env) => ONGLETS.filter((o) => (equipe || (!o.equipeSeule && !HORS_CLIENT.includes(o.cle)))
   && (o.cle !== 'tests' || equipe || (d && (d.scenarios.length || d.campagnes.length)))
   && (o.cle !== 'coffre' || (env && voitLeCoffre(env, d && d.projet)))
-  && (o.cle !== 'evolutions' || equipe));
+  && (o.cle !== 'evolutions' || equipe)
+  && (o.cle !== 'stabilite' || (equipe && d && d.liaisonSentry && d.liaisonSentry.actif !== false)));
 
 /* La conversation vit en bulle, montée pour toutes les pages d'un projet
    par un module global. Depuis une fiche, on lui passe un début de
@@ -110,6 +114,8 @@ const lireTout = (pid) => ({
   /* Les notes que le client a partagées (équipe seule : un client n'a
      jamais cette clé, la liste est vide chez lui). */
   notesPartagees: notesPartageesDuProjet(pid),
+  /* La liaison Sentry (équipe seule) : l'onglet Stabilité n'existe qu'avec elle. */
+  liaisonSentry: magasin.lire(K.sentryLiaison(pid)) || null,
   /* Le plan de tests : sa présentation dit qu'il existe ; ses sections ne
      sont lues que sur l'onglet Tests (undefined tant qu'elles ne le sont
      pas). */
@@ -141,7 +147,7 @@ export const vue = async (ctx, env) => {
   sortie.innerHTML = `<div class="page">${squelette('page', 6)}</div>`;
 
   const cles = [K.projet(pid), K.composants(pid), K.jalons(pid), K.liens(pid), K.taches(pid), K.tickets(pid), K.validations(pid), K.fichiers(pid), K.releases(pid), K.reunions(pid), K.notes(pid), K.blocages(pid), K.documents(pid), K.paiements(pid), K.montants(pid), K.activite(pid), K.equipe,
-    K.scenarios(pid), K.planPresentation(pid), K.campagnes(pid), K.anomalies(pid), ...(env.role === 'equipe' ? [K.projetsInternes, K.interlocuteurs(pid), K.notesPartagees] : [])];
+    K.scenarios(pid), K.planPresentation(pid), K.campagnes(pid), K.anomalies(pid), ...(env.role === 'equipe' ? [K.projetsInternes, K.interlocuteurs(pid), K.notesPartagees, K.sentryLiaison(pid)] : [])];
   abonnerProjet(lot, pid, env.role);
 
   /* Une fiche ouverte par son adresse : une tâche (taches/:tid), une
@@ -318,6 +324,8 @@ export const vue = async (ctx, env) => {
         { libelle: 'Signaler un point bloquant', icone: 'alerte', action: () => editer('blocage', env, { pid }) },
         { libelle: 'Demander une validation', icone: 'valider', action: () => editer('validation', env, { pid }) },
         { libelle: 'Nouvelle note ou décision', icone: 'note', action: () => editer('note', env, { pid }) },
+        /* Relier le projet à Sentry : l'administrateur, depuis la page Stabilité. */
+        ...(env.admin && !(d.liaisonSentry && d.liaisonSentry.actif !== false) ? [{ libelle: 'Relier à Sentry', icone: 'activite', action: () => naviguer(`/projets/${pid}/stabilite`) }] : []),
       ]);
     }
     if (action === 'nouveau') return editer(el.dataset.genre, env, { pid, defaut: el.dataset.defaut ? JSON.parse(el.dataset.defaut) : {} });

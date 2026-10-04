@@ -1,0 +1,20 @@
+[
+  {
+    "id": 144756729, "version": "com.forgeme.app@1.1.3+24", "status": "open", "shortVersion": "com.forgeme.app@1.1.3+24",
+    "versionInfo": { "package": "com.forgeme.app", "version": { "raw": "1.1.3+24", "major": 1, "minor": 1, "patch": 3, "pre": null, "buildCode": "24", "components": 3 }, "description": "1.1.3 (24)", "buildHash": null },
+    "ref": null, "url": null, "dateReleased": null, "dateCreated": "@-2d", "data": {}, "newGroups": 2, "owner": null,
+    "commitCount": 0, "lastCommit": null, "deployCount": 0, "lastDeploy": null, "authors": [],
+    "projects": [ { "id": 4512197449351248, "slug": "forgeme-mobile", "name": "forgeme-mobile", "newGroups": 2, "platform": "react-native", "platforms": [], "hasHealthData": true,
+      "healthData": { "durationP50": null, "durationP90": null, "crashFreeUsers": 97.9, "crashFreeSessions": 98.4, "sessionsCrashed": 13, "sessionsErrored": 41, "totalUsers": 310, "totalUsers24h": 74, "totalProjectUsers24h": 80, "totalSessions": 812, "totalSessions24h": 120, "totalProjectSessions24h": 130, "adoption": 92.3, "sessionsAdoption": 92.3, "stats": { "24h": [] } } } ],
+    "firstEvent": "@-2d", "lastEvent": "@-10m", "currentProjectMeta": {}, "userAgent": null
+  },
+  {
+    "id": 144756100, "version": "com.forgeme.app@1.1.2+23", "status": "open", "shortVersion": "com.forgeme.app@1.1.2+23",
+    "versionInfo": { "package": "com.forgeme.app", "version": { "raw": "1.1.2+23", "major": 1, "minor": 1, "patch": 2, "pre": null, "buildCode": "23", "components": 3 }, "description": "1.1.2 (23)", "buildHash": null },
+    "ref": null, "url": null, "dateReleased": null, "dateCreated": "@-12d", "data": {}, "newGroups": 1, "owner": null,
+    "commitCount": 0, "lastCommit": null, "deployCount": 0, "lastDeploy": null, "authors": [],
+    "projects": [ { "id": 4512197449351248, "slug": "forgeme-mobile", "name": "forgeme-mobile", "newGroups": 1, "platform": "react-native", "platforms": [], "hasHealthData": true,
+      "healthData": { "durationP50": null, "durationP90": null, "crashFreeUsers": 99.2, "crashFreeSessions": 99.0, "sessionsCrashed": 7, "sessionsErrored": 12, "totalUsers": 280, "totalUsers24h": 6, "totalProjectUsers24h": 80, "totalSessions": 728, "totalSessions24h": 10, "totalProjectSessions24h": 130, "adoption": 7.7, "sessionsAdoption": 7.7, "stats": { "24h": [] } } } ],
+    "firstEvent": "@-12d", "lastEvent": "@-3h", "currentProjectMeta": {}, "userAgent": null
+  }
+]

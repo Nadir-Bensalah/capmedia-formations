@@ -2026,3 +2026,91 @@ prévenu, ce que porte un push, l'icône, le manifeste).
    `hubMessageTesteurModifie` (nouvelles), `hubMessageTesteur` (extrait
    des pièces, identifiant du message).
 3. Le site (`agence/suivi/`, dont `testeur.webmanifest` et `sw.js`).
+
+## 37. La stabilité des applications, relevée dans Sentry (04/10/2026)
+
+Ce que Sentry voit d'une application (ForgeMe : organisation `forgeme`,
+région EU, projets `forgeme-web` et `forgeme-mobile`), ramené dans le
+Hub. **Le jeton Sentry ne va jamais dans le navigateur** : seul le
+serveur lit l'API (`fonctions-suivi/sentry.js`), et les deux espaces ne
+lisent que ce qu'il a écrit dans Firestore.
+
+```
+sentryLiaisons/{p}            org, web, mobile (noms des projets Sentry), actif,
+                              ids (posés au premier relevé), par, maj
+                              lu par l'équipe du projet, écrit par le serveur seul
+sentry/{p}                    le relevé : jour (erreurs du jour par Web, iPhone,
+                              Android), stabilite (sessions sans plantage, 7 j,
+                              semaine d'avant, tendance, série de 14 j), versions
+                              (santé de chaque version), problemes (25 erreurs
+                              ouvertes, épurées), releve { le, ok, erreurs, appels }
+sentry/{p}/alertes/{id}       type (nouvelle, regression, pic, alerte, rouverte,
+                              resolue, calme), titre, texte, app, issue, lien, le
+sentry/{p}/tickets/{issue}    l'erreur devenue ticket : ticket, lien Sentry,
+                              occurrences, versions, plateformes
+sentry/{p}/debits/{cle}       une cloche par erreur et par six heures (fermé à tous)
+projets/{p}/stabilite/resume  la vue du client : apps [{ cle, taux, tendance,
+                              tauxAvant }], corrections [{ ticket, plateforme,
+                              reperee }], maj ; seul document lisible par lui
+```
+
+**Le relevé.** `sentryReleve` (toutes les quinze minutes, Europe/Paris)
+et « Actualiser » dans le Cockpit (`sentryActualiser`, une fois par
+minute au plus) : erreurs ouvertes, erreurs du jour (Discover, groupé
+par projet, système et erreur), sessions (`crash_free_rate(session)` par
+projet, quotidien sur 14 jours), versions avec leur santé (web et
+mobile). Cinq appels, six au premier relevé, moins de 500 par jour :
+l'offre gratuite de Sentry ne limite que le débit. Une étape refusée
+garde la valeur d'avant et le dit (encart du Cockpit). Sous vingt
+sessions, aucun taux n'est affirmé au client. Un taux ne s'arrondit
+jamais vers le haut (99,96 % s'écrit 99,9 %).
+
+**Le webhook.** `sentryWebhook` reçoit les envois de l'intégration
+interne Sentry. La signature (`Sentry-Hook-Signature`, HMAC SHA-256 du
+corps brut avec le secret client) est vérifiée avant tout. `issue`
+created devient « Nouvelle erreur », unresolved par Sentry « Erreur
+revenue », `event_alert` d'une règle dont le nom contient « Pic » devient
+« Pic d'erreurs », `metric_alert` critique ou avertissement aussi. Les
+nouvelles, revenues, pics et règles sonnent la cloche de l'équipe du
+projet (lien `#/projets/{p}/stabilite`), une fois par erreur et par six
+heures ; rien de l'utilisateur d'un événement n'est lu. Un relevé suit
+l'alerte si le dernier a plus de deux minutes.
+
+**Créer un ticket.** `sentryVersTicket` (permission `demandes.gerer`) :
+l'équipe écrit le titre et le texte pour le client ; le ticket naît
+« en cours », type bug, avec la version la plus touchée et la plateforme
+quand une seule est touchée. Le lien Sentry, les occurrences, les
+personnes touchées, les versions et les plateformes partent dans une
+note interne du ticket. Le client lit ensuite ce ticket dans « En cours
+de correction » de sa page Stabilité tant qu'il est ouvert.
+
+**Rien de personnel.** Tout texte venu de Sentry passe par `epurer` :
+adresses, adresses IP, identifiants, jetons, numéros, paramètres d'URL
+(un lien Sentry perd sa recherche, qui peut porter une adresse).
+
+**Les écrans.** Cockpit : onglet « Stabilité » d'un projet relié (page
+`vues/stabilite.js`), « Relier à Sentry » dans le menu du projet pour un
+administrateur. Hub : entrée « Stabilité » de l'arbre du projet dès que
+la vue du client a quelque chose à dire.
+
+**Sur le banc**, les secrets sont des valeurs fixes (comme le push) et
+la liaison peut nommer un hôte local (émulateur seul) : le faux serveur
+`outils/lib/faux-sentry.cjs` sert les réponses enregistrées de
+`outils/sentry-faux/`.
+
+### Les épreuves
+
+`sentry.test.mjs` (sans émulateur : épuration, signature, alertes,
+stabilité, erreurs du jour, versions, vue du client, liens),
+`qa-sentry.cjs` (serveur, webhook, ticket, Cockpit et Hub dans de vrais
+navigateurs), le bloc « Sentry » de `regles.test.mjs`.
+
+### À la mise en ligne
+
+1. Côté Sentry : une intégration interne (voir le rapport du 04/10).
+2. Les secrets `SENTRY_JETON` et `SENTRY_WEBHOOK_SECRET`.
+3. Les règles Firestore.
+4. Les fonctions : `sentryReleve`, `sentryWebhook` (nouvelles),
+   `suiviAdmin` (trois actions).
+5. Le site (`agence/suivi/`).
+6. Relier ForgeMe depuis le Cockpit (menu du projet, « Relier à Sentry »).

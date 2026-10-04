@@ -2244,6 +2244,17 @@ service cloud.firestore {
           allow write:  if false;
         }
       }
+
+      // La stabilité de l'application, relevée dans Sentry par le serveur
+      // (sentry.js). Le client membre ne lit que « resume » : un taux par
+      // plateforme, une tendance, et les tickets ouverts nés d'une erreur.
+      // Aucun autre document de cette sous-collection ne lui est ouvert, et
+      // personne n'y écrit depuis un navigateur.
+      match /stabilite/{docId} {
+        allow read:   if equipeSurProjet(projetId)
+                      || (docId == 'resume' && membreDuProjet(projetId));
+        allow write:  if false;
+      }
     }
 
     // La note d'un projet à faire : l'idée telle qu'on l'a en tête. Elle
@@ -2256,6 +2267,32 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['texte', 'par', 'maj'])
         && texteBorne(request.resource.data.texte, 60000);
       allow delete: if estAdmin();
+    }
+
+    // Sentry (sentry.js). La liaison d'un projet (organisation, projets
+    // Sentry), le détail du relevé (erreurs, versions, sessions), les
+    // alertes en direct et le lien erreur-ticket : l'équipe du projet les
+    // lit, le client jamais. Le serveur seul écrit : le jeton Sentry ne
+    // vit que dans ses secrets. Les marques de débit des alertes restent
+    // fermées à tous.
+    match /sentryLiaisons/{projetId} {
+      allow read:   if equipeSurProjet(projetId);
+      allow write:  if false;
+    }
+    match /sentry/{projetId} {
+      allow read:   if equipeSurProjet(projetId);
+      allow write:  if false;
+      match /alertes/{alerteId} {
+        allow read:   if equipeSurProjet(projetId);
+        allow write:  if false;
+      }
+      match /tickets/{issueId} {
+        allow read:   if equipeSurProjet(projetId);
+        allow write:  if false;
+      }
+      match /debits/{cle} {
+        allow read, write: if false;
+      }
     }
 
     // Les jetons des robots de tests. Seule leur empreinte est ici : le

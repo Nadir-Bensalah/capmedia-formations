@@ -39,6 +39,8 @@ import * as demandesProjet from './vues/demandes-projet.js';
 import * as marketing from './vues/marketing.js';
 /* Les annonces de Capmedia : hors des projets, en bas du rail. */
 import * as annonces from './vues/annonces.js';
+/* La stabilité de l'application, relevée dans Sentry par le serveur. */
+import * as stabilite from './vues/stabilite.js';
 import { nonLues as annoncesNonLues } from './annonces-format.js';
 
 const session = await exigerSession();
@@ -208,6 +210,8 @@ const entreesProjet = (p, { attente, nonLusP }) => {
     { chemin: `${base}/demandes`, libelle: 'Tickets', icone: 'demandes', projet: pid, compte: { total: tickets.filter((t) => OUVERTS.includes(t.statut)).length, neuf: ticketsPourVous } },
     { chemin: `/messages/${pid}`, libelle: 'Messages', icone: 'messages', projet: pid, compte: { total: 0, neuf: nonLusP } },
     { chemin: `${base}/etapes`, libelle: 'Planning', icone: 'route', projet: pid },
+    /* La stabilité de l'application, quand Sentry a quelque chose à dire. */
+    ...(stabilite.aDuContenu(magasin.lire(K.stabilite(pid))) ? [{ chemin: `${base}/stabilite`, libelle: 'Stabilité', icone: 'activite', projet: pid }] : []),
     /* Sans chiffre gris : le nombre de notes ou de réunions n'attend rien. */
     { chemin: `${base}/notes`, libelle: 'Notes', icone: 'note', projet: pid },
     /* Les tâches suivent le planning dont elles sont le détail. */
@@ -278,7 +282,7 @@ const construireNavigation = () => {
    un squelette de la même hauteur tient la place des projets et de leur
    arbre. Sans lui, les entrées poussaient une à une à mesure que leurs
    données arrivaient, et le rail sautait. */
-const clesDuProjet = (pid) => [K.tickets(pid), K.validations(pid), K.documents(pid), K.fichiers(pid), K.taches(pid), K.blocages(pid), K.messages(pid), K.maintenance(pid), K.scenarios(pid), K.parcours(pid), K.campagnes(pid), K.liens(pid), K.axes(pid), K.coffre(pid)];
+const clesDuProjet = (pid) => [K.tickets(pid), K.validations(pid), K.documents(pid), K.fichiers(pid), K.taches(pid), K.blocages(pid), K.messages(pid), K.maintenance(pid), K.scenarios(pid), K.parcours(pid), K.campagnes(pid), K.liens(pid), K.axes(pid), K.coffre(pid), K.stabilite(pid)];
 const clesNavigation = () => [K.projets, K.profil, K.demandesProjet, K.annonces, ...(magasin.lire(K.projets) || session.projets || []).flatMap((p) => clesDuProjet(p.id))];
 const dessinerNav = magasin.dessinateur(construireNavigation, 80, clesNavigation, 4000);
 const ecoutees = new Set();
@@ -394,6 +398,7 @@ definir([
   { chemin: '/projets/:id/notes', vue: (ctx) => notesProjet.vue(ctx, env) },
   { chemin: '/projets/:id/decisions', vue: (ctx) => { naviguer(`/projets/${ctx.params.id}/notes`, { remplacer: true }); } },
   { chemin: '/projets/:id/evolutions', vue: (ctx) => evolutions.vue(ctx, env) },
+  { chemin: '/projets/:id/stabilite', vue: (ctx) => stabilite.vue(ctx, env) },
   { chemin: '/projets/:id/suggestions', vue: (ctx) => { naviguer(`/projets/${ctx.params.id}/evolutions`, { remplacer: true }); } },
   { chemin: '/projets/:id/marketing', vue: (ctx) => marketing.vue(ctx, env) },
   { chemin: '/projets/:id/brique/:cid', vue: (ctx) => brique.vue(ctx, env) },

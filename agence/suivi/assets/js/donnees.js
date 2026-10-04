@@ -50,6 +50,15 @@ export const K = {
   /* Le panier du calculateur des axes : celui de la personne connectée,
      sur ce projet (projets/{p}/paniers/{uid}), au responsable seul. */
   panier: (p) => `panier:${p}`,
+  /* La stabilité relevée dans Sentry (sentry.js, serveur seul) : la vue
+     épurée que lit le client (projets/{p}/stabilite/resume), et pour
+     l'équipe la liaison, le détail du relevé, les alertes en direct et
+     les liens erreur-ticket. */
+  stabilite: (p) => `stabilite:${p}`,
+  sentryLiaison: (p) => `sentry-liaison:${p}`,
+  sentry: (p) => `sentry:${p}`,
+  sentryAlertes: (p) => `sentry-alertes:${p}`,
+  sentryTickets: (p) => `sentry-tickets:${p}`,
   /* Les avis et les passages vivent sous une campagne, pas sous un projet :
      c'est la seule granularité que les règles ouvrent au client. */
   appreciations: (c) => `appreciations:${c}`,
@@ -264,6 +273,10 @@ export const abonnerProjet = (lot, pid, role) => {
     ? query(col('projets', pid, 'axes'), where('publication', '==', 'publiee'))
     : col('projets', pid, 'axes')));
   lot.abonner(K.axesIntro(pid), () => doc(bdd, 'projets', pid, 'axesIntro', 'texte'));
+  /* La stabilité : un seul document épuré, lisible des deux côtés. La
+     liaison Sentry (équipe seule) dit si l'onglet Stabilité a lieu d'être. */
+  lot.abonner(K.stabilite(pid), () => doc(bdd, 'projets', pid, 'stabilite', 'resume'));
+  if (!client) lot.abonner(K.sentryLiaison(pid), () => doc(bdd, 'sentryLiaisons', pid));
   lot.abonner(K.taches(pid), () => surProjetVisible('taches'));
   lot.abonner(K.tickets(pid), () => surProjet('tickets'));
   lot.abonner(K.validations(pid), () => surProjet('validations'));
@@ -288,6 +301,15 @@ export const abonnerProjet = (lot, pid, role) => {
   lot.abonner(K.activite(pid), () => (client
     ? query(col('activite'), where('projet', '==', pid), where('visibilite', 'in', responsable ? ['client', 'responsable'] : ['client']))
     : (finance ? surProjet('activite') : query(col('activite'), where('projet', '==', pid), where('visibilite', 'in', ['client', 'interne'])))));
+};
+
+/** Le détail Sentry d'un projet (équipe seule) : le relevé, les vingt
+    dernières alertes, les erreurs devenues tickets. */
+export const abonnerSentry = (lot, pid) => {
+  lot.abonner(K.sentryLiaison(pid), () => doc(bdd, 'sentryLiaisons', pid));
+  lot.abonner(K.sentry(pid), () => doc(bdd, 'sentry', pid));
+  lot.abonner(K.sentryAlertes(pid), () => query(col('sentry', pid, 'alertes'), orderBy('le', 'desc'), limit(20)));
+  lot.abonner(K.sentryTickets(pid), () => col('sentry', pid, 'tickets'));
 };
 
 /** Le plan de tests d'un projet, toutes ses sections (lourd : à la demande). */

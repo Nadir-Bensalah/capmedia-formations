@@ -1417,6 +1417,53 @@ await refuse('Karim ne dépose pas de demande de projet', setDoc(doc(karim(), 'd
 await refuse('Karim ne gonfle pas « de » d un champ libre', addDoc(collection(karim(), `conversationsTesteurs/${KARIM}/messages`), { de: { uid: KARIM, nom: 'Karim', cote: 'testeur', extra: 'x'.repeat(5000) }, texte: 'x', pieces: [], date: serverTimestamp() }));
 await refuse('ni d un nom sans borne', addDoc(collection(karim(), `conversationsTesteurs/${KARIM}/messages`), { de: { uid: KARIM, nom: 'x'.repeat(81), cote: 'testeur' }, texte: 'x', pieces: [], date: serverTimestamp() }));
 
+/* ==========================================================================
+   Sentry (sentry.js) : le détail pour l'équipe du projet, la vue épurée
+   pour le client membre, et personne n'écrit depuis un navigateur.
+   ========================================================================== */
+console.log('\n== Sentry : stabilité et erreurs');
+await env.withSecurityRulesDisabled(async (ctx) => {
+  const b = ctx.firestore();
+  await setDoc(doc(b, 'sentryLiaisons/atelier'), { org: 'forgeme', web: 'forgeme-web', mobile: 'forgeme-mobile', actif: true });
+  await setDoc(doc(b, 'sentry/atelier'), { problemes: [{ id: '1', titre: 'TypeError' }], versions: [], stabilite: {} });
+  await setDoc(doc(b, 'sentry/atelier/alertes/a1'), { type: 'nouvelle', titre: 'Nouvelle erreur', le: new Date() });
+  await setDoc(doc(b, 'sentry/atelier/tickets/1'), { ticket: 't1', issue: '1', lien: 'https://forgeme.sentry.io/issues/1/' });
+  await setDoc(doc(b, 'sentry/atelier/debits/nouvelle-1'), { le: new Date() });
+  await setDoc(doc(b, 'projets/atelier/stabilite/resume'), { apps: [{ cle: 'web', taux: 99.6 }], corrections: [] });
+  await setDoc(doc(b, 'projets/atelier/stabilite/interne'), { note: 'jamais au client' });
+  await setDoc(doc(b, 'projets/boutique/stabilite/resume'), { apps: [], corrections: [] });
+  await setDoc(doc(b, 'projets/ferme/stabilite/resume'), { apps: [], corrections: [] });
+});
+await doit('L équipe lit la liaison Sentry du projet', getDoc(doc(equipe(), 'sentryLiaisons/atelier')));
+await doit('L équipe lit le détail du relevé', getDoc(doc(equipe(), 'sentry/atelier')));
+await doit('et les alertes en direct', getDocs(collection(equipe(), 'sentry/atelier/alertes')));
+await doit('et les liens erreur-ticket', getDocs(collection(equipe(), 'sentry/atelier/tickets')));
+await doit('Un agent du projet lit le détail', getDoc(doc(agentSansFinance(), 'sentry/atelier')));
+await refuse('Un agent d un autre projet ne lit pas le détail', getDoc(doc(agentAilleurs(), 'sentry/atelier')));
+await refuse('ni ses alertes', getDocs(collection(agentAilleurs(), 'sentry/atelier/alertes')));
+await refuse('ni sa liaison', getDoc(doc(agentAilleurs(), 'sentryLiaisons/atelier')));
+await refuse('Camille, cliente, ne lit pas le détail Sentry', getDoc(doc(camille(), 'sentry/atelier')));
+await refuse('ni les alertes', getDocs(collection(camille(), 'sentry/atelier/alertes')));
+await refuse('ni une alerte par son identifiant', getDoc(doc(camille(), 'sentry/atelier/alertes/a1')));
+await refuse('ni les liens erreur-ticket (le lien Sentry y vit)', getDoc(doc(camille(), 'sentry/atelier/tickets/1')));
+await refuse('ni la liaison', getDoc(doc(camille(), 'sentryLiaisons/atelier')));
+await doit('Camille lit la vue épurée de son projet', getDoc(doc(camille(), 'projets/atelier/stabilite/resume')));
+await refuse('mais aucun autre document de la stabilité', getDoc(doc(camille(), 'projets/atelier/stabilite/interne')));
+await refuse('ni toute la sous-collection d un coup', getDocs(collection(camille(), 'projets/atelier/stabilite')));
+await refuse('Léa ne lit pas la vue d un projet qui n est pas le sien', getDoc(doc(lea(), 'projets/atelier/stabilite/resume')));
+await refuse('Camille ne lit pas celle d un projet fermé au client', getDoc(doc(camille(), 'projets/ferme/stabilite/resume')));
+await refuse('Un testeur ne lit pas la vue du client', getDoc(doc(karim(), 'projets/atelier/stabilite/resume')));
+await refuse('ni le détail', getDoc(doc(karim(), 'sentry/atelier')));
+await refuse('Un anonyme ne lit rien', getDoc(doc(anonyme(), 'projets/atelier/stabilite/resume')));
+await doit('L équipe lit la vue du client', getDoc(doc(equipe(), 'projets/atelier/stabilite/resume')));
+await refuse('Camille n écrit pas la vue (un taux à 100 %)', setDoc(doc(camille(), 'projets/atelier/stabilite/resume'), { apps: [{ cle: 'web', taux: 100 }], corrections: [] }));
+await refuse('L équipe n écrit pas la vue non plus : le serveur seul', setDoc(doc(equipe(), 'projets/atelier/stabilite/resume'), { apps: [], corrections: [] }));
+await refuse('L équipe n écrit pas le détail', updateDoc(doc(equipe(), 'sentry/atelier'), { problemes: [] }));
+await refuse('ni une alerte', addDoc(collection(equipe(), 'sentry/atelier/alertes'), { type: 'nouvelle', titre: 'x' }));
+await refuse('ni un lien erreur-ticket', setDoc(doc(equipe(), 'sentry/atelier/tickets/2'), { ticket: 't1' }));
+await refuse('L administrateur ne relie pas un projet depuis le navigateur (hôte, jeton)', setDoc(doc(equipe(), 'sentryLiaisons/atelier'), { org: 'forgeme', web: 'x', hote: 'https://ailleurs.exemple' }));
+await refuse('Les marques de débit restent fermées, même à l équipe', getDoc(doc(equipe(), 'sentry/atelier/debits/nouvelle-1')));
+
 console.log(`\n${ok} contrôle(s) conforme(s)${ecarts.length ? `, ${ecarts.length} ÉCART(S) :\n  - ${ecarts.join('\n  - ')}` : ''}`);
 await env.cleanup();
 process.exit(ecarts.length ? 1 : 0);
