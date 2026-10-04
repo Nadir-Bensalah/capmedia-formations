@@ -150,6 +150,35 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   verifier(interdit.devis==='refusé','ni les devis',interdit.devis);
   verifier(interdit.vivier==='refusé','ni la liste des testeurs',interdit.vivier);
 
+  console.log('\n== Deux campagnes en cours (G4)');
+  /* Une seconde campagne en cours lui est confiée : il doit voir les deux,
+     la plus récente d'abord, et passer de l'une à l'autre. Avant, il ne
+     voyait que la première au hasard de l'ordre de la base. */
+  const autres = sesCles.filter(k=>k!==cle1).slice(0,2);
+  const sv = (x)=>({stringValue:x});
+  await fetch(`${bdd('projets/atelier/campagnes/c-nov')}`,{method:'PATCH',headers:{...prop,'Content-Type':'application/json'},body:JSON.stringify({fields:{
+    titre:sv('Campagne de novembre'), statut:sv('en-cours'), plan:{booleanValue:true},
+    testeurs:{arrayValue:{values:[sv(karim)]}},
+    scenarios:{arrayValue:{values:autres.map(k=>sv(k.split('__')[0]))}},
+    affectation:{mapValue:{fields:{[karim]:{mapValue:{fields:{telephone:sv(((aK||{}).mapValue||{}).fields.telephone.stringValue), web:{booleanValue:true}, vague:{integerValue:'1'}, cles:{arrayValue:{values:autres.map(sv)}}}}}}}},
+    cree:{timestampValue:new Date().toISOString()},
+  }})});
+  await page.reload(); await page.waitForSelector('.t-campagnes [data-campagne]',{timeout:20000}).catch(()=>{});
+  await pause(1500);
+  /* Plus haut, la suite est passée en liste : on revient au tableau. */
+  if (await page.$('[data-vue="grille"][aria-pressed="false"]')) { await page.click('[data-vue="grille"]'); await pause(800); }
+  const deux = await page.evaluate(()=>[...document.querySelectorAll('.t-campagnes [data-campagne]')].map(b=>({t:b.innerText.trim(),cle:b.dataset.campagne,actif:b.getAttribute('aria-pressed')==='true'})));
+  verifier(deux.length===2,'il voit ses deux campagnes en cours',JSON.stringify(deux));
+  verifier(deux.length===2&&deux[0].cle==='atelier/c-nov'&&deux[0].actif,'la plus récente d\'abord, ouverte',JSON.stringify(deux));
+  verifier(await page.$$eval('.tb-case',x=>x.length)===autres.length,`son tableau est celui de la campagne ouverte (${autres.length} cases)`,`${await page.$$eval('.tb-case',x=>x.length)}`);
+  verifier(/Campagne de novembre/.test(await page.textContent('.testeur-tete .surtitre')),'l\'en-tête la nomme');
+  await page.click('[data-campagne="atelier/c-oct"]'); await pause(2000);
+  const casesOct = await page.$$eval('.tb-case',x=>x.length);
+  verifier(casesOct===N,`un geste et il passe à l\'autre : ses ${N} cases`,`${casesOct}`);
+  verifier(await page.$$eval('.tb-case',x=>x.filter(b=>b.dataset.e==='ok').length)===1,'avec le passage déjà fait, rien de perdu');
+  await page.reload(); await page.waitForSelector('.t-campagnes [data-campagne]',{timeout:20000}).catch(()=>{}); await pause(1500);
+  verifier(await page.$eval('[data-campagne="atelier/c-oct"]',b=>b.getAttribute('aria-pressed')==='true').catch(()=>false),'son choix se retient à la visite suivante');
+
   console.log('\n'+(soucis.length?`${soucis.length} ÉCART(S)`:'tout est conforme'));
   console.log('Erreurs JS :', err.length?err.slice(0,4).join('\n  '):'aucune');
   await nav.close();

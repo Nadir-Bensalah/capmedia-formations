@@ -498,6 +498,30 @@ export const clesDuTesteur = (campagne, uid) => {
   return Array.from(new Set(a.cles.filter((k) => typeof k === 'string' && decouperCle(k))));
 };
 
+/* Un horodatage de la base (Timestamp, Date, nombre ou texte) en
+   millisecondes ; 0 quand il manque. */
+const enMs = (x) => {
+  if (!x) return 0;
+  if (x instanceof Date) return x.getTime();
+  if (typeof x.toMillis === 'function') return x.toMillis();
+  if (typeof x.seconds === 'number') return x.seconds * 1000;
+  const n = typeof x === 'number' ? x : Date.parse(x);
+  return Number.isFinite(n) ? n : 0;
+};
+
+/**
+ * Les campagnes en cours d'un testeur, toutes, dans l'ordre où il les voit :
+ * celles qui lui confient des scénarios d'abord, puis la plus récente
+ * (début, sinon création). Une campagne dont son accès est passé n'en fait
+ * plus partie : les règles refusent ses gestes, l'écran n'a pas à la montrer.
+ */
+export const campagnesDuTesteur = (toutes, uid, maintenant = Date.now()) => (toutes || [])
+  .filter((c) => c && c.statut === 'en-cours')
+  .filter((c) => { const f = enMs((c.fins || {})[uid]); return !f || f > maintenant; })
+  .map((c) => ({ c, cles: clesDuTesteur(c, uid).length ? 0 : 1, quand: enMs(c.debut) || enMs(c.cree) }))
+  .sort((a, b) => (a.cles - b.cles) || (b.quand - a.quand) || String(a.c.id).localeCompare(String(b.c.id)))
+  .map((x) => x.c);
+
 /** La section d'un scénario du plan, d'après son identifiant (« taches-f-001 » : taches). */
 export const sectionDuScenario = (id) => {
   const m = /^(.+)-[ftus]-\d+$/.exec(String(id || ''));

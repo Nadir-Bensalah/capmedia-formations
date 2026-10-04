@@ -18,7 +18,7 @@ import {
   tableauTesteur, tableauMachine, rythme, anomalieDeLaCampagne,
   tableauPlan, verdictScenarioPlan, pireEtat,
   tableauHumainPlan, verdictHumainPlan, pireHumain,
-  campagneSurPlan, decouperCle, clePassage, sectionDuScenario, sectionsDesCles, clesDuTesteur, scenariosDuTesteur, affectationPlan, chiffresHumainsDuPlan, resultatLong, resultatCourt,
+  campagneSurPlan, decouperCle, clePassage, sectionDuScenario, sectionsDesCles, clesDuTesteur, scenariosDuTesteur, affectationPlan, campagnesDuTesteur, chiffresHumainsDuPlan, resultatLong, resultatCourt,
 } from '../../agence/suivi/assets/js/verdicts.js';
 
 let echecs = 0;
@@ -381,6 +381,25 @@ console.log('\n== Le rythme');
   egal(r && r.reste, 21, '50 en 5 jours, 205 restent : 21 jours au rythme actuel');
   egal(rythme({ debut: d, fin: d - J, faits: 0, attendus: 1 }), null, 'fin avant le début : rien, plutôt qu un chiffre faux');
   egal(rythme({ debut: d, fin: d + J, faits: 0, attendus: 1, maintenant: d - 2 * J }).avant, 2, 'avant le début : dans deux jours');
+}
+
+console.log('\n== Ses campagnes en cours, toutes (G4)');
+{
+  const J = 86400000; const m = Date.UTC(2026, 9, 4);
+  const aff = (cles) => ({ u1: { telephone: 'ios', web: true, cles, vague: 1 } });
+  const oct = { id: 'c-oct', projet: 'p', statut: 'en-cours', cree: new Date(m - 30 * J), affectation: aff(['a-f-001__ios']) };
+  const nov = { id: 'c-nov', projet: 'p', statut: 'en-cours', cree: { seconds: (m - 2 * J) / 1000 }, affectation: aff(['a-f-002__web']) };
+  const vide = { id: 'c-vide', projet: 'q', statut: 'en-cours', cree: new Date(m - J), affectation: {} };
+  const close = { id: 'c-close', projet: 'p', statut: 'close', cree: new Date(m), affectation: aff(['a-f-003__ios']) };
+  const passee = { id: 'c-passee', projet: 'p', statut: 'en-cours', cree: new Date(m), fins: { u1: new Date(m - 1000) }, affectation: aff(['a-f-004__ios']) };
+  const ids = (l) => l.map((c) => c.id).join(',');
+  egal(ids(campagnesDuTesteur([oct, nov], 'u1', m)), 'c-nov,c-oct', 'deux en cours : il voit les deux, la plus récente d abord');
+  egal(ids(campagnesDuTesteur([nov, oct], 'u1', m)), 'c-nov,c-oct', 'quel que soit l ordre de la base');
+  egal(ids(campagnesDuTesteur([vide, oct, nov], 'u1', m)), 'c-nov,c-oct,c-vide', 'celle qui ne lui confie rien vient après, même plus récente');
+  egal(ids(campagnesDuTesteur([oct, close, passee], 'u1', m)), 'c-oct', 'ni close, ni accès passé');
+  egal(ids(campagnesDuTesteur([oct], 'u1', m)), 'c-oct', 'une seule : la même qu avant');
+  egal(ids(campagnesDuTesteur([{ ...nov, debut: new Date(m - 40 * J) }, oct], 'u1', m)), 'c-oct,c-nov', 'le début compte avant la création');
+  egal(campagnesDuTesteur([], 'u1', m).length, 0, 'aucune : liste vide');
 }
 
 console.log(echecs ? `\n${echecs} ÉCART(S)` : '\nverdicts : tout est conforme');

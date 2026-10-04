@@ -985,6 +985,8 @@ main.porte { display: flex; flex-direction: column; align-items: center; justify
 .t-plateforme { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
 .t-plateforme-sur { font: 400 13px var(--police); color: var(--encre-2); }
 .t-plateforme--feuille { justify-content: center; margin: 16px 0 0; }
+.t-campagnes { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.t-campagnes .segments { flex-wrap: wrap; max-width: 100%; }
 .fs-plateforme { margin: 16px 0 0; text-align: center; font: 400 14px var(--police); color: var(--encre-2); }
 .fs-plateforme strong { color: var(--encre); font-weight: 600; }
 .fs-enchaine { margin: 0 0 8px; text-align: center; font: 500 13px var(--police); color: var(--vert); }

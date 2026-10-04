@@ -26,7 +26,7 @@ import {
 import { icone, pastille, toast, agir, modale, vide } from './ui.js';
 import { monterCoquille, definirNavigation, definirEtat, filAriane, enregistrerRecherche } from './coquille.js';
 import { definir, demarrer, courant, naviguer } from './routeur.js';
-import { tableauTesteur, ETATS_CASE, clesDuTesteur, sectionsDesCles, scenariosDuTesteur, clePassage, resultatCourt, resultatLong } from './verdicts.js';
+import { tableauTesteur, ETATS_CASE, clesDuTesteur, sectionsDesCles, scenariosDuTesteur, clePassage, resultatCourt, resultatLong, campagnesDuTesteur } from './verdicts.js';
 import { barreHtml, famillesHtml } from './grille.js';
 import { ouvrirAccueil, accueilVu, marquerAccueilVu } from './accueil-testeur.js';
 import { ouvrirFiche, consignerAppareil } from './fiche-testeur.js';
@@ -106,7 +106,7 @@ let vueCourante = (() => {
   try { return localStorage.getItem('suivi:testeur-vue') || 'grille'; } catch (e) { return 'grille'; }
 })();
 
-const etat = { campagne: null, scenarios: [], passages: new Map(), avis: null, retour: null, remarques: [], bloc: '', reste: true, charge: false };
+const etat = { campagne: null, campagnes: [], scenarios: [], passages: new Map(), avis: null, retour: null, remarques: [], bloc: '', reste: true, charge: false };
 
 /* -------------------------------------------------------------------------- */
 
@@ -354,6 +354,26 @@ const ouvrirRemarque = (s, moi) => {
   return m.fin;
 };
 
+/* Deux campagnes en cours ou plus : il les voit toutes et passe de l'une
+   à l'autre. La plus récente vient d'abord (celles qui lui confient des
+   scénarios avant les autres) ; son choix se retient d'une visite à
+   l'autre. Une seule : rien ne change. */
+const cleCampagne = (c) => `${c.projet}/${c.id}`;
+let campagneChoisie = (() => {
+  try { return localStorage.getItem('suivi:testeur-campagne') || ''; } catch (e) { return ''; }
+})();
+let rechoisirCampagne = () => {};
+const choixCampagneHtml = () => {
+  if (etat.campagnes.length < 2 || !etat.campagne) return '';
+  const active = cleCampagne(etat.campagne);
+  return `<div class="t-campagnes">
+    <span class="t-plateforme-sur">${etat.campagnes.length} campagnes en cours</span>
+    <div class="segments" role="group" aria-label="Vos campagnes en cours">
+      ${etat.campagnes.map((c) => `<button type="button" data-campagne="${echapper(cleCampagne(c))}" aria-pressed="${cleCampagne(c) === active}">${echapper(c.titre || 'Campagne')}</button>`).join('')}
+    </div>
+  </div>`;
+};
+
 const enTete = (moi, campagne) => {
   const total = etat.scenarios.length;
   const faits = etat.scenarios.filter((s) => fait(s.ref)).length;
@@ -370,6 +390,7 @@ const enTete = (moi, campagne) => {
         <h1>Bonjour ${echapper(moi.prenom || '')}</h1>
       </div>
     </div>
+    ${choixCampagneHtml()}
 
     <div style="margin-top:14px">${barreHtml(tableauTesteur({ scenarios: etat.scenarios, passages: etat.passages }), { legende: false })}</div>
     <p class="chapo">${aTermine() ? `Test terminé · ${faits} scénario${faits > 1 ? 's' : ''} rendu${faits > 1 ? 's' : ''}` : `${faits} sur ${total} · ${part} %`}</p>
@@ -477,7 +498,7 @@ const pageCampagne = (moi) => {
       <header class="testeur-tete"><div class="rang" style="justify-content:space-between;align-items:center;gap:16px">
         <div><p class="surtitre">Ma campagne</p><h1>Bonjour ${echapper(moi.prenom || '')}</h1>
         <p class="t-petit t-2" style="margin-top:2px">${echapper(campagne.titre || 'Campagne en cours')}</p></div>
-      </div></header>
+      </div>${choixCampagneHtml()}</header>
       ${vide({
         icone: 'bug', titre: 'Vos scénarios arrivent',
         texte: 'L\'équipe prépare la répartition. Ils apparaîtront ici, sans recharger la page.',
@@ -1442,17 +1463,25 @@ const suivreCampagne = (moi, c, redessiner) => {
    que celles-là : une requête plus large serait refusée, pas filtrée. */
 const ecouterCampagnes = (moi, redessiner) => {
   const parProjet = new Map();
+  const connues = new Set();
   const choisir = () => {
     const toutes = [...parProjet.values()].flat();
-    /* Une campagne dont son accès est passé ne lui est plus servie : les
-       règles refusent ses gestes, l'écran n'a pas à la montrer. */
-    const accesPasse = (c) => { const f = enDate((c.fins || {})[moi.uid]); return Boolean(f) && f.getTime() <= Date.now(); };
-    const enCours = toutes.find((c) => c.statut === 'en-cours' && !accesPasse(c)) || null;
+    /* Toutes ses campagnes en cours (celles dont l'accès est passé en sont
+       retirées), la plus récente d'abord. L'écran garde celle qu'il a
+       choisie, sinon celle qu'il regarde : une campagne qui s'ouvre ne lui
+       retire pas l'écran sous les doigts. */
+    const liste = campagnesDuTesteur(toutes, moi.uid);
+    etat.campagnes = liste;
+    const dejaVue = etat.campagne ? cleCampagne(etat.campagne) : '';
+    const enCours = liste.find((c) => cleCampagne(c) === campagneChoisie)
+      || liste.find((c) => cleCampagne(c) === dejaVue) || liste[0] || null;
     /* Dans l'application Mac ou Windows : une campagne qui s'ouvre pendant
        que la fenêtre est là devient une notification du système. */
-    if (window.capmediaBureau && etat.charge && enCours && (!etat.campagne || etat.campagne.id !== enCours.id)) {
-      window.capmediaBureau.notifier({ titre: 'Une campagne de tests vous attend', texte: enCours.titre || 'Vos scénarios sont prêts.', lien: '' });
+    const nouvelle = liste.find((c) => !connues.has(cleCampagne(c)));
+    if (window.capmediaBureau && etat.charge && nouvelle) {
+      window.capmediaBureau.notifier({ titre: 'Une campagne de tests vous attend', texte: nouvelle.titre || 'Vos scénarios sont prêts.', lien: '' });
     }
+    liste.forEach((c) => connues.add(cleCampagne(c)));
     etat.charge = true;
     const avant = etat.campagne;
     if (!enCours) { if (avant) suivreCampagne(moi, null, redessiner); else redessiner(); return; }
@@ -1464,6 +1493,7 @@ const ecouterCampagnes = (moi, redessiner) => {
     }
     suivreCampagne(moi, enCours, redessiner);
   };
+  rechoisirCampagne = choisir;
   const projets = moi.projets || [];
   if (!projets.length) { etat.charge = true; redessiner(); return; }
   projets.forEach((pid) => {
@@ -1544,8 +1574,15 @@ const monter = async () => {
   document.addEventListener('input', (e) => { if (e.target && e.target.id === 'remarque-texte') brouillonRemarque = e.target.value; });
 
   document.addEventListener('click', async (e) => {
-    const el = e.target.closest('[data-sortir], [data-sur], [data-continuer], [data-ouvrir], [data-avis], [data-vue], [data-case], [data-accueil="revoir"], [data-astuce-suivante], [data-avis-page], [data-terminer], [data-remarque]');
+    const el = e.target.closest('[data-sortir], [data-sur], [data-continuer], [data-ouvrir], [data-avis], [data-vue], [data-case], [data-accueil="revoir"], [data-astuce-suivante], [data-avis-page], [data-terminer], [data-remarque], [data-campagne]');
     if (!el) return;
+
+    if (el.dataset.campagne) {
+      campagneChoisie = el.dataset.campagne;
+      try { localStorage.setItem('suivi:testeur-campagne', campagneChoisie); } catch (err) { /* stockage refusé */ }
+      rechoisirCampagne();
+      return;
+    }
 
     if (el.dataset.accueil === 'revoir') { lancerAccueil(testeur, { demande: true }); return; }
     if (el.hasAttribute('data-terminer')) { await agir(el, () => terminer(testeur)); return; }
