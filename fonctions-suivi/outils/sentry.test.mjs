@@ -35,6 +35,7 @@ const sale = 'Error: Échec pour jean.dupont@exemple.fr depuis 192.168.1.20, com
 const propre = s._epurer(sale, 400);
 verifier(!/@/.test(propre), 'aucune adresse e-mail', propre);
 verifier(!/192\.168/.test(propre), 'aucune adresse IP');
+verifier(s._epurer('panne vers 10.0.0.1') === 'panne vers [ip]', 'une adresse IP courte aussi', s._epurer('panne vers 10.0.0.1'));
 verifier(!/12345678/.test(propre), 'aucun long numéro');
 verifier(!/eyJ/.test(propre), 'aucun jeton');
 verifier(!/3f2b8c1e/.test(propre), 'aucun identifiant unique');
@@ -54,7 +55,8 @@ verifier(s._signatureValide(corps, sig.replace(/^./, (c) => (c === 'a' ? 'b' : '
 verifier(s._signatureValide(corps, '', secret) === false, 'une signature absente est refusée');
 verifier(s._signatureValide(corps, sig.slice(0, 40), secret) === false, 'une signature tronquée est refusée');
 verifier(s._signatureValide(Buffer.from('{"action":"resolved"}'), sig, secret) === false, 'la signature d un autre corps est refusée');
-verifier(s._signatureValide(corps, sig, '') === false, 'sans secret, rien ne passe');
+const sigVide = crypto.createHmac('sha256', '').update(corps).digest('hex');
+verifier(s._signatureValide(corps, sigVide, '') === false, 'sans secret, rien ne passe (même signé avec une clé vide)');
 
 console.log('\n== Un envoi devient une alerte');
 const issue = { id: '6002', shortId: 'FORGEME-WEB-3', title: 'Error: échec pour jean@exemple.fr', project: { id: '4512197441683536', slug: 'forgeme-web' }, web_url: 'https://forgeme.sentry.io/issues/6002/' };
