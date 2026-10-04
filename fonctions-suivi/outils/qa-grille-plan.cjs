@@ -366,7 +366,7 @@ const verifierChiffres = (r, regles, quoi) => {
   f = await fiche(cockpit, 'plan:gp-connexion-f-003');
   verifier(/Connexion partout/.test(f.titre), 'plusieurs tests : la fiche du scénario', f.titre);
   verifier(/Ouvrir l'application/.test(f.texte) && /Le résultat de gp-connexion-f-003 s'affiche/.test(f.texte), 'avec ses étapes et ce qui doit se passer');
-  verifier(/Humain et robot/.test(f.texte) && /iOS, Android, Web/.test(f.texte), 'qui le fait, et ses plateformes');
+  verifier(/Humain et robot/.test(f.texte) && /iPhone, Android, Web/.test(f.texte) && !/\biOS\b/.test(f.texte), 'qui le fait, et ses plateformes, « iPhone » et jamais « iOS »', f.texte.slice(0, 400));
   verifier(f.parcours.join(',') === 'GP-IOS,GP-AND,GP-WEB' && /Réussi/.test(f.texte) && /Cassé/.test(f.texte) && /Fragile/.test(f.texte), 'la liste de ses tests, chacun avec son résultat', f.parcours.join(','));
   verifier(/Cassé\./.test(f.texte) && /GP-AND en échec/.test(f.texte) && /le plus mauvais résultat l'emporte/.test(f.texte), 'et pourquoi cette couleur', f.texte.slice(0, 260));
   verifier(/par plateforme/i.test(f.texte) && /Web[\s\S]{0,40}GP-WEB/.test(f.texte), 'plateforme par plateforme', f.texte.slice(0, 600));

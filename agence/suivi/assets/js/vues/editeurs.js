@@ -552,7 +552,7 @@ const editeurs = {
         <div class="groupe">
           <span class="etiquette-champ">Numéros de build</span>
           <div class="forme-rang">
-            ${champ('build_ios', 'iOS', fiche ? ((fiche.builds || {}).ios || '') : '', { facultatif: true, placeholder: '24' })}
+            ${champ('build_ios', 'iPhone', fiche ? ((fiche.builds || {}).ios || '') : '', { facultatif: true, placeholder: '24' })}
             ${champ('build_android', 'Android', fiche ? ((fiche.builds || {}).android || '') : '', { facultatif: true, placeholder: '31' })}
           </div>
           ${champ('build_web', 'Web', fiche ? ((fiche.builds || {}).web || '') : '', { facultatif: true, placeholder: 'qa-1.2.0' })}

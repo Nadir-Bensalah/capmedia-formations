@@ -35,10 +35,8 @@ import { squelette } from './ui.js';
 import { definirRetoucheAriane } from './coquille.js';
 import { demarrerPush } from './notifications-push.js';
 
-/* Le testeur dit « iPhone », jamais « iOS », comme le client du Hub (03/10) :
-   les libellés partagés avec le Cockpit prennent son mot ici seulement. */
-PLATEFORMES_TEST.ios.libelle = 'iPhone';
-PLATEFORMES_TEST.ios.court = 'iPhone';
+/* Le testeur dit « iPhone », jamais « iOS » : PLATEFORMES_TEST (noyau.js)
+   le dit pour les trois espaces. */
 
 const $ = (s, r = document) => r.querySelector(s);
 /* La zone où s'affiche la page courante : celle de la coquille, une fois
@@ -89,8 +87,8 @@ const plateformeDe = (s) => (s && s.plateforme) || plateformeCourante;
 const plateformeImposee = (s) => Boolean(s && s.plateforme);
 
 /* Les mots du testeur, ceux du guide, de l'accueil et de la feuille :
-   « Réussi, Échec, Sans objet » et « iPhone ». « OK, KO, NA » et « iOS »
-   sont des mots d'équipe. Les deux jeux de clés de résultat sont compris. */
+   « Réussi, Échec, Sans objet » et « iPhone ». « OK, KO, NA » sont des
+   mots d'équipe. Les deux jeux de clés de résultat sont compris. */
 const VERDICTS_TESTEUR = {
   ok: { libelle: 'Réussi', voile: 'vert' }, reussi: { libelle: 'Réussi', voile: 'vert' },
   ko: { libelle: 'Échec', voile: 'rouge' }, echec: { libelle: 'Échec', voile: 'rouge' },

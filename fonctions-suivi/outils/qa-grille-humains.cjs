@@ -405,8 +405,8 @@ const verifierChiffres = (r, quoi) => {
   let f = await fiche(cockpit, 'plan:gh-taches-f-001');
   verifier(/Créer une tâche partout/.test(f.titre), 'la fiche du scénario du plan', f.titre);
   verifier(/Ouvrir l'application/.test(f.texte) && /Le résultat de gh-taches-f-001 s'affiche/.test(f.texte), 'avec ses étapes et ce qui doit se passer');
-  verifier(/Humain et robot/.test(f.texte) && /iOS, Android, Web/.test(f.texte), 'qui le fait, et ses plateformes');
-  verifier(/Alma · iOS · iPhone 15/.test(f.texte) && /Bruno · Android · Pixel 8/.test(f.texte), 'chaque résultat : le testeur nommé, la plateforme, l\'appareil', f.texte.slice(0, 900));
+  verifier(/Humain et robot/.test(f.texte) && /iPhone, Android, Web/.test(f.texte) && !/\biOS\b/.test(f.texte), 'qui le fait, et ses plateformes, « iPhone » et jamais « iOS »', f.texte.slice(0, 400));
+  verifier(/Alma · iPhone · iPhone 15/.test(f.texte) && /Bruno · Android · Pixel 8/.test(f.texte), 'chaque résultat : le testeur nommé, la plateforme, l\'appareil', f.texte.slice(0, 900));
   verifier(/Hérité de GH-04/.test(f.texte) && (f.texte.match(/Hérité de/g) || []).length === 1, '« Hérité de GH-04 » pour le résultat de la bibliothèque, rien pour celui rendu sur le plan');
   verifier(/Rien ne se passe sur gh-taches-f-001/.test(f.texte) && f.preuves === 1, 'la remarque et la preuve du KO');
   verifier(/\d{1,2} \S+ à \d{2}:\d{2}/.test(f.texte), 'la date du passage', f.texte.slice(0, 600));

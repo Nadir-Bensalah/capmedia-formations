@@ -65,10 +65,9 @@ effacerSecretsLocaux();
 
 /* Le client dit « iPhone », jamais « iOS » (03/10) : les libellés partagés
    avec le Cockpit prennent son mot ici, dans l'espace client seul. Les
-   données saisies (le nom d'une partie) restent telles quelles. */
+   données saisies (le nom d'une partie) restent telles quelles. Les
+   plateformes de test le disent déjà partout (PLATEFORMES_TEST). */
 PLATEFORMES.ios.court = 'iPhone';
-PLATEFORMES_TEST.ios.libelle = 'iPhone';
-PLATEFORMES_TEST.ios.court = 'iPhone';
 TYPES_COMPOSANT.ios = 'Application iPhone';
 
 const env = { session, role: 'client' };

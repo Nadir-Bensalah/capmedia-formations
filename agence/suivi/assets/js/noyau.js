@@ -420,7 +420,7 @@ export const MOTIFS_REPORT = {
    suffit. Passer un scénario deux fois coûte le double : on ne le fait que
    là où la réponse peut différer. */
 export const NIVEAUX_SCENARIO = {
-  'socle':       { libelle: 'Socle',       court: 'Socle',  voile: 'bleu',   double: true,  aide: 'Le comportement dépend du système : un testeur iOS et un testeur Android le passent.' },
+  'socle':       { libelle: 'Socle',       court: 'Socle',  voile: 'bleu',   double: true,  aide: 'Le comportement dépend du système : un testeur iPhone et un testeur Android le passent.' },
   'transversal': { libelle: 'Transversal', court: 'Transv', voile: 'violet', double: true,  aide: 'Synchronisation, langues, abonnement : il demande deux appareils.' },
   'reparti':     { libelle: 'Réparti',     court: 'Simple', voile: 'gris',   double: false, aide: 'Se comporte pareil partout : une seule personne le passe.' },
 };
@@ -441,8 +441,10 @@ export const BLOCS_SCENARIO = {
   'divers':            { libelle: 'Divers' },
 };
 
+/* Une plateforme de test se nomme « iPhone », jamais « iOS », pour le
+   testeur, le client et l'équipe (03/10). La clé stockée reste 'ios'. */
 export const PLATEFORMES_TEST = {
-  'ios':     { libelle: 'iOS',     court: 'iOS' },
+  'ios':     { libelle: 'iPhone',  court: 'iPhone' },
   'android': { libelle: 'Android', court: 'Android' },
   'web':     { libelle: 'Web',     court: 'Web' },
 };
