@@ -182,7 +182,10 @@ let nav = null;
   for (const uid of [camille, lea, agent]) await vider(`profils/${uid}/pushs`);
 
   console.log('\n== Le navigateur : rien à l ouverture, la proposition après un message');
-  nav = await chromium.launch({ channel: 'chrome' });
+  /* Les notifications restent dans Chrome : le centre de notifications de
+     macOS ne garde pas toujours celles de Chrome (getNotifications() rendait
+     0 ou 1 au hasard, la nuit), et la suite lisait alors un vide. */
+  nav = await chromium.launch({ channel: 'chrome', args: ['--disable-features=NativeNotifications,SystemNotifications'] });
   const ctx = await nav.newContext({ viewport: { width: 1440, height: 900 } });
   await ctx.addInitScript(fauxAbonnement);
   const erreurs = [];
