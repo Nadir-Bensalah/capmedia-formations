@@ -72,6 +72,7 @@ const js = (v) => {
 };
 const objet = (d) => (d && d.fields ? Object.fromEntries(Object.entries(d.fields).map(([k, x]) => [k, js(x)])) : null);
 const lireObjet = async (c) => objet(await lire(c));
+const champ = (d, k) => (((d || {}).fields || {})[k]) || {};
 const idDe = (d) => (d && d.name ? d.name.split('/').pop() : '');
 let ok = 0; const ecarts = [];
 const verifier = (c, m, detail) => { if (c) { ok += 1; console.log(`  ok     ${m}`); } else { ecarts.push(m); console.log(`  ÉCART  ${m}${detail ? ` · ${String(detail).slice(0, 300)}` : ''}`); } };
@@ -93,7 +94,7 @@ const SECTIONS = [
     fonctionnel: [sc('qb-taches-f-001', 'robot', ['web'], ['QB-WEB'], 'Ouvrir la page Tâches'), sc('qb-taches-f-002', 'les-deux', ['ios', 'web'], ['QB-WEB'], 'Créer une tâche')],
     technique: [], ux: [], securite: [] } },
   { id: 'qb-connexion', groupe: 'demarrage', ordre: 2, titre: 'Connexion du banc', resume: 'Se connecter.', plateformes: ['ios', 'android', 'web'], aspects: {
-    fonctionnel: [sc('qb-connexion-f-001', 'robot', ['ios', 'android'], ['QB-IOS'], 'Se connecter sur téléphone')],
+    fonctionnel: [sc('qb-connexion-f-001', 'robot', ['ios', 'android'], ['QB-IOS', 'QB-WEB'], 'Se connecter sur téléphone')],
     technique: [], ux: [], securite: [sc('qb-connexion-s-001', 'robot', ['ios'], ['QB-IOS'], 'Garder la session')] } },
 ];
 const constat = (plateforme, section, piste, extra = {}) => ({ section, plateforme, titre: 'technique', gravite: 'mineur', reproduction: 'Ouvrir /tasks avec users/{uid}.', attendu: 'ok', obtenu: 'TypeError: x.toLowerCase', preuve: '/Users/izicode/ForgeMe-tests/web/rapport.json', piste, ...extra });
@@ -211,6 +212,10 @@ const filtrer = async (page, nom, valeur) => {
   } catch (e) { console.log(`    [plan] ${(e.stdout || '').slice(-400)} ${(e.stderr || '').slice(-400)}`); }
   verifier((await docs(`projets/${P}/planTests`)).filter((d) => ['qb-taches', 'qb-connexion'].includes(idDe(d))).length === 2, 'le plan du banc est versé (deux sections)');
   for (const d of await robots()) await fetch(`${BANC.firestore}/v1/${d.name}`, { method: 'DELETE', headers: prop });
+  for (let i = 1; i <= 5; i += 1) await fetch(bdd(`projets/${P}/anomalies/robot-QB-BUG-0${i}/equipe/note`), { method: 'DELETE', headers: prop });
+  /* Un ticket d'un passage précédent, né d'un de ces problèmes, fausserait
+     « Créer un ticket » : on repart sans. */
+  for (const d of await docs('tickets')) if (/^robot-QB/.test(js(champ(d, 'anomalie')) || '')) await fetch(`${BANC.firestore}/v1/${d.name}`, { method: 'DELETE', headers: prop });
 
   console.log('\n== 1. L\'outil d\'import');
   ecrireSource(BUGS(), CLAIR('La page Tâches ne s\'ouvre plus', 'Le test Playwright voit un écran blanc.'));
@@ -374,6 +379,16 @@ const filtrer = async (page, nom, valeur) => {
     const retour = await page.evaluate(() => { const v = [...document.querySelectorAll('.voile')].pop(); return v ? v.innerText : ''; });
     verifier(Boolean(voir) && /La page Tâches reste vide/.test(retour) && /Note interne/.test(retour), 'et de la case on revient à la fiche du problème');
     await fermerFiche(page);
+    /* Une case à deux tests robot : la fiche du scénario (et non celle du
+       test) montre aussi le problème. */
+    await ouvrirFiche(page, 'robot-QB-BUG-02');
+    await page.click('.voile [data-voir-case="qb-connexion-f-001"]');
+    await page.waitForSelector('.modale--scenario', { timeout: 10000 }).catch(() => {});
+    await pause(900);
+    const plan = await page.evaluate(() => ((document.querySelector('.modale--scenario') || {}).innerText) || '');
+    verifier(/Se connecter sur téléphone/.test(plan) && /Les tests robot/i.test(plan) && /La connexion reste bloquée sur téléphone/.test(plan), 'la fiche d\'un scénario à plusieurs tests montre le problème relevé', plan.slice(0, 300));
+    await page.click('.modale--scenario [data-fermer]').catch(() => {});
+    await pause(700);
     await aller(page, `#/tests?projet=${P}`, '#anomalies');
     const humains = await page.evaluate(() => ((document.querySelector('#anomalies') || {}).innerHTML) || '');
     verifier(!/robot-QB/.test(humains), 'les relevés des robots ne se mêlent pas aux problèmes des campagnes');
