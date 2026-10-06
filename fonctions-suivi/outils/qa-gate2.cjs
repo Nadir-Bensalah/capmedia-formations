@@ -56,6 +56,9 @@ const liste = async (chemin) => {
 };
 const effacer = async (col) => { for (const d of await liste(col)) await fetch(`${DB}/${col}/${d.id}`, { method: 'DELETE', headers: OWNER }); };
 const envoisVers = async (email, apres = '') => (await liste('envois')).filter((e) => (e.a || []).some((x) => x.email === email) && (!apres || String(e.cree || '') > apres));
+/* Les lettres de la vie des demandes attendent leur regroupement
+   (regroupement.js) avant d'entrer dans « envois ». */
+const enAttenteVers = async (email, apres = '') => (await liste('envoisEnAttente')).filter((e) => e.email === email && (!apres || String(e.depose || '') > apres));
 const maintenant = () => new Date().toISOString();
 const calme = async () => {
   let avant = ''; let pareil = 0;
@@ -275,7 +278,7 @@ const TESTEUR = 'testeur.sim@exemple.test';
   const uidCollab = await uidDe(COLLAB); const uidResp = await uidDe(RESP);
   const notifs = await liste(`boites/${uidCollab}/notifications`);
   verifier(notifs.some((x) => /Réponse sur/.test(x.titre || '')), 'le collaborateur a sa notification dans le Hub');
-  verifier((await envoisVers(COLLAB, debutRep)).some((e) => e.modele === 'message'), 'et son e-mail (e-mails actifs)');
+  verifier(Boolean(await attendre(async () => (await enAttenteVers(COLLAB, debutRep)).some((e) => e.modele === 'message'))), 'et son e-mail, en attente de regroupement (e-mails actifs)');
 
   etape(14, 'Couper les e-mails du client (cockpit)');
   await aller(admin.page, `#/projets/${pid}/acces`, '[data-action="acces-emails"]');

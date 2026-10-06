@@ -88,7 +88,7 @@ function extrait(texteLibre, maximum = 600) {
   if (brut.length <= maximum) return brut;
   const coupe = brut.slice(0, maximum);
   const espace = coupe.lastIndexOf(' ');
-  return `${(espace > maximum * 0.6 ? coupe.slice(0, espace) : coupe).trim()}...`;
+  return `${(espace > maximum * 0.6 ? coupe.slice(0, espace) : coupe).trim()}…`;
 }
 
 /** Une date Firestore, une Date, ou une chaîne : vers « 14 mars 2026 ». */
@@ -244,6 +244,9 @@ const S = {
   note: `margin:16px 0 0;font:400 14px/1.6 ${POLICE};color:${TEINTES.texte3};`,
   pied: `margin:0;font:400 13px/1.6 ${POLICE};color:${TEINTES.texte3};`,
   lienPied: `color:${TEINTES.texte3};text-decoration:underline;`,
+  elementTitre: `margin:0;font:600 15px/1.45 ${POLICE};color:${TEINTES.texte};`,
+  elementDetail: `margin:4px 0 0;font:400 14px/1.5 ${POLICE};color:${TEINTES.texte2};`,
+  elementLien: `font:500 14px/1.5 ${POLICE};color:${TEINTES.action};text-decoration:underline;`,
 };
 
 /**
@@ -252,6 +255,8 @@ const S = {
  *   intro    string          un ou plusieurs paragraphes (séparés par \n\n)
  *   faits    array           [[clé, valeur]], les valeurs vides sont retirées
  *   citation string          un message repris tel quel, encadré
+ *   liste    array           [{ titre, detail, lien, libelleLien }] : une
+ *            ligne par élément, avec son propre lien (le récapitulatif)
  *   bouton   { libelle, url } l'unique bouton bleu
  *   note     string          la précision en petits caractères
  *   marque   { signature, pied } facultatif : la marque d'en-tête et la
@@ -272,6 +277,17 @@ function rendreGabarit(bloc) {
                   <td style="${S.cle}">${echapper(cle)}</td>
                   <td style="${S.val}">${echapper(valeur)}</td>
                 </tr>`).join('\n                ')}
+              </table>` : '';
+
+  const elements = listeDe(bloc.liste);
+  const tableListe = elements.length ? `
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                     style="border-collapse:collapse;margin:0 0 24px;border-top:1px solid ${TEINTES.trait};">
+                ${elements.map((l) => `<tr><td style="padding:14px 0;border-bottom:1px solid ${TEINTES.trait};">
+                  <p style="${S.elementTitre}">${echapper(l.titre)}</p>${l.detail ? `
+                  <p style="${S.elementDetail}">${echapper(l.detail)}</p>` : ''}${l.lien ? `
+                  <p style="margin:6px 0 0;"><a href="${echapper(l.lien)}" style="${S.elementLien}">${echapper(l.libelleLien)}</a></p>` : ''}
+                </td></tr>`).join('\n                ')}
               </table>` : '';
 
   const citation = valeurTexte(bloc.citation).trim() ? `
@@ -312,7 +328,7 @@ function rendreGabarit(bloc) {
         <tr>
           <td style="padding:28px 32px 32px;">
             <h1 style="${S.titre}">${echapper(bloc.titre)}</h1>
-            ${enParagraphes(bloc.intro, S.corps)}${tableFaits}${citation}${bouton}${note}
+            ${enParagraphes(bloc.intro, S.corps)}${tableFaits}${tableListe}${citation}${bouton}${note}
           </td>
         </tr>
       </table>
@@ -329,11 +345,24 @@ function rendreGabarit(bloc) {
   </tr>
 </table>`;
 
-  return { html, texte: rendreTexte(bloc, faits, signature) };
+  return { html, texte: rendreTexte(bloc, faits, signature, elements) };
+}
+
+/* Les éléments d'une liste, en texte propre. Un lien ne passe que s'il
+   commence par https:// : rien d'autre ne devient un href. */
+function listeDe(liste) {
+  return (Array.isArray(liste) ? liste : [])
+    .map((l) => ({
+      titre: valeurTexte(l && l.titre).trim(),
+      detail: valeurTexte(l && l.detail).trim(),
+      lien: /^https:\/\/\S+$/.test(valeurTexte(l && l.lien).trim()) ? valeurTexte(l.lien).trim() : '',
+      libelleLien: valeurTexte(l && l.libelleLien).trim() || 'Voir',
+    }))
+    .filter((l) => l.titre);
 }
 
 /** La même lettre, en texte brut. Jamais vide : l'objet sert de secours. */
-function rendreTexte(bloc, faits, signature = SIGNATURE) {
+function rendreTexte(bloc, faits, signature = SIGNATURE, elements = []) {
   const lignes = [valeurTexte(signature).toUpperCase(), ''];
 
   const titre = valeurTexte(bloc.titre).trim();
@@ -344,6 +373,13 @@ function rendreTexte(bloc, faits, signature = SIGNATURE) {
 
   for (const [cle, valeur] of faits) lignes.push(`${cle} : ${valeur}`);
   if (faits.length) lignes.push('');
+
+  for (const l of elements) {
+    lignes.push(l.titre);
+    if (l.detail) lignes.push(l.detail);
+    if (l.lien) lignes.push(`${l.libelleLien} : ${l.lien}`);
+    lignes.push('');
+  }
 
   const citation = valeurTexte(bloc.citation).trim();
   if (citation) {
@@ -1009,7 +1045,7 @@ function preprojet(v) {
     objet: versEquipe ? `Nouveau projet demandé : ${valeurTexte(v.titre)}` : `Bien reçu : ${valeurTexte(v.titre)}`,
     ...rendreGabarit({
       titre: versEquipe ? 'Un client décrit un nouveau projet' : 'Votre demande est bien reçue',
-      intro: versEquipe ? `${valeurTexte(v.par)} (${valeurTexte(v.email)}) vient de décrire un projet.` : `Bonjour ${valeurTexte(v.par)},\n\nMerci pour votre demande. Nous la lisons, puis nous en discutons ensemble dans votre espace.`,
+      intro: versEquipe ? `${valeurTexte(v.par)} (${valeurTexte(v.email)}) vient de décrire un projet.` : `${valeurTexte(v.par).trim() ? `Bonjour ${valeurTexte(v.par).trim()},` : 'Bonjour,'}\n\nMerci pour votre demande. Nous la lisons, puis nous en discutons ensemble dans votre espace.`,
       faits: versEquipe ? [['Titre', valeurTexte(v.titre)], ['Type', valeurTexte(v.type)], ['Budget', valeurTexte(v.budget)], ['Délai', valeurTexte(v.delai)], ['Idée', valeurTexte(v.idee).slice(0, 600)]] : [['Projet', valeurTexte(v.titre)]],
       bouton: { libelle: versEquipe ? 'Ouvrir la demande' : 'Suivre ma demande', url: valeurTexte(v.lien) || lienEspace() },
     }),
@@ -1051,7 +1087,10 @@ function maintenance(v) {
   const periode = PERIODES[valeurTexte(v.periode)] || 'mois';
   const evenement = valeurTexte(v.evenement);
   return {
-    objet: `${projet} : ${(TITRES[evenement] || 'votre forfait de maintenance').replace(/^Votre/, 'votre').replace(/^Une/, 'une')}`,
+    /* Sans nom de projet, l'objet commençait par « : ». */
+    objet: projet.trim()
+      ? `${projet} : ${(TITRES[evenement] || 'votre forfait de maintenance').replace(/^Votre/, 'votre').replace(/^Une/, 'une')}`
+      : (TITRES[evenement] || 'Votre forfait de maintenance'),
     ...rendreGabarit({
       titre: TITRES[evenement] || 'Votre forfait de maintenance',
       intro: INTROS[evenement] || 'Votre forfait de maintenance a changé. Tout se lit dans votre espace.',
@@ -1111,12 +1150,12 @@ function relance(v) {
   const lignes = Array.isArray(v.points) ? v.points : [];
   const n = lignes.length;
   return {
-    objet: n > 1
-      ? `${valeurTexte(v.projet)} : ${n} points attendent votre réponse`
-      : `${valeurTexte(v.projet)} : un point attend votre réponse`,
+    /* Sans nom de projet, l'objet commençait par « : » ; sans nom de
+       destinataire, la lettre saluait « Bonjour , ». */
+    objet: `${valeurTexte(v.projet).trim() ? `${valeurTexte(v.projet).trim()} : ` : ''}${n > 1 ? `${n} points attendent votre réponse` : 'un point attend votre réponse'}`.replace(/^un/, 'Un'),
     ...rendreGabarit({
       titre: n > 1 ? `${n} points attendent votre réponse` : 'Un point attend votre réponse',
-      intro: `Bonjour ${valeurTexte(v.par)},\n\nRien d'urgent de notre côté, mais ces points sont bloqués tant qu'ils n'ont pas votre retour. Tout se traite depuis votre espace, en quelques minutes.`,
+      intro: `${valeurTexte(v.par).trim() ? `Bonjour ${valeurTexte(v.par).trim()},` : 'Bonjour,'}\n\nRien d'urgent de notre côté, mais ces points sont bloqués tant qu'ils n'ont pas votre retour. Tout se traite depuis votre espace, en quelques minutes.`,
       faits: lignes.slice(0, 8).map((l) => [valeurTexte(l.quoi), valeurTexte(l.detail)]),
       bouton: { libelle: 'Voir ce qui vous attend', url: valeurTexte(v.lien) || lienEspace() },
       note: "Vous recevez cette lettre une fois par semaine au maximum, et seulement s'il y a quelque chose. Elle s'arrête dès que la liste est vide.",
@@ -1306,6 +1345,108 @@ function campagne(v) {
   };
 }
 
+/* ==========================================================================
+   Le récapitulatif des demandes
+
+   Plusieurs lettres de la vie des demandes en attente pour une même
+   personne, sur un même projet (voir regroupement.js) : une seule lettre,
+   une ligne par demande. Une demande qui a connu plusieurs événements
+   pendant l'attente dit son état final (« Nouvelle demande, en cours »).
+
+   Les variables sont figées par regroupement.js :
+     projetNom, par (le destinataire), lien (ses demandes),
+     lignes: [{ numero, titre, lien, cree, parLEquipe, statut, messages,
+                qualification }], total et nouvelles (comptés avant la
+     coupe des lignes trop nombreuses)
+   ========================================================================== */
+
+/* L'état d'une demande, en bout de ligne. Ce qui est un verbe (« attend
+   votre réponse ») se lit seul ; le reste prend « désormais » quand la
+   demande n'est pas nouvelle. */
+const ETATS_LIGNE = {
+  'nouveau': 'reçue',
+  'a-analyser': 'à analyser',
+  'en-attente-client': 'attend votre réponse',
+  'acceptee': 'acceptée',
+  'planifiee': 'planifiée',
+  'en-cours': 'en cours',
+  'en-revue': 'en relecture chez nous',
+  'a-valider': 'attend votre validation',
+  'resolu': 'terminée',
+  'refuse': 'refusée',
+  'annulee': 'annulée',
+  'ferme': 'fermée',
+};
+const QUALIFS_LIGNE = { 'a-chiffrer': 'un devis va vous être proposé', 'hors-perimetre': 'hors du périmètre prévu' };
+
+const majuscule = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
+/** « 1 nouvelle demande », « 7 nouvelles demandes ». */
+const compte = (n, singulier, pluriel) => `${n} ${n > 1 ? pluriel : singulier}`;
+
+/** Ce qui s'est passé sur une demande pendant l'attente, en une phrase. */
+function quoiDeLaLigne(l) {
+  const x = l || {};
+  const parts = [];
+  if (x.cree === true) parts.push(x.parLEquipe === true ? 'nouvelle demande ouverte pour vous' : 'nouvelle demande');
+  const statut = valeurTexte(x.statut);
+  const etat = ETATS_LIGNE[statut] || (statut ? libelle(STATUTS, statut, '').toLowerCase() : '');
+  if (etat && !(x.cree === true && statut === 'nouveau')) {
+    parts.push(x.cree === true || /^attend /.test(etat) ? etat : `désormais ${etat}`);
+  }
+  const q = valeurTexte(x.qualification);
+  if (q) parts.push(QUALIFS_LIGNE[q] || (QUALIFS[q] ? `qualifiée ${QUALIFS[q]}` : ''));
+  const n = Number(x.messages) || 0;
+  if (n > 0) parts.push(n > 1 ? `${n} nouveaux messages` : 'un nouveau message');
+  return majuscule(parts.filter(Boolean).join(', ')) || 'Mise à jour';
+}
+
+/** Le décompte des lignes : nouvelles demandes, puis mises à jour. */
+function resumeRecapitulatif(lignes) {
+  const toutes = Array.isArray(lignes) ? lignes : [];
+  const nouvelles = toutes.filter((l) => l && l.cree === true).length;
+  const maj = toutes.length - nouvelles;
+  return { nouvelles, maj };
+}
+
+function recapitulatif(v) {
+  const projet = valeurTexte(v.projetNom).trim();
+  const prenom = valeurTexte(v.par).trim().split(/\s+/)[0] || '';
+  const lignes = (Array.isArray(v.lignes) ? v.lignes : []).filter((l) => l && typeof l === 'object');
+  /* Le décompte porte sur toutes les demandes, même celles qu'une lettre
+     trop longue n'affiche pas : « total » et « nouvelles » les comptent
+     avant la coupe (regroupement.js). */
+  const total = Math.max(Number(v.total) || 0, lignes.length);
+  const nouvelles = Math.min(total, Math.max(Number(v.nouvelles) || 0, resumeRecapitulatif(lignes).nouvelles));
+  const maj = total - nouvelles;
+  const dit = [];
+  if (nouvelles) dit.push(compte(nouvelles, 'nouvelle demande', 'nouvelles demandes'));
+  if (maj) dit.push(compte(maj, 'mise à jour', 'mises à jour'));
+  const resume = dit.length === 2 ? `${dit[0]} et ${dit[1]}` : (nouvelles ? dit[0] : `${dit[0] || compte(1, 'mise à jour', 'mises à jour')} de vos demandes`);
+  const cachees = total - lignes.length;
+  return {
+    objet: `${projet || 'Vos demandes'} : ${resume}`,
+    ...rendreGabarit({
+      titre: 'Le point sur vos demandes',
+      intro: `${prenom ? `Bonjour ${prenom},` : 'Bonjour,'}\n\n`
+        + `Voici ce qui a bougé sur vos demandes${projet ? ` du projet ${projet}` : ''} : ${resume}. `
+        + 'Pour vous éviter un e-mail à chaque événement, nous réunissons tout ici.',
+      liste: lignes.map((l) => {
+        const numero = valeurTexte(l.numero).trim();
+        const titre = valeurTexte(l.titre).trim() || 'Demande sans titre';
+        return {
+          titre: numero ? `${numero} · ${titre}` : titre,
+          detail: quoiDeLaLigne(l),
+          lien: valeurTexte(l.lien) || '',
+          libelleLien: 'Voir la demande',
+        };
+      }),
+      bouton: { libelle: 'Ouvrir mes demandes', url: valeurTexte(v.lien) || lienEspace() },
+      note: (cachees > 0 ? `${compte(cachees, 'autre demande a bougé', 'autres demandes ont bougé')} : vous les retrouvez dans votre espace. ` : '')
+        + "Répondez depuis votre espace : un e-mail de retour ne serait pas rattaché à la demande.",
+    }),
+  };
+}
+
 const MODELES = {
   'invitation': invitation,
   'anomalie': anomalie,
@@ -1347,6 +1488,7 @@ const MODELES = {
   'relance': relance,
   'code': code,
   'connexion-equipe': connexionEquipe,
+  'recapitulatif': recapitulatif,
 };
 
 /**
@@ -1362,6 +1504,7 @@ function rendre(modele, variables) {
 
 module.exports = {
   rendre,
+  quoiDeLaLigne,
   MODELES,
   MARQUE_TEST,
   echapper,

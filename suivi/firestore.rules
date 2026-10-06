@@ -1650,6 +1650,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Les lettres aux clients qui attendent leur regroupement (adresse,
+    // contenu, moment) : le serveur seul (regroupement.js).
+    match /envoisEnAttente/{attenteId} {
+      allow read, write: if false;
+    }
+
     // ================================================================
     // La plateforme de tests
     //

@@ -28,6 +28,10 @@ exports.suiviAdmin           = suivi.suiviAdmin;
 const hub = require('./hub');
 Object.assign(exports, hub);
 
+/* Les lettres de la vie des demandes, regroupées par destinataire et par
+   projet : une seule lettre après dix minutes de calme (regroupement.js). */
+exports.hubRegroupementEnvois = require('./regroupement').hubRegroupementEnvois;
+
 /* La porte des robots : les tests automatisés rendent leur verdict en direct. */
 exports.suiviRobot = require('./robot').suiviRobot;
 
