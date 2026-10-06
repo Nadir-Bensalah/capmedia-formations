@@ -96,6 +96,8 @@ const EVENEMENTS = {
   'invitation-equipe': "Invitation dans l'équipe",
   code: 'Code de connexion',
   'connexion-equipe': 'Session du Cockpit ouverte',
+  /* Plusieurs lettres de la vie des demandes réunies (regroupement.js). */
+  recapitulatif: 'Récapitulatif des demandes',
 };
 const libelleEvenement = (cle) => EVENEMENTS[cle] || '';
 

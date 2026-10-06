@@ -125,6 +125,11 @@ const creerDemande = (pid, titre) => appelAdmin('creerDemande', { projet: pid, t
   verifier(ids.every((id) => rendu.texte.includes(`https://capmedia.app/suivi/ticket?t=${id}`)), 'chaque ligne mène à sa demande');
   verifier(/^REGR-\d{3} · Rafale/m.test(rendu.texte), 'chaque ligne porte le numéro de la demande');
   verifier(!/[—–]|null|undefined/.test(`${rendu.objet}${rendu.texte}${rendu.html}`), 'ni tiret cadratin, ni « null », ni « undefined »');
+  /* La page « E-mails envoyés » (journal-envois.js) relit la lettre dans
+     « envois » et la refait avec courriels.rendre(modele, variables). */
+  const journal = require('../journal-envois.js');
+  const vu = journal.rendre(lr);
+  verifier(!vu.erreurRendu && vu.objet === rendu.objet && vu.texte === rendu.texte && journal.publicDe(lr) === 'client', 'la page « E-mails envoyés » refait la même lettre, rangée côté clients', vu.erreurRendu || vu.objet);
   verifier((await enAttente(pid)).length === 0, 'la file est vide');
   const facteur = await attendre(async () => { const d = await Promise.all([lr.id, (aColin[0] || {}).id].map((i) => bdd.doc(`envois/${i}`).get())); return d.every((x) => x.exists && x.data().etat === 'simule') ? d : null; });
   verifier(Boolean(facteur), 'le facteur les sert comme les autres : « simule » sur le banc, aucun e-mail réel');
