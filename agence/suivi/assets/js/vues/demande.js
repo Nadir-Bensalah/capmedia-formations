@@ -8,7 +8,7 @@ import {
   echapper, enDate, dateCourte, dateHeure, depuis, enParagraphes, avecLiens, parDateAsc, parDateDesc, joursAvant, age,
   bdd, collection, query, where, orderBy, doc, marquerPiece,
   STATUTS, TYPES, URGENCES, PLATEFORMES, PLATEFORMES_DEMANDE, QUALIFICATIONS, OUVERTS, ATTEND_CLIENT, STATUTS_RELEASE, pluriel,
-  partiesDemande, nomPartie, contactsProjet, nomsContacts, AIDE_PIECES_SERVEUR,
+  partiesDemande, nomPartie, contactsProjet, AIDE_PIECES_SERVEUR,
 } from '../noyau.js';
 import {
   icone, pastille, puce, pucePlateforme, choixPlateformes, avatar, fait, vide, squelette, titrePage, modale, confirmer, toast, sur, depot, lireForme, valider, obligatoire, longueurMax, agir, optionsDe, messageHtml, brancherPieces, encart, pieceHtml, chronoItem,
@@ -92,11 +92,19 @@ export const nouvelle = async (ctx, env) => {
      le formulaire ne lui parle plus comme au client. Elle dit qui a
      constaté le problème : l'équipe, ou l'un des interlocuteurs, quand elle
      recopie un retour reçu par message ou par téléphone. */
-  const contacts = client ? [] : contactsProjet(projet);
-  const pourQui = client ? '' : (nomsContacts(projet) || 'le client');
+  /* Les interlocuteurs vivent sous projets/{p}/interlocuteurs depuis la
+     Gate 2 (lus par l'équipe seule) ; « contacts » de la fiche projet n'est
+     plus qu'un ancien repli. Seuls les accès actifs sont proposés. */
+  if (!client) await Promise.race([magasin.attendre(K.interlocuteurs(pid)).catch(() => null), new Promise((r) => setTimeout(r, 4000))]);
+  const interlocuteurs = client ? [] : (magasin.lire(K.interlocuteurs(pid)) || []).filter((i) => i && i.statut === 'actif' && (i.nom || i.email));
+  const contacts = client ? [] : (interlocuteurs.length ? interlocuteurs.map((i) => ({ nom: i.nom || '', email: i.email || '' })) : contactsProjet(projet));
+  const nomsActifs = contacts.map((c) => c.nom || c.email).filter(Boolean);
+  const pourQui = client ? '' : (nomsActifs.length ? nomsActifs.join(' et ') : '');
   const chapo = client
     ? "Dites-nous ce dont vous avez besoin. Plus c'est précis, plus vite on avance. Vous recevrez un e-mail à chaque étape."
-    : `Ouvrez une demande au nom du projet. Elle apparaît aussitôt dans l'espace de ${pourQui}, qui est prévenu par e-mail et peut y répondre.`;
+    : (pourQui
+      ? `Ouvrez une demande au nom du projet. Elle apparaît aussitôt dans l'espace de ${pourQui}, qui est prévenu par e-mail et peut y répondre.`
+      : "Ouvrez une demande au nom du projet. Elle apparaît aussitôt dans l'espace du client, qui est prévenu par e-mail et peut y répondre.");
   const aideUrgence = client
     ? Object.values(URGENCES).map((u) => `${u.libelle} : ${u.aide}`).join(' ')
     : 'Bloquant : le client ne peut plus travailler. Critique : une fonction majeure est cassée, il contourne. Important : à traiter dans le cours du projet. Mineur : un détail, quand ce sera possible.';
