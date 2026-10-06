@@ -60,7 +60,7 @@ const destinataireHtml = (a) => {
 const ligneHtml = (l) => `<tr data-envoi="${echapper(l.id)}">
   <td style="white-space:nowrap">${ouTiret(quand(l.quand))}</td>
   <td style="min-width:180px">${destinataireHtml(l.a)}</td>
-  <td style="min-width:240px"><button type="button" class="emails-objet" data-ouvrir="${echapper(l.id)}" style="all:unset;cursor:pointer;font-weight:500;color:var(--encre)">${l.objet ? echapper(l.objet) : `<span class="t-3">Lettre illisible : ${echapper(l.modele || 'modèle absent')}</span>`}</button></td>
+  <td style="min-width:240px"><button type="button" class="ligne-titre--bouton" data-ouvrir="${echapper(l.id)}" style="font-weight:500;color:var(--encre)">${l.objet ? echapper(l.objet) : `<span class="t-3">Lettre illisible : ${echapper(l.modele || 'modèle absent')}</span>`}</button></td>
   <td>${ouTiret(l.projetNom)}</td>
   <td>${ouTiret(l.evenementLibelle)}</td>
   <td style="white-space:nowrap">${puceEtat(l.etat)}${l.etat === 'echec' && l.essais ? ` <span class="t-petit t-3">${echapper(pluriel(l.essais, 'essai'))}</span>` : ''}</td>
@@ -172,7 +172,7 @@ export const vue = async (ctx, env) => {
         <select class="select" id="f-statut" aria-label="Statut" style="width:auto"><option value="">Tous les statuts</option>${d.facettes.statuts.map((s) => `<option value="${s.cle}"${f.statut === s.cle ? ' selected' : ''}>${echapper(s.libelle)} (${s.n})</option>`).join('')}</select>
         ${filtre ? '<button class="btn btn-petit btn-doux" type="button" data-effacer>Effacer les filtres</button>' : ''}
       </div>
-      <p class="t-petit t-2" data-resume style="margin-bottom:var(--e-3)"><strong>${pluriel(d.total, 'e-mail')}</strong>${enEchec && f.statut !== 'echec' ? ` · <button type="button" data-voir-echecs style="all:unset;cursor:pointer;color:var(--rouge);text-decoration:underline">${pluriel(enEchec, 'en échec', 'en échec')}</button>` : ''}${d.pages > 1 ? ` · page ${d.page} sur ${d.pages}` : ''}</p>
+      <p class="t-petit t-2" data-resume style="margin-bottom:var(--e-3)"><strong>${pluriel(d.total, 'e-mail')}</strong>${enEchec && f.statut !== 'echec' ? ` · <button type="button" class="ligne-titre--bouton" data-voir-echecs style="display:inline;width:auto;color:var(--rouge);text-decoration:underline">${pluriel(enEchec, 'en échec', 'en échec')}</button>` : ''}${d.pages > 1 ? ` · page ${d.page} sur ${d.pages}` : ''}</p>
       ${d.lignes.length ? `<div class="cadre-defile"><table class="tableau" data-emails>
         <thead><tr><th scope="col">Date</th><th scope="col">Destinataire</th><th scope="col">Objet</th><th scope="col">Projet</th><th scope="col">Événement</th><th scope="col">Statut</th></tr></thead>
         <tbody>${d.lignes.map(ligneHtml).join('')}</tbody></table></div>`
