@@ -88,7 +88,7 @@ function extrait(texteLibre, maximum = 600) {
   if (brut.length <= maximum) return brut;
   const coupe = brut.slice(0, maximum);
   const espace = coupe.lastIndexOf(' ');
-  return `${(espace > maximum * 0.6 ? coupe.slice(0, espace) : coupe).trim()}...`;
+  return `${(espace > maximum * 0.6 ? coupe.slice(0, espace) : coupe).trim()}…`;
 }
 
 /** Une date Firestore, une Date, ou une chaîne : vers « 14 mars 2026 ». */
@@ -1009,7 +1009,7 @@ function preprojet(v) {
     objet: versEquipe ? `Nouveau projet demandé : ${valeurTexte(v.titre)}` : `Bien reçu : ${valeurTexte(v.titre)}`,
     ...rendreGabarit({
       titre: versEquipe ? 'Un client décrit un nouveau projet' : 'Votre demande est bien reçue',
-      intro: versEquipe ? `${valeurTexte(v.par)} (${valeurTexte(v.email)}) vient de décrire un projet.` : `Bonjour ${valeurTexte(v.par)},\n\nMerci pour votre demande. Nous la lisons, puis nous en discutons ensemble dans votre espace.`,
+      intro: versEquipe ? `${valeurTexte(v.par)} (${valeurTexte(v.email)}) vient de décrire un projet.` : `${valeurTexte(v.par).trim() ? `Bonjour ${valeurTexte(v.par).trim()},` : 'Bonjour,'}\n\nMerci pour votre demande. Nous la lisons, puis nous en discutons ensemble dans votre espace.`,
       faits: versEquipe ? [['Titre', valeurTexte(v.titre)], ['Type', valeurTexte(v.type)], ['Budget', valeurTexte(v.budget)], ['Délai', valeurTexte(v.delai)], ['Idée', valeurTexte(v.idee).slice(0, 600)]] : [['Projet', valeurTexte(v.titre)]],
       bouton: { libelle: versEquipe ? 'Ouvrir la demande' : 'Suivre ma demande', url: valeurTexte(v.lien) || lienEspace() },
     }),
@@ -1051,7 +1051,10 @@ function maintenance(v) {
   const periode = PERIODES[valeurTexte(v.periode)] || 'mois';
   const evenement = valeurTexte(v.evenement);
   return {
-    objet: `${projet} : ${(TITRES[evenement] || 'votre forfait de maintenance').replace(/^Votre/, 'votre').replace(/^Une/, 'une')}`,
+    /* Sans nom de projet, l'objet commençait par « : ». */
+    objet: projet.trim()
+      ? `${projet} : ${(TITRES[evenement] || 'votre forfait de maintenance').replace(/^Votre/, 'votre').replace(/^Une/, 'une')}`
+      : (TITRES[evenement] || 'Votre forfait de maintenance'),
     ...rendreGabarit({
       titre: TITRES[evenement] || 'Votre forfait de maintenance',
       intro: INTROS[evenement] || 'Votre forfait de maintenance a changé. Tout se lit dans votre espace.',
@@ -1111,12 +1114,12 @@ function relance(v) {
   const lignes = Array.isArray(v.points) ? v.points : [];
   const n = lignes.length;
   return {
-    objet: n > 1
-      ? `${valeurTexte(v.projet)} : ${n} points attendent votre réponse`
-      : `${valeurTexte(v.projet)} : un point attend votre réponse`,
+    /* Sans nom de projet, l'objet commençait par « : » ; sans nom de
+       destinataire, la lettre saluait « Bonjour , ». */
+    objet: `${valeurTexte(v.projet).trim() ? `${valeurTexte(v.projet).trim()} : ` : ''}${n > 1 ? `${n} points attendent votre réponse` : 'un point attend votre réponse'}`.replace(/^un/, 'Un'),
     ...rendreGabarit({
       titre: n > 1 ? `${n} points attendent votre réponse` : 'Un point attend votre réponse',
-      intro: `Bonjour ${valeurTexte(v.par)},\n\nRien d'urgent de notre côté, mais ces points sont bloqués tant qu'ils n'ont pas votre retour. Tout se traite depuis votre espace, en quelques minutes.`,
+      intro: `${valeurTexte(v.par).trim() ? `Bonjour ${valeurTexte(v.par).trim()},` : 'Bonjour,'}\n\nRien d'urgent de notre côté, mais ces points sont bloqués tant qu'ils n'ont pas votre retour. Tout se traite depuis votre espace, en quelques minutes.`,
       faits: lignes.slice(0, 8).map((l) => [valeurTexte(l.quoi), valeurTexte(l.detail)]),
       bouton: { libelle: 'Voir ce qui vous attend', url: valeurTexte(v.lien) || lienEspace() },
       note: "Vous recevez cette lettre une fois par semaine au maximum, et seulement s'il y a quelque chose. Elle s'arrête dès que la liste est vide.",

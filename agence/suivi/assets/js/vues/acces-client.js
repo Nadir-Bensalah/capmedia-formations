@@ -156,6 +156,7 @@ export const accesHtml = (d, { pid, env }) => {
         <p class="t-petit t-2" style="margin-top:4px">${coupes
           ? "Le client utilise son espace normalement et y voit ses notifications, mais aucun e-mail ne lui part (ni invitation, ni suivi, ni rappel). Le code de connexion, lui, part toujours."
           : 'Le client reçoit les e-mails du projet selon ses préférences. Les pièces comptables ne partent qu\'aux responsables.'}${ouvert ? '' : ' Sans effet tant que le projet est fermé : rien ne part de toute façon.'}</p>
+        ${peut(env.session, 'systeme') ? `<p class="t-petit" style="margin-top:8px"><a href="#/emails?projet=${encodeURIComponent(pid)}" data-voir-emails>Voir les e-mails envoyés sur ce projet</a></p>` : ''}
       </div>
       ${gererOuverture ? `<button class="btn btn-secondaire" type="button" data-action="acces-emails" data-valeur="${coupes ? 'actifs' : 'coupes'}">${icone(coupes ? 'mail' : 'cadenas')} ${coupes ? 'Réactiver les e-mails' : 'Couper les e-mails'}</button>` : ''}
     </div>

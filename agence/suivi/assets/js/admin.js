@@ -29,6 +29,7 @@ import * as adminFinances from './vues/admin-finances.js';
 import * as documents from './vues/documents.js';
 import * as maintenance from './vues/maintenance.js';
 import * as adminActivite from './vues/admin-activite.js';
+import * as adminEmails from './vues/admin-emails.js';
 import * as adminArchives from './vues/admin-archives.js';
 import * as adminAFaire from './vues/admin-a-faire.js';
 import * as adminParametres from './vues/admin-parametres.js';
@@ -138,6 +139,9 @@ const construireNavigation = () => {
         { chemin: '/finances', libelle: 'Finances', icone: 'finances', compte: { total: piecesDues, neuf: piecesDues }, si: peut(session, 'finance.lecture') },
         { chemin: '/maintenance', libelle: 'Maintenance', icone: 'sante', compte: { total: forfaitsActifs, neuf: forfaitsDemandes } },
         { chemin: '/activite', libelle: 'Activité', icone: 'activite' },
+        /* Les lettres parties vers les clients (et l'équipe, les testeurs) :
+           l'administrateur seul, comme l'action qui les lit. */
+        { chemin: '/emails', libelle: 'E-mails envoyés', icone: 'mail', si: peut(session, 'systeme') },
         /* La santé en direct des applications reliées à Sentry : l'administrateur
            y entre d'ici ; un agent, par la page du projet. */
         { chemin: '/controle', libelle: 'Salle de contrôle', icone: 'sante', si: admin },
@@ -253,6 +257,9 @@ definir([
   { chemin: '/finances/:did', vue: (ctx) => adminFinances.vue(ctx, env) },
   { chemin: '/maintenance', vue: (ctx) => maintenance.vue(ctx, env) },
   { chemin: '/activite', vue: (ctx) => adminActivite.vue(ctx, env) },
+  /* Une clé : changer un filtre (dans l'adresse) recharge la liste sans
+     redessiner la page entière. */
+  { chemin: '/emails', cle: () => 'emails', vue: (ctx) => adminEmails.vue(ctx, env) },
   { chemin: '/annonces', vue: (ctx) => annonces.vue(ctx, env) },
   { chemin: '/archives', vue: (ctx) => adminArchives.vue(ctx, env) },
   { chemin: '/parametres', vue: (ctx) => adminParametres.vue(ctx, env) },
