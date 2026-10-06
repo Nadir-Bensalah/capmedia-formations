@@ -48,6 +48,7 @@ const onDocumentWritten = (o, fn) => v2firestore.onDocumentWritten(o, auMomentDe
 const invitations = require('./invitations');
 const sentry = require('./sentry');
 const controle = require('./controle');
+const journalEnvois = require('./journal-envois');
 const { Refus, cleEmail } = require('./commun');
 
 /* index.js initialise déjà l'application ; la garde permet de charger ce
@@ -1677,6 +1678,11 @@ const ACTIONS = {
      minute ; un incident de disponibilité devient un ticket. */
   controleEcran: { permission: 'projet.voir', projet: (c) => c.projet },
   controleVersTicket: { permission: 'demandes.gerer', projet: (c) => c.projet },
+  /* Le journal des e-mails envoyés (journal-envois.js) : les adresses, le
+     contenu des lettres, les montants. L'administrateur seul : « systeme »
+     ne se délègue pas à un agent. */
+  emailsEnvoyes: { permission: 'systeme' },
+  emailEnvoye: { permission: 'systeme' },
 };
 
 /* Exposé pour l'épreuve : le registre, sans rien exécuter. */
@@ -2289,6 +2295,12 @@ exports.suiviAdmin = onRequest(
       if (action === 'sentryVersTicket') return res.json(await sentry.versTicket(identite, req.body || {}));
       if (action === 'controleEcran') return res.json(await controle.ecran(identite, req.body || {}));
       if (action === 'controleVersTicket') return res.json(await controle.versTicket(identite, req.body || {}));
+      /* --- Le journal des e-mails envoyés (journal-envois.js) ------------- */
+      if (action === 'emailsEnvoyes') {
+        const f = req.body || {};
+        return res.json(await journalEnvois.lister({ public: f.public, projet: f.projet, destinataire: f.destinataire, statut: f.statut, page: f.page }));
+      }
+      if (action === 'emailEnvoye') return res.json(await journalEnvois.lire((req.body || {}).id));
 
       /* --- Poser une demande depuis le cockpit -----------------------------
          Une anomalie remontée par message ou par téléphone doit rejoindre
