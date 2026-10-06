@@ -677,7 +677,7 @@ exports.hubTicketActivite = onDocumentWritten({ region: REGION, document: 'ticke
     await activite({ projet: apres.projet, type: 'demande', texte: `a qualifié la demande ${nom} : ${libelles[apres.qualification]}`, lien });
     if (apres.qualification === 'hors-perimetre' || apres.qualification === 'a-chiffrer') {
       await notifierClients(projet, 'demande', { type: 'demande', titre: apres.qualification === 'a-chiffrer' ? 'Un devis va vous être proposé' : 'Demande hors périmètre', texte: apres.titre, lien: `#${lien}`, projet: apres.projet });
-      await ecrireAuxClients(projet, 'qualification', 'qualification', { projetNom: nomProjet(projet), numero: apres.numero, titre: apres.titre, qualification: apres.qualification, lien: LIEN(lien) });
+      await ecrireAuxClients(projet, 'qualification', 'qualification', { projetNom: nomProjet(projet), numero: apres.numero, titre: apres.titre, qualification: apres.qualification, lien: LIEN(lien) }, { objet: evenement.params.ticketId });
     }
   }
 });

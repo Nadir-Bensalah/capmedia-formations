@@ -90,6 +90,7 @@ const semer = async () => {
     await s('profils/resp', { notifications: {}, lus: {} });
     await s('audit/au1', { action: 'x' });
     await s('envois/e1', { modele: 'code', a: [{ email: 'resp@exemple.test' }] });
+    await s('envoisEnAttente/a1', { modele: 'statut', email: 'resp@exemple.test', projet: 'pa', cle: 'x' });
   });
 };
 
@@ -113,6 +114,8 @@ const OPS = [
   ['interne', 'lire la fiche technique de A', lire('projets/pa/technique/c1'), EQUIPE_A],
   ['interne', 'lire l audit', lire('audit/au1'), ['admin']],
   ['interne', 'lire la file des e-mails', lire('envois/e1'), []],
+  ['interne', 'lire les e-mails en attente de regroupement', lire('envoisEnAttente/a1'), []],
+  ['interne', 'déposer un e-mail en attente', (db) => setDoc(doc(db, 'envoisEnAttente/a2'), { modele: 'statut', email: 'x@exemple.test', projet: 'pa', cle: 'x' }), []],
   ['interne', 'lire le profil d un client', lire('profils/resp'), ['admin', 'resp']],
   // L'organisation
   ['organisation', 'lire la fiche de la société de A', lire('organisations/o1'), ['admin', 'agent-a', 'agent-fin', 'resp', 'collab', 'voisin']],

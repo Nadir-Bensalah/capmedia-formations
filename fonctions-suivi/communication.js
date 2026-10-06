@@ -24,7 +24,9 @@
    ce qui touche ses projets.
    ========================================================================== */
 
+const crypto = require('node:crypto');
 const { AsyncLocalStorage } = require('node:async_hooks');
+const { Timestamp } = require('firebase-admin/firestore');
 const { bdd, FieldValue, normaliserEmail, emailPlausible, sansIndefini, cleEmail, enMillis } = require('./commun');
 const acces = require('./acces');
 
@@ -262,11 +264,77 @@ async function mettreEnFile(modele, destinataires, variables, trace = {}) {
   } catch (err) { console.error(`Mise en file impossible pour « ${modele} »`, err); return null; }
 }
 
+/* ==========================================================================
+   4. Le regroupement des lettres aux clients
+
+   Ouvrir sept demandes d'un coup envoyait sept e-mails au client, puis sept
+   autres au premier changement de statut. Les lettres de la vie des
+   demandes (REGROUPES) ne partent donc plus tout de suite : chacune attend,
+   pour son destinataire et son projet, dans « envoisEnAttente » (fermée à
+   tout navigateur). La fonction planifiée de regroupement.js les relit
+   quand le calme est revenu : une seule lettre, inchangée, si elle est
+   seule ; un récapitulatif sinon. La décision centrale est reprise à ce
+   moment-là : un accès retiré pendant l'attente ne reçoit rien.
+
+   Le reste part tout de suite, comme avant : connexion, invitations,
+   ouverture, finance (devis, factures, paiements), rendez-vous, actions
+   attendues du client (validation, tâche, point bloquant), et tout ce qui
+   va à l'équipe ou aux testeurs.
+   ========================================================================== */
+
+const REGROUPES = new Set(['ticket-cree', 'statut', 'resolu', 'ferme', 'message', 'qualification']);
+const ATTENTE = 'envoisEnAttente';
+
+/* La file d'un destinataire sur un projet : l'empreinte des deux. L'adresse
+   seule ne suffit pas (une personne suit deux projets, deux lettres), et
+   l'identifiant du projet garde sa casse. */
+const cleAttente = (email, projet) => crypto.createHash('sha256')
+  .update(`${normaliserEmail(email)}\u0000${String(projet || '')}`).digest('hex').slice(0, 40);
+
+/**
+ * Met une lettre en attente de regroupement. `trace.objet` : la demande
+ * qu'elle concerne (une ligne par demande dans le récapitulatif). Ne lève
+ * jamais ; si l'attente ne s'écrit pas, la lettre part tout de suite :
+ * mieux vaut un e-mail de trop qu'un e-mail perdu.
+ */
+async function mettreEnAttente(modele, destinataire, variables, trace = {}) {
+  const d = destinataire || {};
+  if (!emailPlausible(d.email) || !trace.projet) return mettreEnFile(modele, [d], variables, trace);
+  const email = normaliserEmail(d.email);
+  const moment = momentCourant();
+  try {
+    const ref = await bdd.collection(ATTENTE).add(sansIndefini({
+      cle: cleAttente(email, trace.projet), email, nom: String(d.nom || '').trim(), uid: d.uid || null,
+      projet: String(trace.projet), modele, evenement: trace.evenement || modele, objet: trace.objet ? String(trace.objet) : null,
+      variables: variables || {},
+      /* Le moment de l'événement, pour la décision reprise à l'envoi ; le
+         dépôt, pour la fenêtre. Deux dates écrites ici, pas par le serveur :
+         la fonction planifiée les compare à son horloge. */
+      moment: moment ? Timestamp.fromMillis(moment) : null,
+      depose: Timestamp.now(),
+    }));
+    return ref.id;
+  } catch (err) {
+    console.error(`Attente impossible pour « ${modele} », envoi immédiat`, err);
+    return mettreEnFile(modele, [d], variables, trace);
+  }
+}
+
 /** Écrit aux clients d'un projet, d'après la décision centrale. */
 async function ecrireAuxClients(projetOuId, evenement, modele, variables, options = {}) {
   const projet = await lireProjet(projetOuId);
   const { destinataires } = await destinatairesClients(projet, evenement, options);
   if (!destinataires.length) return null;
+  /* Une lettre de la vie des demandes attend son regroupement, une par
+     personne (chacune a sa propre file, ses préférences, ses accès). */
+  if (REGROUPES.has(modele) && projet && projet.id) {
+    let dernier = null;
+    for (const d of destinataires) {
+      const v = options.parDestinataire ? { ...variables, par: d.nom } : variables;
+      dernier = (await mettreEnAttente(modele, d, v, { projet: projet.id, evenement, objet: options.objet })) || dernier;
+    }
+    return dernier;
+  }
   /* « parDestinataire » : une lettre par personne, qui la salue par son
      nom (« par »), comme la relance. Sans cela, l'accusé d'une demande
      saluait l'auteur et partait tel quel à tous ses collègues. */
@@ -325,5 +393,6 @@ module.exports = {
   projetOuvertAuClient, decisionNotificationClient, decisionEmailClient, decisionEquipe,
   destinatairesClients, uidsClients, uidsEquipe, contactEquipe, contactsEquipe,
   mettreEnFile, ecrireAuxClients, notifier, notifierClients, notifierEquipe,
-  lireInterlocuteurs, cleEmail,
+  lireInterlocuteurs, lirePreferences, cleEmail,
+  REGROUPES, ATTENTE, cleAttente, mettreEnAttente,
 };

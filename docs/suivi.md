@@ -140,6 +140,32 @@ etat     'attente' | 'envoye' | 'echec'
 erreur   string|null
 cree, envoye timestamp
 ```
+Une lettre sortie du regroupement (ci-dessous) porte en plus
+`attente: { premier, dernier, nombre }`, `regroupe: [{ attente, modele,
+evenement, objet, numero, titre, depose }]` et, s'il y a lieu,
+`ecartes: [{ ...même trace, motif }]`. Le récapitulatif a pour modèle et
+pour événement `recapitulatif`.
+
+### `envoisEnAttente/{attenteId}` (octobre 2026)
+Les lettres de la vie des demandes aux clients (`ticket-cree`, `statut`,
+`resolu`, `ferme`, `message`, `qualification`) ne partent plus tout de
+suite : une par destinataire, elles attendent ici (`cle` : empreinte de
+l'adresse et du projet). `hubRegroupementEnvois` (toutes les deux
+minutes, `regroupement.js`) envoie une file quand dix minutes ont passé
+sans nouvel événement, ou une heure après le premier : la lettre
+d'aujourd'hui si elle est seule, un récapitulatif sinon (une ligne par
+demande, son état final). La décision centrale est reprise à l'envoi ;
+un événement écarté (accès retiré, préférence éteinte, projet fermé,
+e-mails coupés) laisse une ligne `audit` « envoi.ecarte ». Fermée à tout
+navigateur. Tout le reste (connexion, invitations, ouverture, finance,
+rendez-vous, actions attendues du client, lettres à l'équipe et aux
+testeurs) part tout de suite.
+```
+cle, email, nom, uid, projet, modele, evenement, objet (la demande)
+variables map      celles de la lettre d'aujourd'hui
+moment   timestamp le moment de l'événement (décision)
+depose   timestamp le dépôt (fenêtre)
+```
 
 ## 4. Stockage des fichiers
 
@@ -630,6 +656,8 @@ matrice-gate2.test.mjs    12 catégories de personnes x 48 opérations Firestore
 matrice-stockage-gate2    12 catégories x 16 opérations Storage
 invitations-gate2         les quatre familles d'invitation, de bout en bout
 envois-gate2              qui reçoit quoi, compté (fermé, ouverture, coupure, impossibles)
+regroupement.test.mjs     la fenêtre et le texte du récapitulatif, sans base
+qa-regroupement.cjs       sept demandes en rafale, une lettre ; seule, inchangée ; accès retiré ; passages simultanés
 sessions-gate2            une session déjà ouverte, puis l'accès retiré : plus rien ne passe
 copie-prod-gate2.mjs      la migration sur une copie pseudonymisée de la production
 ordre-deploiement.sh      un ordre de déploiement rejoué pièce par pièce

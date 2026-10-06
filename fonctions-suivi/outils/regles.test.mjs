@@ -274,6 +274,8 @@ await refuse("L'équipe n'écrit pas une fiche d'équipe", setDoc(doc(equipe(), 
 await refuse("L'équipe ne crée pas une facture en direct", addDoc(collection(equipe(), 'documents'), { projet: 'atelier', type: 'facture', montant: 1, statut: 'a-payer' }));
 await refuse("L'équipe n'enregistre pas un paiement en direct", addDoc(collection(equipe(), 'paiements'), { projet: 'atelier', montant: 1 }));
 await refuse("L'équipe ne lit pas la file d'e-mails", getDocs(collection(equipe(), 'envois')));
+await refuse("L'équipe ne lit pas les e-mails en attente de regroupement", getDocs(collection(equipe(), 'envoisEnAttente')));
+await refuse("Camille n'y dépose rien", addDoc(collection(camille(), 'envoisEnAttente'), { modele: 'statut', email: 'camille.essai@exemple.test', projet: 'atelier', cle: 'x' }));
 await refuse("L'équipe ne supprime pas une demande", deleteDoc(doc(equipe(), 'tickets/t1')));
 await refuse("L'équipe ne réécrit pas l'audit d'une demande", addDoc(collection(equipe(), 'tickets/t1/evenements'), { type: 'x' }));
 

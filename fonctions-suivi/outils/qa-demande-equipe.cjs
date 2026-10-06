@@ -101,8 +101,11 @@ const creerParRest = async (email, uid, cote, titre, extra = {}) => {
   const j = await r.json().catch(() => ({}));
   return { code: r.status, id: String(j.name || '').split('/').pop() };
 };
-/* Les lettres « ticket-cree » d'une demande, par titre et par côté. */
-const lettres = async (titre, cote) => (await docs('envois?pageSize=300')).filter((d) => str(d, 'modele') === 'ticket-cree' && sous(d, 'variables', 'titre').stringValue === titre && sous(d, 'variables', 'cote').stringValue === cote);
+/* Les lettres « ticket-cree » d'une demande, par titre et par côté. Celle
+   du client attend son regroupement (envoisEnAttente, regroupement.js) :
+   on la cherche là aussi. */
+const lettres = async (titre, cote) => [...await docs('envois?pageSize=300'), ...await docs('envoisEnAttente?pageSize=300')]
+  .filter((d) => str(d, 'modele') === 'ticket-cree' && sous(d, 'variables', 'titre').stringValue === titre && sous(d, 'variables', 'cote').stringValue === cote);
 
 (async () => {
   if (!process.env.FIREBASE_STORAGE_EMULATOR_HOST) { console.error('FIREBASE_STORAGE_EMULATOR_HOST requis'); process.exit(2); }
@@ -243,7 +246,7 @@ const lettres = async (titre, cote) => (await docs('envois?pageSize=300')).filte
   verifier(/Partie concernée\s*Application mobile \(iPhone et Android\)/.test(ficheEcran), 'et nomme la partie « Application mobile (iPhone et Android) »');
   /* L'accusé du client part, l'alerte de l'équipe non : l'équipe ne se
      prévient pas elle-même de son propre geste. */
-  verifier(Boolean(await attendre(async () => (await lettres(TITRE, 'client')).length > 0, 30000)), 'le client reçoit l accusé de la demande ouverte pour lui');
+  verifier(Boolean(await attendre(async () => (await lettres(TITRE, 'client')).length > 0, 30000)), 'le client reçoit l accusé de la demande ouverte pour lui (en attente de regroupement)');
   await pause(4000);
   verifier((await lettres(TITRE, 'equipe')).length === 0, 'l équipe ne reçoit pas d alerte pour une demande qu elle a ouverte');
 
