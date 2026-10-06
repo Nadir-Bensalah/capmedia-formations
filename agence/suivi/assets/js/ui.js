@@ -7,7 +7,7 @@
 
 import {
   $, $$, echapper, initiales, borner, poids, depuis, enParagraphes, avecLiens,
-  envoyerPiece, lienPiece, estPieceMessage, lirePieceMessage, jourRelatif, enDate, PLATEFORMES_CHOIX, libellePlateforme, FORMATS_ACCEPTES,
+  envoyerPiece, lienPiece, estPieceMessage, lirePieceMessage, jourRelatif, enDate, PLATEFORMES_CHOIX, PLATEFORMES_DEMANDE, libellePlateforme, FORMATS_ACCEPTES,
 } from './noyau.js';
 import { icone } from './icones.js';
 
@@ -37,7 +37,7 @@ export const puce = (carte, cle) => {
 
 /** Une plateforme : son icône, son libellé, sa couleur. */
 export const pucePlateforme = (cle, options = {}) => {
-  const f = PLATEFORMES_CHOIX[cle];
+  const f = PLATEFORMES_DEMANDE[cle];
   if (!f) return '';
   return `<span class="plateforme plateforme--${f.voile}"${options.titre ? ` title="${echapper(f.libelle)}"` : ''}>${icone(f.icone)}${options.court === true ? echapper(f.court) : options.court === false ? '' : echapper(f.libelle)}</span>`;
 };
@@ -46,19 +46,19 @@ export const pucePlateforme = (cle, options = {}) => {
  * Un choix de plateformes en pastilles. `genre` : 'checkbox' pour en cocher
  * plusieurs (un projet), 'radio' pour une seule (une demande).
  */
-export const choixPlateformes = (nom, choisies = [], { genre = 'checkbox', limiter = null, avecVide = false } = {}) => {
-  const cles = Object.keys(limiter && limiter.length ? Object.fromEntries(limiter.filter((c) => PLATEFORMES_CHOIX[c]).map((c) => [c, PLATEFORMES_CHOIX[c]])) : PLATEFORMES_CHOIX)
+export const choixPlateformes = (nom, choisies = [], { genre = 'checkbox', limiter = null, avecVide = false, table = PLATEFORMES_CHOIX } = {}) => {
+  const cles = Object.keys(limiter && limiter.length ? Object.fromEntries(limiter.filter((c) => table[c]).map((c) => [c, table[c]])) : table)
     .filter((c) => c !== '' || avecVide);
   const prises = Array.isArray(choisies) ? choisies : [choisies];
   return `<div class="choix-plateformes">${cles.map((c) => {
-    const f = PLATEFORMES_CHOIX[c];
+    const f = table[c];
     return `<label><input type="${genre}" name="${echapper(nom)}" value="${echapper(c)}"${prises.includes(c) ? ' checked' : ''}><span class="plateforme plateforme--${f.voile}">${icone(f.icone)}${echapper(f.libelle)}</span></label>`;
   }).join('')}</div>`;
 };
 
 /** L'icône et la couleur d'une plateforme, pour une pastille de liste. */
-export const iconePlateforme = (cle) => (PLATEFORMES_CHOIX[cle] || {}).icone || '';
-export const tonPlateforme = (cle) => (PLATEFORMES_CHOIX[cle] || {}).voile || '';
+export const iconePlateforme = (cle) => (PLATEFORMES_DEMANDE[cle] || {}).icone || '';
+export const tonPlateforme = (cle) => (PLATEFORMES_DEMANDE[cle] || {}).voile || '';
 
 export const badge = (n, vif = false) => (n > 0
   ? `<span class="badge${vif ? ' badge--vif' : ''}">${echapper(n)}</span>`

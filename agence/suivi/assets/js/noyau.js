@@ -156,6 +156,10 @@ export const PLATEFORMES = {
 /* Le sélecteur d'une demande ajoute « non précisée » ; la fiche d'un projet
    n'énumère que de vraies plateformes. */
 export const PLATEFORMES_CHOIX = { ...PLATEFORMES, '': { libelle: 'Non précisée', court: '', icone: 'help', voile: 'gris' } };
+/* Une demande peut viser l'application mobile entière, iPhone ET Android
+   (06/10/2026) : ce n'est pas une plateforme du projet (on ne la coche pas
+   sur sa fiche, une version ne la porte pas), c'est un choix de demande. */
+export const PLATEFORMES_DEMANDE = { ...PLATEFORMES_CHOIX, 'mobile': { libelle: 'iPhone et Android', court: 'Mobile', icone: 'smartphone', voile: 'vert' } };
 /* Les interlocuteurs d'un projet : la liste si elle existe, sinon le
    contact unique d'avant. Un projet interne n'en a aucun. */
 export const contactsProjet = (projet) => {
@@ -167,7 +171,23 @@ export const contactsProjet = (projet) => {
 };
 export const nomsContacts = (projet) => contactsProjet(projet).map((c) => c.nom || c.email).filter(Boolean).join(' et ');
 
-export const libellePlateforme = (cle) => ((PLATEFORMES_CHOIX[cle] || {}).libelle || cle || '');
+export const libellePlateforme = (cle) => ((PLATEFORMES_DEMANDE[cle] || {}).libelle || cle || '');
+
+/* Les parties qu'une demande peut viser : celles du projet, plus
+   « Application mobile » quand le projet a une application iPhone ET une
+   application Android (06/10/2026). Elle se range juste avant la première
+   des deux. Son identifiant n'est pas celui d'un composant : nomPartie le
+   nomme, et la page d'une brique iPhone ou Android la compte comme sienne. */
+export const PARTIE_MOBILE = { id: 'mobile', nom: 'Application mobile (iPhone et Android)', type: 'mobile' };
+export const partiesDemande = (composants) => {
+  const liste = (composants || []).slice();
+  const types = new Set(liste.map((c) => c && c.type));
+  if (!(types.has('ios') && types.has('android'))) return liste;
+  const i = liste.findIndex((c) => c && (c.type === 'ios' || c.type === 'android'));
+  liste.splice(i, 0, PARTIE_MOBILE);
+  return liste;
+};
+export const nomPartie = (composants, id) => (id === PARTIE_MOBILE.id ? PARTIE_MOBILE.nom : (((composants || []).find((c) => c.id === id) || {}).nom || ''));
 
 export const QUALIFICATIONS = {
   'incluse':        { libelle: 'Incluse au contrat', voile: 'vert' },
@@ -1274,6 +1294,9 @@ export const FORMATS_ACCEPTES = {
   accept: 'image/*,video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm,application/pdf,.pdf,text/plain,.txt,application/zip,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx',
   aide: 'Images, PDF, documents Office, zip jusqu\'à 10 Mo ; vidéos mp4, mov, webm jusqu\'à 100 Mo.',
 };
+/* Une pièce qui passe par le serveur (conversation, demandes) s'arrête à
+   30 Mo pour une vidéo : une requête vers une fonction ne dépasse pas 32 Mo. */
+export const AIDE_PIECES_SERVEUR = 'Images, PDF, documents Office, zip jusqu\'à 10 Mo ; vidéos mp4, mov, webm jusqu\'à 30 Mo.';
 
 /* Les preuves d'un testeur (campagnes/<projet>/<campagne>/<uid>) : une
    capture ou une vidéo, rien d'autre, comme le disent les règles Storage.
@@ -1305,7 +1328,7 @@ export const envoyerPiece = async (fichier, chemin, surProgres, metadonnees = nu
   if (!TYPES_ACCEPTES.test(fichier.type)) {
     throw new Error(`« ${fichier.name} » : ce type de fichier n'est pas accepté.`);
   }
-  if (DOSSIER_MESSAGES.test(chemin)) return envoyerPieceMessage(fichier, chemin, surProgres);
+  if (DOSSIER_MESSAGES.test(chemin) || DOSSIER_TICKET.test(chemin)) return envoyerPieceMessage(fichier, chemin, surProgres, metadonnees);
   const plafond = /^video\//.test(fichier.type) ? TAILLE_MAX_VIDEO : TAILLE_MAX;
   if (fichier.size > plafond) {
     throw new Error(`« ${fichier.name} » dépasse ${Math.round(plafond / 1024 / 1024)} Mo.`);
@@ -1335,6 +1358,11 @@ export const lienPiece = (piece) => getDownloadURL(refStockage(stockage, piece.c
 
 const DOSSIER_MESSAGES = /^projets\/[^/]+\/messages$/;
 const CHEMIN_MESSAGE = /^projets\/[^/]+\/messages\/[^/]+$/;
+/* Les pièces des demandes suivent le même chemin (06/10/2026) : joindre
+   une capture à une demande depuis le Cockpit répondait « vous n'avez pas
+   accès à ce dossier ». Le dossier porte la demande, ou « nouveau ». */
+const DOSSIER_TICKET = /^projets\/[^/]+\/tickets\/[A-Za-z0-9_-]+$/;
+const CHEMIN_TICKET = /^projets\/[^/]+\/tickets\/[A-Za-z0-9_-]+\/[^/]+$/;
 /* Une requête vers une fonction s'arrête à 32 Mo. */
 const TAILLE_MAX_VIDEO_MESSAGE = 30 * 1024 * 1024;
 const PROJET_FIREBASE = (config && config.projectId) || 'capmedia-1f90d';
@@ -1343,7 +1371,7 @@ const URL_PIECE_MESSAGE = surEmulateur
   : `https://europe-west1-${PROJET_FIREBASE}.cloudfunctions.net/suiviPieceMessage`;
 
 /** Le chemin est-il celui d'une pièce de conversation ? */
-export const estPieceMessage = (chemin) => CHEMIN_MESSAGE.test(String(chemin || ''));
+export const estPieceMessage = (chemin) => CHEMIN_MESSAGE.test(String(chemin || '')) || CHEMIN_TICKET.test(String(chemin || ''));
 
 const jetonSession = async () => {
   const u = auth.currentUser;
@@ -1358,14 +1386,19 @@ const phraseServeur = (texte, defaut) => {
   return t && t.length < 260 && !/[<{]|firebase|error/i.test(t) ? t : defaut;
 };
 
-const envoyerPieceMessage = async (fichier, dossier, surProgres) => {
+const envoyerPieceMessage = async (fichier, dossier, surProgres, metadonnees = null) => {
   const plafond = /^video\//.test(fichier.type) ? TAILLE_MAX_VIDEO_MESSAGE : TAILLE_MAX;
   if (fichier.size > plafond) {
     throw new Error(`« ${fichier.name} » dépasse ${Math.round(plafond / 1024 / 1024)} Mo.`);
   }
-  const projet = dossier.split('/')[1];
+  const [, projet, , ticket] = dossier.split('/');
   const jeton = await jetonSession();
-  const adresse = `${URL_PIECE_MESSAGE}?projet=${encodeURIComponent(projet)}&nom=${encodeURIComponent(fichier.name)}&type=${encodeURIComponent(fichier.type)}`;
+  /* Une pièce de demande nomme sa demande, et la marque « interne » d'une
+     note de l'équipe (le serveur l'ignore venant d'un client). */
+  const deDemande = DOSSIER_TICKET.test(dossier)
+    ? `&ticket=${encodeURIComponent(ticket)}${metadonnees && metadonnees.visibilite === 'interne' ? '&interne=1' : ''}`
+    : '';
+  const adresse = `${URL_PIECE_MESSAGE}?projet=${encodeURIComponent(projet)}&nom=${encodeURIComponent(fichier.name)}&type=${encodeURIComponent(fichier.type)}${deDemande}`;
   const refus = `« ${fichier.name} » n'a pas pu être envoyé. Réessayez dans un instant.`;
   return new Promise((ok, ko) => {
     const xhr = new XMLHttpRequest();
@@ -1395,5 +1428,14 @@ export const lirePieceMessage = async (chemin) => {
   return r.blob();
 };
 
-/** Change la visibilité d'une pièce déjà envoyée (équipe seule, par les règles). */
-export const marquerPiece = (piece, visibilite) => updateMetadata(refStockage(stockage, piece.chemin), { customMetadata: { visibilite } });
+/** Change la visibilité d'une pièce déjà envoyée (équipe seule). Une pièce
+    de demande passe par le serveur, comme son envoi. */
+export const marquerPiece = async (piece, visibilite) => {
+  if (!CHEMIN_TICKET.test(String(piece.chemin || ''))) return updateMetadata(refStockage(stockage, piece.chemin), { customMetadata: { visibilite } });
+  const jeton = await jetonSession();
+  let r;
+  try { r = await fetch(`${URL_PIECE_MESSAGE}?geste=marquer&chemin=${encodeURIComponent(piece.chemin)}&visibilite=${encodeURIComponent(visibilite)}`, { method: 'POST', headers: { Authorization: `Bearer ${jeton}` } }); }
+  catch (e) { throw new Error('Le serveur est injoignable. Vérifiez votre connexion et réessayez.'); }
+  if (!r.ok) throw new Error(phraseServeur(await r.text().catch(() => ''), "La pièce n'a pas pu être marquée."));
+  return r.json();
+};

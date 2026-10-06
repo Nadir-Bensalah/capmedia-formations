@@ -7,7 +7,8 @@
 import {
   echapper, enDate, dateCourte, dateHeure, depuis, enParagraphes, avecLiens, parDateAsc, parDateDesc, joursAvant, age,
   bdd, collection, query, where, orderBy, doc, marquerPiece,
-  STATUTS, TYPES, URGENCES, PLATEFORMES, QUALIFICATIONS, OUVERTS, ATTEND_CLIENT, STATUTS_RELEASE, pluriel,
+  STATUTS, TYPES, URGENCES, PLATEFORMES, PLATEFORMES_DEMANDE, QUALIFICATIONS, OUVERTS, ATTEND_CLIENT, STATUTS_RELEASE, pluriel,
+  partiesDemande, nomPartie, contactsProjet, nomsContacts, AIDE_PIECES_SERVEUR,
 } from '../noyau.js';
 import {
   icone, pastille, puce, pucePlateforme, choixPlateformes, avatar, fait, vide, squelette, titrePage, modale, confirmer, toast, sur, depot, lireForme, valider, obligatoire, longueurMax, agir, optionsDe, messageHtml, brancherPieces, encart, pieceHtml, chronoItem,
@@ -71,15 +72,37 @@ export const nouvelle = async (ctx, env) => {
      nomme la pièce, l'équipe sait de quoi il retourne. */
   const devisLie = /^[A-Za-z0-9_-]{1,60}$/.test(String(ctx.requete.devis || '')) ? String(ctx.requete.devis) : '';
   const contexteInitial = devisLie ? `Au sujet du devis ouvert dans « Devis et factures » (#/finances/${devisLie}).` : '';
+  /* Les parties du projet arrivent avec leur abonnement : ouvert
+     directement par son adresse, le formulaire les lisait avant qu'elles
+     soient là, et la question « Quelle partie » manquait. On les attend,
+     sans bloquer plus de quelques secondes. */
+  await Promise.race([magasin.attendre(K.composants(pid)).catch(() => null), new Promise((r) => setTimeout(r, 4000))]);
   const composants = magasin.lire(K.composants(pid)) || [];
+  const parties = partiesDemande(composants);
   /* On ne propose que les plateformes du projet : demander « Android » sur un
-     projet qui n'en a pas n'aide personne. */
-  const plateformesProjet = (projet.plateformes || []).length
+     projet qui n'en a pas n'aide personne. iPhone ET Android ensemble se
+     disent « iPhone et Android », juste après les deux. */
+  const plateformesBase = (projet.plateformes || []).length
     ? projet.plateformes
     : Array.from(new Set(composants.map((c) => c.type).filter((t) => PLATEFORMES[t])));
+  const plateformesProjet = plateformesBase.includes('ios') && plateformesBase.includes('android')
+    ? plateformesBase.flatMap((c) => (c === (plateformesBase.indexOf('ios') > plateformesBase.indexOf('android') ? 'ios' : 'android') ? [c, 'mobile'] : [c]))
+    : plateformesBase;
+  /* Depuis le Cockpit, l'équipe ouvre la demande POUR le client (06/10/2026) :
+     le formulaire ne lui parle plus comme au client. Elle dit qui a
+     constaté le problème : l'équipe, ou l'un des interlocuteurs, quand elle
+     recopie un retour reçu par message ou par téléphone. */
+  const contacts = client ? [] : contactsProjet(projet);
+  const pourQui = client ? '' : (nomsContacts(projet) || 'le client');
+  const chapo = client
+    ? "Dites-nous ce dont vous avez besoin. Plus c'est précis, plus vite on avance. Vous recevrez un e-mail à chaque étape."
+    : `Ouvrez une demande au nom du projet. Elle apparaît aussitôt dans l'espace de ${pourQui}, qui est prévenu par e-mail et peut y répondre.`;
+  const aideUrgence = client
+    ? Object.values(URGENCES).map((u) => `${u.libelle} : ${u.aide}`).join(' ')
+    : 'Bloquant : le client ne peut plus travailler. Critique : une fonction majeure est cassée, il contourne. Important : à traiter dans le cours du projet. Mineur : un détail, quand ce sera possible.';
 
   sortie.innerHTML = `<div class="page" style="max-width:820px">
-    <div class="page-tete"><div><p class="surtitre">${echapper(projet.nom)}</p><h1>${client ? 'Nouveau ticket' : 'Nouvelle demande'}</h1><p class="chapo">Dites-nous ce dont vous avez besoin. Plus c'est précis, plus vite on avance. Vous recevrez un e-mail à chaque étape.</p></div></div>
+    <div class="page-tete"><div><p class="surtitre">${echapper(projet.nom)}</p><h1>${client ? 'Nouveau ticket' : 'Nouvelle demande'}</h1><p class="chapo">${echapper(chapo)}</p></div></div>
     ${depuisMessage ? `<div class="encart encart--info" style="margin-bottom:var(--e-5)">${icone('messages')} <span>Reprise d'un message${depuisMessage.auteur ? ` de ${echapper(depuisMessage.auteur)}` : ''}. Relisez, complétez, ajustez le type si besoin.</span></div>` : ''}
     ${ancienne ? `<div class="encart encart--info" style="margin-bottom:var(--e-5)">${icone('demandes')} <span>${client ? 'Ce ticket fait suite à' : 'Cette demande fait suite à'} <a href="#/projets/${echapper(pid)}/demandes/${echapper(ancienne.id)}">${echapper(ancienne.numero || (client ? 'le ticket' : 'la demande'))} « ${echapper(ancienne.titre)} »</a> : les deux fiches se renverront l'une à l'autre.</span></div>` : ''}
     <form class="forme" id="forme-demande" novalidate>
@@ -88,19 +111,21 @@ export const nouvelle = async (ctx, env) => {
         <div class="grille grille-2" id="choix-type" role="radiogroup">
           ${Object.entries(TYPES).filter(([cle]) => cle !== 'demande').map(([cle, t]) => `<label class="carte carte--serree carte--cliquable rang" style="gap:12px;align-items:flex-start;cursor:pointer">
             <input type="radio" name="type" value="${cle}" ${cle === typeInitial ? 'checked' : ''} style="margin-top:4px">
-            <span><span class="t-corps-fort" style="display:block">${echapper(t.libelle)}</span><span class="t-petit t-2">${echapper(t.aide)}</span>${cle === 'fonctionnalite' && forfaitActif ? `<span class="t-micro t-2" style="display:block;margin-top:6px">Vous avez un forfait de maintenance : une évolution peut aussi se proposer depuis <a href="#/maintenance">Maintenance</a>.</span>` : ''}</span>
+            <span><span class="t-corps-fort" style="display:block">${echapper(t.libelle)}</span><span class="t-petit t-2">${echapper(t.aide)}</span>${cle === 'fonctionnalite' && forfaitActif && client ? `<span class="t-micro t-2" style="display:block;margin-top:6px">Vous avez un forfait de maintenance : une évolution peut aussi se proposer depuis <a href="#/maintenance">Maintenance</a>.</span>` : ''}</span>
           </label>`).join('')}
         </div>
       </div>
       <div class="groupe"><label class="etiquette-champ" for="titre">Titre</label><input class="champ" id="titre" name="titre" maxlength="120" placeholder="En une phrase" value="${echapper(titreInitial || (ancienne ? `Suite de ${ancienne.numero || ancienne.titre}` : ''))}"></div>
-      <div class="groupe"><label class="etiquette-champ" for="description">Description</label><textarea class="zone" id="description" name="description" rows="5" maxlength="6000" placeholder="Ce que vous avez constaté, ce que vous souhaitez, et dans quel contexte.">${echapper(depuisMessage ? depuisMessage.description || '' : '')}</textarea></div>
+      <div class="groupe"><label class="etiquette-champ" for="description">Description</label><textarea class="zone" id="description" name="description" rows="5" maxlength="6000" placeholder="${client ? 'Ce que vous avez constaté, ce que vous souhaitez, et dans quel contexte.' : 'Ce qui a été constaté, ce qui est attendu, et dans quel contexte.'}">${echapper(depuisMessage ? depuisMessage.description || '' : '')}</textarea></div>
+      ${client ? '' : `<div class="groupe"><label class="etiquette-champ" for="constatePar">Qui l'a constaté ?</label><select class="select" id="constatePar" name="constatePar"><option value="">L'équipe Capmedia</option>${contacts.map((c, i) => `<option value="${i}">${echapper(c.nom || c.email)}</option>`).join('')}</select><p class="aide">Si vous recopiez un retour du client, choisissez-le : la demande le dira.</p></div>`}
       <div class="forme-rang">
-        <div class="groupe"><label class="etiquette-champ" for="urgence">Urgence</label><select class="select" id="urgence" name="urgence">${optionsDe(URGENCES, 'important')}</select><p class="aide">${echapper(Object.values(URGENCES).map((u) => `${u.libelle} : ${u.aide}`).join(' '))}</p></div>
-        ${composants.length ? `<div class="groupe"><label class="etiquette-champ" for="composant">Quelle partie du projet ?</label><select class="select" id="composant" name="composant"><option value="">Je ne sais pas</option>${composants.map((c) => `<option value="${echapper(c.id)}">${echapper(c.nom)}</option>`).join('')}</select></div>` : ''}
+        <div class="groupe"><label class="etiquette-champ" for="urgence">Urgence</label><select class="select" id="urgence" name="urgence">${optionsDe(URGENCES, 'important')}</select><p class="aide">${echapper(aideUrgence)}</p></div>
+        ${parties.length ? `<div class="groupe"><label class="etiquette-champ" for="composant">Quelle partie du projet est en cause ?</label><select class="select" id="composant" name="composant"><option value="">${client ? 'Je ne sais pas' : 'Pas encore identifiée'}</option>${parties.map((c) => `<option value="${echapper(c.id)}">${echapper(c.nom)}</option>`).join('')}</select><p class="aide">Ce qu'il faudra corriger ou faire évoluer.</p></div>` : ''}
       </div>
       <div class="groupe" data-champ="plateforme">
-        <span class="etiquette-champ">Sur quelle plateforme ?</span>
-        ${choixPlateformes('plateforme', [''], { genre: 'radio', limiter: plateformesProjet, avecVide: true })}
+        <span class="etiquette-champ">Sur quoi ${client ? "l'avez-vous" : "l'a-t-on"} constaté ?</span>
+        ${choixPlateformes('plateforme', [''], { genre: 'radio', limiter: plateformesProjet, avecVide: true, table: PLATEFORMES_DEMANDE })}
+        <p class="aide">L'appareil ou le site où ça se voit. Souvent la même chose que la partie en cause, pas toujours : un défaut du serveur peut se voir sur l'iPhone.</p>
       </div>
       <div class="groupe" data-champ="version"><label class="etiquette-champ" for="version">Version de l'application <span class="facultatif">(facultatif)</span></label><input class="champ" id="version" name="version" maxlength="40" placeholder="1.4.2"></div>
       <div class="groupe" data-champ="appareil"><label class="etiquette-champ" for="appareil">Appareil, système, navigateur <span class="facultatif">(facultatif)</span></label><input class="champ" id="appareil" name="appareil" maxlength="120" placeholder="iPhone 15, iOS 18 · Chrome sur Mac"></div>
@@ -117,7 +142,7 @@ export const nouvelle = async (ctx, env) => {
   </div>`;
 
   const forme = sortie.querySelector('#forme-demande');
-  const pieces = depot(sortie.querySelector('#zone-pieces'), { chemin: `projets/${pid}/tickets/nouveau` });
+  const pieces = depot(sortie.querySelector('#zone-pieces'), { chemin: `projets/${pid}/tickets/nouveau`, aide: AIDE_PIECES_SERVEUR });
   const ajuster = () => {
     const type = (forme.elements.type.value) || 'bug';
     const visibles = CHAMPS_PAR_TYPE[type] || CHAMPS_PAR_TYPE.autre;
@@ -132,7 +157,20 @@ export const nouvelle = async (ctx, env) => {
     sortie.querySelector('#attendu').placeholder = fonction ? "Ce que l'application devrait permettre." : 'Ce qui devrait se passer.';
     sortie.querySelectorAll('#choix-type .carte').forEach((c) => { c.style.borderColor = c.querySelector('input').checked ? 'var(--accent)' : ''; });
   };
-  forme.addEventListener('change', (e) => { if (e.target.name === 'type') ajuster(); });
+  forme.addEventListener('change', (e) => {
+    if (e.target.name === 'type') ajuster();
+    /* Choisir la partie propose la plateforme qui va avec, tant que
+       personne n'en a choisi une autre. */
+    if (e.target.name === 'composant') {
+      const partie = parties.find((c) => c.id === e.target.value);
+      /* Sur un projet qui a ses plateformes, le choix « Non précisée » n'est
+         pas proposé : rien n'est coché au départ, ce qui vaut « vide ». */
+      const cochee = forme.querySelector('input[name="plateforme"]:checked');
+      const cible = partie && forme.querySelector(`input[name="plateforme"][value="${partie.type}"]`);
+      if (cible && (!cochee || cochee.value === '' || forme.dataset.plateformeProposee === '1')) { cible.checked = true; forme.dataset.plateformeProposee = '1'; }
+    }
+    if (e.target.name === 'plateforme' && e.isTrusted) forme.dataset.plateformeProposee = '';
+  });
   ajuster();
 
   forme.addEventListener('submit', async (e) => {
@@ -150,10 +188,12 @@ export const nouvelle = async (ctx, env) => {
     d.liens = liensSaisis(d.liens).slice(0, 10);
     d.suite = ancienne ? ancienne.id : null;
     if (ctx.requete.anomalie) d.anomalie = String(ctx.requete.anomalie).slice(0, 80);
+    const temoin = !client && d.constatePar !== '' && d.constatePar !== undefined ? contacts[Number(d.constatePar)] : null;
+    d.constatePar = temoin ? { nom: String(temoin.nom || temoin.email || '').slice(0, 120), email: String(temoin.email || '').slice(0, 200) } : null;
     await agir(forme.querySelector('[type="submit"]'), async () => {
       const id = await ecrire.creerDemande(env.session, pid, d, pieces.pieces);
       naviguer(`/projets/${pid}/demandes/${id}`);
-    }, client ? 'Ticket envoyé. Nous vous répondons vite.' : 'Demande envoyée. Nous vous répondons vite.');
+    }, client ? 'Ticket envoyé. Nous vous répondons vite.' : 'Demande ouverte. Le client la voit dans son espace.');
   });
 
   return () => lot.fin();
@@ -297,7 +337,8 @@ export const detail = async (ctx, env) => {
               ${fait('Le', echapper(dateHeure(t.cree)))}
               ${equipe ? fait('Dernier mouvement', echapper(dateHeure(t.maj))) : ''}
               ${fait(equipe ? 'Suivie par' : 'Suivi par', echapper(t.assigne ? (nomEquipe(t.assigne) || 'Capmedia') : (equipe ? 'Personne' : 'Capmedia')))}
-              ${fait('Partie concernée', echapper((composants.find((c) => c.id === t.composant) || {}).nom || ''))}
+              ${t.constatePar && t.constatePar.nom ? fait(equipe ? 'Constatée par' : 'Constaté par', echapper(t.constatePar.nom)) : ''}
+              ${fait('Partie concernée', echapper(nomPartie(composants, t.composant)))}
             </dl>
           </div>
           ${taches.length ? `<div class="carte carte--creuse"><p class="surtitre">Tâches liées</p><div class="pile" style="margin-top:10px;gap:8px">${taches.map((x) => `<a class="rang" style="gap:8px;color:inherit" href="#/projets/${echapper(pid)}/taches/${echapper(x.id)}">${icone(x.statut === 'terminee' ? 'check' : 'taches')}<span class="t-petit">${echapper(x.titre)}</span></a>`).join('')}</div></div>` : ''}
@@ -387,7 +428,7 @@ export const detail = async (ctx, env) => {
         corps: '<div id="zone-pieces-ajout"></div>',
         pied: `<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button><span class="pousse"></span><button class="btn btn-principal" type="button" data-ajouter>Ajouter</button>`,
       });
-      const boite = depot(m.el.querySelector('#zone-pieces-ajout'), { chemin: `projets/${pid}/tickets/${tid}`, max: restantes });
+      const boite = depot(m.el.querySelector('#zone-pieces-ajout'), { chemin: `projets/${pid}/tickets/${tid}`, max: restantes, aide: AIDE_PIECES_SERVEUR });
       m.el.querySelector('[data-ajouter]').addEventListener('click', async (ev) => {
         if (boite.occupe) { toast('Attendez la fin des envois.', 'erreur'); return; }
         if (!boite.pieces.length) { toast('Choisissez au moins un fichier.', 'erreur'); return; }

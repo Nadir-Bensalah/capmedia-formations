@@ -648,6 +648,9 @@ export const ecrire = {
       assigne: null, auteur, pieces, archive: false,
       /* Une demande née d'une anomalie de test garde le lien avec elle. */
       ...(d.anomalie ? { anomalie: String(d.anomalie).slice(0, 80) } : {}),
+      /* Ouverte depuis le Cockpit à partir d'un retour du client : qui l'a
+         constaté (un interlocuteur du projet). L'équipe seule le pose. */
+      ...(auteur.cote === 'equipe' && d.constatePar && d.constatePar.nom ? { constatePar: { nom: String(d.constatePar.nom).slice(0, 120), email: String(d.constatePar.email || '').slice(0, 200) } } : {}),
       /* Une demande née d'une suggestion de Capmedia (« Ça m'intéresse »)
          garde le lien avec elle : les deux fiches se renvoient l'une à l'autre. */
       ...(d.suggestion ? { suggestion: String(d.suggestion).slice(0, 80) } : {}),

@@ -8,7 +8,7 @@ import {
   echapper, dateISO, dateHeureISO, borner, enDate,
   TYPES_COMPOSANT, STATUTS_COMPOSANT, STATUTS_ETAPE, STATUTS_TACHE, PRIORITES, CATEGORIES_LIEN,
   STATUTS_RELEASE, TYPES_CHANGEMENT, TYPES_NOTE, TYPES_VALIDATION, CATEGORIES_FICHIER,
-  STATUTS_PROJET, TYPES_PROJET, SANTES, STATUTS, URGENCES, QUALIFICATIONS, PLATEFORMES_CHOIX, contactsProjet, statutProjet,
+  STATUTS_PROJET, TYPES_PROJET, SANTES, STATUTS, URGENCES, QUALIFICATIONS, PLATEFORMES_CHOIX, PLATEFORMES_DEMANDE, partiesDemande, contactsProjet, statutProjet,
   MOTIFS_REPORT, nomAffiche, dateCourte, estAdmin, peut,
   NIVEAUX_SCENARIO, BLOCS_SCENARIO, STATUTS_CAMPAGNE, PLATEFORMES_TEST, REF_SCENARIO,
   ETATS_PARCOURS, OUTILS_PARCOURS, FAMILLES_REGLE, ETATS_REGLE,
@@ -1385,11 +1385,11 @@ const editeurs = {
       </div>
       <div class="forme-rang">
         ${select('assigne', 'Assignée à', equipeCarte(), fiche.assigne || '', { vide: 'Personne' })}
-        ${select('composant', 'Partie du projet', composantsDe(pid), fiche.composant || '', { vide: 'Aucune' })}
+        ${select('composant', 'Partie du projet', partiesDemande(magasin.lire(K.composants(pid)) || []).reduce((c, x) => ({ ...c, [x.id]: x.nom }), {}), fiche.composant || '', { vide: 'Aucune' })}
       </div>
       <div class="forme-rang">
         ${select('qualification', 'Qualification', QUALIFICATIONS, fiche.qualification || '', { vide: 'Pas encore qualifiée', aide: 'Hors périmètre ou à chiffrer : le client en est informé.' })}
-        ${select('plateforme', 'Plateforme', PLATEFORMES_CHOIX, fiche.plateforme || '')}
+        ${select('plateforme', 'Constaté sur', PLATEFORMES_DEMANDE, fiche.plateforme || '')}
       </div>
       ${select('release', 'Livrée dans la version', releasesDe(pid), fiche.release || '', { vide: 'Pas encore fixée', aide: "Le client lit le nom de la version qui porte la correction, au lieu de le demander." })}
       ${select('devis', 'Devis lié', devisDe(pid), fiche.devis || '', { vide: 'Aucun', aide: 'Pour une demande à chiffrer : le client trouve le lien vers son devis dans la fiche de la demande.' })}
