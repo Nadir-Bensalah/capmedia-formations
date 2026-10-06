@@ -59,9 +59,14 @@ const resoudre = (d, cid) => {
 
 /* Ce qui appartient à cette brique. Une tâche, une demande ou une version
    s'y rattache par son composant, ou à défaut par sa plateforme. */
-const sien = (x, composant, cle) => (x.composant
-  ? Boolean(composant) && x.composant === composant.id
-  : Boolean(cle) && x.plateforme === cle);
+const sien = (x, composant, cle) => {
+  /* Une demande pour « l'application mobile » appartient aux deux briques,
+     iPhone et Android. */
+  if (x.composant === 'mobile' || (!x.composant && x.plateforme === 'mobile')) return cle === 'ios' || cle === 'android';
+  return x.composant
+    ? Boolean(composant) && x.composant === composant.id
+    : Boolean(cle) && x.plateforme === cle;
+};
 
 export const vue = async (ctx, env) => {
   const pid = ctx.params.id;

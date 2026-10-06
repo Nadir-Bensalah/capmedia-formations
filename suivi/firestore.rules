@@ -882,7 +882,8 @@ service cloud.firestore {
         return request.resource.data.type in ['bug', 'modification', 'fonctionnalite', 'amelioration', 'question',
                                               'technique', 'contenu', 'devis', 'demande', 'autre']
             && request.resource.data.urgence in ['bloquant', 'critique', 'important', 'mineur']
-            && request.resource.data.plateforme in ['ios', 'android', 'web', 'admin', 'backend', 'landing', ''];
+            // « mobile » : iPhone et Android ensemble (06/10/2026).
+            && request.resource.data.plateforme in ['ios', 'android', 'web', 'admin', 'backend', 'landing', 'mobile', ''];
       }
 
       function taillesTenues() {
@@ -932,13 +933,22 @@ service cloud.firestore {
                  // La suggestion de Capmedia dont la demande est née.
                  'suggestion',
                  // L'axe d'évolution dont la demande est née (« On en parle »).
-                 'axe'
+                 'axe',
+                 // Qui a constaté le problème, quand l'équipe recopie le
+                 // retour d'un interlocuteur (06/10/2026).
+                 'constatePar'
                ])
             && rendezVousValide()
             // Une demande née d'une anomalie de test porte son identifiant.
             && (!('anomalie' in request.resource.data) || texteBorne(request.resource.data.anomalie, 80))
             && (!('suggestion' in request.resource.data) || texteBorne(request.resource.data.suggestion, 80))
             && (!('axe' in request.resource.data) || texteBorne(request.resource.data.axe, 80))
+            && (!('constatePar' in request.resource.data)
+                || (estEquipe()
+                    && request.resource.data.constatePar is map
+                    && request.resource.data.constatePar.keys().hasOnly(['nom', 'email'])
+                    && texteRequis(request.resource.data.constatePar.nom, 120)
+                    && texteBorne(request.resource.data.constatePar.get('email', ''), 200)))
             && (!('suite' in request.resource.data) || request.resource.data.suite == null || request.resource.data.suite is string)
             && request.resource.data.numero == null
             && request.resource.data.statut == 'nouveau'

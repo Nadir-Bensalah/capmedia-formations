@@ -165,7 +165,10 @@ let page = null;
   const accept = (await page.getAttribute('#zone-pieces input[type="file"]', 'accept')) || '';
   verifier(/application\/pdf/.test(accept) && /\.docx/.test(accept) && /video\/mp4/.test(accept), 'le champ de fichier porte « accept »', accept.slice(0, 80));
   const formulaire = await page.textContent('#forme-demande');
-  verifier(/documents Office, zip jusqu'à 10 Mo ; vidéos mp4, mov, webm jusqu'à 100 Mo/.test(formulaire), 'l aide des pièces dit vrai');
+  /* Les pièces d'une demande passent par le serveur depuis le 06/10/2026 :
+     une vidéo s'y arrête à 30 Mo (une requête vers une fonction ne dépasse
+     pas 32 Mo), et l'aide le dit. */
+  verifier(/documents Office, zip jusqu'à 10 Mo ; vidéos mp4, mov, webm jusqu'à 30 Mo/.test(formulaire), 'l aide des pièces dit vrai (30 Mo pour une vidéo, par le serveur)');
   verifier(/Bloquant :/.test(formulaire) && /Critique :/.test(formulaire) && /Important :/.test(formulaire) && /Mineur :/.test(formulaire), 'l aide de l urgence explique les quatre niveaux');
   verifier(/e-mail à chaque étape/.test(await page.textContent('.page')) && !/chaque mouvement/.test(await page.textContent('.page')), 'le chapo promet un e-mail à chaque étape');
   await page.check('input[name="type"][value="fonctionnalite"]'); await pause(200);

@@ -222,6 +222,7 @@ const PLATEFORMES = {
   'admin': 'Tableau de bord',
   'backend': 'Serveur',
   'landing': 'Site vitrine',
+  'mobile': 'iPhone et Android',
 };
 
 const libelle = (table, cle, defaut = '') => table[valeurTexte(cle)] || defaut;

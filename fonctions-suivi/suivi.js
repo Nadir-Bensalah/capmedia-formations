@@ -278,12 +278,22 @@ exports.suiviTicketCree = onDocumentCreated(
       clientNom: auteur.nom || nomClient(projet),
     }, { parDestinataire: true });
 
-    await mettreEnFile('ticket-cree', contactsEquipe(), {
-      ...communes,
-      cote: 'equipe',
-      auteurNom: auteur.nom || '',
-      auteurEmail: auteur.email || '',
-    }, { projet: projet && projet.id, evenement: 'ticket-cree' });
+    /* Ouverte par l'équipe elle-même : pas d'alerte à l'équipe pour son
+       propre geste (06/10/2026). Le « cote » de l'auteur vient du
+       navigateur et les règles ne le vérifient pas : un client qui
+       l'écrirait « equipe » ferait taire l'alerte. On relit donc la fiche
+       d'équipe de l'auteur ; sans uid, la demande a été posée par le
+       serveur (suiviAdmin, creerDemande), seul à pouvoir l'écrire ainsi. */
+    const parLEquipe = (auteur && auteur.cote) === 'equipe' && (!auteur.uid
+      || await bdd.doc(`equipe/${String(auteur.uid)}`).get().then((d) => d.exists && d.data().actif === true).catch(() => false));
+    if (!parLEquipe) {
+      await mettreEnFile('ticket-cree', contactsEquipe(), {
+        ...communes,
+        cote: 'equipe',
+        auteurNom: auteur.nom || '',
+        auteurEmail: auteur.email || '',
+      }, { projet: projet && projet.id, evenement: 'ticket-cree' });
+    }
 
     console.log(`Ticket ${numero || ticketId} créé sur ${nomProjet(projet) || ticket.projet}`);
   },
@@ -2299,7 +2309,7 @@ exports.suiviAdmin = onRequest(
           numero: null, projet: String(projet), composant: String(req.body.composant || ''),
           titre: titre.slice(0, 120), description: String(description || '').slice(0, 6000),
           type: typeDemande, urgence, statut: String(req.body.statut || 'nouveau'),
-          plateforme: PLATEFORMES_CONNUES.includes(String(req.body.plateforme || '')) ? String(req.body.plateforme) : '',
+          plateforme: [...PLATEFORMES_CONNUES, 'mobile'].includes(String(req.body.plateforme || '')) ? String(req.body.plateforme) : '',
           version: String(req.body.version || ''), etapes: String(req.body.etapes || ''),
           attendu: String(req.body.attendu || ''), obtenu: String(req.body.obtenu || ''),
           contexte: String(req.body.contexte || ''), appareil: String(req.body.appareil || ''),

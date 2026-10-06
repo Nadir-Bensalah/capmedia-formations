@@ -85,6 +85,9 @@ exports.suiviPiece = onRequest({ region: REGION, cors: true, secrets: [], invoke
 
      POST /suiviPieceMessage?projet=<p>&nom=<nom>&type=<type>   corps : le fichier
      GET  /suiviPieceMessage?chemin=projets/<p>/messages/<objet>
+     POST /suiviPieceMessage?projet=<p>&ticket=<t|nouveau>&nom=..&type=..[&interne=1]   pièce d'une demande
+     GET  /suiviPieceMessage?chemin=projets/<p>/tickets/<t>/<objet>
+     POST /suiviPieceMessage?geste=marquer&chemin=projets/<p>/tickets/<t>/<objet>&visibilite=interne|client   (équipe)
      Authorization: Bearer <jeton>
    ========================================================================== */
 
@@ -98,6 +101,22 @@ const MAX_MESSAGE = 10 * 1024 * 1024;
 const MAX_VIDEO_MESSAGE = 30 * 1024 * 1024;
 const CHEMIN_MESSAGE = /^projets\/([A-Za-z0-9_-]{1,128})\/messages\/([A-Za-z0-9_.-]{1,300})$/;
 const PROJET_VALIDE = /^[A-Za-z0-9_-]{1,128}$/;
+/* Les pièces des demandes passent par la même porte (06/10/2026) : depuis
+   le Cockpit, joindre une capture à une demande répondait « vous n'avez
+   pas accès à ce dossier » par les règles Storage. Le dossier porte la
+   demande (« nouveau » avant sa création). Une pièce de note interne est
+   marquée « interne » et n'est jamais remise au client. */
+const CHEMIN_TICKET = /^projets\/([A-Za-z0-9_-]{1,128})\/tickets\/([A-Za-z0-9_-]{1,128})\/([A-Za-z0-9_.-]{1,300})$/;
+const TICKET_VALIDE = /^[A-Za-z0-9_-]{1,128}$/;
+
+/* Une demande déjà créée doit appartenir au projet nommé : sans ce
+   contrôle, un membre d'un projet rangerait une pièce sous la demande
+   d'un autre. « nouveau » est le dossier d'avant la création. */
+async function ticketDuProjet(ticketId, projetId) {
+  if (ticketId === 'nouveau') return true;
+  const t = await bdd.doc(`tickets/${ticketId}`).get();
+  return t.exists && t.data().projet === projetId;
+}
 
 /* L'équipe se vérifie contre sa fiche, le client contre les membres du
    projet : jamais les deux pour la même personne, comme dans les règles. */
@@ -153,14 +172,34 @@ exports.suiviPieceMessage = onRequest({ region: REGION, cors: true, secrets: [],
   try { qui = await acces.identifier(req); } catch (err) { return texte(res, err.code || 401, err.message || 'Connexion requise.'); }
   res.set('Cache-Control', 'private, no-store');
   try {
+    if (req.method === 'POST' && req.query.geste === 'marquer') {
+      /* Note interne ou réponse au client : l'équipe seule remet la marque
+         d'une pièce de demande d'accord avec le message qui la porte. */
+      const chemin = String(req.query.chemin || '').trim();
+      const visibilite = String(req.query.visibilite || '');
+      const m = CHEMIN_TICKET.exec(chemin);
+      if (!m || !['interne', 'client'].includes(visibilite)) return texte(res, 400, 'Cette pièce ne se marque pas.');
+      if (!qui.fiche || !acces.equipeSurProjet(qui.fiche, m[1])) {
+        await audit('piece-message.refusee', { projet: m[1], geste: 'marquer', chemin, uid: qui.uid, email: qui.email });
+        return texte(res, 403, 'Seule l\'équipe du projet marque une pièce.');
+      }
+      const fichier = getStorage().bucket().file(chemin);
+      const [existe] = await fichier.exists();
+      if (!existe) return texte(res, 404, 'Ce fichier n\'est plus là.');
+      await fichier.setMetadata({ metadata: { visibilite } });
+      return res.status(200).json({ chemin, visibilite });
+    }
+
     if (req.method === 'POST') {
       const projetId = String(req.query.projet || '').trim();
       const type = String(req.query.type || '').trim().toLowerCase();
       const nom = String(req.query.nom || '').trim();
+      const ticketId = req.query.ticket === undefined ? null : String(req.query.ticket).trim();
       if (!PROJET_VALIDE.test(projetId)) return texte(res, 400, 'Projet inconnu.');
-      if (!(await peutEchanger(qui, projetId))) {
-        await audit('piece-message.refusee', { projet: projetId, geste: 'envoi', uid: qui.uid, email: qui.email });
-        return texte(res, 403, 'Vous ne pouvez pas joindre de fichier à cette conversation.');
+      if (ticketId !== null && !TICKET_VALIDE.test(ticketId)) return texte(res, 400, 'Demande inconnue.');
+      if (!(await peutEchanger(qui, projetId)) || (ticketId !== null && !(await ticketDuProjet(ticketId, projetId)))) {
+        await audit('piece-message.refusee', { projet: projetId, geste: 'envoi', ...(ticketId !== null ? { ticket: ticketId } : {}), uid: qui.uid, email: qui.email });
+        return texte(res, 403, ticketId !== null ? 'Vous ne pouvez pas joindre de fichier à cette demande.' : 'Vous ne pouvez pas joindre de fichier à cette conversation.');
       }
       if (!TYPES_MESSAGE.test(type)) return texte(res, 400, `« ${nom || 'Ce fichier'} » : ce type de fichier n'est pas accepté.`);
       const corps = Buffer.isBuffer(req.rawBody) ? req.rawBody : (Buffer.isBuffer(req.body) ? req.body : null);
@@ -172,12 +211,17 @@ exports.suiviPieceMessage = onRequest({ region: REGION, cors: true, secrets: [],
         await audit('piece-message.plafond', { projet: projetId, uid: qui.uid, email: qui.email, taille: corps.length });
         return texte(res, 429, refus);
       }
-      const chemin = `projets/${projetId}/messages/${Date.now()}-${nomPropre(nom)}`;
+      /* Seule l'équipe pose la marque « interne » ; venant d'un client, elle
+         est ignorée. */
+      const interne = Boolean(qui.fiche) && req.query.interne === '1';
+      const chemin = ticketId !== null
+        ? `projets/${projetId}/tickets/${ticketId}/${Date.now()}-${nomPropre(nom)}`
+        : `projets/${projetId}/messages/${Date.now()}-${nomPropre(nom)}`;
       try {
         await getStorage().bucket().file(chemin).save(corps, {
           resumable: false,
           contentType: type,
-          metadata: { metadata: { par: qui.uid, cote: qui.fiche ? 'equipe' : 'client' } },
+          metadata: { metadata: { par: qui.uid, cote: qui.fiche ? 'equipe' : 'client', ...(ticketId !== null ? { visibilite: interne ? 'interne' : 'client' } : {}) } },
         });
       } catch (err) {
         await rendreDepot(qui.uid, corps.length);
@@ -187,7 +231,7 @@ exports.suiviPieceMessage = onRequest({ region: REGION, cors: true, secrets: [],
     }
 
     const chemin = String(req.query.chemin || '').trim();
-    const m = CHEMIN_MESSAGE.exec(chemin);
+    const m = CHEMIN_MESSAGE.exec(chemin) || CHEMIN_TICKET.exec(chemin);
     if (!m) return texte(res, 400, 'Ce fichier n\'est pas une pièce de conversation.');
     if (!(await peutEchanger(qui, m[1]))) {
       await audit('piece-message.refusee', { projet: m[1], geste: 'lecture', chemin, uid: qui.uid, email: qui.email });
@@ -197,11 +241,17 @@ exports.suiviPieceMessage = onRequest({ region: REGION, cors: true, secrets: [],
     const [existe] = await fichier.exists();
     if (!existe) return texte(res, 404, 'Ce fichier n\'est plus là.');
     const [meta] = await fichier.getMetadata();
+    /* Une pièce de note interne ne sort jamais vers le client (même règle
+       que pieceInterne() du stockage). */
+    if (!qui.fiche && ((meta.metadata || {}).visibilite === 'interne')) {
+      await audit('piece-message.refusee', { projet: m[1], geste: 'lecture', chemin, uid: qui.uid, email: qui.email, interne: true });
+      return texte(res, 403, 'Ce fichier ne vous est pas ouvert.');
+    }
     /* Le type servi est relu contre la liste fermée : un fichier déposé
        avant elle, ou par un autre chemin, sort en octets bruts. */
     res.set('Content-Type', TYPES_MESSAGE.test(meta.contentType || '') ? meta.contentType : 'application/octet-stream');
     res.set('X-Content-Type-Options', 'nosniff');
-    res.set('Content-Disposition', `attachment; filename="${m[2]}"`);
+    res.set('Content-Disposition', `attachment; filename="${chemin.split('/').pop()}"`);
     return new Promise((resoudre) => {
       fichier.createReadStream()
         .on('error', (err) => { console.error('Pièce de message illisible', err); if (!res.headersSent) texte(res, 500, 'Le fichier n\'a pas pu être lu. Réessayez.'); resoudre(); })
