@@ -1562,7 +1562,9 @@ export const enAttenteDeVous = ({ projets = [], tickets = [], validations = [], 
   const nomProjet = (pid) => ((projets.find((p) => p.id === pid) || {}).nom || '');
   const items = [];
   validations.filter((v) => v.statut === 'en-attente' && peutRepondreValidation(v)).forEach((v) => items.push({
-    genre: 'validation', projet: v.projet, icone: 'valider', ton: 'violet', titre: v.titre, sous: `À valider depuis ${age(v.cree)} · ${nomProjet(v.projet)}`, chemin: `/valider/${v.id}`, date: v.cree,
+    /* La même validation n'a pas la même adresse dans les deux espaces :
+       « En attente du client », dans le Cockpit, ouvre sa fiche d'équipe. */
+    genre: 'validation', projet: v.projet, icone: 'valider', ton: 'violet', titre: v.titre, sous: `À valider depuis ${age(v.cree)} · ${nomProjet(v.projet)}`, chemin: sessionCourante && sessionCourante.equipe ? `/validations/${v.id}` : `/valider/${v.id}`, date: v.cree,
   }));
   tickets.filter((t) => ATTEND_CLIENT.includes(t.statut) && !t.archive).forEach((t) => items.push({
     genre: 'demande', projet: t.projet, icone: t.statut === 'a-valider' ? 'check' : 'help', ton: 'ambre',

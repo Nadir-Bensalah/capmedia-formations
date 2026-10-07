@@ -82,7 +82,7 @@ export const monterCoquille = ({ session, role, groupes, sortie }) => {
         <header class="haut" id="haut">
           <button class="btn-icone btn-menu" type="button" id="bouton-menu" aria-label="Ouvrir la navigation" aria-controls="lat" aria-expanded="false">${icone('menu')}</button>
           <button class="btn-icone btn-deplier" type="button" id="bouton-deplier" aria-label="Déplier la navigation" data-astuce="Déplier">${icone('hub')}</button>
-          ${role === 'client' || role === 'testeur' ? `<button class="btn btn-fantome btn-petit btn-retour" type="button" id="bouton-retour" hidden>${icone('retour')}<span>Retour</span></button>` : ''}
+          <button class="btn btn-fantome btn-petit btn-retour" type="button" id="bouton-retour" hidden>${icone('retour')}<span>Retour</span></button>
           <nav class="ariane" id="ariane" aria-label="Fil d'Ariane"></nav>
           <div class="fin">
             ${suite ? '' : recherche}
@@ -99,7 +99,9 @@ export const monterCoquille = ({ session, role, groupes, sortie }) => {
   rendreNavigation();
   brancherTiroir();
   brancherHaut();
-  if (role === 'client' || role === 'testeur') brancherRetour();
+  /* Le Retour, dans les trois espaces : le client, le testeur et, depuis
+     la refonte du Cockpit (lot 1), l'équipe. */
+  brancherRetour();
   brancherCompte();
   brancherNotifications();
   brancherPalette();
@@ -372,7 +374,7 @@ const brancherTiroir = () => {
   $('#bouton-deplier').addEventListener('click', () => plier(false));
 };
 
-/* Le retour, sur toutes les pages du client et du testeur sauf l'accueil. Il revient à
+/* Le retour, sur toutes les pages sauf l'accueil, dans les trois espaces. Il revient à
    la page d'avant quand on l'a vue dans cette visite ; sinon (une adresse
    ouverte depuis un e-mail, un favori), il remonte d'un cran dans le fil
    d'Ariane, et au pire à l'accueil. Jamais hors de l'espace. */
@@ -445,8 +447,14 @@ const brancherCompte = () => {
       ]);
       return;
     }
+    /* L'équipe a deux pages : les paramètres de la plateforme (/parametres,
+       au pied du rail) et les siens (/moi : profil, e-mails, push). Le menu
+       du compte mène aux siens. Le client n'a qu'une page, /parametres. */
+    const profil = contexte.role === 'equipe'
+      ? { libelle: 'Mon profil', icone: 'utilisateur', action: () => naviguer('/moi') }
+      : { libelle: 'Mon profil et mes préférences', icone: 'utilisateur', action: () => naviguer('/parametres') };
     menu($('#bouton-compte'), [
-      { libelle: 'Mon profil et mes préférences', icone: 'utilisateur', action: () => naviguer('/parametres') },
+      profil,
       ...(contexte.role === 'client' ? [{ libelle: 'Revoir les premiers pas', icone: 'sparkle', action: revoirAccueil }] : []),
       ...installer,
       { libelle: 'Clés d\'accès', icone: 'cle', action: clesAcces },

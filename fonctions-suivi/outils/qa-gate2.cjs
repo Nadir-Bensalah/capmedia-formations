@@ -255,8 +255,17 @@ const TESTEUR = 'testeur.sim@exemple.test';
   verifier(ajoutAgent.ok, 'l administrateur ajoute l agent, sur ce seul projet', ajoutAgent.message);
   const agent = await entrer(nav, AGENT);
   verifier(/cockpit/.test(agent.page.url()), 'l agent arrive au cockpit', agent.page.url());
-  verifier(!(await agent.page.$('a[href="#/clients"]')), 'son cockpit ne propose pas « Clients »');
-  verifier(!(await agent.page.$('#lat a[href="#/finances"]')), 'ni « Finances »');
+  /* Présence et absence explicites (refonte du Cockpit, lot 1) : le rail
+     se dessine d'un seul coup après un squelette ; une absence lue sur le
+     squelette ne prouverait rien. On attend donc le rail dessiné (une
+     entrée que l'agent a, « Demandes »), et l'administrateur, lui, a bien
+     les deux entrées. */
+  const railDe = async (p) => { await p.waitForFunction(() => document.querySelector('#lat-corps .lat-lien[data-chemin="/demandes"]') && !document.querySelector('#lat-corps .lat-squelette'), null, { timeout: 20000 }).catch(() => {}); return p.$$eval('#lat-corps .lat-lien', (as) => as.map((a) => a.dataset.chemin)); };
+  const railAdmin = await railDe(admin.page);
+  verifier(railAdmin.includes('/clients') && railAdmin.includes('/finances'), 'le rail dessiné de l administrateur propose « Clients » et « Finances » (témoin)', railAdmin.join(' '));
+  const railAgent = await railDe(agent.page);
+  verifier(railAgent.includes('/demandes') && !railAgent.includes('/clients'), 'son cockpit, rail dessiné, propose « Demandes » mais pas « Clients »', railAgent.join(' '));
+  verifier(!railAgent.includes('/finances'), 'ni « Finances »', railAgent.join(' '));
   verifier(!/Impayé|Devis en attente|Paiements récents/.test(await texte(agent.page)), 'et son accueil ne montre aucun chiffre financier');
   const autre = await depuisLaSession(agent.page, async (n) => (await n.getDoc(n.doc(n.bdd, 'projets', 'atelier'))).exists(), {});
   verifier(!autre.ok, 'il ne lit pas un projet qui ne lui est pas confié', JSON.stringify(autre));

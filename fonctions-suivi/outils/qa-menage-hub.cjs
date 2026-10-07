@@ -433,7 +433,9 @@ const texteDe = (page, sel) => page.$eval(sel, (el) => el.textContent.replace(/\
   await connecter(eq, 'agent.essai@exemple.test');
   await eq.evaluate(() => { location.hash = '#/projets/atelier'; }); await eq.waitForSelector('#onglets-projet', { timeout: 30000 }).catch(() => {}); await pause(1500);
   verifier(Boolean(await eq.$('#onglets-projet')) && !(await eq.$('#lat-corps .lat-arbre')), 'le Cockpit garde ses onglets horizontaux et son rail');
-  verifier(/Les personnes/.test(await texteDe(eq, '#personnes h2')) && !(await eq.$('#bouton-retour')), 'et « Les personnes », sans bouton Retour');
+  /* Depuis la refonte du Cockpit (lot 1), l'équipe a aussi le Retour :
+     présent, et visible hors de l'accueil. */
+  verifier(/Les personnes/.test(await texteDe(eq, '#personnes h2')) && await eq.$eval('#bouton-retour', (b) => !b.hidden).catch(() => false), 'et « Les personnes » ; le Retour, comme dans le Hub');
   await eq.evaluate(() => { location.hash = '#/projets/atelier/etapes'; }); await pause(2500);
   verifier(Boolean(await eq.$('.frise')), 'l équipe voit toujours la frise du devis pour cocher');
   await eq.evaluate(() => { location.hash = '#/documents'; }); await pause(2500);

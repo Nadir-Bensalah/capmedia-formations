@@ -28,8 +28,11 @@ export const vue = async (ctx, env) => {
   const { session } = env;
   const lot = magasin.lot();
   const sortie = ctx.sortie;
-  titrePage('Paramètres');
-  filAriane([{ libelle: 'Paramètres' }]);
+  /* Pour l'équipe, cette page est « Mon profil » (/moi) : ses Paramètres,
+     au pied du rail, sont ceux de la plateforme. */
+  const titre = env.role === 'equipe' ? 'Mon profil' : 'Paramètres';
+  titrePage(titre);
+  filAriane([{ libelle: titre }]);
   sortie.innerHTML = `<div class="page">${squelette('page', 4)}</div>`;
 
   const rendre = () => {
@@ -37,7 +40,7 @@ export const vue = async (ctx, env) => {
     const prefs = profil.notifications || {};
     const theme = document.documentElement.getAttribute('data-theme') || 'auto';
     sortie.innerHTML = `<div class="page" style="max-width:760px">
-      <div class="page-tete"><div><h1>Paramètres</h1><p class="chapo">Votre profil, vos notifications, l'apparence de l'espace.</p></div></div>
+      <div class="page-tete"><div><h1>${titre}</h1><p class="chapo">Votre profil, vos notifications, l'apparence de l'espace.</p></div></div>
 
       <section class="section" style="margin-top:0">
         <div class="section-tete"><h2>Profil</h2></div>

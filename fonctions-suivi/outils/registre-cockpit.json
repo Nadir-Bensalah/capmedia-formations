@@ -127,9 +127,8 @@
   "destination": "Fil d’Ariane « Accueil › Projets › Projet › Section » + bouton Retour",
   "lot": "L1",
   "sonde": {
-   "route": "/",
-   "cible": "#ariane .courant",
-   "texte": "Accueil"
+   "route": "/projets/atelier/demandes/t-veille",
+   "cible": "#ariane a[href=\"#/\"] ~ a[href=\"#/projets\"]"
   }
  },
  {
@@ -257,7 +256,7 @@
      "#bouton-compte"
     ]
    ],
-   "cible": ".menu [data-cle=\"Mon profil et mes préférences\"]"
+   "cible": ".menu [data-cle=\"Mon profil\"]"
   }
  },
  {
@@ -1258,7 +1257,7 @@
   "sonde": {
    "route": "/clients",
    "cible": "#vue .page-tete .actions a[href=\"#/clients/nouveau\"]",
-   "agent": "present"
+   "agent": "absent"
   }
  },
  {
@@ -1273,7 +1272,7 @@
   "sonde": {
    "route": "/clients",
    "cible": "#vue .liste a.ligne[href=\"#/clients/atelier-nord\"]",
-   "agent": "present"
+   "agent": "absent"
   }
  },
  {
@@ -1288,7 +1287,7 @@
   "sonde": {
    "route": "/clients/nouveau",
    "cible": "#forme-org #entreprise",
-   "agent": "present"
+   "agent": "absent"
   }
  },
  {
@@ -1303,7 +1302,7 @@
   "sonde": {
    "route": "/clients/atelier-nord",
    "cible": "#vue .page-tete [data-action=\"modifier\"]",
-   "agent": "present",
+   "agent": "absent",
    "incertain": true
   }
  },
@@ -1319,7 +1318,7 @@
   "sonde": {
    "route": "/clients/atelier-nord",
    "cible": "#vue .page-tete a[href=\"#/projets/nouveau?organisation=atelier-nord\"]",
-   "agent": "present",
+   "agent": "absent",
    "incertain": true
   }
  },
@@ -1336,7 +1335,7 @@
    "route": "/clients/atelier-nord",
    "cible": "#vue .metriques .metrique-libelle",
    "texte": "Reste dû",
-   "agent": "present",
+   "agent": "absent",
    "incertain": true
   }
  },
@@ -1353,7 +1352,7 @@
    "route": "/clients/atelier-nord",
    "cible": "#vue .section-tete h2",
    "texte": "Accès aux projets",
-   "agent": "present",
+   "agent": "absent",
    "incertain": true
   }
  },
@@ -1370,7 +1369,7 @@
    "route": "/clients/atelier-nord",
    "cible": "#vue aside .carte--creuse .surtitre",
    "texte": "Notes internes",
-   "agent": "present",
+   "agent": "absent",
    "incertain": true
   }
  },
@@ -1627,7 +1626,7 @@
   "sonde": {
    "route": "/a-faire",
    "cible": "#vue [data-noter]",
-   "agent": "present"
+   "agent": "absent"
   }
  },
  {
@@ -1642,7 +1641,7 @@
   "sonde": {
    "route": "/a-faire?noter=1",
    "cible": ".voile .feuille #af-forme #af-nom",
-   "agent": "present"
+   "agent": "absent"
   }
  },
  {
@@ -2132,7 +2131,7 @@
   "sonde": {
    "route": "/testeurs-messages",
    "cible": "#tm-nouveau",
-   "agent": "present"
+   "agent": "absent"
   }
  },
  {
@@ -2154,7 +2153,7 @@
     ]
    ],
    "cible": "#tm-forme #tm-texte",
-   "agent": "present",
+   "agent": "absent",
    "incertain": true
   }
  },
@@ -2446,7 +2445,7 @@
   "sonde": {
    "route": "/finances",
    "cible": "#vue .page-tete #f-projet",
-   "agent": "present"
+   "agent": "absent"
   }
  },
  {
@@ -2461,7 +2460,7 @@
   "sonde": {
    "route": "/finances",
    "cible": "#vue [data-deposer=\"devis\"]",
-   "agent": "present"
+   "agent": "absent"
   }
  },
  {
@@ -2476,7 +2475,7 @@
   "sonde": {
    "route": "/finances",
    "cible": "#vue [data-deposer=\"facture\"]",
-   "agent": "present"
+   "agent": "absent"
   }
  },
  {
@@ -2492,7 +2491,7 @@
    "route": "/finances",
    "cible": "#vue .metriques .metrique-libelle",
    "texte": "Encaissé",
-   "agent": "present"
+   "agent": "absent"
   }
  },
  {
@@ -2522,7 +2521,7 @@
   "sonde": {
    "route": "/finances",
    "cible": "#vue .onglets [data-onglet=\"paiements\"]",
-   "agent": "present"
+   "agent": "absent"
   }
  },
  {
@@ -2929,7 +2928,7 @@
   "sonde": {
    "route": "/annonces",
    "cible": "#vue [data-annonce-action=\"apercu\"][data-id=\"reg-g-annonce\"]",
-   "agent": "present"
+   "agent": "absent"
   }
  },
  {
@@ -2978,7 +2977,7 @@
   "sonde": {
    "route": "/archives",
    "cible": "#vue .onglets [data-onglet=\"fichiers\"]",
-   "agent": "present"
+   "agent": "absent"
   }
  },
  {
@@ -3648,7 +3647,8 @@
      "clic",
      "[data-action=\"menu-projet\"]"
     ]
-   ]
+   ],
+   "agent": "absent"
   }
  },
  {
@@ -3942,7 +3942,7 @@
   "lot": "L1",
   "sonde": {
    "route": "/projets/atelier",
-   "cible": "#onglet-corps .attente a[href=\"#/valider/v-maquette\"]"
+   "cible": "#onglet-corps .attente a[href=\"#/validations/v-maquette\"]"
   }
  },
  {
@@ -6425,8 +6425,7 @@
   "lot": "L1",
   "sonde": {
    "route": "/projets/atelier/brique/ios",
-   "cible": "#ariane .courant",
-   "texte": "Application iOS"
+   "cible": "#ariane a[href=\"#/\"] ~ a[href=\"#/projets\"] ~ a[href=\"#/projets/atelier\"]"
   }
  },
  {
@@ -6893,7 +6892,8 @@
   "lot": "L3",
   "sonde": {
    "route": "/testeurs-messages/reg-t-conv",
-   "cible": ".tm-fil-cadre .tm-tete"
+   "cible": ".tm-fil-cadre .tm-tete",
+   "agent": "absent"
   }
  },
  {
@@ -8811,7 +8811,8 @@
   "lot": "L4",
   "sonde": {
    "route": "/testeurs-messages",
-   "cible": ".tm-deux"
+   "cible": ".tm-deux",
+   "agent": "absent"
   }
  },
  {
@@ -8825,7 +8826,8 @@
   "lot": "L4",
   "sonde": {
    "route": "/testeurs-messages",
-   "cible": "#tm-nouveau"
+   "cible": "#tm-nouveau",
+   "agent": "absent"
   }
  },
  {
@@ -8854,7 +8856,8 @@
   "lot": "L4",
   "sonde": {
    "route": "/testeurs-messages/reg-t-conv",
-   "cible": "#tm-fil"
+   "cible": "#tm-fil",
+   "agent": "absent"
   }
  },
  {
@@ -8868,7 +8871,8 @@
   "lot": "L4",
   "sonde": {
    "route": "/testeurs-messages/reg-t-conv",
-   "cible": "#tm-forme #tm-texte"
+   "cible": "#tm-forme #tm-texte",
+   "agent": "absent"
   }
  },
  {
@@ -10423,7 +10427,7 @@
   "sonde": {
    "route": "/finances",
    "cible": "#f-projet",
-   "agent": "present"
+   "agent": "absent"
   }
  },
  {
@@ -10438,7 +10442,7 @@
   "sonde": {
    "route": "/finances",
    "cible": "[data-deposer=\"facture\"]",
-   "agent": "present"
+   "agent": "absent"
   }
  },
  {
@@ -10453,7 +10457,7 @@
   "sonde": {
    "route": "/finances",
    "cible": ".metriques .metrique",
-   "agent": "present"
+   "agent": "absent"
   }
  },
  {
@@ -10483,7 +10487,7 @@
   "sonde": {
    "route": "/finances",
    "cible": ".onglets [data-onglet=\"paiements\"]",
-   "agent": "present"
+   "agent": "absent"
   }
  },
  {
@@ -10897,7 +10901,7 @@
    "route": "/annonces",
    "cible": ".page-annonces .page-tete .chapo",
    "texte": "sur \\d",
-   "agent": "present"
+   "agent": "absent"
   }
  },
  {
@@ -10946,7 +10950,7 @@
   "sonde": {
    "route": "/annonces",
    "cible": "[data-annonce-ligne=\"reg-m-annonce\"]",
-   "agent": "present"
+   "agent": "absent"
   }
  },
  {
@@ -10981,7 +10985,7 @@
     ]
    ],
    "cible": ".voile .modale [data-apercu]",
-   "agent": "present"
+   "agent": "absent"
   }
  },
  {

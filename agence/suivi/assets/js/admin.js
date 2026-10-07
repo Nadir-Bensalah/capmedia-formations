@@ -2,9 +2,10 @@
    CAPMEDIA CLIENT HUB · l'entrée du cockpit d'équipe
    ========================================================================== */
 
-import { exigerSession, $, OUVERTS, ATTEND_EQUIPE, FACTURES_DUES, joursAvant, projetEstActif, bdd, collection, query, orderBy, limit, peut, estAdmin } from './noyau.js';
-import { monterCoquille, definirNavigation, enregistrerRecherche } from './coquille.js';
-import { definir, demarrer, naviguer } from './routeur.js';
+import { exigerSession, $, OUVERTS, ATTEND_EQUIPE, FACTURES_DUES, joursAvant, projetEstActif, bdd, collection, query, orderBy, limit, peut, estAdmin, echapper } from './noyau.js';
+import { monterCoquille, definirNavigation, enregistrerRecherche, definirRetoucheAriane, filAriane } from './coquille.js';
+import { definir, demarrer, naviguer, courant } from './routeur.js';
+import { titrePage } from './ui.js';
 import * as magasin from './magasin.js';
 import { abonnerGlobal, K, nonLusProjet, requeteMessages, messagesDuProjet } from './donnees.js';
 
@@ -149,6 +150,13 @@ const construireNavigation = () => {
            total gris compte les publiées. */
         { chemin: '/annonces', libelle: 'Annonces', icone: 'porteVoix', compte: { total: (magasin.lire(K.annonces) || []).filter((a) => a.publication === 'publiee').length }, si: admin || peut(session, 'finance.gerer') },
         { chemin: '/archives', libelle: 'Archives', icone: 'archive', si: admin },
+      ],
+    },
+    {
+      /* Épinglé en bas du rail, comme dans le Hub : la liste défile,
+         l'équipe et les paramètres restent en vue. */
+      pied: true,
+      items: [
         { chemin: '/equipe', libelle: 'Équipe', icone: 'utilisateurs' },
         { chemin: '/parametres', libelle: 'Paramètres', icone: 'parametres' },
       ],
@@ -159,6 +167,7 @@ const construireNavigation = () => {
 /* Le cockpit écoute aussi la conversation de chaque projet ouvert : sans
    cela, la pastille des messages non lus resterait muette. */
 const conversationsSuivies = new Set();
+let dessinerNav = () => {};
 const suivreConversations = () => {
   for (const p of (magasin.lire(K.projets) || [])) {
     /* Un projet à moi n'a pas de client, donc pas de conversation : l'écouter
@@ -171,14 +180,63 @@ const suivreConversations = () => {
        ensuite : elle montrait donc au plus quarante messages, à l'envers,
        et l'accusé « Lu » se calculait sur le plus ancien des quarante. */
     lotGlobal.abonner(K.messages(p.id), () => requeteMessages(p.id));
-    lotGlobal.sur(K.messages(p.id), () => planifierNav());
+    lotGlobal.sur(K.messages(p.id), dessinerNav);
   }
 };
 
-let minuteurNav = null;
-const planifierNav = () => { clearTimeout(minuteurNav); minuteurNav = setTimeout(() => { suivreConversations(); construireNavigation(); }, 80); };
-[K.ticketsTous, K.tachesToutes, K.validationsToutes, K.documentsTous, K.demandesProjet, K.projets, K.organisations, K.reunionsToutes, K.fichiersTous, K.profil, K.maintenanceToute, K.campagnesToutes, K.anomaliesToutes, K.conversationsTesteurs, K.annonces].forEach((cle) => magasin.sur(cle, planifierNav));
-construireNavigation();
+/* Le rail se dessine une fois, tout arrivé (magasin.dessinateur, comme le
+   Hub) : avant, un squelette de la même hauteur tient la place des
+   entrées. Une minuterie redessinait le rail à chaque clé qui arrivait :
+   les chiffres poussaient un à un. Les conversations suivies sont posées
+   AVANT le dessin : leurs clés font partie de ce qu'il attend. */
+const CLES_NAVIGATION = [K.ticketsTous, K.tachesToutes, K.validationsToutes, K.documentsTous, K.demandesProjet, K.projets, K.organisations, K.reunionsToutes, K.fichiersTous, K.profil, K.maintenanceToute, K.campagnesToutes, K.anomaliesToutes, K.conversationsTesteurs, K.annonces];
+const clesNavigation = () => [...CLES_NAVIGATION, ...[...conversationsSuivies].map((pid) => K.messages(pid))];
+dessinerNav = magasin.dessinateur(construireNavigation, 80, clesNavigation, 4000);
+magasin.sur(K.projets, suivreConversations);
+CLES_NAVIGATION.forEach((cle) => magasin.sur(cle, dessinerNav));
+/* Le squelette : les mêmes groupes, autant de lignes que d'entrées que le
+   rôle verra (elles ne dépendent que des permissions). */
+const squeletteNavigation = () => {
+  const admin = estAdmin(session);
+  const n = (...conditions) => conditions.filter(Boolean).length;
+  return [
+    { items: [{ chemin: '/', libelle: 'Accueil', icone: 'accueil', exact: true }] },
+    { titre: 'Portefeuille', squelette: { projets: n(peut(session, 'clients.gerer'), true, admin, admin) } },
+    { titre: 'Travail', squelette: { projets: n(true, true, true, true, true, peut(session, 'qa.gerer'), true, true) } },
+    { titre: 'Gestion', squelette: { projets: n(peut(session, 'finance.lecture'), true, true, peut(session, 'systeme'), admin, admin || peut(session, 'finance.gerer'), admin) } },
+    { pied: true, items: [{ chemin: '/equipe', libelle: 'Équipe', icone: 'utilisateurs' }, { chemin: '/parametres', libelle: 'Paramètres', icone: 'parametres' }] },
+  ];
+};
+definirNavigation(squeletteNavigation());
+dessinerNav();
+
+/* Le fil d'Ariane de l'équipe part toujours de l'accueil, et passe par
+   « Projets » puis le projet quand la page est celle d'un projet :
+   « Accueil › Projets › Atelier › Tâches ». Le Retour s'appuie dessus
+   quand on arrive par un lien. Les pages filtrées (« ?projet= ») et les
+   messages gardent leur fil : leur place dans l'arbre viendra avec lui. */
+const projetDuChemin = (chemin) => {
+  const m = /^\/projets\/([^/]+)/.exec(chemin || '');
+  return m && m[1] !== 'nouveau' ? decodeURIComponent(m[1]) : '';
+};
+definirRetoucheAriane((items) => {
+  if (!items || !items.length) return items;
+  if (items.length === 1 && !items[0].chemin && items[0].libelle === 'Accueil') return items;
+  let fil = items.filter((it) => it.chemin !== '/');
+  const pid = projetDuChemin(courant().chemin);
+  if (pid) {
+    const chemin = `/projets/${pid}`;
+    if (!fil.some((it) => it.chemin === chemin)) {
+      const projet = (magasin.lire(K.projets) || []).find((p) => p.id === pid);
+      if (projet) fil.splice(fil.findIndex((it) => it.chemin === '/projets') + 1, 0, { libelle: projet.nom, chemin });
+    }
+    if (fil.some((it) => it.chemin === chemin) && !fil.some((it) => it.chemin === '/projets')) {
+      fil.splice(fil.findIndex((it) => it.chemin === chemin), 0, { libelle: 'Projets', chemin: '/projets' });
+    }
+  }
+  fil = [{ libelle: 'Accueil', chemin: '/' }, ...fil];
+  return fil;
+});
 
 enregistrerRecherche((terme) => {
   const projets = magasin.lire(K.projets) || [];
@@ -206,15 +264,38 @@ enregistrerRecherche((terme) => {
   return items;
 });
 
+/* Une page que le rôle ne permet pas : la même règle que son entrée dans
+   le rail, et un écran qui le dit, sans rien lire. Le serveur et les
+   règles refusent de toute façon ; l'écran ne montre pas un vide
+   trompeur. Les permissions fines d'un agent comptent (peut), pas
+   seulement le rôle. */
+const REGLES = {
+  clients: { ok: () => peut(session, 'clients.gerer'), titre: 'Clients', a: 'aux personnes qui gèrent les fiches clients' },
+  aFaire: { ok: () => estAdmin(session), titre: 'Projets à faire', a: 'à l\'administration' },
+  nouveauxProjets: { ok: () => estAdmin(session), titre: 'Nouveaux projets', a: 'à l\'administration' },
+  finances: { ok: () => peut(session, 'finance.lecture'), titre: 'Finances', a: 'aux personnes qui suivent la finance' },
+  archives: { ok: () => estAdmin(session), titre: 'Archives', a: 'à l\'administration' },
+  testeurs: { ok: () => peut(session, 'qa.gerer'), titre: 'Testeurs', a: 'aux personnes qui pilotent la recette' },
+  annonces: { ok: () => estAdmin(session) || peut(session, 'finance.gerer'), titre: 'Annonces', a: 'à l\'administration et aux personnes qui gèrent la finance' },
+};
+const garde = (regle, vue) => (ctx) => {
+  const r = REGLES[regle];
+  if (r.ok()) return vue(ctx);
+  titrePage(r.titre);
+  filAriane([{ libelle: r.titre }]);
+  ctx.sortie.innerHTML = `<div class="page" style="max-width:720px"><div class="page-tete"><div><h1>${echapper(r.titre)}</h1><p class="chapo" data-refus="${echapper(regle)}">Cette page est réservée ${echapper(r.a)}.</p></div></div><a class="btn btn-secondaire" href="#/">Retour à l'accueil</a></div>`;
+  return () => {};
+};
+
 definir([
   { chemin: '/', vue: (ctx) => adminAccueil.vue(ctx, env) },
-  { chemin: '/clients', vue: (ctx) => adminClients.liste(ctx, env) },
-  { chemin: '/clients/nouveau', vue: (ctx) => adminClients.nouveau(ctx, env) },
-  { chemin: '/clients/:id', vue: (ctx) => adminClients.detail(ctx, env) },
+  { chemin: '/clients', vue: garde('clients', (ctx) => adminClients.liste(ctx, env)) },
+  { chemin: '/clients/nouveau', vue: garde('clients', (ctx) => adminClients.nouveau(ctx, env)) },
+  { chemin: '/clients/:id', vue: garde('clients', (ctx) => adminClients.detail(ctx, env)) },
   { chemin: '/projets', vue: (ctx) => adminProjets.liste(ctx, env) },
   { chemin: '/projets/nouveau', vue: (ctx) => adminProjets.nouveau(ctx, env) },
-  { chemin: '/a-faire', vue: (ctx) => adminAFaire.liste(ctx, env) },
-  { chemin: '/a-faire/:id', vue: (ctx) => adminAFaire.detail(ctx, env) },
+  { chemin: '/a-faire', vue: garde('aFaire', (ctx) => adminAFaire.liste(ctx, env)) },
+  { chemin: '/a-faire/:id', vue: garde('aFaire', (ctx) => adminAFaire.detail(ctx, env)) },
   { chemin: '/projets/:id', cle: (c) => `projet:${c.params.id}`, vue: (ctx) => projet.vue({ ...ctx, onglet: 'apercu' }, env) },
   { chemin: '/projets/:id/nouvelle-demande', vue: (ctx) => demande.nouvelle(ctx, env) },
   { chemin: '/projets/:id/demandes/:tid', vue: (ctx) => demande.detail(ctx, env) },
@@ -233,9 +314,14 @@ definir([
   { chemin: '/projets/:id/controle', vue: (ctx) => controle.vue(ctx, env) },
   { chemin: '/controle', vue: (ctx) => controle.entree(ctx, env) },
   { chemin: '/projets/:id/suggestions', vue: (ctx) => { naviguer(`/projets/${ctx.params.id}/evolutions`, { remplacer: true }); } },
+  /* Les adresses du Hub qu'un membre de l'équipe peut ouvrir (un lien du
+     client, une lettre, le Hub qui renvoie au Cockpit en gardant la
+     route) : leur place dans le Cockpit, au lieu de l'accueil. */
+  { chemin: '/projets/:id/versions', vue: (ctx) => { naviguer(`/projets/${ctx.params.id}/releases`, { remplacer: true }); } },
+  { chemin: '/projets/:id/decisions', vue: (ctx) => { naviguer(`/projets/${ctx.params.id}/notes`, { remplacer: true }); } },
   { chemin: '/projets/:id/:onglet', cle: (c) => `projet:${c.params.id}`, vue: (ctx) => projet.vue({ ...ctx, onglet: ctx.params.onglet }, env) },
-  { chemin: '/nouveaux-projets', vue: (ctx) => nouveauProjet.liste(ctx, env) },
-  { chemin: '/nouveaux-projets/:id', vue: (ctx) => nouveauProjet.detail(ctx, env) },
+  { chemin: '/nouveaux-projets', vue: garde('nouveauxProjets', (ctx) => nouveauProjet.liste(ctx, env)) },
+  { chemin: '/nouveaux-projets/:id', vue: garde('nouveauxProjets', (ctx) => nouveauProjet.detail(ctx, env)) },
   { chemin: '/demandes', vue: (ctx) => adminDemandes.vue(ctx, env) },
   { chemin: '/taches', vue: (ctx) => adminTaches.vue(ctx, env) },
   { chemin: '/tests', cle: () => 'tests', vue: (ctx) => tests.vue(ctx, env) },
@@ -247,21 +333,25 @@ definir([
   { chemin: '/tableau', vue: (ctx) => tableau.ancienne(ctx) },
   { chemin: '/planning', vue: (ctx) => adminPlanning.vue(ctx, env) },
   { chemin: '/messages', vue: (ctx) => messages.vue(ctx, env) },
-  { chemin: '/testeurs-messages', vue: (ctx) => testeursMessages.vue(ctx, env) },
-  { chemin: '/testeurs-messages/:uid', vue: (ctx) => testeursMessages.vue(ctx, env) },
+  { chemin: '/testeurs-messages', vue: garde('testeurs', (ctx) => testeursMessages.vue(ctx, env)) },
+  { chemin: '/testeurs-messages/:uid', vue: garde('testeurs', (ctx) => testeursMessages.vue(ctx, env)) },
   { chemin: '/messages/:pid', vue: (ctx) => messages.vue(ctx, env) },
   { chemin: '/validations', vue: (ctx) => adminValidations.vue(ctx, env) },
   { chemin: '/validations/:vid', vue: (ctx) => adminValidations.vue(ctx, env) },
+  /* L'adresse d'une validation dans le Hub (« En attente du client », les
+     liens du client) : la même fiche dans le Cockpit. */
+  { chemin: '/valider', vue: () => { naviguer('/validations', { remplacer: true }); } },
+  { chemin: '/valider/:vid', vue: (ctx) => { naviguer(`/validations/${encodeURIComponent(ctx.params.vid)}`, { remplacer: true }); } },
   { chemin: '/documents', vue: (ctx) => documents.vue(ctx, env) },
-  { chemin: '/finances', vue: (ctx) => adminFinances.vue(ctx, env) },
-  { chemin: '/finances/:did', vue: (ctx) => adminFinances.vue(ctx, env) },
+  { chemin: '/finances', vue: garde('finances', (ctx) => adminFinances.vue(ctx, env)) },
+  { chemin: '/finances/:did', vue: garde('finances', (ctx) => adminFinances.vue(ctx, env)) },
   { chemin: '/maintenance', vue: (ctx) => maintenance.vue(ctx, env) },
   { chemin: '/activite', vue: (ctx) => adminActivite.vue(ctx, env) },
   /* Une clé : changer un filtre (dans l'adresse) recharge la liste sans
      redessiner la page entière. */
   { chemin: '/emails', cle: () => 'emails', vue: (ctx) => adminEmails.vue(ctx, env) },
-  { chemin: '/annonces', vue: (ctx) => annonces.vue(ctx, env) },
-  { chemin: '/archives', vue: (ctx) => adminArchives.vue(ctx, env) },
+  { chemin: '/annonces', vue: garde('annonces', (ctx) => annonces.vue(ctx, env)) },
+  { chemin: '/archives', vue: garde('archives', (ctx) => adminArchives.vue(ctx, env)) },
   { chemin: '/parametres', vue: (ctx) => adminParametres.vue(ctx, env) },
   { chemin: '/equipe', vue: (ctx) => adminEquipe.vue(ctx, env) },
   { chemin: '/moi', vue: (ctx) => parametres.vue(ctx, env) },

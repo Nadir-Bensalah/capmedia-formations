@@ -323,7 +323,9 @@ export const vue = async (ctx, env) => {
           : { libelle: 'Ranger dans les projets à faire', icone: 'ampoule', action: () => basculerAFaire(d.projet, true) }] : []),
         { libelle: 'La note du projet', icone: 'note', action: () => naviguer(`/a-faire/${pid}`) },
         ...(!d.projet.interne ? [{ libelle: 'Accès du client', icone: 'utilisateurs', action: () => naviguer(`/projets/${pid}/acces`) }] : []),
-        ...(d.projet.ouvert === true && !d.projet.interne ? [{ libelle: 'Refermer au client', icone: 'oeilFerme', danger: true, action: () => refermer(pid) }] : []),
+        /* Refermer, comme ouvrir, demande le droit d'ouvrir un projet au
+           client : la même règle que l'onglet Accès client. */
+        ...(d.projet.ouvert === true && !d.projet.interne && peut(env.session, 'projets.ouvrir', pid) ? [{ libelle: 'Refermer au client', icone: 'oeilFerme', danger: true, action: () => refermer(pid) }] : []),
         { libelle: 'Signaler un point bloquant', icone: 'alerte', action: () => editer('blocage', env, { pid }) },
         { libelle: 'Demander une validation', icone: 'valider', action: () => editer('validation', env, { pid }) },
         { libelle: 'Nouvelle note ou décision', icone: 'note', action: () => editer('note', env, { pid }) },
