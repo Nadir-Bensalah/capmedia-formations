@@ -193,7 +193,7 @@ const marqueHtml = (marque) => {
 };
 
 const lienHtml = (it, classe = '') => `
-        <a class="lat-lien${classe}${it.sous ? ' lat-sous-lien' : ''}${it.enCours ? ' lat-lien--en-cours' : ''}" href="#${echapper(it.lien || it.chemin)}" data-chemin="${echapper(it.chemin)}"${it.projet ? ` data-projet="${echapper(it.projet)}"` : ''}${it.exact ? ' data-exact' : ''}>
+        <a class="lat-lien${classe}${it.sous ? ' lat-sous-lien' : ''}${it.enCours ? ' lat-lien--en-cours' : ''}" href="#${echapper(it.lien || it.chemin)}" data-chemin="${echapper(it.chemin)}"${it.projet ? ` data-projet="${echapper(it.projet)}"` : ''}${it.exact ? ' data-exact' : ''}${it.aussi && it.aussi.length ? ` data-aussi="${echapper(it.aussi.join(' '))}"` : ''}>
           ${it.ecusson || (it.icone ? icone(it.icone) : '')}<span class="tronque">${echapper(it.libelle)}</span>${it.enCours ? `<span class="sr-only">, ${echapper(it.enCours)}</span>` : ''}${compteHtml(typeof it.compte === 'function' ? it.compte() : it.compte)}${repereHtml(it.repere)}${marqueHtml(it.marque)}
         </a>`;
 
@@ -307,9 +307,19 @@ const marquerActif = () => {
     }
     const chemin = a.dataset.chemin;
     if (a.dataset.projet && a.dataset.projet !== projet) return;
-    const correspond = a.hasAttribute('data-exact') ? c === chemin : (c === chemin || c.startsWith(`${chemin}/`));
-    if (correspond && (!meilleur || chemin.length > meilleur.dataset.chemin.length)) meilleur = a;
+    const sous = (x) => c === x || c.startsWith(`${x}/`);
+    /* « data-aussi » : d'autres chemins qu'une entrée couvre (la page d'une
+       partie sous « Plateformes et versions », dans le Cockpit). */
+    const aussi = (a.dataset.aussi || '').split(' ').filter((x) => x && sous(x));
+    const correspond = a.hasAttribute('data-exact') ? c === chemin : sous(chemin);
+    const longueur = Math.max(correspond ? chemin.length : -1, ...aussi.map((x) => x.length));
+    if (longueur < 0) return;
+    /* À longueur égale, l'entrée du projet ouvert l'emporte sur celle de
+       tous les projets (« /tests » d'un projet contre « /tests »). */
+    const mieux = !meilleur || longueur > meilleur.longueur || (longueur === meilleur.longueur && a.dataset.projet && !meilleur.a.dataset.projet);
+    if (mieux) meilleur = { a, longueur };
   });
+  meilleur = meilleur && meilleur.a;
   if (meilleur) {
     meilleur.classList.add('actif');
     meilleur.setAttribute('aria-current', 'page');

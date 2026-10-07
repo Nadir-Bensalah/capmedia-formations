@@ -384,7 +384,7 @@ const dispoHtml = (d) => {
   const sondes = d.c.sondes || {};
   const cles = ['web', 'landing', 'fonctions', 'hub'].filter((c) => sondes[c]);
   const tete = '<div class="salle-bloc-tete"><h2 class="salle-h">Disponibilité et temps de réponse</h2><span class="salle-mini">sondé chaque minute · 24 h</span></div>';
-  if (!cles.length) return `${tete}<p class="salle-vide">Aucune adresse sondée. Un administrateur les donne dans la liaison du projet (page Stabilité).</p>`;
+  if (!cles.length) return `${tete}<p class="salle-vide">Aucune adresse sondée. Un administrateur les donne dans la liaison du projet (page Santé de l'app).</p>`;
   return `${tete}<div class="dispo-liste">${cles.map((cle) => {
     const s = sondes[cle];
     const etat = s.etat === 'panne' ? 'rouge' : s.etat === 'ok' ? 'vert' : 'orange';
@@ -468,7 +468,7 @@ const charpenteEquipe = (d) => `<div class="page page-salle">
       </div>
       <div class="salle-bloc" data-region="erreurs"></div>
       <div class="salle-bloc" data-region="incidents"></div>
-      <p class="salle-pied"><a class="salle-lien" href="#/projets/${echapper(d.projet.id)}/stabilite">Stabilité, le détail</a></p>
+      <p class="salle-pied"><a class="salle-lien" href="#/projets/${echapper(d.projet.id)}/stabilite">Santé de l'app, le détail</a></p>
     </section>
   </div>`;
 
@@ -491,12 +491,12 @@ const vueEquipe = (ctx, env) => {
     if (!d.liaison || d.liaison.actif === false) {
       monte = '';
       titrePage(`Salle de contrôle · ${d.projet.nom}`);
-      sortie.innerHTML = `<div class="page">${vide({ icone: 'activite', titre: 'Pas encore de salle de contrôle', texte: 'Reliez le projet à Sentry et donnez les adresses à surveiller, depuis la page Stabilité.', action: `<a class="btn btn-principal" href="#/projets/${echapper(pid)}/stabilite">Aller à la page Stabilité</a>` })}</div>`;
+      sortie.innerHTML = `<div class="page">${vide({ icone: 'activite', titre: 'Pas encore de salle de contrôle', texte: 'Reliez le projet à Sentry et donnez les adresses à surveiller, depuis la page Santé de l\'app.', action: `<a class="btn btn-principal" href="#/projets/${echapper(pid)}/stabilite">Aller à Santé de l'app</a>` })}</div>`;
       return;
     }
     if (monte !== pid) {
       titrePage(`Salle de contrôle · ${d.projet.nom}`);
-      filAriane([{ libelle: 'Projets', chemin: '/projets' }, { libelle: d.projet.nom, chemin: `/projets/${pid}` }, { libelle: 'Salle de contrôle' }]);
+      filAriane([{ libelle: 'Projets', chemin: '/projets' }, { libelle: d.projet.nom, chemin: `/projets/${pid}` }, { libelle: 'Santé de l\'app', chemin: `/projets/${pid}/stabilite` }, { libelle: 'Salle de contrôle' }]);
       sortie.innerHTML = charpenteEquipe(d);
       regions = dessinateurRegions(sortie.querySelector('[data-salle]'));
       monte = pid;
@@ -718,7 +718,7 @@ export const entree = (ctx, env) => {
     if (liste.length === 1) { naviguer(`/projets/${liste[0].id}/controle`, { remplacer: true }); return; }
     sortie.innerHTML = `<div class="page"><header class="page-tete"><div><h1>Salle de contrôle</h1><p class="chapo">La santé en direct de chaque application reliée à Sentry.</p></div></header>
       ${liste.length ? `<ul class="liste-simple">${liste.map((p) => `<li><a class="lien" href="#/projets/${echapper(p.id)}/controle">${echapper(p.nom)}</a></li>`).join('')}</ul>`
-    : vide({ icone: 'activite', titre: 'Aucun projet relié', texte: 'Reliez un projet à Sentry depuis sa page Stabilité.' })}</div>`;
+    : vide({ icone: 'activite', titre: 'Aucun projet relié', texte: 'Reliez un projet à Sentry depuis sa page Santé de l\'app.' })}</div>`;
   };
   const planifier = magasin.dessinateur(rendre, 60, [K.liaisonsSentry]);
   lot.sur(K.liaisonsSentry, planifier);

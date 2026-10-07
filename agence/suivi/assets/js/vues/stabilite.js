@@ -180,7 +180,7 @@ const pageEquipe = (d, env) => {
   const tete = `<header class="page-tete">
     <div>
       <p class="surtitre">${echapper(d.projet.nom || '')}</p>
-      <h1 style="margin-top:2px">Stabilité</h1>
+      <h1 style="margin-top:2px">Santé de l'app</h1>
       <p class="chapo">${lie ? `Ce que Sentry voit de l'application, relevé toutes les quinze minutes${r.le ? ` · dernier relevé <span data-stab-releve>${echapper(depuis(r.le))}</span>` : ''}.` : 'Ce projet n\'est pas encore relié à Sentry.'}</p>
     </div>
     <div class="actions">
@@ -307,8 +307,8 @@ const vueEquipe = (ctx, env) => {
     if (emp === derniere) return;
     derniere = emp;
     if (!d.projet) { sortie.innerHTML = `<div class="page">${vide({ icone: 'projets', titre: 'Ce projet est introuvable', texte: 'Il a peut-être été archivé, ou vous n\'y avez plus accès.' })}</div>`; return; }
-    titrePage(`Stabilité · ${d.projet.nom}`);
-    filAriane([{ libelle: 'Projets', chemin: '/projets' }, { libelle: d.projet.nom, chemin: `/projets/${pid}` }, { libelle: 'Stabilité' }]);
+    titrePage(`Santé de l'app · ${d.projet.nom}`);
+    filAriane([{ libelle: 'Projets', chemin: '/projets' }, { libelle: d.projet.nom, chemin: `/projets/${pid}` }, { libelle: 'Santé de l\'app' }]);
     sortie.innerHTML = pageEquipe(d, env);
   };
   const planifier = magasin.dessinateur(rendre, 60, cles);

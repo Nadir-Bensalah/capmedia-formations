@@ -189,23 +189,25 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
     await page.keyboard.press('Escape'); await pause(600);
   } else dire('aucun scénario cliquable');
 
-  console.log('\n== L\'onglet du projet, réduit');
-  await aller(page,'/projets/atelier/tests','.chiffres-tests');
+  /* Refonte du Cockpit, lot 3 : l'onglet Tests d'un projet (le résumé)
+     rejoint la console filtrée sur lui. L'adresse y mène, l'entrée Tests
+     de l'arbre du projet y va tout droit, et ce que le résumé disait y
+     est : l'avancement, les campagnes en cours, les problèmes. */
+  console.log('\n== L\'onglet du projet : la console du projet');
+  await page.evaluate(()=>{location.hash='/projets/atelier/tests';});
+  await page.waitForFunction(()=>location.hash==='#/tests?projet=atelier',null,{timeout:15000}).catch(()=>{});
+  await page.waitForSelector('#etage-humain .etage-resume',{timeout:20000}).catch(()=>{});
   await pause(1200);
   const o = await page.evaluate(()=>({
-    scenarios:document.querySelectorAll('.scenario').length,
-    chiffres:document.querySelectorAll('.chiffre').length,
-    console: !!document.querySelector('a[href*="#/tests?projet="]'),
-    texte:(document.querySelector('#onglet-corps')||{}).innerText||'',
+    hash: location.hash,
+    resume: !!document.querySelector('#etage-humain .etage-resume'),
+    campagnes: [...document.querySelectorAll('#campagnes [data-action="ouvrir-campagne"]')].map(x=>x.innerText).join(' | '),
+    entree: (document.querySelector('#lat-corps .lat-arbre[data-arbre="atelier"] a[data-chemin="/tests"]')||{}).getAttribute ? document.querySelector('#lat-corps .lat-arbre[data-arbre="atelier"] a[data-chemin="/tests"]').getAttribute('href') : '',
   }));
-  verifier(o.scenarios===0,'la liste complète n\'est plus dans l\'onglet',`${o.scenarios} scénarios encore`);
-  verifier(o.chiffres===4,'le résumé affiche ses quatre chiffres',`${o.chiffres}`);
-  verifier(o.console,'le bouton « Ouvrir la console » est là');
-  /* L'onglet du projet ne nomme PAS les campagnes : il en donne le
-     nombre, et renvoie vers la console pour le détail. C'est la décision
-     prise quand l'onglet a été allégé. Le contrôle d'origine ne passait
-     que parce qu'un nom traînait ailleurs dans la page. */
-  verifier(/campagnes? en cours/.test(o.texte),'le nombre de campagnes en cours est rappelé',`vu : ${o.texte.slice(0,160).replace(/\n+/g,' | ')}`);
+  verifier(o.hash==='#/tests?projet=atelier','l\'adresse de l\'onglet mène à la console filtrée sur le projet',o.hash);
+  verifier(o.entree==='#/tests?projet=atelier','l\'entrée Tests de l\'arbre du projet y va tout droit',o.entree);
+  verifier(o.resume,'l\'avancement du projet y est (ce que disaient les quatre chiffres)');
+  verifier(/En cours/i.test(o.campagnes),'les campagnes en cours y sont nommées',o.campagnes.slice(0,160));
 
   console.log('\n== Le client');
   const nav2=await chromium.launch();

@@ -3601,7 +3601,7 @@
   "lot": "L3",
   "sonde": {
    "route": "/projets/atelier",
-   "cible": ".menu [data-cle=\"La note du projet\"]",
+   "cible": ".menu [data-cle=\"Note d'idée\"]",
    "avant": [
     [
      "clic",
@@ -3743,7 +3743,7 @@
   "lot": "L3",
   "sonde": {
    "route": "/projets/atelier",
-   "cible": "#onglets-projet"
+   "cible": "#lat-corps .lat-arbre[data-arbre=\"atelier\"].deplie .lat-arbre-branches"
   }
  },
  {
@@ -3757,7 +3757,7 @@
   "lot": "L3",
   "sonde": {
    "route": "/projets/atelier",
-   "cible": "#onglets-projet a[href=\"#/projets/atelier/taches\"] .badge"
+   "cible": "#lat-corps .lat-arbre[data-arbre=\"atelier\"] a[data-chemin=\"/projets/atelier/taches\"] .compte"
   }
  },
  {
@@ -3770,8 +3770,8 @@
   "destination": "Compte de l’entrée Tests calculé sans ouvrir la page",
   "lot": "L3",
   "sonde": {
-   "route": "/projets/atelier/tests",
-   "cible": "#onglets-projet a[href=\"#/projets/atelier/tests\"] .badge"
+   "route": "/",
+   "cible": "#lat-corps .lat-arbre[data-arbre=\"atelier\"] a[data-chemin=\"/tests\"][data-projet=\"atelier\"] .compte.vif"
   }
  },
  {
@@ -3785,7 +3785,7 @@
   "lot": "L3",
   "sonde": {
    "route": "/projets/atelier",
-   "cible": "#onglets-projet a[href=\"#/projets/atelier\"]:not(:has(.badge))"
+   "cible": "#lat-corps .lat-arbre[data-arbre=\"atelier\"] a[data-chemin=\"/projets/atelier\"]:not(:has(.compte))"
   }
  },
  {
@@ -3799,7 +3799,7 @@
   "lot": "L3",
   "sonde": {
    "route": "/projets/atelier",
-   "cible": "#onglets-projet a[href=\"#/projets/atelier/acces\"]"
+   "cible": "#lat-corps .lat-arbre[data-arbre=\"atelier\"] a[data-chemin=\"/projets/atelier/acces\"]"
   }
  },
  {
@@ -3813,7 +3813,7 @@
   "lot": "L3",
   "sonde": {
    "route": "/projets/atelier",
-   "cible": "#onglets-projet a[href=\"#/projets/atelier/stabilite\"]"
+   "cible": "#lat-corps .lat-arbre[data-arbre=\"atelier\"] a[data-chemin=\"/projets/atelier/stabilite\"]"
   }
  },
  {
@@ -3827,7 +3827,7 @@
   "lot": "L3",
   "sonde": {
    "route": "/projets/atelier",
-   "cible": "#onglets-projet a[href=\"#/projets/atelier/evolutions\"]"
+   "cible": "#lat-corps .lat-arbre[data-arbre=\"atelier\"] a[data-chemin=\"/projets/atelier/evolutions\"]"
   }
  },
  {
@@ -4317,9 +4317,7 @@
   "lot": "L3",
   "sonde": {
    "route": "/projets/atelier/composants",
-   "cible": "#onglet-corps a[href*=\"/brique/\"]",
-   "admin": "absent",
-   "agent": "absent"
+   "cible": "#onglet-corps a[data-partie-lien][href*=\"/brique/\"]"
   }
  },
  {
@@ -4789,8 +4787,8 @@
   "destination": "Arbre › Plateformes et versions (liste des versions) ; fiche /projets/:id/releases/:rid gardée",
   "lot": "L3",
   "sonde": {
-   "route": "/projets/atelier/releases",
-   "cible": "#onglet-corps [data-action=\"nouveau\"][data-genre=\"release\"]"
+   "route": "/projets/atelier/composants",
+   "cible": "#versions-projet [data-action=\"nouveau\"][data-genre=\"release\"]"
   }
  },
  {
@@ -4803,8 +4801,8 @@
   "destination": "Arbre › Plateformes et versions (liste des versions) ; fiche /projets/:id/releases/:rid gardée",
   "lot": "L3",
   "sonde": {
-   "route": "/projets/atelier/releases",
-   "cible": "#onglet-corps .carte[data-release]"
+   "route": "/projets/atelier/composants",
+   "cible": "#versions-projet .carte[data-release]"
   }
  },
  {
@@ -4817,8 +4815,8 @@
   "destination": "Arbre › Plateformes et versions (liste des versions) ; fiche /projets/:id/releases/:rid gardée",
   "lot": "L3",
   "sonde": {
-   "route": "/projets/maison/releases",
-   "cible": "#onglet-corps .vide .vide-titre",
+   "route": "/projets/maison/composants",
+   "cible": "#versions-projet .vide .vide-titre",
    "texte": "Aucune version",
    "agent": "ignore"
   }
@@ -4833,12 +4831,12 @@
   "destination": "Arbre › Plateformes et versions (liste des versions) ; fiche /projets/:id/releases/:rid gardée",
   "lot": "L3",
   "sonde": {
-   "route": "/projets/atelier/releases",
+   "route": "/projets/atelier/composants",
    "cible": ".voile .feuille .modale-tete h2",
    "avant": [
     [
      "clic",
-     "#onglet-corps [data-action=\"ouvrir-release\"]"
+     "#versions-projet [data-action=\"ouvrir-release\"]"
     ]
    ]
   }
@@ -5540,8 +5538,8 @@
   "destination": "Arbre › Tests (/tests?projet=) : ces chiffres y sont déjà",
   "lot": "L3",
   "sonde": {
-   "route": "/projets/atelier/tests",
-   "cible": "#onglet-corps .section-tete .chapo"
+   "route": "/tests?projet=atelier",
+   "cible": "#vue .page-tete .chapo"
   }
  },
  {
@@ -5554,8 +5552,8 @@
   "destination": "Tests du projet : bouton « Ce qui va être testé » (déjà dans l’en-tête de /tests)",
   "lot": "L3",
   "sonde": {
-   "route": "/projets/atelier/tests",
-   "cible": "#onglet-corps [data-plan-tests]"
+   "route": "/tests?projet=atelier",
+   "cible": "#vue [data-plan-tests]"
   }
  },
  {
@@ -5568,8 +5566,8 @@
   "destination": "Arbre › Tests (l’entrée mène directement à la console)",
   "lot": "L3",
   "sonde": {
-   "route": "/projets/atelier/tests",
-   "cible": "#onglet-corps a.btn-principal[href=\"#/tests?projet=atelier\"]"
+   "route": "/projets/atelier",
+   "cible": "#lat-corps .lat-arbre[data-arbre=\"atelier\"] a[data-chemin=\"/tests\"][href=\"#/tests?projet=atelier\"]"
   }
  },
  {
@@ -5582,8 +5580,8 @@
   "destination": "Arbre › Tests (/tests?projet=) : ces chiffres y sont déjà",
   "lot": "L3",
   "sonde": {
-   "route": "/projets/atelier/tests",
-   "cible": "#onglet-corps .chiffres-tests .chiffre"
+   "route": "/tests?projet=atelier",
+   "cible": "#etage-humain .etage-resume"
   }
  },
  {
@@ -5596,8 +5594,8 @@
   "destination": "Arbre › Tests (/tests?projet=) : ces chiffres y sont déjà",
   "lot": "L3",
   "sonde": {
-   "route": "/projets/atelier/tests",
-   "cible": "#onglet-corps a.ligne[href*=\"anomalie=reg-q-anomalie\"]"
+   "route": "/tests?projet=atelier",
+   "cible": "#anomalies [data-action=\"ouvrir-anomalie\"][data-id=\"reg-q-anomalie\"]"
   }
  },
  {
@@ -5610,8 +5608,8 @@
   "destination": "Arbre › Tests (/tests?projet=) : ces chiffres y sont déjà",
   "lot": "L3",
   "sonde": {
-   "route": "/projets/atelier/tests",
-   "cible": "#onglet-corps a.ligne[href=\"#/tests?projet=atelier\"]"
+   "route": "/tests?projet=atelier",
+   "cible": "#campagnes [data-action=\"ouvrir-campagne\"][data-id=\"c-oct\"]"
   }
  },
  {
@@ -6103,12 +6101,12 @@
   "destination": "Éditeurs inchangés, ouverts par les mêmes gestes",
   "lot": "L3",
   "sonde": {
-   "route": "/projets/atelier/releases",
+   "route": "/projets/atelier/composants",
    "cible": ".voile .feuille #ed-lienStore",
    "avant": [
     [
      "clic",
-     "#onglet-corps [data-action=\"nouveau\"][data-genre=\"release\"]"
+     "#versions-projet [data-action=\"nouveau\"][data-genre=\"release\"]"
     ]
    ]
   }
@@ -9257,7 +9255,7 @@
   "lot": "L3",
   "sonde": {
    "route": "/projets/atelier",
-   "cible": "#onglets-projet a.onglet[href=\"#/projets/atelier/tests\"]"
+   "cible": "#lat-corps .lat-arbre[data-arbre=\"atelier\"] a[data-chemin=\"/tests\"][href=\"#/tests?projet=atelier\"]"
   }
  },
  {
@@ -9271,7 +9269,7 @@
   "lot": "L3",
   "sonde": {
    "route": "/projets/atelier/tests",
-   "cible": "#vue a.btn[href=\"#/tests?projet=atelier\"]"
+   "cible": "#vue .barre-tests #f-projet"
   }
  },
  {
@@ -9284,8 +9282,8 @@
   "destination": "Disparaît comme page : Arbre › Tests (/tests?projet=) en tient lieu",
   "lot": "L3",
   "sonde": {
-   "route": "/projets/atelier/tests",
-   "cible": "#vue .chiffres-tests .chiffre"
+   "route": "/tests?projet=atelier",
+   "cible": "#etage-humain .etage-resume"
   }
  },
  {
@@ -9298,8 +9296,8 @@
   "destination": "Disparaît comme page : Arbre › Tests (/tests?projet=) en tient lieu",
   "lot": "L3",
   "sonde": {
-   "route": "/projets/atelier/tests",
-   "cible": "#vue a.ligne[href*=\"anomalie=reg-t-anomalie\"]"
+   "route": "/tests?projet=atelier",
+   "cible": "#anomalies [data-action=\"ouvrir-anomalie\"][data-id=\"reg-t-anomalie\"]"
   }
  },
  {
@@ -9312,8 +9310,8 @@
   "destination": "Disparaît comme page : Arbre › Tests (/tests?projet=) en tient lieu",
   "lot": "L3",
   "sonde": {
-   "route": "/projets/atelier/tests",
-   "cible": "#vue a.ligne[href=\"#/tests?projet=atelier\"]"
+   "route": "/tests?projet=atelier",
+   "cible": "#campagnes [data-action=\"ouvrir-campagne\"][data-id=\"c-oct\"]"
   }
  },
  {
@@ -11427,7 +11425,7 @@
   "lot": "L3",
   "sonde": {
    "route": "/projets/atelier",
-   "cible": "#onglets-projet a[href=\"#/projets/atelier/coffre\"]"
+   "cible": "#lat-corps .lat-arbre[data-arbre=\"atelier\"] a[data-chemin=\"/projets/atelier/coffre\"]"
   }
  },
  {

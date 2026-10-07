@@ -79,7 +79,11 @@ const NOTE=[
   await page.reload({waitUntil:'domcontentloaded'}); await pause(2500);
   const entrees=await page.$$eval('#lat-corps .lat-lien',as=>as.map(a=>a.dataset.chemin));
   verifier(entrees.includes('/a-faire'),'la barre porte « Projets à faire »');
-  verifier(entrees.indexOf('/a-faire')===entrees.indexOf('/projets')+1,'juste sous « Projets », dans le portefeuille');
+  /* Refonte du Cockpit, lot 3 : « Projets » devient « Tous les projets »,
+     au bas de l'arbre des projets en cours ; le portefeuille suit, avec
+     les projets à faire. */
+  const portefeuille=await page.$$eval('#lat-corps .lat-groupe',gs=>gs.map(g=>({titre:((g.querySelector('.lat-titre')||{}).textContent||'').trim(),chemins:[...g.querySelectorAll('.lat-lien')].map(a=>a.dataset.chemin)})).find(g=>/Portefeuille/i.test(g.titre)));
+  verifier(portefeuille&&portefeuille.chemins.includes('/a-faire')&&entrees.indexOf('/a-faire')>entrees.indexOf('/projets')&&entrees.indexOf('/projets')>=0,'dans le portefeuille, sous « Tous les projets »',portefeuille&&portefeuille.chemins.join(' '));
   verifier(await compteBarre(page,'/a-faire')===0,'sans compte tant que rien n est rangé');
   /* Le compte ne se lit qu'une fois les projets chargés, et stable : lu
      trop tôt, il vaut encore zéro. */

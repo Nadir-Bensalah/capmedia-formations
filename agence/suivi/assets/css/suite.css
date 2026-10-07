@@ -2489,3 +2489,17 @@ html.salle-plein .lat, html.salle-plein .haut, html.salle-plein .voile-lat, html
 @media (prefers-reduced-motion: reduce) {
   .salle .clignote, .sfil-ligne.neuf, .voyant .voyant-feu, .salle-global-feu { animation: none !important; }
 }
+
+/* ==========================================================================
+   Refonte du Cockpit, lot 3 : la page d'un projet sans onglets horizontaux.
+   Hors de l'aperçu, un en-tête compact (l'écusson, la référence, le nom,
+   Modifier et le menu) ; la section de la page porte son propre titre.
+   Dans « Plateformes et versions », le nom d'une partie mène à sa page.
+   ========================================================================== */
+.page-tete--compacte { align-items: center; margin-bottom: var(--e-5); }
+.page-tete--compacte > .rang { align-items: center; }
+.page-tete--compacte h1 { font: var(--t-titre-2); letter-spacing: -.02em; }
+.page-tete--compacte .surtitre { margin: 0; }
+.lien-partie { color: inherit; text-decoration: none; }
+.lien-partie:hover, .lien-partie:focus-visible { text-decoration: underline; text-underline-offset: 3px; }
+#versions-projet { margin-top: var(--e-7); }

@@ -112,7 +112,7 @@ const retourVisible = (page) => page.$eval('#bouton-retour', (b) => !b.hidden &&
   console.log('\n== Le bouton Retour et le fil d Ariane');
   await aller(pa, '#/', '.page h1');
   verifier(Boolean(await pa.$('#bouton-retour')) && !(await retourVisible(pa)), 'sur l accueil : le Retour existe, caché');
-  await aller(pa, '#/projets/atelier', '#onglets-projet');
+  await aller(pa, '#/projets/atelier', '#onglet-corps');
   verifier(await retourVisible(pa), 'sur un projet : le Retour est là');
   const filProjet = await texteDe(pa, '#ariane');
   verifier(/^Accueil.*Projets.*Atelier$/.test(filProjet) && Boolean(await pa.$('#ariane a[href="#/"]')), 'fil : Accueil › Projets › Atelier', filProjet);
@@ -157,7 +157,8 @@ const retourVisible = (page) => page.$eval('#bouton-retour', (b) => !b.hidden &&
   await aller(pa, '#/valider', '.page h1');
   verifier(await hash(pa) === '#/validations', '/valider mène aux validations', await hash(pa));
   await aller(pa, '#/projets/atelier/versions', '#onglet-corps');
-  verifier(await hash(pa) === '#/projets/atelier/releases', '/projets/:id/versions mène aux versions du projet', await hash(pa));
+  /* Lot 3 : les versions vivent dans « Plateformes et versions ». */
+  verifier(await hash(pa) === '#/projets/atelier/composants', '/projets/:id/versions mène aux versions du projet (Plateformes et versions)', await hash(pa));
   await aller(pa, '#/projets/atelier/decisions', '.page');
   verifier(await hash(pa) === '#/projets/atelier/notes', '/projets/:id/decisions mène aux notes', await hash(pa));
 

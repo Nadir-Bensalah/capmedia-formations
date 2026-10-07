@@ -34,9 +34,18 @@ const projetDe = (route) => {
 /* `sansBulle` (le client seul) : les pages où la bulle n'a rien à faire.
    Sur Messages, la conversation est déjà la page : la bulle la montrait
    une seconde fois et couvrait « Envoyer » sur un téléphone (03/10). */
-export const brancherBulle = (env, { projetParDefaut = null, sansBulle = null } = {}) => {
+/* `pagesFiltrees` (le Cockpit, lot 3) : la bulle suit aussi le projet que
+   nomme l'adresse hors de « /projets/… » (« ?projet= »), sans projet par
+   défaut. `accepte(pid)` : le projet a-t-il une bulle ? Le Cockpit n'en
+   monte pas sur un projet sans client (interne, D9). `revoir()`, rendu,
+   repose la bulle quand ce que lit `accepte` arrive ou change. */
+export const brancherBulle = (env, { projetParDefaut = null, sansBulle = null, pagesFiltrees = false, accepte = null } = {}) => {
   let bulle = null;
-  const voulu = (route) => (sansBulle && sansBulle(route || {}) ? '' : (projetDe(route) || (projetParDefaut ? (projetDeLAdresse(route || {}) || projetParDefaut() || '') : '')));
+  const voulu = (route) => {
+    if (sansBulle && sansBulle(route || {})) return '';
+    const pid = projetDe(route) || (projetParDefaut || pagesFiltrees ? (projetDeLAdresse(route || {}) || (projetParDefaut ? projetParDefaut() : '') || '') : '');
+    return pid && (!accepte || accepte(pid)) ? pid : '';
+  };
 
   const poser = (voulu) => {
     if (bulle && bulle.pid === voulu) return;
@@ -50,6 +59,7 @@ export const brancherBulle = (env, { projetParDefaut = null, sansBulle = null } 
     /* Demandée depuis la page Messages (« Écrire » d'un autre bloc) : la
        page a déjà son fil, on n'y monte pas de bulle. */
     if (sansBulle && sansBulle(courant() || {})) return;
+    if (accepte && !accepte(String(d.projet))) return;
     poser(String(d.projet));
     if (bulle) bulle.ouvrirAvec(d.texte || '');
   };
@@ -60,5 +70,6 @@ export const brancherBulle = (env, { projetParDefaut = null, sansBulle = null } 
 
   return {
     fin: () => { arret(); document.removeEventListener('bulle:ouvrir', surOuvrir); poser(''); },
+    revoir: () => poser(voulu(courant())),
   };
 };

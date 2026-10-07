@@ -17,7 +17,7 @@ import {
 import {
   icone, pastille, pastilleTexte, puce, pucePlateforme, iconePlateforme, tonPlateforme, avatarProjet, avatar, progression, anneau, ligne, vide, fait, chronoItem, parJour, squelette, titrePage,
   echeanceHtml, modale, confirmer, toast, sur, menu, fichierHtml, brancherPieces, depot, lireForme, valider, obligatoire, agir, encart, optionsDe, pieceHtml,
-  verdictHtml, anneauOuPas, progressionOuPas, copier, reglerBarreOnglets,
+  verdictHtml, anneauOuPas, progressionOuPas, copier,
 } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K, ecrire, nouvelId, interneDuProjet, abonnerProjet, abonnerPlan, progressionProjet, jalonCourant, jalonSuivant, prochaineReunion, reunionAVenir, activiteDepuis, versionsPartie, enAttenteDeVous, peutRepondreValidation, parStatut, risquesProjet, MODES_PROGRESSION, trierEtapes, phasesTriees, notesPartageesDuProjet } from '../donnees.js';
@@ -138,6 +138,10 @@ export const vue = async (ctx, env) => {
      e-mail il y a six mois doit toujours y mener. */
   const ongletDe = (voulu) => {
     const v = voulu === 'roadmap' ? 'etapes' : voulu;
+    /* Côté équipe (lot 3), les versions vivent dans « Plateformes et
+       versions », avec les parties : la fiche d'une version (releases/:rid)
+       s'y ouvre par-dessus. */
+    if (env.role === 'equipe' && v === 'releases') return 'composants';
     if (ONGLETS.some((o) => o.cle === v)) return v;
     /* Deux onglets de l'équipe seule : les parties, et l'accès du client. */
     if (env.role === 'equipe' && (v === 'composants' || v === 'acces')) return v;
@@ -159,7 +163,7 @@ export const vue = async (ctx, env) => {
   const ficheDemandee = (params, o) => {
     if (params.tid && o === 'taches') return { genre: 'tache', id: params.tid };
     if (params.rid && o === 'reunions') return { genre: 'reunion', id: params.rid };
-    if (params.rid && o === 'releases') return { genre: 'release', id: params.rid };
+    if (params.rid && (o === 'releases' || o === 'composants')) return { genre: 'release', id: params.rid };
     return null;
   };
   let detailOuvert = ficheDemandee(ctx.params, onglet);
@@ -180,11 +184,21 @@ export const vue = async (ctx, env) => {
   let planSuivi = false;
   const empreintePage = () => `${magasin.empreinte(cles)}|${planSuivi ? magasin.empreinte([K.planTests(pid)]) : ''}|${onglet}|${voitLeCoffre(env, magasin.lire(K.projet(pid))) ? 'coffre' : ''}|${equipe ? '' : `${etatPave(`projet:${pid}`)}${etatPave('accueil')}`}`;
 
+  /* L'onglet Tests d'un projet a rejoint la console (lot 3) : l'équipe y
+     est menée, filtrée sur le projet. Un projet sans aucun test garde sa
+     page vide, d'où l'on écrit le premier scénario. */
+  let redirige = false;
   const rendre = (force = false) => {
+    if (redirige) return;
     suivrePlan();
     const d = lireTout(pid);
     const projet = d.projet;
     if (projet === undefined && !magasin.erreur(K.projet(pid))) return;
+    if (equipe && onglet === 'tests' && projet && (d.scenarios.length || d.campagnes.length || d.anomalies.length || d.plan)) {
+      redirige = true;
+      queueMicrotask(() => naviguer(`/tests?projet=${encodeURIComponent(pid)}`, { remplacer: true }));
+      return;
+    }
     if (!force && empreintePage() === derniereEmpreinte) return;
     if (projet === null || projet === undefined) {
       sortie.innerHTML = `<div class="page">${vide({ icone: 'projets', titre: 'Ce projet est introuvable', texte: "Il a peut-être été archivé, ou vous n'y avez plus accès.", action: '<a class="btn btn-secondaire" href="#/">Retour à l\'accueil</a>' })}</div>`;
@@ -193,27 +207,20 @@ export const vue = async (ctx, env) => {
     titrePage(projet.nom);
     const onglets = ongletsVisibles(d, equipe, env);
     if (!onglets.some((o) => o.cle === onglet) && ONGLETS.some((o) => o.cle === onglet)) onglet = 'apercu';
-    filAriane([{ libelle: equipe ? 'Projets' : 'Accueil', chemin: equipe ? '/projets' : '/' }, { libelle: projet.nom, chemin: `/projets/${pid}` }, ...(onglet !== 'apercu' ? [{ libelle: libelleOnglet(ONGLETS.find((o) => o.cle === onglet) || { libelle: onglet === 'acces' ? 'Accès client' : 'Les parties' }, equipe) }] : [])]);
+    filAriane([{ libelle: equipe ? 'Projets' : 'Accueil', chemin: equipe ? '/projets' : '/' }, { libelle: projet.nom, chemin: `/projets/${pid}` }, ...(onglet !== 'apercu' ? [{ libelle: libelleOnglet(ONGLETS.find((o) => o.cle === onglet) || { libelle: onglet === 'acces' ? 'Accès client' : (equipe ? 'Plateformes et versions' : 'Les parties') }, equipe) }] : [])]);
 
     const prog = progressionProjet(projet, d.jalons, { composants: d.composants, taches: d.taches });
     const risques = risquesProjet({ jalons: d.jalons, blocages: d.blocages, taches: d.taches, tickets: d.tickets });
     const delai = verdictDelai(projet.cible, { clos: statutProjet(projet) === 'termine', risques });
     const ouverts = d.tickets.filter((t) => OUVERTS.includes(t.statut));
     const attente = enAttenteDeVous({ projets: [projet], tickets: d.tickets, validations: d.validations, documents: d.documents, taches: d.taches, blocages: d.blocages });
-    const comptes = {
-      taches: d.taches.filter((t) => t.statut !== 'terminee').length,
-      demandes: ouverts.length,
-      fichiers: d.fichiers.length,
-      releases: d.releases.length,
-      liens: d.liens.length,
-      reunions: d.reunions.filter(reunionAVenir).length,
-      notes: d.notes.length,
-      tests: d.plan ? (d.sectionsPlan ? chiffresHumainsDuPlan(d.sectionsPlan).scenarios : '') : d.scenarios.length,
-      marketing: equipe ? 'À venir' : '',
-    };
-
+    /* L'équipe n'a plus d'onglets horizontaux (lot 3) : l'arbre du projet,
+       dans le rail, est sa seule navigation. L'aperçu garde l'en-tête
+       complet et les cartes des plateformes ; les autres pages, un en-tête
+       compact (le nom, Modifier, le menu ⋯ avec toutes ses entrées). */
+    const compact = equipe && onglet !== 'apercu';
     sortie.innerHTML = `<div class="page">
-      <header class="page-tete page-tete--projet">
+      ${compact ? enteteCompact(projet, d) : `<header class="page-tete page-tete--projet">
         <div class="rang" style="gap:16px;align-items:flex-start;min-width:0">
           ${avatarProjet(projet, 'grand')}
           <div style="min-width:0">
@@ -236,22 +243,13 @@ export const vue = async (ctx, env) => {
           <a class="btn btn-principal" href="#/projets/${echapper(pid)}/nouvelle-demande">${icone('plus')} ${equipe ? 'Nouvelle demande' : 'Nouveau ticket'}</a>
           ${equipe ? `<button class="btn-icone" type="button" data-action="menu-projet" aria-label="Plus">${icone('points')}</button>` : ''}
         </div>
-      </header>
+      </header>`}
 
-      ${cartesPlateformes(projet, d, pid)}
-
-      ${/* Chez le client, les sections du projet sont dans son arbre, dans le
-            rail : plus d'onglets horizontaux en double. */ ''}
-      ${equipe ? `<div class="onglets-enveloppe"><nav class="onglets" id="onglets-projet" aria-label="Sections du projet">
-        ${onglets.map((o) => `<a class="onglet${o.cle === onglet ? ' actif' : ''}" href="#/projets/${echapper(pid)}${o.cle === 'apercu' ? '' : `/${o.cle}`}">${o.libelle}${comptes[o.cle] ? `<span class="badge">${comptes[o.cle]}</span>` : ''}</a>`).join('')}
-        ${equipe ? `<a class="onglet${onglet === 'composants' ? ' actif' : ''}" href="#/projets/${echapper(pid)}/composants">Les parties</a>` : ''}
-        ${equipe && !projet.interne ? `<a class="onglet${onglet === 'acces' ? ' actif' : ''}" href="#/projets/${echapper(pid)}/acces">Accès client${projet.ouvert === true ? '' : ' <span class="badge">fermé</span>'}</a>` : ''}
-      </nav></div>` : ''}
+      ${compact ? '' : cartesPlateformes(projet, d, pid)}
 
       <div id="onglet-corps">${rendreOnglet(onglet, d, { pid, env, prog, attente, ouverts, delai, risques })}</div>
     </div>`;
     derniereEmpreinte = empreintePage();
-    if (equipe) reglerOnglets(sortie);
     /* Le coffre garde sa zone d'un dessin à l'autre ; quitter l'onglet le
        verrouille et coupe ses écoutes. */
     if (onglet === 'coffre') {
@@ -321,7 +319,9 @@ export const vue = async (ctx, env) => {
         ...(!d.projet.archive ? [d.projet.aFaire
           ? { libelle: 'Passer en projet actuel', icone: 'fleche', action: () => basculerAFaire(d.projet, false) }
           : { libelle: 'Ranger dans les projets à faire', icone: 'ampoule', action: () => basculerAFaire(d.projet, true) }] : []),
-        { libelle: 'La note du projet', icone: 'note', action: () => naviguer(`/a-faire/${pid}`) },
+        /* La note d'idée du projet, celle de « Projets à faire » (lot 3 : le
+           libellé dit enfin où elle mène). */
+        { libelle: 'Note d\'idée', icone: 'note', action: () => naviguer(`/a-faire/${pid}`) },
         ...(!d.projet.interne ? [{ libelle: 'Accès du client', icone: 'utilisateurs', action: () => naviguer(`/projets/${pid}/acces`) }] : []),
         /* Refermer, comme ouvrir, demande le droit d'ouvrir un projet au
            client : la même règle que l'onglet Accès client. */
@@ -441,22 +441,37 @@ export const vue = async (ctx, env) => {
         const m = /^\/projets\/[^/]+\/(reunions|releases)\/[^/]+/.exec(suite.chemin || '');
         return m ? m[1] : 'apercu';
       };
+      const avant = onglet;
       onglet = ongletDe(ongletDuChemin());
       detailOuvert = ficheDemandee(suite.params, onglet);
       if (suite.requete && suite.requete.blocage) blocageOuvert = suite.requete.blocage;
       poserFiltre(suite.requete);
       rendre(true);
-      /* Le défilement ne saute au haut de page que si la barre des onglets
-         est sortie de l'écran : sinon l'en-tête reste exactement où il est. */
-      const barre = sortie.querySelector('#onglets-projet');
-      if (barre && barre.getBoundingClientRect().top < 0) barre.scrollIntoView({ block: 'start', behavior: 'instant' });
+      /* Côté équipe, une autre entrée de l'arbre est une autre page : elle
+         s'ouvre en haut. Le client garde sa règle (plus de barre : rien ne
+         bouge). */
+      if (equipe && onglet !== avant && window.scrollY > 0) window.scrollTo({ top: 0, behavior: 'instant' });
     },
   };
 };
 
-/* La barre d'onglets : l'onglet actif se ramène dans le champ de vision, et
-   le dégradé du bord droit ne s'affiche que s'il reste quelque chose à voir. */
-const reglerOnglets = (sortie) => reglerBarreOnglets(sortie.querySelector('#onglets-projet'));
+/* L'en-tête compact d'une page du projet, côté équipe (lot 3) : l'écusson,
+   la référence, le nom, Modifier et le menu ⋯ (toutes ses entrées). La
+   ligne de suivi, les cartes des plateformes et « Nouvelle demande »
+   restent sur l'aperçu ; la page Demandes a son propre bouton. */
+const enteteCompact = (projet, d) => `<header class="page-tete page-tete--projet page-tete--compacte">
+        <div class="rang" style="gap:12px;align-items:center;min-width:0">
+          ${avatarProjet(projet, 'petit')}
+          <div style="min-width:0">
+            <p class="surtitre">${echapper([projet.ref, projet.interne ? 'Mon projet' : ((projet.client || {}).entreprise || nomsContacts(projet)), typeProjetAffiche(projet, d.composants)].filter(Boolean).join(' · '))}</p>
+            <h1>${echapper(projet.nom)}</h1>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn btn-secondaire" type="button" data-action="editer-projet">${icone('edit')} Modifier</button>
+          <button class="btn-icone" type="button" data-action="menu-projet" aria-label="Plus">${icone('points')}</button>
+        </div>
+      </header>`;
 
 /* Les plateformes du projet, en cartes : l'icône dans sa couleur, ce que
    disent les versions réelles, et le lien qui mène à la page de la brique.
@@ -1083,17 +1098,20 @@ const ouvrirEtape = (j, d, { pid, env }) => {
   sur(m.el, 'click', '[data-question]', () => { m.fermer(); ouvrirBulle(pid, `À propos de l'étape « ${j.titre} » : `); });
 };
 
-/* --- Les parties du projet (équipe) --------------------------------------- */
-const composants = (d, { env }) => `
+/* --- Plateformes et versions (équipe) ---------------------------------------
+   Les parties du projet, chacune menant à sa page (brique.js), puis toutes
+   les versions (lot 3 : l'ancien onglet Versions s'y range). */
+const composants = (d, { env, pid }) => `
   <section class="section" style="margin-top:0">
     <div class="section-tete"><h2>Les parties du projet</h2>${boutonNouveau(env, 'composant', 'Ajouter')}</div>
     ${d.composants.length ? `<div class="liste">${d.composants.map((c) => ligne({
       icone: iconePlateforme(c.type) || 'composants', ton: tonPlateforme(c.type),
-      titre: `${echapper(c.nom)} <span class="t-3 t-petit" style="font-weight:400">· ${echapper(TYPES_COMPOSANT[c.type] || c.type || '')}</span>`,
+      titre: `<a class="lien-partie" href="#/projets/${echapper(pid)}/brique/${echapper(c.id)}" data-partie-lien="${echapper(c.id)}">${echapper(c.nom)}</a> <span class="t-3 t-petit" style="font-weight:400">· ${echapper(TYPES_COMPOSANT[c.type] || c.type || '')}</span>`,
       sous: `${echapper([c.version && `v${c.version}`, c.versionPrep && `${c.versionPrep} en prépa.`, c.environnement, (c.techno || []).join(', ')].filter(Boolean).join(' · '))}`,
       fin: `<span class="nb t-petit" style="min-width:44px;text-align:right">${borner(c.progression)} %</span>${pastille(STATUTS_COMPOSANT, c.statut || 'en-cours')}${boutonsEdition(env, 'composant', c.id, c.nom)}`,
     })).join('')}</div>` : vide({ icone: 'composants', titre: 'Aucune partie', texte: 'Découpez le projet pour suivre chacune de ses parties.', compact: true })}
-  </section>`;
+  </section>
+  ${releases(d, { env }, { suite: true })}`;
 
 /* --- Feuille de route ----------------------------------------------------- */
 const etapes = (d, { env, pid }) => {
@@ -1357,10 +1375,10 @@ const ouvrirDepotClient = (pid, env) => {
 };
 
 /* --- Versions ------------------------------------------------------------------ */
-const releases = (d, { env }) => {
+const releases = (d, { env }, { suite = false } = {}) => {
   const liste = d.releases.slice().sort(parDateDesc('date'));
   return `
-  <section class="section" style="margin-top:0">
+  <section class="section"${suite ? ' id="versions-projet"' : ' style="margin-top:0"'}>
     <div class="section-tete"><h2>Versions et changements</h2>${boutonNouveau(env, 'release', 'Nouvelle version')}</div>
     ${liste.length ? `<div class="pile" style="gap:var(--e-4)">${liste.map((r) => `<div class="carte" data-release="${echapper(r.id)}">
       <div class="rang-espace" style="align-items:flex-start">

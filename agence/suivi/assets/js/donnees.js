@@ -347,6 +347,25 @@ export const abonnerLiaisons = (lot) => {
   lot.abonner(K.liaisonsSentry, () => query(col('sentryLiaisons'), where('actif', '==', true)));
 };
 
+/** Ce que l'arbre d'un projet, dans le rail du Cockpit, lit en plus des
+    collections globales (refonte du Cockpit, lot 3) : les ressources, les
+    axes, les notes, les parties, la liaison Sentry, les personnes (projet
+    client) et l'existence du coffre. Les MÊMES requêtes que dans
+    abonnerProjet côté équipe (le magasin partage une écoute par clé, la
+    première posée gagne). Seulement pour les projets en cours et le projet
+    ouvert : cinquante projets fois sept clés pour le seul rail, non. */
+export const abonnerArbreEquipe = (lot, pid, { interne = false } = {}) => {
+  lot.abonner(K.liens(pid), () => col('projets', pid, 'liens'));
+  lot.abonner(K.axes(pid), () => col('projets', pid, 'axes'));
+  lot.abonner(K.notes(pid), () => query(col('notes'), where('projet', '==', pid)));
+  lot.abonner(K.composants(pid), () => col('projets', pid, 'composants'));
+  lot.abonner(K.sentryLiaison(pid), () => doc(bdd, 'sentryLiaisons', pid));
+  if (!interne) lot.abonner(K.interlocuteurs(pid), () => col('projets', pid, 'interlocuteurs'));
+  abonnerCoffre(lot, pid);
+};
+/** Les clés que lit l'arbre d'un projet (le rail les attend avant son dessin). */
+export const clesArbreEquipe = (pid, { interne = false } = {}) => [K.liens(pid), K.axes(pid), K.notes(pid), K.composants(pid), K.sentryLiaison(pid), K.coffre(pid), ...(interne ? [] : [K.interlocuteurs(pid)])];
+
 /** Le plan de tests d'un projet, toutes ses sections (lourd : à la demande). */
 export const abonnerPlan = (lot, pid) => lot.abonner(K.planTests(pid), () => col('projets', pid, 'planTests'));
 

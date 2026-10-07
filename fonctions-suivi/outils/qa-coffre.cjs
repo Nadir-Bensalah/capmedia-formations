@@ -188,7 +188,10 @@ const majEntree = (chemin, champs, masque) => ({
   await connecter(page, ADMIN);
   await aller(page, '#/projets/atelier/coffre');
   verifier(await etatCoffre(page, 'absent'), 'l onglet Coffre-fort s ouvre sur « pas encore de coffre »');
-  verifier(/Coffre-fort/.test(await page.textContent('#onglets-projet').catch(() => '')), 'l onglet figure dans la barre du projet');
+  /* Refonte du Cockpit, lot 3 : plus de barre d'onglets ; l'entrée est
+     dans l'arbre du projet, au rail, sans « Chiffré » tant qu'il n'existe pas. */
+  const entreeCoffre = '#lat-corps .lat-arbre[data-arbre="atelier"] a[data-chemin="/projets/atelier/coffre"]';
+  verifier(/Coffre-fort/.test(await page.textContent(entreeCoffre).catch(() => '')) && !(await page.$(`${entreeCoffre} .lat-marqueur`)), 'l entrée figure dans l arbre du projet, sans « Chiffré » avant la création');
   const expl = await page.textContent('[data-coffre-etat]');
   verifier(/Même Capmedia ne peut pas lire ce coffre sans la phrase/.test(expl) && /le contenu est perdu/.test(expl), 'la page explique : même Capmedia ne peut pas lire, phrase perdue = contenu perdu');
   verifier(!/—/.test(expl), 'aucun tiret cadratin dans les textes du coffre');
@@ -205,6 +208,7 @@ const majEntree = (chemin, champs, masque) => ({
   verifier(p1.sansCopier && /Recopiez-la à la main/.test(p1.texte), 'pas de bouton « Copier la phrase » : elle se recopie à la main, sur papier');
   verifier(/Jamais par e-mail/.test(p1.texte) && /de vive voix ou sur papier/.test(p1.texte) && /plus jamais affichée/.test(p1.texte), 'l avertissement : transmettre à part, jamais par e-mail ni dans le Hub, affichée une fois');
   verifier(await etatCoffre(page, 'ouvert'), 'le coffre créé est ouvert pour son créateur');
+  verifier(await attendre(async () => /Chiffré/.test(await page.textContent(`${entreeCoffre} .lat-marqueur--vert`).catch(() => ''))), 'l entrée de l arbre dit « Chiffré », en vert, comme chez le client');
   verifier(!(await page.content()).includes(p1.phrase), 'la phrase a disparu de la page');
   const coffreDoc = await lire('coffres/atelier');
   verifier(coffreDoc && entier(coffreDoc, 'iterations') >= 600000 && str(coffreDoc, 'kdf') === 'PBKDF2-SHA256' && str(coffreDoc, 'sel').length === 22, 'la base garde PBKDF2-SHA256, 600 000 tours, un sel');

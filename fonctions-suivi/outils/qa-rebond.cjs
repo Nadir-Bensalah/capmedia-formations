@@ -94,7 +94,11 @@ const ligne=(nom,r)=>console.log(`  ${nom.padEnd(40)} peints=${r.peints} contenu
     /* Refonte du Cockpit, lot 2 : côté équipe, Fichiers et Activité ne sont
        plus des onglets du projet mais la page de tous les projets, filtrée
        sur lui (mesurées plus bas comme des pages). */
-    const ongletsProjet=role==='équipe'?['taches','demandes','tests']:['taches','demandes','fichiers','tests','activite'];
+    /* Lot 3 : côté équipe, Tests n'est plus un onglet du projet mais sa
+       console (/tests?projet=), mesurée plus bas comme une page ; Plateformes
+       et versions, Ressources et Feuille de route sont des pages du projet
+       ouvertes par l'arbre, en place (même clé de route). */
+    const ongletsProjet=role==='équipe'?['taches','demandes','composants','liens','etapes']:['taches','demandes','fichiers','tests','activite'];
     for(const o of ongletsProjet) await mesurer(`onglet ${o}`,aller(`/projets/atelier/${o}`));
     await mesurer('onglet apercu',aller('/projets/atelier'));
     /* Première visite de la page Tests : la donnée vient du serveur, le
