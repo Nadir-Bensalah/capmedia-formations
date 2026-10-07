@@ -316,7 +316,9 @@ export const vue = async (ctx, env) => {
         ${blocages.length ? `<div class="liste">${blocages.map((b) => ligne({
           icone: 'alerte', ton: 'rouge', titre: echapper(b.titre),
           sous: echapper([b.description, b.impact && `Conséquence : ${b.impact}`].filter(Boolean).join(' · ')),
-          fin: `${b.responsable === 'client' ? '<span class="puce puce--ambre"><i></i>De votre côté</span>' : '<span class="puce"><i></i>De notre côté</span>'}${equipe ? boutons('blocage', b.id, b.titre) : ''}`,
+          /* Qui doit agir, dit à qui lit : le client lit « De votre côté »,
+             l'équipe « Côté client » (lot 5). */
+          fin: `${b.responsable === 'client' ? `<span class="puce puce--ambre"><i></i>${equipe ? 'Côté client' : 'De votre côté'}</span>` : `<span class="puce"><i></i>${equipe ? (b.responsable === 'tiers' ? 'Un tiers' : 'Côté Capmedia') : 'De notre côté'}</span>`}${equipe ? boutons('blocage', b.id, b.titre) : ''}`,
         })).join('')}</div>` : '<p class="t-petit t-3">Rien ne bloque cette partie.</p>'}
       </section>` : ''}
 
@@ -345,7 +347,7 @@ export const vue = async (ctx, env) => {
       </section>` : ''}
 
       ${jalons.length ? `<section class="section">
-        <div class="section-tete"><h2>Les étapes qui la concernent <span class="compte-section">${jalons.length}</span></h2><a class="lien" href="#/projets/${echapper(pid)}/etapes">${equipe ? 'La feuille de route' : 'Le planning'}</a></div>
+        <div class="section-tete"><h2>Les étapes qui la concernent <span class="compte-section">${jalons.length}</span></h2><a class="lien" href="#/projets/${echapper(pid)}/etapes">Le planning</a></div>
         <div class="liste">${jalons.map((j) => ligne({
           icone: j.statut === 'termine' ? 'check' : j.statut === 'bloque' ? 'alerte' : 'drapeau',
           ton: j.statut === 'termine' ? 'vert' : j.statut === 'bloque' ? 'rouge' : j.statut === 'en-cours' ? 'bleu' : '',
@@ -366,11 +368,11 @@ export const vue = async (ctx, env) => {
       </section>` : ''}
 
       <section class="section" data-section="demandes">
-        <div class="section-tete"><h2>Les tickets ${demandes.length ? `<span class="compte-section">${demandesOuvertes.length}</span>` : ''}</h2><a class="lien" href="#/projets/${echapper(pid)}/nouvelle-demande">${equipe ? 'Nouvelle demande' : 'Nouveau ticket'}</a></div>
+        <div class="section-tete"><h2>Les tickets ${demandes.length ? `<span class="compte-section">${demandesOuvertes.length}</span>` : ''}</h2><a class="lien" href="#/projets/${echapper(pid)}/nouvelle-demande">Nouveau ticket</a></div>
         ${demandes.length ? `<div class="liste">${demandes.map((t) => ligne({
           href: `#/projets/${echapper(pid)}/demandes/${echapper(t.id)}`,
           icone: 'demandes', titre: echapper(t.titre),
-          sous: echapper([t.numero, t.version ? `version ${t.version}` : '', OUVERTS.includes(t.statut) ? `${equipe ? 'ouverte' : 'ouvert'} depuis ${age(t.cree)}` : `${equipe ? 'close' : 'clos'} ${depuis(t.maj)}`].filter(Boolean).join(' · ')),
+          sous: echapper([t.numero, t.version ? `version ${t.version}` : '', OUVERTS.includes(t.statut) ? `ouvert depuis ${age(t.cree)}` : `clos ${depuis(t.maj)}`].filter(Boolean).join(' · ')),
           fin: pastille(STATUTS, t.statut, { client: !equipe }),
         })).join('')}</div>` : `<p class="t-petit t-3">Aucun ticket sur cette partie. Une question, un souhait : écrivez-nous.</p>`}
       </section>

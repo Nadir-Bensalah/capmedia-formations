@@ -20,7 +20,7 @@ import {
   verdictHtml, anneauOuPas, progressionOuPas, copier,
 } from '../ui.js';
 import * as magasin from '../magasin.js';
-import { K, ecrire, nouvelId, interneDuProjet, abonnerProjet, abonnerPlan, progressionProjet, jalonCourant, jalonSuivant, prochaineReunion, reunionAVenir, activiteDepuis, versionsPartie, enAttenteDeVous, peutRepondreValidation, parStatut, risquesProjet, MODES_PROGRESSION, trierEtapes, phasesTriees, notesPartageesDuProjet } from '../donnees.js';
+import { K, ecrire, nouvelId, interneDuProjet, abonnerProjet, abonnerPlan, progressionProjet, jalonCourant, jalonSuivant, prochaineReunion, reunionAVenir, activiteDepuis, versionsPartie, enAttenteDeVous, enAttenteDuClient, peutRepondreValidation, parStatut, risquesProjet, MODES_PROGRESSION, trierEtapes, phasesTriees, notesPartageesDuProjet } from '../donnees.js';
 import { filAriane } from '../coquille.js';
 import { notesPartageesHtml, gesteNoteDemande } from './notes-client.js';
 import { naviguer } from '../routeur.js';
@@ -183,7 +183,7 @@ export const vue = async (ctx, env) => {
      Tests d'un projet qui en a un : ses chiffres remplacent ceux de la
      bibliothèque. */
   let planSuivi = false;
-  const empreintePage = () => `${magasin.empreinte(cles)}|${planSuivi ? magasin.empreinte([K.planTests(pid)]) : ''}|${onglet}|${voitLeCoffre(env, magasin.lire(K.projet(pid))) ? 'coffre' : ''}|${equipe ? '' : `${etatPave(`projet:${pid}`)}${etatPave('accueil')}`}`;
+  const empreintePage = () => `${magasin.empreinte(cles)}|${planSuivi ? magasin.empreinte([K.planTests(pid)]) : ''}|${onglet}|${voitLeCoffre(env, magasin.lire(K.projet(pid))) ? 'coffre' : ''}|${equipe ? etatPave(`projet:${pid}`, 'equipe') : `${etatPave(`projet:${pid}`)}${etatPave('accueil')}`}`;
 
   /* L'onglet Tests d'un projet a rejoint la console (lot 3) : l'équipe y
      est menée, filtrée sur le projet. Un projet sans aucun test garde sa
@@ -214,7 +214,8 @@ export const vue = async (ctx, env) => {
     const risques = risquesProjet({ jalons: d.jalons, blocages: d.blocages, taches: d.taches, tickets: d.tickets });
     const delai = verdictDelai(projet.cible, { clos: statutProjet(projet) === 'termine', risques });
     const ouverts = d.tickets.filter((t) => OUVERTS.includes(t.statut));
-    const attente = enAttenteDeVous({ projets: [projet], tickets: d.tickets, validations: d.validations, documents: d.documents, taches: d.taches, blocages: d.blocages });
+    /* L'équipe lit la même liste dans ses mots (« Retour du client attendu »). */
+    const attente = (equipe ? enAttenteDuClient : enAttenteDeVous)({ projets: [projet], tickets: d.tickets, validations: d.validations, documents: d.documents, taches: d.taches, blocages: d.blocages });
     /* L'équipe n'a plus d'onglets horizontaux (lot 3) : l'arbre du projet,
        dans le rail, est sa seule navigation. L'aperçu garde l'en-tête
        complet et les cartes des plateformes ; les autres pages, un en-tête
@@ -403,12 +404,16 @@ export const vue = async (ctx, env) => {
     rendre(true);
   });
   brancherPieces(sortie);
-  /* Le pavé « En attente de vous » : replier, fermer, réafficher. */
-  const gestesPaves = equipe ? () => {} : brancherPaves(sortie, env);
+  /* Le pavé « En attente de vous » : replier, fermer, réafficher. Côté
+     équipe (lot 5), « En attente du client » se replie seulement. */
+  const gestesPaves = brancherPaves(sortie, env);
 
   /* Premier dessin avant l'affichage, les suivants regroupés : la page
      n'apparaît qu'une fois, sans squelette quand la donnée est déjà là. */
-  const planifier = magasin.dessinateur(() => rendre(false), 60, cles);
+  /* L'équipe attend aussi son profil (le pavé replié ou non) : sans lui, le
+     premier dessin montrait le pavé ouvert, puis le repliait. Il n'entre
+     pas dans l'empreinte : une conversation lue ne redessine rien. */
+  const planifier = magasin.dessinateur(() => rendre(false), 60, equipe ? [...cles, K.profil] : cles);
   cles.forEach((c) => lot.sur(c, planifier));
   function suivrePlan() {
     if (planSuivi || onglet !== 'tests' || !magasin.lire(K.planPresentation(pid))) return;
@@ -418,7 +423,7 @@ export const vue = async (ctx, env) => {
   }
   /* Le profil porte le choix du pavé (replié, fermé) : il redessine la page
      quand ce choix change, et seulement alors (l'empreinte le contient). */
-  if (!equipe) lot.sur(K.profil, planifier);
+  lot.sur(K.profil, planifier);
   planifier();
   /* La pastille de présence des interlocuteurs (onglet Accès client) se
      patche en place : un battement du client ne redessine pas la page. */
@@ -671,7 +676,8 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
   const echeances = [
     ...d.jalons.filter((j) => j.fin && j.statut !== 'termine').map((j) => ({ date: j.fin, titre: j.titre, genre: 'Étape', icone: 'drapeau', chemin: `/projets/${pid}/etapes` })),
     ...d.taches.filter((t) => t.echeance && t.statut !== 'terminee').map((t) => ({ date: t.echeance, titre: t.titre, genre: 'Tâche', icone: 'taches', chemin: `/projets/${pid}/taches/${t.id}` })),
-    ...d.reunions.filter(reunionAVenir).map((r) => ({ date: r.date, titre: r.titre, genre: 'Réunion', icone: 'reunions', chemin: `/projets/${pid}/reunions/${r.id}` })),
+    /* L'équipe va droit au Calendrier du projet, où la fiche s'ouvre (lot 2). */
+    ...d.reunions.filter(reunionAVenir).map((r) => ({ date: r.date, titre: r.titre, genre: 'Réunion', icone: 'reunions', chemin: equipe ? `/calendrier?projet=${encodeURIComponent(pid)}&reunion=${encodeURIComponent(r.id)}` : `/projets/${pid}/reunions/${r.id}` })),
     ...d.documents.filter((x) => x.type === 'facture' && x.echeance && ['a-payer', 'partielle', 'en-retard'].includes(x.statut)).map((x) => ({ date: x.echeance, titre: x.libelle, genre: 'Facture', icone: 'euro', chemin: equipe ? `/finances/${x.id}` : `/finances/${x.id}` })),
   ].filter((e) => joursAvant(e.date) >= -30).sort(parDateAsc('date')).slice(0, 6);
 
@@ -692,14 +698,15 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
      plus « Attendu de vous », la colonne de droite ne redit plus les
      validations ni les tickets. */
   const clePave = `projet:${pid}`;
-  const etatP = equipe ? 'ouvert' : etatPave(clePave);
+  /* L'équipe replie son pavé « En attente du client », sans le fermer (lot 5). */
+  const etatP = etatPave(clePave, equipe ? 'equipe' : 'client');
   const blocagesOuvertsIds = new Set(blocagesOuverts.map((b) => b.id));
   const attentePave = equipe ? attente : attente.filter((a) => !(a.genre === 'blocage' && blocagesOuvertsIds.has(String(a.chemin).split('blocage=')[1])));
   const paveVisible = attentePave.length > 0 && etatP !== 'ferme';
   const attenduTexte = attente.length ? `${pluriel(attente.length, 'point', 'points')}, ${paveVisible ? 'voir ci-dessus' : 'rangés dans Tickets'}` : 'Rien';
   const sourceProgression = prog.valeur === null
     ? 'Rien ne permet encore de la calculer'
-    : `${equipe ? (MODES_PROGRESSION[prog.mode] || '') : (MODES_PROGRESSION[prog.mode] || '').replace('de la feuille de route', 'du planning')}${prog.mode === 'manuel' && (projet.progression || {}).le ? ` le ${dateCourte(projet.progression.le)}` : ''}`;
+    : `${(MODES_PROGRESSION[prog.mode] || '').replace('de la feuille de route', 'du planning')}${prog.mode === 'manuel' && (projet.progression || {}).le ? ` le ${dateCourte(projet.progression.le)}` : ''}`;
 
   /* Ce qui a bougé depuis la dernière visite, sur ce projet seulement et
      sans ses propres gestes. Chaque compteur mène à l'onglet. */
@@ -738,18 +745,15 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
       </div>${equipe ? `<span class="rang" style="gap:2px"><button class="btn btn-petit btn-doux" type="button" data-action="resoudre-blocage" data-id="${echapper(b.id)}">Levé</button>${boutonsEdition(env, 'blocage', b.id, b.titre)}</span>` : ''}</div>`).join('')}</div>
     </section>` : ''}
 
-    ${(equipe ? attente.length : attentePave.length) ? (equipe ? `<section class="section"${blocagesOuverts.length || !rienAuDessus ? '' : ' style="margin-top:0"'}><div class="attente">
-      <p class="attente-tete">${icone('alerte')} En attente du client <span class="badge badge--vif" style="margin-left:4px">${attente.length}</span></p>
-      <div class="liste" style="margin-top:8px">${attente.slice(0, 5).map((a) => ligne({ href: `#${a.chemin}`, icone: a.icone, ton: a.ton, titre: echapper(a.titre), sous: echapper(a.sous) })).join('')}</div>
-      ${attente.length > 5 ? `<p class="t-petit" style="margin-top:8px"><a href="#/demandes">${echapper(pluriel(attente.length - 5, 'autre point', 'autres points'))} à voir</a></p>` : ''}
-    </div></section>` : paveHtml({
-      cle: clePave, etat: etatP, nombre: attentePave.length, rangement: 'Le ranger dans les tickets du projet', premier: !blocagesOuverts.length && rienAuDessus,
+    ${attentePave.length ? paveHtml({
+      cle: clePave, etat: etatP, nombre: attentePave.length, premier: !blocagesOuverts.length && rienAuDessus,
+      ...(equipe ? { titre: 'En attente du client', espace: 'equipe' } : { rangement: 'Le ranger dans les tickets du projet' }),
       corps: `<div class="liste" style="margin-top:8px">${attentePave.slice(0, 5).map((a) => ligne({ href: `#${a.chemin}`, icone: a.icone, ton: a.ton, titre: echapper(a.titre), sous: echapper(a.sous) })).join('')}</div>
-      ${attentePave.length > 5 ? `<p class="t-petit" style="margin-top:8px"><a href="#/projets/${echapper(pid)}/demandes">${echapper(pluriel(attentePave.length - 5, 'autre point', 'autres points'))} à voir</a></p>` : ''}`,
-    })) : ''}
+      ${attentePave.length > 5 ? `<p class="t-petit" style="margin-top:8px"><a href="#/projets/${echapper(pid)}/demandes"${equipe ? ' data-autres-points' : ''}>${echapper(pluriel(attentePave.length - 5, 'autre point', 'autres points'))} à voir</a></p>` : ''}`,
+    }) : ''}
 
     <section class="section${paveVisible || blocagesOuverts.length || !rienAuDessus ? '' : ' section--premiere'}" style="${paveVisible || blocagesOuverts.length || !rienAuDessus ? '' : 'margin-top:0'}">
-      <div class="section-tete"><h2>Votre projet en un coup d'œil</h2>${equipe ? `<button class="btn btn-fantome btn-petit" type="button" data-action="editer-projet">${icone('edit')} Le pouls</button>` : ''}</div>
+      <div class="section-tete"><h2>${equipe ? 'Le projet en un coup d\'œil' : 'Votre projet en un coup d\'œil'}</h2>${equipe ? `<button class="btn btn-fantome btn-petit" type="button" data-action="editer-projet">${icone('edit')} Le pouls</button>` : ''}</div>
       <div class="grille grille-tiers">
         <div class="pouls">
           <div><p class="quoi">${icone('play')} En ce moment</p><p class="texte${pulse.enCours ? '' : ' rien'}">${echapper(pulse.enCours || (enCours[0] ? enCours[0].titre : (courant ? courant.titre : 'Rien de renseigné')))}</p>${pulse.enCours ? poulsMaj : ''}</div>
@@ -795,7 +799,7 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
       <div class="pile" style="gap:var(--e-7)">
         <section>
           <div class="section-tete"><h2>Planning</h2><a class="lien" href="#/projets/${echapper(pid)}/etapes">Tout voir</a></div>
-          ${d.jalons.length ? `<div class="route">${trierEtapes(d.jalons).slice(0, 6).map((j) => phaseHtml(j)).join('')}</div>` : vide({ icone: 'route', titre: equipe ? 'Pas encore de feuille de route' : 'Pas encore de planning', texte: equipe ? 'Posez les étapes du projet.' : 'Elle apparaîtra ici dès que les étapes seront posées.', compact: true, action: boutonNouveau(env, 'jalon', 'Première étape') })}
+          ${d.jalons.length ? `<div class="route">${trierEtapes(d.jalons).slice(0, 6).map((j) => phaseHtml(j)).join('')}</div>` : vide({ icone: 'route', titre: 'Pas encore de planning', texte: equipe ? 'Posez les étapes du projet.' : 'Elle apparaîtra ici dès que les étapes seront posées.', compact: true, action: boutonNouveau(env, 'jalon', 'Première étape') })}
         </section>
         <section>
           <div class="section-tete"><h2>Activité récente</h2><a class="lien" href="${equipe ? `#/activite?projet=${echapper(encodeURIComponent(pid))}` : `#/projets/${echapper(pid)}/activite`}">Tout voir</a></div>
@@ -814,7 +818,7 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
         ${equipe && validationsAttente.length ? `<div class="carte carte--creuse"><p class="surtitre">Validations</p><div class="pile" style="margin-top:10px;gap:8px">${validationsAttente.map((v) => `<button class="rang" type="button" style="gap:10px;text-align:left" data-action="ouvrir-validation" data-id="${echapper(v.id)}"><span class="ligne-icone ligne-icone--violet" style="width:28px;height:28px;border-radius:8px">${icone('valider')}</span><span class="t-petit t-fort">${echapper(v.titre)}</span></button>`).join('')}</div></div>` : ''}
         ${equipe ? `<div class="carte carte--creuse">
           <p class="surtitre">Tickets</p>
-          <p class="t-petit" style="margin-top:8px">${pluriel(ouverts.length, 'ticket ouvert', 'tickets ouverts')}${ouverts.filter((t) => ATTEND_CLIENT.includes(t.statut)).length ? `, ${ouverts.filter((t) => ATTEND_CLIENT.includes(t.statut)).length} de votre côté` : ''}</p>
+          <p class="t-petit" style="margin-top:8px">${pluriel(ouverts.length, 'ticket ouvert', 'tickets ouverts')}${ouverts.filter((t) => ATTEND_CLIENT.includes(t.statut)).length ? `, ${pluriel(ouverts.filter((t) => ATTEND_CLIENT.includes(t.statut)).length, 'attend le client', 'attendent le client')}` : ''}</p>
           <p style="margin-top:8px"><a class="t-petit" href="#/projets/${echapper(pid)}/demandes">Voir les tickets</a></p>
         </div>` : ''}
       </aside>
@@ -964,9 +968,15 @@ const tenueDesDelais = (d, { pid, env, delai, risques, prog }) => {
       ${risques.length ? `<div class="delais-risques">
         <p class="surtitre">Ce qui peut retarder la livraison</p>
         <ul class="delais-liste">${risques.map((brut) => {
-          /* Le client dit « ticket » (02/10) ; le calcul, partagé, garde « demande ». */
-          const r = env.role === 'equipe' ? brut : brut.replace(/\bdemande(s?) en attente/, 'ticket$1 en attente');
-          return `<li><span class="puce puce--ambre"><i aria-hidden="true"></i></span><span>${/(demandes?|tickets?) en attente de votre réponse/.test(r) ? `<a href="#/projets/${echapper(pid)}/demandes?filtre=pour-vous">${echapper(r)}</a>` : echapper(r)}</span></li>`;
+          /* Le client dit « ticket » (02/10) ; le calcul, partagé, garde
+             « demande ». L'équipe aussi dit « ticket » (lot 4), et lit qui
+             doit répondre : le client, pas « vous » (lot 5). */
+          const r = env.role === 'equipe'
+            ? brut.replace(/\bdemande(s?) en attente de votre réponse/, 'ticket$1 en attente de la réponse du client')
+            : brut.replace(/\bdemande(s?) en attente/, 'ticket$1 en attente');
+          const lien = env.role === 'equipe' ? (/tickets? en attente de la réponse du client/.test(r) ? `#/projets/${echapper(pid)}/demandes` : '')
+            : (/(demandes?|tickets?) en attente de votre réponse/.test(r) ? `#/projets/${echapper(pid)}/demandes?filtre=pour-vous` : '');
+          return `<li><span class="puce puce--ambre"><i aria-hidden="true"></i></span><span>${lien ? `<a href="${lien}">${echapper(r)}</a>` : echapper(r)}</span></li>`;
         }).join('')}</ul>
         ${etapesEnRetard.length ? `<p class="t-micro" style="margin-top:8px"><a href="#/projets/${echapper(pid)}/etapes">Voir les étapes concernées</a></p>` : ''}
       </div>` : ''}

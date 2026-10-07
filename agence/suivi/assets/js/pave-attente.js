@@ -12,6 +12,14 @@
    son profil (profils/{uid}.pavesAttente, voir suivi/firestore.rules) :
      { accueil: 'ouvert' | 'replie' | 'ferme', projets: { <pid>: idem } }
    Les clés de ce module : 'accueil', ou 'projet:<pid>'.
+
+   Le Cockpit s'en sert aussi (refonte, lot 5), avec l'espace 'equipe' :
+   le pavé de l'équipe se REPLIE mais ne se ferme pas (il n'a pas de page
+   où se ranger). Sur Aujourd'hui, 'accueil' est le pavé « À traiter » et
+   'projet:*' celui de « Attendent le client » (tous les projets, rangé dans
+   projets['*'], qu'aucun identifiant de projet ne peut prendre) ; dans
+   l'aperçu d'un projet, 'projet:<pid>' est « En attente du client ». Le
+   choix vit dans le profil du membre de l'équipe, même champ, même règle.
    ========================================================================== */
 
 import { echapper } from './noyau.js';
@@ -34,14 +42,17 @@ const etatServeur = (cle) => {
   return ETATS.includes(v) ? v : 'ouvert';
 };
 
-/** L'état du pavé : 'ouvert', 'replie' ou 'ferme'. */
-export const etatPave = (cle) => {
+/** L'état du pavé : 'ouvert', 'replie' ou 'ferme'. Pour l'équipe
+    (espace 'equipe'), jamais fermé : un choix « fermé » venu d'ailleurs
+    se lit replié, le pavé ne disparaît pas sans retour possible. */
+export const etatPave = (cle, espace = 'client') => {
   const serveur = etatServeur(cle);
+  let etat = serveur;
   if (locaux.has(cle)) {
     if (locaux.get(cle) === serveur) locaux.delete(cle);
-    else return locaux.get(cle);
+    else etat = locaux.get(cle);
   }
-  return serveur;
+  return espace === 'equipe' && etat === 'ferme' ? 'replie' : etat;
 };
 
 const poser = (uid, cle, etat) => {
@@ -58,18 +69,22 @@ const poser = (uid, cle, etat) => {
 /**
  * Le pavé, ouvert ou replié ; rien s'il est fermé. `corps` : ses lignes
  * (le pavé replié ne les montre pas). `rangement` dit où il ira.
+ * `espace` : 'client' (le Hub, par défaut) ou 'equipe' (le Cockpit : pas
+ * de Fermer). `tete` : un lien de plus dans l'en-tête, visible même replié
+ * (« Tout voir »). `attrs` : des attributs de plus sur la section.
  */
-export const paveHtml = ({ cle, etat, titre = 'En attente de vous', nombre, corps, rangement, premier = true }) => {
-  if (etat === 'ferme') return '';
-  const replie = etat === 'replie';
+export const paveHtml = ({ cle, etat, titre = 'En attente de vous', nombre, corps, rangement, premier = true, espace = 'client', tete = '', attrs = '' }) => {
+  if (etat === 'ferme' && espace !== 'equipe') return '';
+  const replie = etat === 'replie' || etat === 'ferme';
   const id = `pave-${String(cle).replace(/[^\w-]/g, '-')}`;
-  return `<section class="section"${premier ? ' style="margin-top:0"' : ''}>
+  return `<section class="section"${premier ? ' style="margin-top:0"' : ''}${attrs ? ` ${attrs}` : ''}>
     <div class="attente${replie ? ' attente--repliee' : ''}" data-pave="${echapper(cle)}">
       <div class="attente-tete">
         ${icone('alerte')}<span class="attente-titre">${echapper(titre)}</span><span class="badge badge--vif">${echapper(nombre)}</span>
         <span class="attente-gestes">
+          ${tete}
           <button class="btn btn-fantome btn-petit" type="button" data-pave-geste="${replie ? 'deplier' : 'replier'}" data-pave-cle="${echapper(cle)}" aria-expanded="${replie ? 'false' : 'true'}" aria-controls="${id}">${icone(replie ? 'chevron' : 'chevronHaut')}${replie ? 'Déplier' : 'Replier'}</button>
-          <button class="btn btn-fantome btn-petit" type="button" data-pave-geste="fermer" data-pave-cle="${echapper(cle)}" data-astuce="${echapper(rangement)}">${icone('fermer')}Fermer</button>
+          ${espace === 'equipe' ? '' : `<button class="btn btn-fantome btn-petit" type="button" data-pave-geste="fermer" data-pave-cle="${echapper(cle)}" data-astuce="${echapper(rangement)}">${icone('fermer')}Fermer</button>`}
         </span>
       </div>
       <div id="${id}"${replie ? ' hidden' : ''}>${replie ? '' : corps}</div>
@@ -157,6 +172,8 @@ export const brancherPaves = (racine, env) => sur(racine, 'click', '[data-pave-g
   const geste = el.dataset.paveGeste;
   const uid = env.session.utilisateur.uid;
   if (!cle) return;
+  /* L'équipe replie et déplie ; elle ne range pas (lot 5). */
+  if (env.role === 'equipe' && !['replier', 'deplier'].includes(geste)) return;
   if (geste === 'replier') { poser(uid, cle, 'replie'); return; }
   if (geste === 'deplier') { poser(uid, cle, 'ouvert'); return; }
   if (geste === 'fermer') {

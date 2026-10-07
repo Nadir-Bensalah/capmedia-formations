@@ -238,6 +238,16 @@ await refuse('mais pas un état inventé', setDoc(doc(camille(), `profils/${CAMI
 await refuse('ni une autre clé dans le choix', setDoc(doc(camille(), `profils/${CAMILLE}`), { pavesAttente: { role: 'admin' } }, { merge: true }));
 await refuse('ni autre chose qu une carte', setDoc(doc(camille(), `profils/${CAMILLE}`), { pavesAttente: 'ferme' }, { merge: true }));
 await refuse("Camille ne range pas le pavé de Léa", setDoc(doc(camille(), `profils/${LEA}`), { pavesAttente: { accueil: 'ferme' } }, { merge: true }));
+/* Le Cockpit (refonte, lot 5) : le même champ porte les pavés de l'équipe,
+   « À traiter » (accueil), « Attendent le client » de tous les projets
+   (projets['*']) et « En attente du client » d'un projet ; la date de son
+   passage (« Depuis mon passage »). */
+await doit('L équipe replie son pavé « À traiter »', setDoc(doc(equipe(), `profils/${AGENT}`), { pavesAttente: { accueil: 'replie' } }, { merge: true }));
+await doit('et « Attendent le client » de tous les projets, et celui d un projet', setDoc(doc(equipe(), `profils/${AGENT}`), { pavesAttente: { projets: { '*': 'replie', atelier: 'replie' } } }, { merge: true }));
+await doit('et le déplie', setDoc(doc(equipe(), `profils/${AGENT}`), { pavesAttente: { accueil: 'ouvert', projets: { '*': 'ouvert' } } }, { merge: true }));
+await doit('et pose la date de son passage', setDoc(doc(equipe(), `profils/${AGENT}`), { derniereVisite: new Date() }, { merge: true }));
+await refuse('mais pas un état inventé', setDoc(doc(equipe(), `profils/${AGENT}`), { pavesAttente: { accueil: 'plie' } }, { merge: true }));
+await refuse('ni le pavé d une cliente', setDoc(doc(equipe(), `profils/${CAMILLE}`), { pavesAttente: { accueil: 'replie' } }, { merge: true }));
 
 // Les abonnements push (notifications des messages, espace fermé) : les siens seulement, champs fermés.
 const PUSH_ID = 'a'.repeat(40);

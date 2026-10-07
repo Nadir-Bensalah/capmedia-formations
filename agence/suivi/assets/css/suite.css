@@ -1824,6 +1824,12 @@ button.lat-lien { background: transparent; border: 0; cursor: pointer; }
 /* --- Messages, sur l'accueil, avec le nombre de non lus ----------------- */
 .btn-messages .badge { margin-left: 2px; }
 
+/* --- Les chiffres d'Aujourd'hui (Cockpit, lot 5) : chacun mène à sa liste */
+a.metrique { color: inherit; text-decoration: none; transition: background .15s var(--courbe); }
+a.metrique:hover { background: var(--survol); }
+a.metrique:hover .metrique-libelle { color: var(--encre); }
+a.metrique:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
 /* --- Un fichier montré par la recherche -------------------------------- */
 .fichier--montre { background: var(--bleu-clair); transition: background .6s var(--courbe); }
 

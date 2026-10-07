@@ -105,6 +105,8 @@ const ligne=(nom,r)=>console.log(`  ${nom.padEnd(40)} peints=${r.peints} contenu
        squelette a le droit d'être peint, le contenu une seule fois. */
     await mesurer('page Tests',aller(role==='équipe'?'/tests?projet=atelier':'/tests'));
     if(role==='équipe'){await mesurer('page Tâches',aller('/taches'));await mesurer('page Calendrier',aller('/calendrier'));await mesurer('page Projets',aller('/projets'));
+      /* Aujourd'hui (lot 5) : la donnée est là, un seul dessin, sans squelette. */
+      await mesurer('page Aujourd\'hui',aller('/'));
       /* Les pages d'un projet qui étaient des onglets (lot 2). */
       await mesurer('page Fichiers du projet',aller('/fichiers?projet=atelier'));
       await mesurer('page Activité du projet',aller('/activite?projet=atelier'));

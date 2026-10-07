@@ -1638,8 +1638,12 @@ export const enAttenteDeNous = ({ projets = [], tickets = [], validations = [], 
   return trierParUrgence(items);
 };
 
-/** Ce qui attend le client, vu par l'équipe. */
-export const enAttenteDuClient = (donnees) => enAttenteDeVous(donnees);
+/** Ce qui attend le client, vu par l'équipe : la même liste, dite à
+    l'équipe (lot 5 du Cockpit) ; le client lit « votre retour », « de
+    votre côté », l'équipe lit qui doit agir. */
+const POUR_L_EQUIPE = [[/^Nous attendons votre retour/, 'Retour du client attendu'], [/^Point bloquant de votre côté/, 'Point bloquant côté client']];
+export const enAttenteDuClient = (donnees) => enAttenteDeVous(donnees)
+  .map((a) => ({ ...a, sous: POUR_L_EQUIPE.reduce((s, [motif, texte]) => s.replace(motif, texte), String(a.sous || '')) }));
 
 /** Les projets actifs. */
 export const projetsActifs = (projets = []) => projets.filter(projetEstActif);

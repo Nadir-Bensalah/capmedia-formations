@@ -8,7 +8,7 @@ import { monterCoquille, definirNavigation, enregistrerRecherche, definirRetouch
 import { definir, demarrer, naviguer, courant, adresseAvec, surChangement } from './routeur.js';
 import { titrePage, avatarProjet } from './ui.js';
 import * as magasin from './magasin.js';
-import { abonnerGlobal, abonnerArbreEquipe, clesArbreEquipe, interneDuProjet, reunionAVenir, K, nonLusProjet, requeteMessages, messagesDuProjet } from './donnees.js';
+import { abonnerGlobal, abonnerArbreEquipe, clesArbreEquipe, interneDuProjet, reunionAVenir, K, nonLusProjet, requeteMessages, messagesDuProjet, ecrire } from './donnees.js';
 import * as adminATraiter from './vues/admin-a-traiter.js';
 import { boite, clesBoite } from './vues/admin-a-traiter.js';
 
@@ -58,6 +58,24 @@ const lotGlobal = magasin.lot();
 abonnerGlobal(lotGlobal, session);
 
 const { vue } = monterCoquille({ session, role: 'equipe', groupes: [], sortie: $('#racine') });
+
+/* La dernière visite, comme dans le Hub (app.js) : « Depuis mon passage »
+   d'Aujourd'hui (lot 5) lit la valeur d'AVANT cette session, gardée dans
+   env pour toute la session ; la nouvelle se pose quand la page se cache
+   et toutes les dix minutes d'activité, jamais dans env.derniereVisite. */
+magasin.attendre(K.profil).then((profil) => {
+  env.derniereVisite = profil && profil.derniereVisite ? profil.derniereVisite : null;
+}).catch(() => {});
+const DIX_MINUTES = 10 * 60 * 1000;
+let passageEcrit = 0;
+const poserPassage = ({ force = false } = {}) => {
+  if (!force && Date.now() - passageEcrit < DIX_MINUTES) return;
+  passageEcrit = Date.now();
+  ecrire.majProfil(session.utilisateur.uid, { derniereVisite: new Date() }).catch(() => {});
+};
+window.addEventListener('pagehide', () => poserPassage({ force: true }));
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') poserPassage({ force: true }); });
+['pointerdown', 'keydown'].forEach((type) => document.addEventListener(type, () => poserPassage(), { passive: true }));
 
 /* --- L'arbre des projets en cours (refonte du Cockpit, lot 3) -----------
    Comme dans le Hub : chaque projet en cours a son arbre dans le rail, et

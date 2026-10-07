@@ -1065,7 +1065,8 @@
   "lot": "L5",
   "sonde": {
    "route": "/",
-   "cible": "#vue .page-tete .actions a[href=\"#/projets/nouveau\"]"
+   "cible": "#vue .page-tete .actions a[href=\"#/projets/nouveau\"]",
+   "agent": "absent"
   }
  },
  {
@@ -1079,7 +1080,8 @@
   "lot": "L5",
   "sonde": {
    "route": "/",
-   "cible": "#vue .page-tete .actions a[href=\"#/clients/nouveau\"]"
+   "cible": "#vue .page-tete .actions a[href=\"#/clients/nouveau\"]",
+   "agent": "absent"
   }
  },
  {
@@ -1107,8 +1109,8 @@
   "lot": "L5",
   "sonde": {
    "route": "/",
-   "cible": "#vue .metriques .metrique-libelle",
-   "texte": "Projets clients",
+   "cible": "#vue .metriques a.metrique[data-tuile=\"tickets\"][href=\"#/demandes\"] .metrique-libelle",
+   "texte": "Tickets reçus",
    "agent": "present"
   }
  },
@@ -1123,8 +1125,7 @@
   "lot": "L5",
   "sonde": {
    "route": "/",
-   "cible": "#vue .section-tete h2",
-   "texte": "À traiter maintenant"
+   "cible": "#vue [data-a-traiter] a[href=\"#/a-traiter\"]"
   }
  },
  {
@@ -1196,7 +1197,7 @@
   "lot": "L5",
   "sonde": {
    "route": "/",
-   "cible": "#vue aside .carte--creuse .surtitre",
+   "cible": "#vue aside [data-attente-client]",
    "texte": "Attendent le client"
   }
  },
@@ -3911,7 +3912,7 @@
   "lot": "L5",
   "sonde": {
    "route": "/projets/atelier",
-   "cible": "#onglet-corps .attente .attente-tete",
+   "cible": "#onglet-corps [data-pave=\"projet:atelier\"] .attente-titre",
    "texte": "En attente du client"
   }
  },
@@ -3926,7 +3927,7 @@
   "lot": "L5",
   "sonde": {
    "route": "/projets/atelier",
-   "cible": "#onglet-corps .attente a[href=\"#/demandes\"]",
+   "cible": "#onglet-corps [data-pave=\"projet:atelier\"] a[data-autres-points][href=\"#/projets/atelier/demandes\"]",
    "agent": "absent",
    "incertain": true
   }
