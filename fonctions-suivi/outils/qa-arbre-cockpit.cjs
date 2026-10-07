@@ -78,7 +78,9 @@ const attendreHash = (page, re, ms = 10000) => attendre(async () => re.test(awai
 const arbre = (pid) => `#lat-corps .lat-arbre[data-arbre="${pid}"]`;
 const entree = (pid, chemin) => `${arbre(pid)} .lat-branche a[data-chemin="${chemin}"]`;
 const nombre = async (page, sel) => Number(((await page.$eval(sel, (el) => el.textContent).catch(() => '')) || '').trim()) || 0;
-const arbres = (page) => page.$$eval('#lat-corps .lat-arbre', (as) => as.map((a) => a.dataset.arbre));
+/* Les arbres des projets ; ceux des groupes du rail (lot 4 : À traiter,
+   Messages, Portefeuille, Finances, Pilotage) commencent par « : ». */
+const arbres = (page) => page.$$eval('#lat-corps .lat-arbre', (as) => as.map((a) => a.dataset.arbre).filter((id) => !id.startsWith(':')));
 const deplie = (page, pid) => page.$eval(arbre(pid), (a) => a.classList.contains('deplie')).catch(() => null);
 const actif = (page) => page.$eval('#lat-corps .lat-lien.actif', (a) => ({ chemin: a.dataset.chemin, projet: a.dataset.projet || '', courant: a.getAttribute('aria-current') })).catch(() => null);
 
@@ -183,8 +185,9 @@ const actif = (page) => page.$eval('#lat-corps .lat-lien.actif', (a) => ({ chemi
   verifier(await attendre(async () => deplie(pa, 'atelier')), 'ouvrir Atelier déplie son arbre');
   const entrees = await pa.$$eval(`${arbre('atelier')} .lat-branche a`, (as) => as.map((a) => ({ chemin: a.dataset.chemin, href: a.getAttribute('href'), texte: a.querySelector('.tronque').textContent.trim() })));
   const attendues = [
-    ['Aperçu', '#/projets/atelier'], ['Demandes', '#/projets/atelier/demandes'], ['Messages', '#/messages/atelier'], ['Feuille de route', '#/projets/atelier/etapes'],
-    ['Notes', '#/projets/atelier/notes'], ['Tâches', '#/projets/atelier/taches'], ['Calendrier', '#/calendrier?projet=atelier'], ['Tests', '#/tests?projet=atelier'],
+    /* Lot 4 : les mots du client pour ce qui est partagé. */
+    ['Aperçu', '#/projets/atelier'], ['Tickets', '#/projets/atelier/demandes'], ['Messages', '#/messages/atelier'], ['Planning', '#/projets/atelier/etapes'],
+    ['Notes', '#/projets/atelier/notes'], ['Tâches', '#/projets/atelier/taches'], ['Calendrier', '#/calendrier?projet=atelier'], ['Campagne de tests', '#/tests?projet=atelier'],
     ['Marketing', '#/projets/atelier/marketing'], ['Coffre-fort', '#/projets/atelier/coffre'], ['Fichiers', '#/fichiers?projet=atelier'], ['Ressources', '#/projets/atelier/liens'],
     ['Axes d\'évolution', '#/projets/atelier/evolutions'], ['Devis et factures', '#/finances?projet=atelier'], ['Maintenance', '#/maintenance?projet=atelier'],
     ['Santé de l\'app', '#/projets/atelier/stabilite'], ['Plateformes et versions', '#/projets/atelier/composants'], ['Accès client', '#/projets/atelier/acces'],
@@ -195,7 +198,7 @@ const actif = (page) => page.$eval('#lat-corps .lat-lien.actif', (a) => ({ chemi
   const demandes = entree('atelier', '/projets/atelier/demandes');
   const grisDemandes = await nombre(pa, `${demandes} .compte:not(.vif)`);
   const rougeDemandes = await nombre(pa, `${demandes} .compte.vif`);
-  verifier(rougeDemandes === chezNous && (grisDemandes === ouvertes || (ouvertes === chezNous && !grisDemandes)), 'Demandes : ouvertes en gris, chez nous en rouge', `${grisDemandes}/${rougeDemandes} attendu ${ouvertes}/${chezNous}`);
+  verifier(rougeDemandes === chezNous && (grisDemandes === ouvertes || (ouvertes === chezNous && !grisDemandes)), 'Tickets : ouverts en gris, chez nous en rouge', `${grisDemandes}/${rougeDemandes} attendu ${ouvertes}/${chezNous}`);
   verifier(await nombre(pa, `${entree('atelier', '/projets/atelier/notes')} .compte`) === notesAValider, 'Notes : les propositions à valider seulement, ni refusées ni internes (D10)', await texteDe(pa, entree('atelier', '/projets/atelier/notes')));
   const tests = `${arbre('atelier')} .lat-branche a[data-chemin="/tests"]`;
   verifier((await nombre(pa, `${tests} .compte.vif`)) === anomalies, 'Tests : les anomalies ouvertes, sans avoir ouvert la page (D10)', `${await nombre(pa, `${tests} .compte.vif`)} / ${anomalies}`);
@@ -257,7 +260,7 @@ const actif = (page) => page.$eval('#lat-corps .lat-lien.actif', (a) => ({ chemi
   console.log('\n== La page d un projet, sans onglets horizontaux');
   await aller(pa, '#/projets/atelier', '#onglet-corps');
   verifier(!(await pa.$('#onglets-projet')) && !(await pa.$('.onglets-enveloppe')), 'plus de barre d onglets sur l aperçu');
-  verifier(Boolean(await pa.$('.page-tete--projet .tete-suivi')) && Boolean(await pa.$('.cartes-plateformes')) && Boolean(await pa.$('.page-tete--projet a[href="#/projets/atelier/nouvelle-demande"]')), 'l aperçu garde l en-tête complet, les cartes et « Nouvelle demande »');
+  verifier(Boolean(await pa.$('.page-tete--projet .tete-suivi')) && Boolean(await pa.$('.cartes-plateformes')) && Boolean(await pa.$('.page-tete--projet a[href="#/projets/atelier/nouvelle-demande"]')), 'l aperçu garde l en-tête complet, les cartes et « Nouveau ticket »');
   await aller(pa, '#/projets/atelier/taches', '#onglet-corps');
   verifier(!(await pa.$('#onglets-projet')), 'ni sur une autre page du projet');
   verifier((await texteDe(pa, '.page-tete--compacte h1')) === 'Atelier' && Boolean(await pa.$('.page-tete--compacte [data-action="editer-projet"]')) && Boolean(await pa.$('.page-tete--compacte [data-action="menu-projet"]')) && !(await pa.$('.cartes-plateformes')) && !(await pa.$('.tete-suivi')), 'ailleurs, un en-tête compact : le nom, Modifier, le menu ⋯', await texteDe(pa, '.page-tete'));
@@ -287,14 +290,14 @@ const actif = (page) => page.$eval('#lat-corps .lat-lien.actif', (a) => ({ chemi
   /* ---------------------------------------------------------------- */
   console.log('\n== Le fil d Ariane des pages d un projet');
   const fils = [
-    ['#/fichiers?projet=atelier', /^Accueil.*Projets.*Atelier.*Fichiers$/],
-    ['#/calendrier?projet=atelier', /^Accueil.*Projets.*Atelier.*Calendrier$/],
-    ['#/maintenance?projet=atelier', /^Accueil.*Projets.*Atelier.*Maintenance$/],
-    ['#/messages/atelier', /^Accueil.*Projets.*Atelier.*Messages$/],
-    ['#/projets/atelier/brique/ios', /^Accueil.*Projets.*Atelier.*Plateformes et versions.*Application iOS$/],
-    ['#/projets/atelier/composants', /^Accueil.*Projets.*Atelier.*Plateformes et versions$/],
-    ['#/projets/atelier/stabilite', /^Accueil.*Projets.*Atelier.*Santé de l'app$/],
-    ['#/projets/atelier/controle', /^Accueil.*Projets.*Atelier.*Santé de l'app.*Salle de contrôle$/],
+    ['#/fichiers?projet=atelier', /^Aujourd'hui.*Projets.*Atelier.*Fichiers$/],
+    ['#/calendrier?projet=atelier', /^Aujourd'hui.*Projets.*Atelier.*Calendrier$/],
+    ['#/maintenance?projet=atelier', /^Aujourd'hui.*Projets.*Atelier.*Maintenance$/],
+    ['#/messages/atelier', /^Aujourd'hui.*Projets.*Atelier.*Messages$/],
+    ['#/projets/atelier/brique/ios', /^Aujourd'hui.*Projets.*Atelier.*Plateformes et versions.*Application iOS$/],
+    ['#/projets/atelier/composants', /^Aujourd'hui.*Projets.*Atelier.*Plateformes et versions$/],
+    ['#/projets/atelier/stabilite', /^Aujourd'hui.*Projets.*Atelier.*Santé de l'app$/],
+    ['#/projets/atelier/controle', /^Aujourd'hui.*Projets.*Atelier.*Santé de l'app.*Salle de contrôle$/],
   ];
   for (const [h, re] of fils) {
     await aller(pa, h, '#ariane .courant'); await pause(400);
@@ -302,7 +305,7 @@ const actif = (page) => page.$eval('#lat-corps .lat-lien.actif', (a) => ({ chemi
   }
   await aller(pa, '#/calendrier?projet=atelier', '#f-projet');
   await pa.selectOption('#f-projet', ''); await pause(1500);
-  verifier(/^Accueil.*Calendrier$/.test(await texteDe(pa, '#ariane')) && !/Atelier/.test(await texteDe(pa, '#ariane')), 'changer de projet sur place met le fil à jour', await texteDe(pa, '#ariane'));
+  verifier(/^Aujourd'hui.*Calendrier$/.test(await texteDe(pa, '#ariane')) && !/Atelier/.test(await texteDe(pa, '#ariane')), 'changer de projet sur place met le fil à jour', await texteDe(pa, '#ariane'));
 
   /* ---------------------------------------------------------------- */
   console.log('\n== Un projet ouvert hors des projets en cours');

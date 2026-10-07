@@ -81,8 +81,9 @@ const NOTE=[
   verifier(entrees.includes('/a-faire'),'la barre porte « Projets à faire »');
   /* Refonte du Cockpit, lot 3 : « Projets » devient « Tous les projets »,
      au bas de l'arbre des projets en cours ; le portefeuille suit, avec
-     les projets à faire. */
-  const portefeuille=await page.$$eval('#lat-corps .lat-groupe',gs=>gs.map(g=>({titre:((g.querySelector('.lat-titre')||{}).textContent||'').trim(),chemins:[...g.querySelectorAll('.lat-lien')].map(a=>a.dataset.chemin)})).find(g=>/Portefeuille/i.test(g.titre)));
+     les projets à faire. Lot 4 : le portefeuille est un groupe qui se
+     plie (son arbre « :portefeuille »). */
+  const portefeuille=await page.$eval('#lat-corps .lat-arbre[data-arbre=":portefeuille"]',g=>({titre:((g.querySelector('.lat-groupe-tete .tronque')||{}).textContent||'').trim(),chemins:[...g.querySelectorAll('.lat-branche .lat-lien')].map(a=>a.dataset.chemin)})).catch(()=>null);
   verifier(portefeuille&&portefeuille.chemins.includes('/a-faire')&&entrees.indexOf('/a-faire')>entrees.indexOf('/projets')&&entrees.indexOf('/projets')>=0,'dans le portefeuille, sous « Tous les projets »',portefeuille&&portefeuille.chemins.join(' '));
   verifier(await compteBarre(page,'/a-faire')===0,'sans compte tant que rien n est rangé');
   /* Le compte ne se lit qu'une fois les projets chargés, et stable : lu

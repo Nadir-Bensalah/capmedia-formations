@@ -75,9 +75,10 @@ const ONGLETS = [
      projet relié. Le client y entre par le rail. */
   { cle: 'controle', libelle: 'Salle de contrôle', icone: 'sante', equipeSeule: true },
 ];
-/* Le nom d'une section dans les mots du client (Planning, Tickets...) ;
-   l'équipe garde les siens. */
-const libelleOnglet = (o, equipe) => (!equipe && o.libelleClient) || o.libelle;
+/* Le nom d'une section dans les mots du client (Planning, Tickets,
+   Campagne de tests) : depuis le lot 4 de la refonte du Cockpit, l'équipe
+   parle comme le client pour tout ce qui est partagé. */
+const libelleOnglet = (o) => o.libelleClient || o.libelle;
 /* Chez le client, les versions vivent dans la page de chaque plateforme
    (brique.js), les suggestions dans « Axes d'évolution », les décisions
    dans « Notes » (app.js en tient les adresses) : plus d'onglet pour eux. */
@@ -207,7 +208,7 @@ export const vue = async (ctx, env) => {
     titrePage(projet.nom);
     const onglets = ongletsVisibles(d, equipe, env);
     if (!onglets.some((o) => o.cle === onglet) && ONGLETS.some((o) => o.cle === onglet)) onglet = 'apercu';
-    filAriane([{ libelle: equipe ? 'Projets' : 'Accueil', chemin: equipe ? '/projets' : '/' }, { libelle: projet.nom, chemin: `/projets/${pid}` }, ...(onglet !== 'apercu' ? [{ libelle: libelleOnglet(ONGLETS.find((o) => o.cle === onglet) || { libelle: onglet === 'acces' ? 'Accès client' : (equipe ? 'Plateformes et versions' : 'Les parties') }, equipe) }] : [])]);
+    filAriane([{ libelle: equipe ? 'Projets' : 'Accueil', chemin: equipe ? '/projets' : '/' }, { libelle: projet.nom, chemin: `/projets/${pid}` }, ...(onglet !== 'apercu' ? [{ libelle: libelleOnglet(ONGLETS.find((o) => o.cle === onglet) || { libelle: onglet === 'acces' ? 'Accès client' : (equipe ? 'Plateformes et versions' : 'Les parties') }) }] : [])]);
 
     const prog = progressionProjet(projet, d.jalons, { composants: d.composants, taches: d.taches });
     const risques = risquesProjet({ jalons: d.jalons, blocages: d.blocages, taches: d.taches, tickets: d.tickets });
@@ -240,7 +241,7 @@ export const vue = async (ctx, env) => {
         </div>
         <div class="actions">
           ${equipe ? `<button class="btn btn-secondaire" type="button" data-action="editer-projet">${icone('edit')} Modifier</button>` : ''}
-          <a class="btn btn-principal" href="#/projets/${echapper(pid)}/nouvelle-demande">${icone('plus')} ${equipe ? 'Nouvelle demande' : 'Nouveau ticket'}</a>
+          <a class="btn btn-principal" href="#/projets/${echapper(pid)}/nouvelle-demande">${icone('plus')} Nouveau ticket</a>
           ${equipe ? `<button class="btn-icone" type="button" data-action="menu-projet" aria-label="Plus">${icone('points')}</button>` : ''}
         </div>
       </header>`}
@@ -793,7 +794,7 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
     <div class="grille grille-tiers section">
       <div class="pile" style="gap:var(--e-7)">
         <section>
-          <div class="section-tete"><h2>${equipe ? 'Feuille de route' : 'Planning'}</h2><a class="lien" href="#/projets/${echapper(pid)}/etapes">Tout voir</a></div>
+          <div class="section-tete"><h2>Planning</h2><a class="lien" href="#/projets/${echapper(pid)}/etapes">Tout voir</a></div>
           ${d.jalons.length ? `<div class="route">${trierEtapes(d.jalons).slice(0, 6).map((j) => phaseHtml(j)).join('')}</div>` : vide({ icone: 'route', titre: equipe ? 'Pas encore de feuille de route' : 'Pas encore de planning', texte: equipe ? 'Posez les étapes du projet.' : 'Elle apparaîtra ici dès que les étapes seront posées.', compact: true, action: boutonNouveau(env, 'jalon', 'Première étape') })}
         </section>
         <section>
@@ -812,9 +813,9 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
         </div>
         ${equipe && validationsAttente.length ? `<div class="carte carte--creuse"><p class="surtitre">Validations</p><div class="pile" style="margin-top:10px;gap:8px">${validationsAttente.map((v) => `<button class="rang" type="button" style="gap:10px;text-align:left" data-action="ouvrir-validation" data-id="${echapper(v.id)}"><span class="ligne-icone ligne-icone--violet" style="width:28px;height:28px;border-radius:8px">${icone('valider')}</span><span class="t-petit t-fort">${echapper(v.titre)}</span></button>`).join('')}</div></div>` : ''}
         ${equipe ? `<div class="carte carte--creuse">
-          <p class="surtitre">Demandes</p>
-          <p class="t-petit" style="margin-top:8px">${pluriel(ouverts.length, 'demande ouverte', 'demandes ouvertes')}${ouverts.filter((t) => ATTEND_CLIENT.includes(t.statut)).length ? `, ${ouverts.filter((t) => ATTEND_CLIENT.includes(t.statut)).length} de votre côté` : ''}</p>
-          <p style="margin-top:8px"><a class="t-petit" href="#/projets/${echapper(pid)}/demandes">Voir les demandes</a></p>
+          <p class="surtitre">Tickets</p>
+          <p class="t-petit" style="margin-top:8px">${pluriel(ouverts.length, 'ticket ouvert', 'tickets ouverts')}${ouverts.filter((t) => ATTEND_CLIENT.includes(t.statut)).length ? `, ${ouverts.filter((t) => ATTEND_CLIENT.includes(t.statut)).length} de votre côté` : ''}</p>
+          <p style="margin-top:8px"><a class="t-petit" href="#/projets/${echapper(pid)}/demandes">Voir les tickets</a></p>
         </div>` : ''}
       </aside>
     </div>`;
@@ -1129,7 +1130,7 @@ const etapes = (d, { env, pid }) => {
     ${frises}
   </section>` : ''}
   <section class="section" style="${frises ? '' : 'margin-top:0'}">
-    <div class="section-tete"><h2>${env.role === 'equipe' ? 'Feuille de route' : 'Planning'}</h2>${boutonNouveau(env, 'jalon', 'Nouvelle étape', { ordre: d.jalons.length + 1 })}</div>
+    <div class="section-tete"><h2>Planning</h2>${boutonNouveau(env, 'jalon', 'Nouvelle étape', { ordre: d.jalons.length + 1 })}</div>
     ${d.jalons.length ? `${/* Un seul format chez le client (03/10) : la liste par phase. */ env.role === 'equipe' ? `<div class="route" style="margin-bottom:var(--e-6)">${trierEtapes(d.jalons).map(phaseHtml).join('')}</div>` : ''}
     ${phases.map((p) => `<div class="section" style="margin-top:var(--e-5)">
       <p class="surtitre" style="margin-bottom:8px">${echapper(p.nom)}</p>
@@ -1311,9 +1312,9 @@ const demandes = (d, { env, pid, attente = [] }) => {
   return `
   ${blocAttente}
   <section class="section"${equipe ? ' style="margin-top:0"' : ''} id="demandes-projet">
-    <div class="section-tete"><h2>${equipe ? 'Demandes' : `Tickets ${echapper(d.projet.nom || '')}`}</h2><a class="btn btn-principal btn-petit" href="#/projets/${echapper(pid)}/nouvelle-demande">${icone('plus')} ${equipe ? 'Nouvelle demande' : 'Nouveau ticket'}</a></div>
+    <div class="section-tete"><h2>${equipe ? 'Tickets' : `Tickets ${echapper(d.projet.nom || '')}`}</h2><a class="btn btn-principal btn-petit" href="#/projets/${echapper(pid)}/nouvelle-demande">${icone('plus')} Nouveau ticket</a></div>
     <div class="filtres" style="margin-bottom:16px">
-      ${(equipe ? [['ouvertes', 'Ouvertes'], ['moi', 'Côté client'], ['terminees', 'Terminées'], ['toutes', 'Toutes']] : [['ouvertes', 'Ouverts'], ['moi', 'Pour vous'], ['terminees', 'Terminés'], ['toutes', 'Tous']]).map(([cle, lib]) => `<button class="filtre${filtre === cle ? ' actif' : ''}" type="button" data-filtre-demandes="${cle}">${lib}<span class="compte">${groupes[cle].length}</span></button>`).join('')}
+      ${(equipe ? [['ouvertes', 'Ouverts'], ['moi', 'Côté client'], ['terminees', 'Terminés'], ['toutes', 'Tous']] : [['ouvertes', 'Ouverts'], ['moi', 'Pour vous'], ['terminees', 'Terminés'], ['toutes', 'Tous']]).map(([cle, lib]) => `<button class="filtre${filtre === cle ? ' actif' : ''}" type="button" data-filtre-demandes="${cle}">${lib}<span class="compte">${groupes[cle].length}</span></button>`).join('')}
     </div>
     ${liste.length ? `<div class="liste">${liste.map((t) => ligne({
       href: `#/projets/${echapper(pid)}/demandes/${echapper(t.id)}`,
@@ -1331,7 +1332,7 @@ const demandes = (d, { env, pid, attente = [] }) => {
         return '';
       })()}${pastille(STATUTS, t.statut, { client: !equipe })}`,
     })).join('')}</div>`
-    : vide({ icone: 'demandes', titre: filtre === 'ouvertes' ? (equipe ? 'Aucune demande en cours' : 'Aucun ticket en cours') : 'Rien ici', texte: filtre === 'ouvertes' ? 'Tout semble en ordre pour le moment.' : '', action: `<a class="btn btn-secondaire" href="#/projets/${echapper(pid)}/nouvelle-demande">${equipe ? 'Créer une demande' : 'Créer un ticket'}</a>` })}
+    : vide({ icone: 'demandes', titre: filtre === 'ouvertes' ? 'Aucun ticket en cours' : 'Rien ici', texte: filtre === 'ouvertes' ? 'Tout semble en ordre pour le moment.' : '', action: `<a class="btn btn-secondaire" href="#/projets/${echapper(pid)}/nouvelle-demande">${equipe ? 'Créer une demande' : 'Créer un ticket'}</a>` })}
   </section>`;
 };
 

@@ -169,16 +169,21 @@ const basculerBloc = (bloc, oui) => {
   bloc.classList.toggle('deplie', oui);
   const bouton = bloc.querySelector('.lat-arbre-bascule');
   if (bouton) { bouton.setAttribute('aria-expanded', String(oui)); bouton.setAttribute('aria-label', `${oui ? 'Replier' : 'Déplier'} ${bouton.dataset.nom || ''}`.trim()); }
+  /* Un groupe sans page (le Cockpit) : sa ligne est le bouton qui le plie. */
+  const tete = bloc.querySelector('button.lat-projet[data-bascule-arbre]');
+  if (tete) tete.setAttribute('aria-expanded', String(oui));
   const branches = bloc.querySelector('.lat-arbre-branches');
   if (branches) branches.inert = !oui;
   /* Le chiffre du projet : la somme quand il est replié, rien quand ses
-     entrées le portent. Le bloc n'est pas redessiné : ses branches glissent. */
+     entrées le portent. Le bloc n'est pas redessiné : ses branches glissent.
+     Un arbre qui a son propre chiffre (« compte », la boîte À traiter du
+     Cockpit) le garde déplié. */
   const it = contexte.groupes.flatMap((g) => g.items || []).find((x) => x.arbre === bloc.dataset.arbre);
   const ligneProjet = bloc.querySelector('.lat-projet');
   if (it && ligneProjet) {
     const ancien = ligneProjet.querySelector(':scope > .comptes');
     if (ancien) ancien.remove();
-    const neuf = compteHtml(oui ? null : it.compteReplie);
+    const neuf = compteHtml(oui ? (it.compte || null) : (it.compteReplie || it.compte || null));
     if (neuf) ligneProjet.insertAdjacentHTML('beforeend', neuf);
   }
   railRendu = htmlNavigation();
@@ -197,14 +202,24 @@ const lienHtml = (it, classe = '') => `
           ${it.ecusson || (it.icone ? icone(it.icone) : '')}<span class="tronque">${echapper(it.libelle)}</span>${it.enCours ? `<span class="sr-only">, ${echapper(it.enCours)}</span>` : ''}${compteHtml(typeof it.compte === 'function' ? it.compte() : it.compte)}${repereHtml(it.repere)}${marqueHtml(it.marque)}
         </a>`;
 
+/* La tête d'un groupe qui n'a pas de page à lui (Portefeuille, Finances,
+   Pilotage, dans le Cockpit) : la ligne entière plie et déplie le groupe,
+   au même gabarit qu'une entrée ; le chevron est le même. */
+const teteGroupeHtml = (it, ouvert, id, compte) => `
+        <button class="lat-lien lat-projet lat-groupe-tete" type="button" data-bascule-arbre="${echapper(it.arbre)}" aria-expanded="${ouvert}" aria-controls="${id}">
+          ${it.icone ? icone(it.icone) : ''}<span class="tronque">${echapper(it.libelle)}</span>${compteHtml(compte)}
+        </button>
+        <span class="lat-arbre-bascule" data-bascule-arbre="${echapper(it.arbre)}" aria-hidden="true">${icone('chevron')}</span>`;
+
 const arbreHtml = (it) => {
   const ouvert = arbreDeplie(it);
   const id = `arbre-${String(it.arbre).replace(/[^\w-]/g, '-')}`;
+  const compte = ouvert ? (it.compte || null) : (it.compteReplie || it.compte || null);
   return `
-    <div class="lat-arbre${ouvert ? ' deplie' : ''}" data-arbre="${echapper(it.arbre)}">
+    <div class="lat-arbre${ouvert ? ' deplie' : ''}${it.chemin ? '' : ' lat-arbre--groupe'}" data-arbre="${echapper(it.arbre)}">
       <div class="lat-arbre-tete">
-        ${lienHtml({ ...it, compte: ouvert ? null : it.compteReplie }, ' lat-projet')}
-        <button class="lat-arbre-bascule" type="button" data-bascule-arbre="${echapper(it.arbre)}" data-nom="${echapper(it.libelle)}" aria-expanded="${ouvert}" aria-controls="${id}" aria-label="${ouvert ? 'Replier' : 'Déplier'} ${echapper(it.libelle)}">${icone('chevron')}</button>
+        ${it.chemin ? `${lienHtml({ ...it, compte }, ' lat-projet')}
+        <button class="lat-arbre-bascule" type="button" data-bascule-arbre="${echapper(it.arbre)}" data-nom="${echapper(it.libelle)}" aria-expanded="${ouvert}" aria-controls="${id}" aria-label="${ouvert ? 'Replier' : 'Déplier'} ${echapper(it.libelle)}">${icone('chevron')}</button>` : teteGroupeHtml(it, ouvert, id, compte)}
       </div>
       <div class="lat-arbre-branches" id="${id}"${ouvert ? '' : ' inert'}>
         <ul role="list">${it.enfants.map((e) => `<li class="lat-branche">${lienHtml(e)}</li>`).join('')}</ul>
@@ -303,7 +318,9 @@ const marquerActif = () => {
        l'entrée qui le fait. Elle dit seulement « vous êtes dans ce projet ». */
     if (a.classList.contains('lat-projet')) {
       if (projet && a.dataset.chemin === `/projets/${projet}`) a.classList.add('lat-projet--courant');
-      return;
+      /* Sauf la tête d'un arbre qui est elle-même une page, dite « exacte »
+         (À traiter, dans le Cockpit) : elle s'allume sur sa page. */
+      if (!a.hasAttribute('data-exact')) return;
     }
     const chemin = a.dataset.chemin;
     if (a.dataset.projet && a.dataset.projet !== projet) return;
@@ -640,7 +657,7 @@ export const ouvrirPalette = () => {
   const boite = $('.modale', m.el);
   boite.className = 'palette';
   boite.innerHTML = `
-    <div class="palette-champ">${icone('recherche')}<input type="search" placeholder="Projet, demande, tâche, fichier, facture..." aria-label="Rechercher" autocomplete="off"></div>
+    <div class="palette-champ">${icone('recherche')}<input type="search" placeholder="Projet, ticket, tâche, fichier, facture..." aria-label="Rechercher" autocomplete="off"></div>
     <div class="palette-liste" role="listbox"></div>`;
   const champ = $('input', boite);
   const liste = $('.palette-liste', boite);

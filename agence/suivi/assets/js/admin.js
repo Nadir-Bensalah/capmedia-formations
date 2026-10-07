@@ -2,12 +2,15 @@
    CAPMEDIA CLIENT HUB · l'entrée du cockpit d'équipe
    ========================================================================== */
 
-import { exigerSession, $, OUVERTS, ATTEND_EQUIPE, FACTURES_DUES, ROLES_CLIENT, joursAvant, enDate, projetEstActif, bdd, collection, query, orderBy, limit, peut, estAdmin, echapper } from './noyau.js';
+import { exigerSession, $, OUVERTS, ATTEND_EQUIPE, FACTURES_DUES, ROLES_CLIENT, joursAvant, enDate, projetEstActif, bdd, collection, query, orderBy, limit, peut, estAdmin, echapper, libellePlateforme } from './noyau.js';
+import { choisirProjet } from './vues/accueil.js';
 import { monterCoquille, definirNavigation, enregistrerRecherche, definirRetoucheAriane, filAriane, projetDeLAdresse, deplierArbre } from './coquille.js';
 import { definir, demarrer, naviguer, courant, adresseAvec, surChangement } from './routeur.js';
 import { titrePage, avatarProjet } from './ui.js';
 import * as magasin from './magasin.js';
 import { abonnerGlobal, abonnerArbreEquipe, clesArbreEquipe, interneDuProjet, reunionAVenir, K, nonLusProjet, requeteMessages, messagesDuProjet } from './donnees.js';
+import * as adminATraiter from './vues/admin-a-traiter.js';
+import { boite, clesBoite } from './vues/admin-a-traiter.js';
 
 import * as adminAccueil from './vues/admin-accueil.js';
 import * as adminClients from './vues/admin-clients.js';
@@ -97,8 +100,10 @@ const projetsDeLArbre = () => {
    les projets que le Cockpit lit déjà (demandes, tâches, réunions,
    fichiers, tests, finances, maintenance), et de sept clés par projet de
    l'arbre (abonnerArbreEquipe). Le gris dit combien il y en a ; le rouge,
-   ce qui attend l'équipe. Les mots restent ceux de l'équipe jusqu'au lot 4
-   (question 2 : les mots du client pour ce qui est partagé). */
+   ce qui attend l'équipe. Les mots sont ceux du client pour ce qui est
+   partagé (lot 4, question 2) : Tickets, Planning, Campagne de tests ;
+   ceux de l'équipe là où le client n'a rien (Accès client, Plateformes et
+   versions). */
 const entreesProjetEquipe = (p, t) => {
   const pid = p.id;
   const base = `/projets/${pid}`;
@@ -127,10 +132,10 @@ const entreesProjetEquipe = (p, t) => {
   const tests = scenarios || campagnes || anomalies.length || de(t.campagnes).length;
   return [
     { chemin: base, libelle: 'Aperçu', icone: 'accueil', exact: true, projet: pid },
-    { chemin: `${base}/demandes`, libelle: 'Demandes', icone: 'demandes', projet: pid, aussi: [`${base}/nouvelle-demande`], compte: { total: tickets.filter((x) => OUVERTS.includes(x.statut)).length, neuf: tickets.filter((x) => ATTEND_EQUIPE.includes(x.statut)).length } },
+    { chemin: `${base}/demandes`, libelle: 'Tickets', icone: 'demandes', projet: pid, aussi: [`${base}/nouvelle-demande`], compte: { total: tickets.filter((x) => OUVERTS.includes(x.statut)).length, neuf: tickets.filter((x) => ATTEND_EQUIPE.includes(x.statut)).length } },
     /* Un projet interne n'a pas de client : pas de conversation. */
     ...(!p.interne ? [{ chemin: `/messages/${pid}`, libelle: 'Messages', icone: 'messages', projet: pid, compte: { total: 0, neuf: t.nonLus(p) } }] : []),
-    { chemin: `${base}/etapes`, libelle: 'Feuille de route', icone: 'route', projet: pid },
+    { chemin: `${base}/etapes`, libelle: 'Planning', icone: 'route', projet: pid },
     { chemin: `${base}/notes`, libelle: 'Notes', icone: 'note', projet: pid, compte: { total: aValider } },
     { chemin: `${base}/taches`, libelle: 'Tâches', icone: 'taches', projet: pid, compte: { total: taches.length, neuf: taches.filter((x) => x.echeance && joursAvant(x.echeance) < 0).length } },
     { chemin: '/calendrier', lien: `/calendrier?projet=${encodeURIComponent(pid)}`, libelle: 'Calendrier', icone: 'calendrier', projet: pid, compte: { total: reunions.length } },
@@ -138,8 +143,8 @@ const entreesProjetEquipe = (p, t) => {
        vide, d'où l'on écrit le premier scénario. Animée pendant une
        campagne, comme l'entrée Tests de tous les projets. */
     tests
-      ? { chemin: '/tests', lien: `/tests?projet=${encodeURIComponent(pid)}`, libelle: 'Tests', icone: 'bug', projet: pid, compte: { total: 0, neuf: anomalies.length }, enCours: campagnes ? (campagnes > 1 ? `${campagnes} campagnes de tests en cours` : 'campagne de tests en cours') : '' }
-      : { chemin: `${base}/tests`, libelle: 'Tests', icone: 'bug', projet: pid },
+      ? { chemin: '/tests', lien: `/tests?projet=${encodeURIComponent(pid)}`, libelle: 'Campagne de tests', icone: 'bug', projet: pid, compte: { total: 0, neuf: anomalies.length }, enCours: campagnes ? (campagnes > 1 ? `${campagnes} campagnes de tests en cours` : 'campagne de tests en cours') : '' }
+      : { chemin: `${base}/tests`, libelle: 'Campagne de tests', icone: 'bug', projet: pid },
     { chemin: `${base}/marketing`, libelle: 'Marketing', icone: 'trend', projet: pid, marque: { texte: 'À venir' } },
     { chemin: `${base}/coffre`, libelle: 'Coffre-fort', icone: 'cadenas', projet: pid, marque: coffre ? { texte: 'Chiffré', icone: 'cadenas', ton: 'vert', titre: 'Chiffré de bout en bout : Capmedia ne lit pas son contenu' } : null },
     { chemin: '/fichiers', lien: `/fichiers?projet=${encodeURIComponent(pid)}`, libelle: 'Fichiers', icone: 'fichiers', projet: pid, compte: { total: fichiers.length } },
@@ -155,6 +160,23 @@ const entreesProjetEquipe = (p, t) => {
     ...(!p.interne ? [{ chemin: `${base}/acces`, libelle: 'Accès client', icone: 'utilisateurs', projet: pid, compte: p.ouvert === true ? { total: 0, neuf: arbitrer } : null, marque: p.ouvert === true ? null : { texte: 'fermé' } }] : []),
   ];
 };
+
+/* Les groupes qui se plient dans le rail : la boîte À traiter et Messages
+   (dépliés d'office), puis Portefeuille, Finances et Pilotage (repliés
+   d'office). Le choix se retient, comme pour un projet (coquille.js) ; ces
+   identifiants commencent par « : », ce qu'un identifiant de projet ne
+   fait jamais. */
+const GROUPES = { aTraiter: ':a-traiter', messages: ':messages', portefeuille: ':portefeuille', finances: ':finances', pilotage: ':pilotage' };
+/* Le chiffre d'un groupe replié : la somme de ce qui attend dans ses
+   entrées (leurs rouges), pour qu'un rouge ne se cache jamais. */
+const sommeRouge = (items) => ({ total: 0, neuf: items.reduce((n, i) => n + (Number((i.compte || {}).neuf) || 0), 0) });
+/* Un groupe : ses entrées permises ; aucun s'il n'en reste pas. */
+const groupe = (arbre, libelle, icone, items, options = {}) => {
+  const enfants = items.filter((i) => i.si === undefined || i.si);
+  if (!enfants.length) return [];
+  return [{ arbre, libelle, icone, enfants, compteReplie: sommeRouge(enfants), ...options }];
+};
+let cheminsDesGroupes = new Map();
 
 const construireNavigation = () => {
   const tickets = (magasin.lire(K.ticketsTous) || []).filter((t) => !t.archive);
@@ -176,18 +198,24 @@ const construireNavigation = () => {
   const { projets, arbre } = projetsDeLArbre();
   const organisations = magasin.lire(K.organisations) || [];
   const reunions = (magasin.lire(K.reunionsToutes) || []).filter((r) => joursAvant(r.date) >= 0);
-  const fichiers = magasin.lire(K.fichiersTous) || [];
+  /* D5 : les fichiers archivés ne sont pas dans la page Fichiers. */
+  const fichiers = (magasin.lire(K.fichiersTous) || []).filter((f) => !f.archive);
   const profil = magasin.lire(K.profil);
   const uid = session.utilisateur.uid;
   const nonLusDe = (p) => (p.interne ? 0 : nonLusProjet(messagesDuProjet(p.id), profil, p.id, uid));
   const nonLus = projets.reduce((n, p) => n + nonLusDe(p), 0);
+  /* D5 : la page Messages liste une conversation par projet non archivé,
+     projets internes compris ; la barre comptait sans eux. */
+  const conversations = projets.filter((p) => !p.archive).length;
   /* Les testeurs qui ont écrit, et ce qui attend une réponse. */
   const conversationsTesteurs = magasin.lire(K.conversationsTesteurs) || [];
   const nonLusTesteurs = conversationsTesteurs.reduce((n, c) => n + Number(c.nonLusEquipe || 0), 0);
   const ouvertes = tickets.filter((t) => OUVERTS.includes(t.statut)).length;
   const aFaire = taches.filter((t) => t.statut !== 'terminee').length;
   const nouveauxPreprojets = demandesProjet.filter((d) => d.statut === 'nouvelle').length;
-  const piecesDues = documents.filter((d) => FACTURES_DUES.includes(d.statut) || d.statut === 'envoye').length;
+  /* D5 : le rouge de Finances ne compte que les factures dues ; un devis
+     envoyé attend le client, pas nous (il était compté deux fois). */
+  const facturesDues = documents.filter((d) => d.type === 'facture' && FACTURES_DUES.includes(d.statut)).length;
 
   /* La console de tests annonce ce qui tourne et ce qui bloque : une
      campagne en cours, et une anomalie qu'on n'a pas encore refermée. */
@@ -201,48 +229,63 @@ const construireNavigation = () => {
   const contrats = maintenanceToute.filter((x) => x.id === 'contrat');
   const forfaitsActifs = contrats.filter((x) => x.statut === 'actif').length;
   const forfaitsDemandes = contrats.filter((x) => x.statut === 'demande').length;
+  /* Ce qui attend l'équipe, tous genres (la page À traiter). */
+  const aTraiter = boite(session).length;
 
   /* Ce que l'arbre compte, projet par projet. Une partie de la maintenance
      ou d'une campagne n'a pas son projet dans le document : le magasin le
      pose dans « _parent » quand la collection est lue en groupe. */
   const avecProjet = (liste) => liste.map((x) => (x.projet ? x : { ...x, projet: x._parent || x.projet }));
   const tout = {
-    tickets, taches, reunions: magasin.lire(K.reunionsToutes) || [], fichiers: fichiers.filter((f) => !f.archive), documents,
+    tickets, taches, reunions: magasin.lire(K.reunionsToutes) || [], fichiers, documents,
     campagnes: avecProjet(campagnes), anomalies: avecProjet(anomalies), scenarios: avecProjet(magasin.lire(K.scenariosTous) || []),
     maintenance: avecProjet(maintenanceToute), finance: peut(session, 'finance.lecture'), nonLus: nonLusDe,
   };
 
   /* Ce que le rôle ne permet pas n'apparaît pas : un agent n'administre ni
      les clients, ni la finance, ni l'équipe. Le serveur et les règles
-     refusent de toute façon ; l'écran ne propose pas l'impossible. */
+     refusent de toute façon ; l'écran ne propose pas l'impossible. Un
+     groupe dont aucune entrée ne reste disparaît en entier. */
   const admin = estAdmin(session);
-  const garder = (groupe) => ({ ...groupe, items: groupe.items.filter((i) => i.si === undefined || i.si) });
+  const garder = (g) => ({ ...g, items: g.items.filter((i) => i.si === undefined || i.si) });
   const seul = arbre.filter(projetEstActif).length === 1;
-  definirNavigation([
-    { items: [{ chemin: '/', libelle: 'Accueil', icone: 'accueil', exact: true }] },
+  const ticketsEntree = { chemin: '/demandes', libelle: 'Tickets', icone: 'demandes', compte: { total: ouvertes, neuf: nouvelles } };
+  /* Messages : les clients (une conversation par projet) et les testeurs ;
+     sans la recette, une seule entrée. */
+  const messagesClients = { chemin: '/messages', libelle: 'Clients', icone: 'utilisateurs', compte: { total: conversations, neuf: nonLus } };
+  const messagesTesteurs = { chemin: '/testeurs-messages', libelle: 'Testeurs', icone: 'smartphone', compte: { total: conversationsTesteurs.length, neuf: nonLusTesteurs } };
+  const avecTesteurs = peut(session, 'qa.gerer');
+  const groupes = [
     {
-      titre: 'Travail',
       items: [
-        { chemin: '/demandes', libelle: 'Demandes', icone: 'inbox', compte: { total: ouvertes, neuf: nouvelles } },
-        { chemin: '/taches', libelle: 'Tâches', icone: 'taches', compte: { total: aFaire, neuf: enRetard } },
-        /* Une campagne qui tourne anime l'entrée, comme chez le client. */
-        { chemin: '/tests', libelle: 'Tests', icone: 'bug', compte: { total: campagnesEnCours, neuf: anomaliesOuvertes }, enCours: campagnesEnCours ? (campagnesEnCours > 1 ? `${campagnesEnCours} campagnes de tests en cours` : 'campagne de tests en cours') : '' },
+        /* L'accueil de l'équipe : ce que la journée demande. */
+        { chemin: '/', libelle: 'Aujourd\'hui', icone: 'accueil', exact: true },
+        /* La boîte unique de ce qui attend l'équipe ; dessous, les pages de
+           tous les projets d'où on le traite. Dépliée d'office. */
+        {
+          chemin: '/a-traiter', libelle: 'À traiter', icone: 'inbox', exact: true, arbre: GROUPES.aTraiter, deplieParDefaut: true,
+          compte: { total: 0, neuf: aTraiter },
+          enfants: [
+            ticketsEntree,
+            { chemin: '/taches', libelle: 'Tâches', icone: 'taches', compte: { total: aFaire, neuf: enRetard } },
+            { chemin: '/validations', libelle: 'Validations', icone: 'valider', compte: { total: attendues } },
+          ],
+        },
+        ...(avecTesteurs
+          ? [{ chemin: '/messages', libelle: 'Messages', icone: 'messages', arbre: GROUPES.messages, deplieParDefaut: true, compte: { total: 0, neuf: nonLus + nonLusTesteurs }, enfants: [messagesClients, messagesTesteurs] }]
+          : [{ ...messagesClients, libelle: 'Messages', icone: 'messages' }]),
         /* L'agenda de tous les projets s'appelle « Calendrier », comme chez
            le client (#/calendrier) ; l'ancienne adresse #/planning y mène. */
         { chemin: '/calendrier', libelle: 'Calendrier', icone: 'calendrier', compte: { total: reunions.length } },
-        { chemin: '/messages', libelle: 'Messages', icone: 'messages', compte: { total: projets.filter((p) => !p.archive && !p.interne).length, neuf: nonLus } },
-        { chemin: '/testeurs-messages', libelle: 'Testeurs', icone: 'smartphone', compte: { total: conversationsTesteurs.length, neuf: nonLusTesteurs }, si: peut(session, 'qa.gerer') },
-        { chemin: '/validations', libelle: 'Validations', icone: 'valider', compte: { total: attendues } },
-        /* « Fichiers », comme chez le client (#/fichiers) ; l'ancienne
-           adresse #/documents y mène. */
-        { chemin: '/fichiers', libelle: 'Fichiers', icone: 'documents', compte: { total: fichiers.length } },
+        /* Une campagne qui tourne anime l'entrée, comme chez le client. */
+        { chemin: '/tests', libelle: 'Tests', icone: 'bug', compte: { total: campagnesEnCours, neuf: anomaliesOuvertes }, enCours: campagnesEnCours ? (campagnesEnCours > 1 ? `${campagnesEnCours} campagnes de tests en cours` : 'campagne de tests en cours') : '' },
       ],
     },
     {
       titre: 'Projets en cours',
       /* Chaque projet, son écusson et son arbre. Seul le projet ouvert est
          déplié (et le projet seul, s'il n'y en a qu'un) ; replié, il porte
-         ce qui attend l'équipe : les demandes chez nous et les messages non
+         ce qui attend l'équipe : les tickets chez nous et les messages non
          lus. « Tous les projets » ferme la liste. */
       items: [
         ...arbre.map((p) => {
@@ -259,33 +302,37 @@ const construireNavigation = () => {
       ],
     },
     {
-      titre: 'Portefeuille',
+      /* Trois groupes repliés d'office ; replié, chacun porte la somme de
+         ses rouges. */
       items: [
-        { chemin: '/clients', libelle: 'Clients', icone: 'entreprise', compte: { total: organisations.length }, si: peut(session, 'clients.gerer') },
-        /* Les idées et les projets mis de côté : rangés à part, jamais comptés
-           dans le portefeuille en cours. */
-        { chemin: '/a-faire', libelle: 'Projets à faire', icone: 'ampoule', compte: { total: projets.filter((p) => p.aFaire && !p.archive).length }, si: admin },
-        { chemin: '/nouveaux-projets', libelle: 'Nouveaux projets', icone: 'sparkle', compte: { total: preprojets, neuf: nouveauxPreprojets }, si: admin },
-      ],
-    },
-    {
-      titre: 'Gestion',
-      items: [
-        /* Le libellé ne tenait pas dans la barre : le titre de la page dit
-           « Finances », la barre disait autre chose et se faisait couper. */
-        { chemin: '/finances', libelle: 'Finances', icone: 'finances', compte: { total: piecesDues, neuf: piecesDues }, si: peut(session, 'finance.lecture') },
-        { chemin: '/maintenance', libelle: 'Maintenance', icone: 'sante', compte: { total: forfaitsActifs, neuf: forfaitsDemandes } },
-        { chemin: '/activite', libelle: 'Activité', icone: 'activite' },
-        /* Les lettres parties vers les clients (et l'équipe, les testeurs) :
-           l'administrateur seul, comme l'action qui les lit. */
-        { chemin: '/emails', libelle: 'E-mails envoyés', icone: 'mail', si: peut(session, 'systeme') },
-        /* La santé en direct des applications reliées à Sentry : l'administrateur
-           y entre d'ici ; un agent, par la page du projet. */
-        { chemin: '/controle', libelle: 'Salle de contrôle', icone: 'sante', si: admin },
-        /* Ce que Capmedia annonce à ses clients, congés compris : le
-           total gris compte les publiées. */
-        { chemin: '/annonces', libelle: 'Annonces', icone: 'porteVoix', compte: { total: (magasin.lire(K.annonces) || []).filter((a) => a.publication === 'publiee').length }, si: admin || peut(session, 'finance.gerer') },
-        { chemin: '/archives', libelle: 'Archives', icone: 'archive', si: admin },
+        ...groupe(GROUPES.portefeuille, 'Portefeuille', 'dossier', [
+          { chemin: '/clients', libelle: 'Clients', icone: 'entreprise', compte: { total: organisations.length }, si: peut(session, 'clients.gerer') },
+          { chemin: '/nouveaux-projets', libelle: 'Nouveaux projets', icone: 'sparkle', compte: { total: preprojets, neuf: nouveauxPreprojets }, si: admin },
+          /* Les idées et les projets mis de côté : rangés à part, jamais
+             comptés dans le portefeuille en cours. */
+          { chemin: '/a-faire', libelle: 'Projets à faire', icone: 'ampoule', compte: { total: projets.filter((p) => p.aFaire && !p.archive).length }, si: admin },
+          /* « Fichiers », comme chez le client (#/fichiers) ; l'ancienne
+             adresse #/documents y mène. */
+          { chemin: '/fichiers', libelle: 'Fichiers', icone: 'documents', compte: { total: fichiers.length } },
+          { chemin: '/archives', libelle: 'Archives', icone: 'archive', si: admin },
+        ]),
+        ...groupe(GROUPES.finances, 'Finances', 'finances', [
+          { chemin: '/finances', libelle: 'Devis et factures', icone: 'receipt', compte: { total: 0, neuf: facturesDues }, si: peut(session, 'finance.lecture') },
+          { chemin: '/maintenance', libelle: 'Forfaits de maintenance', icone: 'sante', compte: { total: forfaitsActifs, neuf: forfaitsDemandes } },
+        ]),
+        ...groupe(GROUPES.pilotage, 'Pilotage', 'cible', [
+          /* La santé en direct des applications reliées à Sentry :
+             l'administrateur y entre d'ici ; un agent, par l'arbre du projet
+             (Santé de l'app). */
+          { chemin: '/controle', libelle: 'Salle de contrôle', icone: 'activite', si: admin },
+          /* Les lettres parties vers les clients (et l'équipe, les
+             testeurs) : l'administrateur seul, comme l'action qui les lit. */
+          { chemin: '/emails', libelle: 'E-mails envoyés', icone: 'mail', si: peut(session, 'systeme') },
+          { chemin: '/activite', libelle: 'Activité', icone: 'horloge' },
+          /* Ce que Capmedia annonce à ses clients, congés compris, et la
+             grille de tarifs : le total gris compte les publiées. */
+          { chemin: '/annonces', libelle: 'Annonces et tarifs', icone: 'porteVoix', compte: { total: (magasin.lire(K.annonces) || []).filter((a) => a.publication === 'publiee').length }, si: admin || peut(session, 'finance.gerer') },
+        ]),
       ],
     },
     {
@@ -297,8 +344,30 @@ const construireNavigation = () => {
         { chemin: '/parametres', libelle: 'Paramètres', icone: 'parametres' },
       ],
     },
-  ].map(garder).filter((g) => g.items.length));
+  ].map(garder).filter((g) => g.items.length);
+  /* Les chemins de chaque groupe : la page ouverte déplie le sien. */
+  cheminsDesGroupes = new Map(groupes.flatMap((g) => g.items).filter((i) => i.enfants && String(i.arbre).startsWith(':')).map((i) => [i.arbre, i.enfants.map((e) => e.chemin)]));
+  deplierGroupeDeLaPage();
+  definirNavigation(groupes);
 };
+
+/* Une page de tous les projets rangée dans un groupe replié (Finances,
+   Pilotage...) déplie son groupe en arrivant : l'entrée allumée reste en
+   vue. Une fois par adresse (replier le groupe sur place tient) ; une page
+   filtrée sur un projet est à lui, pas au groupe. */
+let routeDepliee = null;
+function deplierGroupeDeLaPage() {
+  const route = courant() || {};
+  const c = route.chemin || '';
+  const pid = projetOuvert(route);
+  const cle = `${c}|${pid}`;
+  if (cle === routeDepliee) return;
+  routeDepliee = cle;
+  if (pid) return;
+  for (const [id, chemins] of cheminsDesGroupes) {
+    if (chemins.some((x) => c === x || c.startsWith(`${x}/`))) deplierArbre(id, true);
+  }
+}
 
 /* Le cockpit écoute aussi la conversation de chaque projet ouvert : sans
    cela, la pastille des messages non lus resterait muette. */
@@ -342,7 +411,9 @@ const suivreArbres = () => {
    pour un agent sans finance.lecture, la clé assemblée de ses projets ne
    se remplit jamais (abonnerProjet ne les lui demande pas), et le rail
    attendait sa patience entière (4 s) avant de se dessiner. */
-const CLES_NAVIGATION = [K.ticketsTous, K.tachesToutes, K.validationsToutes, ...(peut(session, 'finance.lecture') ? [K.documentsTous] : []), K.demandesProjet, K.projets, K.organisations, K.reunionsToutes, K.fichiersTous, K.profil, K.maintenanceToute, K.campagnesToutes, K.anomaliesToutes, K.scenariosTous, K.activiteToute, K.projetsInternes, K.conversationsTesteurs, K.annonces];
+/* La boîte À traiter (son compte) ajoute les points bloquants et les notes
+   partagées. */
+const CLES_NAVIGATION = [...new Set([K.ticketsTous, K.tachesToutes, K.validationsToutes, ...(peut(session, 'finance.lecture') ? [K.documentsTous] : []), K.demandesProjet, K.projets, K.organisations, K.reunionsToutes, K.fichiersTous, K.profil, K.maintenanceToute, K.campagnesToutes, K.anomaliesToutes, K.scenariosTous, K.activiteToute, K.projetsInternes, K.conversationsTesteurs, K.annonces, ...clesBoite(session)])];
 const clesNavigation = () => [...CLES_NAVIGATION,
   ...[...conversationsSuivies].map((pid) => K.messages(pid)),
   ...[...arbresSuivis].flatMap(([pid, interne]) => clesArbreEquipe(pid, { interne }))];
@@ -355,14 +426,17 @@ CLES_NAVIGATION.forEach((cle) => magasin.sur(cle, dessinerNav));
    cours : ceux d'un agent sont connus d'avance, pas ceux de l'administrateur. */
 const squeletteNavigation = () => {
   const admin = estAdmin(session);
-  const n = (...conditions) => conditions.filter(Boolean).length;
   const projetsAgent = admin ? 0 : ((session.equipe && session.equipe.projets) || []).length;
+  const testeurs = peut(session, 'qa.gerer');
   return [
-    { items: [{ chemin: '/', libelle: 'Accueil', icone: 'accueil', exact: true }] },
-    { titre: 'Travail', squelette: { projets: n(true, true, true, true, true, peut(session, 'qa.gerer'), true, true) } },
+    { items: [{ chemin: '/', libelle: 'Aujourd\'hui', icone: 'accueil', exact: true }] },
+    /* À traiter et ses trois entrées, Messages (et ses deux entrées avec
+       la recette), Calendrier, Tests. */
+    { squelette: { projets: 4 + (testeurs ? 3 : 1) + 2 } },
     { titre: 'Projets en cours', squelette: { projets: (admin ? 4 : Math.max(1, projetsAgent)) + 1 } },
-    ...(n(peut(session, 'clients.gerer'), admin, admin) ? [{ titre: 'Portefeuille', squelette: { projets: n(peut(session, 'clients.gerer'), admin, admin) } }] : []),
-    { titre: 'Gestion', squelette: { projets: n(peut(session, 'finance.lecture'), true, true, peut(session, 'systeme'), admin, admin || peut(session, 'finance.gerer'), admin) } },
+    /* Portefeuille (l'agent a Fichiers), Finances (Forfaits de
+       maintenance), Pilotage (Activité) : repliés, une ligne chacun. */
+    { squelette: { projets: 3 } },
     { pied: true, items: [{ chemin: '/equipe', libelle: 'Équipe', icone: 'utilisateurs' }, { chemin: '/parametres', libelle: 'Paramètres', icone: 'parametres' }] },
   ];
 };
@@ -386,12 +460,12 @@ surChangement((route) => {
   dessinerNav();
 });
 
-/* Le fil d'Ariane de l'équipe part toujours de l'accueil, et passe par
-   « Projets » puis le projet quand la page est celle d'un projet :
-   « Accueil › Projets › Atelier › Tâches ». Le Retour s'appuie dessus
+/* Le fil d'Ariane de l'équipe part toujours de l'accueil (« Aujourd'hui »,
+   lot 4), et passe par « Projets » puis le projet quand la page est celle
+   d'un projet : « Aujourd'hui › Projets › Atelier › Tâches ». Le Retour s'appuie dessus
    quand on arrive par un lien. Depuis l'arbre (lot 3), les pages filtrées
    sur un projet (« ?projet= ») et ses messages sont des pages du projet :
-   « Accueil › Projets › Atelier › Fichiers ». La page d'une partie passe
+   « Aujourd'hui › Projets › Atelier › Fichiers ». La page d'une partie passe
    par « Plateformes et versions ». */
 let filBrut = null;
 let filChemin = '';
@@ -399,7 +473,7 @@ let filPoses = 0;
 definirRetoucheAriane((items) => {
   if (!items || !items.length) return items;
   filBrut = items; filChemin = courant().chemin; filPoses += 1;
-  if (items.length === 1 && !items[0].chemin && items[0].libelle === 'Accueil') return items;
+  if (items.length === 1 && !items[0].chemin && ['Accueil', 'Aujourd\'hui'].includes(items[0].libelle)) return [{ libelle: 'Aujourd\'hui' }];
   let fil = items.filter((it) => it.chemin !== '/');
   const route = courant();
   const pid = projetOuvert(route);
@@ -417,7 +491,7 @@ definirRetoucheAriane((items) => {
       fil.splice(fil.findIndex((it) => it.chemin === chemin) + 1, 0, { libelle: 'Plateformes et versions', chemin: parties });
     }
   }
-  fil = [{ libelle: 'Accueil', chemin: '/' }, ...fil];
+  fil = [{ libelle: 'Aujourd\'hui', chemin: '/' }, ...fil];
   return fil;
 });
 /* Une page filtrée change de projet en place (sa clé de route) sans
@@ -431,31 +505,66 @@ const reposerFil = () => {
 surChangement((route) => { if (route.chemin === filChemin) reposerFil(); });
 magasin.sur(K.projets, reposerFil);
 
+/* La recherche (⌘K), alignée sur celle du Hub (H-49, lot 4) : des
+   actions (un ticket, un message, avec le choix du projet), les pages du
+   Cockpit que le rôle ouvre, puis les projets et leur contenu, chacun vers
+   sa fiche : un ticket, une validation, une tâche, un fichier (« ?f= »),
+   une note, une ressource (le lien lui-même), une pièce, une réunion, une
+   version. Les projets archivés n'y mènent plus que par leur nom. */
+const choisirUnProjet = (titre) => {
+  const projets = (magasin.lire(K.projets) || []).filter((p) => !p.archive && !p.aFaire);
+  return choisirProjet(projets.filter(projetEstActif).length ? projets.filter(projetEstActif) : projets, { titre });
+};
+/** « Nouveau ticket » : le projet d'abord (le seul, s'il n'y en a qu'un). */
+const nouveauTicket = async () => { const pid = await choisirUnProjet('Nouveau ticket : pour quel projet ?'); if (pid) naviguer(`/projets/${encodeURIComponent(pid)}/nouvelle-demande`); };
 enregistrerRecherche((terme) => {
   const projets = magasin.lire(K.projets) || [];
   /* Une table plutôt qu'une recherche linéaire par élément : à cinquante
      projets et quelques milliers d'items, la frappe devenait saccadée. */
   const nomsProjets = new Map(projets.map((p) => [p.id, p.nom]));
   const nomProjet = (pid) => nomsProjets.get(pid) || '';
+  const vivants = new Set(projets.filter((p) => !p.archive).map((p) => p.id));
+  const vivant = (x) => vivants.has(x.projet) && !x.archive;
+  const admin = estAdmin(session);
   const items = [];
   if (!terme) {
-    if (peut(session, 'projets.creer')) items.push({ groupe: 'Créer', libelle: 'Nouveau projet', icone: 'plus', chemin: '/projets/nouveau' });
-    if (peut(session, 'clients.gerer')) items.push({ groupe: 'Créer', libelle: 'Nouveau client', icone: 'entreprise', chemin: '/clients/nouveau' });
-    if (estAdmin(session)) items.push({ groupe: 'Créer', libelle: 'Noter une idée', icone: 'ampoule', chemin: '/a-faire?noter=1' });
-    items.push({ groupe: 'Aller à', libelle: 'Demandes à traiter', icone: 'inbox', chemin: '/demandes' });
-    items.push({ groupe: 'Aller à', libelle: 'Validations attendues', icone: 'valider', chemin: '/validations' });
+    items.push({ groupe: 'Actions', libelle: 'Nouveau ticket', icone: 'plus', action: nouveauTicket });
+    items.push({ groupe: 'Actions', libelle: 'Envoyer un message', icone: 'messages', action: async () => { const pid = await choisirUnProjet('Écrire au client : quel projet ?'); naviguer(pid ? `/messages/${encodeURIComponent(pid)}` : '/messages'); } });
+    if (peut(session, 'projets.creer')) items.push({ groupe: 'Actions', libelle: 'Nouveau projet', icone: 'plus', chemin: '/projets/nouveau' });
+    if (peut(session, 'clients.gerer')) items.push({ groupe: 'Actions', libelle: 'Nouveau client', icone: 'entreprise', chemin: '/clients/nouveau' });
+    if (admin) items.push({ groupe: 'Actions', libelle: 'Noter une idée', icone: 'ampoule', chemin: '/a-faire?noter=1' });
   }
+  /* Les pages, sous les mêmes droits que leur entrée du rail. */
+  const pages = [
+    ['À traiter', '/a-traiter', 'inbox', true], ['Tickets', '/demandes', 'demandes', true], ['Tâches', '/taches', 'taches', true],
+    ['Validations', '/validations', 'valider', true], ['Messages', '/messages', 'messages', true], ['Messages des testeurs', '/testeurs-messages', 'smartphone', peut(session, 'qa.gerer')],
+    ['Calendrier', '/calendrier', 'calendrier', true], ['Tests', '/tests', 'bug', true], ['Tous les projets', '/projets', 'projets', true],
+    ['Clients', '/clients', 'entreprise', peut(session, 'clients.gerer')], ['Nouveaux projets', '/nouveaux-projets', 'sparkle', admin], ['Projets à faire', '/a-faire', 'ampoule', admin],
+    ['Fichiers', '/fichiers', 'documents', true], ['Archives', '/archives', 'archive', admin], ['Devis et factures', '/finances', 'receipt', peut(session, 'finance.lecture')],
+    ['Forfaits de maintenance', '/maintenance', 'sante', true], ['Salle de contrôle', '/controle', 'activite', admin], ['E-mails envoyés', '/emails', 'mail', peut(session, 'systeme')],
+    ['Activité', '/activite', 'horloge', true], ['Annonces et tarifs', '/annonces', 'porteVoix', admin || peut(session, 'finance.gerer')], ['Équipe', '/equipe', 'utilisateurs', true],
+    ['Paramètres', '/parametres', 'parametres', true], ['Mon profil', '/moi', 'utilisateur', true], ['Aujourd\'hui', '/', 'accueil', true],
+  ];
+  pages.filter((x) => x[3]).forEach(([libelle, chemin, ic]) => items.push({ groupe: 'Pages', libelle, sous: 'Page du Cockpit', icone: ic, chemin }));
   (magasin.lire(K.organisations) || []).forEach((o) => items.push({ groupe: 'Clients', libelle: o.nom, sous: o.entreprise, icone: 'entreprise', chemin: `/clients/${o.id}` }));
   projets.forEach((p) => items.push(p.aFaire && !p.archive
     ? { groupe: 'Projets à faire', libelle: p.nom, sous: p.description || p.ref, icone: 'ampoule', chemin: `/a-faire/${p.id}` }
     : { groupe: 'Projets', libelle: p.nom, sous: p.ref, icone: 'projets', chemin: `/projets/${p.id}` }));
-  (magasin.lire(K.ticketsTous) || []).forEach((t) => items.push({ groupe: 'Demandes', libelle: t.titre, sous: `${t.numero || ''} ${nomProjet(t.projet)}`.trim(), icone: 'demandes', chemin: `/projets/${t.projet}/demandes/${t.id}` }));
+  (magasin.lire(K.ticketsTous) || []).forEach((t) => items.push({ groupe: 'Tickets', libelle: t.titre, sous: `${t.numero || ''} ${nomProjet(t.projet)}`.trim(), icone: 'demandes', chemin: `/projets/${t.projet}/demandes/${t.id}` }));
+  (magasin.lire(K.validationsToutes) || []).filter((v) => v.statut === 'en-attente' && vivant(v)).forEach((v) => items.push({ groupe: 'Validations', libelle: v.titre || '', sous: nomProjet(v.projet), icone: 'valider', chemin: `/validations/${encodeURIComponent(v.id)}` }));
   (magasin.lire(K.tachesToutes) || []).forEach((t) => items.push({ groupe: 'Tâches', libelle: t.titre, sous: nomProjet(t.projet), icone: 'taches', chemin: `/projets/${t.projet}/taches/${t.id}` }));
-  (magasin.lire(K.documentsTous) || []).forEach((d) => items.push({ groupe: 'Devis et factures', libelle: `${d.numero || ''} ${d.libelle || ''}`.trim(), sous: nomProjet(d.projet), icone: 'receipt', chemin: `/finances/${d.id}` }));
   /* Un fichier s'éclaire dans les Fichiers de son projet ; une réunion
      ouvre sa fiche dans le Calendrier de son projet. */
   (magasin.lire(K.fichiersTous) || []).forEach((f) => items.push({ groupe: 'Fichiers', libelle: f.nom, sous: nomProjet(f.projet), icone: 'fichiers', chemin: `/fichiers?projet=${encodeURIComponent(f.projet)}&f=${encodeURIComponent(f.id)}` }));
+  /* Les notes et les ressources des projets que le Cockpit suit de près
+     (l'arbre) : leurs clés y sont lues. */
+  const parProjet = (cle) => projets.filter((p) => !p.archive).flatMap((p) => (magasin.lire(cle(p.id)) || []).map((x) => ({ ...x, projet: x.projet || p.id })));
+  parProjet(K.notes).forEach((n) => items.push({ groupe: 'Notes', libelle: n.titre || '', sous: nomProjet(n.projet), icone: 'note', chemin: `/projets/${n.projet}/notes` }));
+  parProjet(K.liens).forEach((l) => items.push({ groupe: 'Ressources', libelle: l.nom || l.url || '', sous: `${nomProjet(l.projet)}${l.url ? ` · ${l.url}` : ''}`, icone: 'liens', action: () => { if (l.url) window.open(l.url, '_blank', 'noopener'); else naviguer(`/projets/${l.projet}/liens`); } }));
+  (magasin.lire(K.documentsTous) || []).forEach((d) => items.push({ groupe: 'Devis et factures', libelle: `${d.numero || ''} ${d.libelle || ''}`.trim(), sous: nomProjet(d.projet), icone: 'receipt', chemin: `/finances/${d.id}` }));
   (magasin.lire(K.reunionsToutes) || []).forEach((r) => items.push({ groupe: 'Réunions', libelle: r.titre, sous: nomProjet(r.projet), icone: 'reunions', chemin: `/calendrier?projet=${encodeURIComponent(r.projet)}&reunion=${encodeURIComponent(r.id)}` }));
+  /* Une version ouvre sa fiche dans « Plateformes et versions ». */
+  (magasin.lire(K.releasesToutes) || []).filter(vivant).forEach((r) => items.push({ groupe: 'Versions', libelle: `${libellePlateforme(r.plateforme)} ${r.version || ''}`.trim(), sous: nomProjet(r.projet), icone: 'releases', chemin: `/projets/${r.projet}/releases/${encodeURIComponent(r.id)}` }));
   return items;
 });
 
@@ -489,6 +598,8 @@ const rediriger = (vers) => (ctx) => { naviguer(vers({ ...ctx, requete: ctx.requ
 
 definir([
   { chemin: '/', vue: (ctx) => adminAccueil.vue(ctx, env) },
+  /* La boîte de ce qui attend l'équipe ; le genre (?genre=) redessine en place. */
+  { chemin: '/a-traiter', cle: () => 'a-traiter', vue: (ctx) => adminATraiter.vue(ctx, env) },
   { chemin: '/clients', vue: garde('clients', (ctx) => adminClients.liste(ctx, env)) },
   { chemin: '/clients/nouveau', vue: garde('clients', (ctx) => adminClients.nouveau(ctx, env)) },
   { chemin: '/clients/:id', vue: garde('clients', (ctx) => adminClients.detail(ctx, env)) },

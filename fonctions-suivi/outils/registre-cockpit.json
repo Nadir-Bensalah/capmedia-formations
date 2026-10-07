@@ -837,7 +837,7 @@
     ]
    ],
    "cible": ".palette .palette-item",
-   "texte": "Demandes à traiter"
+   "texte": "^À traiter"
   }
  },
  {
@@ -905,7 +905,7 @@
     ]
    ],
    "cible": ".palette .palette-groupe",
-   "texte": "^Demandes$"
+   "texte": "^Tickets$"
   }
  },
  {
@@ -6606,7 +6606,7 @@
   "sonde": {
    "route": "/projets/atelier/nouvelle-demande",
    "cible": "#ariane .courant",
-   "texte": "Nouvelle demande"
+   "texte": "Nouveau ticket"
   }
  },
  {
@@ -10396,7 +10396,7 @@
   "sonde": {
    "route": "/projets/atelier/demandes/reg-m-inconnue",
    "cible": ".vide .vide-titre",
-   "texte": "Demande introuvable"
+   "texte": "Ticket introuvable"
   }
  },
  {

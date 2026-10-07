@@ -134,8 +134,11 @@ const sansDefaut = (texte, ou) => {
   page = equipe;
   equipe.on('pageerror', (e) => erreurs.push(`cockpit: ${e.message.slice(0, 160)}`));
   await connecter(equipe, ADMIN);
-  const gestion = await equipe.$$eval('#lat-corps .lat-groupe', (gs) => gs.map((g) => ({ titre: (g.querySelector('.lat-titre') || {}).textContent || '', chemins: [...g.querySelectorAll('.lat-lien')].map((a) => a.dataset.chemin) })).find((g) => /Gestion/i.test(g.titre)));
-  verifier(gestion && gestion.chemins.includes('/annonces'), 'l entrée « Annonces » est dans la zone Gestion du Cockpit', JSON.stringify(gestion));
+  /* Refonte du Cockpit, lot 4 : la zone Gestion devient le groupe
+     « Pilotage », qui se plie ; l'entrée s'y appelle « Annonces et tarifs ». */
+  await equipe.waitForSelector('#lat-corps .lat-arbre[data-arbre=":pilotage"]', { state: 'attached', timeout: 20000 }).catch(() => {});
+  const gestion = await equipe.$eval('#lat-corps .lat-arbre[data-arbre=":pilotage"]', (g) => ({ titre: ((g.querySelector('.lat-groupe-tete .tronque') || {}).textContent || '').trim(), chemins: [...g.querySelectorAll('.lat-branche .lat-lien')].map((a) => a.dataset.chemin), libelle: ((g.querySelector('.lat-lien[data-chemin="/annonces"] .tronque') || {}).textContent || '').trim() })).catch(() => null);
+  verifier(gestion && /Pilotage/.test(gestion.titre) && gestion.chemins.includes('/annonces') && gestion.libelle === 'Annonces et tarifs', 'l entrée « Annonces et tarifs » est dans le groupe Pilotage du Cockpit', JSON.stringify(gestion));
   await aller(equipe, '#/annonces');
   await equipe.waitForSelector('[data-annonce-ligne]', { timeout: 20000 }).catch(() => {});
   verifier(Boolean(await equipe.$('[data-annonce-ligne="tarif-2027-01"]')), 'l annonce semée est listée, en brouillon');

@@ -47,8 +47,9 @@ export const nouvelle = async (ctx, env) => {
   if (!projet) { sortie.innerHTML = `<div class="page">${vide({ icone: 'projets', titre: 'Projet introuvable' })}</div>`; return () => lot.fin(); }
   /* Le client dit « ticket », l'équipe « demande » (02/10). */
   const client = env.role !== 'equipe';
-  titrePage(client ? 'Nouveau ticket' : 'Nouvelle demande');
-  filAriane([{ libelle: projet.nom, chemin: `/projets/${pid}` }, { libelle: client ? 'Tickets' : 'Demandes', chemin: `/projets/${pid}/demandes` }, { libelle: client ? 'Nouveau ticket' : 'Nouvelle demande' }]);
+  /* Les mots du client des deux côtés (refonte du Cockpit, lot 4). */
+  titrePage('Nouveau ticket');
+  filAriane([{ libelle: projet.nom, chemin: `/projets/${pid}` }, { libelle: 'Tickets', chemin: `/projets/${pid}/demandes` }, { libelle: 'Nouveau ticket' }]);
   /* « Suite de » : la nouvelle demande poursuit une ancienne (terminée
      depuis plus de sept jours, ou fermée). Le titre est prérempli, le
      type repris, et le serveur relie les deux fiches. */
@@ -110,7 +111,7 @@ export const nouvelle = async (ctx, env) => {
     : 'Bloquant : le client ne peut plus travailler. Critique : une fonction majeure est cassée, il contourne. Important : à traiter dans le cours du projet. Mineur : un détail, quand ce sera possible.';
 
   sortie.innerHTML = `<div class="page" style="max-width:820px">
-    <div class="page-tete"><div><p class="surtitre">${echapper(projet.nom)}</p><h1>${client ? 'Nouveau ticket' : 'Nouvelle demande'}</h1><p class="chapo">${echapper(chapo)}</p></div></div>
+    <div class="page-tete"><div><p class="surtitre">${echapper(projet.nom)}</p><h1>Nouveau ticket</h1><p class="chapo">${echapper(chapo)}</p></div></div>
     ${depuisMessage ? `<div class="encart encart--info" style="margin-bottom:var(--e-5)">${icone('messages')} <span>Reprise d'un message${depuisMessage.auteur ? ` de ${echapper(depuisMessage.auteur)}` : ''}. Relisez, complétez, ajustez le type si besoin.</span></div>` : ''}
     ${ancienne ? `<div class="encart encart--info" style="margin-bottom:var(--e-5)">${icone('demandes')} <span>${client ? 'Ce ticket fait suite à' : 'Cette demande fait suite à'} <a href="#/projets/${echapper(pid)}/demandes/${echapper(ancienne.id)}">${echapper(ancienne.numero || (client ? 'le ticket' : 'la demande'))} « ${echapper(ancienne.titre)} »</a> : les deux fiches se renverront l'une à l'autre.</span></div>` : ''}
     <form class="forme" id="forme-demande" novalidate>
@@ -254,7 +255,7 @@ export const detail = async (ctx, env) => {
     const e = magasin.empreinte(cles);
     if (e === derniereEmpreinte) return;
     derniereEmpreinte = e;
-    if (!t || !projet) { sortie.innerHTML = `<div class="page">${vide({ icone: 'demandes', titre: equipe ? 'Demande introuvable' : 'Ticket introuvable', texte: equipe ? "Elle a peut-être été archivée, ou vous n'y avez plus accès." : "Il a peut-être été archivé, ou vous n'y avez plus accès.", action: `<a class="btn btn-secondaire" href="#/projets/${echapper(pid)}/demandes">Retour aux demandes</a>` })}</div>`; return; }
+    if (!t || !projet) { sortie.innerHTML = `<div class="page">${vide({ icone: 'demandes', titre: 'Ticket introuvable', texte: "Il a peut-être été archivé, ou vous n'y avez plus accès.", action: `<a class="btn btn-secondaire" href="#/projets/${echapper(pid)}/demandes">Retour aux tickets</a>` })}</div>`; return; }
     const messages = magasin.lire(K.messagesTicket(tid)) || [];
     const evenements = magasin.lire(K.evenementsTicket(tid)) || [];
     const composants = magasin.lire(K.composants(pid)) || [];
@@ -265,8 +266,8 @@ export const detail = async (ctx, env) => {
     const brouillon = composeur ? composeur.value : '';
     const interneCoche = sortie.querySelector('#mode-interne') ? sortie.querySelector('#mode-interne').checked : false;
 
-    titrePage(`${t.numero || (equipe ? 'Demande' : 'Ticket')} · ${t.titre}`);
-    filAriane([{ libelle: projet.nom, chemin: `/projets/${pid}` }, { libelle: equipe ? 'Demandes' : 'Tickets', chemin: `/projets/${pid}/demandes` }, { libelle: t.numero || t.titre }]);
+    titrePage(`${t.numero || 'Ticket'} · ${t.titre}`);
+    filAriane([{ libelle: projet.nom, chemin: `/projets/${pid}` }, { libelle: 'Tickets', chemin: `/projets/${pid}/demandes` }, { libelle: t.numero || t.titre }]);
 
     if (!luMarque && OUVERTS.includes(t.statut)) { luMarque = true; ecrire.marquerLuDemande(tid, equipe ? 'equipe' : 'client', env.session.utilisateur.uid).catch(() => {}); }
 
@@ -298,7 +299,7 @@ export const detail = async (ctx, env) => {
           ${!equipe && t.statut === 'a-valider' ? `<button class="btn btn-ok" type="button" data-action="valider">${icone('check')} C'est réglé, je valide</button><button class="btn btn-secondaire" type="button" data-action="pas-regle">Pas tout à fait</button>` : ''}
           ${peutRouvrir ? `<button class="btn btn-secondaire" type="button" data-action="rouvrir">Rouvrir</button>` : ''}
           ${peutRetirer ? `<button class="btn btn-doux" type="button" data-action="retirer">Je n'en ai plus besoin</button>` : ''}
-          ${proposerSuite ? `<a class="btn btn-secondaire" href="${lienSuite}" data-suite>${icone('plus')} ${equipe ? 'Ouvrir une nouvelle demande' : 'Ouvrir un nouveau ticket'}</a>` : ''}
+          ${proposerSuite ? `<a class="btn btn-secondaire" href="${lienSuite}" data-suite>${icone('plus')} Ouvrir un nouveau ticket</a>` : ''}
         </div>
       </header>
 
@@ -333,7 +334,7 @@ export const detail = async (ctx, env) => {
               <textarea class="zone" name="texte" id="texte-message" maxlength="6000" placeholder="${equipe ? 'Votre réponse...' : 'Écrivez ici. Une capture aide souvent plus qu\'un paragraphe.'}">${echapper(brouillon)}</textarea>
               <div id="zone-pieces-message"></div>
               <div class="composer-pied"><span class="t-micro t-3" id="aide-message">${equipe ? 'Ce texte part au client et déclenche un e-mail.' : 'Capmedia est prévenu par e-mail.'}</span><span class="pousse"></span><button class="btn btn-principal" type="submit">${icone('envoyer')} Envoyer</button></div>
-            </form>` : (equipe ? `<p class="t-petit t-3" style="margin-top:14px">Cette demande est ${(STATUTS[t.statut] || {}).libelle ? (STATUTS[t.statut].libelle.toLowerCase()) : 'close'}. ${peutRouvrir ? 'Vous pouvez la rouvrir pendant sept jours.' : (proposerSuite ? `<a href="${lienSuite}">Ouvrez une nouvelle demande</a> si besoin : elle gardera le lien avec celle-ci.` : 'Ouvrez une nouvelle demande si besoin.')}</p>`
+            </form>` : (equipe ? `<p class="t-petit t-3" style="margin-top:14px">Ce ticket est ${({ resolu: 'résolu', refuse: 'refusé', annulee: 'annulé', ferme: 'fermé' })[t.statut] || 'clos'}. ${peutRouvrir ? 'Vous pouvez le rouvrir pendant sept jours.' : (proposerSuite ? `<a href="${lienSuite}">Ouvrez un nouveau ticket</a> si besoin : il gardera le lien avec celui-ci.` : 'Ouvrez un nouveau ticket si besoin.')}</p>`
               : `<p class="t-petit t-3" style="margin-top:14px">Ce ticket est clos. ${peutRouvrir ? 'Vous pouvez le rouvrir pendant sept jours.' : (proposerSuite ? `<a href="${lienSuite}">Ouvrez un nouveau ticket</a> si besoin : il gardera le lien avec celui-ci.` : 'Ouvrez un nouveau ticket si besoin.')}</p>`)}
           </section>
         </div>

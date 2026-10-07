@@ -1790,6 +1790,11 @@ a.coffre-lien:hover { color: var(--accent); }
 .lat-branche .lat-lien { padding: 6px 10px; font-size: 14px; color: var(--encre-2); }
 .lat-branche .lat-lien:hover, .lat-branche .lat-lien.actif { color: var(--encre); }
 .lat-branche .lat-lien svg { width: 16px; height: 16px; }
+/* Un groupe sans page à lui (Portefeuille, Finances, Pilotage, dans le
+   Cockpit) : sa ligne est un bouton qui plie le groupe, au gabarit d'une
+   entrée, sans fond ni bordure de bouton. */
+button.lat-lien { background: transparent; border: 0; cursor: pointer; }
+.lat-arbre--groupe .lat-arbre-bascule { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   .lat-arbre-branches, .lat-arbre-bascule svg { transition: none; }
 }

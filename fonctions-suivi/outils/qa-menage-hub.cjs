@@ -430,7 +430,7 @@ const texteDe = (page, sel) => page.$eval(sel, (el) => el.textContent.replace(/\
   /* Refonte du Cockpit, lot 3 : cette section s'inverse. Le Cockpit a
      désormais l'arbre des projets, comme le Hub, et plus d'onglets
      horizontaux ; il garde ce qui est à l'équipe (Marketing « À venir »,
-     la frise du devis, ses mots jusqu'au lot 4). */
+     la frise du devis ; depuis le lot 4, les mots du client). */
   console.log('\n== Le Cockpit prend l arbre du Hub');
   const ctxE = await nav.newContext({ viewport: { width: 1440, height: 900 } });
   const eq = await ctxE.newPage(); garder(eq);
@@ -452,7 +452,8 @@ const texteDe = (page, sel) => page.$eval(sel, (el) => el.textContent.replace(/\
   verifier(/Marketing/.test(entreeMarketing) && /À venir/.test(entreeMarketing), 'l équipe voit l entrée Marketing, marquée « À venir »', entreeMarketing);
   await eq.click(`${arbreEq} a[data-chemin="/projets/atelier/marketing"]`); await pause(1500);
   verifier(/^#\/projets\/atelier\/marketing$/.test(hash(eq)) && /À venir/.test(await texteDe(eq, '#onglet-corps')), 'et sa page, vide pour l instant', hash(eq));
-  verifier(/Feuille de route/.test(await texteDe(eq, arbreEq)) && /Demandes/.test(await texteDe(eq, arbreEq)), 'le Cockpit garde ses mots (Demandes, Feuille de route) jusqu au lot 4');
+  /* Lot 4 : le Cockpit parle comme le client pour ce qui est partagé. */
+  verifier(/Planning/.test(await texteDe(eq, arbreEq)) && /Tickets/.test(await texteDe(eq, arbreEq)) && /Campagne de tests/.test(await texteDe(eq, arbreEq)) && !/Feuille de route|Demandes/.test(await texteDe(eq, arbreEq)), 'le Cockpit dit comme le client : Tickets, Planning, Campagne de tests');
   await ctxE.close();
 
   verifier(erreurs.length === 0, `aucune erreur de page ${erreurs.join(' | ')}`);

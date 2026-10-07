@@ -115,18 +115,19 @@ const retourVisible = (page) => page.$eval('#bouton-retour', (b) => !b.hidden &&
   await aller(pa, '#/projets/atelier', '#onglet-corps');
   verifier(await retourVisible(pa), 'sur un projet : le Retour est là');
   const filProjet = await texteDe(pa, '#ariane');
-  verifier(/^Accueil.*Projets.*Atelier$/.test(filProjet) && Boolean(await pa.$('#ariane a[href="#/"]')), 'fil : Accueil › Projets › Atelier', filProjet);
+  /* Lot 4 : l'accueil de l'équipe s'appelle « Aujourd'hui », dans le rail et le fil. */
+  verifier(/^Aujourd'hui.*Projets.*Atelier$/.test(filProjet) && Boolean(await pa.$('#ariane a[href="#/"]')), 'fil : Aujourd hui › Projets › Atelier', filProjet);
   await aller(pa, '#/projets/atelier/taches', '#onglet-corps');
   await pa.click('#bouton-retour'); await pause(1500);
   verifier(await hash(pa) === '#/projets/atelier', 'le Retour revient à la page d avant', await hash(pa));
   await aller(pa, '#/projets/atelier/brique/ios', '.page');
   const filPartie = await texteDe(pa, '#ariane');
-  verifier(/^Accueil.*Projets.*Atelier.*Application iOS$/.test(filPartie), 'la page d une partie : Accueil › Projets › Atelier › la partie', filPartie);
+  verifier(/^Aujourd'hui.*Projets.*Atelier.*Application iOS$/.test(filPartie), 'la page d une partie : Aujourd hui › Projets › Atelier › la partie', filPartie);
   await aller(pa, '#/projets/atelier/demandes/t-veille', '#ariane .courant');
   const filDemande = await texteDe(pa, '#ariane');
-  verifier(/^Accueil.*Projets.*Atelier.*Demandes.*ATELIER-004$/.test(filDemande), 'la fiche d une demande : Accueil › Projets › Atelier › Demandes › son numéro', filDemande);
+  verifier(/^Aujourd'hui.*Projets.*Atelier.*Tickets.*ATELIER-004$/.test(filDemande), 'la fiche d un ticket : Aujourd hui › Projets › Atelier › Tickets › son numéro', filDemande);
   await aller(pa, '#/demandes', '.page h1');
-  verifier(/^Accueil.*Demandes$/.test(await texteDe(pa, '#ariane')), 'une page globale : Accueil › Demandes', await texteDe(pa, '#ariane'));
+  verifier(/^Aujourd'hui.*Tickets$/.test(await texteDe(pa, '#ariane')), 'une page globale : Aujourd hui › Tickets', await texteDe(pa, '#ariane'));
   /* Une adresse ouverte par un lien (onglet neuf) : pas de page d'avant,
      le Retour remonte d'un cran dans le fil. */
   const direct = await pa.context().newPage();

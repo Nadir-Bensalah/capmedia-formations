@@ -10,7 +10,7 @@ import { filAriane } from '../coquille.js';
 import { naviguer, adresseAvec } from '../routeur.js';
 import { activiteHtml } from './accueil.js';
 
-const NATURES = { '': 'Tout', demande: 'Demandes', tache: 'Tâches', message: 'Messages', validation: 'Validations', fichier: 'Fichiers', release: 'Versions', reunion: 'Réunions', devis: 'Devis', facture: 'Factures', paiement: 'Paiements', jalon: 'Étapes', note: 'Notes', blocage: 'Blocages', projet: 'Projets', test: 'Tests' };
+const NATURES = { '': 'Tout', demande: 'Tickets', tache: 'Tâches', message: 'Messages', validation: 'Validations', fichier: 'Fichiers', release: 'Versions', reunion: 'Réunions', devis: 'Devis', facture: 'Factures', paiement: 'Paiements', jalon: 'Étapes', note: 'Notes', blocage: 'Blocages', projet: 'Projets', test: 'Tests' };
 
 export const vue = async (ctx, env) => {
   const lot = magasin.lot();

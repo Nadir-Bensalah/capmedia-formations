@@ -256,7 +256,7 @@ export const vue = async (ctx, env) => {
         ${composant ? metrique(`${borner(composant.progression)} %`, 'Avancement de la partie', { nuance: dateCourte(composant.maj) ? `le ${dateCourte(composant.maj)}` : '' }) : metrique('Pas encore suivie', 'Avancement')}
         ${metrique(publiees.length, 'Versions publiées', { nuance: versions.length > publiees.length ? `${versions.length - publiees.length} en cours` : '' })}
         ${metrique(ouvertes.length, 'Tâches ouvertes', { nuance: `${taches.length} au total` })}
-        ${metrique(demandesOuvertes.length, equipe ? 'Demandes ouvertes' : 'Tickets ouverts', { ton: demandesOuvertes.length ? 'accent' : '' })}
+        ${metrique(demandesOuvertes.length, 'Tickets ouverts', { ton: demandesOuvertes.length ? 'accent' : '' })}
         ${metrique(blocages.length, 'Points bloquants', { ton: blocages.length ? 'rouge' : '' })}
       </div>
 
@@ -366,13 +366,13 @@ export const vue = async (ctx, env) => {
       </section>` : ''}
 
       <section class="section" data-section="demandes">
-        <div class="section-tete"><h2>${equipe ? 'Les demandes' : 'Les tickets'} ${demandes.length ? `<span class="compte-section">${demandesOuvertes.length}</span>` : ''}</h2><a class="lien" href="#/projets/${echapper(pid)}/nouvelle-demande">${equipe ? 'Nouvelle demande' : 'Nouveau ticket'}</a></div>
+        <div class="section-tete"><h2>Les tickets ${demandes.length ? `<span class="compte-section">${demandesOuvertes.length}</span>` : ''}</h2><a class="lien" href="#/projets/${echapper(pid)}/nouvelle-demande">${equipe ? 'Nouvelle demande' : 'Nouveau ticket'}</a></div>
         ${demandes.length ? `<div class="liste">${demandes.map((t) => ligne({
           href: `#/projets/${echapper(pid)}/demandes/${echapper(t.id)}`,
           icone: 'demandes', titre: echapper(t.titre),
           sous: echapper([t.numero, t.version ? `version ${t.version}` : '', OUVERTS.includes(t.statut) ? `${equipe ? 'ouverte' : 'ouvert'} depuis ${age(t.cree)}` : `${equipe ? 'close' : 'clos'} ${depuis(t.maj)}`].filter(Boolean).join(' · ')),
           fin: pastille(STATUTS, t.statut, { client: !equipe }),
-        })).join('')}</div>` : `<p class="t-petit t-3">${equipe ? 'Aucune demande' : 'Aucun ticket'} sur cette partie. Une question, un souhait : écrivez-nous.</p>`}
+        })).join('')}</div>` : `<p class="t-petit t-3">Aucun ticket sur cette partie. Une question, un souhait : écrivez-nous.</p>`}
       </section>
 
       ${notes.length || equipe ? `<section class="section">
