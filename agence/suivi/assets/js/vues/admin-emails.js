@@ -79,7 +79,17 @@ const provenance = (e) => {
   return `${pourquoi} à partir des données figées à la mise en file, avec le gabarit en service. Une retouche du gabarit faite après l'envoi s'y verrait.`;
 };
 
-const enveloppe = (html) => `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><base target="_blank"></head><body style="margin:0">${html}</body></html>`;
+/* La lettre montrée ici vit dans un cadre qui hérite de la politique de
+   sécurité du Cockpit : pas de feuille <style> en ligne, des images du site
+   seulement. On retire donc la feuille de la lettre (elle ne porte que le
+   mode sombre et la mise en page du téléphone : la lettre claire reste
+   entière), et ses images, publiées sur capmedia.app, sont prises sur le
+   site qui sert la page. La lettre gardée, elle, ne change pas. */
+const IMAGES_COURRIEL = 'https://capmedia.app/assets/img/courriel/';
+const pourApercu = (html) => String(html || '')
+  .replace(/<style[\s\S]*?<\/style>/gi, '')
+  .split(IMAGES_COURRIEL).join('/assets/img/courriel/');
+const enveloppe = (html) => `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><base target="_blank"></head><body style="margin:0">${pourApercu(html)}</body></html>`;
 
 const ouvrirLettre = async (id) => {
   const m = modale({ titre: 'E-mail', large: true, corps: squelette('lignes', 4) });

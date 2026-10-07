@@ -178,7 +178,9 @@ const PIEGE = '<script>parent.__pirate = 1</script><img src="x" onerror="parent.
   const inv = await lire('qa-invitation');
   verifier(inv.code === 200 && !inv.texte.includes(JETON) && !l1.texte.includes(JETON) && /\?i=…/.test(((inv.json || {}).envoi || {}).texte || '') && ((inv.json || {}).envoi || {}).masques.length === 1, 'ni le jeton d un lien d invitation', ((inv.json || {}).envoi || {}).masques);
   const pg = ((await lire('qa-piege')).json || {}).envoi || {};
-  verifier(pg.html && !/<script|<img|<b>/i.test(pg.html) && pg.html.includes('&lt;script&gt;'), 'un texte piégé reste du texte dans la lettre');
+  /* La lettre a ses propres images (logo, icônes) : ce qui compte, c'est
+     qu'aucune balise du texte piégé n'y soit devenue une balise. */
+  verifier(pg.html && !/<script|<img[^>]*onerror|<img src="x"|<b>/i.test(pg.html) && pg.html.includes('&lt;script&gt;') && pg.html.includes('&lt;img src=&quot;x&quot;'), 'un texte piégé reste du texte dans la lettre');
   verifier((await lire('envois-absente')).code === 404 && (await lire('a/b')).code === 400, 'une lettre absente : 404 ; un identifiant bricolé : 400');
 
   console.log('\n== Les refus');
@@ -251,7 +253,7 @@ const PIEGE = '<script>parent.__pirate = 1</script><img src="x" onerror="parent.
   await page.waitForSelector('iframe[data-apercu]', { timeout: 15000 }).catch(() => {});
   await pause(1500);
   const cadre2 = page.frames().find((f) => f !== page.mainFrame() && f.url() === 'about:srcdoc');
-  const piege = cadre2 ? await cadre2.evaluate(() => ({ texte: document.body.innerText, scripts: document.querySelectorAll('script, img, b').length })).catch((er) => ({ texte: String(er), scripts: -1 })) : { texte: '', scripts: -1 };
+  const piege = cadre2 ? await cadre2.evaluate(() => ({ texte: document.body.innerText, scripts: document.querySelectorAll('script, img[onerror], img[src="x"], b').length })).catch((er) => ({ texte: String(er), scripts: -1 })) : { texte: '', scripts: -1 };
   const pirate = await page.evaluate(() => window.__pirate);
   verifier(piege.scripts === 0 && /parent\.__pirate = 1/.test(piege.texte) && pirate === undefined, 'un texte piégé s affiche en texte : aucun script, aucune balise', JSON.stringify({ s: piege.scripts, p: pirate }));
   await page.click('.modale-tete [data-fermer]'); await pause(500);

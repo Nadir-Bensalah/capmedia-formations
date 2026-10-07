@@ -1039,11 +1039,23 @@ exports.suiviFacteur = onDocumentCreated(
     if (!envoi) return;
     if (envoi.etat !== 'attente') return;
 
+    /* Le logo du projet, en tête de la lettre. Une lecture qui échoue ne
+       retient jamais un e-mail : la lettre part avec les initiales. */
+    let projetLogo = '';
+    if (typeof envoi.projet === 'string' && envoi.projet && !envoi.projet.includes('/')) {
+      try {
+        const p = await bdd.doc(`projets/${envoi.projet}`).get();
+        projetLogo = p.exists && typeof p.data().logo === 'string' ? p.data().logo : '';
+      } catch (err) {
+        console.warn(`Logo du projet ${envoi.projet} illisible, lettre sans logo`, err.message);
+      }
+    }
+
     let courriel;
     try {
       /* Les destinataires passent au gabarit : une lettre à une personne
          la salue par son prénom. */
-      courriel = courriels.rendre(envoi.modele, envoi.variables, { a: Array.isArray(envoi.a) ? envoi.a : [] });
+      courriel = courriels.rendre(envoi.modele, envoi.variables, { a: Array.isArray(envoi.a) ? envoi.a : [], ...(projetLogo ? { projetLogo } : {}) });
     } catch (err) {
       /* Modèle inconnu : rien à réessayer, c'est une erreur de code. */
       await marquerEchec(ref, Number(envoi.essais || 0), err);

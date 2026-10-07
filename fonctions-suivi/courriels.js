@@ -2,45 +2,70 @@
    ESPACE DE SUIVI CLIENT · les gabarits d'e-mail
    Contrat : docs/suivi.md, section 6.
 
-   Un seul gabarit, sobre, tout en ligne : les clients de messagerie
-   jettent les feuilles de style externes, et beaucoup jettent aussi les
-   balises <style>. Donc chaque couleur, chaque marge est portée par un
-   attribut « style » sur la balise qui en a besoin.
+   Un seul gabarit, au dessin de la suite Capmedia : la marque (logo,
+   mot, badge du service, trait), une carte blanche à coins arrondis sur
+   fond doux, le projet de la lettre en tête (son logo, ses initiales
+   sinon), des blocs à fond doux, un bouton en pilule.
 
-   Les couleurs viennent de agence/assets/css/tokens.css, en dur ici parce
-   qu'un e-mail ne sait pas lire une variable CSS. Elles sont regroupées
-   dans TEINTES : c'est le seul endroit à corriger si le site change.
+   Tout est en ligne : les clients de messagerie jettent les feuilles de
+   style externes, et beaucoup jettent aussi les balises <style>. Donc
+   chaque couleur, chaque marge est portée par un attribut « style ». La
+   seule feuille de la lettre (FEUILLE) ajoute le mode sombre et la mise
+   en page du téléphone : une messagerie qui l'ignore garde la lettre
+   claire, entière.
+
+   Les couleurs viennent de agence/suivi/assets/css/suite.css, en dur ici
+   parce qu'un e-mail ne sait pas lire une variable CSS. Elles sont
+   regroupées dans TEINTES et SOMBRE : le seul endroit à corriger si la
+   suite change. Les images sont des PNG publiés avec le site (IMAGES) :
+   Gmail et Outlook n'affichent pas le SVG.
 
    Chaque modèle renvoie { objet, html, texte }. Toujours les deux corps :
    un client de messagerie en mode texte doit rester lisible.
    ========================================================================== */
 
-/* --- Les couleurs du site, figées pour la messagerie -------------------- */
+/* --- Les couleurs de la suite (Capmedia Desk), figées pour la messagerie --
+   Celles de agence/suivi/assets/css/suite.css, en opaque : le rgba passe
+   mal partout. SOMBRE double chaque teinte pour les messageries qui
+   suivent le mode sombre (Apple Mail, iOS, Outlook.com). */
 const TEINTES = {
-  fond: '#F6F5F4',      // --bg-3, le fond de la fenêtre autour de la lettre
-  lettre: '#FFFFFF',    // --bg
-  texte: '#000000',     // --texte
-  texte2: '#615D59',    // --texte-2, gris chaud
-  texte3: '#A39E98',    // --texte-3, le pied de page
-  trait: '#E8E6E4',     // --trait, en opaque : le rgba passe mal partout
-  action: '#0075DE',    // --action, réservé à l'unique bouton
-  voile: '#F9F9F8',     // --bg-2, le fond d'une citation
+  page: '#F5F5F7',      // --page, le fond autour de la lettre
+  lettre: '#FFFFFF',    // --blanc, la carte
+  panneau: '#F5F5F7',   // le fond d'un bloc dans la carte (faits, citation)
+  texte: '#1D1D1F',     // --encre
+  texte2: '#424245',    // le corps de la lettre
+  texte3: '#86868B',    // --encre-3, libellés, notes, pied
+  trait: '#E8E8ED',     // --trait-clair, les filets
+  action: '#0075DE',    // le bleu du Hub, réservé au bouton et aux liens
+  badge: '#E5F1FC',     // le fond du badge du service
+  initiale: '#6E6E73',  // --encre-2, les initiales d'un projet sans logo
+};
+const SOMBRE = {
+  page: '#111113', lettre: '#1C1C1E', panneau: '#2C2C2E',
+  texte: '#F5F5F7', texte2: '#D1D1D6', texte3: '#98989D', trait: '#3A3A3C',
+  lien: '#409CFF', badge: '#13314F', initiale: '#C7C7CC',
 };
 
-const POLICE = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+const POLICE = "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif";
+const POLICE_TITRE = "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif";
+const POLICE_MONO = "'SF Mono', ui-monospace, Menlo, Consolas, 'Courier New', monospace";
 const LARGEUR = 600;
 
 const SITE = 'https://capmedia.app';
 const BASE = `${SITE}/suivi/`;
 const SIGNATURE = 'Capmedia Digital';
+/* Les images de la lettre : des PNG publiés avec le site (agence/assets/
+   img/courriel, produits par outils/generer-images-courriel.mjs). */
+const IMAGES = `${SITE}/assets/img/courriel/`;
 
 /* Les lettres aux testeurs portent la marque de leur espace, Capmedia Test :
-   un testeur n'a pas de projet chez nous, il a une mission de test. */
-const MARQUE_TEST = { signature: 'Capmedia Test', pied: 'Cet e-mail vous est adressé au titre de votre mission de test.' };
+   un testeur n'a pas de projet chez nous, il a une mission de test.
+   « service » : le badge bleu qui accompagne toujours la marque. */
+const MARQUE_TEST = { signature: 'Capmedia Test', pied: 'Cet e-mail vous est adressé au titre de votre mission de test.', service: 'Test' };
 
 /* Les lettres à l'équipe : même en-tête, mais un pied qui ne parle pas de
    « votre projet » (elles ne vont pas à un client). */
-const MARQUE_EQUIPE = { signature: SIGNATURE, pied: "Cet e-mail est réservé à l'équipe Capmedia." };
+const MARQUE_EQUIPE = { signature: SIGNATURE, pied: "Cet e-mail est réservé à l'équipe Capmedia.", service: 'Cockpit' };
 
 /* --- Les liens directs, une seule source ------------------------------- */
 const lienEspace = () => BASE;
@@ -78,11 +103,11 @@ function echapper(valeur) {
 }
 
 /** Texte libre rendu avec ses retours à la ligne, sans HTML injecté. */
-function enParagraphes(texteLibre, style) {
+function enParagraphes(texteLibre, style, classe = '') {
   const blocs = echapper(texteLibre).split(/\n{2,}/).filter((b) => b.trim());
   if (!blocs.length) return '';
   return blocs
-    .map((bloc) => `<p style="${style}">${bloc.replace(/\n/g, '<br>')}</p>`)
+    .map((bloc) => `<p${classe ? ` class="${classe}"` : ''} style="${style}">${bloc.replace(/\n/g, '<br>')}</p>`)
     .join('');
 }
 
@@ -330,24 +355,200 @@ const compte = (n, singulier, pluriel) => `${n} ${n > 1 ? pluriel : singulier}`;
    échapper au nettoyage, même après une modification distraite.
    ========================================================================== */
 
+/* Une police en propriétés séparées : Outlook lit mal le raccourci « font ». */
+const f = (poids, taille, hauteur, famille = POLICE) =>
+  `font-family:${famille};font-size:${taille}px;line-height:${hauteur}px;font-weight:${poids};`;
+
 const S = {
-  titre: `margin:0 0 16px;font:600 22px/1.3 ${POLICE};color:${TEINTES.texte};letter-spacing:-0.01em;`,
-  corps: `margin:0 0 16px;font:400 16px/1.6 ${POLICE};color:${TEINTES.texte2};`,
-  fort: `margin:0 0 16px;font:400 16px/1.6 ${POLICE};color:${TEINTES.texte};`,
-  cle: `padding:6px 0;font:400 14px/1.5 ${POLICE};color:${TEINTES.texte3};vertical-align:top;white-space:nowrap;`,
-  val: `padding:6px 0 6px 16px;font:500 14px/1.5 ${POLICE};color:${TEINTES.texte};vertical-align:top;`,
-  note: `margin:16px 0 0;font:400 14px/1.6 ${POLICE};color:${TEINTES.texte3};`,
-  pied: `margin:0;font:400 13px/1.6 ${POLICE};color:${TEINTES.texte3};`,
+  titre: `margin:0 0 20px;${f(700, 26, 32, POLICE_TITRE)}color:${TEINTES.texte};letter-spacing:-0.022em;`,
+  corps: `margin:0 0 16px;${f(400, 16, 26)}color:${TEINTES.texte2};`,
+  cle: `${f(400, 14, 20)}color:${TEINTES.texte3};`,
+  val: `${f(600, 14, 20)}color:${TEINTES.texte};`,
+  note: `margin:0;${f(400, 13, 20)}color:${TEINTES.texte3};`,
+  pied: `margin:12px 0 0;${f(400, 12, 19)}color:${TEINTES.texte3};`,
   lienPied: `color:${TEINTES.texte3};text-decoration:underline;`,
-  elementTitre: `margin:0;font:600 15px/1.45 ${POLICE};color:${TEINTES.texte};`,
-  elementDetail: `margin:4px 0 0;font:400 14px/1.5 ${POLICE};color:${TEINTES.texte2};`,
-  elementLien: `font:500 14px/1.5 ${POLICE};color:${TEINTES.action};text-decoration:underline;`,
-  second: `margin:12px 0 0;font:400 14px/1.5 ${POLICE};color:${TEINTES.texte2};`,
+  numero: `margin:0 0 4px;${f(500, 12, 16, POLICE_MONO)}color:${TEINTES.texte3};letter-spacing:0.02em;`,
+  elementTitre: `margin:0;${f(600, 15, 21)}color:${TEINTES.texte};`,
+  elementDetail: `margin:4px 0 0;${f(400, 14, 20)}color:${TEINTES.texte2};`,
+  elementLien: `${f(600, 14, 20)}color:${TEINTES.action};text-decoration:none;`,
+  second: `margin:18px 0 0;${f(400, 15, 22)}color:${TEINTES.texte2};`,
+  citation: `margin:0 0 10px;${f(400, 15, 24)}color:${TEINTES.texte};`,
 };
 
 /* Un lien ne devient un href que s'il commence par https:// ; rien
    d'autre (pas de « javascript: », pas de chemin relatif). */
 const lienSur = (url) => (/^https:\/\/\S+$/.test(valeurTexte(url).trim()) ? valeurTexte(url).trim() : '');
+
+/* Le logo d'un projet n'entre dans la lettre que s'il est une image que
+   toutes les messageries lisent : PNG, JPEG ou GIF, en https. Un SVG ou un
+   WebP laisse la place aux initiales. */
+const logoSur = (url) => {
+  const u = lienSur(url);
+  return u && /\.(png|jpe?g|gif)([?#]|$)/i.test(u) ? u : '';
+};
+
+/* Les initiales d'un projet sans logo, comme le Hub (ui.js, avatarProjet). */
+const initiales = (nom) => valeurTexte(nom).trim().split(/\s+/).slice(0, 2)
+  .map((m) => m.charAt(0)).join('').toUpperCase();
+
+/* --- Les icônes ----------------------------------------------------------
+   Celles du Hub, au trait, en PNG gris (#8E8E93) lisible sur les deux
+   fonds. Toujours posées à côté d'un libellé, jamais dans une pastille.
+   Décoratives : alt vide, la lettre se lit pareil images bloquées. */
+const icone = (nom, marge = 10) => `<img src="${IMAGES}i-${nom}.png" width="16" height="16" alt="" style="display:inline-block;width:16px;height:16px;border:0;outline:none;vertical-align:-3px;margin:0 ${marge}px 0 0;">`;
+
+/* L'icône d'un fait, d'après son libellé. Le premier motif qui répond
+   l'emporte : l'ordre compte (« Reste à payer » avant « Date »). */
+const ICONES_FAITS = [
+  [/montant|reste à payer|budget/i, 'euro'],
+  [/^tva$/i, 'receipt'],
+  [/^devis/i, 'documents'],
+  [/^facture/i, 'receipt'],
+  [/^moyen/i, 'paiement'],
+  [/^code$/i, 'cadenas'],
+  [/adresse ip/i, 'globe'],
+  [/adresse/i, 'mail'],
+  [/visioconf/i, 'video'],
+  [/^lieu/i, 'pin'],
+  [/durée|temps passé|rythme|^heure/i, 'horloge'],
+  [/ le$|échéance|^date|jusqu|fin prévue|délai|séquence|jours de travail/i, 'calendrier'],
+  [/urgence|gravité|bloquant|anomalie|échecs/i, 'alerte'],
+  [/statut|^réponse/i, 'activite'],
+  [/plateforme/i, 'smartphone'],
+  [/^version/i, 'releases'],
+  [/testeurs/i, 'utilisateurs'],
+  [/rôle|ouverte par|testeur|^par$/i, 'utilisateur'],
+  [/pièce/i, 'trombone'],
+  [/fichier/i, 'fichiers'],
+  [/tâche/i, 'taches'],
+  [/réussi/i, 'check'],
+  [/valid|examiner/i, 'valider'],
+  [/sans objet/i, 'aucun'],
+  [/scénario/i, 'liste'],
+  [/^idée/i, 'ampoule'],
+  [/note du test/i, 'sparkle'],
+  [/attendons|vous testez/i, 'cible'],
+  [/formule/i, 'composants'],
+  [/feuille de route/i, 'route'],
+  [/^projet|^application/i, 'projets'],
+  [/demande|précision|correction|évolution/i, 'demandes'],
+  [/^type|catégorie|référence/i, 'etiquette'],
+];
+const iconeDuFait = (cle) => (ICONES_FAITS.find(([motif]) => motif.test(cle)) || [null, 'note'])[1];
+
+/* La flèche d'un lien, à la couleur du lien : deux images, l'une pour le
+   clair, l'autre pour le sombre, échangées par la feuille de la lettre.
+   Outlook (Word) ne lit pas cet échange : il n'a que la claire. */
+const fleche = () => `<img class="cm-clair" src="${IMAGES}fleche.png" width="14" height="14" alt="" style="display:inline-block;width:14px;height:14px;border:0;vertical-align:-2px;margin-left:2px;">`
+  + `<!--[if !mso]><!--><img class="cm-sombre" src="${IMAGES}fleche-sombre.png" width="14" height="14" alt="" style="display:none;width:14px;height:14px;border:0;vertical-align:-2px;margin-left:2px;"><!--<![endif]-->`;
+
+/* Un bloc à fond doux et coins arrondis, dans la carte. */
+const panneau = (contenu, marge = '8px 0 28px', pad = '6px 22px') => `
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="cm-panneau" bgcolor="${TEINTES.panneau}"
+                     style="border-collapse:separate;width:100%;margin:${marge};background:${TEINTES.panneau};border-radius:16px;">
+                <tr><td class="cm-panneau-pad" style="padding:${pad};">${contenu}
+                </td></tr>
+              </table>`;
+
+/* Un fait : l'icône et le libellé à gauche, la valeur à droite ; une
+   valeur longue passe dessous, et tout s'empile sur un téléphone. */
+const LONGUE = 44;
+function ligneFait(cle, valeur, premiere) {
+  const bord = premiere ? '' : `border-top:1px solid ${TEINTES.trait};`;
+  const libelle = `${icone(iconeDuFait(cle))}<span class="cm-t3" style="${S.cle}">${echapper(cle)}</span>`;
+  if (valeur.length > LONGUE || valeur.includes('\n')) {
+    return `
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">
+                    <tr><td class="cm-bord" style="padding:14px 0;${bord}">
+                      <div style="${S.cle}">${libelle}</div>
+                      <div class="cm-t1" style="margin:6px 0 0 26px;${S.val}">${echapper(valeur).replace(/\n/g, '<br>')}</div>
+                    </td></tr>
+                  </table>`;
+  }
+  return `
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">
+                    <tr>
+                      <td class="cm-bord cm-pile" valign="top" style="padding:14px 16px 14px 0;white-space:nowrap;${bord}${S.cle}">${libelle}</td>
+                      <td class="cm-bord cm-pile cm-val cm-t1" valign="top" align="right" style="padding:14px 0;text-align:right;${bord}${S.val}">${echapper(valeur)}</td>
+                    </tr>
+                  </table>`;
+}
+
+/* Une ligne du récapitulatif. Le numéro de la demande, s'il ouvre le
+   titre (« FORGEME-012 · Titre »), passe au-dessus en chasse fixe. */
+function ligneElement(l, premiere) {
+  const bord = premiere ? '' : `border-top:1px solid ${TEINTES.trait};`;
+  const m = /^([A-Z0-9][A-Z0-9_]*-\d+) · (.+)$/.exec(l.titre);
+  return `
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">
+                    <tr><td class="cm-bord" style="padding:18px 0;${bord}">${m ? `
+                      <p class="cm-t3" style="${S.numero}">${echapper(m[1])}</p>` : ''}
+                      <p class="cm-t1" style="${S.elementTitre}">${echapper(m ? m[2] : l.titre)}</p>${l.detail ? `
+                      <p class="cm-t2" style="${S.elementDetail}">${echapper(l.detail)}</p>` : ''}${l.lien ? `
+                      <p style="margin:10px 0 0;${f(600, 14, 20)}"><a class="cm-lien" href="${echapper(l.lien)}" style="${S.elementLien}">${echapper(l.libelleLien)}</a>${fleche()}</p>` : ''}
+                    </td></tr>
+                  </table>`;
+}
+
+/* Le bouton, en pilule. Outlook (Word) ne sait pas arrondir un lien : il
+   reçoit le même bouton dessiné en VML. */
+function boutonPilule(libelle, url) {
+  const l = echapper(libelle); const u = echapper(url);
+  const largeur = Math.min(520, Math.max(200, Math.round(valeurTexte(libelle).length * 9.5 + 64)));
+  return `
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" class="cm-bouton" style="border-collapse:separate;margin:4px 0 0;">
+                <tr><td align="center" bgcolor="${TEINTES.action}" style="border-radius:999px;background:${TEINTES.action};">
+                  <!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${u}" style="height:50px;v-text-anchor:middle;width:${largeur}px;" arcsize="50%" stroke="f" fillcolor="${TEINTES.action}"><w:anchorlock/><center style="color:#FFFFFF;font-family:'Segoe UI',Arial,sans-serif;font-size:16px;font-weight:600;">${l}</center></v:roundrect><![endif]-->
+                  <!--[if !mso]><!--><a href="${u}" style="display:inline-block;padding:15px 30px;${f(600, 16, 20)}color:#FFFFFF;text-decoration:none;border-radius:999px;letter-spacing:-0.01em;">${l}</a><!--<![endif]-->
+                </td></tr>
+              </table>`;
+}
+
+/* La feuille de la lettre : le mode sombre et le téléphone. Les messageries
+   qui l'ignorent (Gmail pour le sombre) gardent la lettre claire, entière. */
+const FEUILLE = `
+  :root { color-scheme: light dark; supported-color-schemes: light dark; }
+  body { margin: 0; padding: 0; width: 100% !important; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+  img { border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic; }
+  table { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+  a[x-apple-data-detectors] { color: inherit !important; text-decoration: none !important; }
+  @media screen and (max-width: 620px) {
+    .cm-ext { padding: 16px 10px 28px !important; }
+    .cm-tete { padding: 4px 8px 16px !important; }
+    .cm-pad { padding-left: 22px !important; padding-right: 22px !important; }
+    .cm-h1 { font-size: 23px !important; line-height: 29px !important; }
+    .cm-panneau-pad { padding-left: 16px !important; padding-right: 16px !important; }
+    .cm-pile { display: block !important; width: auto !important; text-align: left !important; white-space: normal !important; padding: 14px 0 0 0 !important; }
+    .cm-val { border-top: 0 !important; padding: 4px 0 14px 26px !important; }
+    .cm-bouton { width: 100% !important; }
+    .cm-bouton a { display: block !important; }
+  }
+  @media (prefers-color-scheme: dark) {
+    .cm-page { background: ${SOMBRE.page} !important; }
+    .cm-carte { background: ${SOMBRE.lettre} !important; box-shadow: none !important; }
+    .cm-panneau { background: ${SOMBRE.panneau} !important; }
+    .cm-t1 { color: ${SOMBRE.texte} !important; }
+    .cm-t2 { color: ${SOMBRE.texte2} !important; }
+    .cm-t3, .cm-t3 a { color: ${SOMBRE.texte3} !important; }
+    .cm-bord { border-color: ${SOMBRE.trait} !important; }
+    .cm-filet { background: ${SOMBRE.trait} !important; }
+    .cm-lien { color: ${SOMBRE.lien} !important; }
+    .cm-badge { background: ${SOMBRE.badge} !important; color: ${SOMBRE.lien} !important; }
+    .cm-initiale { background: ${SOMBRE.panneau} !important; color: ${SOMBRE.initiale} !important; }
+    .cm-clair { display: none !important; }
+    .cm-sombre { display: inline-block !important; }
+  }
+  [data-ogsb] .cm-page { background: ${SOMBRE.page} !important; }
+  [data-ogsb] .cm-carte { background: ${SOMBRE.lettre} !important; }
+  [data-ogsb] .cm-panneau, [data-ogsb] .cm-initiale { background: ${SOMBRE.panneau} !important; }
+  [data-ogsc] .cm-t1 { color: ${SOMBRE.texte} !important; }
+  [data-ogsc] .cm-t2 { color: ${SOMBRE.texte2} !important; }
+  [data-ogsc] .cm-t3 { color: ${SOMBRE.texte3} !important; }
+  [data-ogsc] .cm-lien { color: ${SOMBRE.lien} !important; }`;
+
+/* L'en-tête du projet de la lettre, posé par rendre() le temps d'un rendu :
+   { nom, logo }. Le rendu est synchrone, rien ne peut s'intercaler. */
+let enteteProjet = null;
 
 /**
  * @param {object} bloc
@@ -361,96 +562,145 @@ const lienSur = (url) => (/^https:\/\/\S+$/.test(valeurTexte(url).trim()) ? vale
  *   second   { libelle, url } un lien secondaire, sous le bouton : jamais
  *            d'adresse nue dans une phrase du HTML
  *   note     string          la précision en petits caractères
- *   marque   { signature, pied } facultatif : la marque d'en-tête et la
- *            phrase du pied. MARQUE_TEST pour les testeurs, MARQUE_EQUIPE
- *            pour l'équipe ; sans elle, Capmedia Digital et le suivi du
- *            projet.
+ *   code     string          le code de connexion, mis en avant (le fait
+ *            « Code » qui le porte ne se répète pas dans le HTML)
+ *   marque   { signature, pied, service } facultatif : la signature, la
+ *            phrase du pied et le badge du service à côté de la marque.
+ *            MARQUE_TEST pour les testeurs, MARQUE_EQUIPE pour l'équipe ;
+ *            sans elle, Capmedia Digital, le Hub et le suivi du projet.
  */
 function rendreGabarit(bloc) {
   const signature = valeurTexte((bloc.marque || {}).signature).trim() || SIGNATURE;
   const pied = valeurTexte((bloc.marque || {}).pied).trim() || 'Cet e-mail vous est adressé au titre du suivi de votre projet.';
+  const service = valeurTexte((bloc.marque || {}).service).trim() || 'Hub';
   const faits = (bloc.faits || [])
     .map(([cle, valeur]) => [valeurTexte(cle), valeurTexte(valeur).trim()])
     .filter(([cle, valeur]) => cle && valeur);
+  const code = valeurTexte(bloc.code).trim();
+  const faitsVus = code ? faits.filter(([, valeur]) => valeur !== code) : faits;
 
-  const tableFaits = faits.length ? `
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
-                     style="border-collapse:collapse;margin:0 0 24px;border-top:1px solid ${TEINTES.trait};border-bottom:1px solid ${TEINTES.trait};">
-                ${faits.map(([cle, valeur]) => `<tr>
-                  <td style="${S.cle}">${echapper(cle)}</td>
-                  <td style="${S.val}">${echapper(valeur)}</td>
-                </tr>`).join('\n                ')}
-              </table>` : '';
+  const tableFaits = faitsVus.length
+    ? panneau(faitsVus.map(([cle, valeur], i) => ligneFait(cle, valeur, i === 0)).join(''), '8px 0 28px', '4px 22px')
+    : '';
+
+  const blocCode = code ? panneau(`
+                  <p class="cm-t3" style="margin:0;${S.cle}text-align:center;">${icone('cadenas', 8)}Code</p>
+                  <p class="cm-t1" style="margin:10px 0 0;${f(600, 34, 40, POLICE_MONO)}color:${TEINTES.texte};letter-spacing:0.22em;text-align:center;padding-left:0.22em;">${echapper(code)}</p>`, '8px 0 28px', '24px 16px 26px') : '';
 
   const elements = listeDe(bloc.liste);
-  const tableListe = elements.length ? `
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
-                     style="border-collapse:collapse;margin:0 0 24px;border-top:1px solid ${TEINTES.trait};">
-                ${elements.map((l) => `<tr><td style="padding:14px 0;border-bottom:1px solid ${TEINTES.trait};">
-                  <p style="${S.elementTitre}">${echapper(l.titre)}</p>${l.detail ? `
-                  <p style="${S.elementDetail}">${echapper(l.detail)}</p>` : ''}${l.lien ? `
-                  <p style="margin:6px 0 0;"><a href="${echapper(l.lien)}" style="${S.elementLien}">${echapper(l.libelleLien)}</a></p>` : ''}
-                </td></tr>`).join('\n                ')}
-              </table>` : '';
+  const tableListe = elements.length
+    ? panneau(elements.map((l, i) => ligneElement(l, i === 0)).join(''), '8px 0 28px', '2px 22px')
+    : '';
 
-  const citation = valeurTexte(bloc.citation).trim() ? `
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
-                     style="border-collapse:collapse;margin:0 0 24px;">
-                <tr><td style="background:${TEINTES.voile};border-left:2px solid ${TEINTES.trait};padding:16px 20px;">
-                  ${enParagraphes(bloc.citation, `margin:0 0 8px;font:400 15px/1.6 ${POLICE};color:${TEINTES.texte};`)}
-                </td></tr>
-              </table>` : '';
+  const citation = valeurTexte(bloc.citation).trim()
+    ? panneau(`
+                  ${enParagraphes(bloc.citation, S.citation, 'cm-t1')}`, '8px 0 28px', '20px 24px 10px')
+    : '';
 
-  const bouton = (bloc.bouton && valeurTexte(bloc.bouton.url)) ? `
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;margin:0 0 8px;">
-                <tr><td style="background:${TEINTES.action};border-radius:4px;">
-                  <a href="${echapper(bloc.bouton.url)}"
-                     style="display:inline-block;padding:12px 22px;font:600 15px/1 ${POLICE};color:#FFFFFF;text-decoration:none;">${echapper(bloc.bouton.libelle || 'Ouvrir mon espace')}</a>
-                </td></tr>
-              </table>` : '';
+  const bouton = (bloc.bouton && valeurTexte(bloc.bouton.url))
+    ? boutonPilule(bloc.bouton.libelle || 'Ouvrir mon espace', valeurTexte(bloc.bouton.url)) : '';
 
   const urlSecond = bloc.second ? lienSur(bloc.second.url) : '';
   const second = urlSecond
-    ? `<p style="${S.second}"><a href="${echapper(urlSecond)}" style="${S.elementLien}">${echapper(valeurTexte(bloc.second.libelle) || 'Ouvrir mon espace')}</a></p>` : '';
+    ? `<p class="cm-t2" style="${S.second}"><a class="cm-lien" href="${echapper(urlSecond)}" style="${S.elementLien}font-size:15px;">${echapper(valeurTexte(bloc.second.libelle) || 'Ouvrir mon espace')}</a>${fleche()}</p>` : '';
 
-  const note = valeurTexte(bloc.note).trim()
-    ? `<p style="${S.note}">${echapper(bloc.note)}</p>` : '';
+  const note = valeurTexte(bloc.note).trim() ? `
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin:32px 0 0;">
+                <tr><td class="cm-bord" style="border-top:1px solid ${TEINTES.trait};padding:20px 0 0;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
+                    <tr>
+                      <td valign="top" style="width:16px;padding:2px 10px 0 0;">${icone(code ? 'cadenas' : 'info', 0)}</td>
+                      <td valign="top"><p class="cm-t3" style="${S.note}">${echapper(bloc.note)}</p></td>
+                    </tr>
+                  </table>
+                </td></tr>
+              </table>` : '';
 
-  const html = `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
-       style="border-collapse:collapse;background:${TEINTES.fond};margin:0;padding:0;">
+  /* Le projet de la lettre : son logo et son nom, en tête de la carte. */
+  const projet = enteteProjet && enteteProjet.nom ? enteteProjet : null;
+  const logo = projet ? logoSur(projet.logo) : '';
+  const ecusson = !projet ? '' : logo
+    ? `<img src="${echapper(logo)}" width="44" height="44" alt="" style="display:block;width:44px;height:44px;border:0;border-radius:12px;">`
+    : `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;">
+                        <tr><td class="cm-initiale" width="44" height="44" align="center" valign="middle" bgcolor="${TEINTES.panneau}"
+                                style="width:44px;height:44px;border-radius:12px;background:${TEINTES.panneau};${f(600, 16, 44, POLICE_TITRE)}color:${TEINTES.initiale};letter-spacing:0.02em;">${echapper(initiales(projet.nom))}</td></tr>
+                      </table>`;
+  const ligneProjet = projet ? `
+        <tr>
+          <td class="cm-pad" style="padding:32px 40px 0;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
+              <tr>
+                <td valign="middle" style="width:44px;">${ecusson}</td>
+                <td valign="middle" style="padding:0 0 0 14px;"><p class="cm-t1" style="margin:0;${f(600, 17, 22, POLICE_TITRE)}color:${TEINTES.texte};letter-spacing:-0.012em;">${echapper(projet.nom)}</p></td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td class="cm-pad" style="padding:24px 40px 0;">
+            <div class="cm-filet" style="height:1px;line-height:1px;font-size:0;background:${TEINTES.trait};">&nbsp;</div>
+          </td>
+        </tr>` : '';
+
+  const html = `<!doctype html>
+<html lang="fr" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>${echapper(bloc.titre)}</title>
+<!--[if mso]><noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]-->
+<style>${FEUILLE}
+</style>
+</head>
+<body class="cm-page" style="margin:0;padding:0;background:${TEINTES.page};">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="cm-page" bgcolor="${TEINTES.page}"
+       style="border-collapse:collapse;width:100%;background:${TEINTES.page};margin:0;padding:0;">
   <tr>
-    <td align="center" style="padding:32px 12px;">
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="${LARGEUR}"
-             style="border-collapse:collapse;width:100%;max-width:${LARGEUR}px;background:${TEINTES.lettre};border:1px solid ${TEINTES.trait};border-radius:6px;">
+    <td align="center" class="cm-ext" style="padding:40px 16px 48px;">
+      <!--[if mso]><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="${LARGEUR}"><tr><td><![endif]-->
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;width:100%;max-width:${LARGEUR}px;">
         <tr>
-          <td style="padding:28px 32px 0;">
-            <p style="margin:0;font:600 14px/1 ${POLICE};color:${TEINTES.texte};letter-spacing:0.02em;">${echapper(signature)}</p>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:20px 32px 0;">
-            <div style="height:1px;background:${TEINTES.trait};line-height:1px;font-size:0;">&nbsp;</div>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:28px 32px 32px;">
-            <h1 style="${S.titre}">${echapper(bloc.titre)}</h1>
-            ${enParagraphes(bloc.intro, S.corps)}${tableFaits}${tableListe}${citation}${bouton}${second}${note}
+          <td class="cm-tete" style="padding:0 8px 20px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
+              <tr>
+                <td valign="top" style="width:32px;padding:0 10px 0 0;"><img src="${IMAGES}capmedia.png" width="32" height="32" alt="" style="display:block;width:32px;height:32px;border:0;"></td>
+                <td valign="top">
+                  <p style="margin:0;${f(700, 22, 28, POLICE_TITRE)}"><span class="cm-t1" style="color:${TEINTES.texte};letter-spacing:-0.035em;">Capmedia</span>&nbsp;<span class="cm-badge" style="display:inline-block;padding:3px 8px 2px;border-radius:999px;background:${TEINTES.badge};color:${TEINTES.action};${f(600, 10, 13, POLICE_TITRE)}letter-spacing:0.06em;vertical-align:4px;">${echapper(service.toUpperCase())}</span></p>
+                  <img class="cm-clair" src="${IMAGES}trait.png" width="86" height="8" alt="" style="display:block;width:86px;height:8px;border:0;margin:1px 0 0;">
+                  <!--[if !mso]><!--><img class="cm-sombre" src="${IMAGES}trait-sombre.png" width="86" height="8" alt="" style="display:none;width:86px;height:8px;border:0;margin:1px 0 0;"><!--<![endif]-->
+                </td>
+              </tr>
+            </table>
           </td>
         </tr>
       </table>
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="${LARGEUR}"
-             style="border-collapse:collapse;width:100%;max-width:${LARGEUR}px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="cm-carte" bgcolor="${TEINTES.lettre}"
+             style="border-collapse:separate;width:100%;max-width:${LARGEUR}px;background:${TEINTES.lettre};border-radius:20px;box-shadow:0 2px 8px rgba(0,0,0,0.04),0 12px 32px rgba(0,0,0,0.06);">${ligneProjet}
         <tr>
-          <td style="padding:20px 32px 0;">
-            <p style="${S.pied}">${echapper(signature)} · <a href="${SITE}" style="${S.lienPied}">capmedia.app</a><br>
+          <td class="cm-pad" style="padding:${projet ? 28 : 40}px 40px 40px;">
+            <h1 class="cm-t1 cm-h1" style="${S.titre}">${echapper(bloc.titre)}</h1>
+            ${enParagraphes(bloc.intro, S.corps, 'cm-t2')}${blocCode}${tableFaits}${tableListe}${citation}${bouton}${second}${note}
+          </td>
+        </tr>
+      </table>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;width:100%;max-width:${LARGEUR}px;">
+        <tr>
+          <td align="center" class="cm-pad" style="padding:32px 40px 0;">
+            <img src="${IMAGES}capmedia.png" width="24" height="24" alt="Capmedia" style="display:block;width:24px;height:24px;border:0;margin:0 auto;">
+            <p class="cm-t3" style="${S.pied}">${echapper(signature)} · <a href="${SITE}" style="${S.lienPied}">capmedia.app</a><br>
             ${echapper(pied)}</p>
           </td>
         </tr>
       </table>
+      <!--[if mso]></td></tr></table><![endif]-->
     </td>
   </tr>
-</table>`;
+</table>
+</body>
+</html>`;
 
   return { html, texte: rendreTexte(bloc, faits, signature, elements, urlSecond) };
 }
@@ -1401,8 +1651,11 @@ function code(v, ctx) {
       /* Les six chiffres collés, sans espace : un double-clic ou un appui long
          les sélectionne d'un coup, et le collage arrive entier. */
       faits: [['Code', chiffres]],
+      code: chiffres,
       note: "Si vous n'avez rien demandé, ignorez ce message : sans ce code, personne n'entre. Ne le transmettez à personne, nous ne vous le demanderons jamais.",
-      marque: { signature: SIGNATURE, pied: 'Cet e-mail fait suite à une demande de connexion avec votre adresse.' },
+      /* La porte de connexion est commune : le badge dit « Suite », ou
+         « Cockpit » pour une personne de l'équipe. */
+      marque: { signature: SIGNATURE, pied: 'Cet e-mail fait suite à une demande de connexion avec votre adresse.', service: v.equipe === true ? 'Cockpit' : 'Suite' },
     }),
   };
 }
@@ -1791,7 +2044,18 @@ const MODELES = {
 function rendre(modele, variables, contexte = null) {
   const fabrique = MODELES[valeurTexte(modele)];
   if (!fabrique) throw new Error(`Modèle d'e-mail inconnu : ${valeurTexte(modele) || '(vide)'}`);
-  return fabrique(variables && typeof variables === 'object' ? variables : {}, contexte && typeof contexte === 'object' ? contexte : null);
+  const v = variables && typeof variables === 'object' ? variables : {};
+  const ctx = contexte && typeof contexte === 'object' ? contexte : null;
+  /* L'en-tête du projet : son nom tel que figé dans la lettre, et son logo
+     si le facteur l'a trouvé (contexte.projetLogo). Sans logo, la lettre
+     est exactement celle que refait la page « E-mails envoyés ». */
+  const nom = valeurTexte(v.projetNom).trim() || valeurTexte(v.projet).trim() || valeurTexte(v.application).trim();
+  enteteProjet = nom ? { nom, logo: valeurTexte(ctx && ctx.projetLogo) } : null;
+  try {
+    return fabrique(v, ctx);
+  } finally {
+    enteteProjet = null;
+  }
 }
 
 module.exports = {
