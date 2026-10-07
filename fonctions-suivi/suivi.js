@@ -1018,10 +1018,10 @@ async function envoyerParBrevo(cle, courriel, destinataires) {
 }
 
 /** Un échec définitif reste lisible : l'état, le nombre d'essais, le motif. */
-async function marquerEchec(ref, essais, err) {
+async function marquerEchec(ref, essais, err, rendu = null) {
   const motif = String((err && err.message) || err || 'motif inconnu').slice(0, 900);
   try {
-    await ref.update({ etat: 'echec', erreur: motif, essais });
+    await ref.update({ etat: 'echec', erreur: motif, essais, ...(rendu ? { rendu } : {}) });
   } catch (autre) {
     console.error('État « echec » non écrit sur l\'envoi', autre);
   }
@@ -1039,18 +1039,38 @@ exports.suiviFacteur = onDocumentCreated(
     if (!envoi) return;
     if (envoi.etat !== 'attente') return;
 
+    /* Le logo du projet, en tête de la lettre. Une lecture qui échoue ne
+       retient jamais un e-mail : la lettre part avec les initiales. */
+    let projetLogo = '';
+    if (typeof envoi.projet === 'string' && envoi.projet && !envoi.projet.includes('/')) {
+      try {
+        const p = await bdd.doc(`projets/${envoi.projet}`).get();
+        projetLogo = p.exists && typeof p.data().logo === 'string' ? p.data().logo : '';
+      } catch (err) {
+        console.warn(`Logo du projet ${envoi.projet} illisible, lettre sans logo`, err.message);
+      }
+    }
+
     let courriel;
     try {
-      courriel = courriels.rendre(envoi.modele, envoi.variables);
+      /* Les destinataires passent au gabarit : une lettre à une personne
+         la salue par son prénom. */
+      courriel = courriels.rendre(envoi.modele, envoi.variables, { a: Array.isArray(envoi.a) ? envoi.a : [], ...(projetLogo ? { projetLogo } : {}) });
     } catch (err) {
       /* Modèle inconnu : rien à réessayer, c'est une erreur de code. */
       await marquerEchec(ref, Number(envoi.essais || 0), err);
       return;
     }
 
+    /* La lettre exacte qui part (objet, HTML, texte), gardée dans l'envoi
+       au moment de l'envoi : la page « E-mails envoyés » la montre telle
+       quelle. Bornée, et sans le code de connexion ni le jeton d'une
+       invitation (journal-envois.js, renduAGarder). */
+    const rendu = journalEnvois.renduAGarder(envoi, courriel);
+
     const destinataires = (envoi.a || []).filter((d) => d && d.email);
     if (!destinataires.length) {
-      await marquerEchec(ref, Number(envoi.essais || 0), new Error('aucun destinataire'));
+      await marquerEchec(ref, Number(envoi.essais || 0), new Error('aucun destinataire'), rendu);
       return;
     }
 
@@ -1062,7 +1082,7 @@ exports.suiviFacteur = onDocumentCreated(
          le processus des fonctions, et les déclencheurs livrés au même
          moment étaient perdus. */
       try {
-        await ref.update({ etat: 'simule', envoye: FieldValue.serverTimestamp(), erreur: null });
+        await ref.update({ etat: 'simule', envoye: FieldValue.serverTimestamp(), erreur: null, rendu });
       } catch (err) {
         if (err && err.code === 5) { console.warn(`Envoi ${ref.id} effacé avant d'être marqué : rien à faire`); return; }
         throw err;
@@ -1072,7 +1092,7 @@ exports.suiviFacteur = onDocumentCreated(
     }
     const cle = String(BREVO_CLE.value() || '').trim();
     if (!cle) {
-      await marquerEchec(ref, Number(envoi.essais || 0), new Error('secret BREVO_CLE absent'));
+      await marquerEchec(ref, Number(envoi.essais || 0), new Error('secret BREVO_CLE absent'), rendu);
       return;
     }
 
@@ -1102,7 +1122,7 @@ exports.suiviFacteur = onDocumentCreated(
          le renvoyer. Avant, l'échec du marquage relançait la boucle, et le
          destinataire recevait le même e-mail jusqu'à ESSAIS_MAX fois. */
       try {
-        await ref.update({ etat: 'envoye', erreur: null, essais, brevo: identifiant, envoye: FieldValue.serverTimestamp() });
+        await ref.update({ etat: 'envoye', erreur: null, essais, brevo: identifiant, envoye: FieldValue.serverTimestamp(), rendu });
       } catch (err) {
         console.error(`E-mail « ${envoi.modele} » envoyé, mais non marqué comme tel (${ref.id})`, err);
       }
@@ -1110,7 +1130,7 @@ exports.suiviFacteur = onDocumentCreated(
       return;
     }
 
-    await marquerEchec(ref, essais, derniere);
+    await marquerEchec(ref, essais, derniere, rendu);
   },
 );
 

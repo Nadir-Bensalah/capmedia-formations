@@ -5,8 +5,9 @@
    aux clients d'abord, et sur un clic à l'équipe, aux testeurs, ou les
    codes de connexion. Une ligne s'ouvre sur la lettre telle que reçue.
 
-   Le serveur lit la file « envois » (fermée à tout navigateur) et refait
-   chaque lettre avec le gabarit du facteur (journal-envois.js). La lettre
+   Le serveur lit la file « envois » (fermée à tout navigateur) et rend
+   chaque lettre telle que le facteur l'a enregistrée à l'envoi, ou, pour
+   une lettre plus ancienne, la refait avec son gabarit (journal-envois.js). La lettre
    s'affiche dans un cadre isolé, sans script ni sortie : rien de ce qu'elle
    contient ne touche au Cockpit.
 
@@ -68,7 +69,27 @@ const ligneHtml = (l) => `<tr data-envoi="${echapper(l.id)}">
 
 /* --- La lettre ouverte --------------------------------------------------- */
 
-const enveloppe = (html) => `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><base target="_blank"></head><body style="margin:0">${html}</body></html>`;
+/* D'où vient la lettre montrée : enregistrée au moment de l'envoi (depuis
+   le 07/10/2026), ou reconstituée pour une lettre plus ancienne. */
+const provenance = (e) => {
+  if (e.provenance === 'enregistre') return "Telle qu'envoyée : objet, lettre et texte brut enregistrés au moment de l'envoi.";
+  const pourquoi = e.renduTronque
+    ? "La lettre envoyée dépassait la taille gardée ; elle est reconstituée"
+    : (e.etat === 'attente' ? 'Pas encore partie : elle est reconstituée' : "Lettre partie avant l'enregistrement des envois : elle est reconstituée");
+  return `${pourquoi} à partir des données figées à la mise en file, avec le gabarit en service. Une retouche du gabarit faite après l'envoi s'y verrait.`;
+};
+
+/* La lettre montrée ici vit dans un cadre qui hérite de la politique de
+   sécurité du Cockpit : pas de feuille <style> en ligne, des images du site
+   seulement. On retire donc la feuille de la lettre (elle ne porte que le
+   mode sombre et la mise en page du téléphone : la lettre claire reste
+   entière), et ses images, publiées sur capmedia.app, sont prises sur le
+   site qui sert la page. La lettre gardée, elle, ne change pas. */
+const IMAGES_COURRIEL = 'https://capmedia.app/assets/img/courriel/';
+const pourApercu = (html) => String(html || '')
+  .replace(/<style[\s\S]*?<\/style>/gi, '')
+  .split(IMAGES_COURRIEL).join('/assets/img/courriel/');
+const enveloppe = (html) => `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><base target="_blank"></head><body style="margin:0">${pourApercu(html)}</body></html>`;
 
 const ouvrirLettre = async (id) => {
   const m = modale({ titre: 'E-mail', large: true, corps: squelette('lignes', 4) });
@@ -103,7 +124,7 @@ const ouvrirLettre = async (id) => {
       <p class="t-petit t-3" style="margin:0">Les liens ne s'ouvrent pas depuis l'aperçu.</p>
     </div>
     <div data-lettre></div>` : ''}
-    <p class="t-petit t-3" data-provenance style="margin-top:var(--e-3)">Reconstituée à partir des données figées à la mise en file, avec le gabarit en service : c'est le calcul que fait le facteur au moment d'envoyer. Une retouche du gabarit faite après l'envoi s'y verrait.${(e.masques || []).length ? ` Masqué ici : ${echapper(e.masques.join(', '))}.` : ''}</p>`;
+    <p class="t-petit t-3" data-provenance="${e.provenance === 'enregistre' ? 'enregistre' : 'reconstitue'}" style="margin-top:var(--e-3)">${provenance(e)}${(e.masques || []).length ? ` Masqué ici : ${echapper(e.masques.join(', '))}.` : ''}</p>`;
 
   const zone = m.corps.querySelector('[data-lettre]');
   if (!zone) return;

@@ -94,6 +94,11 @@ const PIEGE = '<script>parent.__pirate = 1</script><img src="x" onerror="parent.
   /* Une lettre « en file » : créée terminée, puis remise en attente (le
      facteur n'écoute que les créations). */
   await lettre('qa-attente', { modele: 'fichier', a: [{ email: CAMILLE, nom: 'Camille Martin' }], variables: { projetNom: 'Atelier', nom: 'maquette.pdf', categorie: 'Design', cote: 'client' }, etat: 'envoye', cree: T(2 * MIN), envoye: null, projet: 'atelier', evenement: 'fichier' });
+  /* Une lettre partie avec son rendu enregistré par le facteur (depuis le
+     07/10/2026) : le journal doit la montrer telle quelle, même si le
+     gabarit a changé depuis. */
+  const RENDU = { objet: 'Objet tel que parti le 7 octobre', html: '<p>Lettre telle que partie, marque QA-RENDU-ENREGISTRE.</p>', texte: 'Texte tel que parti, marque QA-RENDU-ENREGISTRE.', masques: [], tronque: false };
+  await lettre('qa-rendu', { modele: 'facture', a: [{ email: CAMILLE, nom: 'Camille Martin' }], variables: { numero: 'F-2026-0099', libelle: 'Ancienne', montant: 10, tva: 0, projetNom: 'Atelier' }, etat: 'envoye', cree: T(6 * MIN), envoye: T(6 * MIN), projet: 'atelier', evenement: 'facture', rendu: RENDU });
   await pause(1500);
   await fs.doc('envois/qa-attente').update({ etat: 'attente' });
 
@@ -140,9 +145,32 @@ const PIEGE = '<script>parent.__pirate = 1</script><img src="x" onerror="parent.
   const lire = async (id, email = ADMIN) => appelAdmin('emailEnvoye', { id }, { email });
   const dv = await lire('qa-devis');
   const e = (dv.json || {}).envoi || {};
-  const attendu = courriels.rendre('devis', devisVars);
+  /* Le facteur rend la lettre avec ses destinataires (salutation au
+     prénom) : le journal aussi. */
+  const attendu = courriels.rendre('devis', devisVars, { a: [{ email: CAMILLE, nom: 'Camille Martin' }] });
   verifier(dv.code === 200 && e.objet === attendu.objet && e.html === attendu.html && e.texte === attendu.texte, 'la lettre est celle du gabarit, à l octet près (objet, HTML, texte)', `${dv.code} ${e.objet}`);
   verifier(e.a && e.a[0].email === CAMILLE && e.etat === 'envoye' && e.brevo === '<qa-devis@brevo>' && e.cree && e.envoye && e.projet === 'atelier' && e.evenementLibelle === 'Devis déposé', 'avec ses informations d envoi', JSON.stringify({ ...e, html: undefined, texte: undefined }).slice(0, 300));
+  verifier(e.provenance === 'reconstitue', 'une lettre sans rendu enregistré est dite reconstituée', e.provenance);
+  const re = ((await lire('qa-rendu')).json || {}).envoi || {};
+  verifier(re.provenance === 'enregistre' && re.objet === RENDU.objet && re.html === RENDU.html && re.texte === RENDU.texte, 'une lettre au rendu enregistré : montrée telle qu envoyée, à l octet près', `${re.provenance} ${re.objet}`);
+  const lRendu = ((l1.json || {}).lignes || []).find((l) => l.id === 'qa-rendu') || {};
+  verifier(lRendu.objet === RENDU.objet, 'et la liste montre son objet enregistré', lRendu.objet);
+
+  console.log('\n== Le facteur enregistre ce qu il envoie');
+  const FACTEUR = 'facteur.essai@exemple.test';
+  const varsF = { ...devisVars, numero: 'D-2026-0077', clientNom: 'Société Bleue SAS' };
+  await fs.doc('envois/qa-facteur').set({ modele: 'devis', a: [{ email: FACTEUR, nom: 'SÉBASTIEN HOREMANS' }], variables: varsF, etat: 'attente', erreur: null, essais: 0, cree: admin.firestore.FieldValue.serverTimestamp(), envoye: null, projet: 'atelier', evenement: 'devis' });
+  await fs.doc('envois/qa-facteur-code').set({ modele: 'code', a: [{ email: FACTEUR, nom: '' }], variables: { code: '135790', minutes: 10 }, etat: 'attente', erreur: null, essais: 0, cree: admin.firestore.FieldValue.serverTimestamp(), envoye: null });
+  const servi = await attendre(async () => { const d = await Promise.all(['qa-facteur', 'qa-facteur-code'].map((i) => fs.doc(`envois/${i}`).get())); return d.every((x) => x.exists && x.data().etat === 'simule') ? d.map((x) => x.data()) : null; }, 45000);
+  const fr = ((servi || [])[0] || {}).rendu || {};
+  const attenduF = courriels.rendre('devis', varsF, { a: [{ email: FACTEUR, nom: 'SÉBASTIEN HOREMANS' }] });
+  verifier(Boolean(servi) && fr.objet === attenduF.objet && fr.html === attenduF.html && fr.texte === attenduF.texte && fr.tronque === false, 'le facteur garde dans la lettre l objet, le HTML et le texte exacts', JSON.stringify(Object.keys(fr)));
+  verifier(/^Bonjour Sébastien,$/m.test(fr.texte || ''), 'salués au prénom du destinataire, casse corrigée, pas au nom de la société', (fr.texte || '').split('\n')[4]);
+  const fc = ((servi || [])[1] || {}).rendu || {};
+  verifier(fc.objet && !JSON.stringify(fc).includes('135790') && /•{6}/.test(fc.objet), 'le code de connexion n est pas gardé en clair dans le rendu', fc.objet);
+  const vuF = ((await lire('qa-facteur')).json || {}).envoi || {};
+  verifier(vuF.provenance === 'enregistre' && vuF.html === attenduF.html, 'le journal montre ce rendu enregistré');
+
   const ec = ((await lire('qa-echec')).json || {}).envoi || {};
   verifier(ec.etat === 'echec' && ec.erreur === 'Brevo 401 : clé refusée' && ec.essais === 3, 'une lettre en échec dit son motif');
   const cd = await lire('qa-code');
@@ -150,7 +178,9 @@ const PIEGE = '<script>parent.__pirate = 1</script><img src="x" onerror="parent.
   const inv = await lire('qa-invitation');
   verifier(inv.code === 200 && !inv.texte.includes(JETON) && !l1.texte.includes(JETON) && /\?i=…/.test(((inv.json || {}).envoi || {}).texte || '') && ((inv.json || {}).envoi || {}).masques.length === 1, 'ni le jeton d un lien d invitation', ((inv.json || {}).envoi || {}).masques);
   const pg = ((await lire('qa-piege')).json || {}).envoi || {};
-  verifier(pg.html && !/<script|<img|<b>/i.test(pg.html) && pg.html.includes('&lt;script&gt;'), 'un texte piégé reste du texte dans la lettre');
+  /* La lettre a ses propres images (logo, icônes) : ce qui compte, c'est
+     qu'aucune balise du texte piégé n'y soit devenue une balise. */
+  verifier(pg.html && !/<script|<img[^>]*onerror|<img src="x"|<b>/i.test(pg.html) && pg.html.includes('&lt;script&gt;') && pg.html.includes('&lt;img src=&quot;x&quot;'), 'un texte piégé reste du texte dans la lettre');
   verifier((await lire('envois-absente')).code === 404 && (await lire('a/b')).code === 400, 'une lettre absente : 404 ; un identifiant bricolé : 400');
 
   console.log('\n== Les refus');
@@ -210,7 +240,8 @@ const PIEGE = '<script>parent.__pirate = 1</script><img src="x" onerror="parent.
   verifier(titreModale === 'D-2026-0042 · Votre devis : Refonte du tableau de bord', 'l objet en titre', titreModale);
   const cadre = page.frames().find((f) => f !== page.mainFrame() && f.url() === 'about:srcdoc');
   const corpsLettre = cadre ? await cadre.evaluate(() => document.body.innerText).catch(() => '') : '';
-  verifier(/Votre devis est disponible/.test(corpsLettre) && /Bonjour Camille Martin/.test(corpsLettre) && /D-2026-0042/.test(corpsLettre), 'le corps est rendu, tel que reçu', corpsLettre.slice(0, 120));
+  /* 07/10/2026 : la salutation commune, « Bonjour Prénom, ». */
+  verifier(/Votre devis est disponible/.test(corpsLettre) && /Bonjour Camille,/.test(corpsLettre) && !/Bonjour Camille Martin/.test(corpsLettre) && /D-2026-0042/.test(corpsLettre), 'le corps est rendu, tel que reçu', corpsLettre.slice(0, 120));
   const infos = (await page.textContent('[data-infos-envoi]')).replace(/\s+/g, ' ');
   verifier(/camille\.essai@exemple\.test/.test(infos) && /Envoyé/.test(infos) && /Devis déposé/.test(infos) && /<qa-devis@brevo>/.test(infos), 'avec ses informations d envoi', infos.slice(0, 200));
   await page.click('[data-version="texte"]');
@@ -222,7 +253,7 @@ const PIEGE = '<script>parent.__pirate = 1</script><img src="x" onerror="parent.
   await page.waitForSelector('iframe[data-apercu]', { timeout: 15000 }).catch(() => {});
   await pause(1500);
   const cadre2 = page.frames().find((f) => f !== page.mainFrame() && f.url() === 'about:srcdoc');
-  const piege = cadre2 ? await cadre2.evaluate(() => ({ texte: document.body.innerText, scripts: document.querySelectorAll('script, img, b').length })).catch((er) => ({ texte: String(er), scripts: -1 })) : { texte: '', scripts: -1 };
+  const piege = cadre2 ? await cadre2.evaluate(() => ({ texte: document.body.innerText, scripts: document.querySelectorAll('script, img[onerror], img[src="x"], b').length })).catch((er) => ({ texte: String(er), scripts: -1 })) : { texte: '', scripts: -1 };
   const pirate = await page.evaluate(() => window.__pirate);
   verifier(piege.scripts === 0 && /parent\.__pirate = 1/.test(piege.texte) && pirate === undefined, 'un texte piégé s affiche en texte : aucun script, aucune balise', JSON.stringify({ s: piege.scripts, p: pirate }));
   await page.click('.modale-tete [data-fermer]'); await pause(500);
@@ -230,7 +261,16 @@ const PIEGE = '<script>parent.__pirate = 1</script><img src="x" onerror="parent.
   await page.click('[data-ouvrir="qa-invitation"]');
   await page.waitForSelector('[data-provenance]', { timeout: 15000 }).catch(() => {});
   const provenance = await page.textContent('[data-provenance]').catch(() => '');
-  verifier(/Reconstituée/.test(provenance) && /jeton du lien d'invitation/.test(provenance) && !(await page.content()).includes(JETON), 'la lettre dit d où elle vient et ce qui est masqué', provenance.slice(0, 160));
+  verifier(/reconstituée/.test(provenance) && /jeton du lien d'invitation/.test(provenance) && !(await page.content()).includes(JETON), 'la lettre dit d où elle vient et ce qui est masqué', provenance.slice(0, 160));
+  await page.click('.modale-tete [data-fermer]').catch(() => {}); await pause(500);
+
+  await page.click('[data-ouvrir="qa-rendu"]');
+  await page.waitForSelector('[data-provenance]', { timeout: 15000 }).catch(() => {});
+  await pause(1000);
+  const provRendu = await page.$eval('[data-provenance]', (p) => ({ cle: p.getAttribute('data-provenance'), texte: p.textContent })).catch(() => ({}));
+  const cadreRendu = page.frames().find((f) => f !== page.mainFrame() && f.url() === 'about:srcdoc');
+  const corpsRendu = cadreRendu ? await cadreRendu.evaluate(() => document.body.innerText).catch(() => '') : '';
+  verifier(provRendu.cle === 'enregistre' && /Telle qu'envoyée/.test(provRendu.texte || '') && /QA-RENDU-ENREGISTRE/.test(corpsRendu), 'une lettre au rendu enregistré s affiche telle qu envoyée, et le dit', `${provRendu.cle} ${(provRendu.texte || '').slice(0, 80)}`);
   await page.click('.modale-tete [data-fermer]').catch(() => {}); await pause(500);
 
   console.log('\n== Depuis la fiche d un projet');

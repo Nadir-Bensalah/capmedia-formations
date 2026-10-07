@@ -6,13 +6,14 @@
    file, en échec ou simulée sur le banc, et la lettre elle-même, telle que
    le destinataire l'a reçue.
 
-   Le corps n'est pas gardé dans « envois » : le facteur (suivi.js,
-   suiviFacteur) le fabrique au moment d'envoyer, avec courriels.rendre,
-   depuis le modèle et les variables figés à la mise en file. Ce journal
-   refait exactement le même appel sur les mêmes données. La lettre montrée
-   sort donc du même gabarit que celle qui est partie ; seule une
-   modification de courriels.js faite APRÈS l'envoi ferait une différence,
-   et l'écran le dit.
+   Depuis le 07/10/2026, le facteur (suivi.js, suiviFacteur) enregistre
+   dans la lettre, au moment de l'envoi, l'objet, le HTML et le texte
+   exacts qui sont partis (champ « rendu », taille bornée, secrets
+   masqués). Ce journal montre ce rendu quand il existe. Pour une lettre
+   plus ancienne, il refait l'appel du facteur (courriels.rendre sur le
+   modèle, les variables et les destinataires figés à la mise en file) :
+   seule une retouche de courriels.js faite APRÈS l'envoi ferait alors une
+   différence, et l'écran dit laquelle des deux versions il montre.
 
    Deux choses ne sortent jamais en clair, même vers l'administrateur : le
    code de connexion (il ouvrirait une session) et le jeton d'un lien
@@ -117,13 +118,58 @@ function masquer(modele, variables) {
   return { variables: v, masques };
 }
 
-/** La lettre, refaite comme le facteur l'a faite. Ne lève pas. */
+/* Le rendu gardé dans la lettre : borné (un document Firestore ne
+   dépasse pas un mégaoctet) et sans secret. Au-delà des bornes, seul
+   l'objet est gardé, et le journal reconstitue le reste. */
+const RENDU_MAX = { objet: 1000, html: 300000, texte: 100000 };
+const MASQUE_CODE = '••••••';
+const JETON = /([?&]i=)[^&#"'\s<>]+/g;
+
+function masquerTexte(t, code) {
+  let s = typeof t === 'string' ? t : '';
+  if (code) s = s.split(code).join(MASQUE_CODE);
+  return s.replace(JETON, '$1…');
+}
+
+/**
+ * Ce que le facteur écrit dans « rendu », au moment de l'envoi. Pur.
+ * Rend { objet, html, texte, masques, tronque }.
+ */
+function renduAGarder(envoi, courriel) {
+  const e = envoi || {}; const c = courriel || {};
+  const code = e.modele === 'code' && e.variables && e.variables.code ? String(e.variables.code) : '';
+  const masques = [];
+  if (code) masques.push('le code de connexion');
+  if (/[?&]i=[^&#"'\s<>]/.test(`${c.objet || ''}${c.html || ''}${c.texte || ''}`)) masques.push("le jeton du lien d'invitation");
+  const r = { objet: masquerTexte(c.objet, code), html: masquerTexte(c.html, code), texte: masquerTexte(c.texte, code) };
+  const tronque = r.objet.length > RENDU_MAX.objet || r.html.length > RENDU_MAX.html || r.texte.length > RENDU_MAX.texte;
+  if (tronque) return { objet: r.objet.slice(0, RENDU_MAX.objet), html: '', texte: '', masques, tronque: true };
+  return { ...r, masques, tronque: false };
+}
+
+/* Un rendu enregistré utilisable : les trois parties en texte, complet. */
+const renduValide = (r) => Boolean(r && typeof r === 'object' && !r.tronque
+  && typeof r.objet === 'string' && typeof r.html === 'string' && typeof r.texte === 'string' && (r.html || r.texte));
+
+/** La lettre telle qu'envoyée si le facteur l'a gardée, sinon refaite
+ *  comme il l'a faite. Ne lève pas. provenance : 'enregistre' ou
+ *  'reconstitue'. */
 function rendre(envoi) {
+  const r = envoi && envoi.rendu;
+  if (renduValide(r)) {
+    /* Masqué à l'écriture ; on repasse quand même, par prudence. */
+    const code = envoi.modele === 'code' && envoi.variables && envoi.variables.code ? String(envoi.variables.code) : '';
+    return {
+      objet: masquerTexte(r.objet, code), html: masquerTexte(r.html, code), texte: masquerTexte(r.texte, code),
+      masques: Array.isArray(r.masques) ? r.masques.map(String) : [], erreurRendu: '', provenance: 'enregistre', renduTronque: false,
+    };
+  }
   const { variables, masques } = masquer(envoi.modele, envoi.variables);
+  const renduTronque = Boolean(r && r.tronque);
   try {
-    return { ...courriels.rendre(envoi.modele, variables), masques, erreurRendu: '' };
+    return { ...courriels.rendre(envoi.modele, variables, { a: Array.isArray(envoi.a) ? envoi.a : [] }), masques, erreurRendu: '', provenance: 'reconstitue', renduTronque };
   } catch (err) {
-    return { objet: '', html: '', texte: '', masques, erreurRendu: String((err && err.message) || err) };
+    return { objet: '', html: '', texte: '', masques, erreurRendu: String((err && err.message) || err), provenance: 'reconstitue', renduTronque };
   }
 }
 
@@ -248,6 +294,8 @@ async function lire(id) {
       texte: r.texte,
       masques: r.masques,
       erreurRendu: r.erreurRendu,
+      provenance: r.provenance,
+      renduTronque: r.renduTronque,
       a: destinataires(e),
       etat: e.etat || '',
       etatLibelle: ETATS[e.etat] || '',
@@ -266,4 +314,4 @@ async function lire(id) {
   };
 }
 
-module.exports = { lister, lire, publicDe, masquer, rendre, PUBLICS, ETATS, PAR_PAGE };
+module.exports = { lister, lire, publicDe, masquer, rendre, renduAGarder, RENDU_MAX, PUBLICS, ETATS, PAR_PAGE };

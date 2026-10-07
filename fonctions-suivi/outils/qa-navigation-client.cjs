@@ -61,7 +61,8 @@ const nettoyer = async () => {
   const lettre = (m, v) => courriels.rendre(m, v);
   verifier(/vous écrit/.test(lettre('message-projet', { projetNom: 'Atelier', auteur: 'Alex', texte: 'Bonjour', lien: 'x' }).html) && /Répondre/.test(lettre('message-projet', { auteur: 'Alex', texte: 'x', lien: 'x' }).html), 'message-projet : « vous écrit », « Répondre »');
   verifier(/demandé/.test(lettre('preprojet', { cote: 'equipe', titre: 'Appli', par: 'Léa', email: 'l@x.test' }).objet) && /décrit/.test(lettre('preprojet', { cote: 'equipe', titre: 'Appli', par: 'Léa', email: 'l@x.test' }).html), 'preprojet : « demandé », « décrit »');
-  verifier(/posé les modalités/.test(lettre('maintenance', { cote: 'client', evenement: 'proposition', projet: 'Atelier' }).html) && /arrivé à son terme/.test(lettre('maintenance', { cote: 'client', evenement: 'termine', projet: 'Atelier' }).html), 'maintenance : « posé les modalités », « arrivé à son terme »');
+  /* 07/10/2026 : la proposition est reformulée (« préparé une proposition »). */
+  verifier(/préparé une proposition de forfait/.test(lettre('maintenance', { cote: 'client', evenement: 'proposition', projet: 'Atelier' }).html) && /arrivé à son terme/.test(lettre('maintenance', { cote: 'client', evenement: 'termine', projet: 'Atelier' }).html), 'maintenance : « préparé une proposition de forfait », « arrivé à son terme »');
   verifier(/acceptée/.test(lettre('evolution-statut', { projet: 'Atelier', titre: 'Export', statut: 'acceptee', lien: 'x' }).objet), 'la lettre « evolution-statut » existe et se rend');
 
   await nettoyer();

@@ -56,7 +56,8 @@ const TAXE=/\b(HT|TTC)\b|Hors taxes|TVA 0/;
     const zero=['devis','facture','facture-echeance','facture-retard'].map(m=>c.rendre(m,{...base,tva:0,ttc:1000,reste:1000})).map(r=>`${r.texte}\n${r.html}`);
     verifier(zero.every(t=>/1 000,00 €/.test(t)&&MENTION.test(t)&&!/EUR|TTC|hors taxes/.test(t)),'à TVA 0 : un seul montant en « € » et la mention 293 B, ni « EUR TTC » ni « hors taxes »',zero.map(t=>(t.match(/[^\n]*(EUR|TTC|hors taxes)[^\n]*/)||[''])[0]).filter(Boolean).join(' | ').slice(0,160));
     const vingt=c.rendre('facture',{...base,tva:20,ttc:1200});
-    verifier(/1[\s\u202f\u00a0]200,00[\s\u202f\u00a0]EUR TTC/.test(vingt.texte)&&/hors taxes/.test(vingt.texte)&&!MENTION.test(vingt.texte),'à TVA 20 : le TTC et le hors taxes restent, sans la mention',vingt.texte.split('\n').filter(l=>/Montant/.test(l)).join(' '));
+    /* 07/10/2026 : « € TTC » et « € HT », jamais « EUR » ni « hors taxes ». */
+    verifier(/1[\s\u202f\u00a0]200,00[\s\u202f\u00a0]€ TTC \(1[\s\u202f\u00a0]000,00[\s\u202f\u00a0]€ HT\)/.test(vingt.texte)&&!/EUR|hors taxes/.test(vingt.texte)&&!MENTION.test(vingt.texte),'à TVA 20 : le TTC et le HT restent, en « € », sans la mention',vingt.texte.split('\n').filter(l=>/Montant/.test(l)).join(' '));
   }
 
   console.log('\n== 1 · Franchise de TVA : un seul montant, la mention une fois');

@@ -73,7 +73,7 @@ const sept = Array.from({ length: 7 }, (_, i) => ev(`e${i}`, 'ticket-cree', i, {
 const recap = r.composer(sept, { projetId: 'pFM', projetNom: 'ForgeMe', nom: 'Sébastien Durand' });
 verifier(recap.modele === 'recapitulatif' && recap.variables.lignes.length === 7 && recap.variables.total === 7 && recap.variables.nouvelles === 7, 'un récapitulatif, sept lignes', JSON.stringify(recap.variables).slice(0, 200));
 const rendu = courriels.rendre(recap.modele, recap.variables);
-verifier(rendu.objet === 'ForgeMe : 7 nouvelles demandes', 'objet : « ForgeMe : 7 nouvelles demandes »', rendu.objet);
+verifier(rendu.objet === 'ForgeMe · 7 nouvelles demandes', 'objet : « ForgeMe · 7 nouvelles demandes »', rendu.objet);
 verifier(/^Bonjour Sébastien,$/m.test(rendu.texte), 'il salue le destinataire par son prénom');
 verifier((rendu.texte.match(/^Voir la demande : https:\/\/capmedia\.app\/suivi\/ticket\?t=t\d$/gm) || []).length === 7, 'sept liens, un par demande');
 verifier(/FM-010 · Demande 1\nNouvelle demande ouverte pour vous/.test(rendu.texte), 'une ligne : numéro, titre, ce qui s est passé');
@@ -83,14 +83,14 @@ verifier((rendu.html.match(/Voir la demande<\/a>/g) || []).length === 7 && rendu
 console.log('\n== Les accords, le ton, la propreté');
 const melange = [...sept.slice(0, 2), ev('m1', 'statut', 8, { numero: 'FM-001', titre: 'Ancienne', lien: 'https://capmedia.app/suivi/ticket?t=v1', statutApres: 'en-cours' }, 'v1'), ev('m2', 'message', 9, { numero: 'FM-002', titre: 'Autre', lien: 'https://capmedia.app/suivi/ticket?t=v2' }, 'v2')];
 const r2 = courriels.rendre('recapitulatif', r.composer(melange, { projetId: 'pFM', projetNom: 'ForgeMe', nom: 'Camille' }).variables);
-verifier(r2.objet === 'ForgeMe : 2 nouvelles demandes et 2 mises à jour', 'pluriels : « 2 nouvelles demandes et 2 mises à jour »', r2.objet);
+verifier(r2.objet === 'ForgeMe · 2 nouvelles demandes et 2 mises à jour', 'pluriels : « 2 nouvelles demandes et 2 mises à jour »', r2.objet);
 const r3 = courriels.rendre('recapitulatif', r.composer([sept[0], melange[2]], { projetNom: 'ForgeMe' }).variables);
-verifier(r3.objet === 'ForgeMe : 1 nouvelle demande et 1 mise à jour', 'singuliers : « 1 nouvelle demande et 1 mise à jour »', r3.objet);
+verifier(r3.objet === 'ForgeMe · 1 nouvelle demande et 1 mise à jour', 'singuliers : « 1 nouvelle demande et 1 mise à jour »', r3.objet);
 verifier(/^Bonjour,$/m.test(r3.texte), 'sans nom : « Bonjour, »');
 const r4 = courriels.rendre('recapitulatif', r.composer([melange[2], melange[3]], { projetNom: 'ForgeMe' }).variables);
-verifier(r4.objet === 'ForgeMe : 2 mises à jour de vos demandes', 'mises à jour seules : « 2 mises à jour de vos demandes »', r4.objet);
+verifier(r4.objet === 'ForgeMe · 2 mises à jour de vos demandes', 'mises à jour seules : « 2 mises à jour de vos demandes »', r4.objet);
 const r5 = courriels.rendre('recapitulatif', r.composer([ev('a', 'ticket-cree', 1, base), ev('b', 'statut', 2, { ...base, statutApres: 'en-cours' })], { projetNom: 'ForgeMe' }).variables);
-verifier(r5.objet === 'ForgeMe : 1 nouvelle demande' && /Nouvelle demande, en cours/.test(r5.texte), 'deux événements, une demande : une ligne', r5.objet);
+verifier(r5.objet === 'ForgeMe · 1 nouvelle demande' && /Nouvelle demande, en cours/.test(r5.texte), 'deux événements, une demande : une ligne', r5.objet);
 const tous = [rendu, r2, r3, r4, r5];
 const sale = tous.filter((x) => /[—–]|null|undefined|NaN|\[object/.test(`${x.objet}\n${x.texte}\n${x.html}`));
 verifier(sale.length === 0, 'ni tiret cadratin ni demi-cadratin, ni null, undefined, NaN', sale.map((x) => x.objet).join(' | '));
@@ -104,8 +104,8 @@ console.log('\n== Les très longues rafales');
 const quarante = Array.from({ length: 40 }, (_, i) => ev(`x${i}`, 'ticket-cree', i, { numero: `FM-${100 + i}`, titre: `T${i}`, lien: `https://capmedia.app/suivi/ticket?t=x${i}` }, `x${i}`));
 const c40 = r.composer(quarante, { projetNom: 'ForgeMe' });
 const r40 = courriels.rendre('recapitulatif', c40.variables);
-verifier(c40.variables.lignes.length === r.LIGNES_MAX && r40.objet === 'ForgeMe : 40 nouvelles demandes', `les ${r.LIGNES_MAX} premières lignes, le décompte complet`, r40.objet);
-verifier(/10 autres demandes ont bougé : vous les retrouvez dans votre espace\./.test(r40.texte), 'et la note renvoie à l espace pour les dix autres');
+verifier(c40.variables.lignes.length === r.LIGNES_MAX && r40.objet === 'ForgeMe · 40 nouvelles demandes', `les ${r.LIGNES_MAX} premières lignes, le décompte complet`, r40.objet);
+verifier(/10 autres demandes ont également été mises à jour : vous les retrouverez dans votre espace\./.test(r40.texte), 'et la note renvoie à l espace pour les dix autres');
 
 console.log('\n== Ce qui est regroupé, ce qui ne l est pas');
 const REG = [...communication.REGROUPES].sort().join(',');

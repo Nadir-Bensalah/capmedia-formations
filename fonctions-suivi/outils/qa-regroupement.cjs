@@ -116,7 +116,7 @@ const creerDemande = (pid, titre) => appelAdmin('creerDemande', { projet: pid, t
   verifier((lr.regroupe || []).length === 9 && (lr.regroupe || []).every((x) => x.attente && x.modele && x.depose), 'il garde la trace des neuf événements réunis', String((lr.regroupe || []).length));
   verifier(lr.attente && lr.attente.nombre === 9 && lr.attente.premier && lr.attente.dernier, 'et de l attente (premier, dernier, nombre)', JSON.stringify(lr.attente || {}).slice(0, 120));
   const rendu = courriels.rendre(lr.modele || 'recapitulatif', vr);
-  verifier(rendu.objet === 'Projet Regroupement : 7 nouvelles demandes', 'objet : « Projet Regroupement : 7 nouvelles demandes »', rendu.objet);
+  verifier(rendu.objet === 'Projet Regroupement · 7 nouvelles demandes', 'objet : « Projet Regroupement · 7 nouvelles demandes » (forme commune des objets, 07/10/2026)', rendu.objet);
   verifier(/^Bonjour Rose,$/m.test(rendu.texte) && /^Bonjour Colin,$/m.test(courriels.rendre('recapitulatif', (aColin[0] || {}).variables || {}).texte), 'chacun est salué par son prénom');
   const ligne0 = (vr.lignes || []).find((l) => l.titre === titres[0]) || {};
   const ligne1 = (vr.lignes || []).find((l) => l.titre === titres[1]) || {};
@@ -133,6 +133,9 @@ const creerDemande = (pid, titre) => appelAdmin('creerDemande', { projet: pid, t
   verifier((await enAttente(pid)).length === 0, 'la file est vide');
   const facteur = await attendre(async () => { const d = await Promise.all([lr.id, (aColin[0] || {}).id].map((i) => bdd.doc(`envois/${i}`).get())); return d.every((x) => x.exists && x.data().etat === 'simule') ? d : null; });
   verifier(Boolean(facteur), 'le facteur les sert comme les autres : « simule » sur le banc, aucun e-mail réel');
+  /* 07/10/2026 : le facteur garde la lettre exacte, saluée au prénom. */
+  const renduRose = facteur ? (facteur[0].data().rendu || {}) : {};
+  verifier(renduRose.objet === rendu.objet && /^Bonjour Rose,$/m.test(renduRose.texte || '') && renduRose.html === courriels.rendre('recapitulatif', vr, { a: lr.a }).html, 'le récapitulatif parti est gardé tel quel dans la lettre (objet, HTML, texte)', renduRose.objet);
   verifier(Boolean(facteur) && facteur.every((x) => !x.data().brevo && x.data().envoye), 'sans passage par Brevo, datées par le serveur');
   const encore = await regroupement.viderLaFile({ maintenant: PLUS_TARD(30) });
   const auxDeux = (await nouveaux(avantVidage)).filter((e) => vers([e], RESP).length || vers([e], COLLAB).length);
@@ -151,7 +154,7 @@ const creerDemande = (pid, titre) => appelAdmin('creerDemande', { projet: pid, t
   verifier(s1.length === 1 && e1.modele === 'ticket-cree' && e1.evenement === 'ticket-cree', 'une lettre « ticket-cree », pas un récapitulatif', `${s1.length} ${e1.modele}`);
   verifier(JSON.stringify(e1.variables) === JSON.stringify(attente1.variables), 'mêmes variables, à l identique');
   const r1 = courriels.rendre(e1.modele || 'x', e1.variables || {});
-  verifier(/^REGR-\d{3} · Une demande a été ouverte pour vous$/.test(r1.objet) && /^Bonjour Rose Martin,$/m.test(r1.texte), 'donc le même objet et la même salutation qu hier', r1.objet);
+  verifier(/^REGR-\d{3} · Une demande a été ouverte pour vous$/.test(r1.objet) && /^Bonjour Rose,$/m.test(r1.texte), 'donc le même objet qu hier, et la salutation commune « Bonjour Prénom, » (07/10/2026)', r1.objet);
   verifier((e1.regroupe || []).length === 1 && e1.regroupe[0].objet === sid, 'la trace dit d où elle vient');
 
   console.log('\n== Ce qui part tout de suite');
