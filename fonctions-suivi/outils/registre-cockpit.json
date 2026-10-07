@@ -5525,8 +5525,8 @@
   "destination": "Tests › onglet Ce qu’on vérifie : bouton « Nouveau scénario » (seule porte de l’éditeur de scénario)",
   "lot": "L7",
   "sonde": {
-   "route": "/projets/boutique/tests",
-   "cible": "#onglet-corps [data-action=\"nouveau\"][data-genre=\"scenario\"]",
+   "route": "/tests?projet=boutique&onglet=bibliotheque",
+   "cible": "#scenarios [data-action=\"nouveau\"][data-genre=\"scenario\"]",
    "agent": "ignore"
   }
  },
@@ -6920,8 +6920,8 @@
   "destination": "Tests : fil d’Ariane « Projet › Tests » quand un projet est choisi",
   "lot": "L7",
   "sonde": {
-   "route": "/tests",
-   "cible": "#ariane .courant",
+   "route": "/tests?projet=atelier",
+   "cible": "#ariane a[href=\"#/projets/atelier\"] ~ .courant",
    "texte": "^Tests$"
   }
  },
@@ -8885,9 +8885,23 @@
   "destination": "Messages › Testeurs : lien vers la fiche du testeur et ses campagnes",
   "lot": "L7",
   "sonde": {
-   "manuel": true,
-   "pourquoi": "information sans repère : ce qui manque (aucun lien vers la fiche du testeur)",
-   "page": "/testeurs-messages"
+   "route": "/testeurs-messages",
+   "cible": "#tm-liens [data-fiche-testeur]",
+   "agent": "absent",
+   "avant": [
+    [
+     "attendre",
+     "#tm-nouveau"
+    ],
+    [
+     "evaluer",
+     "new Promise((fait, rate) => { const t0 = Date.now(); const essai = () => { const o = document.querySelector('#tm-nouveau option:not([value=\"\"])'); if (o) { location.hash = '#/testeurs-messages/' + o.value; fait(); } else if (Date.now() - t0 > 8000) rate(new Error('aucun testeur au vivier')); else setTimeout(essai, 200); }; essai(); })"
+    ],
+    [
+     "attendre",
+     "#tm-liens [data-campagne-testeur]"
+    ]
+   ]
   }
  },
  {
@@ -9326,9 +9340,8 @@
   "destination": "Tests › onglet Ce qu’on vérifie : bouton « Nouveau scénario »",
   "lot": "L7",
   "sonde": {
-   "route": "/projets/boutique/tests",
-   "cible": "[data-action=\"nouveau\"][data-genre=\"scenario\"]",
-   "agent": "absent"
+   "route": "/tests?projet=atelier&onglet=bibliotheque",
+   "cible": "#scenarios [data-action=\"nouveau\"][data-genre=\"scenario\"]"
   }
  },
  {

@@ -25,7 +25,7 @@
 import {
   echapper, dateHeure, depuis, pluriel, enDate, heure, dateCourte,
   BLOCS_SCENARIO, NIVEAUX_SCENARIO, PLATEFORMES_TEST, STATUTS_CAMPAGNE,
-  GRAVITES_ANOMALIE, STATUTS_ANOMALIE, OUTILS_PARCOURS, RESULTATS_PASSAGE,
+  GRAVITES_ANOMALIE, STATUTS_ANOMALIE, OUTILS_PARCOURS,
   bdd, collection, query, orderBy, limit, doc, getDoc,
 } from '../noyau.js';
 import { icone, pastille, vide, sur, modale, agir, brancherPieces, copier } from '../ui.js';
@@ -38,6 +38,13 @@ import { tableauHumain, tableauHumainPlan, tableauMachine, tableauPlan, verdictP
 import { barreHtml, famillesHtml } from '../grille.js';
 import { ordonnerSections, GROUPES_PLAN, QUI_PLAN } from './plan-tests.js';
 import { clesDe } from '../repartition.js';
+import { VERDICTS, verdictDe } from '../campagne-plan.js';
+
+/* Le résultat d'un passage, en mots : « Réussi », « Échec », « Sans
+   objet ». Les passages d'avant le 03/10/2026 disent ok, ko, na ; ceux
+   d'après, reussi, echec, sans-objet. La carte des anciens mots laissait
+   les nouveaux en clé brute dans la fiche d'une case. */
+const pastilleResultat = (r) => pastille(VERDICTS, verdictDe(r));
 
 /* Un testeur est « là » si son dernier signe a moins de 75 secondes : il
    en envoie un toutes les 30, et un réseau lent en perd un. */
@@ -565,7 +572,7 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
             return `<div class="tb-passage">
               <div><p><strong>${echapper(qui.nom)}</strong>${p && p.plateforme ? ` · ${echapper((PLATEFORMES_TEST[p.plateforme] || {}).libelle || p.plateforme)}` : ''}${appareil ? ` · ${echapper(appareil)}` : ''}${ici ? ' · <span class="tb-bleu">l\'a ouvert en ce moment</span>' : ''}</p>
                 ${p ? `<p class="aide">${p.le ? echapper(dateHeure(p.le)) : ''}${p.commentaire ? ` · ${echapper(p.commentaire)}` : ''}${p.aRevoir ? ' · corrigé, à rejouer' : ''}</p>` : ''}</div>
-              <div class="rang">${p ? pastille(RESULTATS_PASSAGE, p.resultat) : '<span class="etiquette">attendu</span>'}${((p && p.preuves) || []).map((ch, i) => `<button class="btn btn-doux btn-petit" type="button" data-piece="${echapper(ch)}">${icone('image')} Preuve ${i + 1}</button>`).join('')}</div>
+              <div class="rang">${p ? pastilleResultat(p.resultat) : '<span class="etiquette">attendu</span>'}${((p && p.preuves) || []).map((ch, i) => `<button class="btn btn-doux btn-petit" type="button" data-piece="${echapper(ch)}">${icone('image')} Preuve ${i + 1}</button>`).join('')}</div>
             </div>`;
           }).join('') : '<p class="aide">Personne n\'a reçu ce scénario.</p>'}</div>
         </div>
@@ -631,7 +638,7 @@ export const monter = (boite, env, { projet: projetChoisi = () => '', plateforme
     return `<div class="tb-passage">
             <div><p><strong>${echapper(nommer(p.testeur).nom)}</strong>${p.plateforme ? ` · ${echapper(libellePlateforme(p.plateforme))}` : ''}${appareil ? ` · ${echapper(appareil)}` : ''}${ici ? ' · <span class="tb-bleu">l\'a ouvert en ce moment</span>' : ''}</p>
               <p class="aide">${[quand(p) ? echapper(dateHeure(quand(p))) : '', p.commentaire ? echapper(p.commentaire) : '', p.aRevoir ? 'corrigé, à rejouer' : '', p.herite ? `Hérité de <span class="ref">${echapper(p.origine)}</span>, campagne d'avant le plan` : ''].filter(Boolean).join(' · ')}</p></div>
-            <div class="rang">${pastille(RESULTATS_PASSAGE, p.resultat)}${(p.preuves || []).map((ch, i) => `<button class="btn btn-doux btn-petit" type="button" data-piece="${echapper(ch)}">${icone('image')} Preuve ${i + 1}</button>`).join('')}</div>
+            <div class="rang">${pastilleResultat(p.resultat)}${(p.preuves || []).map((ch, i) => `<button class="btn btn-doux btn-petit" type="button" data-piece="${echapper(ch)}">${icone('image')} Preuve ${i + 1}</button>`).join('')}</div>
           </div>`;
   }).join('')}</div>` : `<p>Pas encore testé par un humain${etat.plateforme ? ` sur ${echapper(libellePlateforme(etat.plateforme))}` : ''}.</p>`}
           ${attendusSans.length ? `<div class="tb-sessions">${attendusSans.map((x) => `<div class="tb-passage">

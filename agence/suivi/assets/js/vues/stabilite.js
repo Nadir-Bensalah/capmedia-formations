@@ -196,7 +196,13 @@ const pageEquipe = (d, env) => {
   const avertissement = r.le && soucis.length
     ? encart(`Le dernier relevé n'a pas tout lu : ${echapper(soucis.map((e) => `${e.etape}${e.code ? ` (${e.code})` : ''}`).join(', '))}. Le reste garde la valeur d'avant.`, 'attention', 'alerte')
     : '';
-  if (!r.le) return `<div class="page page-stabilite">${tete}${squelette('lignes', 3)}</div>`;
+  /* Relié, mais aucun relevé encore lu : un squelette attendait ici une
+     donnée qui peut ne jamais venir (premier relevé raté, Sentry muet).
+     La page le dit, avec ce que le relevé a manqué s'il l'a noté. */
+  if (!r.le) {
+    const manques = soucis.length ? ` Le dernier essai n'a pas tout lu : ${soucis.map((e) => `${e.etape}${e.code ? ` (${e.code})` : ''}`).join(', ')}.` : '';
+    return `<div class="page page-stabilite" data-stab-attente>${tete}${vide({ icone: 'activite', titre: 'Pas encore de relevé', texte: `Le projet est relié à Sentry, mais aucun relevé n'est encore arrivé. Il passe toutes les quinze minutes ; « Actualiser » le lance tout de suite.${manques}` })}</div>`;
+  }
   return `<div class="page page-stabilite">${tete}${avertissement}
     <section class="section" data-stab-section="jour">
       <div class="section-tete"><h2>Erreurs du jour</h2><span class="t-petit t-3">depuis minuit</span></div>
