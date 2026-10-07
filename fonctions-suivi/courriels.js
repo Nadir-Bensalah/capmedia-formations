@@ -450,26 +450,17 @@ const panneau = (contenu, marge = '8px 0 28px', pad = '6px 22px') => `
                 </td></tr>
               </table>`;
 
-/* Un fait : l'icône et le libellé à gauche, la valeur à droite ; une
-   valeur longue passe dessous, et tout s'empile sur un téléphone. */
-const LONGUE = 44;
-function ligneFait(cle, valeur, premiere) {
-  const bord = premiere ? '' : `border-top:1px solid ${TEINTES.trait};`;
+/* Un fait : l'icône et le libellé à gauche, la valeur à droite, sur
+   ordinateur comme sur téléphone (07/10/2026, Nadir : « style très épuré
+   Apple ») ; pas de filet entre les lignes, des lignes serrées. Une valeur
+   longue revient à la ligne dans sa colonne, à droite. */
+function ligneFait(cle, valeur) {
   const libelle = `${icone(iconeDuFait(cle))}<span class="cm-t3" style="${S.cle}">${echapper(cle)}</span>`;
-  if (valeur.length > LONGUE || valeur.includes('\n')) {
-    return `
-                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">
-                    <tr><td class="cm-bord" style="padding:14px 0;${bord}">
-                      <div style="${S.cle}">${libelle}</div>
-                      <div class="cm-t1" style="margin:6px 0 0 26px;${S.val}">${echapper(valeur).replace(/\n/g, '<br>')}</div>
-                    </td></tr>
-                  </table>`;
-  }
   return `
                   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;">
                     <tr>
-                      <td class="cm-bord cm-pile" valign="top" style="padding:14px 16px 14px 0;white-space:nowrap;${bord}${S.cle}">${libelle}</td>
-                      <td class="cm-bord cm-pile cm-val cm-t1" valign="top" align="right" style="padding:14px 0;text-align:right;${bord}${S.val}">${echapper(valeur)}</td>
+                      <td valign="top" style="padding:7px 16px 7px 0;white-space:nowrap;${S.cle}">${libelle}</td>
+                      <td class="cm-t1" valign="top" align="right" style="padding:7px 0;text-align:right;${S.val}">${echapper(valeur).replace(/\n/g, '<br>')}</td>
                     </tr>
                   </table>`;
 }
@@ -518,8 +509,6 @@ const FEUILLE = `
     .cm-pad { padding-left: 22px !important; padding-right: 22px !important; }
     .cm-h1 { font-size: 23px !important; line-height: 29px !important; }
     .cm-panneau-pad { padding-left: 16px !important; padding-right: 16px !important; }
-    .cm-pile { display: block !important; width: auto !important; text-align: left !important; white-space: normal !important; padding: 14px 0 0 0 !important; }
-    .cm-val { border-top: 0 !important; padding: 4px 0 14px 26px !important; }
     .cm-bouton { width: 100% !important; }
     .cm-bouton a { display: block !important; }
   }
@@ -580,7 +569,7 @@ function rendreGabarit(bloc) {
   const faitsVus = code ? faits.filter(([, valeur]) => valeur !== code) : faits;
 
   const tableFaits = faitsVus.length
-    ? panneau(faitsVus.map(([cle, valeur], i) => ligneFait(cle, valeur, i === 0)).join(''), '8px 0 28px', '4px 22px')
+    ? panneau(faitsVus.map(([cle, valeur], i) => ligneFait(cle, valeur)).join(''), '8px 0 28px', '9px 20px')
     : '';
 
   const blocCode = code ? panneau(`
