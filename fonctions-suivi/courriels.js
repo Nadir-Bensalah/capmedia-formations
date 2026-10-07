@@ -38,6 +38,10 @@ const SIGNATURE = 'Capmedia Digital';
    un testeur n'a pas de projet chez nous, il a une mission de test. */
 const MARQUE_TEST = { signature: 'Capmedia Test', pied: 'Cet e-mail vous est adressé au titre de votre mission de test.' };
 
+/* Les lettres à l'équipe : même en-tête, mais un pied qui ne parle pas de
+   « votre projet » (elles ne vont pas à un client). */
+const MARQUE_EQUIPE = { signature: SIGNATURE, pied: "Cet e-mail est réservé à l'équipe Capmedia." };
+
 /* --- Les liens directs, une seule source ------------------------------- */
 const lienEspace = () => BASE;
 const lienTicket = (ticketId) => `${BASE}ticket?t=${encodeURIComponent(String(ticketId || ''))}`;
@@ -112,33 +116,45 @@ function enDate(valeur) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-/** Un montant hors taxes, en euros. Une valeur absente ne s'affiche pas. */
-function montantHT(valeur) {
+/* --- Les montants ------------------------------------------------------- */
+
+/** Un montant en euros, seul : « 2 875,00 € ». Une valeur absente ne
+ *  s'affiche pas. Jamais « EUR » : le symbole, comme sur les pièces. */
+function euros(valeur) {
+  if (valeur === null || valeur === undefined || valeur === '') return '';
   const nombre = Number(valeur);
   if (!Number.isFinite(nombre)) return '';
-  const chiffres = nombre.toLocaleString('fr-FR', {
-    minimumFractionDigits: 2, maximumFractionDigits: 2,
-  });
-  return `${chiffres} EUR hors taxes`;
+  return `${nombre.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/[  ]/g, ' ')} €`;
 }
 
-/** Un montant toutes taxes, en euros, avec le hors taxes entre parenthèses
- *  quand il en diffère. C'est le TTC que le client doit : c'est lui que la
- *  lettre annonce en premier. Sans TTC connu, le HT seul. */
+/** Un montant hors taxes : « 1 234,56 € HT ». */
+function montantHT(valeur) {
+  const e = euros(valeur);
+  return e ? `${e} HT` : '';
+}
+
+/** Un montant toutes taxes, seul : « 1 481,47 € TTC ». */
+function montantTTCSeul(valeur) {
+  const e = euros(valeur);
+  return e ? `${e} TTC` : '';
+}
+
+/** Un montant toutes taxes, avec le hors taxes entre parenthèses quand il
+ *  en diffère. C'est le TTC que le client doit : c'est lui que la lettre
+ *  annonce en premier. Sans TTC connu, le HT seul. */
 function montantTTC(ttc, ht) {
   const toutes = Number(ttc);
   const hors = Number(ht);
   if (!Number.isFinite(toutes)) return montantHT(ht);
-  const chiffres = toutes.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const detail = Number.isFinite(hors) && Math.abs(hors - toutes) >= 0.01 ? ` (${montantHT(hors)})` : '';
-  return `${chiffres} EUR TTC${detail}`;
+  return `${montantTTCSeul(toutes)}${detail}`;
 }
 
 /* Capmedia est une micro-entreprise : franchise en base de TVA. Une pièce
    à TVA 0 n'a qu'un montant, le prix payé, en « € », et la lettre porte la
-   mention légale une fois. Une vraie TVA (> 0) garde HT et TTC. Sans taux
-   connu, on compare TTC et HT ; sans l'un ni l'autre, c'est la franchise,
-   le régime de Capmedia. */
+   mention légale une fois (comme la page « Devis et factures » du Hub). Une
+   vraie TVA (> 0) garde HT et TTC. Sans taux connu, on compare TTC et HT ;
+   sans l'un ni l'autre, c'est la franchise, le régime de Capmedia. */
 const MENTION_FRANCHISE = 'TVA non applicable, article 293 B du CGI';
 function franchiseDe(v) {
   const x = v || {};
@@ -147,16 +163,93 @@ function franchiseDe(v) {
   if (x.ttc !== undefined && x.ttc !== null && x.montant !== undefined && x.montant !== null && Number.isFinite(ttc) && Number.isFinite(ht)) return Math.abs(ttc - ht) < 0.01;
   return true;
 }
-/** Un montant en euros, seul : « 2 875,00 € ». */
-function euros(valeur) {
-  const nombre = Number(valeur);
-  if (!Number.isFinite(nombre)) return '';
-  return `${nombre.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/[\u202f\u00a0]/g, ' ')} €`;
-}
 /** Le montant d'une pièce selon son régime : seul en franchise, TTC sinon. */
 function somme(v, valeur, ht) { return franchiseDe(v) ? euros(valeur) : montantTTC(valeur, ht); }
 /** La ligne de la mention légale, en franchise seulement. */
 function ligneFranchise(v) { return franchiseDe(v) ? ['TVA', MENTION_FRANCHISE] : ['', '']; }
+
+/* ==========================================================================
+   1 bis. La salutation
+
+   Une seule formule pour toutes les lettres : « Bonjour Prénom, », ou
+   « Bonjour, » quand on ne connaît pas de prénom. Avant, chaque modèle
+   saluait à sa façon : le nom complet tel que saisi (« Bonjour SÉBASTIEN
+   HOREMANS, »), le prénom, « Bonjour, », ou rien du tout.
+   ========================================================================== */
+
+/* Ce qui précède parfois un prénom, et n'en est pas un. */
+const CIVILITES = new Set(['m', 'mr', 'mme', 'mlle', 'monsieur', 'madame', 'mademoiselle', 'dr', 'docteur', 'pr', 'professeur', 'me', 'maître', 'maitre']);
+/* Les particules d'un nom de famille : un nom qui commence par l'une
+   d'elles n'a pas de prénom devant (« de La Fontaine »). */
+const PARTICULES = new Set(['de', 'du', 'des', 'le', 'la', 'les', 'van', 'von', 'der', 'den', 'di', 'da', 'del', 'della', 'dos', 'das', 'ten', 'ter', 'zu']);
+/* Un nom qui désigne un service ou une société, pas une personne. */
+const PAS_UNE_PERSONNE = /^(l['’]\s*)?(équipe|equipe|capmedia|client|contact|service|société|societe|support|admin|administrateur)\b/i;
+
+/** Une partie de prénom remise à la casse d'usage, si elle a été saisie
+ *  tout en capitales ou tout en minuscules ; une casse mixte (« DeAndre »)
+ *  est gardée telle quelle. */
+function casseDePrenom(mot) {
+  if (mot !== mot.toUpperCase() && mot !== mot.toLowerCase()) return mot;
+  return mot.toLowerCase().replace(/(^|[-'’])(\p{L})/gu, (_, sep, lettre) => `${sep}${lettre.toUpperCase()}`);
+}
+
+/**
+ * Le prénom d'un nom saisi, prêt à saluer. Rend '' quand il n'y en a pas
+ * de sûr : adresse e-mail, service, initiale seule, nom à particule.
+ *   « SÉBASTIEN HOREMANS » → « Sébastien »
+ *   « jean-pierre dupont » → « Jean-Pierre »
+ *   « Mme Claire Martin »  → « Claire »
+ *   « HOREMANS, Sébastien » → « Sébastien »
+ *   « de La Fontaine »     → ''
+ */
+function prenomDe(nom) {
+  let s = valeurTexte(nom).replace(/\s+/g, ' ').trim();
+  if (!s || s.includes('@') || /\d/.test(s) || PAS_UNE_PERSONNE.test(s)) return '';
+  /* « NOM, Prénom » : la forme des annuaires. */
+  if (s.includes(',')) s = s.slice(s.indexOf(',') + 1).trim();
+  const mots = s.split(' ').filter(Boolean);
+  while (mots.length && CIVILITES.has(mots[0].toLowerCase().replace(/\.$/, ''))) mots.shift();
+  const premier = (mots[0] || '').replace(/^[^\p{L}]+|[^\p{L}]+$/gu, '');
+  if (premier.length < 2) return '';
+  const bas = premier.toLowerCase();
+  if (PARTICULES.has(bas) || /^[dl]['’]/i.test(premier)) return '';
+  return casseDePrenom(premier);
+}
+
+/** « Bonjour Sébastien, », ou « Bonjour, » sans prénom sûr. */
+function salutation(nom) {
+  const prenom = prenomDe(nom);
+  return prenom ? `Bonjour ${prenom},` : 'Bonjour,';
+}
+
+/**
+ * Le nom de la personne à qui CETTE lettre est adressée.
+ *
+ * `contexte.a` est la liste des destinataires de l'envoi (le facteur la
+ * passe toujours) : une lettre à une seule personne la salue par son nom ;
+ * une lettre à plusieurs ne salue personne en particulier. Sans contexte
+ * (aperçu, épreuve), les variables qui désignent le destinataire.
+ *   destinataire : variables qui nomment le destinataire, lues aussi quand
+ *                  l'envoi ne porte pas de nom
+ *   secours      : variables lues seulement sans contexte (le nom du client
+ *                  du projet, qui peut être celui d'une société)
+ */
+function nomDuDestinataire(v, contexte, { destinataire = [], secours = [] } = {}) {
+  const a = contexte && Array.isArray(contexte.a) ? contexte.a.filter((d) => d && d.email) : null;
+  if (a && a.length > 1) return '';
+  const sien = a && a.length === 1 ? valeurTexte(a[0].nom).trim() : '';
+  if (sien) return sien;
+  const champs = a ? destinataire : [...destinataire, ...secours];
+  for (const c of champs) {
+    const x = valeurTexte(v[c]).trim();
+    if (x) return x;
+  }
+  return '';
+}
+
+/* Une lettre à l'équipe ne salue personne en particulier : elle part à
+   l'adresse commune. */
+const BONJOUR_EQUIPE = 'Bonjour,';
 
 /* ==========================================================================
    2. Les libellés, alignés sur agence/suivi/assets/noyau.js
@@ -177,18 +270,18 @@ const STATUTS = {
   'ferme': 'Fermée',
 };
 
-/** Le bout de phrase qui passe dans l'objet : « votre demande ... ». */
+/** Le bout de phrase qui passe dans l'objet : « Votre demande ... ». */
 const PHRASES_STATUT = {
-  'nouveau': 'est revenue au statut reçue',
-  'a-analyser': 'est à analyser',
-  'en-attente-client': 'attend votre réponse',
+  'nouveau': 'est de nouveau en attente de traitement',
+  'a-analyser': 'est à l\'étude',
+  'en-attente-client': 'attend une précision de votre part',
   'acceptee': 'est acceptée',
   'planifiee': 'est planifiée',
-  'en-cours': 'est passée en cours',
-  'en-revue': 'est en relecture chez nous',
+  'en-cours': 'est en cours de traitement',
+  'en-revue': 'est en cours de vérification',
   'a-valider': 'attend votre validation',
   'resolu': 'est terminée',
-  'refuse': 'est refusée',
+  'refuse': 'n\'a pas été retenue',
   'annulee': 'est annulée',
   'ferme': 'est fermée',
 };
@@ -200,8 +293,7 @@ const URGENCES = {
   'mineur': 'Mineur',
 };
 
-/* Les neuf types du formulaire, et « autre ». Trois seulement étaient
-   connus ici : la ligne « Type » manquait dans l'accusé des six autres. */
+/* Les neuf types du formulaire, et « autre ». */
 const TYPES = {
   'bug': 'Anomalie',
   'modification': 'Modification',
@@ -226,6 +318,9 @@ const PLATEFORMES = {
 };
 
 const libelle = (table, cle, defaut = '') => table[valeurTexte(cle)] || defaut;
+const majuscule = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
+/** « 1 nouvelle demande », « 7 nouvelles demandes ». */
+const compte = (n, singulier, pluriel) => `${n} ${n > 1 ? pluriel : singulier}`;
 
 /* ==========================================================================
    3. Le gabarit
@@ -247,7 +342,12 @@ const S = {
   elementTitre: `margin:0;font:600 15px/1.45 ${POLICE};color:${TEINTES.texte};`,
   elementDetail: `margin:4px 0 0;font:400 14px/1.5 ${POLICE};color:${TEINTES.texte2};`,
   elementLien: `font:500 14px/1.5 ${POLICE};color:${TEINTES.action};text-decoration:underline;`,
+  second: `margin:12px 0 0;font:400 14px/1.5 ${POLICE};color:${TEINTES.texte2};`,
 };
+
+/* Un lien ne devient un href que s'il commence par https:// ; rien
+   d'autre (pas de « javascript: », pas de chemin relatif). */
+const lienSur = (url) => (/^https:\/\/\S+$/.test(valeurTexte(url).trim()) ? valeurTexte(url).trim() : '');
 
 /**
  * @param {object} bloc
@@ -258,10 +358,13 @@ const S = {
  *   liste    array           [{ titre, detail, lien, libelleLien }] : une
  *            ligne par élément, avec son propre lien (le récapitulatif)
  *   bouton   { libelle, url } l'unique bouton bleu
+ *   second   { libelle, url } un lien secondaire, sous le bouton : jamais
+ *            d'adresse nue dans une phrase du HTML
  *   note     string          la précision en petits caractères
  *   marque   { signature, pied } facultatif : la marque d'en-tête et la
- *            phrase du pied, « Capmedia Test » pour les lettres aux testeurs
- *            (MARQUE_TEST). Sans elle, Capmedia Digital et le suivi du projet.
+ *            phrase du pied. MARQUE_TEST pour les testeurs, MARQUE_EQUIPE
+ *            pour l'équipe ; sans elle, Capmedia Digital et le suivi du
+ *            projet.
  */
 function rendreGabarit(bloc) {
   const signature = valeurTexte((bloc.marque || {}).signature).trim() || SIGNATURE;
@@ -306,6 +409,10 @@ function rendreGabarit(bloc) {
                 </td></tr>
               </table>` : '';
 
+  const urlSecond = bloc.second ? lienSur(bloc.second.url) : '';
+  const second = urlSecond
+    ? `<p style="${S.second}"><a href="${echapper(urlSecond)}" style="${S.elementLien}">${echapper(valeurTexte(bloc.second.libelle) || 'Ouvrir mon espace')}</a></p>` : '';
+
   const note = valeurTexte(bloc.note).trim()
     ? `<p style="${S.note}">${echapper(bloc.note)}</p>` : '';
 
@@ -328,7 +435,7 @@ function rendreGabarit(bloc) {
         <tr>
           <td style="padding:28px 32px 32px;">
             <h1 style="${S.titre}">${echapper(bloc.titre)}</h1>
-            ${enParagraphes(bloc.intro, S.corps)}${tableFaits}${tableListe}${citation}${bouton}${note}
+            ${enParagraphes(bloc.intro, S.corps)}${tableFaits}${tableListe}${citation}${bouton}${second}${note}
           </td>
         </tr>
       </table>
@@ -345,24 +452,24 @@ function rendreGabarit(bloc) {
   </tr>
 </table>`;
 
-  return { html, texte: rendreTexte(bloc, faits, signature, elements) };
+  return { html, texte: rendreTexte(bloc, faits, signature, elements, urlSecond) };
 }
 
-/* Les éléments d'une liste, en texte propre. Un lien ne passe que s'il
-   commence par https:// : rien d'autre ne devient un href. */
+/* Les éléments d'une liste, en texte propre. */
 function listeDe(liste) {
   return (Array.isArray(liste) ? liste : [])
     .map((l) => ({
       titre: valeurTexte(l && l.titre).trim(),
       detail: valeurTexte(l && l.detail).trim(),
-      lien: /^https:\/\/\S+$/.test(valeurTexte(l && l.lien).trim()) ? valeurTexte(l.lien).trim() : '',
+      lien: lienSur(l && l.lien),
       libelleLien: valeurTexte(l && l.libelleLien).trim() || 'Voir',
     }))
     .filter((l) => l.titre);
 }
 
-/** La même lettre, en texte brut. Jamais vide : l'objet sert de secours. */
-function rendreTexte(bloc, faits, signature = SIGNATURE, elements = []) {
+/** La même lettre, en texte brut. Jamais vide : l'objet sert de secours.
+ *  Ici, les adresses restent en clair : c'est le seul moyen de les suivre. */
+function rendreTexte(bloc, faits, signature = SIGNATURE, elements = [], urlSecond = '') {
   const lignes = [valeurTexte(signature).toUpperCase(), ''];
 
   const titre = valeurTexte(bloc.titre).trim();
@@ -389,6 +496,7 @@ function rendreTexte(bloc, faits, signature = SIGNATURE, elements = []) {
   if (bloc.bouton && valeurTexte(bloc.bouton.url)) {
     lignes.push(`${valeurTexte(bloc.bouton.libelle) || 'Ouvrir mon espace'} : ${valeurTexte(bloc.bouton.url)}`, '');
   }
+  if (urlSecond) lignes.push(`${valeurTexte(bloc.second.libelle) || 'Ouvrir mon espace'} : ${urlSecond}`, '');
 
   const note = valeurTexte(bloc.note).trim();
   if (note) lignes.push(note, '');
@@ -397,75 +505,60 @@ function rendreTexte(bloc, faits, signature = SIGNATURE, elements = []) {
   return lignes.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-/* --- L'objet : le numéro du ticket d'abord, quand il y en a un --------- */
+/* --- L'objet ------------------------------------------------------------
+   Une seule forme pour toutes les lettres : « Projet · Ce qui se passe »,
+   ou « NUMÉRO · Ce qui se passe » pour une demande. */
 function objetAvecNumero(numero, suite) {
   const num = valeurTexte(numero).trim();
   return num ? `${num} · ${suite}` : suite;
 }
+function objetDuProjet(projet, suite) {
+  const p = valeurTexte(projet).trim();
+  return p ? `${p} · ${suite}` : suite;
+}
+/** « Titre : détail », ou « Titre » seul quand le détail manque : jamais
+ *  un objet qui finit par deux-points. */
+const avecDetail = (suite, detail) => (valeurTexte(detail).trim() ? `${suite} : ${valeurTexte(detail).trim()}` : suite);
+/** « la demande FORGEME-012, « Titre », » : le numéro et le titre, ce
+ *  qu'on en a. Au milieu d'une phrase, l'incise du titre se ferme par une
+ *  virgule ; en fin de phrase (enFin), non. */
+function laDemande(numero, titre, article = 'la demande', enFin = false) {
+  const n = valeurTexte(numero).trim(); const t = valeurTexte(titre).trim();
+  return `${article}${n ? ` ${n}` : ''}${t ? `, « ${t} »${enFin ? '' : ','}` : ''}`;
+}
+/** Le salut, puis le corps de la lettre. */
+const ecrire = (bonjour, corps) => `${bonjour}\n\n${corps}`;
 
 /* ==========================================================================
-   4. Les dix modèles
+   4. Les modèles des clients : accès, demandes, devis et factures
 
-   Chacun reçoit les « variables » de son document d'envoi et renvoie
-   { objet, html, texte }. Aucune lecture de base ici : tout ce qui est
-   nécessaire a été figé au moment de la mise en file, ce qui rend l'e-mail
-   fidèle à l'instant de l'événement même s'il part une heure plus tard.
+   Chacun reçoit les « variables » de son document d'envoi, et le contexte
+   de l'envoi (ses destinataires), et renvoie { objet, html, texte }. Aucune
+   lecture de base ici : tout ce qui est nécessaire a été figé au moment de
+   la mise en file, ce qui rend l'e-mail fidèle à l'instant de l'événement
+   même s'il part une heure plus tard.
    ========================================================================== */
 
+const ROLES_CLIENT = { responsable: 'Responsable du projet', collaborateur: 'Collaborateur' };
+
 /* 1. Invitation d'un client sur son espace. */
-function invitation(v) {
+function invitation(v, ctx) {
   const projet = valeurTexte(v.projetNom).trim();
-  const prenom = valeurTexte(v.clientNom).trim();
+  const bonjour = salutation(nomDuDestinataire(v, ctx, { destinataire: ['clientNom'] }));
   return {
-    objet: projet ? `Votre espace de suivi ${projet} est ouvert` : 'Votre espace de suivi est ouvert',
+    objet: objetDuProjet(projet, 'Votre espace de suivi est ouvert'),
     ...rendreGabarit({
       titre: 'Votre espace de suivi est ouvert',
-      intro: `${prenom ? `Bonjour ${prenom},` : 'Bonjour,'}\n\n`
-        + `Votre espace de suivi${projet ? ` pour ${projet}` : ''} est en ligne. Vous y déclarez une anomalie ou une demande, `
-        + 'vous suivez son avancement, vous échangez avec nous et vous retrouvez vos devis et vos factures.\n\n'
-        + "La connexion se fait sans mot de passe : saisissez votre adresse e-mail, un code à six chiffres vous est envoyé, et il ouvre la session. Il est valable dix minutes et ne sert qu'une fois.",
+      intro: ecrire(bonjour, `Votre espace de suivi${projet ? ` du projet ${projet}` : ''} est désormais accessible. Vous pouvez y signaler une anomalie ou formuler une demande, `
+        + 'suivre son avancement, échanger avec notre équipe et retrouver vos devis et factures.\n\n'
+        + "La connexion se fait sans mot de passe : saisissez votre adresse e-mail et vous recevrez un code à six chiffres qui ouvre la session. Ce code est valable dix minutes et ne sert qu'une fois."),
       faits: [
         ['Projet', projet],
         ['Votre adresse', valeurTexte(v.email)],
-        ['Votre rôle', valeurTexte(v.role) === 'responsable' ? 'Responsable du projet' : (valeurTexte(v.role) === 'collaborateur' ? 'Collaborateur' : '')],
+        ['Votre rôle', libelle(ROLES_CLIENT, v.role)],
       ],
       bouton: { libelle: 'Ouvrir mon espace', url: valeurTexte(v.lien) || lienEspace() },
-      note: "Utilisez bien l'adresse à laquelle vous avez reçu cet e-mail : c'est elle qui donne accès au projet.",
-    }),
-  };
-}
-
-/* 1 bis. L'invitation d'un testeur.
-
-   Elle était absente : inscrire un testeur créait son compte en silence, et
-   personne ne lui disait ni qu'il était attendu, ni où aller. Il ne pouvait
-   donc pas entrer, même avec un compte valide.
-
-   Un testeur n'est membre d'aucun projet : il ne voit que les scénarios
-   qu'on lui confie, jamais le reste. La lettre le dit, parce que son écran
-   ne ressemble à rien de ce qu'il connaît. */
-function invitationTesteur(v) {
-  const prenom = valeurTexte(v.prenom).trim();
-  const projet = valeurTexte(v.projetNom).trim();
-  const plateformes = (Array.isArray(v.plateformes) ? v.plateformes : [])
-    .map((p) => libelle(PLATEFORMES, p, p)).filter(Boolean).join(', ');
-  return {
-    objet: projet ? `Vous testez ${projet} : votre espace est ouvert` : 'Votre espace de test est ouvert',
-    ...rendreGabarit({
-      titre: 'Votre espace de test est ouvert',
-      intro: `${prenom ? `Bonjour ${prenom},` : 'Bonjour,'}\n\n`
-        + `Nous vous avons inscrit comme testeur${projet ? ` sur ${projet}` : ''}. Votre travail consiste à dérouler des scénarios précis, `
-        + "écrits pas à pas, et à dire pour chacun ce que vous avez obtenu : cela a marché, cela n'a pas marché, ou cela ne s'appliquait pas.\n\n"
-        + "Quand quelque chose ne marche pas, une capture d'écran est demandée : c'est elle qui permet de reproduire le problème, donc de le corriger.\n\n"
-        + "La connexion se fait sans mot de passe : saisissez votre adresse e-mail, un code à six chiffres vous est envoyé, et il ouvre la session. Il est valable quinze minutes et ne sert qu'une fois.",
-      faits: [
-        ['Projet', projet],
-        ['Votre adresse', valeurTexte(v.email)],
-        ['Ce que vous testez', plateformes],
-      ],
-      bouton: { libelle: 'Ouvrir mon espace de test', url: valeurTexte(v.lien) || lienEspace() },
-      note: "Utilisez bien l'adresse à laquelle vous avez reçu cet e-mail : c'est elle qui ouvre votre espace. Vous ne voyez que les scénarios qui vous sont confiés, et vous n'avez accès à rien d'autre du projet.",
-      marque: MARQUE_TEST,
+      note: "Connectez-vous avec l'adresse à laquelle vous avez reçu cet e-mail : c'est elle qui donne accès au projet.",
     }),
   };
 }
@@ -476,56 +569,38 @@ function invitationTesteur(v) {
    chaque interlocuteur : l'invitation, et ce qui l'attend déjà dans son
    espace. Pas une lettre par événement accumulé pendant la préparation :
    un résumé, puis l'espace. */
-function ouverture(v) {
+function ouverture(v, ctx) {
   const projet = valeurTexte(v.projetNom).trim();
-  const prenom = valeurTexte(v.clientNom).trim().split(/\s+/)[0] || '';
+  const bonjour = salutation(nomDuDestinataire(v, ctx, { destinataire: ['clientNom'] }));
   const points = (Array.isArray(v.points) ? v.points : []).slice(0, 8)
     .map((p) => [valeurTexte(p && p.quoi), valeurTexte(p && p.detail)]);
   return {
-    objet: projet ? `${projet} : votre espace de suivi est ouvert` : 'Votre espace de suivi est ouvert',
+    objet: objetDuProjet(projet, 'Votre espace de suivi est ouvert'),
     ...rendreGabarit({
       titre: 'Votre espace de suivi est ouvert',
-      intro: `${prenom ? `Bonjour ${prenom},` : 'Bonjour,'}\n\n`
-        + `Votre espace de suivi${projet ? ` pour ${projet}` : ''} est prêt. Vous y suivez l'avancement, vous posez vos demandes, `
-        + "vous échangez avec nous et vous retrouvez ce qui attend votre avis.\n\n"
-        + (points.length ? 'Voici ce qui vous y attend déjà.' : "La connexion se fait sans mot de passe : saisissez votre adresse, un code à six chiffres vous est envoyé, il ouvre la session."),
+      intro: ecrire(bonjour, `Votre espace de suivi${projet ? ` du projet ${projet}` : ''} est prêt. Vous pouvez y suivre l'avancement, formuler vos demandes, `
+        + 'échanger avec notre équipe et retrouver les éléments qui attendent votre avis.'
+        + (points.length ? '\n\nVoici ce qui vous y attend déjà.' : '')),
       faits: [
-        ['Votre rôle', valeurTexte(v.role) === 'responsable' ? 'Responsable du projet' : 'Collaborateur'],
+        /* Un rôle inconnu ne s'invente pas : la ligne disparaît. */
+        ['Votre rôle', libelle(ROLES_CLIENT, v.role)],
         ...points,
         ['Votre adresse', valeurTexte(v.email)],
       ],
       bouton: { libelle: 'Ouvrir mon espace', url: valeurTexte(v.lien) || lienEspace() },
-      note: "La connexion se fait sans mot de passe : un code à six chiffres, valable dix minutes, arrive à l'adresse qui a reçu cet e-mail.",
-    }),
-  };
-}
-
-/* 1 quater. L'arrivée dans l'équipe. */
-function invitationEquipe(v) {
-  const prenom = valeurTexte(v.nom).trim().split(/\s+/)[0] || '';
-  const admin = valeurTexte(v.role) === 'admin';
-  return {
-    objet: "Votre accès au cockpit Capmedia",
-    ...rendreGabarit({
-      titre: "Bienvenue dans l'équipe",
-      intro: `${prenom ? `Bonjour ${prenom},` : 'Bonjour,'}\n\n`
-        + `Un accès au cockpit Capmedia vient de vous être ouvert, avec le rôle ${admin ? 'administrateur' : 'agent'}. `
-        + (admin ? "Vous voyez tous les projets et vous administrez l'équipe." : 'Vous voyez les projets sur lesquels vous travaillez.')
-        + "\n\nLa connexion se fait sans mot de passe : saisissez votre adresse, un code à six chiffres, valable cinq minutes, vous est envoyé.",
-      faits: [['Votre adresse', valeurTexte(v.email)], ['Rôle', admin ? 'Administrateur' : 'Agent']],
-      bouton: { libelle: 'Ouvrir le cockpit', url: valeurTexte(v.lien) || lienEspace() },
-      note: "Si vous n'attendiez pas cet accès, ignorez ce message et prévenez-nous.",
+      note: "La connexion se fait sans mot de passe : un code à six chiffres, valable dix minutes, est envoyé à l'adresse qui a reçu cet e-mail.",
     }),
   };
 }
 
 /* 2. Demande créée. Deux voix : l'accusé au client, l'alerte à l'équipe. */
-function ticketCree(v) {
+function ticketCree(v, ctx) {
   const numero = valeurTexte(v.numero);
   const titre = valeurTexte(v.titre);
+  const projet = valeurTexte(v.projetNom).trim();
   const faits = [
     ['Demande', numero],
-    ['Projet', valeurTexte(v.projetNom)],
+    ['Projet', projet],
     ['Type', libelle(TYPES, v.type)],
     ['Urgence', libelle(URGENCES, v.urgence)],
     ['Plateforme', libelle(PLATEFORMES, v.plateforme)],
@@ -535,39 +610,35 @@ function ticketCree(v) {
 
   if (valeurTexte(v.cote) === 'equipe') {
     return {
-      objet: objetAvecNumero(numero, `Nouvelle demande : ${titre || 'sans titre'}`),
+      objet: objetAvecNumero(numero, avecDetail('Nouvelle demande', titre)),
       ...rendreGabarit({
         titre: titre || 'Nouvelle demande',
-        intro: `${valeurTexte(v.auteurNom).trim() || 'Un client'} vient d'ouvrir une demande`
-          + `${valeurTexte(v.projetNom).trim() ? ` sur ${valeurTexte(v.projetNom)}` : ''}.`,
-        faits: faits.concat([['Ouvert par', valeurTexte(v.auteurNom)], ['Adresse', valeurTexte(v.auteurEmail)]]),
+        intro: ecrire(BONJOUR_EQUIPE, `${valeurTexte(v.auteurNom).trim() || 'Un client'} vient d'ouvrir une demande${projet ? ` sur le projet ${projet}` : ''}.`),
+        faits: faits.concat([['Ouverte par', valeurTexte(v.auteurNom)], ['Adresse', valeurTexte(v.auteurEmail)]]),
         citation: extrait(v.description, 900),
         bouton: { libelle: 'Traiter la demande', url: lien },
+        marque: MARQUE_EQUIPE,
       }),
     };
   }
 
   /* Une demande ouverte par l'équipe pour le compte du client ne peut pas
-     lui être accusée comme si c'était lui qui l'avait écrite : il lisait
-     « Bonjour Équipe Capmedia, nous avons bien reçu votre demande ». */
+     lui être accusée comme si c'était lui qui l'avait écrite. « par » est
+     le destinataire de CETTE lettre (une par personne) ; « clientNom »
+     reste le nom de l'auteur, pour les envois d'avant. */
   const parLEquipe = v.parLEquipe === true || valeurTexte(v.parLEquipe) === 'true';
-  /* « par » est le destinataire de CETTE lettre (une par personne, voir
-     communication.ecrireAuxClients, parDestinataire) ; « clientNom » reste
-     le nom de l'auteur, pour les envois d'avant. */
-  const salue = valeurTexte(v.par).trim() || valeurTexte(v.clientNom).trim();
-  const bonjour = `Bonjour${salue ? ` ${salue}` : ''},\n\n`;
+  const bonjour = salutation(nomDuDestinataire(v, ctx, { destinataire: ['par'], secours: ['clientNom'] }));
 
   if (parLEquipe) {
     return {
       objet: objetAvecNumero(numero, 'Une demande a été ouverte pour vous'),
       ...rendreGabarit({
         titre: 'Une demande a été ouverte pour vous',
-        intro: `${bonjour}Nous avons ouvert une demande${numero ? ` ${numero}` : ''}`
-          + `${titre ? `, « ${titre} »` : ''} à la suite de nos échanges. Vous la suivez depuis votre espace, et vous pouvez y répondre.`,
+        intro: ecrire(bonjour, `Nous avons ouvert ${laDemande(numero, titre)} à la suite de nos échanges. Vous pouvez la suivre et y répondre depuis votre espace.`),
         faits,
         citation: extrait(v.description, 600),
         bouton: { libelle: 'Suivre la demande', url: lien },
-        note: "Si nous avons mal compris votre besoin, dites-le dans la demande : nous corrigeons.",
+        note: 'Si nous avons mal compris votre besoin, indiquez-le dans la demande : nous la corrigerons.',
       }),
     };
   }
@@ -576,41 +647,59 @@ function ticketCree(v) {
     objet: objetAvecNumero(numero, 'Votre demande est enregistrée'),
     ...rendreGabarit({
       titre: 'Votre demande est enregistrée',
-      intro: `${bonjour}Nous avons bien reçu votre demande${numero ? ` ${numero}` : ''}`
-        + `${titre ? `, « ${titre} »` : ''}. Elle est en file, nous revenons vers vous dès sa prise en charge.`,
+      intro: ecrire(bonjour, `Nous avons bien reçu votre demande${numero ? ` ${numero}` : ''}${titre ? `, « ${titre} »` : ''}. Elle est enregistrée et nous revenons vers vous dès sa prise en charge.`),
       faits,
       citation: extrait(v.description, 600),
       bouton: { libelle: 'Suivre la demande', url: lien },
-      note: "Tout se passe désormais dans votre espace : ajoutez une précision ou une capture d'écran depuis la demande.",
+      note: "Pour ajouter une précision ou une capture d'écran, rendez-vous sur la demande, dans votre espace.",
     }),
   };
 }
 
 /* 3. Changement de statut. */
-function statut(v) {
+function statut(v, ctx) {
   const numero = valeurTexte(v.numero);
+  const titre = valeurTexte(v.titre);
   const apres = valeurTexte(v.statutApres);
-  /* Un statut hors nomenclature ne doit pas produire une phrase tronquée. */
-  const phrase = PHRASES_STATUT[apres]
-    || (apres ? `est passé au statut ${libelle(STATUTS, apres, apres)}` : "a changé d'état");
+  const libelleApres = libelle(STATUTS, apres, apres);
   const pourEquipe = valeurTexte(v.cote) === 'equipe';
 
+  if (pourEquipe) {
+    return {
+      /* Un statut inconnu ne s'écrit pas « inconnu » : l'objet s'arrête. */
+      objet: objetAvecNumero(numero, avecDetail('Statut modifié par le client', libelleApres)),
+      ...rendreGabarit({
+        titre: 'Statut modifié par le client',
+        intro: ecrire(BONJOUR_EQUIPE, `Le client a modifié le statut de ${laDemande(numero, titre)} depuis son espace.`),
+        faits: [
+          ['Demande', numero],
+          ['Titre', titre],
+          ['Statut précédent', libelle(STATUTS, v.statutAvant)],
+          ['Nouveau statut', libelleApres],
+          ['Projet', valeurTexte(v.projetNom)],
+        ],
+        bouton: { libelle: 'Voir la demande', url: valeurTexte(v.lien) || lienEspace() },
+        marque: MARQUE_EQUIPE,
+      }),
+    };
+  }
+
+  /* Un statut hors nomenclature ne doit pas produire une phrase tronquée. */
+  const phrase = PHRASES_STATUT[apres]
+    || (apres ? `est passée au statut « ${libelleApres} »` : 'a été mise à jour');
+  const bonjour = salutation(nomDuDestinataire(v, ctx, { destinataire: ['par'], secours: ['clientNom'] }));
   return {
-    objet: objetAvecNumero(numero, pourEquipe
-      ? `Statut modifié : ${libelle(STATUTS, apres, apres) || 'inconnu'}`
-      : `Votre demande ${phrase}`),
+    objet: objetAvecNumero(numero, `Votre demande ${phrase}`),
     ...rendreGabarit({
-      titre: pourEquipe ? 'Statut modifié par le client' : `Votre demande ${phrase}`,
-      intro: pourEquipe
-        ? `La demande ${numero || 'concernée'}${valeurTexte(v.titre) ? `, « ${valeurTexte(v.titre)} »` : ''} a changé de statut depuis l'espace client.`
-        : `La demande${numero ? ` ${numero}` : ''}${valeurTexte(v.titre) ? `, « ${valeurTexte(v.titre)} »` : ''} vient de changer d'état.`
-          + (apres === 'en-attente-client' ? '\n\nNous avons besoin d\'une précision de votre part pour avancer.' : '')
-          + (apres === 'a-valider' ? '\n\nLa correction est livrée. Vérifiez de votre côté, puis validez depuis la demande.' : ''),
+      titre: `Votre demande ${phrase}`,
+      intro: ecrire(bonjour, `Le statut de ${laDemande(numero, titre, 'votre demande')} a été mis à jour.`
+        + (apres === 'en-attente-client' ? '\n\nNous avons besoin d\'une précision de votre part pour avancer : vous pouvez nous répondre directement depuis la demande.' : '')
+        + (apres === 'a-valider' ? '\n\nLa correction est livrée. Nous vous invitons à la vérifier, puis à la valider depuis la demande.' : '')),
       faits: [
         ['Demande', numero],
-        ['Titre', valeurTexte(v.titre)],
-        ['Avant', libelle(STATUTS, v.statutAvant)],
-        ['Maintenant', libelle(STATUTS, apres, apres)],
+        ['Titre', titre],
+        ['Statut précédent', libelle(STATUTS, v.statutAvant)],
+        ['Nouveau statut', libelleApres],
         ['Projet', valeurTexte(v.projetNom)],
       ],
       bouton: { libelle: 'Voir la demande', url: valeurTexte(v.lien) || lienEspace() },
@@ -619,66 +708,85 @@ function statut(v) {
 }
 
 /* 4. Assignation, adressée à l'assigné. */
-function assignation(v) {
+function assignation(v, ctx) {
   const numero = valeurTexte(v.numero);
+  const titre = valeurTexte(v.titre);
+  const bonjour = salutation(nomDuDestinataire(v, ctx, { destinataire: ['assigneNom'] }));
   return {
-    objet: objetAvecNumero(numero, `Demande assignée : ${valeurTexte(v.titre) || 'sans titre'}`),
+    objet: objetAvecNumero(numero, avecDetail('Demande assignée', titre)),
     ...rendreGabarit({
       titre: 'Une demande vous est assignée',
-      intro: `${valeurTexte(v.assigneNom).trim() ? `${valeurTexte(v.assigneNom)}, cette` : 'Cette'} demande est désormais sous votre responsabilité.`,
+      intro: ecrire(bonjour, `${majuscule(laDemande(numero, titre))} vous est désormais assignée.`),
       faits: [
         ['Demande', numero],
-        ['Titre', valeurTexte(v.titre)],
+        ['Titre', titre],
         ['Projet', valeurTexte(v.projetNom)],
         ['Type', libelle(TYPES, v.type)],
         ['Urgence', libelle(URGENCES, v.urgence)],
         ['Statut', libelle(STATUTS, v.statut)],
       ],
       bouton: { libelle: 'Traiter la demande', url: valeurTexte(v.lien) || lienEspace() },
+      marque: MARQUE_EQUIPE,
     }),
   };
 }
 
 /* 5. Nouveau message sur une demande, vers l'autre partie. */
-function message(v) {
+function message(v, ctx) {
   const numero = valeurTexte(v.numero);
+  const titre = valeurTexte(v.titre);
   const auteur = valeurTexte(v.auteurNom).trim();
   const versEquipe = valeurTexte(v.cote) === 'equipe';
+  const faits = [
+    ['Demande', numero],
+    ['Projet', valeurTexte(v.projetNom)],
+    ['Statut', libelle(STATUTS, v.statut)],
+  ];
 
+  if (versEquipe) {
+    return {
+      objet: objetAvecNumero(numero, `Réponse du client${auteur ? ` (${auteur})` : ''}`),
+      ...rendreGabarit({
+        titre: 'Le client a répondu',
+        intro: ecrire(BONJOUR_EQUIPE, `${auteur || 'Le client'} a écrit sur ${laDemande(numero, titre, 'la demande', true)}.`),
+        faits,
+        citation: extrait(v.texte, 1200),
+        bouton: { libelle: 'Répondre', url: valeurTexte(v.lien) || lienEspace() },
+        note: 'Répondez depuis la demande : une réponse par e-mail ne serait pas rattachée à la demande.',
+        marque: MARQUE_EQUIPE,
+      }),
+    };
+  }
+
+  const bonjour = salutation(nomDuDestinataire(v, ctx, { destinataire: ['par'] }));
   return {
-    objet: objetAvecNumero(numero, versEquipe
-      ? `Réponse du client${auteur ? ` (${auteur})` : ''}`
-      : 'Nouveau message sur votre demande'),
+    objet: objetAvecNumero(numero, 'Nouveau message sur votre demande'),
     ...rendreGabarit({
-      titre: versEquipe ? 'Le client a répondu' : 'Nouveau message sur votre demande',
-      intro: `${auteur || (versEquipe ? 'Le client' : "L'équipe")} a écrit sur la demande`
-        + `${numero ? ` ${numero}` : ''}${valeurTexte(v.titre) ? `, « ${valeurTexte(v.titre)} »` : ''}.`,
-      faits: [
-        ['Demande', numero],
-        ['Projet', valeurTexte(v.projetNom)],
-        ['Statut', libelle(STATUTS, v.statut)],
-      ],
+      titre: 'Nouveau message sur votre demande',
+      intro: ecrire(bonjour, `${auteur || 'Notre équipe'} vous a écrit au sujet de ${laDemande(numero, titre, 'votre demande', true)}.`),
+      faits,
       citation: extrait(v.texte, 1200),
       bouton: { libelle: 'Répondre', url: valeurTexte(v.lien) || lienEspace() },
-      note: "Répondez depuis l'espace de suivi : un e-mail de retour ne serait pas rattaché à la demande.",
+      note: 'Merci de répondre depuis votre espace : une réponse par e-mail ne serait pas rattachée à la demande.',
     }),
   };
 }
 
 /* 6. Demande terminée. */
-function resolu(v) {
+function resolu(v, ctx) {
   const numero = valeurTexte(v.numero);
+  const bonjour = salutation(nomDuDestinataire(v, ctx, { destinataire: ['par'], secours: ['clientNom'] }));
   return {
     objet: objetAvecNumero(numero, 'Votre demande est terminée'),
     ...rendreGabarit({
       titre: 'Votre demande est terminée',
-      intro: `La demande${numero ? ` ${numero}` : ''}${valeurTexte(v.titre) ? `, « ${valeurTexte(v.titre)} »` : ''} est marquée comme terminée.\n\n`
-        + 'Si le problème revient, vous pouvez la rouvrir depuis votre espace pendant sept jours. Passé ce délai, ouvrez une nouvelle demande depuis sa fiche : elle gardera le lien avec celle-ci.',
+      intro: ecrire(bonjour, `${majuscule(laDemande(numero, v.titre, 'votre demande'))} est terminée.\n\n`
+        + 'Si le problème se reproduit, vous pouvez la rouvrir depuis votre espace pendant sept jours. Au-delà, ouvrez une nouvelle demande depuis sa fiche : elle restera liée à celle-ci.'),
       faits: [
         ['Demande', numero],
         ['Titre', valeurTexte(v.titre)],
         ['Projet', valeurTexte(v.projetNom)],
-        ['Résolu le', dateFr(v.date)],
+        ['Terminée le', dateFr(v.date)],
       ],
       bouton: { libelle: 'Voir la demande', url: valeurTexte(v.lien) || lienEspace() },
     }),
@@ -686,35 +794,40 @@ function resolu(v) {
 }
 
 /* 7. Demande fermée. */
-function ferme(v) {
+function ferme(v, ctx) {
   const numero = valeurTexte(v.numero);
+  const bonjour = salutation(nomDuDestinataire(v, ctx, { destinataire: ['par'], secours: ['clientNom'] }));
   return {
     objet: objetAvecNumero(numero, 'Votre demande est fermée'),
     ...rendreGabarit({
       titre: 'Votre demande est fermée',
-      intro: `La demande${numero ? ` ${numero}` : ''}${valeurTexte(v.titre) ? `, « ${valeurTexte(v.titre)} »` : ''} est close. `
+      intro: ecrire(bonjour, `${majuscule(laDemande(numero, v.titre, 'votre demande'))} est fermée. `
         + 'Elle reste consultable dans votre espace, avec tout son historique.\n\n'
-        + 'Une demande fermée ne se rouvre pas. Si le sujet revient, ouvrez une nouvelle demande : nous y retrouverons le contexte.',
+        + 'Une demande fermée ne peut pas être rouverte. Si le sujet revient, ouvrez une nouvelle demande : nous y retrouverons le contexte.'),
       faits: [
         ['Demande', numero],
         ['Titre', valeurTexte(v.titre)],
         ['Projet', valeurTexte(v.projetNom)],
-        ['Fermé le', dateFr(v.date)],
+        ['Fermée le', dateFr(v.date)],
       ],
       bouton: { libelle: 'Consulter la demande', url: valeurTexte(v.lien) || lienEspace() },
     }),
   };
 }
 
-/* 8. Devis déposé, vers le client. */
-function devis(v) {
+/* 8. Devis déposé, vers le client. Le nom figé (« clientNom ») est celui
+   du client du projet, parfois une société : il ne sert qu'à défaut des
+   destinataires de l'envoi. */
+const NOM_FINANCE = { destinataire: ['par'], secours: ['clientNom'] };
+
+function devis(v, ctx) {
   const numero = valeurTexte(v.numero);
+  const bonjour = salutation(nomDuDestinataire(v, ctx, NOM_FINANCE));
   return {
-    objet: objetAvecNumero(numero, `Votre devis : ${valeurTexte(v.libelle) || 'prestation'}`),
+    objet: objetAvecNumero(numero, avecDetail('Votre devis', valeurTexte(v.libelle) || 'prestation')),
     ...rendreGabarit({
       titre: 'Votre devis est disponible',
-      intro: `Bonjour${valeurTexte(v.clientNom).trim() ? ` ${valeurTexte(v.clientNom)}` : ''},\n\n`
-        + `Le devis${numero ? ` ${numero}` : ''} est déposé dans votre espace, dans « Devis et factures ». Vous pouvez le télécharger, puis l'accepter ou le refuser depuis sa fiche.`,
+      intro: ecrire(bonjour, `Le devis${numero ? ` ${numero}` : ''} est disponible dans votre espace, rubrique « Devis et factures ». Vous pouvez le télécharger, puis l'accepter ou le refuser depuis sa fiche.`),
       faits: [
         ['Devis', numero],
         ['Objet', valeurTexte(v.libelle)],
@@ -724,7 +837,7 @@ function devis(v) {
         ['Valable jusqu\'au', dateFr(v.echeance)],
       ],
       bouton: { libelle: 'Voir le devis', url: valeurTexte(v.lien) || lienEspace() },
-      note: 'Votre réponse est horodatée dans votre espace : elle vaut accord ou refus, sans autre formalité.',
+      note: 'Votre réponse est horodatée dans votre espace et vaut accord ou refus, sans autre formalité.',
     }),
   };
 }
@@ -732,42 +845,43 @@ function devis(v) {
 /* 9. Réponse du client à un devis, vers l'équipe. */
 function devisReponse(v) {
   const numero = valeurTexte(v.numero);
+  const projet = valeurTexte(v.projetNom).trim();
   const accepte = valeurTexte(v.reponse) === 'accepte';
   const verdict = accepte ? 'accepté' : 'refusé';
   return {
-    objet: objetAvecNumero(numero, `Devis ${verdict}${valeurTexte(v.projetNom) ? ` · ${valeurTexte(v.projetNom)}` : ''}`),
+    objet: objetAvecNumero(numero, `Devis ${verdict}${projet ? ` · ${projet}` : ''}`),
     ...rendreGabarit({
       titre: `Devis ${verdict}`,
-      intro: `${valeurTexte(v.clientNom).trim() || 'Le client'} a ${verdict} le devis${numero ? ` ${numero}` : ''}`
-        + `${valeurTexte(v.projetNom) ? ` du projet ${valeurTexte(v.projetNom)}` : ''}.`,
+      intro: ecrire(BONJOUR_EQUIPE, `${valeurTexte(v.clientNom).trim() || 'Le client'} a ${verdict} le devis${numero ? ` ${numero}` : ''}${projet ? ` du projet ${projet}` : ''}.`),
       faits: [
         ['Devis', numero],
         ['Objet', valeurTexte(v.libelle)],
         ...(franchiseDe(v)
           ? [['Montant', euros(Number.isFinite(Number(v.ttc)) ? v.ttc : v.montant)], ligneFranchise(v)]
-          : [['Montant HT', montantHT(v.montant)], ['Montant TTC', montantTTC(v.ttc, v.montant)]]),
-        ['Projet', valeurTexte(v.projetNom)],
+          : [['Montant HT', montantHT(v.montant)], ['Montant TTC', montantTTCSeul(v.ttc)]]),
+        ['Projet', projet],
         ['Réponse', accepte ? 'Accepté' : 'Refusé'],
         ['Répondu le', dateFr(v.date)],
         /* Le motif d'un refus, ou le mot laissé avec l'acceptation. */
-        valeurTexte(v.commentaire).trim() ? [accepte ? 'Un mot du client' : 'Motif', valeurTexte(v.commentaire)] : ['', ''],
+        valeurTexte(v.commentaire).trim() ? [accepte ? 'Commentaire du client' : 'Motif du refus', valeurTexte(v.commentaire)] : ['', ''],
       ],
       bouton: { libelle: 'Ouvrir dans le Cockpit', url: valeurTexte(v.lien) || lienEspace() },
+      marque: MARQUE_EQUIPE,
     }),
   };
 }
 
 /* 10. Facture déposée, vers le client. */
-function facture(v) {
+function facture(v, ctx) {
   const numero = valeurTexte(v.numero);
   const echeance = dateFr(v.echeance);
+  const bonjour = salutation(nomDuDestinataire(v, ctx, NOM_FINANCE));
   return {
-    objet: objetAvecNumero(numero, `Votre facture : ${valeurTexte(v.libelle) || 'prestation'}`),
+    objet: objetAvecNumero(numero, avecDetail('Votre facture', valeurTexte(v.libelle) || 'prestation')),
     ...rendreGabarit({
       titre: 'Votre facture est disponible',
-      intro: `Bonjour${valeurTexte(v.clientNom).trim() ? ` ${valeurTexte(v.clientNom)}` : ''},\n\n`
-        + `La facture${numero ? ` ${numero}` : ''} est déposée dans votre espace${v.avecPdf ? ', avec son fichier PDF' : ''}.`
-        + (echeance ? ` Son règlement est attendu au plus tard le ${echeance}.` : ''),
+      intro: ecrire(bonjour, `La facture${numero ? ` ${numero}` : ''} est disponible dans votre espace${v.avecPdf ? ', avec son fichier PDF' : ''}.`
+        + (echeance ? ` Son règlement est attendu au plus tard le ${echeance}.` : '')),
       faits: [
         ['Facture', numero],
         ['Objet', valeurTexte(v.libelle)],
@@ -777,21 +891,24 @@ function facture(v) {
         ['Échéance', echeance],
       ],
       bouton: { libelle: 'Voir la facture', url: valeurTexte(v.lien) || lienEspace() },
-      note: 'Une question sur cette facture : ouvrez une demande depuis votre espace, nous regardons.',
+      note: 'Pour toute question sur cette facture, ouvrez une demande depuis votre espace : nous vous répondrons rapidement.',
     }),
   };
 }
 
 /* 10 bis. L'échéance approche : trois jours avant, une fois. */
-function factureEcheance(v) {
+function factureEcheance(v, ctx) {
   const numero = valeurTexte(v.numero);
   const echeance = dateFr(v.echeance);
+  const bonjour = salutation(nomDuDestinataire(v, ctx, NOM_FINANCE));
+  /* Sans date, l'objet ne s'arrête pas sur « avant le ». */
+  const titre = echeance ? `Facture à régler avant le ${echeance}` : 'Facture bientôt à échéance';
   return {
-    objet: objetAvecNumero(numero, `Facture à régler avant le ${echeance}`),
+    objet: objetAvecNumero(numero, titre),
     ...rendreGabarit({
-      titre: `Facture à régler avant le ${echeance}`,
-      intro: `Bonjour${valeurTexte(v.clientNom).trim() ? ` ${valeurTexte(v.clientNom)}` : ''},\n\n`
-        + `La facture${numero ? ` ${numero}` : ''} arrive à échéance le ${echeance}. Si le règlement est déjà parti, merci de le déclarer depuis la fiche de la facture : nous le confirmons dès réception.`,
+      titre,
+      intro: ecrire(bonjour, `Nous vous rappelons que la facture${numero ? ` ${numero}` : ''} arrive à échéance${echeance ? ` le ${echeance}` : ' prochainement'}. `
+        + 'Si le règlement a déjà été effectué, merci de le déclarer depuis la fiche de la facture : nous le confirmerons dès réception.'),
       faits: [
         ['Facture', numero],
         ['Objet', valeurTexte(v.libelle)],
@@ -801,21 +918,23 @@ function factureEcheance(v) {
         ['Échéance', echeance],
       ],
       bouton: { libelle: 'Voir la facture', url: valeurTexte(v.lien) || lienEspace() },
-      note: 'Les coordonnées de règlement sont sur la fiche de la facture, dans votre espace.',
+      note: 'Les coordonnées de règlement figurent sur la fiche de la facture, dans votre espace.',
     }),
   };
 }
 
 /* 10 ter. L'échéance est passée : la facture est en retard, une fois. */
-function factureRetard(v) {
+function factureRetard(v, ctx) {
   const numero = valeurTexte(v.numero);
   const echeance = dateFr(v.echeance);
+  const bonjour = salutation(nomDuDestinataire(v, ctx, NOM_FINANCE));
   return {
-    objet: objetAvecNumero(numero, 'Facture en retard'),
+    objet: objetAvecNumero(numero, 'Facture en attente de règlement'),
     ...rendreGabarit({
       titre: 'Une facture a dépassé son échéance',
-      intro: `Bonjour${valeurTexte(v.clientNom).trim() ? ` ${valeurTexte(v.clientNom)}` : ''},\n\n`
-        + `La facture${numero ? ` ${numero}` : ''} était à régler${echeance ? ` avant le ${echeance}` : ''} et nous n'avons pas reçu son règlement. Si le virement est parti, déclarez-le depuis la fiche de la facture ; sinon, merci de le faire au plus tôt. Un souci ? Ouvrez une demande, on en parle.`,
+      intro: ecrire(bonjour, `Sauf erreur de notre part, le règlement de la facture${numero ? ` ${numero}` : ''}${echeance ? `, attendu avant le ${echeance},` : ''} ne nous est pas encore parvenu. `
+        + 'Si le virement a été effectué, merci de le déclarer depuis la fiche de la facture. Dans le cas contraire, nous vous remercions de procéder au règlement dans les meilleurs délais.\n\n'
+        + 'Pour toute question ou difficulté, ouvrez une demande depuis votre espace : nous restons à votre disposition.'),
       faits: [
         ['Facture', numero],
         ['Objet', valeurTexte(v.libelle)],
@@ -832,11 +951,13 @@ function factureRetard(v) {
 /* 10 quater. Le client déclare avoir réglé, vers l'équipe. */
 function reglementDeclare(v) {
   const numero = valeurTexte(v.numero);
+  const projet = valeurTexte(v.projetNom).trim();
   return {
-    objet: objetAvecNumero(numero, `Règlement déclaré${valeurTexte(v.projetNom) ? ` · ${valeurTexte(v.projetNom)}` : ''}`),
+    objet: objetAvecNumero(numero, `Règlement déclaré${projet ? ` · ${projet}` : ''}`),
     ...rendreGabarit({
       titre: 'Un règlement déclaré par le client',
-      intro: `${valeurTexte(v.par).trim() || 'Le client'} déclare avoir réglé la facture${numero ? ` ${numero}` : ''}${valeurTexte(v.projetNom) ? ` du projet ${valeurTexte(v.projetNom)}` : ''}. Dès réception, enregistrez le paiement dans le Cockpit : la déclaration passe alors en « Confirmé » chez lui.`,
+      intro: ecrire(BONJOUR_EQUIPE, `${valeurTexte(v.par).trim() || 'Le client'} déclare avoir réglé la facture${numero ? ` ${numero}` : ''}${projet ? ` du projet ${projet}` : ''}. `
+        + 'Dès réception, enregistrez le paiement dans le Cockpit : le client verra alors son règlement confirmé.'),
       faits: [
         ['Facture', numero],
         ['Objet', valeurTexte(v.libelle)],
@@ -848,18 +969,10 @@ function reglementDeclare(v) {
         ligneFranchise(v),
       ],
       bouton: { libelle: 'Ouvrir dans le Cockpit', url: valeurTexte(v.lien) || lienEspace() },
+      marque: MARQUE_EQUIPE,
     }),
   };
 }
-
-/* ==========================================================================
-   5. Le point d'entrée unique
-
-   Le facteur ne connaît que le nom du modèle, tel qu'il a été écrit dans
-   le document d'envoi. Un nom inconnu lève : c'est une erreur de code, et
-   elle doit se voir dans les journaux plutôt que partir chez un client.
-   ========================================================================== */
-
 
 /* ==========================================================================
    5. Les modèles du hub : tâches, versions, fichiers, réunions, validations,
@@ -868,17 +981,21 @@ function reglementDeclare(v) {
 
 const QUALIFS = { 'incluse': 'incluse au contrat', 'hors-perimetre': 'hors du périmètre prévu', 'a-chiffrer': 'à chiffrer', 'offerte': 'offerte' };
 const CHANGEMENTS = { nouveau: 'Nouveau', amelioration: 'Amélioration', correction: 'Correction', technique: 'Technique' };
+/* La plupart des lettres du hub ne figent aucun nom : elles saluent le
+   destinataire de l'envoi, ou personne. */
+const NOM_ENVOI = { destinataire: ['par'] };
 
-function tacheAttente(v) {
+function tacheAttente(v, ctx) {
   const projet = valeurTexte(v.projetNom).trim();
+  const bonjour = salutation(nomDuDestinataire(v, ctx, NOM_ENVOI));
   return {
-    objet: `${projet ? `${projet} · ` : ''}Nous attendons votre retour : ${valeurTexte(v.titre)}`,
+    objet: objetDuProjet(projet, avecDetail('Votre retour est attendu', v.titre)),
     ...rendreGabarit({
-      titre: 'Nous attendons votre retour',
-      intro: `Bonjour,\n\nPour avancer sur ${projet || 'votre projet'}, nous avons besoin de vous sur le point suivant.`,
+      titre: 'Votre retour est attendu',
+      intro: ecrire(bonjour, `Pour avancer sur ${projet ? `le projet ${projet}` : 'votre projet'}, nous avons besoin de votre retour sur le point suivant.`),
       faits: [['Tâche', valeurTexte(v.titre)], ['Détail', valeurTexte(v.description)]],
       bouton: { libelle: 'Voir et répondre', url: valeurTexte(v.lien) || lienEspace() },
-      note: 'Répondez directement depuis la fiche de la tâche, avec un fichier si besoin : la tâche revient chez nous aussitôt.',
+      note: 'Répondez directement depuis la fiche de la tâche, avec un fichier si nécessaire : nous en sommes aussitôt informés.',
     }),
   };
 }
@@ -887,167 +1004,263 @@ function tacheAttente(v) {
 function tacheReponse(v) {
   const projet = valeurTexte(v.projetNom).trim();
   const par = valeurTexte(v.par).trim();
+  const titre = valeurTexte(v.titre).trim();
   return {
-    objet: `${projet ? `${projet} · ` : ''}Réponse du client sur une tâche : ${valeurTexte(v.titre)}`,
+    objet: objetDuProjet(projet, avecDetail('Réponse du client sur une tâche', titre)),
     ...rendreGabarit({
       titre: 'Le client a répondu sur une tâche',
-      intro: `${par || 'Le client'} a répondu sur la tâche « ${valeurTexte(v.titre)} »${projet ? ` (${projet})` : ''}. Elle est passée « Réponse reçue » : à vous de la reprendre.`,
-      faits: [['Tâche', valeurTexte(v.titre)], ['Pièces jointes', Number(v.pieces) > 0 ? String(v.pieces) : '']],
+      intro: ecrire(BONJOUR_EQUIPE, `${par || 'Le client'} a répondu sur la tâche${titre ? ` « ${titre} »` : ''}${projet ? ` du projet ${projet}` : ''}. Elle est passée à l'état « Réponse reçue » et revient de votre côté.`),
+      faits: [['Tâche', titre], ['Pièces jointes', Number(v.pieces) > 0 ? String(v.pieces) : '']],
       citation: valeurTexte(v.texte),
       bouton: { libelle: 'Ouvrir la tâche', url: valeurTexte(v.lien) || lienEspace() },
+      marque: MARQUE_EQUIPE,
     }),
   };
 }
 
 /* Un point bloquant de son côté : ce qu'on attend de lui, pour quand, et
-   la fiche où dire « C'est fait ». Avant, seule une notification partait,
-   sans consigne. */
-function blocageClient(v) {
+   la fiche où dire « C'est fait ». */
+function blocageClient(v, ctx) {
   const projet = valeurTexte(v.projetNom).trim();
-  const prenom = valeurTexte(v.par).trim();
+  const bonjour = salutation(nomDuDestinataire(v, ctx, NOM_ENVOI));
   return {
-    objet: `${projet ? `${projet} · ` : ''}Un point bloque de votre côté : ${valeurTexte(v.titre)}`,
+    objet: objetDuProjet(projet, avecDetail('Une action est attendue de votre part', v.titre)),
     ...rendreGabarit({
-      titre: 'Un point bloque de votre côté',
-      intro: `${prenom ? `Bonjour ${prenom},` : 'Bonjour,'}\n\nPour avancer sur ${projet || 'votre projet'}, un point dépend de vous. Voici ce que nous attendons, et pour quand.`,
+      titre: 'Une action est attendue de votre part',
+      intro: ecrire(bonjour, `Pour avancer sur ${projet ? `le projet ${projet}` : 'votre projet'}, un point dépend de vous. Voici ce que nous attendons, et dans quel délai.`),
       faits: [
         ['Point bloquant', valeurTexte(v.titre)],
-        ['Ce qu\'on attend de vous', valeurTexte(v.attendu)],
+        ['Ce que nous attendons', valeurTexte(v.attendu)],
         ['Attendu pour le', dateFr(v.echeance)],
         ['Détail', valeurTexte(v.description)],
       ],
       bouton: { libelle: 'Voir le point bloquant', url: valeurTexte(v.lien) || lienEspace() },
-      note: 'Depuis la fiche, dites-nous « C\'est fait » quand c\'est réglé, ou répondez-nous si quelque chose vous bloque.',
+      note: 'Depuis la fiche, indiquez-nous « C\'est fait » une fois le point réglé, ou écrivez-nous si quelque chose vous en empêche.',
     }),
   };
 }
 
-function release(v) {
+function release(v, ctx) {
   const projet = valeurTexte(v.projetNom).trim();
+  const version = valeurTexte(v.version).trim();
   const notes = Array.isArray(v.notes) ? v.notes : [];
+  const store = lienSur(v.lienStore);
+  const titre = version ? `Version ${version} disponible` : 'Nouvelle version disponible';
+  const bonjour = salutation(nomDuDestinataire(v, ctx, NOM_ENVOI));
   return {
-    objet: `${projet ? `${projet} · ` : ''}Version ${valeurTexte(v.version)} disponible`,
+    objet: objetDuProjet(projet, titre),
     ...rendreGabarit({
-      titre: `Version ${valeurTexte(v.version)} disponible`,
-      intro: `Bonjour,\n\nUne nouvelle version${projet ? ` de ${projet}` : ''} est en ligne${v.titre ? ` : ${valeurTexte(v.titre)}` : ''}.`,
-      faits: notes.slice(0, 12).map((n) => [CHANGEMENTS[n.type] || 'Changement', valeurTexte(n.texte)]),
-      bouton: { libelle: v.lienStore ? 'Ouvrir dans le store' : 'Voir les changements', url: valeurTexte(v.lienStore) || valeurTexte(v.lien) || lienEspace() },
-      note: v.lienStore ? `Le détail des changements est dans votre espace : ${valeurTexte(v.lien)}` : '',
+      titre,
+      intro: ecrire(bonjour, `Une nouvelle version${projet ? ` de ${projet}` : ''} est disponible${valeurTexte(v.titre).trim() ? ` : ${valeurTexte(v.titre).trim()}` : ''}.`),
+      faits: notes.slice(0, 12).map((n) => [CHANGEMENTS[(n || {}).type] || 'Changement', valeurTexte((n || {}).texte)]),
+      bouton: store
+        ? { libelle: 'Télécharger la mise à jour', url: store }
+        : { libelle: 'Voir les changements', url: valeurTexte(v.lien) || lienEspace() },
+      /* Avec le lien du store, le détail des changements reste à un clic,
+         sous le bouton : plus d'adresse nue dans la note. */
+      second: store ? { libelle: 'Voir le détail des changements dans votre espace', url: valeurTexte(v.lien) } : null,
     }),
   };
 }
 
-function fichier(v) {
+function fichier(v, ctx) {
   const projet = valeurTexte(v.projetNom).trim();
-  const versEquipe = v.cote === 'equipe';
+  if (v.cote === 'equipe') {
+    const par = valeurTexte(v.par).trim();
+    return {
+      objet: objetDuProjet(projet, par ? `Fichier déposé par ${par}` : 'Fichier déposé par le client'),
+      ...rendreGabarit({
+        titre: 'Un client a déposé un fichier',
+        intro: ecrire(BONJOUR_EQUIPE, `${par || 'Le client'} a déposé un fichier${projet ? ` sur le projet ${projet}` : ''}.`),
+        faits: [['Fichier', valeurTexte(v.nom)], ['Catégorie', valeurTexte(v.categorie)]],
+        bouton: { libelle: 'Ouvrir les fichiers', url: valeurTexte(v.lien) || lienEspace() },
+        marque: MARQUE_EQUIPE,
+      }),
+    };
+  }
+  const bonjour = salutation(nomDuDestinataire(v, ctx, NOM_ENVOI));
   return {
-    objet: versEquipe ? `${projet} · Fichier reçu de ${valeurTexte(v.par)}` : `${projet ? `${projet} · ` : ''}Nouveau fichier disponible`,
+    objet: objetDuProjet(projet, 'Nouveau fichier disponible'),
     ...rendreGabarit({
-      titre: versEquipe ? 'Un client a déposé un fichier' : 'Un nouveau fichier vous attend',
-      intro: versEquipe ? `${valeurTexte(v.par)} a déposé un fichier sur ${projet}.` : `Bonjour,\n\nUn fichier vient d'être ajouté à votre espace${projet ? ` ${projet}` : ''}.`,
+      titre: 'Un nouveau fichier vous attend',
+      intro: ecrire(bonjour, `Un fichier vient d'être ajouté à votre espace${projet ? ` du projet ${projet}` : ''}.`),
       faits: [['Fichier', valeurTexte(v.nom)], ['Catégorie', valeurTexte(v.categorie)]],
       bouton: { libelle: 'Ouvrir les fichiers', url: valeurTexte(v.lien) || lienEspace() },
     }),
   };
 }
 
-function reunion(v) {
+/* Les informations d'une réunion, dans le même ordre partout. */
+const faitsReunion = (v) => [
+  ['Objet', valeurTexte(v.titre)],
+  ['Date', valeurTexte(v.date)],
+  ['Durée', Number(v.duree) > 0 ? `${valeurTexte(v.duree)} min` : ''],
+  ['Lieu', valeurTexte(v.lieu)],
+  ['Visioconférence', valeurTexte(v.lienVisio)],
+  ['Ordre du jour', valeurTexte(v.ordreDuJour)],
+];
+/* Le bouton mène à la visio quand il y en a une ; la fiche de la réunion,
+   d'où se prend le fichier d'agenda, reste alors à un clic, sous lui. */
+function liensReunion(v) {
+  const visio = lienSur(v.lienVisio);
+  const fiche = valeurTexte(v.lien) || lienEspace();
+  return visio
+    ? { bouton: { libelle: 'Rejoindre la réunion', url: visio }, second: { libelle: 'Voir la réunion et ajouter à mon agenda', url: fiche }, note: '' }
+    : { bouton: { libelle: 'Voir la réunion', url: fiche }, second: null, note: "Le fichier d'agenda se télécharge depuis la fiche de la réunion." };
+}
+
+function reunion(v, ctx) {
   const projet = valeurTexte(v.projetNom).trim();
+  const quoi = v.deplacee ? 'Réunion déplacée' : 'Réunion programmée';
+  const bonjour = salutation(nomDuDestinataire(v, ctx, NOM_ENVOI));
   return {
-    objet: `${projet ? `${projet} · ` : ''}${v.deplacee ? 'Réunion déplacée' : 'Réunion programmée'} : ${valeurTexte(v.titre)}`,
+    objet: objetDuProjet(projet, avecDetail(quoi, v.titre)),
     ...rendreGabarit({
-      titre: v.deplacee ? 'Réunion déplacée' : 'Réunion programmée',
-      intro: `Bonjour,\n\n${v.deplacee ? 'La réunion suivante change de date.' : 'Une réunion est programmée.'}`,
-      faits: [['Objet', valeurTexte(v.titre)], ['Quand', valeurTexte(v.date)], ['Durée', v.duree ? `${valeurTexte(v.duree)} min` : ''], ['Lieu', valeurTexte(v.lieu)], ['Visio', valeurTexte(v.lienVisio)], ['Ordre du jour', valeurTexte(v.ordreDuJour)]],
-      bouton: { libelle: v.lienVisio ? 'Rejoindre la réunion' : 'Voir la réunion', url: valeurTexte(v.lienVisio) || valeurTexte(v.lien) || lienEspace() },
-      note: `Le fichier d'agenda est disponible dans votre espace : ${valeurTexte(v.lien)}`,
+      titre: quoi,
+      intro: ecrire(bonjour, v.deplacee
+        ? `La réunion ci-dessous${projet ? `, sur le projet ${projet},` : ''} a été déplacée. Voici ses nouvelles informations.`
+        : `Une réunion a été programmée${projet ? ` sur le projet ${projet}` : ''}. Voici ses informations.`),
+      faits: faitsReunion(v),
+      ...liensReunion(v),
     }),
   };
 }
 
-/* La veille d'une réunion, à 17 h : un rappel, une seule fois. Il redit
-   l'heure, le lieu ou la visio, l'ordre du jour, et mène à la fiche, d'où
-   le fichier d'agenda se prend en un clic. */
-function reunionRappel(v) {
+/* La veille d'une réunion, à 17 h : un rappel, une seule fois. */
+function reunionRappel(v, ctx) {
   const projet = valeurTexte(v.projetNom).trim();
+  const titre = valeurTexte(v.titre).trim();
+  const heure = valeurTexte(v.heure).trim();
+  const bonjour = salutation(nomDuDestinataire(v, ctx, NOM_ENVOI));
   return {
-    objet: `${projet ? `${projet} · ` : ''}Demain : ${valeurTexte(v.titre)}${v.heure ? ` à ${valeurTexte(v.heure)}` : ''}`,
+    objet: objetDuProjet(projet, `Rappel : ${titre ? `${titre}, ` : 'votre réunion, '}demain${heure ? ` à ${heure}` : ''}`),
     ...rendreGabarit({
-      titre: 'Votre réunion, c\'est demain',
-      intro: `Bonjour,\n\nUn rappel pour la réunion de demain${projet ? ` sur ${projet}` : ''}.`,
-      faits: [['Objet', valeurTexte(v.titre)], ['Quand', valeurTexte(v.date)], ['Durée', v.duree ? `${valeurTexte(v.duree)} min` : ''], ['Lieu', valeurTexte(v.lieu)], ['Visio', valeurTexte(v.lienVisio)], ['Ordre du jour', valeurTexte(v.ordreDuJour)]],
-      bouton: { libelle: v.lienVisio ? 'Rejoindre la réunion' : 'Voir la réunion', url: valeurTexte(v.lienVisio) || valeurTexte(v.lien) || lienEspace() },
-      note: `La fiche de la réunion, avec le fichier d'agenda : ${valeurTexte(v.lien)}`,
+      titre: 'Rappel : votre réunion a lieu demain',
+      intro: ecrire(bonjour, `Nous vous rappelons la réunion prévue demain${heure ? ` à ${heure}` : ''}${projet ? ` sur le projet ${projet}` : ''}.`),
+      faits: faitsReunion(v),
+      ...liensReunion(v),
     }),
   };
 }
 
-function validationDemandee(v) {
+function validationDemandee(v, ctx) {
   const projet = valeurTexte(v.projetNom).trim();
+  const bonjour = salutation(nomDuDestinataire(v, ctx, NOM_ENVOI));
   return {
-    objet: `${projet ? `${projet} · ` : ''}Votre validation est attendue : ${valeurTexte(v.titre)}`,
+    objet: objetDuProjet(projet, avecDetail('Votre validation est attendue', v.titre)),
     ...rendreGabarit({
       titre: 'Votre validation est attendue',
-      intro: `Bonjour,\n\nNous avons besoin de votre accord pour continuer.`,
-      faits: [['À valider', valeurTexte(v.titre)], ['Ce qu\'il faut regarder', valeurTexte(v.description)]],
+      intro: ecrire(bonjour, `Nous avons besoin de votre accord pour poursuivre${projet ? ` le projet ${projet}` : ''}.`),
+      faits: [['À valider', valeurTexte(v.titre)], ['Points à examiner', valeurTexte(v.description)]],
       bouton: { libelle: 'Examiner et répondre', url: valeurTexte(v.lien) || lienEspace() },
-      note: 'Vous pouvez approuver, ou demander des modifications en un commentaire.',
+      note: 'Vous pouvez approuver, ou demander des modifications en laissant un commentaire.',
     }),
   };
 }
 
 function validationReponse(v) {
   const approuvee = v.statut === 'approuvee';
+  const quoi = approuvee ? 'Validation approuvée' : 'Modifications demandées';
+  const titre = valeurTexte(v.titre).trim();
   return {
-    objet: `${valeurTexte(v.projetNom) ? `${valeurTexte(v.projetNom)} · ` : ''}${approuvee ? 'Validation approuvée' : 'Modifications demandées'} : ${valeurTexte(v.titre)}`,
+    objet: objetDuProjet(v.projetNom, avecDetail(quoi, titre)),
     ...rendreGabarit({
-      titre: approuvee ? 'Validation approuvée' : 'Modifications demandées',
-      intro: `${valeurTexte(v.par) || 'Le client'} a répondu sur « ${valeurTexte(v.titre)} ».`,
+      titre: quoi,
+      intro: ecrire(BONJOUR_EQUIPE, `${valeurTexte(v.par).trim() || 'Le client'} a répondu à la demande de validation${titre ? ` « ${titre} »` : ''}.`),
       faits: [['Réponse', approuvee ? 'Approuvée' : 'Modifications demandées'], ['Commentaire', valeurTexte(v.commentaire)]],
-      bouton: { libelle: 'Ouvrir dans le cockpit', url: valeurTexte(v.lien) || lienEspace() },
+      bouton: { libelle: 'Ouvrir dans le Cockpit', url: valeurTexte(v.lien) || lienEspace() },
+      marque: MARQUE_EQUIPE,
     }),
   };
 }
 
-function messageProjet(v) {
+function messageProjet(v, ctx) {
   const projet = valeurTexte(v.projetNom).trim();
   const versEquipe = v.cote === 'equipe';
-  const texte = valeurTexte(v.texte);
+  const auteur = valeurTexte(v.auteur).trim();
+  const pieces = Number(v.pieces) > 0 ? [['Pièces jointes', String(Number(v.pieces))]] : [];
+  if (versEquipe) {
+    return {
+      objet: objetDuProjet(projet, `Message de ${auteur || 'votre client'}`),
+      ...rendreGabarit({
+        titre: `${auteur || 'Le client'} vous écrit`,
+        intro: ecrire(BONJOUR_EQUIPE, `${auteur || 'Le client'} a envoyé un message${projet ? ` sur le projet ${projet}` : ''}.`),
+        faits: pieces,
+        citation: extrait(v.texte, 1200),
+        bouton: { libelle: 'Répondre', url: valeurTexte(v.lien) || lienEspace() },
+        marque: MARQUE_EQUIPE,
+      }),
+    };
+  }
+  const bonjour = salutation(nomDuDestinataire(v, ctx, NOM_ENVOI));
   return {
-    objet: `${projet ? `${projet} · ` : ''}Message de ${valeurTexte(v.auteur)}`,
+    objet: objetDuProjet(projet, `Nouveau message de ${auteur || 'Capmedia'}`),
     ...rendreGabarit({
-      titre: `${valeurTexte(v.auteur)} vous écrit`,
-      intro: texte.length > 1200 ? `${texte.slice(0, 1200)}…` : texte,
-      faits: v.pieces ? [['Pièces jointes', String(v.pieces)]] : [],
+      titre: `${auteur || 'Notre équipe'} vous écrit`,
+      intro: ecrire(bonjour, `${auteur || 'Notre équipe'} vous a envoyé un message${projet ? ` sur le projet ${projet}` : ''}.`),
+      faits: pieces,
+      citation: extrait(v.texte, 1200),
       bouton: { libelle: 'Répondre', url: valeurTexte(v.lien) || lienEspace() },
-      note: versEquipe ? '' : 'Répondez depuis votre espace : la conversation y reste au complet.',
+      note: 'Répondez depuis votre espace : la conversation y reste complète.',
     }),
   };
 }
 
-function qualification(v) {
+const TITRES_QUALIF = {
+  'a-chiffrer': 'Un devis va vous être proposé',
+  'hors-perimetre': 'Cette demande sort du périmètre prévu',
+  'incluse': 'Cette demande est incluse au contrat',
+  'offerte': 'Cette demande vous est offerte',
+};
+const SUITES_QUALIF = {
+  'a-chiffrer': 'Nous vous proposerons un devis avant tout développement.',
+  'hors-perimetre': 'Nous revenons vers vous pour en discuter ou vous proposer un chiffrage.',
+  'incluse': 'Elle sera traitée dans le cadre de votre contrat.',
+  'offerte': 'Elle sera réalisée sans frais supplémentaires.',
+};
+
+function qualification(v, ctx) {
   const projet = valeurTexte(v.projetNom).trim();
-  const q = QUALIFS[v.qualification] || valeurTexte(v.qualification);
+  const cle = valeurTexte(v.qualification);
+  const q = QUALIFS[cle] || cle;
+  const titre = valeurTexte(v.titre).trim();
+  const bonjour = salutation(nomDuDestinataire(v, ctx, NOM_ENVOI));
   return {
-    objet: `${projet ? `${projet} · ` : ''}${valeurTexte(v.numero)} : demande ${q}`,
+    objet: objetDuProjet(projet, objetAvecNumero(v.numero, q ? `Demande ${q}` : 'Demande qualifiée')),
     ...rendreGabarit({
-      titre: v.qualification === 'a-chiffrer' ? 'Un devis va vous être proposé' : 'Cette demande sort du périmètre prévu',
-      intro: `Bonjour,\n\nNous avons étudié votre demande « ${valeurTexte(v.titre)} ». Elle est ${q}. ${v.qualification === 'a-chiffrer' ? 'Nous vous proposons un devis avant tout développement.' : 'Nous revenons vers vous pour en discuter ou vous proposer un chiffrage.'}`,
-      faits: [['Demande', valeurTexte(v.numero)], ['Titre', valeurTexte(v.titre)]],
+      titre: TITRES_QUALIF[cle] || 'Votre demande a été étudiée',
+      intro: ecrire(bonjour, `Nous avons étudié votre demande${titre ? ` « ${titre} »` : ''}.${q ? ` Elle est ${q}.` : ''}${SUITES_QUALIF[cle] ? ` ${SUITES_QUALIF[cle]}` : ''}`),
+      faits: [['Demande', valeurTexte(v.numero)], ['Titre', titre]],
       bouton: { libelle: 'Voir la demande', url: valeurTexte(v.lien) || lienEspace() },
     }),
   };
 }
 
-function preprojet(v) {
-  const versEquipe = v.cote === 'equipe';
+function preprojet(v, ctx) {
+  const titre = valeurTexte(v.titre).trim();
+  if (v.cote === 'equipe') {
+    const par = valeurTexte(v.par).trim();
+    const email = valeurTexte(v.email).trim();
+    const qui = par && email ? `${par} (${email})` : (par || email || 'Un client');
+    return {
+      objet: avecDetail('Nouveau projet demandé', titre),
+      ...rendreGabarit({
+        titre: 'Un client décrit un nouveau projet',
+        intro: ecrire(BONJOUR_EQUIPE, `${qui} vient de décrire un nouveau projet.`),
+        faits: [['Titre', titre], ['Type', valeurTexte(v.type)], ['Budget', valeurTexte(v.budget)], ['Délai', valeurTexte(v.delai)], ['Idée', valeurTexte(v.idee).slice(0, 600)]],
+        bouton: { libelle: 'Ouvrir la demande', url: valeurTexte(v.lien) || lienEspace() },
+        marque: MARQUE_EQUIPE,
+      }),
+    };
+  }
+  const bonjour = salutation(nomDuDestinataire(v, ctx, NOM_ENVOI));
   return {
-    objet: versEquipe ? `Nouveau projet demandé : ${valeurTexte(v.titre)}` : `Bien reçu : ${valeurTexte(v.titre)}`,
+    objet: avecDetail('Votre demande de projet est bien reçue', titre),
     ...rendreGabarit({
-      titre: versEquipe ? 'Un client décrit un nouveau projet' : 'Votre demande est bien reçue',
-      intro: versEquipe ? `${valeurTexte(v.par)} (${valeurTexte(v.email)}) vient de décrire un projet.` : `${valeurTexte(v.par).trim() ? `Bonjour ${valeurTexte(v.par).trim()},` : 'Bonjour,'}\n\nMerci pour votre demande. Nous la lisons, puis nous en discutons ensemble dans votre espace.`,
-      faits: versEquipe ? [['Titre', valeurTexte(v.titre)], ['Type', valeurTexte(v.type)], ['Budget', valeurTexte(v.budget)], ['Délai', valeurTexte(v.delai)], ['Idée', valeurTexte(v.idee).slice(0, 600)]] : [['Projet', valeurTexte(v.titre)]],
-      bouton: { libelle: versEquipe ? 'Ouvrir la demande' : 'Suivre ma demande', url: valeurTexte(v.lien) || lienEspace() },
+      titre: 'Votre demande est bien reçue',
+      intro: ecrire(bonjour, 'Merci pour votre demande. Nous l\'étudions et revenons vers vous rapidement pour en discuter dans votre espace.'),
+      faits: [['Projet', titre]],
+      bouton: { libelle: 'Suivre ma demande', url: valeurTexte(v.lien) || lienEspace() },
     }),
   };
 }
@@ -1056,44 +1269,48 @@ function preprojet(v) {
  * La maintenance continue. Vers l'équipe : le client demande un forfait,
  * ou propose une évolution. Vers le client : l'état de son forfait change.
  */
-function maintenance(v) {
-  const projet = valeurTexte(v.projet);
+const TITRES_MAINTENANCE = {
+  proposition: 'Une proposition de maintenance vous attend',
+  actif: 'Votre forfait de maintenance est en cours',
+  suspendu: 'Votre forfait de maintenance est suspendu',
+  termine: 'Votre forfait de maintenance est terminé',
+};
+const INTROS_MAINTENANCE = {
+  proposition: "Nous avons préparé une proposition de forfait de maintenance continue pour votre projet : ce qui est compris, le rythme et les délais. Elle est consultable dans votre espace, où le devis correspondant vous attend. Rien n'est engagé tant que vous ne l'avez pas accepté.",
+  actif: 'Votre forfait est actif. Chaque journée travaillée et chaque évolution livrée apparaîtront dans votre espace, au fur et à mesure.',
+  suspendu: 'Votre forfait est mis en pause. Les séquences et les évolutions restent consultables dans votre espace. Vous pourrez le reprendre à tout moment depuis votre page Maintenance, avec le bouton « Reprendre le forfait ».',
+  termine: 'Votre forfait est arrivé à son terme. Son historique reste consultable dans votre espace, et vous pouvez le reprendre à tout moment.',
+};
+const PERIODES = { mensuelle: 'mois', trimestrielle: 'trimestre', annuelle: 'an' };
+
+function maintenance(v, ctx) {
+  const projet = valeurTexte(v.projet).trim();
   if (v.cote === 'equipe') {
     const evolution = v.evenement === 'evolution';
+    const par = valeurTexte(v.par).trim();
+    const email = valeurTexte(v.email).trim();
+    const qui = par && email ? `${par} (${email})` : (par || email || 'Le client');
     return {
-      objet: evolution ? `${projet} : une évolution proposée` : `${projet} : forfait de maintenance demandé`,
+      objet: objetDuProjet(projet, evolution ? 'Évolution proposée par le client' : 'Forfait de maintenance demandé'),
       ...rendreGabarit({
         titre: evolution ? 'Le client propose une évolution' : 'Le client demande un forfait de maintenance',
-        intro: `${valeurTexte(v.par)} (${valeurTexte(v.email)}) vient d'écrire depuis son espace.`,
+        intro: ecrire(BONJOUR_EQUIPE, `${qui} vient d'écrire depuis son espace${projet ? `, sur le projet ${projet}` : ''}.`),
         faits: [['Projet', projet], evolution ? ['Évolution', valeurTexte(v.titre)] : ['Rythme souhaité', valeurTexte(v.rythme)]],
         citation: valeurTexte(v.message),
         bouton: { libelle: 'Ouvrir la maintenance', url: valeurTexte(v.lien) || lienEspace() },
+        marque: MARQUE_EQUIPE,
       }),
     };
   }
-  const TITRES = {
-    proposition: 'Une proposition de maintenance vous attend',
-    actif: 'Votre forfait de maintenance est en cours',
-    suspendu: 'Votre forfait de maintenance est suspendu',
-    termine: 'Votre forfait de maintenance est terminé',
-  };
-  const INTROS = {
-    proposition: "Nous avons posé les modalités d'un forfait de maintenance continue pour votre projet : ce qui est compris, le rythme, les délais. Tout se lit dans votre espace, et le devis vous y attend. Rien ne s'engage avant que vous l'ayez accepté.",
-    actif: 'Le forfait tourne. Chaque jour travaillé et chaque évolution livrée apparaissent dans votre espace, au fur et à mesure.',
-    suspendu: "Le forfait est mis en pause. Rien n'est perdu : les séquences et les évolutions restent dans votre espace, et il reprend quand vous le souhaitez : le bouton « Reprendre le forfait » est sur votre page Maintenance.",
-    termine: 'Le forfait est arrivé à son terme. Son histoire reste consultable dans votre espace, et vous pouvez le reprendre quand vous le souhaitez.',
-  };
-  const PERIODES = { mensuelle: 'mois', trimestrielle: 'trimestre', annuelle: 'an' };
   const periode = PERIODES[valeurTexte(v.periode)] || 'mois';
   const evenement = valeurTexte(v.evenement);
+  const titre = TITRES_MAINTENANCE[evenement] || 'Votre forfait de maintenance a évolué';
+  const bonjour = salutation(nomDuDestinataire(v, ctx, NOM_ENVOI));
   return {
-    /* Sans nom de projet, l'objet commençait par « : ». */
-    objet: projet.trim()
-      ? `${projet} : ${(TITRES[evenement] || 'votre forfait de maintenance').replace(/^Votre/, 'votre').replace(/^Une/, 'une')}`
-      : (TITRES[evenement] || 'Votre forfait de maintenance'),
+    objet: objetDuProjet(projet, titre),
     ...rendreGabarit({
-      titre: TITRES[evenement] || 'Votre forfait de maintenance',
-      intro: INTROS[evenement] || 'Votre forfait de maintenance a changé. Tout se lit dans votre espace.',
+      titre,
+      intro: ecrire(bonjour, INTROS_MAINTENANCE[evenement] || 'Votre forfait de maintenance a évolué. Le détail est consultable dans votre espace.'),
       faits: [
         ['Projet', projet],
         ['Formule', valeurTexte(v.formule)],
@@ -1108,57 +1325,61 @@ function maintenance(v) {
 
 /*
  * Une évolution de maintenance change de sort : acceptée, planifiée, livrée,
- * écartée. Le client l'apprenait par une notification dans le Hub, jamais
- * par une lettre. Préférence « Vie du projet ».
+ * écartée. Préférence « Vie du projet ».
  */
-function evolutionStatut(v) {
+const TITRES_EVOLUTION = {
+  acceptee: 'Votre évolution est acceptée',
+  planifiee: 'Votre évolution est planifiée',
+  livree: 'Votre évolution est livrée',
+  refusee: 'Votre évolution n\'est pas retenue',
+  proposee: 'Votre évolution est de nouveau à l\'étude',
+};
+const INTROS_EVOLUTION = {
+  acceptee: 'Nous avons accepté votre évolution. Sa planification vous sera indiquée sur votre page Maintenance.',
+  planifiee: 'Votre évolution est planifiée. Chaque journée de travail qui lui sera consacrée apparaîtra dans votre espace.',
+  livree: 'Votre évolution est livrée. Si quelque chose ne vous convient pas, ouvrez une demande depuis votre espace.',
+  refusee: 'Après étude, nous ne donnerons pas suite à cette évolution.',
+  proposee: 'Votre évolution est de nouveau à l\'étude. Aucune décision n\'est prise pour le moment.',
+};
+
+function evolutionStatut(v, ctx) {
   const projet = valeurTexte(v.projet).trim();
-  const TITRES = {
-    acceptee: 'Votre évolution est acceptée',
-    planifiee: 'Votre évolution est planifiée',
-    livree: 'Votre évolution est livrée',
-    refusee: 'Votre évolution est écartée',
-    proposee: 'Votre évolution est remise à l\'étude',
-  };
-  const INTROS = {
-    acceptee: 'Nous la ferons. Reste à dire dans quelle séquence : vous le lirez sur votre page Maintenance.',
-    planifiee: 'Elle a sa séquence. Chaque jour travaillé dessus apparaîtra dans votre espace.',
-    livree: 'Elle est dans l\'application. Si quelque chose ne va pas, ouvrez une demande depuis votre espace.',
-    refusee: 'Nous ne la ferons pas, et nous vous disons pourquoi ci-dessous.',
-    proposee: 'Elle revient à l\'étude. Rien n\'est décidé pour l\'instant.',
-  };
-  const statut = valeurTexte(v.statut);
+  const etat = valeurTexte(v.statut);
+  const reponse = valeurTexte(v.reponse).trim();
+  const titre = TITRES_EVOLUTION[etat] || 'Votre évolution a été mise à jour';
+  const bonjour = salutation(nomDuDestinataire(v, ctx, NOM_ENVOI));
   return {
-    objet: `${projet ? `${projet} · ` : ''}${(TITRES[statut] || 'Votre évolution a changé').replace(/^Votre/, 'votre')}`,
+    objet: objetDuProjet(projet, titre),
     ...rendreGabarit({
-      titre: TITRES[statut] || 'Votre évolution a changé',
-      intro: INTROS[statut] || 'Son sort a changé. Tout se lit dans votre espace.',
-      faits: [['Projet', projet], ['Évolution', valeurTexte(v.titre)], v.sequence ? ['Séquence', valeurTexte(v.sequence)] : ['', ''], v.version ? ['Version', valeurTexte(v.version)] : ['', '']],
-      citation: valeurTexte(v.reponse),
+      titre,
+      intro: ecrire(bonjour, (INTROS_EVOLUTION[etat] || 'Votre évolution a été mise à jour. Le détail est consultable dans votre espace.')
+        + (etat === 'refusee' ? (reponse ? ' Vous trouverez nos explications ci-dessous.' : ' N\'hésitez pas à nous écrire pour en discuter.') : '')),
+      faits: [['Projet', projet], ['Évolution', valeurTexte(v.titre)], ['Séquence', valeurTexte(v.sequence)], ['Version', valeurTexte(v.version)]],
+      citation: reponse,
       bouton: { libelle: 'Voir la maintenance', url: valeurTexte(v.lien) || lienEspace() },
     }),
   };
 }
 
 /*
- * La relance hebdomadaire. Rien dans l'espace n'allait chercher le client :
- * tout attendait qu'il vienne. S'il n'ouvre pas le hub pendant trois
- * semaines, personne ne lui dit que six choses l'attendent. Cette lettre
- * ne part que s'il y a vraiment quelque chose, et elle liste quoi.
+ * La relance hebdomadaire. Elle ne part que s'il y a vraiment quelque
+ * chose, et elle liste quoi.
  */
-function relance(v) {
+function relance(v, ctx) {
   const lignes = Array.isArray(v.points) ? v.points : [];
   const n = lignes.length;
+  const projet = valeurTexte(v.projet).trim();
+  const resume = n > 1 ? `${n} points attendent votre réponse` : 'Un point attend votre réponse';
+  const bonjour = salutation(nomDuDestinataire(v, ctx, NOM_ENVOI));
   return {
-    /* Sans nom de projet, l'objet commençait par « : » ; sans nom de
-       destinataire, la lettre saluait « Bonjour , ». */
-    objet: `${valeurTexte(v.projet).trim() ? `${valeurTexte(v.projet).trim()} : ` : ''}${n > 1 ? `${n} points attendent votre réponse` : 'un point attend votre réponse'}`.replace(/^un/, 'Un'),
+    objet: objetDuProjet(projet, resume),
     ...rendreGabarit({
-      titre: n > 1 ? `${n} points attendent votre réponse` : 'Un point attend votre réponse',
-      intro: `${valeurTexte(v.par).trim() ? `Bonjour ${valeurTexte(v.par).trim()},` : 'Bonjour,'}\n\nRien d'urgent de notre côté, mais ces points sont bloqués tant qu'ils n'ont pas votre retour. Tout se traite depuis votre espace, en quelques minutes.`,
-      faits: lignes.slice(0, 8).map((l) => [valeurTexte(l.quoi), valeurTexte(l.detail)]),
+      titre: resume,
+      intro: ecrire(bonjour, `Rien d'urgent de notre côté, mais ${n > 1 ? 'ces points sont bloqués' : 'ce point est bloqué'} tant que nous n'avons pas votre retour${projet ? ` sur le projet ${projet}` : ''}. `
+        + `${n > 1 ? 'Ils se traitent' : 'Il se traite'} en quelques minutes depuis votre espace.`),
+      faits: lignes.slice(0, 8).map((l) => [valeurTexte((l || {}).quoi), valeurTexte((l || {}).detail)]),
       bouton: { libelle: 'Voir ce qui vous attend', url: valeurTexte(v.lien) || lienEspace() },
-      note: "Vous recevez cette lettre une fois par semaine au maximum, et seulement s'il y a quelque chose. Elle s'arrête dès que la liste est vide.",
+      note: "Vous recevez ce rappel au plus une fois par semaine, et seulement si des points vous attendent. Il s'arrête dès que la liste est vide.",
     }),
   };
 }
@@ -1167,133 +1388,192 @@ function relance(v) {
  * Le code de connexion. Rien d'autre dans la lettre : pas de lien à
  * cliquer, donc rien à détourner. Le code se lit, se recopie, et meurt.
  */
-function code(v) {
+function code(v, ctx) {
   const chiffres = valeurTexte(v.code);
   const minutes = Number(v.minutes) || 10;
+  const bonjour = salutation(nomDuDestinataire(v, ctx));
   return {
     objet: `${chiffres} est votre code de connexion`,
     ...rendreGabarit({
       titre: 'Votre code de connexion',
-      intro: `Saisissez ce code dans la page de connexion, sur l'appareil où vous venez de le demander.\n\n`
-        + `Il est valable ${minutes} minutes et ne sert qu'une fois.`,
+      intro: ecrire(bonjour, "Voici votre code de connexion. Saisissez-le dans la page de connexion, sur l'appareil où vous venez de le demander.\n\n"
+        + `Il est valable ${minutes} minutes et ne sert qu'une fois.`),
       /* Les six chiffres collés, sans espace : un double-clic ou un appui long
          les sélectionne d'un coup, et le collage arrive entier. */
       faits: [['Code', chiffres]],
       note: "Si vous n'avez rien demandé, ignorez ce message : sans ce code, personne n'entre. Ne le transmettez à personne, nous ne vous le demanderons jamais.",
+      marque: { signature: SIGNATURE, pied: 'Cet e-mail fait suite à une demande de connexion avec votre adresse.' },
     }),
   };
 }
 
-/* L'alerte d'ouverture d'une session d'équipe : le cockpit voit tous les
-   projets, une ouverture qu'on n'a pas faite doit se remarquer. */
-function connexionEquipe(v) {
+/* L'arrivée dans l'équipe. */
+function invitationEquipe(v, ctx) {
+  const admin = valeurTexte(v.role) === 'admin';
+  const bonjour = salutation(nomDuDestinataire(v, ctx, { destinataire: ['nom'] }));
   return {
-    objet: "Une session du cockpit vient de s'ouvrir",
+    objet: 'Votre accès au Cockpit Capmedia',
     ...rendreGabarit({
-      titre: 'Session du cockpit ouverte',
-      intro: "Une session d'équipe vient d'être ouverte avec votre adresse. Si c'est vous, il n'y a rien à faire.",
-      faits: [['Quand', valeurTexte(v.quand)], ['Depuis', valeurTexte(v.ip)]],
-      note: "Si ce n'est pas vous, changez l'accès à votre boîte immédiatement : c'est elle qui ouvre le cockpit.",
+      titre: "Bienvenue dans l'équipe",
+      intro: ecrire(bonjour, `Un accès au Cockpit Capmedia vient de vous être ouvert, avec le rôle ${admin ? 'd\'administrateur' : 'd\'agent'}. `
+        + (admin ? "Vous voyez tous les projets et vous administrez l'équipe." : 'Vous voyez les projets sur lesquels vous intervenez.')
+        + '\n\nLa connexion se fait sans mot de passe : saisissez votre adresse, et un code à six chiffres, valable cinq minutes, vous est envoyé.'),
+      faits: [['Votre adresse', valeurTexte(v.email)], ['Rôle', admin ? 'Administrateur' : 'Agent']],
+      bouton: { libelle: 'Ouvrir le Cockpit', url: valeurTexte(v.lien) || lienEspace() },
+      note: "Si vous n'attendiez pas cet accès, ignorez cet e-mail et prévenez-nous.",
+      marque: MARQUE_EQUIPE,
     }),
   };
 }
 
-/* La fin de test d'un testeur : son bilan à l'équipe, tout compté. La
-   lettre nomme le testeur, parce qu'elle ne va qu'à l'équipe. Les échecs
-   sont repris en citation, un par ligne, pour être relus d'un coup. */
+/* L'alerte d'ouverture d'une session d'équipe : le Cockpit voit tous les
+   projets, une ouverture qu'on n'a pas faite doit se remarquer. */
+function connexionEquipe(v, ctx) {
+  const bonjour = salutation(nomDuDestinataire(v, ctx));
+  return {
+    objet: "Une session du Cockpit vient de s'ouvrir",
+    ...rendreGabarit({
+      titre: 'Session du Cockpit ouverte',
+      intro: ecrire(bonjour, "Une session du Cockpit vient d'être ouverte avec votre adresse. Si c'est bien vous, aucune action n'est nécessaire."),
+      faits: [['Date', valeurTexte(v.quand)], ['Adresse IP', valeurTexte(v.ip)]],
+      note: "Si ce n'est pas vous, sécurisez immédiatement l'accès à votre boîte e-mail : c'est elle qui permet d'ouvrir le Cockpit.",
+      marque: MARQUE_EQUIPE,
+    }),
+  };
+}
+
+/* ==========================================================================
+   6. Les tests : lettres aux testeurs, à l'équipe et au client
+   ========================================================================== */
+
+/* 1 bis. L'invitation d'un testeur. Un testeur n'est membre d'aucun
+   projet : il ne voit que les scénarios qu'on lui confie, jamais le reste.
+   La lettre le dit, parce que son écran ne ressemble à rien de ce qu'il
+   connaît. */
+function invitationTesteur(v, ctx) {
+  const projet = valeurTexte(v.projetNom).trim();
+  const bonjour = salutation(nomDuDestinataire(v, ctx, { destinataire: ['prenom'] }));
+  const plateformes = (Array.isArray(v.plateformes) ? v.plateformes : [])
+    .map((p) => libelle(PLATEFORMES, p, valeurTexte(p))).filter(Boolean).join(', ');
+  return {
+    objet: objetDuProjet(projet, 'Votre espace de test est ouvert'),
+    ...rendreGabarit({
+      titre: 'Votre espace de test est ouvert',
+      intro: ecrire(bonjour, `Nous vous avons inscrit comme testeur${projet ? ` sur ${projet}` : ''}. Votre mission consiste à dérouler des scénarios précis, `
+        + "décrits étape par étape, et à indiquer pour chacun le résultat obtenu : réussi, en échec, ou sans objet.\n\n"
+        + "Lorsqu'un scénario échoue, une capture d'écran vous est demandée : c'est elle qui nous permet de reproduire le problème, puis de le corriger.\n\n"
+        + "La connexion se fait sans mot de passe : saisissez votre adresse e-mail et vous recevrez un code à six chiffres qui ouvre la session. Ce code est valable quinze minutes et ne sert qu'une fois."),
+      faits: [
+        ['Projet', projet],
+        ['Votre adresse', valeurTexte(v.email)],
+        ['Ce que vous testez', plateformes],
+      ],
+      bouton: { libelle: 'Ouvrir mon espace de test', url: valeurTexte(v.lien) || lienEspace() },
+      note: "Connectez-vous avec l'adresse à laquelle vous avez reçu cet e-mail : c'est elle qui ouvre votre espace. Vous n'y voyez que les scénarios qui vous sont confiés, et vous n'avez accès à rien d'autre du projet.",
+      marque: MARQUE_TEST,
+    }),
+  };
+}
+
+/* La fin de test d'un testeur : son bilan à l'équipe, tout compté. */
 function testeurTermine(v) {
   const echecs = (Array.isArray(v.echecs) ? v.echecs : []).map(valeurTexte).filter(Boolean);
-  const qui = valeurTexte(v.testeur) || 'Un testeur';
+  const qui = valeurTexte(v.testeur).trim() || 'Un testeur';
+  const campagne = valeurTexte(v.campagne).trim();
+  const projet = valeurTexte(v.projetNom).trim();
   return {
-    objet: `${qui} a terminé le test : ${valeurTexte(v.campagne)}`,
+    objet: avecDetail(`${qui} a terminé le test`, campagne),
     ...rendreGabarit({
       titre: 'Un testeur a terminé',
-      intro: `${qui} vient de dire « j'ai terminé » sur ${valeurTexte(v.campagne) || 'la campagne'}${v.projetNom ? ` (${valeurTexte(v.projetNom)})` : ''}. Ses résultats sont figés ; il garde sept jours pour ajouter une remarque.`,
+      intro: ecrire(BONJOUR_EQUIPE, `${qui} a indiqué avoir terminé ses tests sur ${campagne ? `la campagne « ${campagne} »` : 'la campagne'}${projet ? ` (${projet})` : ''}. Ses résultats sont figés ; il peut encore ajouter une remarque pendant sept jours.`),
       faits: [
-        ['Testeur', `${qui}${v.email ? ` · ${valeurTexte(v.email)}` : ''}`],
+        ['Testeur', `${qui}${valeurTexte(v.email) ? ` · ${valeurTexte(v.email)}` : ''}`],
         ['Réussis', valeurTexte(v.ok)],
         ['Échecs', valeurTexte(v.ko)],
         ['Sans objet', valeurTexte(v.na)],
         ['Scénarios déroulés', valeurTexte(v.total)],
-        ['Temps donné', valeurTexte(v.temps)],
-        ['Avis sur l\'application', valeurTexte(v.avisDonne)],
+        ['Temps passé', valeurTexte(v.temps)],
+        ['Avis sur l\'application', majuscule(valeurTexte(v.avisDonne))],
         ['Note du test', valeurTexte(v.noteTest)],
         ['Accès jusqu\'au', valeurTexte(v.finAcces)],
       ],
-      citation: [v.noteTestCommentaire ? `Sur le test : ${valeurTexte(v.noteTestCommentaire)}` : '', ...echecs].filter(Boolean).join('\n'),
+      citation: [valeurTexte(v.noteTestCommentaire) ? `Sur le test : ${valeurTexte(v.noteTestCommentaire)}` : '', ...echecs].filter(Boolean).join('\n'),
       bouton: { libelle: 'Ouvrir la campagne dans le Cockpit', url: valeurTexte(v.lien) },
-      note: 'Le client lit qu\'un testeur a terminé, sans son nom. Ses réponses et ses échecs sont dans la campagne.',
+      note: 'Le client est informé qu\'un testeur a terminé, sans voir son nom. Le détail des réponses et des échecs est dans la campagne.',
+      marque: MARQUE_EQUIPE,
     }),
   };
 }
 
-/* Une remarque ajoutée après la fin du test, reprise telle quelle. */
+/* Une remarque d'un testeur, reprise telle quelle. « libre » : écrite à
+   tout moment (campagnes/{c}/remarques), pas seulement après la fin. */
 function testeurRemarque(v) {
   const remarques = (Array.isArray(v.remarques) ? v.remarques : []).map(valeurTexte).filter(Boolean);
-  const qui = valeurTexte(v.testeur) || 'Un testeur';
-  /* « libre » : une remarque écrite à tout moment (campagnes/{c}/remarques),
-     pas seulement après la fin du test. */
+  const qui = valeurTexte(v.testeur).trim() || 'Un testeur';
   const libre = v.libre === true;
   const scenario = valeurTexte(v.scenario);
+  const campagne = valeurTexte(v.campagne).trim();
+  const projet = valeurTexte(v.projetNom).trim();
   return {
-    objet: libre ? `Remarque de ${qui} : ${valeurTexte(v.campagne)}` : `Remarque de ${qui} après son test : ${valeurTexte(v.campagne)}`,
+    objet: avecDetail(libre ? `Remarque de ${qui}` : `Remarque de ${qui} après son test`, campagne),
     ...rendreGabarit({
       titre: libre ? 'Une remarque d\'un testeur' : 'Une remarque après le test',
-      intro: `${qui} a ajouté ce qui suit sur ${valeurTexte(v.campagne) || 'la campagne'}${v.projetNom ? ` (${valeurTexte(v.projetNom)})` : ''}${libre ? '.' : ', après avoir terminé.'}`,
-      faits: [['Testeur', `${qui}${v.email ? ` · ${valeurTexte(v.email)}` : ''}`], ...(scenario ? [['Scénario', scenario]] : [])],
+      intro: ecrire(BONJOUR_EQUIPE, `${qui} a ajouté la remarque suivante sur ${campagne ? `la campagne « ${campagne} »` : 'la campagne'}${projet ? ` (${projet})` : ''}${libre ? '.' : ', après avoir terminé ses tests.'}`),
+      faits: [['Testeur', `${qui}${valeurTexte(v.email) ? ` · ${valeurTexte(v.email)}` : ''}`], ['Scénario', scenario]],
       citation: remarques.join('\n\n'),
       bouton: { libelle: 'Ouvrir la campagne dans le Cockpit', url: valeurTexte(v.lien) },
+      marque: MARQUE_EQUIPE,
     }),
   };
 }
 
 /* Un message d'un testeur à l'équipe, repris tel quel. */
 function messageTesteur(v) {
-  const qui = valeurTexte(v.testeur) || 'Un testeur';
+  const qui = valeurTexte(v.testeur).trim() || 'Un testeur';
   return {
-    objet: `${qui} (testeur) vous écrit`,
+    objet: `Message de ${qui} (testeur)`,
     ...rendreGabarit({
       titre: 'Un testeur vous écrit',
-      intro: `${qui}${v.email ? ` (${valeurTexte(v.email)})` : ''} a laissé ce message depuis son espace de test.`,
+      intro: ecrire(BONJOUR_EQUIPE, `${qui}${valeurTexte(v.email) ? ` (${valeurTexte(v.email)})` : ''} a laissé ce message depuis son espace de test.`),
       citation: valeurTexte(v.texte),
       bouton: { libelle: 'Répondre dans le Cockpit', url: valeurTexte(v.lien) },
-      note: 'Votre réponse lui arrive dans sa bulle, en direct, et par e-mail.',
+      note: 'Votre réponse lui parvient dans son espace, en direct, et par e-mail.',
+      marque: MARQUE_EQUIPE,
     }),
   };
 }
 
 /* La réponse de l'équipe au testeur. */
-function messageTesteurReponse(v) {
-  const prenom = valeurTexte(v.prenom).trim();
+function messageTesteurReponse(v, ctx) {
+  const auteur = valeurTexte(v.auteur).trim() || 'L\'équipe Capmedia';
+  const bonjour = salutation(nomDuDestinataire(v, ctx, { destinataire: ['prenom'] }));
   return {
-    objet: `${valeurTexte(v.auteur) || 'Capmedia'} vous a répondu`,
+    objet: `${auteur} vous a répondu`,
     ...rendreGabarit({
       titre: "Une réponse de l'équipe",
-      intro: `${prenom ? `Bonjour ${prenom},` : 'Bonjour,'}\n\n${valeurTexte(v.auteur) || 'Capmedia'} vous a répondu dans votre espace de test.`,
+      intro: ecrire(bonjour, `${auteur} vous a répondu dans votre espace de test.`),
       citation: valeurTexte(v.texte),
       bouton: { libelle: 'Ouvrir la conversation', url: valeurTexte(v.lien) || lienEspace() },
-      note: 'Vous pouvez répondre depuis la bulle en bas à droite de votre espace.',
+      note: 'Vous pouvez répondre depuis la bulle de discussion, en bas à droite de votre espace.',
       marque: MARQUE_TEST,
     }),
   };
 }
 
 /* La campagne commence : la lettre à chaque testeur qu'on y a mis, au
-   moment où elle s'ouvre (ou où on l'y ajoute, campagne déjà ouverte).
-   Jusqu'ici il ne recevait que l'invitation, parfois des semaines avant. */
-function campagneTesteur(v) {
-  const prenom = valeurTexte(v.prenom).trim();
+   moment où elle s'ouvre (ou où on l'y ajoute, campagne déjà ouverte). */
+function campagneTesteur(v, ctx) {
   const application = valeurTexte(v.application).trim();
   const n = Number(v.scenarios) || 0;
   const fin = valeurTexte(v.fin).trim();
+  const bonjour = salutation(nomDuDestinataire(v, ctx, { destinataire: ['prenom'] }));
   return {
-    objet: application ? `Vous testez ${application} : votre campagne commence` : 'Votre campagne de tests commence',
+    objet: objetDuProjet(application, 'Votre campagne de tests commence'),
     ...rendreGabarit({
       titre: 'Votre campagne commence',
-      intro: `${prenom ? `Bonjour ${prenom},` : 'Bonjour,'}\n\n`
-        + `La campagne « ${valeurTexte(v.titre) || 'de tests'} » est ouverte${application ? ` : vous testez ${application}` : ''}. `
+      intro: ecrire(bonjour, `La campagne « ${valeurTexte(v.titre).trim() || 'de tests'} » est ouverte${application ? ` : vous testez ${application}` : ''}. `
         + (n ? `${n > 1 ? `${n} scénarios vous attendent` : 'Un scénario vous attend'} dans votre espace.` : 'Vos scénarios arrivent dans votre espace : vous les verrez dès qu\'ils vous seront confiés.')
-        + "\n\nPour chacun, dites ce que vous avez obtenu : Réussi, Échec ou Sans objet. Un souci, une question : la bulle en bas à droite de votre espace vous met en contact avec l'équipe.",
+        + "\n\nPour chacun, indiquez le résultat obtenu : Réussi, Échec ou Sans objet. Pour toute question, la bulle de discussion en bas à droite de votre espace vous met en contact avec l'équipe."),
       faits: [
         ['Application', application],
         ['Vos scénarios', n ? String(n) : ''],
@@ -1311,34 +1591,41 @@ function campagneTesteur(v) {
    jamais le nom d'un testeur, seulement le scénario et la gravité. */
 const GRAVITES_ANOMALIE = { bloquant: 'Bloquante', critique: 'Critique', important: 'Importante', mineur: 'Mineure' };
 
-function anomalie(v) {
+function anomalie(v, ctx) {
   const projet = valeurTexte(v.projetNom).trim();
   const corrigee = v.evenement === 'corrigee';
+  const titre = valeurTexte(v.titre).trim();
   const gravite = GRAVITES_ANOMALIE[valeurTexte(v.gravite)] || valeurTexte(v.gravite);
+  const quoi = corrigee ? 'Anomalie corrigée' : 'Anomalie relevée par les testeurs';
+  const bonjour = salutation(nomDuDestinataire(v, ctx, NOM_ENVOI));
   return {
-    objet: `${projet ? `${projet} · ` : ''}${corrigee ? 'Anomalie corrigée' : 'Une anomalie a été trouvée par les testeurs'} : ${valeurTexte(v.titre)}`,
+    objet: objetDuProjet(projet, avecDetail(quoi, titre)),
     ...rendreGabarit({
-      titre: corrigee ? 'Anomalie corrigée' : 'Une anomalie a été trouvée par les testeurs',
-      intro: corrigee
-        ? `Bonjour,\n\nL'anomalie « ${valeurTexte(v.titre)} » est corrigée. Les testeurs vont rejouer le scénario pour le confirmer.`
-        : `Bonjour,\n\nEn testant ${projet || 'votre application'}, les testeurs ont constaté un défaut. Nous le reproduisons, puis nous le corrigeons.`,
-      faits: [['Scénario', valeurTexte(v.scenario)], ['Gravité', gravite], ['Ce qu\'on sait', valeurTexte(v.description)]],
+      titre: corrigee ? 'Anomalie corrigée' : 'Une anomalie a été relevée par les testeurs',
+      intro: ecrire(bonjour, corrigee
+        ? `L'anomalie${titre ? ` « ${titre} »` : ''} est corrigée. Les testeurs vont rejouer le scénario pour le confirmer.`
+        : `Lors des tests de ${projet || 'votre application'}, les testeurs ont relevé une anomalie. Nous allons la reproduire, puis la corriger.`),
+      faits: [['Scénario', valeurTexte(v.scenario)], ['Gravité', gravite], ['Description', valeurTexte(v.description)]],
       bouton: { libelle: 'Voir l\'anomalie', url: valeurTexte(v.lien) || lienEspace() },
-      note: corrigee ? '' : 'Vous pouvez en faire une demande depuis sa fiche, pour la suivre comme n\'importe quel signalement.',
+      note: corrigee ? '' : 'Depuis sa fiche, vous pouvez en faire une demande pour en suivre le traitement.',
     }),
   };
 }
 
-function campagne(v) {
+function campagne(v, ctx) {
   const projet = valeurTexte(v.projetNom).trim();
   const close = v.evenement === 'close';
+  const titre = valeurTexte(v.titre).trim();
+  const quoi = close ? 'Campagne de tests close' : 'Campagne de tests ouverte';
+  const bonjour = salutation(nomDuDestinataire(v, ctx, NOM_ENVOI));
+  const nommee = titre ? `La campagne « ${titre} »` : 'La campagne de tests';
   return {
-    objet: `${projet ? `${projet} · ` : ''}${close ? 'Campagne de tests close' : 'Campagne de tests ouverte'} : ${valeurTexte(v.titre)}`,
+    objet: objetDuProjet(projet, avecDetail(quoi, titre)),
     ...rendreGabarit({
-      titre: close ? 'Campagne de tests close' : 'Campagne de tests ouverte',
-      intro: close
-        ? `Bonjour,\n\nLa campagne « ${valeurTexte(v.titre)} » est terminée : ses résultats sont figés. Une validation « Bon pour sortie » vous attend dans votre espace : en l'approuvant, vous donnez votre accord pour la mise en ligne.`
-        : `Bonjour,\n\nLa campagne « ${valeurTexte(v.titre)} » commence : les testeurs déroulent les scénarios, et vous suivez les résultats en direct dans votre espace.`,
+      titre: quoi,
+      intro: ecrire(bonjour, close
+        ? `${nommee} est terminée et ses résultats sont figés. Une validation « Bon pour sortie » vous attend dans votre espace : en l'approuvant, vous donnez votre accord pour la mise en ligne.`
+        : `${nommee} commence : les testeurs déroulent les scénarios, et vous pouvez suivre les résultats en direct dans votre espace.`),
       faits: [['Scénarios', valeurTexte(v.scenarios)], ['Testeurs', valeurTexte(v.testeurs)], ['Anomalies ouvertes', close ? valeurTexte(v.anomalies) : '']],
       bouton: { libelle: close ? 'Donner mon feu vert' : 'Suivre les tests', url: valeurTexte(v.lien) || lienEspace() },
     }),
@@ -1346,7 +1633,7 @@ function campagne(v) {
 }
 
 /* ==========================================================================
-   Le récapitulatif des demandes
+   7. Le récapitulatif des demandes
 
    Plusieurs lettres de la vie des demandes en attente pour une même
    personne, sur un même projet (voir regroupement.js) : une seule lettre,
@@ -1365,32 +1652,28 @@ function campagne(v) {
    demande n'est pas nouvelle. */
 const ETATS_LIGNE = {
   'nouveau': 'reçue',
-  'a-analyser': 'à analyser',
+  'a-analyser': 'à l\'étude',
   'en-attente-client': 'attend votre réponse',
   'acceptee': 'acceptée',
   'planifiee': 'planifiée',
   'en-cours': 'en cours',
-  'en-revue': 'en relecture chez nous',
+  'en-revue': 'en cours de vérification',
   'a-valider': 'attend votre validation',
   'resolu': 'terminée',
-  'refuse': 'refusée',
+  'refuse': 'non retenue',
   'annulee': 'annulée',
   'ferme': 'fermée',
 };
 const QUALIFS_LIGNE = { 'a-chiffrer': 'un devis va vous être proposé', 'hors-perimetre': 'hors du périmètre prévu' };
-
-const majuscule = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
-/** « 1 nouvelle demande », « 7 nouvelles demandes ». */
-const compte = (n, singulier, pluriel) => `${n} ${n > 1 ? pluriel : singulier}`;
 
 /** Ce qui s'est passé sur une demande pendant l'attente, en une phrase. */
 function quoiDeLaLigne(l) {
   const x = l || {};
   const parts = [];
   if (x.cree === true) parts.push(x.parLEquipe === true ? 'nouvelle demande ouverte pour vous' : 'nouvelle demande');
-  const statut = valeurTexte(x.statut);
-  const etat = ETATS_LIGNE[statut] || (statut ? libelle(STATUTS, statut, '').toLowerCase() : '');
-  if (etat && !(x.cree === true && statut === 'nouveau')) {
+  const etatCle = valeurTexte(x.statut);
+  const etat = ETATS_LIGNE[etatCle] || (etatCle ? libelle(STATUTS, etatCle, '').toLowerCase() : '');
+  if (etat && !(x.cree === true && etatCle === 'nouveau')) {
     parts.push(x.cree === true || /^attend /.test(etat) ? etat : `désormais ${etat}`);
   }
   const q = valeurTexte(x.qualification);
@@ -1408,9 +1691,9 @@ function resumeRecapitulatif(lignes) {
   return { nouvelles, maj };
 }
 
-function recapitulatif(v) {
+function recapitulatif(v, ctx) {
   const projet = valeurTexte(v.projetNom).trim();
-  const prenom = valeurTexte(v.par).trim().split(/\s+/)[0] || '';
+  const bonjour = salutation(nomDuDestinataire(v, ctx, NOM_ENVOI));
   const lignes = (Array.isArray(v.lignes) ? v.lignes : []).filter((l) => l && typeof l === 'object');
   /* Le décompte porte sur toutes les demandes, même celles qu'une lettre
      trop longue n'affiche pas : « total » et « nouvelles » les comptent
@@ -1424,12 +1707,11 @@ function recapitulatif(v) {
   const resume = dit.length === 2 ? `${dit[0]} et ${dit[1]}` : (nouvelles ? dit[0] : `${dit[0] || compte(1, 'mise à jour', 'mises à jour')} de vos demandes`);
   const cachees = total - lignes.length;
   return {
-    objet: `${projet || 'Vos demandes'} : ${resume}`,
+    objet: objetDuProjet(projet, majuscule(resume)),
     ...rendreGabarit({
       titre: 'Le point sur vos demandes',
-      intro: `${prenom ? `Bonjour ${prenom},` : 'Bonjour,'}\n\n`
-        + `Voici ce qui a bougé sur vos demandes${projet ? ` du projet ${projet}` : ''} : ${resume}. `
-        + 'Pour vous éviter un e-mail à chaque événement, nous réunissons tout ici.',
+      intro: ecrire(bonjour, `Voici les dernières évolutions de vos demandes${projet ? ` sur le projet ${projet}` : ''} : ${resume}. `
+        + 'Pour ne pas vous envoyer un e-mail à chaque événement, nous les regroupons ici.'),
       liste: lignes.map((l) => {
         const numero = valeurTexte(l.numero).trim();
         const titre = valeurTexte(l.titre).trim() || 'Demande sans titre';
@@ -1441,11 +1723,19 @@ function recapitulatif(v) {
         };
       }),
       bouton: { libelle: 'Ouvrir mes demandes', url: valeurTexte(v.lien) || lienEspace() },
-      note: (cachees > 0 ? `${compte(cachees, 'autre demande a bougé', 'autres demandes ont bougé')} : vous les retrouvez dans votre espace. ` : '')
-        + "Répondez depuis votre espace : un e-mail de retour ne serait pas rattaché à la demande.",
+      note: (cachees > 0 ? `${compte(cachees, 'autre demande a également été mise à jour', 'autres demandes ont également été mises à jour')} : vous les retrouverez dans votre espace. ` : '')
+        + 'Merci de répondre depuis votre espace : une réponse par e-mail ne serait pas rattachée à la demande.',
     }),
   };
 }
+
+/* ==========================================================================
+   8. Le point d'entrée unique
+
+   Le facteur ne connaît que le nom du modèle, tel qu'il a été écrit dans
+   le document d'envoi. Un nom inconnu lève : c'est une erreur de code, et
+   elle doit se voir dans les journaux plutôt que partir chez un client.
+   ========================================================================== */
 
 const MODELES = {
   'invitation': invitation,
@@ -1494,12 +1784,14 @@ const MODELES = {
 /**
  * @param {string} modele      une clé de MODELES
  * @param {object} variables   ce qui a été figé à la mise en file
+ * @param {object} [contexte]  { a } : les destinataires de l'envoi, pour
+ *                             saluer la personne qui reçoit la lettre
  * @returns {{objet: string, html: string, texte: string}}
  */
-function rendre(modele, variables) {
+function rendre(modele, variables, contexte = null) {
   const fabrique = MODELES[valeurTexte(modele)];
   if (!fabrique) throw new Error(`Modèle d'e-mail inconnu : ${valeurTexte(modele) || '(vide)'}`);
-  return fabrique(variables && typeof variables === 'object' ? variables : {});
+  return fabrique(variables && typeof variables === 'object' ? variables : {}, contexte && typeof contexte === 'object' ? contexte : null);
 }
 
 module.exports = {
@@ -1507,11 +1799,17 @@ module.exports = {
   quoiDeLaLigne,
   MODELES,
   MARQUE_TEST,
+  MARQUE_EQUIPE,
   echapper,
   valeurTexte,
   dateFr,
+  euros,
   montantHT,
+  montantTTC,
   franchiseDe,
+  prenomDe,
+  salutation,
+  nomDuDestinataire,
   MENTION_FRANCHISE,
   STATUTS,
   URGENCES,

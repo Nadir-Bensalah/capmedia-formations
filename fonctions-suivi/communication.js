@@ -346,19 +346,22 @@ async function ecrireAuxClients(projetOuId, evenement, modele, variables, option
     }
     return dernier;
   }
-  /* Un montant qui accompagne un événement ordinaire (le prix d'un forfait)
+  /* Une lettre par personne, toujours : chacune la salue par son prénom
+     (« Bonjour Sébastien, »), et personne ne lit l'adresse de ses
+     collègues dans l'en-tête. Avant, une seule lettre partait à tous, et
+     ne pouvait saluer personne.
+     Un montant qui accompagne un événement ordinaire (le prix d'un forfait)
      ne part qu'aux responsables : les autres reçoivent la même lettre, sans
      lui. */
-  const enPlus = options.pourResponsable;
-  if (enPlus && Object.keys(enPlus).length) {
-    const roles = (projet && projet.roles) || {};
-    const resp = destinataires.filter((d) => d.uid && roles[d.uid] === 'responsable');
-    const autres = destinataires.filter((d) => !resp.includes(d));
-    const a = resp.length ? await mettreEnFile(modele, resp, { ...variables, ...enPlus }, { projet: projet && projet.id, evenement }) : null;
-    const b = autres.length ? await mettreEnFile(modele, autres, variables, { projet: projet && projet.id, evenement }) : null;
-    return a || b;
+  const enPlus = options.pourResponsable && Object.keys(options.pourResponsable).length ? options.pourResponsable : null;
+  const roles = (projet && projet.roles) || {};
+  let dernier = null;
+  for (const d of destinataires) {
+    const avecPlus = enPlus && d.uid && roles[d.uid] === 'responsable';
+    const id = await mettreEnFile(modele, [d], avecPlus ? { ...variables, ...enPlus } : variables, { projet: projet && projet.id, evenement });
+    dernier = id || dernier;
   }
-  return mettreEnFile(modele, destinataires, variables, { projet: projet && projet.id, evenement });
+  return dernier;
 }
 
 /** Une notification dans la boîte de chaque uid. */

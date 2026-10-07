@@ -119,7 +119,8 @@ const accents = () => {
   const sansProjet = rendre('validation-reponse', { statut: 'modifications', titre: 'Maquette' });
   verifier(sansProjet.objet === 'Modifications demandées : Maquette', 'sans nom de projet, l\'objet ne commence pas par « · »', sansProjet.objet);
   const relance = rendre('relance', { projet: 'Atelier', par: 'Camille', points: [{ quoi: 'Devis', detail: 'à décider' }] });
-  verifier(relance.texte.includes('de notre côté') && relance.texte.includes('sont bloqués') && relance.texte.includes("s'arrête dès que"), 'relance : côté, bloqués, s\'arrête dès que');
+  /* 07/10/2026 : un seul point s'accorde au singulier (« ce point est bloqué »). */
+  verifier(relance.texte.includes('de notre côté') && relance.texte.includes('est bloqué') && relance.texte.includes("s'arrête dès que"), 'relance : côté, bloqué, s\'arrête dès que');
   verifier(rendre('fichier', { projetNom: 'Atelier' }).texte.includes("vient d'être ajouté à votre espace"), 'fichier : « ajouté à votre espace »');
   verifier(rendre('ferme', { numero: 'X-1' }).texte.includes('Elle reste consultable'), 'demande fermée : « Elle reste consultable »');
 
