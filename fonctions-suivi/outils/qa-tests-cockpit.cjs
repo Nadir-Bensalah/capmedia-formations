@@ -2,8 +2,8 @@
    CAPMEDIA CLIENT HUB · Tests et testeurs dans le Cockpit (refonte, lot 7)
 
    Ce que prouve cette suite, dans le Cockpit :
-   - le fil d'Ariane de la page Tests suit le projet choisi : « Accueil ›
-     Projets › Atelier › Tests », et revient à « Accueil › Tests » sur tous
+   - le fil d'Ariane de la page Tests suit le projet choisi : « Aujourd'hui ›
+     Projets › Atelier › Tests », et revient à « Aujourd'hui › Tests » sur tous
      les projets, par le sélecteur comme par l'adresse (T-009). Le titre
      reste « Tests » ;
    - sur tous les projets, le crayon d'un robot ou d'une règle ouvre son
@@ -87,11 +87,11 @@ const fermer = async (page) => { await page.keyboard.press('Escape').catch(() =>
   console.log('\n== Le fil d Ariane de la page Tests (T-009)');
   await aller(pa, '#/tests', '#etage-projets');
   const filTous = await texteDe(pa, '#ariane');
-  verifier(/^Accueil.*Tests$/.test(filTous) && !(await pa.$('#ariane a[href="#/projets/atelier"]')), 'tous les projets : Accueil › Tests', filTous);
+  verifier(/^Aujourd'hui.*Tests$/.test(filTous) && !(await pa.$('#ariane a[href="#/projets/atelier"]')), 'tous les projets : Aujourd hui › Tests', filTous);
   await aller(pa, `#/tests?projet=${P}`, '#onglets-tests');
   await pa.waitForSelector('#ariane a[href="#/projets/atelier"]', { timeout: 8000 }).catch(() => {});
   const filProjet = await texteDe(pa, '#ariane');
-  verifier(/^Accueil.*Projets.*Atelier.*Tests$/.test(filProjet), 'un projet choisi : Accueil › Projets › Atelier › Tests', filProjet);
+  verifier(/^Aujourd'hui.*Projets.*Atelier.*Tests$/.test(filProjet), 'un projet choisi : Aujourd hui › Projets › Atelier › Tests', filProjet);
   verifier(Boolean(await pa.$('#ariane a[href="#/projets"]')) && Boolean(await pa.$('#ariane a[href="#/projets/atelier"]')) && (await texteDe(pa, '#ariane .courant')) === 'Tests', 'Projets et le projet sont des liens, Tests la page courante');
   verifier((await texteDe(pa, '.page h1')) === 'Tests', 'le titre de la page reste « Tests »', await texteDe(pa, '.page h1'));
   /* Changer de projet par le sélecteur : la page se met à jour sur place,
@@ -99,7 +99,7 @@ const fermer = async (page) => { await page.keyboard.press('Escape').catch(() =>
   await pa.selectOption('#f-projet', '');
   await pa.waitForFunction(() => !document.querySelector('#ariane a[href="#/projets/atelier"]'), null, { timeout: 8000 }).catch(() => {});
   const filRetour = await texteDe(pa, '#ariane');
-  verifier(/^Accueil.*Tests$/.test(filRetour) && !/Atelier/.test(filRetour), 'revenir à tous les projets : le fil redevient Accueil › Tests', filRetour);
+  verifier(/^Aujourd'hui.*Tests$/.test(filRetour) && !/Atelier/.test(filRetour), 'revenir à tous les projets : le fil redevient Aujourd hui › Tests', filRetour);
   await pa.selectOption('#f-projet', P);
   await pa.waitForSelector('#ariane a[href="#/projets/atelier"]', { timeout: 8000 }).catch(() => {});
   verifier(/Atelier.*Tests$/.test(await texteDe(pa, '#ariane')), 'puis rechoisir Atelier : le fil le reprend', await texteDe(pa, '#ariane'));
