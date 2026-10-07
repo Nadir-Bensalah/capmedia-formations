@@ -199,6 +199,10 @@ const NOTE=[
   await aller(page,'#/projets','.filtres');
   await page.click('[data-filtre="maison"]'); await pause(400);
   verifier(/Wealth Simulator/.test(await page.textContent('.page')),'il est dans « Mes projets »');
+  /* Lot 3 : « Tous les projets » compte aussi les projets internes. L'idée
+     devenue projet y entre : un de plus, qui devient la référence. */
+  verifier(await attendre(async()=>(await compteBarre(page,'/projets'))===actifsAvant+1,20,300),'l idée devenue projet rejoint « Tous les projets »',`${await compteBarre(page,'/projets')} contre ${actifsAvant}+1`);
+  actifsAvant=await compteBarre(page,'/projets');
 
   console.log('\n== Ranger un projet client, puis le ramener');
   await aller(page,'#/projets/atelier','[data-action="menu-projet"]');

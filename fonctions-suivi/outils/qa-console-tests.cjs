@@ -201,13 +201,13 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   const o = await page.evaluate(()=>({
     hash: location.hash,
     resume: !!document.querySelector('#etage-humain .etage-resume'),
-    campagnes: [...document.querySelectorAll('#campagnes [data-action="ouvrir-campagne"]')].map(x=>x.innerText).join(' | '),
+    enCours: !!document.querySelector('#campagnes [data-action="ouvrir-campagne"][data-id="c-oct"]'),
     entree: (document.querySelector('#lat-corps .lat-arbre[data-arbre="atelier"] a[data-chemin="/tests"]')||{}).getAttribute ? document.querySelector('#lat-corps .lat-arbre[data-arbre="atelier"] a[data-chemin="/tests"]').getAttribute('href') : '',
   }));
   verifier(o.hash==='#/tests?projet=atelier','l\'adresse de l\'onglet mène à la console filtrée sur le projet',o.hash);
   verifier(o.entree==='#/tests?projet=atelier','l\'entrée Tests de l\'arbre du projet y va tout droit',o.entree);
   verifier(o.resume,'l\'avancement du projet y est (ce que disaient les quatre chiffres)');
-  verifier(/En cours/i.test(o.campagnes),'les campagnes en cours y sont nommées',o.campagnes.slice(0,160));
+  verifier(o.enCours,'la campagne en cours du banc (c-oct) y est nommée');
 
   console.log('\n== Le client');
   const nav2=await chromium.launch();

@@ -135,7 +135,9 @@ const retourVisible = (page) => page.$eval('#bouton-retour', (b) => !b.hidden &&
   await direct.waitForSelector('#ariane .courant', { timeout: 30000 }).catch(() => {}); await pause(2000);
   verifier(await retourVisible(direct), 'ouvert par un lien : le Retour est là');
   await direct.click('#bouton-retour'); await pause(1500);
-  verifier(await hash(direct) === '#/projets/atelier', 'et il remonte au projet, d un cran dans le fil', await hash(direct));
+  /* Lot 3 : la page d'une partie est sous « Plateformes et versions » ;
+     un cran plus haut dans le fil, c'est cette page du projet. */
+  verifier(await hash(direct) === '#/projets/atelier/composants', 'et il remonte d un cran dans le fil : Plateformes et versions du projet', await hash(direct));
   await direct.close();
 
   /* ---------------------------------------------------------------- */
