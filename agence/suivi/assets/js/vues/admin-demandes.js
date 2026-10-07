@@ -8,6 +8,7 @@ import { icone, pastille, puce, pucePlateforme, iconePlateforme, tonPlateforme, 
 import * as magasin from '../magasin.js';
 import { K } from '../donnees.js';
 import { filAriane } from '../coquille.js';
+import { naviguer, reecrire, adresseAvec } from '../routeur.js';
 
 const COLONNES = [
   { cle: 'nouveau', libelle: 'Nouvelles', statuts: ['nouveau'] },
@@ -22,7 +23,17 @@ export const vue = async (ctx, env) => {
   titrePage('Demandes');
   filAriane([{ libelle: 'Demandes' }]);
   sortie.innerHTML = `<div class="page">${squelette('page', 6)}</div>`;
-  const etat = { colonne: 'nouveau', projet: '', urgence: '', moi: false, terme: '' };
+  /* Les filtres vivent dans l'adresse (#/demandes?colonne=…&projet=…) : le
+     Retour et un lien copié les retrouvent. Changer un filtre change
+     l'adresse ; le routeur rend la main par « maj », qui redessine une
+     fois, en place. Le terme de recherche se réécrit sans redessiner. */
+  const lireFiltres = (requete = {}) => ({
+    colonne: COLONNES.some((c) => c.cle === requete.colonne) ? requete.colonne : 'nouveau',
+    projet: requete.projet || '', urgence: requete.urgence || '', moi: requete.moi === '1', terme: requete.terme || '',
+  });
+  const etat = lireFiltres(ctx.requete);
+  const adresse = (f = etat) => adresseAvec('/demandes', { colonne: f.colonne === 'nouveau' ? '' : f.colonne, projet: f.projet, urgence: f.urgence, moi: f.moi, terme: f.terme });
+  const poser = (changes) => naviguer(adresse({ ...etat, ...changes }));
 
   const rendre = () => {
     const projets = magasin.lire(K.projets) || [];
@@ -52,14 +63,23 @@ export const vue = async (ctx, env) => {
         fin: `${puce(URGENCES, t.urgence || 'important')}${pastille(STATUTS, t.statut)}${t.assigne ? '' : '<span class="etiquette">Sans assigné</span>'}`,
       })).join('')}</div>` : vide({ icone: 'inbox', titre: 'Rien dans cette colonne', texte: etat.colonne === 'nouveau' ? 'Aucune nouvelle demande. Tout est pris en charge.' : '', compact: true })}
     </div>`;
-    sortie.querySelector('#terme').addEventListener('input', (e) => { etat.terme = e.target.value; const pos = e.target.selectionStart; rendre(); const c = sortie.querySelector('#terme'); c.focus(); c.setSelectionRange(pos, pos); });
-    sortie.querySelector('#f-projet').addEventListener('change', (e) => { etat.projet = e.target.value; rendre(); });
-    sortie.querySelector('#f-urgence').addEventListener('change', (e) => { etat.urgence = e.target.value; rendre(); });
-    sortie.querySelector('#f-moi').addEventListener('change', (e) => { etat.moi = e.target.checked; rendre(); });
+    sortie.querySelector('#terme').addEventListener('input', (e) => { etat.terme = e.target.value; reecrire(adresse()); const pos = e.target.selectionStart; rendre(); const c = sortie.querySelector('#terme'); c.focus(); c.setSelectionRange(pos, pos); });
+    sortie.querySelector('#f-projet').addEventListener('change', (e) => { poser({ projet: e.target.value }); });
+    sortie.querySelector('#f-urgence').addEventListener('change', (e) => { poser({ urgence: e.target.value }); });
+    sortie.querySelector('#f-moi').addEventListener('change', (e) => { poser({ moi: e.target.checked }); });
   };
-  const gestes = sur(sortie, 'click', '[data-colonne]', (el) => { etat.colonne = el.dataset.colonne; rendre(); });
+  const gestes = sur(sortie, 'click', '[data-colonne]', (el) => { poser({ colonne: el.dataset.colonne }); });
   [K.projets, K.ticketsTous].forEach((c) => lot.sur(c, rendre));
-  return () => { gestes(); lot.fin(); };
+  return {
+    fin: () => { gestes(); lot.fin(); },
+    /* Même page, autres filtres : un dessin, en place. */
+    maj: (suite) => {
+      const f = lireFiltres(suite.requete);
+      if (JSON.stringify(f) === JSON.stringify(etat)) return;
+      Object.assign(etat, f);
+      rendre();
+    },
+  };
 };
 
 void icone;

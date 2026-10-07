@@ -49,8 +49,10 @@ const projetDe = (x) => x.projet || x._parent || '';
 /* Les anciennes adresses du tableau, gardées pour les liens déjà
    partagés : elles mènent à Tests, où le tableau vit désormais. */
 export const ancienne = (ctx) => {
-  const projet = (ctx.requete || {}).projet;
-  history.replaceState(null, '', `#/tests${projet ? `?projet=${encodeURIComponent(projet)}` : ''}`);
+  /* Tous les paramètres passent : le projet, mais aussi l'onglet, la
+     plateforme, la campagne ou la case qu'un lien ancien visait (T-006). */
+  const chaine = new URLSearchParams(ctx.requete || {}).toString();
+  history.replaceState(null, '', `#/tests${chaine ? `?${chaine}` : ''}`);
   window.dispatchEvent(new HashChangeEvent('hashchange'));
   return () => {};
 };

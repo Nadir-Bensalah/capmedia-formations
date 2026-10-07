@@ -438,8 +438,10 @@ const texteDe = (page, sel) => page.$eval(sel, (el) => el.textContent.replace(/\
   verifier(/Les personnes/.test(await texteDe(eq, '#personnes h2')) && await eq.$eval('#bouton-retour', (b) => !b.hidden).catch(() => false), 'et « Les personnes » ; le Retour, comme dans le Hub');
   await eq.evaluate(() => { location.hash = '#/projets/atelier/etapes'; }); await pause(2500);
   verifier(Boolean(await eq.$('.frise')), 'l équipe voit toujours la frise du devis pour cocher');
+  /* Refonte du Cockpit, lot 2 : « Documents » devient « Fichiers », comme
+     dans le Hub ; l'ancienne adresse y mène. */
   await eq.evaluate(() => { location.hash = '#/documents'; }); await pause(2500);
-  verifier((await texteDe(eq, '.page h1')) === 'Documents', 'et sa page Documents');
+  verifier((await texteDe(eq, '.page h1')) === 'Fichiers' && /^#\/fichiers$/.test(hash(eq)), 'et sa page Fichiers (l ancienne adresse #/documents y mène)', `${await texteDe(eq, '.page h1')} ${hash(eq)}`);
   await eq.evaluate(() => { location.hash = '#/projets/atelier'; }); await eq.waitForSelector('#onglets-projet', { timeout: 30000 }).catch(() => {}); await pause(1500);
   const ongletMarketing = await texteDe(eq, '#onglets-projet a[href="#/projets/atelier/marketing"]');
   verifier(/Marketing/.test(ongletMarketing) && /À venir/.test(ongletMarketing), 'l équipe voit l onglet Marketing, marqué « À venir »', ongletMarketing);

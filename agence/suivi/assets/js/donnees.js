@@ -307,9 +307,21 @@ export const abonnerProjet = (lot, pid, role) => {
     lot.abonner(K.paiements(pid), () => surProjet('paiements'));
     lot.abonner(K.montants(pid), () => col('projets', pid, 'montants'));
   }
+  abonnerActiviteProjet(lot, pid, role);
+};
+
+/** Le fil d'activité d'un projet, seul : la MÊME requête que dans
+    abonnerProjet (le magasin partage une écoute par clé, la première posée
+    gagne). La page Activité du Cockpit filtrée sur un projet le lit : le
+    fil de tous les projets est borné aux 200 derniers mouvements, un projet
+    calme n'y aurait presque rien. */
+export const abonnerActiviteProjet = (lot, pid, role) => {
+  const client = role !== 'equipe';
+  const responsable = client && responsableDe(pid);
+  const finance = client ? responsable : financeDe(pid);
   lot.abonner(K.activite(pid), () => (client
     ? query(col('activite'), where('projet', '==', pid), where('visibilite', 'in', responsable ? ['client', 'responsable'] : ['client']))
-    : (finance ? surProjet('activite') : query(col('activite'), where('projet', '==', pid), where('visibilite', 'in', ['client', 'interne'])))));
+    : (finance ? query(col('activite'), where('projet', '==', pid)) : query(col('activite'), where('projet', '==', pid), where('visibilite', 'in', ['client', 'interne'])))));
 };
 
 /** Le détail Sentry d'un projet (équipe seule) : le relevé, les vingt

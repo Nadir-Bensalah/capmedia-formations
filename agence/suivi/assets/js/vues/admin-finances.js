@@ -8,7 +8,7 @@ import { icone, pastille, ligne, vide, squelette, titrePage, sur, modale, toast,
 import * as magasin from '../magasin.js';
 import { K, ecrire, resteAPayer, nouvelId, noteDuPaiement } from '../donnees.js';
 import { filAriane } from '../coquille.js';
-import { naviguer } from '../routeur.js';
+import { naviguer, adresseAvec } from '../routeur.js';
 import { appelServeur } from '../serveur.js';
 import { ouvrirDocument, joindreFichier, editerLiens, joindreDevis, estDemandePanier } from './finances.js';
 import { estimationCourte } from '../panier.js';
@@ -140,8 +140,26 @@ export const vue = async (ctx, env) => {
   titrePage('Finances');
   filAriane([{ libelle: 'Finances' }]);
   sortie.innerHTML = `<div class="page">${squelette('page', 6)}</div>`;
-  const etat = { onglet: 'factures', projet: '' };
+  /* L'onglet et le projet vivent dans l'adresse (#/finances?projet=…&onglet=devis) :
+     l'entrée « Devis et factures » d'un projet y mène filtrée, le Retour et un
+     lien copié les retrouvent. En changer redessine en place (« maj »). */
+  const ONGLETS = ['factures', 'devis', 'paiements'];
+  const lireFiltres = (requete = {}) => ({ onglet: ONGLETS.includes(requete.onglet) ? requete.onglet : 'factures', projet: requete.projet || '' });
+  const etat = lireFiltres(ctx.requete);
+  const adresse = (f = etat) => adresseAvec('/finances', { projet: f.projet, onglet: f.onglet === 'factures' ? '' : f.onglet });
+  const poser = (changes) => naviguer(adresse({ ...etat, ...changes }));
+  /* « /finances/:did » (lettres, cloche, calendrier) : la fiche s'ouvre dès
+     que les pièces sont là. Le premier dessin peut venir avant elles : on ne
+     conclut qu'une fois la clé chargée, sinon le lien se perdait (D4). */
   let ouvert = ctx.params.did || null;
+  const ouvrirDepuisAdresse = (documents, projets, paiements) => {
+    if (!ouvert) return;
+    if (magasin.lire(K.documentsTous) === undefined && !magasin.erreur(K.documentsTous)) return;
+    const d = documents.find((x) => x.id === ouvert) || (magasin.lire(K.documentsTous) || []).find((x) => x.id === ouvert);
+    ouvert = null;
+    if (!d) { toast('Cette pièce n\'existe plus, ou elle a été archivée.', 'erreur'); naviguer(adresse(), { remplacer: true }); return; }
+    ouvrirDocument(d, env, { projets, paiements, documents }).then(() => { if (/^\/finances\/[^/?]+/.test(location.hash.replace(/^#/, ''))) naviguer(adresse(), { remplacer: true }); });
+  };
 
   const rendre = () => {
     const projets = magasin.lire(K.projets) || [];
@@ -171,14 +189,14 @@ export const vue = async (ctx, env) => {
       : etat.onglet === 'devis' ? (devis.length ? `<div class="liste">${devis.map(ligneDoc).join('')}</div>` : vide({ icone: 'receipt', titre: 'Aucun devis', compact: true }))
       : (paiements.length ? `<div class="liste">${paiements.slice().sort(parDateDesc('date')).map((p) => { const f = documents.find((d) => d.id === p.facture) || {}; return ligne({ icone: 'paiement', ton: 'vert', titre: echapper(montantTTC(p.montant, 2)), sous: `${echapper(dateCourte(p.date))} · ${echapper(MOYENS_PAIEMENT[p.moyen] || p.moyen || '')} · ${echapper(f.numero || '')} · ${echapper(nomProjet(p.projet))}${p.reference ? ` · ${echapper(p.reference)}` : ''}${noteDuPaiement(p.id) ? ` · ${echapper(noteDuPaiement(p.id))}` : ''}` }); }).join('')}</div>` : vide({ icone: 'paiement', titre: 'Aucun paiement', compact: true }))}
     </div>`;
-    sortie.querySelector('#f-projet').addEventListener('change', (e) => { etat.projet = e.target.value; rendre(); });
-    if (ouvert) { const d = documents.find((x) => x.id === ouvert); ouvert = null; if (d) ouvrirDocument(d, env, { projets, paiements, documents }).then(() => naviguer('/finances', { remplacer: true })); }
+    sortie.querySelector('#f-projet').addEventListener('change', (e) => { poser({ projet: e.target.value }); });
+    ouvrirDepuisAdresse(documents, projets, paiements);
   };
 
   const gestes = sur(sortie, 'click', '[data-onglet], [data-deposer], [data-action="ouvrir"], [data-menu-doc], [data-marquer-retard]', async (el, ev) => {
     const projets = magasin.lire(K.projets) || [];
     const documents = magasin.lire(K.documentsTous) || [];
-    if (el.dataset.onglet) { etat.onglet = el.dataset.onglet; rendre(); return; }
+    if (el.dataset.onglet) { poser({ onglet: el.dataset.onglet }); return; }
     if (el.dataset.deposer) { if (!projets.length) { toast('Créez d\'abord un projet.', 'erreur'); return; } deposer(env, projets, el.dataset.deposer); return; }
     if (el.hasAttribute('data-marquer-retard')) {
       const retard = documents.filter((d) => d.type === 'facture' && d.statut === 'a-payer' && d.echeance && joursAvant(d.echeance) < 0);
@@ -212,5 +230,16 @@ export const vue = async (ctx, env) => {
     if (d) ouvrirDocument(d, env, { projets, paiements: magasin.lire(K.paiementsTous) || [], documents });
   });
   [K.projets, K.documentsTous, K.paiementsTous, K.paiementsInternes].forEach((c) => lot.sur(c, rendre));
-  return () => { gestes(); lot.fin(); };
+  return {
+    fin: () => { gestes(); lot.fin(); },
+    /* Même page : d'autres filtres, ou la fiche d'une pièce par son adresse. */
+    maj: (suite) => {
+      const f = lireFiltres(suite.requete);
+      const did = (suite.params || {}).did || null;
+      const memes = f.onglet === etat.onglet && f.projet === etat.projet;
+      Object.assign(etat, f);
+      if (did) ouvert = did;
+      if (!memes || did) rendre();
+    },
+  };
 };

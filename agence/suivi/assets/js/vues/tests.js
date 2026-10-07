@@ -26,8 +26,9 @@ import {
 } from '../noyau.js';
 import {
   icone, pastille, ligne, vide, squelette, titrePage, sur, modale, toast, agir, confirmer,
-  brancherPieces, lisible, menu, reglerBarreOnglets,
+  brancherPieces, lisible, menu, reglerBarreOnglets, fermerFlottants,
 } from '../ui.js';
+import { reecrire } from '../routeur.js';
 import * as magasin from '../magasin.js';
 import {
   K, ecrire, repartir, profilsTesteurs, scenariosHumains, chargeParTesteur, controler, clesDe, lireSectionsPlan,
@@ -2116,16 +2117,38 @@ export const vue = async (ctx, env) => {
   const aOuvrir = { anomalie: lire(ctx, 'anomalie', ''), campagne: lire(ctx, 'campagne', '') };
   /* Une anomalie à ouvrir vit dans l'onglet Problèmes (toutes y sont, sans
      filtre), une campagne dans celui des tests humains. */
-  if (aOuvrir.anomalie) { etat.onglet = 'problemes'; FILTRES_PROBLEMES.forEach((f) => { etat.filtres[f] = ''; }); }
-  else if (aOuvrir.campagne) etat.onglet = ONGLET_DEFAUT;
+  const viserOnglet = () => {
+    if (aOuvrir.anomalie) { etat.onglet = 'problemes'; FILTRES_PROBLEMES.forEach((f) => { etat.filtres[f] = ''; }); }
+    else if (aOuvrir.campagne) etat.onglet = ONGLET_DEFAUT;
+  };
+  viserOnglet();
   let essais = 0;
+  let minuteurOuvrir = null;
+  /* Ouverte, la fiche ne doit pas se rouvrir au filtre suivant : le
+     paramètre quitte l'adresse (réécrite sur place, sans redessiner). Sans
+     cela, un clic sur une plateforme, qui part de l'adresse courante,
+     ramenait « &anomalie= » et rouvrait la fiche. */
+  const oublierDansAdresse = () => {
+    const brut = location.hash.replace(/^#/, '');
+    const [chemin, chaine = ''] = brut.split('?');
+    if (chemin !== '/tests') return;
+    const p = new URLSearchParams(chaine);
+    if (!p.has('anomalie') && !p.has('campagne')) return;
+    p.delete('anomalie'); p.delete('campagne');
+    /* L'adresse dit l'onglet et les filtres qu'on voit vraiment : une
+       anomalie a mené à « Problèmes », sans filtre. */
+    if (etat.onglet && etat.onglet !== ONGLET_DEFAUT) p.set('onglet', etat.onglet); else p.delete('onglet');
+    FILTRES_PROBLEMES.forEach((f) => { if (etat.filtres[f]) p.set(f, etat.filtres[f]); else p.delete(f); });
+    reecrire(`/tests${p.toString() ? `?${p.toString()}` : ''}`);
+  };
   const ouvrirDepuisAdresse = () => {
+    clearTimeout(minuteurOuvrir);
     if (!aOuvrir.anomalie && !aOuvrir.campagne) return;
     essais += 1;
     const cible = aOuvrir.anomalie ? `[data-action="ouvrir-anomalie"][data-id="${aOuvrir.anomalie}"]` : `[data-action="ouvrir-campagne"][data-id="${aOuvrir.campagne}"]`;
     const el = sortie.querySelector(cible);
-    if (el) { aOuvrir.anomalie = ''; aOuvrir.campagne = ''; el.click(); return; }
-    if (essais < 20) setTimeout(ouvrirDepuisAdresse, 500);
+    if (el) { aOuvrir.anomalie = ''; aOuvrir.campagne = ''; oublierDansAdresse(); el.click(); return; }
+    if (essais < 20) minuteurOuvrir = setTimeout(ouvrirDepuisAdresse, 500);
   };
   ouvrirDepuisAdresse();
   /* « ?case=<scénario du plan> » : la case de test s'ouvre dans le tableau,
@@ -2138,22 +2161,34 @@ export const vue = async (ctx, env) => {
   }
 
   return {
-    fin: () => { planifier.arreter(); gestes(); sortie.removeEventListener('change', changeFiltre); lot.fin(); if (tableau) tableau.fin(); },
+    fin: () => { clearTimeout(minuteurOuvrir); planifier.arreter(); gestes(); sortie.removeEventListener('change', changeFiltre); lot.fin(); if (tableau) tableau.fin(); },
     /* Même adresse, autres filtres : on lit le projet et la plateforme dans
        la nouvelle adresse et on redessine en place, sans squelette ni
        retour en haut de page. */
     maj: (suite) => {
       const projet = lire(suite, 'projet', '');
       const plateforme = lire(suite, 'plateforme', '');
-      const onglet = ongletValide(lire(suite, 'onglet', ''));
-      const filtres = Object.fromEntries(FILTRES_PROBLEMES.map((f) => [f, lire(suite, f, '')]));
-      if (projet === etat.projet && plateforme === etat.plateforme && onglet === etat.onglet && JSON.stringify(filtres) === JSON.stringify(etat.filtres)) return;
+      let onglet = ongletValide(lire(suite, 'onglet', ''));
+      let filtres = Object.fromEntries(FILTRES_PROBLEMES.map((f) => [f, lire(suite, f, '')]));
+      /* Une notification ouverte depuis une autre page Tests : la fiche
+         qu'elle vise s'ouvre aussi, comme à l'arrivée (« ?anomalie= »,
+         « ?campagne= » étaient ignorés sur place). */
+      const anomalie = lire(suite, 'anomalie', '');
+      const campagne = lire(suite, 'campagne', '');
+      if (anomalie || campagne) {
+        aOuvrir.anomalie = anomalie; aOuvrir.campagne = anomalie ? '' : campagne; essais = 0;
+        if (anomalie) { onglet = 'problemes'; filtres = Object.fromEntries(FILTRES_PROBLEMES.map((f) => [f, ''])); }
+        else onglet = ONGLET_DEFAUT;
+        fermerFlottants();
+      }
+      if (projet === etat.projet && plateforme === etat.plateforme && onglet === etat.onglet && JSON.stringify(filtres) === JSON.stringify(etat.filtres)) { ouvrirDepuisAdresse(); return; }
       etat.filtres = filtres;
       const changeOnglet = onglet !== etat.onglet;
       etat.projet = projet;
       etat.plateforme = plateforme;
       etat.onglet = onglet;
       rendre(true);
+      ouvrirDepuisAdresse();
       /* Changer d'onglet quand la barre est sortie de l'écran : on la
          ramène en haut, sinon l'en-tête reste exactement où il est. */
       const barre = sortie.querySelector('#onglets-tests');

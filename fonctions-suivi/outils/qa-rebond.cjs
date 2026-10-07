@@ -91,12 +91,47 @@ const ligne=(nom,r)=>console.log(`  ${nom.padEnd(40)} peints=${r.peints} contenu
     const mesurer=async(nom,geste)=>{const r=await relever(page,geste);releves[nom]=r;ligne(nom,r);return r;};
 
     await mesurer('projet (arrivée)',aller('/projets/atelier'));
-    for(const o of ['taches','demandes','fichiers','tests','activite']) await mesurer(`onglet ${o}`,aller(`/projets/atelier/${o}`));
+    /* Refonte du Cockpit, lot 2 : côté équipe, Fichiers et Activité ne sont
+       plus des onglets du projet mais la page de tous les projets, filtrée
+       sur lui (mesurées plus bas comme des pages). */
+    const ongletsProjet=role==='équipe'?['taches','demandes','tests']:['taches','demandes','fichiers','tests','activite'];
+    for(const o of ongletsProjet) await mesurer(`onglet ${o}`,aller(`/projets/atelier/${o}`));
     await mesurer('onglet apercu',aller('/projets/atelier'));
     /* Première visite de la page Tests : la donnée vient du serveur, le
        squelette a le droit d'être peint, le contenu une seule fois. */
     await mesurer('page Tests',aller(role==='équipe'?'/tests?projet=atelier':'/tests'));
-    if(role==='équipe'){await mesurer('page Tâches',aller('/taches'));await mesurer('page Planning',aller('/planning'));await mesurer('page Projets',aller('/projets'));}
+    if(role==='équipe'){await mesurer('page Tâches',aller('/taches'));await mesurer('page Calendrier',aller('/calendrier'));await mesurer('page Projets',aller('/projets'));
+      /* Les pages d'un projet qui étaient des onglets (lot 2). */
+      await mesurer('page Fichiers du projet',aller('/fichiers?projet=atelier'));
+      await mesurer('page Activité du projet',aller('/activite?projet=atelier'));
+      await mesurer('page Calendrier du projet',aller('/calendrier?projet=atelier'));
+      /* Les filtres dans l'adresse (lot 2) : changer un filtre redessine la
+         page une fois, en place, sans squelette ni remontage. */
+      const choisir=(sel,v)=>()=>page.selectOption(sel,v);
+      const cliquer=(sel)=>()=>page.click(sel);
+      await mesurer('adresse calendrier : tous les projets',choisir('#f-projet',''));
+      await mesurer('adresse calendrier : un projet',choisir('#f-projet','atelier'));
+      await mesurer('page Fichiers',aller('/fichiers'));
+      await mesurer('adresse fichiers : projet',choisir('#filtre-projet','atelier'));
+      if(await page.$('[data-cat="design"]'))await mesurer('adresse fichiers : catégorie',cliquer('[data-cat="design"]'));
+      await mesurer('adresse fichiers : tri',choisir('#tri-doc','nom'));
+      await mesurer('page Activité',aller('/activite'));
+      await mesurer('adresse activité : nature',cliquer('[data-nature="tache"]'));
+      await mesurer('adresse activité : projet',choisir('#f-projet','atelier'));
+      await mesurer('page Demandes',aller('/demandes'));
+      await mesurer('adresse demandes : colonne',cliquer('[data-colonne="a-traiter"]'));
+      await mesurer('adresse demandes : projet',choisir('#f-projet','atelier'));
+      await mesurer('adresse demandes : retour',()=>page.goBack());
+      await mesurer('page Tâches (filtres)',aller('/taches'));
+      await mesurer('adresse tâches : projet',choisir('#f-projet','atelier'));
+      await mesurer('adresse tâches : terminées',cliquer('#f-terminees'));
+      await mesurer('page Finances',aller('/finances'));
+      await mesurer('adresse finances : onglet',cliquer('[data-onglet="devis"]'));
+      await mesurer('adresse finances : projet',choisir('#f-projet','atelier'));
+      await mesurer('page Axes',aller('/projets/atelier/evolutions'));
+      const plateformeAxe=await page.$$eval('[data-axe-filtre]',(bs)=>bs.map((b)=>b.dataset.axeFiltre).filter(Boolean)[0]||'').catch(()=>'');
+      if(plateformeAxe)await mesurer('adresse axes : plateforme',cliquer(`[data-axe-filtre="${plateformeAxe}"]`));
+    }
     else{await mesurer('page Accueil',aller('/'));await mesurer('page Demandes',aller('/demandes'));}
     await mesurer('page Tests (retour)',aller('/tests?projet=atelier'));
     for(const p of ['ios','android','web','']) await mesurer(`filtre ${p||'toutes'} (clic)`,()=>page.click(`[data-plateforme="${p}"]`));
@@ -123,6 +158,12 @@ const ligne=(nom,r)=>console.log(`  ${nom.padEnd(40)} peints=${r.peints} contenu
     verifier(onglets.every(([,r])=>r.peints===1),'un onglet de projet n\'est peint qu\'une fois',onglets.filter(([,r])=>r.peints!==1).map(([n,r])=>`${n}:${r.peints}`).join(' '));
     verifier(onglets.every(([,r])=>!r.squelettePeint),'sans squelette entre deux');
     verifier(onglets.every(([,r])=>r.scroll===0),'sans saut de défilement quand la barre est visible',onglets.filter(([,r])=>r.scroll!==0).map(([n,r])=>`${n}:${r.scroll}`).join(' '));
+    if(role==='équipe'){
+      const adresses=Object.entries(releves).filter(([n])=>n.startsWith('adresse '));
+      verifier(adresses.length>=12,'les filtres dans l adresse sont mesurés',`${adresses.length}`);
+      verifier(adresses.every(([,r])=>r.peints===1&&r.contenus===1),'un filtre dans l adresse ne peint la page qu une fois',adresses.filter(([,r])=>r.peints!==1||r.contenus!==1).map(([n,r])=>`${n}:${r.peints}/${r.contenus}`).join(' '));
+      verifier(adresses.every(([,r])=>!r.squelette),'sans squelette (la page n est pas remontée)',adresses.filter(([,r])=>r.squelette).map(([n])=>n).join(' '));
+    }
     const filtres=Object.entries(releves).filter(([n])=>n.startsWith('filtre '));
     verifier(filtres.every(([,r])=>r.peints===1),'un filtre de plateforme ne peint la page qu\'une fois',filtres.map(([n,r])=>`${n}:${r.peints}`).join(' '));
     verifier(filtres.every(([,r])=>!r.squelettePeint),'et ne repeint pas de squelette');

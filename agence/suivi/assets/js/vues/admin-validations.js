@@ -33,8 +33,20 @@ export const vue = async (ctx, env) => {
       ${attente.length ? `<section class="section" style="margin-top:0"><div class="section-tete"><h2>En attente</h2></div><div class="liste">${attente.map(bloc).join('')}</div></section>` : vide({ icone: 'valider', titre: 'Aucune validation en attente', compact: true })}
       ${repondues.length ? `<section class="section"><div class="section-tete"><h2>Répondues</h2></div><div class="liste">${repondues.slice(0, 30).map(bloc).join('')}</div></section>` : ''}
     </div>`;
-    if (ouvert) { const v = validations.find((x) => x.id === ouvert); ouvert = null; if (v) ouvrirValidation(v, env, projets).then(() => naviguer('/validations', { remplacer: true })); }
+    ouvrirDepuisAdresse(validations, projets);
   };
+  /* « /validations/:vid » (lettres, cloche, « En attente du client ») : la
+     fiche s'ouvre dès que les validations sont là. Le premier dessin peut
+     venir avant elles : on ne conclut qu'une fois la clé chargée, sinon le
+     lien se perdait (D4). */
+  function ouvrirDepuisAdresse(validations, projets) {
+    if (!ouvert) return;
+    if (magasin.lire(K.validationsToutes) === undefined && !magasin.erreur(K.validationsToutes)) return;
+    const v = validations.find((x) => x.id === ouvert);
+    ouvert = null;
+    if (!v) { toast('Cette validation n\'existe plus.', 'erreur'); naviguer('/validations', { remplacer: true }); return; }
+    ouvrirValidation(v, env, projets).then(() => { if (/^\/validations\/[^/?]+/.test(location.hash.replace(/^#/, ''))) naviguer('/validations', { remplacer: true }); });
+  }
   const gestes = sur(sortie, 'click', '[data-action="ouvrir"], [data-nouvelle]', async (el) => {
     const projets = magasin.lire(K.projets) || [];
     if (el.hasAttribute('data-nouvelle')) {
@@ -49,5 +61,14 @@ export const vue = async (ctx, env) => {
     if (v) ouvrirValidation(v, env, projets);
   });
   [K.projets, K.validationsToutes].forEach((c) => lot.sur(c, rendre));
-  return () => { gestes(); lot.fin(); };
+  return {
+    fin: () => { gestes(); lot.fin(); },
+    /* La fiche d'une autre validation par son adresse, sans remonter la page. */
+    maj: (suite) => {
+      const vid = (suite.params || {}).vid || null;
+      if (!vid) return;
+      ouvert = vid;
+      ouvrirDepuisAdresse(magasin.lire(K.validationsToutes) || [], magasin.lire(K.projets) || []);
+    },
+  };
 };

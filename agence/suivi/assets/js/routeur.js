@@ -163,6 +163,26 @@ export const naviguer = (chemin, { remplacer = false } = {}) => {
   location.hash = chemin;
 };
 
+/**
+ * Réécrit l'adresse en place, sans rendre ni s'ajouter à l'historique :
+ * pour un champ de recherche, dont chaque frappe ne doit ni redessiner la
+ * page par le routeur ni empiler une adresse. Le Retour et un lien copié
+ * retrouvent le terme.
+ */
+export const reecrire = (chemin) => {
+  history.replaceState(null, '', `#${chemin}`);
+  const lu = lireHash();
+  routeCourante = { ...routeCourante, chemin: lu.chemin, requete: lu.requete };
+};
+
+/** L'adresse d'une page et de ses filtres : les valeurs vides sont omises. */
+export const adresseAvec = (chemin, params = {}) => {
+  const q = new URLSearchParams();
+  Object.entries(params || {}).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== '' && v !== false) q.set(k, v === true ? '1' : String(v)); });
+  const chaine = q.toString();
+  return `${chemin}${chaine ? `?${chaine}` : ''}`;
+};
+
 export const rafraichir = () => rendre();
 
 export const courant = () => routeCourante;

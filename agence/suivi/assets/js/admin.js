@@ -4,7 +4,7 @@
 
 import { exigerSession, $, OUVERTS, ATTEND_EQUIPE, FACTURES_DUES, joursAvant, projetEstActif, bdd, collection, query, orderBy, limit, peut, estAdmin, echapper } from './noyau.js';
 import { monterCoquille, definirNavigation, enregistrerRecherche, definirRetoucheAriane, filAriane } from './coquille.js';
-import { definir, demarrer, naviguer, courant } from './routeur.js';
+import { definir, demarrer, naviguer, courant, adresseAvec } from './routeur.js';
 import { titrePage } from './ui.js';
 import * as magasin from './magasin.js';
 import { abonnerGlobal, K, nonLusProjet, requeteMessages, messagesDuProjet } from './donnees.js';
@@ -125,11 +125,15 @@ const construireNavigation = () => {
         { chemin: '/taches', libelle: 'Tâches', icone: 'taches', compte: { total: aFaire, neuf: enRetard } },
         /* Une campagne qui tourne anime l'entrée, comme chez le client. */
         { chemin: '/tests', libelle: 'Tests', icone: 'bug', compte: { total: campagnesEnCours, neuf: anomaliesOuvertes }, enCours: campagnesEnCours ? (campagnesEnCours > 1 ? `${campagnesEnCours} campagnes de tests en cours` : 'campagne de tests en cours') : '' },
-        { chemin: '/planning', libelle: 'Planning', icone: 'calendrier', compte: { total: reunions.length } },
+        /* L'agenda de tous les projets s'appelle « Calendrier », comme chez
+           le client (#/calendrier) ; l'ancienne adresse #/planning y mène. */
+        { chemin: '/calendrier', libelle: 'Calendrier', icone: 'calendrier', compte: { total: reunions.length } },
         { chemin: '/messages', libelle: 'Messages', icone: 'messages', compte: { total: projets.filter((p) => !p.archive && !p.interne).length, neuf: nonLus } },
         { chemin: '/testeurs-messages', libelle: 'Testeurs', icone: 'smartphone', compte: { total: conversationsTesteurs.length, neuf: nonLusTesteurs }, si: peut(session, 'qa.gerer') },
         { chemin: '/validations', libelle: 'Validations', icone: 'valider', compte: { total: attendues } },
-        { chemin: '/documents', libelle: 'Documents', icone: 'documents', compte: { total: fichiers.length } },
+        /* « Fichiers », comme chez le client (#/fichiers) ; l'ancienne
+           adresse #/documents y mène. */
+        { chemin: '/fichiers', libelle: 'Fichiers', icone: 'documents', compte: { total: fichiers.length } },
       ],
     },
     {
@@ -259,8 +263,10 @@ enregistrerRecherche((terme) => {
   (magasin.lire(K.ticketsTous) || []).forEach((t) => items.push({ groupe: 'Demandes', libelle: t.titre, sous: `${t.numero || ''} ${nomProjet(t.projet)}`.trim(), icone: 'demandes', chemin: `/projets/${t.projet}/demandes/${t.id}` }));
   (magasin.lire(K.tachesToutes) || []).forEach((t) => items.push({ groupe: 'Tâches', libelle: t.titre, sous: nomProjet(t.projet), icone: 'taches', chemin: `/projets/${t.projet}/taches/${t.id}` }));
   (magasin.lire(K.documentsTous) || []).forEach((d) => items.push({ groupe: 'Devis et factures', libelle: `${d.numero || ''} ${d.libelle || ''}`.trim(), sous: nomProjet(d.projet), icone: 'receipt', chemin: `/finances/${d.id}` }));
-  (magasin.lire(K.fichiersTous) || []).forEach((f) => items.push({ groupe: 'Fichiers', libelle: f.nom, sous: nomProjet(f.projet), icone: 'fichiers', chemin: `/projets/${f.projet}/fichiers` }));
-  (magasin.lire(K.reunionsToutes) || []).forEach((r) => items.push({ groupe: 'Réunions', libelle: r.titre, sous: nomProjet(r.projet), icone: 'reunions', chemin: `/projets/${r.projet}/reunions` }));
+  /* Un fichier s'éclaire dans les Fichiers de son projet ; une réunion
+     ouvre sa fiche dans le Calendrier de son projet. */
+  (magasin.lire(K.fichiersTous) || []).forEach((f) => items.push({ groupe: 'Fichiers', libelle: f.nom, sous: nomProjet(f.projet), icone: 'fichiers', chemin: `/fichiers?projet=${encodeURIComponent(f.projet)}&f=${encodeURIComponent(f.id)}` }));
+  (magasin.lire(K.reunionsToutes) || []).forEach((r) => items.push({ groupe: 'Réunions', libelle: r.titre, sous: nomProjet(r.projet), icone: 'reunions', chemin: `/calendrier?projet=${encodeURIComponent(r.projet)}&reunion=${encodeURIComponent(r.id)}` }));
   return items;
 });
 
@@ -287,6 +293,11 @@ const garde = (regle, vue) => (ctx) => {
   return () => {};
 };
 
+/* Une route qui ne fait que mener ailleurs, en remplaçant l'adresse dans
+   l'historique (adresseAvec omet les paramètres vides). */
+const adresse = adresseAvec;
+const rediriger = (vers) => (ctx) => { naviguer(vers({ ...ctx, requete: ctx.requete || {} }), { remplacer: true }); };
+
 definir([
   { chemin: '/', vue: (ctx) => adminAccueil.vue(ctx, env) },
   { chemin: '/clients', vue: garde('clients', (ctx) => adminClients.liste(ctx, env)) },
@@ -303,11 +314,14 @@ definir([
      dans le hub, résolu dans le cockpit. */
   { chemin: '/demande/:tid', vue: (ctx) => resoudreDemande(ctx) },
   { chemin: '/projets/:id/taches/:tid', cle: (c) => `projet:${c.params.id}`, vue: (ctx) => projet.vue({ ...ctx, onglet: 'taches' }, env) },
-  { chemin: '/projets/:id/reunions/:rid', cle: (c) => `projet:${c.params.id}`, vue: (ctx) => projet.vue({ ...ctx, onglet: 'reunions' }, env) },
+  /* Les réunions d'un projet vivent dans son Calendrier : la fiche d'une
+     réunion s'y ouvre par-dessus (lettres, notifications, liens anciens). */
+  { chemin: '/projets/:id/reunions/:rid', vue: rediriger((c) => adresse('/calendrier', { projet: c.params.id, reunion: c.params.rid })) },
   { chemin: '/projets/:id/releases/:rid', cle: (c) => `projet:${c.params.id}`, vue: (ctx) => projet.vue({ ...ctx, onglet: 'releases' }, env) },
   { chemin: '/projets/:id/brique/:cid', vue: (ctx) => brique.vue(ctx, env) },
   { chemin: '/projets/:id/notes', vue: (ctx) => notesProjet.vue(ctx, env) },
-  { chemin: '/projets/:id/evolutions', vue: (ctx) => evolutions.vue(ctx, env) },
+  /* Une clé : le filtre de plateforme (dans l'adresse) redessine en place. */
+  { chemin: '/projets/:id/evolutions', cle: (c) => `axes:${c.params.id}`, vue: (ctx) => evolutions.vue(ctx, env) },
   /* Ce que Sentry voit de l'application (vues/stabilite.js). */
   { chemin: '/projets/:id/stabilite', vue: (ctx) => stabilite.vue(ctx, env) },
   /* La salle de contrôle : la santé en direct, plein écran possible (vues/controle.js). */
@@ -319,11 +333,19 @@ definir([
      route) : leur place dans le Cockpit, au lieu de l'accueil. */
   { chemin: '/projets/:id/versions', vue: (ctx) => { naviguer(`/projets/${ctx.params.id}/releases`, { remplacer: true }); } },
   { chemin: '/projets/:id/decisions', vue: (ctx) => { naviguer(`/projets/${ctx.params.id}/notes`, { remplacer: true }); } },
+  /* Trois onglets du projet ont rejoint la page de tous les projets,
+     filtrée sur lui : les fichiers, les réunions, l'activité. Les adresses
+     déjà parties (lettres, cloche, activité rangée en base) y mènent. */
+  { chemin: '/projets/:id/fichiers', vue: rediriger((c) => adresse('/fichiers', { projet: c.params.id, f: c.requete.f })) },
+  { chemin: '/projets/:id/reunions', vue: rediriger((c) => adresse('/calendrier', { projet: c.params.id })) },
+  { chemin: '/projets/:id/activite', vue: rediriger((c) => adresse('/activite', { projet: c.params.id })) },
   { chemin: '/projets/:id/:onglet', cle: (c) => `projet:${c.params.id}`, vue: (ctx) => projet.vue({ ...ctx, onglet: ctx.params.onglet }, env) },
   { chemin: '/nouveaux-projets', vue: garde('nouveauxProjets', (ctx) => nouveauProjet.liste(ctx, env)) },
   { chemin: '/nouveaux-projets/:id', vue: garde('nouveauxProjets', (ctx) => nouveauProjet.detail(ctx, env)) },
-  { chemin: '/demandes', vue: (ctx) => adminDemandes.vue(ctx, env) },
-  { chemin: '/taches', vue: (ctx) => adminTaches.vue(ctx, env) },
+  /* Les filtres vivent dans l'adresse ; la clé fait qu'en changer
+     redessine la liste en place, sans squelette ni retour en haut. */
+  { chemin: '/demandes', cle: () => 'demandes', vue: (ctx) => adminDemandes.vue(ctx, env) },
+  { chemin: '/taches', cle: () => 'taches', vue: (ctx) => adminTaches.vue(ctx, env) },
   { chemin: '/tests', cle: () => 'tests', vue: (ctx) => tests.vue(ctx, env) },
   /* Ce qui va être testé : le plan de tests d'un projet, section par
      section. La même page des deux côtés ; l'équipe y corrige. */
@@ -331,22 +353,29 @@ definir([
   /* Le tableau vit dans Tests : ses anciennes adresses y mènent. */
   { chemin: '/tests/tableau', vue: (ctx) => tableau.ancienne(ctx) },
   { chemin: '/tableau', vue: (ctx) => tableau.ancienne(ctx) },
-  { chemin: '/planning', vue: (ctx) => adminPlanning.vue(ctx, env) },
+  /* Le calendrier de tous les projets, filtrable par projet (l'entrée
+     Calendrier d'un projet) ; l'ancienne adresse #/planning y mène. */
+  { chemin: '/calendrier', cle: () => 'calendrier', vue: (ctx) => adminPlanning.vue(ctx, env) },
+  { chemin: '/planning', vue: rediriger((c) => adresse('/calendrier', c.requete)) },
   { chemin: '/messages', vue: (ctx) => messages.vue(ctx, env) },
   { chemin: '/testeurs-messages', vue: garde('testeurs', (ctx) => testeursMessages.vue(ctx, env)) },
   { chemin: '/testeurs-messages/:uid', vue: garde('testeurs', (ctx) => testeursMessages.vue(ctx, env)) },
   { chemin: '/messages/:pid', vue: (ctx) => messages.vue(ctx, env) },
-  { chemin: '/validations', vue: (ctx) => adminValidations.vue(ctx, env) },
-  { chemin: '/validations/:vid', vue: (ctx) => adminValidations.vue(ctx, env) },
+  /* La fiche d'une validation par son adresse : la même vue, en place. */
+  { chemin: '/validations', cle: () => 'validations', vue: (ctx) => adminValidations.vue(ctx, env) },
+  { chemin: '/validations/:vid', cle: () => 'validations', vue: (ctx) => adminValidations.vue(ctx, env) },
   /* L'adresse d'une validation dans le Hub (« En attente du client », les
      liens du client) : la même fiche dans le Cockpit. */
   { chemin: '/valider', vue: () => { naviguer('/validations', { remplacer: true }); } },
   { chemin: '/valider/:vid', vue: (ctx) => { naviguer(`/validations/${encodeURIComponent(ctx.params.vid)}`, { remplacer: true }); } },
-  { chemin: '/documents', vue: (ctx) => documents.vue(ctx, env) },
-  { chemin: '/finances', vue: garde('finances', (ctx) => adminFinances.vue(ctx, env)) },
-  { chemin: '/finances/:did', vue: garde('finances', (ctx) => adminFinances.vue(ctx, env)) },
+  /* Les fichiers de tous les projets, filtrables par projet (l'entrée
+     Fichiers d'un projet) ; l'ancienne adresse #/documents y mène. */
+  { chemin: '/fichiers', cle: () => 'fichiers', vue: (ctx) => documents.vue(ctx, env) },
+  { chemin: '/documents', vue: rediriger((c) => adresse('/fichiers', c.requete)) },
+  { chemin: '/finances', cle: () => 'finances', vue: garde('finances', (ctx) => adminFinances.vue(ctx, env)) },
+  { chemin: '/finances/:did', cle: () => 'finances', vue: garde('finances', (ctx) => adminFinances.vue(ctx, env)) },
   { chemin: '/maintenance', vue: (ctx) => maintenance.vue(ctx, env) },
-  { chemin: '/activite', vue: (ctx) => adminActivite.vue(ctx, env) },
+  { chemin: '/activite', cle: () => 'activite', vue: (ctx) => adminActivite.vue(ctx, env) },
   /* Une clé : changer un filtre (dans l'adresse) recharge la liste sans
      redessiner la page entière. */
   { chemin: '/emails', cle: () => 'emails', vue: (ctx) => adminEmails.vue(ctx, env) },

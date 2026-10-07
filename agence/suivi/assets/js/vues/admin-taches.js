@@ -7,7 +7,7 @@ import { icone, pastille, puce, avatar, ligne, vide, squelette, titrePage, sur, 
 import * as magasin from '../magasin.js';
 import { K, ecrire, parStatut } from '../donnees.js';
 import { filAriane } from '../coquille.js';
-import { naviguer } from '../routeur.js';
+import { naviguer, adresseAvec } from '../routeur.js';
 import { editer } from './editeurs.js';
 
 export const vue = async (ctx, env) => {
@@ -16,7 +16,13 @@ export const vue = async (ctx, env) => {
   titrePage('Tâches');
   filAriane([{ libelle: 'Tâches' }]);
   sortie.innerHTML = `<div class="page">${squelette('page', 6)}</div>`;
-  const etat = { mode: (() => { try { return localStorage.getItem('suivi:taches-vue-admin') || 'liste'; } catch (e) { return 'liste'; } })(), projet: '', assigne: '', retard: false, terminees: false };
+  /* Les filtres vivent dans l'adresse (#/taches?projet=…&retard=1) : le
+     Retour et un lien copié les retrouvent ; en changer redessine en place
+     (« maj »). La bascule Liste / Kanban est une préférence d'affichage :
+     elle reste retenue dans le navigateur. */
+  const lireFiltres = (requete = {}) => ({ projet: requete.projet || '', assigne: requete.assigne || '', retard: requete.retard === '1', terminees: requete.terminees === '1' });
+  const etat = { mode: (() => { try { return localStorage.getItem('suivi:taches-vue-admin') || 'liste'; } catch (e) { return 'liste'; } })(), ...lireFiltres(ctx.requete) };
+  const poser = (changes) => { const f = { ...lireFiltres(), projet: etat.projet, assigne: etat.assigne, retard: etat.retard, terminees: etat.terminees, ...changes }; naviguer(adresseAvec('/taches', f)); };
 
   const rendre = () => {
     const projets = magasin.lire(K.projets) || [];
@@ -47,10 +53,10 @@ export const vue = async (ctx, env) => {
       : etat.mode === 'kanban' ? `<div class="kanban">${parStatut(liste, STATUTS_TACHE).map((col) => `<div class="kanban-col"><div class="kanban-tete"><span class="puce puce--${col.fiche.voile}"><i></i></span>${echapper(col.fiche.libelle)}<span class="badge">${col.items.length}</span></div>${col.items.map((t) => `<a class="kanban-carte" href="#/projets/${echapper(t.projet)}/taches/${echapper(t.id)}" style="display:block;text-decoration:none;color:inherit"><p class="titre">${echapper(t.titre)}</p><div class="sous"><span>${echapper(nomProjet(t.projet))}</span>${dateCourte(t.echeance) ? `<span>${echapper(dateCourte(t.echeance))}</span>` : ''}${t.assigne ? avatar(nomEquipe(t.assigne) || 'C', { equipe: true, taille: 'petit' }) : ''}</div></a>`).join('')}</div>`).join('')}</div>`
       : `<div class="liste">${liste.map(carte).join('')}</div>`}
     </div>`;
-    sortie.querySelector('#f-projet').addEventListener('change', (e) => { etat.projet = e.target.value; rendre(); });
-    sortie.querySelector('#f-assigne').addEventListener('change', (e) => { etat.assigne = e.target.value; rendre(); });
-    sortie.querySelector('#f-retard').addEventListener('change', (e) => { etat.retard = e.target.checked; rendre(); });
-    sortie.querySelector('#f-terminees').addEventListener('change', (e) => { etat.terminees = e.target.checked; rendre(); });
+    sortie.querySelector('#f-projet').addEventListener('change', (e) => { poser({ projet: e.target.value }); });
+    sortie.querySelector('#f-assigne').addEventListener('change', (e) => { poser({ assigne: e.target.value }); });
+    sortie.querySelector('#f-retard').addEventListener('change', (e) => { poser({ retard: e.target.checked }); });
+    sortie.querySelector('#f-terminees').addEventListener('change', (e) => { poser({ terminees: e.target.checked }); });
   };
 
   const gestes = sur(sortie, 'click', '[data-mode], [data-nouvelle]', async (el) => {
@@ -67,7 +73,16 @@ export const vue = async (ctx, env) => {
     editer('tache', env, { pid });
   });
   [K.projets, K.equipe, K.tachesToutes].forEach((c) => lot.sur(c, rendre));
-  return () => { gestes(); lot.fin(); };
+  return {
+    fin: () => { gestes(); lot.fin(); },
+    /* Même page, autres filtres : un dessin, en place. */
+    maj: (suite) => {
+      const f = lireFiltres(suite.requete);
+      if (['projet', 'assigne', 'retard', 'terminees'].every((k) => f[k] === etat[k])) return;
+      Object.assign(etat, f);
+      rendre();
+    },
+  };
 };
 
 void agir; void naviguer; void ecrire;

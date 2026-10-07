@@ -782,7 +782,7 @@ const apercu = (d, { pid, env, prog, attente, ouverts, delai, risques }) => {
           ${d.jalons.length ? `<div class="route">${trierEtapes(d.jalons).slice(0, 6).map((j) => phaseHtml(j)).join('')}</div>` : vide({ icone: 'route', titre: equipe ? 'Pas encore de feuille de route' : 'Pas encore de planning', texte: equipe ? 'Posez les étapes du projet.' : 'Elle apparaîtra ici dès que les étapes seront posées.', compact: true, action: boutonNouveau(env, 'jalon', 'Première étape') })}
         </section>
         <section>
-          <div class="section-tete"><h2>Activité récente</h2><a class="lien" href="#/projets/${echapper(pid)}/activite">Tout voir</a></div>
+          <div class="section-tete"><h2>Activité récente</h2><a class="lien" href="${equipe ? `#/activite?projet=${echapper(encodeURIComponent(pid))}` : `#/projets/${echapper(pid)}/activite`}">Tout voir</a></div>
           ${activiteHtml(d.activite.slice(0, 8), { equipe: env.role === 'equipe' })}
         </section>
       </div>
@@ -1486,7 +1486,12 @@ const ouvrirReunion = (r, d, { pid, env }) => {
       el.closest('.coche').classList.toggle('faite', fait);
     } catch (e) { el.checked = !fait; toast("L'action n'a pas pu être enregistrée.", 'erreur'); } finally { el.disabled = false; }
   });
+  return m;
 };
+
+/** La même fiche, ouverte hors de la page du projet : le Calendrier du
+    Cockpit, filtré sur un projet, y mène ses réunions. Rend la modale. */
+export const ouvrirFicheReunion = (r, { pid, env, projet = null }) => ouvrirReunion(r, { projet: projet || {} }, { pid, env });
 
 /* --- Notes et décisions ------------------------------------------------------------ */
 const notes = (d, { env }) => {

@@ -557,7 +557,7 @@
   "lot": "L4",
   "sonde": {
    "route": "/",
-   "cible": "#lat-corps .lat-lien[data-chemin=\"/planning\"]"
+   "cible": "#lat-corps .lat-lien[data-chemin=\"/calendrier\"]"
   }
  },
  {
@@ -613,7 +613,7 @@
   "lot": "L4",
   "sonde": {
    "route": "/",
-   "cible": "#lat-corps .lat-lien[data-chemin=\"/documents\"]"
+   "cible": "#lat-corps .lat-lien[data-chemin=\"/fichiers\"]"
   }
  },
  {
@@ -1949,7 +1949,7 @@
   "destination": "Rail › Calendrier (/calendrier, alias /planning) ; filtré : entrée Calendrier du projet",
   "lot": "L2",
   "sonde": {
-   "route": "/planning",
+   "route": "/calendrier",
    "cible": "#vue .segments [data-mois=\"0\"]"
   }
  },
@@ -1963,7 +1963,7 @@
   "destination": "Rail › Calendrier (/calendrier, alias /planning) ; filtré : entrée Calendrier du projet",
   "lot": "L2",
   "sonde": {
-   "route": "/planning",
+   "route": "/calendrier",
    "avant": [
     [
      "clic",
@@ -1983,7 +1983,7 @@
   "destination": "Rail › Calendrier (/calendrier, alias /planning) ; filtré : entrée Calendrier du projet",
   "lot": "L2",
   "sonde": {
-   "route": "/planning",
+   "route": "/calendrier",
    "cible": "#vue .calendrier [data-jour-ouvrir]"
   }
  },
@@ -1997,7 +1997,7 @@
   "destination": "Rail › Calendrier (/calendrier, alias /planning) ; filtré : entrée Calendrier du projet",
   "lot": "L2",
   "sonde": {
-   "route": "/planning",
+   "route": "/calendrier",
    "avant": [
     [
      "clic",
@@ -2017,7 +2017,7 @@
   "destination": "Rail › Calendrier (/calendrier, alias /planning) ; filtré : entrée Calendrier du projet",
   "lot": "L2",
   "sonde": {
-   "route": "/planning",
+   "route": "/calendrier",
    "cible": "#vue aside .surtitre",
    "texte": "À venir"
   }
@@ -2359,7 +2359,7 @@
   "destination": "Entrée Fichiers du projet (/fichiers?projet=) ; tous projets : Portefeuille › Fichiers ; alias /documents",
   "lot": "L2",
   "sonde": {
-   "route": "/documents",
+   "route": "/fichiers",
    "avant": [
     [
      "clic",
@@ -2379,7 +2379,7 @@
   "destination": "Entrée Fichiers du projet (/fichiers?projet=) ; tous projets : Portefeuille › Fichiers ; alias /documents",
   "lot": "L2",
   "sonde": {
-   "route": "/documents",
+   "route": "/fichiers",
    "cible": "#recherche-doc"
   }
  },
@@ -2395,7 +2395,7 @@
   "sonde": {
    "manuel": true,
    "pourquoi": "code mort",
-   "page": "/documents"
+   "page": "/fichiers"
   }
  },
  {
@@ -2408,7 +2408,7 @@
   "destination": "Entrée Fichiers du projet (/fichiers?projet=) ; tous projets : Portefeuille › Fichiers ; alias /documents",
   "lot": "L2",
   "sonde": {
-   "route": "/documents",
+   "route": "/fichiers",
    "avant": [
     [
      "clic",
@@ -2428,7 +2428,7 @@
   "destination": "Entrée Fichiers du projet (/fichiers?projet=) ; tous projets : Portefeuille › Fichiers ; alias /documents",
   "lot": "L2",
   "sonde": {
-   "route": "/documents?f=fic-maquettes",
+   "route": "/fichiers?f=fic-maquettes",
    "cible": "#vue .fichier.fichier--montre[data-id=\"fic-maquettes\"]",
    "incertain": true
   }
@@ -4188,7 +4188,7 @@
   "lot": "L2",
   "sonde": {
    "route": "/projets/atelier",
-   "cible": "#onglet-corps a.lien[href=\"#/projets/atelier/activite\"]"
+   "cible": "#onglet-corps a.lien[href=\"#/activite?projet=atelier\"]"
   }
  },
  {
@@ -4711,8 +4711,8 @@
   "destination": "Arbre › Fichiers (/fichiers?projet=, alias /projets/:id/fichiers)",
   "lot": "L2",
   "sonde": {
-   "route": "/projets/atelier/fichiers",
-   "cible": "#onglet-corps [data-action=\"nouveau\"][data-genre=\"fichier\"]"
+   "route": "/fichiers?projet=atelier",
+   "cible": "#vue [data-deposer]"
   }
  },
  {
@@ -4725,8 +4725,8 @@
   "destination": "Arbre › Fichiers (/fichiers?projet=, alias /projets/:id/fichiers)",
   "lot": "L2",
   "sonde": {
-   "route": "/projets/atelier/fichiers",
-   "cible": "#onglet-corps [data-filtre-fichiers]"
+   "route": "/fichiers?projet=atelier",
+   "cible": "#vue [data-cat]"
   }
  },
  {
@@ -4739,8 +4739,8 @@
   "destination": "Arbre › Fichiers (/fichiers?projet=, alias /projets/:id/fichiers)",
   "lot": "L2",
   "sonde": {
-   "route": "/projets/atelier/fichiers",
-   "cible": "#onglet-corps .fichier[data-id=\"fic-maquettes\"]"
+   "route": "/fichiers?projet=atelier",
+   "cible": "#vue .fichier[data-id=\"fic-maquettes\"]"
   }
  },
  {
@@ -4753,12 +4753,12 @@
   "destination": "Arbre › Fichiers (/fichiers?projet=, alias /projets/:id/fichiers)",
   "lot": "L2",
   "sonde": {
-   "route": "/projets/atelier/fichiers",
+   "route": "/fichiers?projet=atelier",
    "cible": ".menu [data-cle=\"Modifier la fiche\"]",
    "avant": [
     [
      "clic",
-     "#onglet-corps .fichier[data-id=\"fic-maquettes\"] [data-menu-fichier]"
+     "#vue .fichier[data-id=\"fic-maquettes\"] [data-menu-fichier]"
     ]
    ]
   }
@@ -4773,8 +4773,8 @@
   "destination": "Arbre › Fichiers (/fichiers?projet=, alias /projets/:id/fichiers)",
   "lot": "L2",
   "sonde": {
-   "route": "/projets/maison/fichiers",
-   "cible": "#onglet-corps .vide .vide-titre",
+   "route": "/fichiers?projet=maison",
+   "cible": "#vue .vide .vide-titre",
    "texte": "Aucun fichier",
    "agent": "ignore"
   }
@@ -5296,8 +5296,8 @@
   "destination": "Arbre › Calendrier du projet (/calendrier?projet=) ; /projets/:id/reunions[/:rid] redirige et ouvre la fiche",
   "lot": "L2",
   "sonde": {
-   "route": "/projets/atelier/reunions",
-   "cible": "#onglet-corps [data-action=\"nouveau\"][data-genre=\"reunion\"]"
+   "route": "/calendrier?projet=atelier",
+   "cible": "#vue [data-reunion]"
   }
  },
  {
@@ -5310,8 +5310,8 @@
   "destination": "Arbre › Calendrier du projet (/calendrier?projet=) ; /projets/:id/reunions[/:rid] redirige et ouvre la fiche",
   "lot": "L2",
   "sonde": {
-   "route": "/projets/atelier/reunions",
-   "cible": "#onglet-corps .liste [data-action=\"ouvrir-reunion\"]"
+   "route": "/calendrier?projet=atelier",
+   "cible": "#reunions-projet .liste [data-action=\"ouvrir-reunion\"]"
   }
  },
  {
@@ -5324,8 +5324,8 @@
   "destination": "Arbre › Calendrier du projet (/calendrier?projet=) ; /projets/:id/reunions[/:rid] redirige et ouvre la fiche",
   "lot": "L2",
   "sonde": {
-   "route": "/projets/boutique/reunions",
-   "cible": "#onglet-corps .vide-titre",
+   "route": "/calendrier?projet=boutique",
+   "cible": "#reunions-projet .vide-titre",
    "texte": "Aucune réunion",
    "agent": "ignore"
   }
@@ -5340,12 +5340,12 @@
   "destination": "Arbre › Calendrier du projet (/calendrier?projet=) ; /projets/:id/reunions[/:rid] redirige et ouvre la fiche",
   "lot": "L2",
   "sonde": {
-   "route": "/projets/atelier/reunions",
+   "route": "/calendrier?projet=atelier",
    "cible": ".voile .feuille [data-action-reunion]",
    "avant": [
     [
      "clic",
-     "#onglet-corps [data-action=\"ouvrir-reunion\"]",
+     "#reunions-projet [data-action=\"ouvrir-reunion\"]",
      "Revue"
     ]
    ]
@@ -5361,12 +5361,12 @@
   "destination": "Arbre › Calendrier du projet (/calendrier?projet=) ; /projets/:id/reunions[/:rid] redirige et ouvre la fiche",
   "lot": "L2",
   "sonde": {
-   "route": "/projets/atelier/reunions",
+   "route": "/calendrier?projet=atelier",
    "cible": ".voile .feuille .modale-pied [data-suppr]",
    "avant": [
     [
      "clic",
-     "#onglet-corps [data-action=\"ouvrir-reunion\"]",
+     "#reunions-projet [data-action=\"ouvrir-reunion\"]",
      "Revue"
     ]
    ]
@@ -5624,8 +5624,8 @@
   "destination": "Rail › Pilotage › Activité, filtrée : /activite?projet= (« Tout voir » de l’Aperçu)",
   "lot": "L2",
   "sonde": {
-   "route": "/projets/atelier/activite",
-   "cible": "#onglet-corps .chrono"
+   "route": "/activite?projet=atelier",
+   "cible": "#vue .chrono"
   }
  },
  {
@@ -6123,12 +6123,12 @@
   "destination": "Éditeurs inchangés, ouverts par les mêmes gestes",
   "lot": "L3",
   "sonde": {
-   "route": "/projets/atelier/reunions",
+   "route": "/calendrier?projet=atelier",
    "cible": ".voile .feuille #ed-compteRendu",
    "avant": [
     [
      "clic",
-     "#onglet-corps [data-action=\"nouveau\"][data-genre=\"reunion\"]"
+     "#vue [data-reunion]"
     ]
    ]
   }
@@ -6187,12 +6187,12 @@
   "destination": "Éditeurs inchangés, ouverts par les mêmes gestes",
   "lot": "L3",
   "sonde": {
-   "route": "/projets/atelier/fichiers",
+   "route": "/fichiers?projet=atelier",
    "cible": ".voile .feuille #ed-tags",
    "avant": [
     [
      "clic",
-     "#onglet-corps [data-action=\"nouveau\"][data-genre=\"fichier\"]"
+     "#vue [data-deposer]"
     ]
    ]
   }
@@ -6877,8 +6877,8 @@
   "destination": "Alias gardés, paramètres d’onglet et de plateforme transmis",
   "lot": "L2",
   "sonde": {
-   "route": "/tableau?projet=atelier",
-   "cible": "#onglets-tests"
+   "route": "/tableau?projet=atelier&onglet=automatises",
+   "cible": "#onglets-tests .onglet.actif[data-onglet=\"automatises\"]"
   }
  },
  {
@@ -11308,7 +11308,7 @@
   "lot": "L2",
   "sonde": {
    "route": "/",
-   "cible": "#lat-corps [data-chemin=\"/documents\"] .comptes"
+   "cible": "#lat-corps [data-chemin=\"/fichiers\"] .comptes"
   }
  },
  {
@@ -11321,7 +11321,7 @@
   "destination": "Arbre › Fichiers (/fichiers?projet=) ; tous projets : Portefeuille › Fichiers",
   "lot": "L2",
   "sonde": {
-   "route": "/documents",
+   "route": "/fichiers",
    "avant": [
     [
      "clic",
@@ -11341,7 +11341,7 @@
   "destination": "Arbre › Fichiers (/fichiers?projet=) ; tous projets : Portefeuille › Fichiers",
   "lot": "L2",
   "sonde": {
-   "route": "/documents",
+   "route": "/fichiers",
    "cible": "#recherche-doc"
   }
  },
@@ -11355,7 +11355,7 @@
   "destination": "Arbre › Fichiers (/fichiers?projet=) ; tous projets : Portefeuille › Fichiers",
   "lot": "L2",
   "sonde": {
-   "route": "/documents",
+   "route": "/fichiers",
    "cible": ".fichier[data-id=\"fic-maquettes\"]"
   }
  },
@@ -11369,7 +11369,7 @@
   "destination": "Arbre › Fichiers (/fichiers?projet=) ; tous projets : Portefeuille › Fichiers",
   "lot": "L2",
   "sonde": {
-   "route": "/documents",
+   "route": "/fichiers",
    "avant": [
     [
      "clic",
@@ -11389,7 +11389,7 @@
   "destination": "Arbre › Fichiers (/fichiers?projet=) ; tous projets : Portefeuille › Fichiers",
   "lot": "L2",
   "sonde": {
-   "route": "/documents",
+   "route": "/fichiers",
    "avant": [
     [
      "remplir",
@@ -11413,7 +11413,7 @@
   "sonde": {
    "manuel": true,
    "pourquoi": "code mort",
-   "page": "/documents"
+   "page": "/fichiers"
   }
  },
  {
@@ -12012,7 +12012,7 @@
   "destination": "Rail › Calendrier (/calendrier, alias /planning)",
   "lot": "L2",
   "sonde": {
-   "route": "/planning",
+   "route": "/calendrier",
    "cible": ".calendrier .jour[data-jour] .jour-ouvrir"
   }
  },
@@ -12026,7 +12026,7 @@
   "destination": "Rail › Calendrier (/calendrier, alias /planning)",
   "lot": "L2",
   "sonde": {
-   "route": "/planning",
+   "route": "/calendrier",
    "cible": "[data-reunion]"
   }
  },
@@ -12040,7 +12040,7 @@
   "destination": "Rail › Calendrier (/calendrier, alias /planning)",
   "lot": "L2",
   "sonde": {
-   "route": "/planning",
+   "route": "/calendrier",
    "avant": [
     [
      "clic",
@@ -12060,7 +12060,7 @@
   "destination": "Rail › Calendrier (/calendrier, alias /planning)",
   "lot": "L2",
   "sonde": {
-   "route": "/planning",
+   "route": "/calendrier",
    "cible": "[data-ics-tout]",
    "admin": "absent",
    "agent": "absent"

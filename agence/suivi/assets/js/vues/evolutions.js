@@ -28,6 +28,7 @@ import * as magasin from '../magasin.js';
 import { K, ecrire, abonnerProjet, abonnerPanier, montantDe, horodatage } from '../donnees.js';
 import { photoDuPanier, dessinPhoto, libelleDemande, axePanierable, MAX_PANIER } from '../panier.js';
 import { filAriane } from '../coquille.js';
+import { naviguer, adresseAvec } from '../routeur.js';
 import { feuille, champ, zone, choix as select } from './editeurs.js';
 import {
   PLATEFORMES_AXE, APPORTS_AXE, AMPLEURS_AXE, ETATS_AXE, ETATS_AXE_CLIENT_AGIT, PUBLICATIONS_AXE, CHOIX_AXE, BORNES_AXE, joursTexte, joursValides,
@@ -425,7 +426,11 @@ export const vue = async (ctx, env) => {
      dessin à l'autre. Cocher ne redessine rien : la classe suffit. */
   const ouverts = new Set();
   let derniere = '';
-  let filtre = '';
+  /* Le filtre de plateforme vit dans l'adresse côté équipe
+     (#/projets/<p>/evolutions?plateforme=ios) : le Retour et un lien copié
+     le retrouvent, et le changer redessine en place (« maj »). Chez le
+     client, il reste sur place, comme avant. */
+  let filtre = equipe ? String((ctx.requete || {}).plateforme || '') : '';
   let dernierFiltre = null;
 
   const rendre = () => {
@@ -477,7 +482,11 @@ export const vue = async (ctx, env) => {
   };
   sortie.addEventListener('change', surCase);
   /* Le filtre de plateforme, en haut : « Tout » par défaut. */
-  const gesteFiltre = sur(sortie, 'click', '[data-axe-filtre]', (el) => { filtre = el.dataset.axeFiltre || ''; rendre(); });
+  const gesteFiltre = sur(sortie, 'click', '[data-axe-filtre]', (el) => {
+    const voulu = el.dataset.axeFiltre || '';
+    if (equipe) { naviguer(adresseAvec(`/projets/${encodeURIComponent(pid)}/evolutions`, { plateforme: voulu })); return; }
+    filtre = voulu; rendre();
+  });
 
   const gestesClient = sur(sortie, 'click', '[data-axe-geste]', async (el) => {
     const d = lireTout(pid, env);
@@ -543,6 +552,15 @@ export const vue = async (ctx, env) => {
 
   return {
     fin: () => { planifier.arreter(); sortie.removeEventListener('change', surCase); gestesClient(); gestesPanier(); gestesEquipe(); gesteFiltre(); lot.fin(); },
+    /* Même page, autre plateforme (Cockpit : la route a une clé) : un
+       dessin, en place. */
+    maj: (suite) => {
+      if (!equipe) return;
+      const voulu = String((suite.requete || {}).plateforme || '');
+      if (voulu === filtre) return;
+      filtre = voulu;
+      rendre();
+    },
   };
 };
 
