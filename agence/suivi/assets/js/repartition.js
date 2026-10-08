@@ -21,9 +21,16 @@
    dit par où le testeur commence : 1 s'il a au moins un passage de
    priorité haute, 2 sinon.
 
-   Ce module ne dépend de rien : la page (vues/tests.js) et l'épreuve
-   (fonctions-suivi/outils/repartition.test.mjs) importent le même code.
+   Ce module ne dépend que des verdicts (verdicts.js, pur lui aussi) : la
+   page (vues/tests.js) et l'épreuve (fonctions-suivi/outils/
+   repartition.test.mjs) importent le même code.
+
+   Depuis le 08/10/2026, une campagne se répartit selon la règle du socle
+   (repartirSocle, plus bas), décidée par Nadir pour six vrais testeurs.
+   La règle d'avant (repartir) reste pour relire les campagnes d'avant.
    ========================================================================== */
+
+import { verdictScenarioPlan } from './verdicts.js';
 
 export const QUI_HUMAIN = ['humain', 'les-deux'];
 export const TELEPHONES = ['ios', 'android'];
@@ -217,4 +224,273 @@ export const controler = (affectation, scenarios) => {
   const oubliees = attendus.filter((a) => !compte.get(a.cle)).map((a) => a.cle);
   const malCouvertes = attendus.filter((a) => compte.get(a.cle) && compte.get(a.cle) !== a.voulu).map((a) => a.cle);
   return { oubliees, enTrop, malCouvertes, conforme: !oubliees.length && !enTrop.length && !malCouvertes.length };
+};
+
+
+/* ==========================================================================
+   La règle du socle (Nadir, 08/10/2026)
+
+   Six testeurs, chacun SON téléphone et le web, dix heures au plus :
+   - un plafond par testeur (120 tests, à 5 minutes le test), réglable sur
+     la campagne ;
+   - un socle décisif commun, d'environ 25 scénarios (priorité haute, dans
+     les sections où aucun bug n'est toléré) : TOUS les testeurs le font,
+     sur leur téléphone, et la part web sur le web ;
+   - le reste, chaque passage UNE seule fois, par ordre de priorité (haute,
+     puis moyenne, puis basse), tiré au sort à priorité égale, en servant
+     toujours le moins chargé, jusqu'au plafond. Ce qui ne rentre pas est
+     laissé aux robots ;
+   - avant tout, on retire ce qui ne dirait rien de neuf : un passage
+     « humain et robot » déjà rouge ou en défaut connu chez les robots, ou
+     visé par un bug connu, et, sur le web, celui que les robots ont déjà
+     validé au vert. Un scénario « humain » seul n'est jamais retiré :
+     aucun robot ne le joue.
+   Les informations viennent du Hub (plan, parcours des robots, anomalies),
+   jamais d'un fichier local.
+   ========================================================================== */
+
+export const PLAFOND_DEFAUT = 120;
+export const MINUTES_PAR_TEST = 5;
+export const TAILLE_SOCLE = 25;
+/* Les sections où aucun bug n'est toléré : inscription, connexion,
+   session, premier lancement, tâches, abonnement et achat, synchro,
+   compte, données. */
+export const SECTIONS_CRITIQUES = ['inscription', 'connexion', 'session', 'onboarding', 'taches', 'abonnements', 'abonnement-croise', 'synchro', 'compte', 'donnees'];
+export const MOTIFS_RETRAIT = {
+  robot: 'déjà rouge ou en défaut connu chez les robots',
+  bug: 'bug déjà connu',
+  'web-vert': 'déjà validé au vert par les robots sur le web',
+};
+const ANOMALIES_OUVERTES = ['nouvelle', 'a-reverifier', 'confirmee'];
+const RANG_PRIORITE = { haute: 0, moyenne: 1, basse: 2 };
+const rangPriorite = (p) => (p in RANG_PRIORITE ? RANG_PRIORITE[p] : 3);
+const RANG_TYPE = { normal: 0, limite: 1, erreur: 2 };
+const RANG_ASPECT = { f: 0, s: 1, t: 2, u: 3 };
+const aspectDe = (id) => (/-([ftus])-\d{3}$/.exec(String(id || '')) || [])[1] || '';
+
+/** Le plafond d'une campagne : un entier positif, 120 sinon. */
+export const plafondDe = (c) => {
+  const n = Math.floor(Number((c || {}).plafond));
+  return Number.isFinite(n) && n > 0 ? n : PLAFOND_DEFAUT;
+};
+
+/** Une campagne qui suit la règle du socle. */
+export const regleSocle = (c) => Boolean(c) && c.regle === 'socle';
+
+/**
+ * Le socle proposé : les scénarios humains de priorité haute des sections
+ * critiques, pris à tour de rôle, section par section (dans l'ordre de
+ * SECTIONS_CRITIQUES), le cas d'usage courant et le fonctionnel d'abord.
+ * Si les sections critiques n'y suffisent pas, les autres complètent, dans
+ * l'ordre du plan. Seulement des scénarios qui ont au moins un passage au
+ * téléphone qui n'est pas retiré (retraits : Map clé -> motif). L'équipe
+ * retouche la liste dans le Cockpit.
+ */
+export const proposerSocle = (scenarios, { sections = SECTIONS_CRITIQUES, nombre = TAILLE_SOCLE, retraits = new Map() } = {}) => {
+  const rangDe = new Map((scenarios || []).map((s, i) => [s && s.id, i]));
+  /* Le socle se fait sur le téléphone : un scénario sans téléphone, ou
+     dont tous les passages au téléphone sont retirés, n'y a pas sa place. */
+  const candidats = (scenarios || []).filter((s) => s && s.id && QUI_HUMAIN.includes(s.qui) && s.priorite === 'haute'
+    && (Array.isArray(s.plateformes) ? s.plateformes : []).some((p) => TELEPHONES.includes(p) && !retraits.has(cleAffectation(s.id, p))));
+  const parSection = new Map();
+  candidats.forEach((s) => { const k = s.section || ''; if (!parSection.has(k)) parSection.set(k, []); parSection.get(k).push(s); });
+  parSection.forEach((l) => l.sort((a, b) => (RANG_TYPE[a.type] ?? 3) - (RANG_TYPE[b.type] ?? 3)
+    || (RANG_ASPECT[aspectDe(a.id)] ?? 4) - (RANG_ASPECT[aspectDe(b.id)] ?? 4)
+    || rangDe.get(a.id) - rangDe.get(b.id)));
+  const pris = [];
+  const tourner = (ordre) => {
+    const files = ordre.map((k) => (parSection.get(k) || []).slice()).filter((f) => f.length);
+    while (pris.length < nombre && files.some((f) => f.length)) {
+      files.forEach((f) => { if (pris.length < nombre && f.length) pris.push(f.shift().id); });
+    }
+  };
+  tourner(sections.filter((k) => parSection.has(k)));
+  if (pris.length < nombre) tourner([...parSection.keys()].filter((k) => !sections.includes(k)));
+  return pris;
+};
+
+/* Une anomalie vise-t-elle ce scénario sur cette plateforme ? Celles des
+   robots portent « scenarios », celles des testeurs « scenario » ; sans
+   plateforme déclarée, elle vaut partout. */
+const anomalieSurCle = (a, id, plateforme) => {
+  const vise = a.scenario === id || (Array.isArray(a.scenarios) && a.scenarios.includes(id));
+  const plats = Array.isArray(a.plateformes) ? a.plateformes : [];
+  return vise && (!plats.length || plats.includes(plateforme));
+};
+
+/**
+ * Les passages à retirer de la campagne, avec leur motif (MOTIFS_RETRAIT).
+ *
+ * @param {Array} scenarios  scénarios du plan (avec « parcours », les
+ *                           références des tests robot rattachés)
+ * @param {Array} parcours   les parcours du projet (projets/{p}/parcours)
+ * @param {Array} anomalies  les anomalies du projet (projets/{p}/anomalies)
+ * @returns {Map<string, string>} clé -> motif
+ */
+export const retraitsConnus = ({ scenarios = [], parcours = [], anomalies = [] } = {}) => {
+  const parRef = new Map((parcours || []).filter((p) => p && p.ref && p.actif !== false).map((p) => [p.ref, p]));
+  const ouvertes = (anomalies || []).filter((a) => a && ANOMALIES_OUVERTES.includes(a.statut || 'nouvelle'));
+  const retraits = new Map();
+  (scenarios || []).forEach((s) => {
+    if (!s || s.qui !== 'les-deux' || !s.id) return;
+    const rattaches = (Array.isArray(s.parcours) ? s.parcours : []).map((r) => parRef.get(r)).filter(Boolean);
+    const siennes = new Set(Array.isArray(s.plateformes) ? s.plateformes : []);
+    PLATEFORMES.filter((p) => siennes.has(p)).forEach((p) => {
+      const etat = rattaches.length ? verdictScenarioPlan({ scenario: s, rattaches, plateforme: p }).etat : 'aecrire';
+      const cle = cleAffectation(s.id, p);
+      if (etat === 'casse' || etat === 'connu') retraits.set(cle, 'robot');
+      else if (ouvertes.some((a) => anomalieSurCle(a, s.id, p))) retraits.set(cle, 'bug');
+      else if (p === 'web' && etat === 'ok') retraits.set(cle, 'web-vert');
+    });
+  });
+  return retraits;
+};
+
+/* Un tirage reproductible : la même campagne, les mêmes données, la même
+   répartition. L'aperçu montre ce qui sera écrit, pas un autre tirage. */
+const alea = (graine) => {
+  let h = 2166136261;
+  String(graine || 'capmedia').split('').forEach((ch) => { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); });
+  let x = h >>> 0;
+  return () => { x = (x + 0x6D2B79F5) >>> 0; let t = x; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+};
+
+/**
+ * La répartition selon la règle du socle.
+ *
+ * @param {Array}  scenarios  scénarios du plan retenus par la campagne
+ * @param {Array}  testeurs   [{ id, mobile: 'ios'|'android', web? }]
+ * @param {Object} options    socle (identifiants), plafond, retraits (Map
+ *                            clé -> motif), garder ({ uid: [clé] } déjà
+ *                            consignés), graine (le tirage)
+ * @returns {{ affectation, socle, reste, laisses, retires, depassements, ecartes, attendus }}
+ */
+export const repartirSocle = (scenarios, testeurs, { socle = [], plafond = PLAFOND_DEFAUT, retraits = new Map(), garder = {}, graine = '' } = {}) => {
+  const tous = passagesAttendus(scenarios);
+  const sc = new Map((scenarios || []).map((s) => [s.id, s]));
+  const retires = tous.filter((a) => retraits.has(a.cle)).map((a) => ({ cle: a.cle, motif: retraits.get(a.cle) }));
+  const attendus = tous.filter((a) => !retraits.has(a.cle));
+  const parCle = new Map(attendus.map((a) => [a.cle, a]));
+  const dansSocle = new Set((socle || []).filter((id) => sc.has(id)));
+  const max = Math.max(1, Math.floor(Number(plafond)) || PLAFOND_DEFAUT);
+
+  const gens = [];
+  const ecartes = [];
+  (testeurs || []).forEach((t) => {
+    if (!t || !t.id || gens.some((x) => x.id === t.id)) return;
+    if (!TELEPHONES.includes(t.mobile)) { ecartes.push(t.id); return; }
+    gens.push({ id: t.id, telephone: t.mobile, web: t.web !== false, cles: new Set() });
+  });
+
+  /* 1. Le socle, chez tous, sur ce que chacun peut faire. */
+  const cleSocle = attendus.filter((a) => dansSocle.has(a.scenario));
+  gens.forEach((t) => cleSocle.forEach((a) => { if (peut(t, a.plateforme)) t.cles.add(a.cle); }));
+  const socleDe = new Map(gens.map((t) => [t.id, t.cles.size]));
+
+  /* 2. Ce qui est déjà joué reste chez son auteur (une fois). */
+  const pris = new Map();
+  gens.forEach((t) => (Array.isArray(garder[t.id]) ? garder[t.id] : []).forEach((cle) => {
+    const a = parCle.get(cle);
+    if (!a || dansSocle.has(a.scenario) || pris.has(cle) || !peut(t, a.plateforme)) return;
+    t.cles.add(cle); pris.set(cle, t.id);
+  }));
+
+  /* 3. Le reste, une fois chacun, priorité par priorité. À priorité égale,
+     un « humain » seul passe devant (aucun robot ne le rattrapera), le
+     téléphone devant le web (les robots couvrent déjà le web), et le
+     sort décide dans chaque groupe. Toujours le moins chargé, jamais
+     au-delà du plafond. */
+  const tirer = alea(`${graine}|${max}`);
+  const groupe = (a) => {
+    const s = sc.get(a.scenario) || {};
+    return [rangPriorite(s.priorite), s.qui === 'humain' ? 0 : 1, a.plateforme === 'web' ? 1 : 0];
+  };
+  const reste = attendus.filter((a) => !dansSocle.has(a.scenario) && !pris.has(a.cle))
+    .map((a) => ({ a, g: groupe(a), x: tirer() }))
+    .sort((p, q) => p.g[0] - q.g[0] || p.g[1] - q.g[1] || p.g[2] - q.g[2] || p.x - q.x)
+    .map((p) => p.a);
+  const laisses = [];
+  reste.forEach((a) => {
+    const libres = gens.filter((t) => peut(t, a.plateforme) && t.cles.size < max);
+    if (!libres.length) { laisses.push(a); return; }
+    const moins = Math.min(...libres.map((t) => t.cles.size));
+    const egaux = libres.filter((t) => t.cles.size === moins);
+    const t = egaux[Math.floor(tirer() * egaux.length)];
+    t.cles.add(a.cle); pris.set(a.cle, t.id);
+  });
+
+  const rangDe = new Map(attendus.map((a, i) => [a.cle, i]));
+  const tri = (k) => { const a = parCle.get(k); const s = sc.get(a.scenario) || {}; return [dansSocle.has(a.scenario) ? 0 : 1, rangPriorite(s.priorite), a.plateforme === 'web' ? 1 : 0, rangDe.get(k)]; };
+  const comparer = (x, y) => { const a = tri(x); const b = tri(y); for (let i = 0; i < a.length; i += 1) if (a[i] !== b[i]) return a[i] - b[i]; return 0; };
+  const affectation = {};
+  gens.forEach((t) => {
+    const cles = [...t.cles].sort(comparer);
+    const haute = cles.some((k) => dansSocle.has(parCle.get(k).scenario) || (sc.get(parCle.get(k).scenario) || {}).priorite === 'haute');
+    affectation[t.id] = { telephone: t.telephone, web: t.web, cles, vague: haute ? 1 : 2 };
+  });
+  const depassements = gens.filter((t) => socleDe.get(t.id) > max).map((t) => ({ id: t.id, socle: socleDe.get(t.id) }));
+  return {
+    affectation,
+    socle: { scenarios: [...dansSocle], cles: cleSocle.length },
+    laisses: laisses.map((a) => { const s = sc.get(a.scenario) || {}; return { cle: a.cle, scenario: a.scenario, plateforme: a.plateforme, qui: s.qui, priorite: s.priorite || '' }; }),
+    retires,
+    depassements,
+    ecartes,
+    attendus: attendus.length,
+  };
+};
+
+/**
+ * Le contrôle d'une affectation selon la règle du socle, contre le plan,
+ * sans recalculer le tirage : ce qui doit être vrai quelle que soit la
+ * façon dont on l'a obtenue.
+ *   enTrop        clé inconnue du plan, retirée, en double chez un testeur,
+ *                 ou hors de son téléphone et du web ;
+ *   doublons      clé hors socle confiée à plus d'un testeur ;
+ *   socleManquant clé du socle qu'un testeur peut faire et n'a pas ;
+ *   auDessus      testeur au-delà du plafond ;
+ *   laisses       clés que personne n'a (laissées aux robots), pour info.
+ */
+export const controlerSocle = (affectation, scenarios, { socle = [], retraits = [], plafond = PLAFOND_DEFAUT } = {}) => {
+  const sansRetraits = new Set(retraits instanceof Map ? [...retraits.keys()] : (retraits || []));
+  const attendus = passagesAttendus(scenarios).filter((a) => !sansRetraits.has(a.cle));
+  const parCle = new Map(attendus.map((a) => [a.cle, a]));
+  const dansSocle = new Set(socle || []);
+  const max = Math.max(1, Math.floor(Number(plafond)) || PLAFOND_DEFAUT);
+  const porteurs = new Map();
+  const enTrop = []; const socleManquant = []; const auDessus = [];
+  Object.entries(affectation || {}).forEach(([uid, a]) => {
+    const t = { telephone: a && a.telephone, web: !a || a.web !== false };
+    const vues = new Set();
+    const cles = clesDe(affectation, uid);
+    cles.forEach((cle) => {
+      const p = parCle.get(cle);
+      if (!p || vues.has(cle) || !peut(t, p.plateforme)) { enTrop.push(`${uid}:${cle}`); return; }
+      vues.add(cle);
+      porteurs.set(cle, (porteurs.get(cle) || 0) + 1);
+    });
+    attendus.filter((x) => dansSocle.has(x.scenario) && peut(t, x.plateforme) && !vues.has(x.cle))
+      .forEach((x) => socleManquant.push(`${uid}:${x.cle}`));
+    if (cles.length > max) auDessus.push(uid);
+  });
+  const doublons = attendus.filter((a) => !dansSocle.has(a.scenario) && (porteurs.get(a.cle) || 0) > 1).map((a) => a.cle);
+  const laisses = attendus.filter((a) => !dansSocle.has(a.scenario) && !porteurs.get(a.cle)).map((a) => a.cle);
+  return { enTrop, doublons, socleManquant, auDessus, laisses, conforme: !enTrop.length && !doublons.length && !socleManquant.length && !auDessus.length };
+};
+
+/* La charge de chacun selon la règle du socle : socle, reste, total, et
+   le temps que ça représente. */
+export const chargeSocle = (affectation, socle = []) => {
+  const dansSocle = new Set(socle || []);
+  return Object.keys(affectation || {}).map((id) => {
+    const a = affectation[id] || {};
+    const cles = clesDe(affectation, id);
+    const scenario = (c) => c.slice(0, c.lastIndexOf('__'));
+    const s = cles.filter((c) => dansSocle.has(scenario(c))).length;
+    return {
+      id, telephone: a.telephone || '', socle: s, reste: cles.length - s, total: cles.length,
+      webN: cles.filter((c) => c.endsWith('__web')).length,
+      heures: Math.round((cles.length * MINUTES_PAR_TEST / 60) * 10) / 10,
+    };
+  });
 };

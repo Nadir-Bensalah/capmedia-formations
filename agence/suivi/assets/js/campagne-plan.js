@@ -14,9 +14,14 @@
    - « humain » seul se passe par deux testeurs différents, « les-deux »
      par un seul (un robot fait l'autre moitié).
 
-   Le calcul de la répartition n'est pas ici (donnees.js, repartir) : ce
-   module ne fait que préparer ce qu'on lui donne et juger ce qu'il rend.
+   Le calcul de la répartition n'est pas ici (repartition.js) : ce module
+   ne fait que préparer ce qu'on lui donne et juger ce qu'il rend. Une
+   campagne « regle: 'socle' » (08/10/2026) se juge avec controlerSocle :
+   le socle chez chacun, le reste une fois, le plafond tenu, ce qui ne
+   rentre pas laissé aux robots.
    ========================================================================== */
+
+import { controlerSocle, plafondDe, regleSocle, MINUTES_PAR_TEST } from './repartition.js';
 
 export const QUI_HUMAINS = ['humain', 'les-deux'];
 const ASPECTS = ['fonctionnel', 'technique', 'ux', 'securite'];
@@ -51,8 +56,8 @@ export const scenariosHumainsDuPlan = (sections = []) => {
       vus.add(sc.id);
       const propres = (sc.plateformes || []).filter((p) => PLATEFORMES.includes(p));
       sortie.push({
-        id: sc.id, ref: sc.id, titre: sc.titre || '', qui: sc.qui, priorite: sc.priorite || '',
-        plateformes: propres,
+        id: sc.id, ref: sc.id, titre: sc.titre || '', qui: sc.qui, priorite: sc.priorite || '', type: sc.type || '',
+        plateformes: propres, parcours: Array.isArray(sc.parcours) ? sc.parcours.slice() : [],
         section: s.id, sectionTitre: s.titre || s.id || '', groupe: s.groupe || '', aspect,
       });
     }));
@@ -156,6 +161,24 @@ export const vivierPropose = (vivier = [], pid = '', dejaPris = []) => (vivier |
 
 /* Avant le lancement : ce qui doit être vrai, ligne par ligne. La campagne
    ne part que si tout est vrai. */
+/* Le jugement d'une campagne à la règle du socle, dans les mots de la
+   liste « Prête à lancer ? ». */
+const repartitionSocle = (c, dedans, repartie) => {
+  const aff = c.affectation || {};
+  const plafond = plafondDe(c);
+  const ctl = controlerSocle(aff, dedans, { socle: c.socle || [], retraits: c.retraits || [], plafond });
+  const n = (c.testeurs || []).length;
+  const heures = Math.max(0, ...Object.keys(aff).map((u) => clesDe(aff[u]).length)) * MINUTES_PAR_TEST / 60;
+  const ok = repartie && ctl.conforme;
+  const detail = !repartie ? 'Personne n\'a encore de scénario.'
+    : ctl.enTrop.length ? `${ctl.enTrop.length} ${ctl.enTrop.length > 1 ? 'passages en trop ou hors du téléphone et du web du testeur' : 'passage en trop ou hors du téléphone et du web du testeur'} : répartissez de nouveau.`
+      : ctl.doublons.length ? `${ctl.doublons.length} ${ctl.doublons.length > 1 ? 'passages confiés' : 'passage confié'} deux fois hors du socle : répartissez de nouveau.`
+        : ctl.socleManquant.length ? `Le socle manque chez un testeur (${ctl.socleManquant.length} ${ctl.socleManquant.length > 1 ? 'passages' : 'passage'}) : répartissez de nouveau.`
+          : ctl.auDessus.length ? `${ctl.auDessus.length} ${ctl.auDessus.length > 1 ? 'testeurs dépassent' : 'testeur dépasse'} le plafond de ${plafond} tests.`
+            : `${n} ${n > 1 ? 'testeurs' : 'testeur'}, ${nombreDeCles(aff)} passages, ${Math.round(heures * 10) / 10} h au plus chacun. ${ctl.laisses.length} ${ctl.laisses.length > 1 ? 'tests laissés' : 'test laissé'} aux robots.`;
+  return { ok, detail };
+};
+
 export const pretALancer = (c = {}, { humains = [], testeurs = [] } = {}) => {
   const surPlan = estSurLePlan(c, humains);
   const retenus = new Set(c.scenarios || []);
@@ -163,14 +186,15 @@ export const pretALancer = (c = {}, { humains = [], testeurs = [] } = {}) => {
   const aff = c.affectation || {};
   const bilan = bilanAffectation(aff, dedans, testeurs);
   const repartie = nombreDeCles(aff) > 0 && (c.testeurs || []).length > 0;
+  const socle = regleSocle(c) ? repartitionSocle(c, dedans, repartie) : null;
   const inst = c.installation || {};
   const systemes = [...new Set(Object.values(aff).map((e) => (e && !Array.isArray(e) ? e.telephone : '')).filter(Boolean))];
   const liensManquants = systemes.filter((s) => !inst[s]);
   return [
     { cle: 'scenarios', ok: surPlan && dedans.length > 0, libelle: 'Les scénarios du plan',
       detail: !surPlan ? 'La campagne reprend l\'ancienne bibliothèque : choisissez les sections du plan.' : `${dedans.length} ${dedans.length > 1 ? 'scénarios retenus' : 'scénario retenu'}.` },
-    { cle: 'repartition', ok: repartie && !bilan.oubliees.length && !bilan.enTrop.length && !bilan.horsSysteme.length, libelle: 'Les testeurs, répartis',
-      detail: !repartie ? 'Personne n\'a encore de scénario.' : bilan.oubliees.length ? `${bilan.oubliees.length} ${bilan.oubliees.length > 1 ? 'passages sans testeur' : 'passage sans testeur'}.` : bilan.enTrop.length ? `${bilan.enTrop.length} ${bilan.enTrop.length > 1 ? 'passages en trop' : 'passage en trop'} : répartissez de nouveau.` : bilan.horsSysteme.length ? `${bilan.horsSysteme.length} ${bilan.horsSysteme.length > 1 ? 'passages confiés' : 'passage confié'} hors du téléphone ou du web du testeur : répartissez de nouveau.` : `${(c.testeurs || []).length} ${(c.testeurs || []).length > 1 ? 'testeurs' : 'testeur'}, ${nombreDeCles(aff)} passages.` },
+    { cle: 'repartition', ok: socle ? socle.ok : repartie && !bilan.oubliees.length && !bilan.enTrop.length && !bilan.horsSysteme.length, libelle: 'Les testeurs, répartis',
+      detail: socle ? socle.detail : !repartie ? 'Personne n\'a encore de scénario.' : bilan.oubliees.length ? `${bilan.oubliees.length} ${bilan.oubliees.length > 1 ? 'passages sans testeur' : 'passage sans testeur'}.` : bilan.enTrop.length ? `${bilan.enTrop.length} ${bilan.enTrop.length > 1 ? 'passages en trop' : 'passage en trop'} : répartissez de nouveau.` : bilan.horsSysteme.length ? `${bilan.horsSysteme.length} ${bilan.horsSysteme.length > 1 ? 'passages confiés' : 'passage confié'} hors du téléphone ou du web du testeur : répartissez de nouveau.` : `${(c.testeurs || []).length} ${(c.testeurs || []).length > 1 ? 'testeurs' : 'testeur'}, ${nombreDeCles(aff)} passages.` },
     { cle: 'installation', ok: repartie && !liensManquants.length && Boolean(inst.ios || inst.android || inst.web), libelle: 'Les liens d\'installation',
       detail: liensManquants.length ? `Il manque le lien ${liensManquants.map((s) => NOMS_PLATEFORMES[s] || s).join(' et ')}.` : (inst.ios || inst.android || inst.web) ? 'Chaque testeur a de quoi installer.' : 'Aucun lien pour l\'instant.' },
     { cle: 'presentation', ok: Boolean(String(c.application || '').trim()), libelle: 'La présentation aux testeurs',

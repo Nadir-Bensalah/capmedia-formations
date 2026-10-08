@@ -124,9 +124,13 @@ await env.withSecurityRulesDisabled(async (ctx) => {
   await setDoc(doc(b, `projets/atelier/campagnes/c1/passages/${SONIA}__DI-15`), { scenario: 'DI-15', testeur: SONIA, plateforme: 'android', resultat: 'ok', commentaire: '', preuves: [], contexte: { modele: 'Pixel 8' } });
   await setDoc(doc(b, `projets/atelier/campagnes/close/passages/${KARIM}__ID-01`), { scenario: 'ID-01', testeur: KARIM, plateforme: 'ios', resultat: 'ok', commentaire: '', preuves: [], contexte: {} });
   await setDoc(doc(b, `projets/atelier/campagnes/c1/appreciations/${KARIM}`), { beaute: 4, prix: 5 });
-  await setDoc(doc(b, 'projets/atelier/anomalies/a1'), { titre: 'Rappel decale', gravite: 'critique', statut: 'confirmee', passages: [`${KARIM}__DI-15`] });
+  await setDoc(doc(b, 'projets/atelier/anomalies/a1'), { titre: 'Rappel decale', gravite: 'critique', statut: 'confirmee', interne: false, passages: [`${KARIM}__DI-15`] });
+  /* Un échec de testeur pas encore confirmé (08/10/2026) : interne. Et une
+     anomalie d'avant la migration, sans le champ. */
+  await setDoc(doc(b, 'projets/atelier/anomalies/ko-DI-16'), { titre: 'Le rappel ne part pas', gravite: 'important', statut: 'nouvelle', origine: 'testeur', interne: true, scenario: 'DI-16' });
+  await setDoc(doc(b, 'projets/atelier/anomalies/sans-champ'), { titre: 'Ancienne', gravite: 'mineur', statut: 'nouvelle' });
   /* Un problème relevé par les tests automatiques, et sa note interne. */
-  await setDoc(doc(b, 'projets/atelier/anomalies/robot-BUG-001'), { titre: 'La page Tâches ne s ouvre pas', gravite: 'critique', statut: 'nouvelle', origine: 'robot', scenarios: ['taches-f-001'], plateformes: ['web'] });
+  await setDoc(doc(b, 'projets/atelier/anomalies/robot-BUG-001'), { titre: 'La page Tâches ne s ouvre pas', gravite: 'critique', statut: 'nouvelle', origine: 'robot', interne: false, scenarios: ['taches-f-001'], plateformes: ['web'] });
   await setDoc(doc(b, 'projets/atelier/anomalies/robot-BUG-001/equipe/note'), { source: 'BUG-001', constats: [{ plateforme: 'web', piste: 'src/pages/tasks.tsx:12' }] });
   await setDoc(doc(b, 'projets/boutique/anomalies/robot-BUG-002'), { titre: 'Autre projet', gravite: 'mineur', statut: 'nouvelle', origine: 'robot' });
   await setDoc(doc(b, 'projets/boutique/anomalies/robot-BUG-002/equipe/note'), { source: 'BUG-002', constats: [] });
@@ -479,11 +483,19 @@ await doit("L'équipe lit les appréciations", getDocs(collection(equipe(), 'pro
 console.log('\n== La plateforme de tests : les anomalies');
 /* Le testeur rapporte, il ne juge pas : le tri des échecs en anomalies
    est un geste d'équipe, et le client en voit le résultat. */
-await doit('Camille lit les anomalies', getDocs(collection(camille(), 'projets/atelier/anomalies')));
+await doit('Camille lit les anomalies ouvertes au client', getDocs(query(collection(camille(), 'projets/atelier/anomalies'), where('interne', '==', false))));
+/* Décision du 08/10/2026 : un échec de testeur reste à l'équipe tant
+   qu'elle ne l'a pas confirmé. Les règles le ferment, pas l'écran. */
+await refuse('Camille ne liste pas les anomalies sans le filtre (elle verrait les internes)', getDocs(collection(camille(), 'projets/atelier/anomalies')));
+await refuse('Camille ne lit pas un échec de testeur pas encore confirmé', getDoc(doc(camille(), 'projets/atelier/anomalies/ko-DI-16')));
+await refuse('Camille ne liste pas les internes en les demandant', getDocs(query(collection(camille(), 'projets/atelier/anomalies'), where('interne', '==', true))));
+await refuse('Une anomalie sans le champ reste fermée au client (la migration le pose avant)', getDoc(doc(camille(), 'projets/atelier/anomalies/sans-champ')));
+await doit('L équipe lit l échec interne', getDoc(doc(equipe(), 'projets/atelier/anomalies/ko-DI-16')));
+await doit('L équipe liste tout, internes compris', getDocs(collection(equipe(), 'projets/atelier/anomalies')));
 await doit("L'équipe classe une anomalie", updateDoc(doc(equipe(), 'projets/atelier/anomalies/a1'), { statut: 'corrigee' }));
 await refuse('Karim ne lit pas les anomalies', getDocs(collection(karim(), 'projets/atelier/anomalies')));
 await refuse('Camille ne classe pas une anomalie', updateDoc(doc(camille(), 'projets/atelier/anomalies/a1'), { statut: 'sans-suite' }));
-await refuse('Léa ne lit pas les anomalies d un autre projet', getDocs(collection(lea(), 'projets/atelier/anomalies')));
+await refuse('Léa ne lit pas les anomalies d un autre projet', getDocs(query(collection(lea(), 'projets/atelier/anomalies'), where('interne', '==', false))));
 
 console.log('\n== Les problèmes relevés par les tests automatiques : statut au client, note à l équipe');
 /* Règle du 04/10/2026 : le client lit le problème et son statut ; la

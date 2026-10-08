@@ -540,11 +540,17 @@ const cleDuPassage = (p) => (p && p.scenario && p.plateforme ? clePassage(p.scen
 const ORDRE_GROUPES = ['demarrage', 'socle', 'fonctionnalites', 'transverse'];
 const rangGroupe = (g) => { const i = ORDRE_GROUPES.indexOf(g); return i < 0 ? 99 : i; };
 
+const RANG_PRIORITE = { haute: 0, moyenne: 1, basse: 2 };
+
 /**
  * Les scénarios d'un testeur dans une campagne sur le plan : une ligne par
  * clé de son affectation, rangée par section (dans l'ordre du plan), puis
  * le téléphone avant le web (on ne change pas d'appareil à chaque ligne),
  * puis l'ordre des scénarios dans la section.
+ *
+ * Une campagne à la règle du socle (socle non vide, 08/10/2026) range
+ * autrement : le socle d'abord, puis la priorité (haute, moyenne, basse) ;
+ * dans chacun, le téléphone avant le web, puis l'ordre du plan.
  *
  * Une clé dont le scénario n'est plus dans le plan, n'est plus fait par un
  * humain, ou n'est plus déclaré sur cette plateforme, ne donne pas de
@@ -557,7 +563,9 @@ const rangGroupe = (g) => { const i = ORDRE_GROUPES.indexOf(g); return i < 0 ? 9
  *   chaque scénario : { ref (la clé), id, plateforme, titre, etapes, attendu,
  *   priorite, type, qui, aspect, section, sectionTitre, bloc, blocLibelle }
  */
-export const scenariosDuTesteur = ({ sections = [], cles = [] }) => {
+export const scenariosDuTesteur = ({ sections = [], cles = [], socle = [] }) => {
+  const dansSocle = new Set(Array.isArray(socle) ? socle : []);
+  const parPriorite = dansSocle.size > 0;
   const parId = new Map();
   sections.filter((s) => s && s.aspects).forEach((s) => {
     let rang = 0;
@@ -578,7 +586,10 @@ export const scenariosDuTesteur = ({ sections = [], cles = [] }) => {
       titre: sc.titre || sc.id, etapes: sc.etapes || '', attendu: sc.attendu || '',
       priorite: sc.priorite || '', type: sc.type || '', qui: sc.qui, aspect,
       section: s.id, sectionTitre: s.titre || s.id, bloc: s.id, blocLibelle: s.titre || s.id,
-      rang: [rangGroupe(s.groupe), Number(s.ordre) || 0, s.id, k.plateforme === 'web' ? 1 : 0, rang],
+      rang: parPriorite
+        ? [dansSocle.has(sc.id) ? 0 : 1, sc.priorite in RANG_PRIORITE ? RANG_PRIORITE[sc.priorite] : 3, k.plateforme === 'web' ? 1 : 0, rangGroupe(s.groupe), Number(s.ordre) || 0, s.id, rang]
+        : [rangGroupe(s.groupe), Number(s.ordre) || 0, s.id, k.plateforme === 'web' ? 1 : 0, rang],
+      socle: dansSocle.has(sc.id),
     });
   });
   const comparer = (a, b) => {

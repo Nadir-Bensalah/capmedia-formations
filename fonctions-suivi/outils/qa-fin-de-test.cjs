@@ -120,7 +120,11 @@ let page = null;
   }
   const act = ((await lire('activite?pageSize=100')) || {}).documents || [];
   const ligne = act.find((d) => str(d, 'type') === 'test' && /a terminé la campagne/.test(str(d, 'texte')));
-  verifier(ligne && str(ligne, 'visibilite') === 'client' && !/Karim/.test(str(ligne, 'texte')), 'le client lit qu un testeur a terminé, sans son nom', ligne ? str(ligne, 'texte') : '(rien)');
+  /* Décision du 08/10/2026 : rien pour le client sur les tests. La trace
+     est interne, et aucune cloche ne lui dit qu'un testeur a terminé. */
+  verifier(ligne && str(ligne, 'visibilite') === 'interne', 'la fin d un testeur laisse une trace interne, pas une activité client', ligne ? `${str(ligne, 'visibilite')} : ${str(ligne, 'texte')}` : '(rien)');
+  const cloches = await fetch(`${BANC.firestore}/v1/projects/${PROJET}/databases/(default)/documents:runQuery`, { method: 'POST', headers: { ...prop, 'Content-Type': 'application/json' }, body: JSON.stringify({ structuredQuery: { from: [{ collectionId: 'notifications', allDescendants: true }], where: { fieldFilter: { field: { fieldPath: 'titre' }, op: 'EQUAL', value: { stringValue: 'Un testeur a terminé' } } } } }) }).then((r) => r.json()).catch(() => []);
+  verifier(Array.isArray(cloches) && !cloches.some((x) => x.document), 'aucune notification « Un testeur a terminé » chez le client', JSON.stringify(cloches).slice(0, 120));
 
   console.log('\n== Une remarque après coup');
   await page.fill('#remarque-texte', 'Le bouton Retour est trop petit sur iPhone SE.');

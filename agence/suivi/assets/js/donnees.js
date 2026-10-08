@@ -270,7 +270,10 @@ export const abonnerProjet = (lot, pid, role) => {
      Les sections, lourdes, ne se lisent que sur la page du plan. */
   lot.abonner(K.planPresentation(pid), () => doc(bdd, 'projets', pid, 'planTests', 'presentation'));
   lot.abonner(K.campagnes(pid), () => col('projets', pid, 'campagnes'));
-  lot.abonner(K.anomalies(pid), () => col('projets', pid, 'anomalies'));
+  /* Un échec de testeur pas encore confirmé par l'équipe est une
+     anomalie interne (« interne: true ») : le client ne la lit pas, les
+     règles le lui refusent, et sa requête ne demande que les autres. */
+  lot.abonner(K.anomalies(pid), () => (client ? query(col('projets', pid, 'anomalies'), where('interne', '==', false)) : col('projets', pid, 'anomalies')));
   lot.abonner(K.parcours(pid), () => col('projets', pid, 'parcours'));
   lot.abonner(K.regles(pid), () => col('projets', pid, 'regles'));
   lot.abonner(K.profilsTesteurs(pid), () => col('projets', pid, 'profilsTesteurs'));
@@ -1009,7 +1012,7 @@ export const ecrire = {
      celles-ci prennent un identifiant libre, et la même feuille les
      qualifie toutes. */
   creerAnomalie: (pid, d) => addDoc(col('projets', pid, 'anomalies'), nettoyer({
-    ...d, origine: 'equipe', passages: d.passages || [], temoins: d.temoins || [],
+    ...d, origine: 'equipe', interne: false, passages: d.passages || [], temoins: d.temoins || [],
     cree: serverTimestamp(), maj: serverTimestamp(),
   })),
   majAnomalie: (pid, id, d) => updateDoc(doc(bdd, 'projets', pid, 'anomalies', id), nettoyer({ ...d, maj: serverTimestamp() })),
@@ -1138,6 +1141,10 @@ export const ecrire = {
        blanche qui l'oublie crée une campagne qui n'a rien à distribuer,
        sans rien dire à personne. */
     scenarios: d.scenarios || [],
+    /* La règle du socle (08/10/2026) : sans elle, une campagne neuve
+       perdait son socle et son plafond à la création. */
+    ...(d.regle === 'socle' ? { regle: 'socle', socle: Array.isArray(d.socle) ? d.socle : [], plafond: d.plafond } : {}),
+    ...(d.plan === true ? { plan: true } : {}),
     cree: serverTimestamp(), maj: serverTimestamp(),
   })),
   majCampagne: (pid, cid, d) => updateDoc(doc(bdd, 'projets', pid, 'campagnes', cid), nettoyer({ ...d, maj: serverTimestamp() })),

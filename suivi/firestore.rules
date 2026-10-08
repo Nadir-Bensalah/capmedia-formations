@@ -2087,8 +2087,15 @@ service cloud.firestore {
       // le client lit tout, ce qui n'est pas confirmé est dit « À
       // confirmer ». Il ne change jamais un statut : l'écriture est à
       // l'équipe.
+      //
+      // Depuis le 08/10/2026, un échec de testeur naît INTERNE
+      // (« interne: true ») : le client ne la lit qu'une fois l'équipe
+      // l'a confirmée (le serveur passe alors « interne » à false). Une
+      // anomalie sans le champ reste fermée au client : la migration
+      // (migrer-anomalies-interne.mjs) l'a posé partout avant ces règles.
       match /anomalies/{anomalieId} {
-        allow read:   if accesProjet(projetId);
+        allow read:   if equipeSurProjet(projetId)
+                      || (membreDuProjet(projetId) && resource.data.interne == false);
         allow write:  if equipeSurProjet(projetId);
 
         // La note interne : la piste technique (fichier, ligne, preuve) et

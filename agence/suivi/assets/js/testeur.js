@@ -104,7 +104,26 @@ let vueCourante = (() => {
   try { return localStorage.getItem('suivi:testeur-vue') || 'grille'; } catch (e) { return 'grille'; }
 })();
 
-const etat = { campagne: null, campagnes: [], scenarios: [], passages: new Map(), avis: null, retour: null, remarques: [], bloc: '', reste: true, charge: false };
+const etat = { campagne: null, campagnes: [], scenarios: [], passages: new Map(), passes: new Set(), avis: null, retour: null, remarques: [], bloc: '', reste: true, charge: false };
+
+/* Passer et revenir (08/10/2026). Un scénario bloqué (le compte n'est pas
+   prêt, la notification n'arrive pas) ne bloque plus toute la suite : le
+   testeur le passe, il l'attend à la fin, et il y revient quand il veut.
+   « J'ai terminé » demande toujours un résultat partout. Ce que l'on a
+   passé est une commodité de cet appareil (son navigateur) : perdue, la
+   suite redevient simplement stricte. */
+const clePasses = (c, uid) => `suivi:testeur-passes:${c}:${uid}`;
+const lirePasses = (c, uid) => {
+  try { const v = JSON.parse(localStorage.getItem(clePasses(c, uid)) || '[]'); return new Set(Array.isArray(v) ? v.filter((x) => typeof x === 'string') : []); } catch (e) { return new Set(); }
+};
+const ecrirePasses = () => {
+  const c = etat.campagne; const uid = auth.currentUser && auth.currentUser.uid;
+  if (!c || !uid) return;
+  try { localStorage.setItem(clePasses(c.id, uid), JSON.stringify([...etat.passes])); } catch (e) { /* stockage refusé : la mémoire suffit */ }
+};
+const estPasse = (ref) => etat.passes.has(ref) && !etat.passages.has(ref);
+const passer = (ref) => { etat.passes.add(ref); ecrirePasses(); };
+const oublierPasse = (ref) => { if (etat.passes.delete(ref)) ecrirePasses(); };
 
 /* -------------------------------------------------------------------------- */
 
@@ -145,19 +164,23 @@ const finAcces = () => {
 const dateCourte = (d) => (d ? d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) : '');
 
 /* Ouvrable : le premier de la liste, ou celui dont tous les précédents ont
-   un résultat. Un échec corrigé « à rejouer » compte comme déroulé : il ne
-   rebloque pas la suite. */
+   un résultat ou ont été passés. Un échec corrigé « à rejouer » compte
+   comme déroulé : il ne rebloque pas la suite. */
 const ouvrable = (ref) => {
   const i = etat.scenarios.findIndex((s) => s.ref === ref);
   if (i <= 0) return true;
-  return etat.scenarios.slice(0, i).every((s) => etat.passages.has(s.ref));
+  return etat.scenarios.slice(0, i).every((s) => etat.passages.has(s.ref) || estPasse(s.ref));
 };
 
-const prochain = () => etat.scenarios.find((s) => !etat.passages.has(s.ref)) || null;
+const prochain = () => etat.scenarios.find((s) => !etat.passages.has(s.ref) && !estPasse(s.ref))
+  || etat.scenarios.find((s) => !etat.passages.has(s.ref)) || null;
 
 /* Ce qu'il a à faire maintenant : le premier scénario qui n'est pas fait,
-   à rejouer compris. Tous ceux d'avant ont un résultat : il est ouvrable. */
-const aFaire = () => etat.scenarios.find((s) => !fait(s.ref)) || null;
+   à rejouer compris, en laissant pour la fin ceux qu'il a passés. Quand
+   il ne reste qu'eux, le premier passé revient. */
+const aFaire = () => etat.scenarios.find((s) => !fait(s.ref) && !estPasse(s.ref))
+  || etat.scenarios.find((s) => !fait(s.ref)) || null;
+const nombrePasses = () => etat.scenarios.filter((s) => estPasse(s.ref)).length;
 
 /* Ce que le rail dit de l'accès, en bas. */
 const etatAcces = () => {
@@ -417,10 +440,13 @@ const suiteHtml = () => {
   if (!s) return finTestHtml();
   const p = etat.passages.get(s.ref);
   const rejouer = Boolean(p) && estEchec(p.resultat) && p.aRevoir === true;
-  const entame = etat.scenarios.some((x) => etat.passages.has(x.ref));
+  const entame = etat.scenarios.some((x) => etat.passages.has(x.ref) || estPasse(x.ref));
   const avantFait = aRepondu(etat.avis || {}, 'avant');
+  const revenir = estPasse(s.ref);
+  const passes = nombrePasses();
   return `<section class="t-suite" aria-label="Votre prochain scénario">
-    <p class="t-suite-sur">${rejouer ? 'À rejouer' : entame ? 'À vous' : 'Pour commencer'} · <span class="t-scenario-ref">${echapper(s.id || s.ref)}</span>${plateformeImposee(s) ? ` · sur ${echapper(PLATEFORMES_TESTEUR[s.plateforme] || s.plateforme)}` : ''}</p>
+    <p class="t-suite-sur">${rejouer ? 'À rejouer' : revenir ? 'Vous l\'aviez passé' : entame ? 'À vous' : 'Pour commencer'} · <span class="t-scenario-ref">${echapper(s.id || s.ref)}</span>${plateformeImposee(s) ? ` · sur ${echapper(PLATEFORMES_TESTEUR[s.plateforme] || s.plateforme)}` : ''}</p>
+    ${passes && !revenir ? `<p class="t-micro t-3" data-passes>${passes > 1 ? `${passes} scénarios passés vous attendent` : 'Un scénario passé vous attend'} à la fin.</p>` : ''}
     <p class="t-suite-titre">${echapper(s.titre || '')}</p>
     <div class="t-suite-gestes">
       <button class="btn btn-principal" type="button" data-continuer="${echapper(s.ref)}">${entame ? 'Continuer' : 'Commencer'}</button>
@@ -438,12 +464,13 @@ const ligneScenario = (s) => {
      répond pas sans avoir lu « Ce qui doit se passer ». */
   const rejouer = Boolean(p) && !fige && estEchec(r) && p.aRevoir === true;
   const suivant = !fige && (aFaire() || {}).ref === s.ref;
+  const passe = !fige && estPasse(s.ref);
   return `
   <div class="t-scenario${r ? ` t-scenario--${sorteVerdict(r)}` : ''}${verrou ? ' t-scenario--verrou' : ''}${fige ? ' t-scenario--fige' : ''}${suivant ? ' t-scenario--suivant' : ''}" data-ref="${echapper(s.ref)}">
     <button class="t-scenario-corps" type="button" data-ouvrir="${echapper(s.ref)}"${verrou ? ' aria-disabled="true"' : ''}>
       <span class="t-scenario-ref">${echapper(s.id || s.ref)}</span>
       <span class="t-scenario-titre">${echapper(s.titre)}</span>
-      ${rejouer ? '<span class="pastille pastille--ambre">À rejouer</span>' : r ? pastille(VERDICTS_TESTEUR, r) : suivant ? '<span class="pastille pastille--bleu">À vous</span>' : ''}
+      ${rejouer ? '<span class="pastille pastille--ambre">À rejouer</span>' : r ? pastille(VERDICTS_TESTEUR, r) : suivant ? '<span class="pastille pastille--bleu">À vous</span>' : passe ? '<span class="pastille pastille--gris" data-passe>Passé</span>' : ''}
     </button>
   </div>`;
 };
@@ -1111,6 +1138,7 @@ const poser = async (s, resultat, moi) => {
   try {
     await setDoc(doc(bdd, chemin), passage);
     etat.passages.set(s.ref, { ...passage, resultat });
+    oublierPasse(s.ref);
     rendre(moi);
     if (estEchec(resultat)) toast('Échec enregistré, merci. On le reproduit de notre côté.');
     return true;
@@ -1340,6 +1368,7 @@ const ouvrirFeuille = (s, moi, { apres = null } = {}) => {
       ${plateforme}
       <p class="fs-note">${fige ? '<strong>Le test est terminé</strong> : ce résultat est figé.' : 'Un scénario où rien ne se passe est un échec, jamais une réussite.'}</p>
       ${apres && !fige ? '<p class="fs-note"><button class="lien-sobre" type="button" data-fermer>Faire une pause</button> : tout est enregistré, « Continuer » vous ramènera ici.</p>' : ''}
+      ${!fige && !p && !estPasse(s.ref) ? '<p class="fs-note"><button class="lien-sobre" type="button" data-feuille-passer>Passer pour l\'instant</button> : vous êtes bloqué ? Il vous attendra à la fin, vous y reviendrez quand vous voudrez.</p>' : ''}
       ${peutRemarquer() ? '<p class="fs-note"><button class="lien-sobre" type="button" data-remarque-scenario>Une remarque sur ce scénario</button></p>' : ''}`,
     pied: fige
       ? '<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>'
@@ -1347,6 +1376,15 @@ const ouvrirFeuille = (s, moi, { apres = null } = {}) => {
   });
   m.el.addEventListener('click', async (ev) => {
     if (ev.target.closest('[data-remarque-scenario]')) { await ouvrirRemarque(s, moi); return; }
+    if (ev.target.closest('[data-feuille-passer]')) {
+      passer(s.ref);
+      m.fermer(true);
+      rendre(moi);
+      const suite = aFaire();
+      if (suite && suite.ref !== s.ref && !estPasse(suite.ref)) ouvrirFeuille(suite, moi);
+      else toast('Passé. Il vous attend à la fin.', 'info');
+      return;
+    }
     const b = ev.target.closest('[data-feuille-poser]');
     if (!b) return;
     const resultat = b.dataset.feuillePoser;
@@ -1386,6 +1424,7 @@ const suivreCampagne = (moi, c, redessiner) => {
   couper(ecoutes.campagne);
   etat.campagne = c;
   etat.passages = new Map();
+  etat.passes = c && moi ? lirePasses(c.id, moi.uid) : new Set();
   etat.avis = null;
   etat.retour = null;
   etat.remarques = [];
@@ -1411,7 +1450,7 @@ const suivreCampagne = (moi, c, redessiner) => {
   const recu = { scenarios: !attendues.length, passages: false };
   const dessinerSiComplet = () => { if (recu.scenarios && recu.passages) redessiner(); };
   const ranger = () => {
-    const { scenarios, ecartees } = scenariosDuTesteur({ sections: [...sections.values()], cles });
+    const { scenarios, ecartees } = scenariosDuTesteur({ sections: [...sections.values()], cles, socle: c.regle === 'socle' ? (c.socle || []) : [] });
     if (ecartees.length) console.warn('[testeur] clés sans scénario du plan', ecartees);
     etat.scenarios = scenarios;
   };

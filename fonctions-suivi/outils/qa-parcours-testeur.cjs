@@ -92,6 +92,14 @@ let page = null;
   if (await page.$('.accueil')) { await page.click('.accueil [data-accueil="passer"]'); await page.waitForSelector('.accueil', { state: 'detached' }); }
   await page.waitForSelector('[data-continuer]', { timeout: 25000 }); await pause(1200);
 
+  console.log('\n== Le message de la clé d accès ne cache rien');
+  /* Audit du 08/10/2026 : posé en bas de l'écran pendant 12 s, il cachait
+     « Échec » et « Enregistrer l'échec » au premier scénario. */
+  verifier(Boolean(await page.$('[data-proposer-cle]')), 'après une connexion par code, la clé d accès est proposée');
+  await page.click('[data-continuer]'); await page.waitForSelector('.modale--scenario [data-feuille-poser]', { timeout: 10000 }).catch(() => null); await pause(400);
+  verifier(!(await page.$('[data-proposer-cle]')), 'dès qu une feuille s ouvre, le message s efface');
+  await page.keyboard.press('Escape'); await pause(600);
+
   console.log('\n== Le premier jour, sur un iPhone');
   const bas = await page.evaluate(() => { const b = document.querySelector('[data-continuer]'); const r = b.getBoundingClientRect(); return { bas: Math.round(r.bottom), scroll: Math.round((document.scrollingElement || {}).scrollTop || 0) }; });
   verifier(bas.scroll === 0 && bas.bas > 0 && bas.bas <= 844, `« Commencer » se voit sans défiler (bas du bouton à ${bas.bas} px sur 844)`);
@@ -117,6 +125,29 @@ let page = null;
   verifier(/Ce qu'il faut faire/i.test(feuille) && /Ouvrir l'application/.test(feuille) && /Priorité haute/i.test(feuille), 'et montre les étapes et la priorité du plan', feuille.slice(0, 160));
   await page.keyboard.press('Escape'); await pause(500);
   await page.click('[data-vue="grille"]'); await pause(500);
+
+  console.log('\n== Passer un scénario bloqué, et y revenir');
+  /* 08/10/2026 : un scénario bloqué ne retient plus toute la suite. */
+  await page.click('[data-continuer]'); await page.waitForSelector('.modale--scenario [data-feuille-passer]', { timeout: 10000 }).catch(() => null);
+  verifier(Boolean(await page.$('.modale--scenario [data-feuille-passer]')), 'la feuille propose « Passer pour l instant »');
+  const piedVisible = await page.evaluate(() => { const b = document.querySelector('.modale--scenario [data-feuille-poser]'); if (!b) return false; const r = b.getBoundingClientRect(); const x = r.left + r.width / 2; const y = r.top + r.height / 2; const el = document.elementFromPoint(x, y); return Boolean(el && el.closest('[data-feuille-poser]')); });
+  verifier(piedVisible, 'les boutons de résultat sont à portée de doigt, rien par-dessus');
+  if (await page.$('.modale--scenario [data-feuille-passer]')) await page.click('.modale--scenario [data-feuille-passer]');
+  await pause(1200);
+  const apresPasse = await page.evaluate(() => ((document.querySelector('.modale--scenario .modale-tete p') || {}).textContent || ''));
+  verifier(apresPasse.startsWith(refs[1].split('__')[0]), `passé, la feuille du suivant s ouvre (${apresPasse.slice(0, 30)})`);
+  await page.keyboard.press('Escape'); await pause(600);
+  verifier((await page.getAttribute('[data-continuer]', 'data-continuer')) === refs[1], 'le geste suivant est le scénario d après');
+  verifier(/passé vous attend/.test(await page.textContent('.t-suite').catch(() => '')), 'la page rappelle qu un scénario passé l attend à la fin', await page.textContent('.t-suite').catch(() => ''));
+  verifier(!(await page.$(`.tb--testeur [data-case="${refs[1]}"][data-verrou]`)), 'le suivant n est plus verrouillé');
+  verifier(!(await lire(`${passages}/${uid}__${refs[0]}`)), 'passer n écrit aucun résultat');
+  await page.click(`.tb--testeur [data-case="${refs[0]}"]`); await page.waitForSelector('.modale--scenario [data-feuille-poser]', { timeout: 10000 }).catch(() => null);
+  verifier(((await page.evaluate(() => ((document.querySelector('.modale--scenario .modale-tete p') || {}).textContent || '')))).startsWith(refs[0].split('__')[0]), 'il y revient d un geste, quand il veut');
+  await page.keyboard.press('Escape'); await pause(400);
+  /* La suite reprend l ordre strict : on oublie ce qui a été passé. */
+  await page.evaluate(() => { Object.keys(localStorage).filter((k) => k.startsWith('suivi:testeur-passes:')).forEach((k) => localStorage.removeItem(k)); });
+  await page.reload(); await page.waitForSelector('[data-continuer]', { timeout: 25000 }); await pause(1200);
+  verifier((await page.getAttribute('[data-continuer]', 'data-continuer')) === refs[0], 'sans rien de passé, l ordre redevient strict');
 
   console.log('\n== Un résultat ouvre le suivant');
   await page.click('[data-continuer]'); await page.waitForSelector('[data-feuille-poser]', { timeout: 10000 });
