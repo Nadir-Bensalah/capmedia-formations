@@ -233,7 +233,9 @@ export const demarrerPush = (env) => {
         action: async () => {
           try {
             const etat = await activerPush(uid);
-            if (etat === 'actif') toast(testeur ? 'Notifications activées. Vous pourrez les couper depuis la bulle.' : 'Notifications activées. Vous pourrez les couper dans Paramètres.');
+            /* Le réglage de l'équipe est dans « Mon profil » (/moi), celui
+               du client dans ses Paramètres. */
+            if (etat === 'actif') toast(testeur ? 'Notifications activées. Vous pourrez les couper depuis la bulle.' : equipe ? 'Notifications activées. Vous pourrez les couper dans Mon profil.' : 'Notifications activées. Vous pourrez les couper dans Paramètres.');
           } catch (err) {
             console.error('[push]', err);
             toast('Les notifications n\'ont pas pu être activées sur cet appareil.', 'erreur');

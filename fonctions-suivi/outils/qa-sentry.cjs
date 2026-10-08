@@ -282,8 +282,10 @@ const erreursPage = [];
     const requetesSentry = [];
     pe.on('request', (r) => { if (/sentry\.io|127\.0\.0\.1:9877|127\.0\.0\.1:19877/.test(r.url())) requetesSentry.push(r.url()); });
     await connecter(pe, 'agent.essai@exemple.test');
-    await aller(pe, '#/projets/atelier', '#onglets-projet');
-    verifier(Boolean(await pe.$('#onglets-projet a[href="#/projets/atelier/stabilite"]')), 'l onglet Stabilité est sur la page du projet relié');
+    /* Refonte du Cockpit, lot 3 : plus d'onglets ; l'entrée « Santé de
+       l'app » de l'arbre du projet relié mène à la page Stabilité. */
+    await aller(pe, '#/projets/atelier', '#lat-corps .lat-arbre[data-arbre="atelier"]');
+    verifier(Boolean(await pe.$('#lat-corps .lat-arbre[data-arbre="atelier"] a[data-chemin="/projets/atelier/stabilite"][href="#/projets/atelier/stabilite"]')), 'l entrée Santé de l app est dans l arbre du projet relié');
     await aller(pe, '#/projets/atelier/stabilite', '[data-stab-section="erreurs"]');
     const te = await texteDe(pe);
     const metriques = async (sel) => pe.$$eval(`${sel} .metrique`, (els) => els.map((e) => `${e.querySelector('.metrique-libelle').textContent}=${e.querySelector('.metrique-valeur').textContent}`.replace(/\u00a0|\u202f/g, ' ')));

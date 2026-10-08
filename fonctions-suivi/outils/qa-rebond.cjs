@@ -50,10 +50,10 @@ const sonder=(page)=>page.evaluate(()=>{
       s.ev.push({t:Math.round(performance.now()),image:s.image,genre,squelette,taille:(n.innerHTML||'').length,scroll:Math.round(scrollY)});}}});
   obs.observe(document.querySelector('#vue'),{childList:true,subtree:true});
 });
-const relever=async(page,geste)=>{
+const relever=async(page,geste,attente=1400)=>{
   await page.evaluate(()=>{window.__sonde.ev=[];window.__sonde.t0=performance.now();});
   await geste();
-  await pause(1400);
+  await pause(attente);
   const r=await page.evaluate(()=>{const s=window.__sonde;const pages=s.ev.filter(e=>e.genre==='page');const onglets=s.ev.filter(e=>e.genre==='onglet');const tableaux=s.ev.filter(e=>e.genre==='tableau');
     const tous=[...pages,...onglets,...tableaux].sort((a,b)=>a.t-b.t);
     /* Ce qui a été PEINT : un remplacement par image affichée. Le tableau
@@ -88,15 +88,64 @@ const ligne=(nom,r)=>console.log(`  ${nom.padEnd(40)} peints=${r.peints} contenu
     await sonder(page);
     const aller=(h)=>()=>page.evaluate(x=>{location.hash=x;},h);
     const releves={};
-    const mesurer=async(nom,geste)=>{const r=await relever(page,geste);releves[nom]=r;ligne(nom,r);return r;};
+    const mesurer=async(nom,geste,attente)=>{const r=await relever(page,geste,attente);releves[nom]=r;ligne(nom,r);return r;};
 
     await mesurer('projet (arrivée)',aller('/projets/atelier'));
-    for(const o of ['taches','demandes','fichiers','tests','activite']) await mesurer(`onglet ${o}`,aller(`/projets/atelier/${o}`));
+    /* Refonte du Cockpit, lot 2 : côté équipe, Fichiers et Activité ne sont
+       plus des onglets du projet mais la page de tous les projets, filtrée
+       sur lui (mesurées plus bas comme des pages). */
+    /* Lot 3 : côté équipe, Tests n'est plus un onglet du projet mais sa
+       console (/tests?projet=), mesurée plus bas comme une page ; Plateformes
+       et versions, Ressources et Feuille de route sont des pages du projet
+       ouvertes par l'arbre, en place (même clé de route). */
+    const ongletsProjet=role==='équipe'?['taches','demandes','composants','liens','etapes']:['taches','demandes','fichiers','tests','activite'];
+    for(const o of ongletsProjet) await mesurer(`onglet ${o}`,aller(`/projets/atelier/${o}`));
     await mesurer('onglet apercu',aller('/projets/atelier'));
     /* Première visite de la page Tests : la donnée vient du serveur, le
        squelette a le droit d'être peint, le contenu une seule fois. */
     await mesurer('page Tests',aller(role==='équipe'?'/tests?projet=atelier':'/tests'));
-    if(role==='équipe'){await mesurer('page Tâches',aller('/taches'));await mesurer('page Planning',aller('/planning'));await mesurer('page Projets',aller('/projets'));}
+    if(role==='équipe'){await mesurer('page Tâches',aller('/taches'));await mesurer('page Calendrier',aller('/calendrier'));await mesurer('page Projets',aller('/projets'));
+      /* Aujourd'hui (lot 5) : la donnée est là, un seul dessin, sans squelette. */
+      await mesurer('page Aujourd\'hui',aller('/'));
+      /* Les pages d'un projet qui étaient des onglets (lot 2). */
+      await mesurer('page Fichiers du projet',aller('/fichiers?projet=atelier'));
+      await mesurer('page Activité du projet',aller('/activite?projet=atelier'));
+      await mesurer('page Calendrier du projet',aller('/calendrier?projet=atelier'));
+      /* Les filtres dans l'adresse (lot 2) : changer un filtre redessine la
+         page une fois, en place, sans squelette ni remontage. */
+      const choisir=(sel,v)=>()=>page.selectOption(sel,v);
+      const cliquer=(sel)=>()=>page.click(sel);
+      await mesurer('adresse calendrier : tous les projets',choisir('#f-projet',''));
+      await mesurer('adresse calendrier : un projet',choisir('#f-projet','atelier'));
+      await mesurer('page Fichiers',aller('/fichiers'));
+      await mesurer('adresse fichiers : projet',choisir('#filtre-projet','atelier'));
+      if(await page.$('[data-cat="design"]'))await mesurer('adresse fichiers : catégorie',cliquer('[data-cat="design"]'));
+      await mesurer('adresse fichiers : tri',choisir('#tri-doc','nom'));
+      await mesurer('page Activité',aller('/activite'));
+      await mesurer('adresse activité : nature',cliquer('[data-nature="tache"]'));
+      await mesurer('adresse activité : projet',choisir('#f-projet','atelier'));
+      await mesurer('page Demandes',aller('/demandes'));
+      await mesurer('adresse demandes : colonne',cliquer('[data-colonne="a-traiter"]'));
+      await mesurer('adresse demandes : projet',choisir('#f-projet','atelier'));
+      await mesurer('adresse demandes : retour',()=>page.goBack());
+      await mesurer('page Tâches (filtres)',aller('/taches'));
+      await mesurer('adresse tâches : projet',choisir('#f-projet','atelier'));
+      await mesurer('adresse tâches : terminées',cliquer('#f-terminees'));
+      await mesurer('page Finances',aller('/finances'));
+      await mesurer('adresse finances : onglet',cliquer('[data-onglet="devis"]'));
+      await mesurer('adresse finances : projet',choisir('#f-projet','atelier'));
+      await mesurer('page Axes',aller('/projets/atelier/evolutions'));
+      const plateformeAxe=await page.$$eval('[data-axe-filtre]',(bs)=>bs.map((b)=>b.dataset.axeFiltre).filter(Boolean)[0]||'').catch(()=>'');
+      if(plateformeAxe)await mesurer('adresse axes : plateforme',cliquer(`[data-axe-filtre="${plateformeAxe}"]`));
+      /* Lot 6 de la refonte : les pages de l'équipe passées au dessinateur
+         à clés (H-30). Première visite : la donnée peut venir du serveur, le
+         squelette a le droit d'être peint, le contenu une seule fois (et pas
+         une page vide puis pleine). Puis un retour : la donnée est là, ni
+         squelette ni second dessin. */
+      const PAGES_L6=[['Clients','/clients'],['fiche client','/clients/atelier-nord'],['Validations','/validations'],['Équipe','/equipe'],['Archives','/archives'],['Projets à faire','/a-faire'],['Nouveaux projets','/nouveaux-projets'],['Paramètres','/parametres'],['Mon profil','/moi'],['Testeurs','/testeurs-messages'],['Maintenance','/maintenance'],['Maintenance du projet','/maintenance?projet=atelier'],['E-mails envoyés','/emails']];
+      for(const [nom,h] of PAGES_L6){await mesurer(`visite ${nom}`,aller(h),2600);await mesurer('page Projets (entre deux)',aller('/projets'));}
+      for(const [nom,h] of PAGES_L6.filter(([n])=>n!=='E-mails envoyés')){await mesurer(`page ${nom} (retour)`,aller(h));await mesurer('page Tâches (entre deux)',aller('/taches'));}
+    }
     else{await mesurer('page Accueil',aller('/'));await mesurer('page Demandes',aller('/demandes'));}
     await mesurer('page Tests (retour)',aller('/tests?projet=atelier'));
     for(const p of ['ios','android','web','']) await mesurer(`filtre ${p||'toutes'} (clic)`,()=>page.click(`[data-plateforme="${p}"]`));
@@ -123,6 +172,12 @@ const ligne=(nom,r)=>console.log(`  ${nom.padEnd(40)} peints=${r.peints} contenu
     verifier(onglets.every(([,r])=>r.peints===1),'un onglet de projet n\'est peint qu\'une fois',onglets.filter(([,r])=>r.peints!==1).map(([n,r])=>`${n}:${r.peints}`).join(' '));
     verifier(onglets.every(([,r])=>!r.squelettePeint),'sans squelette entre deux');
     verifier(onglets.every(([,r])=>r.scroll===0),'sans saut de défilement quand la barre est visible',onglets.filter(([,r])=>r.scroll!==0).map(([n,r])=>`${n}:${r.scroll}`).join(' '));
+    if(role==='équipe'){
+      const adresses=Object.entries(releves).filter(([n])=>n.startsWith('adresse '));
+      verifier(adresses.length>=12,'les filtres dans l adresse sont mesurés',`${adresses.length}`);
+      verifier(adresses.every(([,r])=>r.peints===1&&r.contenus===1),'un filtre dans l adresse ne peint la page qu une fois',adresses.filter(([,r])=>r.peints!==1||r.contenus!==1).map(([n,r])=>`${n}:${r.peints}/${r.contenus}`).join(' '));
+      verifier(adresses.every(([,r])=>!r.squelette),'sans squelette (la page n est pas remontée)',adresses.filter(([,r])=>r.squelette).map(([n])=>n).join(' '));
+    }
     const filtres=Object.entries(releves).filter(([n])=>n.startsWith('filtre '));
     verifier(filtres.every(([,r])=>r.peints===1),'un filtre de plateforme ne peint la page qu\'une fois',filtres.map(([n,r])=>`${n}:${r.peints}`).join(' '));
     verifier(filtres.every(([,r])=>!r.squelettePeint),'et ne repeint pas de squelette');
@@ -132,6 +187,13 @@ const ligne=(nom,r)=>console.log(`  ${nom.padEnd(40)} peints=${r.peints} contenu
        d'être peint, mais le contenu une seule fois. Retour : plus de squelette. */
     const retours=pages.filter(([n])=>!(n.startsWith('page Tests')&&!n.includes('retour')));
     verifier(retours.every(([,r])=>!r.squelettePeint),'sans squelette peint quand la donnée est déjà là',retours.filter(([,r])=>r.squelettePeint).map(([n])=>n).join(' '));
+    if(role==='équipe'){
+      /* Lot 6 : la première visite d'une page de l'équipe ne peint son
+         contenu qu'une fois (squelette permis, jamais vide puis plein). */
+      const visites=Object.entries(releves).filter(([n])=>n.startsWith('visite '));
+      verifier(visites.length>=13,'les pages du lot 6 sont mesurées',`${visites.length}`);
+      verifier(visites.every(([,r])=>r.contenus===1),'une première visite ne peint son contenu qu une fois',visites.filter(([,r])=>r.contenus!==1).map(([n,r])=>`${n}:${r.contenus}`).join(' '));
+    }
     const arrivee=releves['projet (arrivée)'];
     verifier(arrivee&&arrivee.contenus===1,'la première arrivée sur un projet ne peint son contenu qu\'une fois',arrivee&&`${arrivee.contenus}`);
     await ctx.close();

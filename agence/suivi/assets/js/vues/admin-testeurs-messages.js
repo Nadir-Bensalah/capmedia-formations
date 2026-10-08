@@ -12,7 +12,7 @@
    peut aussi écrire la première, à n'importe quel testeur du vivier.
    ========================================================================== */
 
-import { echapper, depuis, enDate, bdd, doc, collection, query, orderBy, limit, onSnapshot, updateDoc, serverTimestamp } from '../noyau.js';
+import { echapper, depuis, enDate, STATUTS_CAMPAGNE, bdd, doc, collection, query, orderBy, limit, onSnapshot, updateDoc, serverTimestamp } from '../noyau.js';
 import { icone, vide, squelette, titrePage, toast, agir, depot, brancherPieces, sur, lisible } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K, filDeMessages } from '../donnees.js';
@@ -43,6 +43,31 @@ export const vue = async (ctx, env) => {
   const testeurs = () => magasin.lire(K.testeurs) || [];
   const conversation = () => conversations().find((x) => x.id === choisi) || null;
   const fiche = () => testeurs().find((x) => x.id === choisi) || null;
+  /* Les campagnes où le testeur a été pris, les plus récentes d'abord :
+     chacune mène à sa fiche, dans son projet. */
+  const campagnesDe = (id) => (magasin.lire(K.campagnesToutes) || [])
+    .filter((c) => (c.testeurs || []).includes(id))
+    .sort((a, b) => ((enDate(b.debut) || enDate(b.cree) || 0) - (enDate(a.debut) || enDate(a.cree) || 0)));
+  const nomProjet = (pid) => ((magasin.lire(K.projets) || []).find((p) => p.id === pid) || {}).nom || '';
+  /* Sous le nom : la fiche du testeur (le vivier, dans la page Tests) et
+     ses campagnes. Un testeur qui n'est plus au vivier n'a plus de fiche :
+     on le dit au lieu d'un lien qui n'ouvrirait rien. */
+  let liensPoses = '';
+  const liensHtml = () => {
+    const t = fiche();
+    const camp = campagnesDe(choisi);
+    const lienFiche = t
+      ? `<a class="lien" href="#/tests?testeur=${encodeURIComponent(choisi)}" data-fiche-testeur="${echapper(choisi)}">Voir sa fiche</a>`
+      : '<span class="t-3">Plus au vivier</span>';
+    const lienCampagnes = camp.length
+      ? camp.map((c) => {
+        const pid = c.projet || c._parent || '';
+        const statut = (STATUTS_CAMPAGNE[c.statut || 'preparation'] || {}).libelle || '';
+        return `<a class="lien" href="#/tests?projet=${encodeURIComponent(pid)}&campagne=${encodeURIComponent(c.id)}" data-campagne-testeur="${echapper(c.id)}">${echapper(c.titre || 'Campagne')}</a><span class="t-3"> · ${echapper([nomProjet(pid), statut].filter(Boolean).join(', '))}</span>`;
+      }).join('<span class="t-3">&nbsp;; </span>')
+      : '<span class="t-3">Aucune campagne</span>';
+    return `<p class="t-petit">${lienFiche}</p><p class="t-petit"><span class="t-2">Ses campagnes : </span>${lienCampagnes}</p>`;
+  };
   const nomDe = (c) => { const t = testeurs().find((x) => x.id === c.id) || {}; return c.prenom || t.prenom || c.email || t.email || 'Testeur'; };
 
   /* Lu : le compteur de l'équipe à zéro, avec l'heure (le testeur lit « Lu le »). */
@@ -63,11 +88,11 @@ export const vue = async (ctx, env) => {
         <label class="champ-groupe" style="display:block;margin-bottom:10px"><span class="t-petit t-2">Écrire à un testeur</span>
           <select class="champ" id="tm-nouveau"></select>
         </label>
-        <div class="tm-liste" id="tm-liste"></div>
+        <div class="tm-liste" id="tm-liste" aria-busy="true"></div>
       </aside>
       <section class="tm-fil-cadre">
         ${courante ? `
-          <header class="tm-tete"><div><p class="surtitre">Testeur</p><h2 id="tm-nom"></h2><p class="t-petit t-2" id="tm-email"></p></div></header>
+          <header class="tm-tete"><div><p class="surtitre">Testeur</p><h2 id="tm-nom"></h2><p class="t-petit t-2" id="tm-email"></p><div class="tm-liens" id="tm-liens" style="margin-top:6px"></div></div></header>
           <div class="tm-fil" id="tm-fil"></div>
           <form class="tm-repondre" id="tm-forme" novalidate>
             <div style="grid-column:1/-1" id="tm-contexte"></div>
@@ -101,6 +126,8 @@ export const vue = async (ctx, env) => {
       const c = conversation() || { id: choisi, ...(fiche() || {}) };
       $('#tm-nom').textContent = nomDe(c);
       $('#tm-email').textContent = c.email || (fiche() || {}).email || '';
+      const liens = liensHtml();
+      if (liens !== liensPoses) { liensPoses = liens; $('#tm-liens').innerHTML = liens; }
     }
   };
   $('#tm-nouveau').addEventListener('change', (e) => { if (e.target.value) naviguer(`/testeurs-messages/${e.target.value}`); });
@@ -201,9 +228,15 @@ export const vue = async (ctx, env) => {
     }, (err) => console.warn('[testeurs] fil', err));
   }
 
-  const surConversations = () => { rendreListe(); rendreFil(); marquerLu(); };
-  [K.conversationsTesteurs, K.testeurs].forEach((c) => lot.sur(c, surConversations));
-  rendreListe();
+  /* La liste ne se peint qu'une fois les conversations et le vivier
+     arrivés (lot 6, H-30) : avant, elle disait « Aucun message de
+     testeur » le temps que la donnée arrive. La place reste vide
+     jusque-là (le cadre de la page, lui, est peint d'un coup). */
+  const surConversations = () => { const l = $('#tm-liste'); if (l) l.removeAttribute('aria-busy'); rendreListe(); rendreFil(); marquerLu(); };
+  const cles = [K.conversationsTesteurs, K.testeurs, K.campagnesToutes, K.projets];
+  const planifier = magasin.dessinateur(surConversations, 40, cles);
+  cles.forEach((c) => lot.sur(c, planifier));
+  planifier();
   rendreFil(true);
-  return () => { if (arretFil) arretFil(); retraits.forEach((r) => r()); lot.fin(); };
+  return () => { planifier.arreter(); if (arretFil) arretFil(); retraits.forEach((r) => r()); lot.fin(); };
 };

@@ -23,30 +23,30 @@
 
    Banc : émulateurs, site local, semer-suivi.
    ========================================================================== */
-require('./lib/garde-banc.cjs');
+require('./lib/garde-banc.cjs'); const BANC = require('./lib/ports-banc.cjs');
 const { chromium } = require('@playwright/test');
 const { spawnSync } = require('node:child_process');
 const { mkdirSync } = require('node:fs');
 const { join } = require('node:path');
 const { lireRest } = require('./lib/rest-banc.cjs');
 const { jetonPour } = require('./lib/session-banc.cjs');
-const PROJET = 'capmedia-1f90d'; const SITE = process.env.BANC_SITE || 'http://127.0.0.1:8787';
+const PROJET = 'capmedia-1f90d'; const SITE = process.env.BANC_SITE || BANC.site;
 const CAPTURES = process.env.CAPTURES_ANNONCES || '/private/tmp/claude-502/-Users-izicode-ForgeMe/88b4c411-a61c-4a15-accb-75f5cd3d4339/scratchpad/annonces';
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 const prop = { Authorization: 'Bearer owner' };
-const RACINE = `http://127.0.0.1:8080/v1/projects/${PROJET}/databases/(default)/documents`;
+const RACINE = `${BANC.firestore}/v1/projects/${PROJET}/databases/(default)/documents`;
 const bdd = (c) => `${RACINE}/${c}`;
 const nomDoc = (c) => `projects/${PROJET}/databases/(default)/documents/${c}`;
 const lire = async (c) => lireRest(bdd(c), prop);
 const docs = async (c) => (((await lire(c)) || {}).documents || []);
-const vider = async (col) => { for (const d of await docs(`${col}?pageSize=300`)) await fetch(`http://127.0.0.1:8080/v1/${d.name}`, { method: 'DELETE', headers: prop }); };
+const vider = async (col) => { for (const d of await docs(`${col}?pageSize=300`)) await fetch(`${BANC.firestore}/v1/${d.name}`, { method: 'DELETE', headers: prop }); };
 const champ = (d, n) => (((d || {}).fields || {})[n]) || {};
 const str = (d, n) => champ(d, n).stringValue || '';
 const S = (v) => ({ stringValue: String(v) }); const I = (v) => ({ integerValue: String(v) }); const B = (v) => ({ booleanValue: Boolean(v) });
 const L = (valeurs) => ({ arrayValue: { values: valeurs } }); const M = (fields) => ({ mapValue: { fields } }); const T = (d) => ({ timestampValue: d.toISOString() });
 const NUL = { nullValue: null };
 const poser = async (chemin, fields, masque) => fetch(`${bdd(chemin)}${masque ? `?${masque.map((m) => `updateMask.fieldPaths=${m}`).join('&')}` : ''}`, { method: 'PATCH', headers: { ...prop, 'Content-Type': 'application/json' }, body: JSON.stringify({ fields }) });
-const uidDe = async (email) => { const r = await fetch(`http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/projects/${PROJET}/accounts:lookup`, { method: 'POST', headers: { ...prop, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: [email] }) }); const j = await r.json(); return ((j.users || [])[0] || {}).localId || ''; };
+const uidDe = async (email) => { const r = await fetch(`${BANC.auth}/identitytoolkit.googleapis.com/v1/projects/${PROJET}/accounts:lookup`, { method: 'POST', headers: { ...prop, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: [email] }) }); const j = await r.json(); return ((j.users || [])[0] || {}).localId || ''; };
 const statutLecture = async (chemin, jeton) => (await fetch(bdd(chemin), { headers: jeton ? { Authorization: `Bearer ${jeton}` } : {} })).status;
 const statutCommit = async (jeton, writes) => (await fetch(`${RACINE}:commit`, { method: 'POST', headers: { ...(jeton ? { Authorization: `Bearer ${jeton}` } : {}), 'Content-Type': 'application/json' }, body: JSON.stringify({ writes }) })).status;
 const dernierCode = async (e) => { for (let i = 0; i < 40; i += 1) { const p = (await docs('envois?pageSize=200')).filter((d) => str(d, 'modele') === 'code' && ((((d.fields || {}).a || {}).arrayValue || {}).values || []).some((x) => ((((x.mapValue || {}).fields || {}).email) || {}).stringValue === e)); if (p.length) { p.sort((x, y) => new Date(((y.fields.cree || {}).timestampValue) || 0) - new Date(((x.fields.cree || {}).timestampValue) || 0)); const v = (((p[0].fields.variables || {}).mapValue || {}).fields) || {}; if (v.code && v.code.stringValue) return v.code.stringValue; } await pause(300); } return ''; };
@@ -134,8 +134,11 @@ const sansDefaut = (texte, ou) => {
   page = equipe;
   equipe.on('pageerror', (e) => erreurs.push(`cockpit: ${e.message.slice(0, 160)}`));
   await connecter(equipe, ADMIN);
-  const gestion = await equipe.$$eval('#lat-corps .lat-groupe', (gs) => gs.map((g) => ({ titre: (g.querySelector('.lat-titre') || {}).textContent || '', chemins: [...g.querySelectorAll('.lat-lien')].map((a) => a.dataset.chemin) })).find((g) => /Gestion/i.test(g.titre)));
-  verifier(gestion && gestion.chemins.includes('/annonces'), 'l entrée « Annonces » est dans la zone Gestion du Cockpit', JSON.stringify(gestion));
+  /* Refonte du Cockpit, lot 4 : la zone Gestion devient le groupe
+     « Pilotage », qui se plie ; l'entrée s'y appelle « Annonces et tarifs ». */
+  await equipe.waitForSelector('#lat-corps .lat-arbre[data-arbre=":pilotage"]', { state: 'attached', timeout: 20000 }).catch(() => {});
+  const gestion = await equipe.$eval('#lat-corps .lat-arbre[data-arbre=":pilotage"]', (g) => ({ titre: ((g.querySelector('.lat-groupe-tete .tronque') || {}).textContent || '').trim(), chemins: [...g.querySelectorAll('.lat-branche .lat-lien')].map((a) => a.dataset.chemin), libelle: ((g.querySelector('.lat-lien[data-chemin="/annonces"] .tronque') || {}).textContent || '').trim() })).catch(() => null);
+  verifier(gestion && /Pilotage/.test(gestion.titre) && gestion.chemins.includes('/annonces') && gestion.libelle === 'Annonces et tarifs', 'l entrée « Annonces et tarifs » est dans le groupe Pilotage du Cockpit', JSON.stringify(gestion));
   await aller(equipe, '#/annonces');
   await equipe.waitForSelector('[data-annonce-ligne]', { timeout: 20000 }).catch(() => {});
   verifier(Boolean(await equipe.$('[data-annonce-ligne="tarif-2027-01"]')), 'l annonce semée est listée, en brouillon');

@@ -33,6 +33,15 @@ const MAX_ENTREES = 350;
 /* Les attributs qui écartent les gestionnaires de mots de passe (navigateur,
    1Password, LastPass, Bitwarden, Dashlane) : la phrase et les accès du
    client n'ont rien à faire dans le trousseau d'un tiers. */
+/* Le nom de la clé de cet appareil, tel que la personne la connaît :
+   Windows Hello sous Windows, Touch ID ou Face ID chez Apple, sinon la
+   clé de l'appareil (avant, « Touch ID » même sous Windows). */
+const nomDeLaCle = () => {
+  const ua = String((typeof navigator !== 'undefined' && navigator.userAgent) || '');
+  if (/Windows/i.test(ua)) return 'Avec Windows Hello';
+  if (/Mac|iPhone|iPad/i.test(ua)) return 'Avec Touch ID ou Face ID';
+  return 'Avec la clé de cet appareil';
+};
 const SANS_TROUSSEAU = 'autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other"';
 
 /** Qui voit l'onglet : l'équipe, et le responsable côté client. */
@@ -438,7 +447,7 @@ const corpsHtml = () => {
         <p class="erreur-champ" data-coffre-refus style="display:none"></p>
         <div class="rang" style="gap:8px;margin-top:var(--e-3)">
           <button class="btn btn-principal" type="submit" data-coffre-deverrouiller>Déverrouiller</button>
-          ${parAppareil ? '<button class="btn btn-secondaire" type="button" data-coffre="ouvrir-appareil">Avec Touch ID ou Face ID</button>' : ''}
+          ${parAppareil ? `<button class="btn btn-secondaire" type="button" data-coffre="ouvrir-appareil">${echapper(nomDeLaCle())}</button>` : ''}
         </div>
         <p class="aide" style="margin-top:var(--e-2)" data-coffre-derniere>${derniereHtml()}</p>
       </form>

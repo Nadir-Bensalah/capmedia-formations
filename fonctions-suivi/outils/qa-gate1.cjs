@@ -238,8 +238,11 @@ const verifierConversation = async (page, qui) => {
   await eq.page.waitForFunction((t) => location.hash === `#/projets/atelier/demandes/${t}`, tid, { timeout: 30000 }).catch(() => {});
   verifier(eq.page.url().endsWith(`#/projets/atelier/demandes/${tid}`), 'connecté, cockpit#/demande/<id> ouvre la fiche');
   await eq.page.goto(`${SITE}/suivi/cockpit#/demande/inexistante`, { waitUntil: 'domcontentloaded' });
-  const introuvable = await attendre(async () => (await eq.page.content()).includes('Demande introuvable'), 30, 500);
-  verifier(Boolean(introuvable), 'une demande inconnue dit qu elle est introuvable');
+  /* Refonte du Cockpit (lots 4 et 6) : l'équipe dit « ticket » comme le
+     client. Le lien d'un ticket inconnu le dit, et ramène l'équipe à ses
+     tickets (plus à l'accueil). */
+  const introuvable = await attendre(async () => (await eq.page.content()).includes('Ticket introuvable') && Boolean(await eq.page.$('#vue .vide a[href="#/demandes"]')), 30, 500);
+  verifier(Boolean(introuvable), 'un ticket inconnu dit qu il est introuvable, avec le chemin des tickets');
 
   /* ------------------------------------------------------------------ */
   console.log('\n== 5. La déconnexion efface la clé d administration');

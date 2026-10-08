@@ -242,7 +242,8 @@ const lettres = async (titre, cote) => [...await docs('envois?pageSize=300'), ..
   verifier(sous(fiche, 'auteur', 'cote').stringValue === 'equipe', 'ouverte au nom de l équipe');
   await page.waitForSelector('.suivi-demande', { timeout: 15000 }).catch(() => {}); await pause(1200);
   const ficheEcran = await page.textContent('.page');
-  verifier(/Constatée par\s*Camille Martin/.test(ficheEcran), 'la fiche dit « Constatée par Camille Martin »');
+  /* Lot 6 : l'équipe dit « ticket », au masculin. */
+  verifier(/Constaté par\s*Camille Martin/.test(ficheEcran), 'la fiche dit « Constaté par Camille Martin »');
   verifier(/Partie concernée\s*Application mobile \(iPhone et Android\)/.test(ficheEcran), 'et nomme la partie « Application mobile (iPhone et Android) »');
   /* L'accusé du client part, l'alerte de l'équipe non : l'équipe ne se
      prévient pas elle-même de son propre geste. */

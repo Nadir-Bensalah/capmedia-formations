@@ -54,15 +54,39 @@ export const liste = async (ctx, env) => {
       archives: projets.filter((p) => p.archive),
     };
     const liste = groupes[etat.filtre] || groupes.actifs;
-    sortie.innerHTML = `<div class="page">
+    /* Un filtre vide dit pourquoi, et propose le geste suivant. */
+    const VIDES = {
+      prepa: ['Aucun projet en préparation', 'Un nouveau projet reste ici tant que son espace n\'est pas ouvert au client.'],
+      actifs: ['Aucun projet client en cours', 'Les projets ouverts à un client apparaissent ici.'],
+      maison: ['Aucun projet à vous', 'Les projets sans client, les vôtres, se rangent ici.'],
+      tous: ['Aucun projet', 'Créez le premier : il commence en préparation.'],
+      termines: ['Aucun projet terminé', 'Un projet livré et clos se range ici.'],
+      archives: ['Aucun projet archivé', 'Un projet archivé reste ici, prêt à être restauré.'],
+    };
+    const [titreVide, texteVide] = VIDES[etat.filtre] || VIDES.actifs;
+    const actionVide = ['archives', 'termines'].includes(etat.filtre)
+      ? '<button class="btn btn-secondaire" type="button" data-filtre="tous">Voir tous les projets</button>'
+      : '<a class="btn btn-principal" href="#/projets/nouveau">Nouveau projet</a>';
+    const html = `<div class="page">
       <div class="page-tete"><div><h1>Projets</h1><p class="chapo">${pluriel(groupes.actifs.length, 'projet client actif', 'projets clients actifs')} et ${pluriel(groupes.maison.length, 'projet à moi', 'projets à moi')}, sur ${projets.length} au total${aFaire ? `, dont <a href="#/a-faire">${pluriel(aFaire, 'projet à faire', 'projets à faire')}</a> ${aFaire > 1 ? 'rangés' : 'rangé'} à part` : ''}.</p></div><div class="actions"><a class="btn btn-principal" href="#/projets/nouveau">${icone('plus')} Nouveau projet</a></div></div>
       <div class="filtres" style="margin-bottom:16px">${[['prepa', 'En préparation'], ['actifs', 'Clients'], ['maison', 'Mes projets'], ['tous', 'Tous'], ['termines', 'Terminés'], ['archives', 'Archivés']].map(([cle, lib]) => `<button class="filtre${etat.filtre === cle ? ' actif' : ''}" type="button" data-filtre="${cle}">${lib}<span class="compte">${groupes[cle].length}</span></button>`).join('')}</div>
-      ${liste.length ? `<div class="liste">${liste.map((p) => { const prog = progressionProjet(p, jalons.filter((j) => j.projet === p.id), { taches: taches.filter((t) => t.projet === p.id) }); const ouverts = tickets.filter((t) => t.projet === p.id && !['resolu', 'ferme', 'refuse', 'annulee'].includes(t.statut)).length; return ligne({ href: `#/projets/${echapper(p.id)}`, titre: `<span class="rang" style="gap:10px">${avatarProjet(p, 'petit')} ${echapper(p.nom)} <span class="t-3 t-petit" style="font-weight:400">${echapper(p.ref || '')}</span></span>`, sous: echapper([p.interne ? 'Mon projet' : (nomOrg(p.organisation) || (p.client || {}).entreprise || (p.client || {}).nom), dateCourte(p.cible) ? `cible ${dateCourte(p.cible)}` : '', ouverts ? pluriel(ouverts, 'demande ouverte', 'demandes ouvertes') : ''].filter(Boolean).join(' · ')), fin: `${!p.interne && p.ouvert !== true ? '<span class="puce" data-astuce="Le client n a pas encore acces"><i></i>Fermé</span>' : ''}${jetonsPlateformes(p.plateformes)}<span style="width:90px">${progressionOuPas(prog)}</span>${pastille(STATUTS_PROJET, statutProjet(p))}${verdictHtml(verdictDelai(p.cible, { clos: statutProjet(p) === 'termine', risques: risquesProjet({ jalons: jalons.filter((j) => j.projet === p.id), taches: taches.filter((t) => t.projet === p.id) }) }), { vide: false, detail: false })}` }); }).join('')}</div>` : vide({ icone: 'projets', titre: 'Aucun projet ici', compact: true })}
+      ${liste.length ? `<div class="liste">${liste.map((p) => { const prog = progressionProjet(p, jalons.filter((j) => j.projet === p.id), { taches: taches.filter((t) => t.projet === p.id) }); const ouverts = tickets.filter((t) => t.projet === p.id && !['resolu', 'ferme', 'refuse', 'annulee'].includes(t.statut)).length; return ligne({ href: `#/projets/${echapper(p.id)}`, titre: `<span class="rang" style="gap:10px">${avatarProjet(p, 'petit')} ${echapper(p.nom)} <span class="t-3 t-petit" style="font-weight:400">${echapper(p.ref || '')}</span></span>`, sous: echapper([p.interne ? 'Mon projet' : (nomOrg(p.organisation) || (p.client || {}).entreprise || (p.client || {}).nom), dateCourte(p.cible) ? `cible ${dateCourte(p.cible)}` : '', ouverts ? pluriel(ouverts, 'ticket ouvert', 'tickets ouverts') : ''].filter(Boolean).join(' · ')), fin: `${!p.interne && p.ouvert !== true ? '<span class="puce" data-astuce="Le client n’a pas encore accès"><i></i>Fermé</span>' : ''}${jetonsPlateformes(p.plateformes)}<span style="width:90px">${progressionOuPas(prog)}</span>${pastille(STATUTS_PROJET, statutProjet(p))}${verdictHtml(verdictDelai(p.cible, { clos: statutProjet(p) === 'termine', risques: risquesProjet({ jalons: jalons.filter((j) => j.projet === p.id), taches: taches.filter((t) => t.projet === p.id) }) }), { vide: false, detail: false })}` }); }).join('')}</div>` : vide({ icone: 'projets', titre: titreVide, texte: texteVide, action: actionVide, compact: true })}
     </div>`;
+    /* La même page, à l'identique : rien à repeindre. */
+    if (html === dernierHtml && sortie.querySelector('[data-filtre]')) return;
+    dernierHtml = html;
+    sortie.innerHTML = html;
   };
+  let dernierHtml = '';
   const gestes = sur(sortie, 'click', '[data-filtre]', (el) => { etat.filtre = el.dataset.filtre; rendre(); });
-  [K.projets, K.organisations, K.ticketsTous, K.jalonsTous, K.tachesToutes].forEach((c) => lot.sur(c, rendre));
-  return () => { gestes(); lot.fin(); };
+  /* Un seul dessin, toutes les clés arrivées (lot 6 de la refonte, H-30) :
+     sans lui, la liste se peignait sans ses clients ni ses tickets, puis se
+     repeignait à chaque clé qui arrivait. */
+  const cles = [K.projets, K.organisations, K.ticketsTous, K.jalonsTous, K.tachesToutes];
+  const planifier = magasin.dessinateur(rendre, 40, cles);
+  cles.forEach((c) => lot.sur(c, planifier));
+  planifier();
+  return () => { planifier.arreter(); gestes(); lot.fin(); };
 };
 
 /* ==========================================================================

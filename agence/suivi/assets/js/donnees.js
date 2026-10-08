@@ -307,9 +307,21 @@ export const abonnerProjet = (lot, pid, role) => {
     lot.abonner(K.paiements(pid), () => surProjet('paiements'));
     lot.abonner(K.montants(pid), () => col('projets', pid, 'montants'));
   }
+  abonnerActiviteProjet(lot, pid, role);
+};
+
+/** Le fil d'activité d'un projet, seul : la MÊME requête que dans
+    abonnerProjet (le magasin partage une écoute par clé, la première posée
+    gagne). La page Activité du Cockpit filtrée sur un projet le lit : le
+    fil de tous les projets est borné aux 200 derniers mouvements, un projet
+    calme n'y aurait presque rien. */
+export const abonnerActiviteProjet = (lot, pid, role) => {
+  const client = role !== 'equipe';
+  const responsable = client && responsableDe(pid);
+  const finance = client ? responsable : financeDe(pid);
   lot.abonner(K.activite(pid), () => (client
     ? query(col('activite'), where('projet', '==', pid), where('visibilite', 'in', responsable ? ['client', 'responsable'] : ['client']))
-    : (finance ? surProjet('activite') : query(col('activite'), where('projet', '==', pid), where('visibilite', 'in', ['client', 'interne'])))));
+    : (finance ? query(col('activite'), where('projet', '==', pid)) : query(col('activite'), where('projet', '==', pid), where('visibilite', 'in', ['client', 'interne'])))));
 };
 
 /** Le détail Sentry d'un projet (équipe seule) : le relevé, les vingt
@@ -334,6 +346,25 @@ export const abonnerControle = (lot, pid) => {
 export const abonnerLiaisons = (lot) => {
   lot.abonner(K.liaisonsSentry, () => query(col('sentryLiaisons'), where('actif', '==', true)));
 };
+
+/** Ce que l'arbre d'un projet, dans le rail du Cockpit, lit en plus des
+    collections globales (refonte du Cockpit, lot 3) : les ressources, les
+    axes, les notes, les parties, la liaison Sentry, les personnes (projet
+    client) et l'existence du coffre. Les MÊMES requêtes que dans
+    abonnerProjet côté équipe (le magasin partage une écoute par clé, la
+    première posée gagne). Seulement pour les projets en cours et le projet
+    ouvert : cinquante projets fois sept clés pour le seul rail, non. */
+export const abonnerArbreEquipe = (lot, pid, { interne = false } = {}) => {
+  lot.abonner(K.liens(pid), () => col('projets', pid, 'liens'));
+  lot.abonner(K.axes(pid), () => col('projets', pid, 'axes'));
+  lot.abonner(K.notes(pid), () => query(col('notes'), where('projet', '==', pid)));
+  lot.abonner(K.composants(pid), () => col('projets', pid, 'composants'));
+  lot.abonner(K.sentryLiaison(pid), () => doc(bdd, 'sentryLiaisons', pid));
+  if (!interne) lot.abonner(K.interlocuteurs(pid), () => col('projets', pid, 'interlocuteurs'));
+  abonnerCoffre(lot, pid);
+};
+/** Les clés que lit l'arbre d'un projet (le rail les attend avant son dessin). */
+export const clesArbreEquipe = (pid, { interne = false } = {}) => [K.liens(pid), K.axes(pid), K.notes(pid), K.composants(pid), K.sentryLiaison(pid), K.coffre(pid), ...(interne ? [] : [K.interlocuteurs(pid)])];
 
 /** Le plan de tests d'un projet, toutes ses sections (lourd : à la demande). */
 export const abonnerPlan = (lot, pid) => lot.abonner(K.planTests(pid), () => col('projets', pid, 'planTests'));
@@ -1562,7 +1593,9 @@ export const enAttenteDeVous = ({ projets = [], tickets = [], validations = [], 
   const nomProjet = (pid) => ((projets.find((p) => p.id === pid) || {}).nom || '');
   const items = [];
   validations.filter((v) => v.statut === 'en-attente' && peutRepondreValidation(v)).forEach((v) => items.push({
-    genre: 'validation', projet: v.projet, icone: 'valider', ton: 'violet', titre: v.titre, sous: `À valider depuis ${age(v.cree)} · ${nomProjet(v.projet)}`, chemin: `/valider/${v.id}`, date: v.cree,
+    /* La même validation n'a pas la même adresse dans les deux espaces :
+       « En attente du client », dans le Cockpit, ouvre sa fiche d'équipe. */
+    genre: 'validation', projet: v.projet, icone: 'valider', ton: 'violet', titre: v.titre, sous: `À valider depuis ${age(v.cree)} · ${nomProjet(v.projet)}`, chemin: sessionCourante && sessionCourante.equipe ? `/validations/${v.id}` : `/valider/${v.id}`, date: v.cree,
   }));
   tickets.filter((t) => ATTEND_CLIENT.includes(t.statut) && !t.archive).forEach((t) => items.push({
     genre: 'demande', projet: t.projet, icone: t.statut === 'a-valider' ? 'check' : 'help', ton: 'ambre',
@@ -1605,8 +1638,12 @@ export const enAttenteDeNous = ({ projets = [], tickets = [], validations = [], 
   return trierParUrgence(items);
 };
 
-/** Ce qui attend le client, vu par l'équipe. */
-export const enAttenteDuClient = (donnees) => enAttenteDeVous(donnees);
+/** Ce qui attend le client, vu par l'équipe : la même liste, dite à
+    l'équipe (lot 5 du Cockpit) ; le client lit « votre retour », « de
+    votre côté », l'équipe lit qui doit agir. */
+const POUR_L_EQUIPE = [[/^Nous attendons votre retour/, 'Retour du client attendu'], [/^Point bloquant de votre côté/, 'Point bloquant côté client']];
+export const enAttenteDuClient = (donnees) => enAttenteDeVous(donnees)
+  .map((a) => ({ ...a, sous: POUR_L_EQUIPE.reduce((s, [motif, texte]) => s.replace(motif, texte), String(a.sous || '')) }));
 
 /** Les projets actifs. */
 export const projetsActifs = (projets = []) => projets.filter(projetEstActif);

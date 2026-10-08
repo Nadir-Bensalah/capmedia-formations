@@ -1,6 +1,8 @@
 /* ==========================================================================
    Les fichiers : maquettes, photos, contrats, livrables, captures. Dans le
-   Cockpit, la page « Documents » de tous les projets. Chez le client, la
+   Cockpit, la page « Fichiers » de tous les projets (#/fichiers), filtrable
+   par projet dans l'adresse (#/fichiers?projet=<p>, l'entrée Fichiers d'un
+   projet ; les filtres y vivent aussi). Chez le client, la
    page « Fichiers » D'UN projet (l'entrée Fichiers de son arbre, adresse
    #/fichiers?projet=<p>) : les devis et les factures n'y sont plus, ils ont
    leur seule place dans « Devis et factures » (jamais la même information
@@ -14,37 +16,27 @@ import { icone, vide, squelette, titrePage, sur, fichierHtml, brancherPieces, mo
 import * as magasin from '../magasin.js';
 import { K, G, agreger, ecrire, nouvelId } from '../donnees.js';
 import { filAriane } from '../coquille.js';
+import { naviguer, reecrire, adresseAvec } from '../routeur.js';
 import { editer } from './editeurs.js';
 
 /* Les tris : le plus récent d'abord (le défaut), le plus ancien, le nom.
-   Un fichier se date à son dépôt, une pièce à son émission. */
+   Un fichier se date à son dépôt. */
 const TRIS = { recents: 'Plus récents', anciens: 'Plus anciens', nom: 'Nom' };
 const quand = (x) => enDate(x.cree || x.date) || 0;
-const nomDe = (x) => (x.type === 'devis' || x.type === 'facture' ? `${x.numero || ''} ${x.libelle || ''}`.trim() : String(x.nom || ''));
+const nomDe = (x) => String(x.nom || '');
 const trier = (liste, tri) => {
   if (tri === 'nom') return liste.slice().sort((a, b) => nomDe(a).localeCompare(nomDe(b), 'fr', { sensitivity: 'base' }));
   if (tri === 'anciens') return liste.slice().sort((a, b) => quand(a) - quand(b));
   return liste.slice().sort((a, b) => quand(b) - quand(a));
 };
 
-/* Les genres de la page, dans leur ordre d'affichage. Un avoir est une
-   facture dont le statut dit « avoir » : il a son propre rayon. */
-const GENRES = { factures: 'Factures', devis: 'Devis', avoirs: 'Avoirs', fichiers: 'Fichiers du projet' };
-const genreDe = (x) => (x.type === 'devis' ? 'devis' : x.type === 'facture' ? (x.statut === 'avoir' ? 'avoirs' : 'factures') : 'fichiers');
-
 /**
- * Ce que la page Documents montre, la même source pour la page et pour le
- * badge de la barre. Les fichiers non archivés ; les pièces seulement pour
- * le client, et seulement sur les projets dont il est responsable (un
- * collaborateur ne lit pas la finance : il ne s'y abonne pas, et l'écran
- * ne compte pas sur ce seul fait). Jamais un brouillon ni une archive.
+ * Ce que la page Fichiers montre : les fichiers non archivés. Les pièces
+ * comptables n'y sont plus (elles vivent dans « Devis et factures ») :
+ * leurs rayons Factures, Devis et Avoirs, toujours vides, sont retirés
+ * (refonte du Cockpit, lot 6).
  */
-export const documentsVisibles = (session) => {
-  const fichiers = agreger(session, G.fichiers).filter((f) => !f.archive);
-  /* Les pièces comptables ne sont montrées nulle part ici : elles vivent
-     dans « Devis et factures ». */
-  return { fichiers, pieces: [] };
-};
+export const documentsVisibles = (session) => ({ fichiers: agreger(session, G.fichiers).filter((f) => !f.archive) });
 
 export const vue = async (ctx, env) => {
   const { session } = env;
@@ -52,14 +44,23 @@ export const vue = async (ctx, env) => {
   const uid = session.utilisateur.uid;
   const lot = magasin.lot();
   const sortie = ctx.sortie;
-  const nomPage = equipe ? 'Documents' : 'Fichiers';
+  const nomPage = 'Fichiers';
   titrePage(nomPage);
   filAriane([{ libelle: nomPage }]);
   sortie.innerHTML = `<div class="page">${squelette('page', 5)}</div>`;
   /* Chez le client, la page est celle d'un projet : le projet vient de
      l'adresse et ne se change pas ici (l'arbre du rail le fait). */
   const projetFixe = equipe ? '' : String((ctx.requete || {}).projet || '');
-  const etat = { genre: '', categorie: '', projet: projetFixe, terme: '', tri: 'recents' };
+  /* Dans le Cockpit, le projet, la catégorie, le tri et le terme vivent
+     dans l'adresse : l'entrée Fichiers d'un projet y mène filtrée, le
+     Retour et un lien copié les retrouvent. Changer un filtre change
+     l'adresse, le routeur rend la main par « maj » (un dessin, en place) ;
+     le terme se réécrit sans redessiner. Chez le client, rien ne change. */
+  const lireFiltres = (requete = {}) => ({ projet: String(requete.projet || ''), categorie: String(requete.categorie || ''), tri: TRIS[requete.tri] ? requete.tri : 'recents', terme: String(requete.terme || '') });
+  const etat = { categorie: '', projet: projetFixe, terme: '', tri: 'recents', ...(equipe ? lireFiltres(ctx.requete) : {}) };
+  const adresse = (f = etat) => adresseAvec('/fichiers', { projet: f.projet, categorie: f.categorie, tri: f.tri === 'recents' ? '' : f.tri, terme: f.terme });
+  /* Un filtre : dans l'adresse pour l'équipe, sur place pour le client. */
+  const filtrer = (changes) => { if (equipe) { naviguer(adresse({ ...etat, ...changes })); return; } Object.assign(etat, changes); rendre(); };
   /* « ?f=<id> » (la recherche) : le fichier se montre et s'éclaire. */
   let aMontrer = String((ctx.requete || {}).f || '');
   let dernierHtml = '';
@@ -67,48 +68,36 @@ export const vue = async (ctx, env) => {
   const rendre = () => {
     const projets = magasin.lire(K.projets) || session.projets;
     const nomProjet = (pid) => ((projets.find((p) => p.id === pid) || {}).nom || '');
-    const { fichiers: tousFichiers, pieces: toutesPieces } = documentsVisibles(session);
+    const { fichiers: tousFichiers } = documentsVisibles(session);
     const terme = etat.terme.toLowerCase();
     const duProjet = (x) => !etat.projet || x.projet === etat.projet;
-    const trouve = (x) => !terme || (x.type === 'devis' || x.type === 'facture'
-      ? `${x.numero || ''} ${x.libelle || ''} ${nomProjet(x.projet)}`
-      : `${x.nom} ${x.description || ''} ${(x.tags || []).join(' ')}`).toLowerCase().includes(terme);
+    const trouve = (x) => !terme || `${x.nom} ${x.description || ''} ${(x.tags || []).join(' ')}`.toLowerCase().includes(terme);
     /* Les comptes des puces suivent le projet choisi, pas la recherche :
        ils disent ce qu'il y a, la liste dit ce qui correspond. */
     const fichiersProjet = tousFichiers.filter(duProjet);
-    const piecesProjet = toutesPieces.filter(duProjet);
-    const parGenre = { factures: [], devis: [], avoirs: [], fichiers: fichiersProjet };
-    piecesProjet.forEach((d) => parGenre[genreDe(d)].push(d));
-    const genres = Object.keys(GENRES).filter((g) => parGenre[g].length);
-    if (etat.genre && !genres.includes(etat.genre)) etat.genre = '';
-    const total = fichiersProjet.length + piecesProjet.length;
+    const total = fichiersProjet.length;
     const categories = Object.entries(CATEGORIES_FICHIER).filter(([cle]) => fichiersProjet.some((f) => f.categorie === cle));
     if (etat.categorie && !categories.some(([cle]) => cle === etat.categorie)) etat.categorie = '';
-    /* La liste d'un genre, filtrée et triée. */
-    const listeDe = (g) => trier(parGenre[g].filter((x) => trouve(x) && (g !== 'fichiers' || !etat.categorie || x.categorie === etat.categorie)), etat.tri);
-    const blocFichiers = (liste) => `<div class="grille grille-2">${liste.map((f) => fichierHtml({ ...f, categorieLibelle: `${CATEGORIES_FICHIER[f.categorie] || f.categorie}${projets.length > 1 && !projetFixe ? ` · ${nomProjet(f.projet)}` : ''}` }, { menu: equipe, retirer: !equipe, moi: equipe ? '' : uid })).join('')}</div>`;
-    const bloc = (g, liste) => blocFichiers(liste);
-    const avecPieces = toutesPieces.length > 0;
-    const montres = etat.genre ? [etat.genre] : genres;
-    const listes = montres.map((g) => [g, listeDe(g)]);
-    const rien = listes.every(([, l]) => !l.length);
-    /* Un seul genre à l'écran : sa liste, sans titre de section. Plusieurs :
-       une section par genre, dans l'ordre de GENRES, les vides tues. */
-    const corps = rien
-      ? vide({ icone: 'fichiers', titre: total ? 'Rien ne correspond' : (equipe ? 'Aucun document' : 'Aucun fichier'), texte: total ? 'Changez un filtre ou le terme de recherche.' : (equipe ? 'Les fichiers des projets apparaîtront ici.' : 'Les fichiers de ce projet apparaîtront ici. Vous pouvez aussi nous envoyer des captures, des logos ou des photos.') })
-      : (listes.length === 1 ? bloc(listes[0][0], listes[0][1])
-        : listes.filter(([, l]) => l.length).map(([g, l]) => `<section class="section" data-rayon="${g}"><div class="section-tete"><h2>${echapper(GENRES[g])}</h2><span class="t-petit t-3">${l.length}</span></div>${bloc(g, l)}</section>`).join(''));
+    const liste = trier(fichiersProjet.filter((x) => trouve(x) && (!etat.categorie || x.categorie === etat.categorie)), etat.tri);
+    const blocFichiers = (l) => `<div class="grille grille-2">${l.map((f) => fichierHtml({ ...f, categorieLibelle: `${CATEGORIES_FICHIER[f.categorie] || f.categorie}${projets.length > 1 && !projetFixe ? ` · ${nomProjet(f.projet)}` : ''}` }, { menu: equipe, retirer: !equipe, moi: equipe ? '' : uid })).join('')}</div>`;
+    /* Rien à montrer : la phrase dit pourquoi, le bouton propose la suite
+       (effacer la recherche, ou déposer le premier fichier). */
+    const actionVide = total
+      ? (equipe ? `<a class="btn btn-secondaire" href="#${adresse({ ...etat, categorie: '', terme: '' })}">Effacer les filtres</a>` : '')
+      : `<button class="btn btn-secondaire" type="button" data-deposer>${equipe ? 'Déposer un fichier' : 'Envoyer un fichier'}</button>`;
+    const corps = !liste.length
+      ? vide({ icone: 'fichiers', titre: total ? 'Rien ne correspond' : 'Aucun fichier', texte: total ? 'Changez un filtre ou le terme de recherche.' : (equipe ? (etat.projet ? 'Déposez maquettes, livrables, documents.' : 'Les fichiers des projets apparaîtront ici.') : 'Les fichiers de ce projet apparaîtront ici. Vous pouvez aussi nous envoyer des captures, des logos ou des photos.'), action: actionVide })
+      : blocFichiers(liste);
 
     const html = `<div class="page">
-      <div class="page-tete"><div><h1>${echapper(nomPage)}</h1><p class="chapo">${equipe ? 'Maquettes, contrats, livrables, captures : tous les fichiers, rangés par catégorie et par projet.' : 'Maquettes, photos, contrats, livrables, captures : les fichiers de ce projet, rangés par catégorie. Les devis et les factures sont dans « Devis et factures ».'}</p></div>
+      <div class="page-tete"><div><h1>${echapper(nomPage)}</h1><p class="chapo">${equipe ? (etat.projet && nomProjet(etat.projet) ? `Maquettes, contrats, livrables, captures : les fichiers de ${echapper(nomProjet(etat.projet))}, rangés par catégorie.` : 'Maquettes, contrats, livrables, captures : tous les fichiers, rangés par catégorie et par projet.') : 'Maquettes, photos, contrats, livrables, captures : les fichiers de ce projet, rangés par catégorie. Les devis et les factures sont dans « Devis et factures ».'}</p></div>
         <div class="actions">${equipe ? `<button class="btn btn-principal" type="button" data-deposer>${icone('plus')} Déposer</button>` : `<button class="btn btn-principal" type="button" data-deposer>${icone('plus')} Envoyer un fichier</button>`}</div></div>
       <div class="rang" style="margin-bottom:16px;gap:12px">
         <div style="flex:1;min-width:220px;position:relative"><input class="champ" type="search" id="recherche-doc" placeholder="Rechercher un fichier" value="${echapper(etat.terme)}" aria-label="Rechercher"></div>
         ${projets.length > 1 && !projetFixe ? `<select class="select" id="filtre-projet" style="width:auto;min-width:180px"><option value="">Tous les projets</option>${projets.map((p) => `<option value="${echapper(p.id)}" ${etat.projet === p.id ? 'selected' : ''}>${echapper(p.nom)}</option>`).join('')}</select>` : ''}
         <select class="select" id="tri-doc" style="width:auto" aria-label="Trier">${optionsDe(TRIS, etat.tri)}</select>
       </div>
-      ${genres.length > 1 ? `<div class="filtres" id="filtre-genre" style="margin-bottom:12px"><button class="filtre${!etat.genre ? ' actif' : ''}" type="button" data-genre="">Tous<span class="compte">${total}</span></button>${genres.map((g) => `<button class="filtre${etat.genre === g ? ' actif' : ''}" type="button" data-genre="${g}">${echapper(GENRES[g])}<span class="compte">${parGenre[g].length}</span></button>`).join('')}</div>` : ''}
-      ${(!avecPieces || etat.genre === 'fichiers') && categories.length > 1 ? `<div class="filtres" style="margin-bottom:20px"><button class="filtre${!etat.categorie ? ' actif' : ''}" type="button" data-cat="">${avecPieces ? 'Tous les fichiers' : 'Tous'}<span class="compte">${fichiersProjet.length}</span></button>${categories.map(([cle, lib]) => `<button class="filtre${etat.categorie === cle ? ' actif' : ''}" type="button" data-cat="${cle}">${echapper(lib)}<span class="compte">${fichiersProjet.filter((f) => f.categorie === cle).length}</span></button>`).join('')}</div>` : (genres.length > 1 ? '<div style="height:8px"></div>' : '')}
+      ${categories.length > 1 ? `<div class="filtres" style="margin-bottom:20px"><button class="filtre${!etat.categorie ? ' actif' : ''}" type="button" data-cat="">Tous<span class="compte">${fichiersProjet.length}</span></button>${categories.map(([cle, lib]) => `<button class="filtre${etat.categorie === cle ? ' actif' : ''}" type="button" data-cat="${cle}">${echapper(lib)}<span class="compte">${fichiersProjet.filter((f) => f.categorie === cle).length}</span></button>`).join('')}</div>` : ''}
       ${corps}
     </div>`;
     /* Une donnée qui revient à l'identique ne repeint pas la page : sinon
@@ -127,16 +116,15 @@ export const vue = async (ctx, env) => {
       }
     }
     const champ = sortie.querySelector('#recherche-doc');
-    champ.addEventListener('input', () => { etat.terme = champ.value; const pos = champ.selectionStart; rendre(); const c = sortie.querySelector('#recherche-doc'); c.focus(); c.setSelectionRange(pos, pos); });
+    champ.addEventListener('input', () => { etat.terme = champ.value; if (equipe) reecrire(adresse()); const pos = champ.selectionStart; rendre(); const c = sortie.querySelector('#recherche-doc'); c.focus(); c.setSelectionRange(pos, pos); });
     const sel = sortie.querySelector('#filtre-projet');
-    if (sel) sel.addEventListener('change', () => { etat.projet = sel.value; rendre(); });
+    if (sel) sel.addEventListener('change', () => { filtrer({ projet: sel.value, categorie: '' }); });
     const tri = sortie.querySelector('#tri-doc');
-    if (tri) tri.addEventListener('change', () => { etat.tri = TRIS[tri.value] ? tri.value : 'recents'; rendre(); });
+    if (tri) tri.addEventListener('change', () => { filtrer({ tri: TRIS[tri.value] ? tri.value : 'recents' }); });
   };
 
-  const gestes = sur(sortie, 'click', '[data-genre], [data-cat], [data-deposer], [data-menu-fichier]', async (el) => {
-    if (el.dataset.genre !== undefined) { etat.genre = el.dataset.genre; etat.categorie = ''; rendre(); return; }
-    if (el.dataset.cat !== undefined) { etat.categorie = el.dataset.cat; rendre(); return; }
+  const gestes = sur(sortie, 'click', '[data-cat], [data-deposer], [data-menu-fichier]', async (el) => {
+    if (el.dataset.cat !== undefined) { filtrer({ categorie: el.dataset.cat }); return; }
     const projets = magasin.lire(K.projets) || session.projets;
     if (el.hasAttribute('data-deposer')) {
       const pid = etat.projet || (projets[0] && projets[0].id);
@@ -180,7 +168,22 @@ export const vue = async (ctx, env) => {
   const planifier = magasin.dessinateur(rendre, 40, cles);
   cles.forEach((c) => lot.sur(c, planifier));
   planifier();
-  return () => { planifier.arreter(); gestes(); gestesPieces(); lot.fin(); };
+  return {
+    fin: () => { planifier.arreter(); gestes(); gestesPieces(); lot.fin(); },
+    /* Même page, autres filtres (Cockpit : la route a une clé) : un
+       dessin, en place. Un « ?f= » nouveau éclaire son fichier. */
+    maj: (suite) => {
+      if (!equipe) return;
+      const f = lireFiltres(suite.requete);
+      const montrer = String((suite.requete || {}).f || '');
+      const memes = ['projet', 'categorie', 'tri', 'terme'].every((k) => f[k] === etat[k]);
+      if (montrer) aMontrer = montrer;
+      if (memes && !montrer) return;
+      Object.assign(etat, f);
+      if (montrer) dernierHtml = '';
+      rendre();
+    },
+  };
 };
 
 /* Le dépôt du client : les mêmes catégories et les mêmes libellés que

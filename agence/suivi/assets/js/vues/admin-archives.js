@@ -31,13 +31,13 @@ export const vue = async (ctx, env) => {
     const restaurer = (genre, id) => `<button class="btn btn-secondaire btn-petit" type="button" data-restaurer="${genre}" data-id="${echapper(id)}">${icone('restaurer')} Restaurer</button>`;
     sortie.innerHTML = `<div class="page">
       <div class="page-tete"><div><h1>Archives</h1><p class="chapo">Ce qui a été rangé. Tout se restaure en un geste.</p></div></div>
-      <div class="onglets">${[['projets', 'Projets'], ['demandes', 'Demandes'], ['taches', 'Tâches'], ['fichiers', 'Fichiers'], ['documents', 'Devis et factures']].map(([c, l]) => `<button class="onglet${etat.onglet === c ? ' actif' : ''}" type="button" data-onglet="${c}">${l}<span class="badge">${groupes[c].length}</span></button>`).join('')}</div>
-      ${!liste.length ? vide({ icone: 'archive', titre: 'Rien dans cette archive', compact: true })
-      : etat.onglet === 'projets' ? `<div class="liste">${liste.map((p) => ligne({ href: `#/projets/${echapper(p.id)}`, titre: `<span class="rang" style="gap:10px">${avatarProjet(p, 'petit')} ${echapper(p.nom)}</span>`, sous: echapper((p.client || {}).entreprise || (p.client || {}).nom || ''), fin: `${pastille(STATUTS_PROJET, p.archive ? 'archive' : statutProjet(p))}${restaurer('projet', p.id)}` })).join('')}</div>`
-      : etat.onglet === 'demandes' ? `<div class="liste">${liste.map((t) => ligne({ href: `#/projets/${echapper(t.projet)}/demandes/${echapper(t.id)}`, icone: 'demandes', titre: `${echapper(t.numero || '')} ${echapper(t.titre)}`, sous: `${echapper(nomProjet(t.projet))} · ${echapper(depuis(t.maj))}`, fin: `${pastille(STATUTS, t.statut)}${restaurer('demande', t.id)}` })).join('')}</div>`
-      : etat.onglet === 'taches' ? `<div class="liste">${liste.map((t) => ligne({ icone: 'taches', titre: echapper(t.titre), sous: echapper(nomProjet(t.projet)), fin: restaurer('tache', t.id), attrs: 'style="cursor:default"' })).join('')}</div>`
-      : etat.onglet === 'fichiers' ? `<div class="liste">${liste.map((f) => ligne({ icone: 'fichiers', titre: echapper(f.nom), sous: `${echapper(nomProjet(f.projet))} · ${echapper(dateCourte(f.cree))}`, fin: restaurer('fichier', f.id), attrs: 'style="cursor:default"' })).join('')}</div>`
-      : `<div class="liste">${liste.map((d) => ligne({ icone: d.type === 'devis' ? 'receipt' : 'euro', titre: `${echapper(d.numero || '')} ${echapper(d.libelle || '')}`, sous: `${echapper(nomProjet(d.projet))} · ${echapper(dateCourte(d.date))}`, fin: restaurer('document', d.id), attrs: 'style="cursor:default"' })).join('')}</div>`}
+      <div class="onglets">${[['projets', 'Projets'], ['demandes', 'Tickets'], ['taches', 'Tâches'], ['fichiers', 'Fichiers'], ['documents', 'Devis et factures']].map(([c, l]) => `<button class="onglet${etat.onglet === c ? ' actif' : ''}" type="button" data-onglet="${c}">${l}<span class="badge">${groupes[c].length}</span></button>`).join('')}</div>
+      ${!liste.length ? vide({ icone: 'archive', titre: 'Rien dans cette archive', texte: ({ projets: 'Un projet archivé depuis son menu ⋯ se range ici.', demandes: 'Un ticket archivé se range ici.', taches: 'Une tâche archivée se range ici.', fichiers: 'Un fichier archivé se range ici.', documents: 'Un devis ou une facture archivé se range ici.' })[etat.onglet] || '', action: `<a class="btn btn-secondaire" href="#${({ projets: '/projets', demandes: '/demandes', taches: '/taches', fichiers: '/fichiers', documents: '/finances' })[etat.onglet] || '/projets'}">Retour à la liste</a>`, compact: true })
+      : etat.onglet === 'projets' ? `<div class="liste">${liste.map((p) => ligne({ href: `#/projets/${echapper(p.id)}`, titre: `<span class="rang" style="gap:10px">${avatarProjet(p, 'petit')} ${echapper(p.nom)}</span>`, sous: echapper((p.client || {}).entreprise || (p.client || {}).nom || (p.interne ? 'Mon projet' : '–')), fin: `${pastille(STATUTS_PROJET, p.archive ? 'archive' : statutProjet(p))}${restaurer('projet', p.id)}` })).join('')}</div>`
+      : etat.onglet === 'demandes' ? `<div class="liste">${liste.map((t) => ligne({ href: `#/projets/${echapper(t.projet)}/demandes/${echapper(t.id)}`, icone: 'demandes', titre: `${echapper(t.numero || '')} ${echapper(t.titre)}`, sous: `${echapper(nomProjet(t.projet) || '–')} · ${echapper(depuis(t.maj) || '–')}`, fin: `${pastille(STATUTS, t.statut)}${restaurer('demande', t.id)}` })).join('')}</div>`
+      : etat.onglet === 'taches' ? `<div class="liste">${liste.map((t) => ligne({ icone: 'taches', titre: echapper(t.titre), sous: echapper(nomProjet(t.projet) || '–'), fin: restaurer('tache', t.id), attrs: 'style="cursor:default"' })).join('')}</div>`
+      : etat.onglet === 'fichiers' ? `<div class="liste">${liste.map((f) => ligne({ icone: 'fichiers', titre: echapper(f.nom), sous: `${echapper(nomProjet(f.projet) || '–')} · ${echapper(dateCourte(f.cree) || '–')}`, fin: restaurer('fichier', f.id), attrs: 'style="cursor:default"' })).join('')}</div>`
+      : `<div class="liste">${liste.map((d) => ligne({ icone: d.type === 'devis' ? 'receipt' : 'euro', titre: `${echapper(d.numero || '')} ${echapper(d.libelle || '')}`, sous: `${echapper(nomProjet(d.projet) || '–')} · ${echapper(dateCourte(d.date) || '–')}`, fin: restaurer('document', d.id), attrs: 'style="cursor:default"' })).join('')}</div>`}
     </div>`;
   };
   const gestes = sur(sortie, 'click', '[data-onglet], [data-restaurer]', async (el, ev) => {
@@ -53,6 +53,10 @@ export const vue = async (ctx, env) => {
       else if (genre === 'document') await appelServeur('archiverDocument', { id, archive: false });
     }, 'Restauré.');
   });
-  [K.projets, K.ticketsTous, K.tachesToutes, K.fichiersTous, K.documentsTous].forEach((c) => lot.sur(c, rendre));
-  return () => { gestes(); lot.fin(); };
+  /* Un seul dessin, toutes les clés arrivées (lot 6, H-30). */
+  const cles = [K.projets, K.ticketsTous, K.tachesToutes, K.fichiersTous, K.documentsTous];
+  const planifier = magasin.dessinateur(rendre, 40, cles);
+  cles.forEach((c) => lot.sur(c, planifier));
+  planifier();
+  return () => { planifier.arreter(); gestes(); lot.fin(); };
 };

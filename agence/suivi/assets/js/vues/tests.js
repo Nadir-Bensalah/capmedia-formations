@@ -26,8 +26,9 @@ import {
 } from '../noyau.js';
 import {
   icone, pastille, ligne, vide, squelette, titrePage, sur, modale, toast, agir, confirmer,
-  brancherPieces, lisible, menu, reglerBarreOnglets,
+  brancherPieces, lisible, menu, reglerBarreOnglets, fermerFlottants,
 } from '../ui.js';
+import { reecrire } from '../routeur.js';
 import * as magasin from '../magasin.js';
 import {
   K, ecrire, repartir, profilsTesteurs, scenariosHumains, chargeParTesteur, controler, clesDe, lireSectionsPlan,
@@ -84,16 +85,6 @@ const ALIAS_ONGLET = { avis: 'humains' };
 const ongletValide = (o) => {
   const v = ALIAS_ONGLET[o] || o;
   return ONGLETS_TESTS.some((x) => x.cle === v) ? v : ONGLET_DEFAUT;
-};
-/* Quel onglet porte chaque section : pour un lien qui vise une section
-   (index, alerte, adresse), on ouvre d'abord le bon onglet. */
-const ONGLET_DE_SECTION = {
-  'etage-devis': 'devis',
-  'etage-humain': 'humains', campagnes: 'humains', anomalies: 'humains', testeurs: 'humains',
-  'etage-avis': 'humains', avis: 'humains',
-  'etage-machine': 'automatises', parcours: 'automatises', regles: 'automatises',
-  'etage-bibli': 'bibliotheque', scenarios: 'bibliotheque', bibliotheque: 'bibliotheque',
-  problemes: 'problemes',
 };
 
 /* --------------------------------------------------------------------------
@@ -472,7 +463,7 @@ const parcoursHtml = (d, { pid, equipe, plateforme = '' }) => {
     ton: x.etat === 'vert' ? 'vert' : x.etat === 'rouge' ? 'rouge' : x.etat === 'instable' ? 'ambre' : '',
     titre: `${ref(x.ref)} ${echapper(x.titre || '')}${x.mutation || x.etat !== 'vert' ? '' : ' <span class="etiquette">Sans contre-épreuve</span>'}`,
     sous: `${echapper((OUTILS_PARCOURS[x.outil] || {}).court || x.outil)}${(x.plateformes || []).length ? ` · ${echapper((x.plateformes || []).map((p) => (PLATEFORMES_TEST[p] || {}).court || p).join(', '))}` : ''}${(x.scenarios || []).length ? ` · ${pluriel((x.scenarios || []).length, 'scénario', 'scénarios')}` : ''}${x.note ? ` · ${echapper(x.note.slice(0, 60))}` : ''}`,
-    fin: `${pastille(ETATS_PARCOURS, x.etat || 'a-ecrire')}${equipe ? `<span class="rang boutons-edition"><button class="btn-icone" type="button" data-editer-parcours="${echapper(x.ref)}" aria-label="Modifier" data-astuce="Modifier">${icone('edit')}</button></span>` : ''}`,
+    fin: `${pastille(ETATS_PARCOURS, x.etat || 'a-ecrire')}${equipe ? `<span class="rang boutons-edition"><button class="btn-icone" type="button" data-editer-parcours="${echapper(x.ref)}" data-projet-robot="${echapper(projetDe(x))}" aria-label="Modifier" data-astuce="Modifier">${icone('edit')}</button></span>` : ''}`,
   });
 
   return `<section class="section" id="parcours">
@@ -554,7 +545,7 @@ const reglesHtml = (d, { pid, equipe }) => {
     ton: x.etat === 'vert' ? 'vert' : x.etat === 'rouge' ? 'rouge' : '',
     titre: `${ref(x.ref)} ${echapper(x.titre || '')}${x.mutation || x.etat !== 'vert' ? '' : ' <span class="etiquette">Sans contre-épreuve</span>'}`,
     sous: `${pluriel(Number(x.cas) || 0, 'situation essayée', 'situations essayées')}${x.cherche ? ` · ${echapper(x.cherche)}` : ''}`,
-    fin: `${pastille(ETATS_REGLE, x.etat || 'a-ecrire')}${equipe ? `<span class="rang boutons-edition"><button class="btn-icone" type="button" data-editer-regle="${echapper(x.ref)}" aria-label="Modifier" data-astuce="Modifier">${icone('edit')}</button></span>` : ''}`,
+    fin: `${pastille(ETATS_REGLE, x.etat || 'a-ecrire')}${equipe ? `<span class="rang boutons-edition"><button class="btn-icone" type="button" data-editer-regle="${echapper(x.ref)}" data-projet-robot="${echapper(projetDe(x))}" aria-label="Modifier" data-astuce="Modifier">${icone('edit')}</button></span>` : ''}`,
   });
 
   return `<section class="section" id="regles">
@@ -900,7 +891,10 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAU
   const sectionScenarios = `<section class="section" id="scenarios">
     <div class="section-tete">
       <div><h2>Les vérifications ${infoBouton('scenarios')}</h2><p class="chapo">Tout ce qu'on vérifie dans l'app${plateforme ? `, sur ${(PLATEFORMES_TEST[plateforme] || {}).libelle}` : ''}. ${scen.length ? pluriel(scen.length, 'vérification', 'vérifications') : 'Vide.'}</p></div>
-      <button class="btn btn-secondaire btn-petit" type="button" data-plier-scenarios aria-expanded="false">${icone('deplier')} Voir la liste</button>
+      <div class="rang">
+        ${equipe ? `<button class="btn btn-principal btn-petit" type="button" data-action="nouveau" data-genre="scenario">${icone('plus')} Nouveau scénario</button>` : ''}
+        <button class="btn btn-secondaire btn-petit" type="button" data-plier-scenarios aria-expanded="false">${icone('deplier')} Voir la liste</button>
+      </div>
     </div>
     ${scen.length ? `
     <div id="bibliotheque" hidden>
@@ -925,7 +919,7 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAU
           </div>`).join('')}</div>
       </div>`).join('')}
     </div>`
-    : vide({ icone: 'bug', titre: plateforme ? 'Aucun scénario sur cette plateforme' : 'Aucun scénario', texte: plateforme ? 'Changez de filtre, ou élargissez les plateformes de vos scénarios.' : equipe ? 'Versez un plan de tests sur ce projet.' : 'Les scénarios de test apparaîtront ici dès qu\'ils seront écrits.', compact: true })}
+    : vide({ icone: 'bug', titre: plateforme ? 'Aucun scénario sur cette plateforme' : 'Aucun scénario', texte: plateforme ? 'Changez de filtre, ou élargissez les plateformes de vos scénarios.' : equipe ? 'Écrivez-en un avec « Nouveau scénario », ou versez un plan de tests sur ce projet.' : 'Les scénarios de test apparaîtront ici dès qu\'ils seront écrits.', compact: true })}
   </section>`;
 
   /* Les quatre tuiles d'autrefois redisaient l'avancement avec d'autres
@@ -1747,8 +1741,6 @@ export const vue = async (ctx, env) => {
     /* Les filtres de la liste des problèmes. */
     filtres: Object.fromEntries(FILTRES_PROBLEMES.map((f) => [f, lire(ctx, f, '')])),
   };
-  /* Une section visée par un lien, à faire défiler une fois l'onglet ouvert. */
-  let allerA = '';
 
   let empreinte = '';
   /* Les lectures en groupe n'existent que côté équipe : les règles les lui
@@ -1780,6 +1772,22 @@ export const vue = async (ctx, env) => {
     if (etat.projet) return etat.projet;
     const p = magasin.lire(K.projets) || [];
     return env.role !== 'equipe' && p.length === 1 ? p[0].id : '';
+  };
+
+  /* Le fil d'Ariane de l'équipe suit le projet choisi : « Projets ›
+     Atelier › Tests », comme les autres pages d'un projet (la retouche du
+     Cockpit y ajoute l'accueil). Sans projet, ou pour le client, le fil
+     reste celui de la page. Posé seulement quand il change : un projet
+     choisi, son nom arrivé. */
+  let filPose = '';
+  const poserFil = (pid, nom) => {
+    const fil = env.role === 'equipe' && pid && nom
+      ? [{ libelle: 'Projets', chemin: '/projets' }, { libelle: nom, chemin: `/projets/${pid}` }, { libelle: 'Tests' }]
+      : [{ libelle: env.role === 'equipe' ? 'Tests' : 'Campagne de tests' }];
+    const cle = JSON.stringify(fil);
+    if (cle === filPose) return;
+    filPose = cle;
+    filAriane(fil);
   };
 
   /* Une seule fonction pour toutes les clés : un dessin par tour, et le
@@ -1831,6 +1839,7 @@ export const vue = async (ctx, env) => {
        disparaît et son projet s'ouvre directement. */
     const seul = env.role !== 'equipe' && d.projets.length === 1 ? d.projets[0].id : '';
     const pid = projetCourant();
+    poserFil(pid, nomProjet(pid));
 
     /* « Ce qui va être testé » : le plan de tests, section par section. En
        tête de page, avant tout le reste : c'est la première question d'un
@@ -1886,11 +1895,6 @@ export const vue = async (ctx, env) => {
     }
 
     reglerBarreOnglets(sortie.querySelector('#onglets-tests'));
-    if (allerA) {
-      const cible = sortie.querySelector(`#${allerA}`);
-      allerA = '';
-      if (cible) cible.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
 
     const sel = sortie.querySelector('#f-projet');
     /* Changer de projet ou de plateforme, c'est changer d'adresse : le
@@ -1951,7 +1955,7 @@ export const vue = async (ctx, env) => {
     poser({ [sel.dataset.filtreProbleme]: sel.value, onglet: 'problemes' });
   };
   sortie.addEventListener('change', changeFiltre);
-  const gestes = sur(sortie, 'click', '[data-info], [data-aller], [data-nouvelle-anomalie], [data-editer-anomalie], [data-action="ouvrir-anomalie"], [data-plateforme], [data-scenario], [data-plier-bugs], [data-plier-scenarios], [data-plier-parcours], [data-plier-regles], [data-plier-questions], [data-nouvelle-regle], [data-editer-regle], [data-nouvelle-campagne], [data-editer-campagne], [data-action="ouvrir-campagne"], [data-nouveau-testeur], [data-action="ouvrir-testeur"], [data-nouveau-parcours], [data-editer-parcours]', async (el) => {
+  const gestes = sur(sortie, 'click', '[data-info], [data-nouvelle-anomalie], [data-editer-anomalie], [data-action="ouvrir-anomalie"], [data-plateforme], [data-scenario], [data-plier-bugs], [data-plier-scenarios], [data-plier-parcours], [data-plier-regles], [data-plier-questions], [data-nouvelle-regle], [data-editer-regle], [data-nouvelle-campagne], [data-editer-campagne], [data-action="ouvrir-campagne"], [data-nouveau-testeur], [data-action="ouvrir-testeur"], [data-nouveau-parcours], [data-editer-parcours], [data-action="nouveau"][data-genre="scenario"]', async (el) => {
     /* Une référence n'est unique qu'à l'intérieur d'un projet : deux plans
        de tests portent chacun leur « DI-15 ». Chercher sans le projet
        ouvrirait l'énoncé d'une autre application, sans rien dire. */
@@ -1967,14 +1971,6 @@ export const vue = async (ctx, env) => {
     if (el.dataset.info) {
       const x = EXPLICATIONS[el.dataset.info];
       if (x) modale({ titre: x.titre, corps: `<div class="prose">${x.corps}</div>` });
-      return;
-    }
-    if (el.dataset.aller) {
-      const cible = sortie.querySelector(`#${el.dataset.aller}`);
-      if (cible) { cible.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
-      /* La section vit dans un autre onglet : on l'ouvre, puis on y va. */
-      const o = ONGLET_DE_SECTION[el.dataset.aller];
-      if (o) { allerA = el.dataset.aller; poser({ projet: etat.projet, plateforme: etat.plateforme, onglet: o === ONGLET_DEFAUT ? '' : o }); }
       return;
     }
     if (el.hasAttribute('data-plier-bugs')) {
@@ -2029,8 +2025,12 @@ export const vue = async (ctx, env) => {
       return;
     }
     if (el.dataset.nouvelleRegle) { await editer('regle', env, { pid: el.dataset.nouvelleRegle }); return; }
+    /* Un robot ou une règle vit dans son projet : sur la vue de tous les
+       projets, aucun n'est choisi, et c'est le bouton qui dit lequel
+       (« data-projet-robot » : « data-projet » est déjà la case à cocher
+       des projets dans la fiche d'un testeur). */
     if (el.dataset.editerRegle) {
-      const pid = projetCourant();
+      const pid = el.dataset.projetRobot || projetCourant();
       const x = lireTout(env).regles.find((y) => y.ref === el.dataset.editerRegle && projetDe(y) === pid);
       if (x) await editer('regle', env, { pid, fiche: x });
       return;
@@ -2049,9 +2049,16 @@ export const vue = async (ctx, env) => {
       return;
     }
     if (el.dataset.nouvelleCampagne) { await editer('campagne', env, { pid: el.dataset.nouvelleCampagne, sections: sectionsDuPlan(el.dataset.nouvelleCampagne) }); return; }
+    /* L'éditeur de scénario n'avait qu'une porte : l'état vide de l'onglet
+       Tests d'un projet. La bibliothèque est ici, le bouton aussi. */
+    if (el.dataset.action === 'nouveau' && el.dataset.genre === 'scenario') {
+      const pid = projetCourant();
+      if (pid) await editer('scenario', env, { pid });
+      return;
+    }
     if (el.dataset.nouveauParcours) { await editer('parcours', env, { pid: el.dataset.nouveauParcours }); return; }
     if (el.dataset.editerParcours) {
-      const pid = projetCourant();
+      const pid = el.dataset.projetRobot || projetCourant();
       const x = lireTout(env).parcours.find((y) => y.ref === el.dataset.editerParcours && projetDe(y) === pid);
       if (x) await editer('parcours', env, { pid, fiche: x });
       return;
@@ -2112,20 +2119,46 @@ export const vue = async (ctx, env) => {
 
   /* Une notification mène droit à sa fiche : « ?anomalie= » ou
      « ?campagne= » dans l'adresse ouvre l'anomalie ou la campagne dès
-     qu'elle est là, une seule fois. */
-  const aOuvrir = { anomalie: lire(ctx, 'anomalie', ''), campagne: lire(ctx, 'campagne', '') };
+     qu'elle est là, une seule fois. « ?testeur= » ouvre la fiche du
+     testeur (lien depuis Messages › Testeurs), équipe seule : sur la vue
+     de tous les projets, le vivier complet. */
+  const aOuvrir = { anomalie: lire(ctx, 'anomalie', ''), campagne: lire(ctx, 'campagne', ''), testeur: env.role === 'equipe' ? lire(ctx, 'testeur', '') : '' };
   /* Une anomalie à ouvrir vit dans l'onglet Problèmes (toutes y sont, sans
      filtre), une campagne dans celui des tests humains. */
-  if (aOuvrir.anomalie) { etat.onglet = 'problemes'; FILTRES_PROBLEMES.forEach((f) => { etat.filtres[f] = ''; }); }
-  else if (aOuvrir.campagne) etat.onglet = ONGLET_DEFAUT;
+  const viserOnglet = () => {
+    if (aOuvrir.anomalie) { etat.onglet = 'problemes'; FILTRES_PROBLEMES.forEach((f) => { etat.filtres[f] = ''; }); }
+    else if (aOuvrir.campagne || aOuvrir.testeur) etat.onglet = ONGLET_DEFAUT;
+  };
+  viserOnglet();
   let essais = 0;
+  let minuteurOuvrir = null;
+  /* Ouverte, la fiche ne doit pas se rouvrir au filtre suivant : le
+     paramètre quitte l'adresse (réécrite sur place, sans redessiner). Sans
+     cela, un clic sur une plateforme, qui part de l'adresse courante,
+     ramenait « &anomalie= » et rouvrait la fiche. */
+  const oublierDansAdresse = () => {
+    const brut = location.hash.replace(/^#/, '');
+    const [chemin, chaine = ''] = brut.split('?');
+    if (chemin !== '/tests') return;
+    const p = new URLSearchParams(chaine);
+    if (!p.has('anomalie') && !p.has('campagne') && !p.has('testeur')) return;
+    p.delete('anomalie'); p.delete('campagne'); p.delete('testeur');
+    /* L'adresse dit l'onglet et les filtres qu'on voit vraiment : une
+       anomalie a mené à « Problèmes », sans filtre. */
+    if (etat.onglet && etat.onglet !== ONGLET_DEFAUT) p.set('onglet', etat.onglet); else p.delete('onglet');
+    FILTRES_PROBLEMES.forEach((f) => { if (etat.filtres[f]) p.set(f, etat.filtres[f]); else p.delete(f); });
+    reecrire(`/tests${p.toString() ? `?${p.toString()}` : ''}`);
+  };
   const ouvrirDepuisAdresse = () => {
-    if (!aOuvrir.anomalie && !aOuvrir.campagne) return;
+    clearTimeout(minuteurOuvrir);
+    if (!aOuvrir.anomalie && !aOuvrir.campagne && !aOuvrir.testeur) return;
     essais += 1;
-    const cible = aOuvrir.anomalie ? `[data-action="ouvrir-anomalie"][data-id="${aOuvrir.anomalie}"]` : `[data-action="ouvrir-campagne"][data-id="${aOuvrir.campagne}"]`;
+    const cible = aOuvrir.anomalie ? `[data-action="ouvrir-anomalie"][data-id="${CSS.escape(aOuvrir.anomalie)}"]`
+      : aOuvrir.campagne ? `[data-action="ouvrir-campagne"][data-id="${CSS.escape(aOuvrir.campagne)}"]`
+        : `[data-action="ouvrir-testeur"][data-id="${CSS.escape(aOuvrir.testeur)}"]`;
     const el = sortie.querySelector(cible);
-    if (el) { aOuvrir.anomalie = ''; aOuvrir.campagne = ''; el.click(); return; }
-    if (essais < 20) setTimeout(ouvrirDepuisAdresse, 500);
+    if (el) { aOuvrir.anomalie = ''; aOuvrir.campagne = ''; aOuvrir.testeur = ''; oublierDansAdresse(); el.click(); return; }
+    if (essais < 20) minuteurOuvrir = setTimeout(ouvrirDepuisAdresse, 500);
   };
   ouvrirDepuisAdresse();
   /* « ?case=<scénario du plan> » : la case de test s'ouvre dans le tableau,
@@ -2138,22 +2171,35 @@ export const vue = async (ctx, env) => {
   }
 
   return {
-    fin: () => { planifier.arreter(); gestes(); sortie.removeEventListener('change', changeFiltre); lot.fin(); if (tableau) tableau.fin(); },
+    fin: () => { clearTimeout(minuteurOuvrir); planifier.arreter(); gestes(); sortie.removeEventListener('change', changeFiltre); lot.fin(); if (tableau) tableau.fin(); },
     /* Même adresse, autres filtres : on lit le projet et la plateforme dans
        la nouvelle adresse et on redessine en place, sans squelette ni
        retour en haut de page. */
     maj: (suite) => {
       const projet = lire(suite, 'projet', '');
       const plateforme = lire(suite, 'plateforme', '');
-      const onglet = ongletValide(lire(suite, 'onglet', ''));
-      const filtres = Object.fromEntries(FILTRES_PROBLEMES.map((f) => [f, lire(suite, f, '')]));
-      if (projet === etat.projet && plateforme === etat.plateforme && onglet === etat.onglet && JSON.stringify(filtres) === JSON.stringify(etat.filtres)) return;
+      let onglet = ongletValide(lire(suite, 'onglet', ''));
+      let filtres = Object.fromEntries(FILTRES_PROBLEMES.map((f) => [f, lire(suite, f, '')]));
+      /* Une notification ouverte depuis une autre page Tests : la fiche
+         qu'elle vise s'ouvre aussi, comme à l'arrivée (« ?anomalie= »,
+         « ?campagne= » étaient ignorés sur place). */
+      const anomalie = lire(suite, 'anomalie', '');
+      const campagne = lire(suite, 'campagne', '');
+      const testeur = env.role === 'equipe' ? lire(suite, 'testeur', '') : '';
+      if (anomalie || campagne || testeur) {
+        aOuvrir.anomalie = anomalie; aOuvrir.campagne = anomalie ? '' : campagne; aOuvrir.testeur = anomalie || campagne ? '' : testeur; essais = 0;
+        if (anomalie) { onglet = 'problemes'; filtres = Object.fromEntries(FILTRES_PROBLEMES.map((f) => [f, ''])); }
+        else onglet = ONGLET_DEFAUT;
+        fermerFlottants();
+      }
+      if (projet === etat.projet && plateforme === etat.plateforme && onglet === etat.onglet && JSON.stringify(filtres) === JSON.stringify(etat.filtres)) { ouvrirDepuisAdresse(); return; }
       etat.filtres = filtres;
       const changeOnglet = onglet !== etat.onglet;
       etat.projet = projet;
       etat.plateforme = plateforme;
       etat.onglet = onglet;
       rendre(true);
+      ouvrirDepuisAdresse();
       /* Changer d'onglet quand la barre est sortie de l'écran : on la
          ramène en haut, sinon l'en-tête reste exactement où il est. */
       const barre = sortie.querySelector('#onglets-tests');

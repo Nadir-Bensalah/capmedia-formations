@@ -162,7 +162,9 @@ const attendre=async(fn,n=25)=>{for(let i=0;i<n;i++){const v=await fn();if(v)ret
 
     console.log('\n== 7 · Le cockpit compte comme ses pages');
     const barreEq=await eq.evaluate(()=>{
-      const l=[...document.querySelectorAll('.lat a')].find(a=>/Finances/.test(a.textContent));
+      /* Refonte du Cockpit, lot 4 : l'entrée de tous les projets s'appelle
+         « Devis et factures » (groupe Finances) ; celles des projets ont un data-projet. */
+      const l=document.querySelector('.lat a[data-chemin="/finances"]:not([data-projet])');
       return l?[...l.querySelectorAll('.compte')].map(x=>x.textContent.trim()):[];
     });
     verifier(barreEq.length<=1||barreEq[0]===barreEq[1],'l\'entrée Finances ne montre pas deux chiffres qui se contredisent',JSON.stringify(barreEq));

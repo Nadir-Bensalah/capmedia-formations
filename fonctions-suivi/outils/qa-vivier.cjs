@@ -102,7 +102,8 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   await page.selectOption('#t-age','25-34');
   await page.fill('#t-fonction','Testeuse QA');
   await page.selectOption('#t-aisance','À l\'aise');
-  const pr = await page.$('[data-projet]'); if (pr) await pr.check();
+  /* L'arbre du rail porte aussi data-projet (lot 3) : viser la case. */
+  const pr = await page.$('input[type="checkbox"][data-projet]'); if (pr) await pr.check();
   await page.click('[data-enregistrer]'); await pause(3200);
 
   const apres = ((await lire('testeurs?pageSize=50'))||{}).documents||[];

@@ -22,7 +22,9 @@ import { naviguer } from '../routeur.js';
 import { appelServeur } from '../serveur.js';
 
 const VOILES = { attente: 'ambre', envoye: 'vert', echec: 'rouge', simule: 'gris' };
-const ETATS = { attente: 'En file', envoye: 'Envoyé', echec: 'Échec', simule: 'Simulé' };
+/* Les états dits en clair (le serveur garde ses clés : attente, envoye,
+   echec, simule). « Simulé » : une lettre du banc d'essai, jamais partie. */
+const ETATS = { attente: "En attente d'envoi", envoye: 'Envoyé', echec: 'Échec', simule: 'Essai, non envoyé' };
 const TIRET = '–';
 
 const quand = (ms) => (ms ? new Date(ms).toLocaleString('fr-FR', {
@@ -58,13 +60,15 @@ const destinataireHtml = (a) => {
     ${premier.nom ? `<br><span class="t-petit t-3">${echapper(premier.email)}</span>` : ''}`;
 };
 
+/* Chaque case porte son titre (data-libelle) : au téléphone, la ligne
+   devient une carte et le titre s'affiche devant la valeur. */
 const ligneHtml = (l) => `<tr data-envoi="${echapper(l.id)}">
-  <td style="white-space:nowrap">${ouTiret(quand(l.quand))}</td>
-  <td style="min-width:180px">${destinataireHtml(l.a)}</td>
-  <td style="min-width:240px"><button type="button" class="ligne-titre--bouton" data-ouvrir="${echapper(l.id)}" style="font-weight:500;color:var(--encre)">${l.objet ? echapper(l.objet) : `<span class="t-3">Lettre illisible : ${echapper(l.modele || 'modèle absent')}</span>`}</button></td>
-  <td>${ouTiret(l.projetNom)}</td>
-  <td>${ouTiret(l.evenementLibelle)}</td>
-  <td style="white-space:nowrap">${puceEtat(l.etat)}${l.etat === 'echec' && l.essais ? ` <span class="t-petit t-3">${echapper(pluriel(l.essais, 'essai'))}</span>` : ''}</td>
+  <td class="emails-date" data-libelle="Date" style="white-space:nowrap">${ouTiret(quand(l.quand))}</td>
+  <td data-libelle="Destinataire" style="min-width:180px">${destinataireHtml(l.a)}</td>
+  <td class="emails-objet" data-libelle="Objet" style="min-width:240px"><button type="button" class="ligne-titre--bouton" data-ouvrir="${echapper(l.id)}" style="font-weight:500;color:var(--encre)">${l.objet ? echapper(l.objet) : '<span class="t-3">Lettre impossible à afficher</span>'}</button></td>
+  <td data-libelle="Projet">${ouTiret(l.projetNom)}</td>
+  <td data-libelle="Événement">${ouTiret(l.evenementLibelle)}</td>
+  <td data-libelle="Statut" style="white-space:nowrap">${puceEtat(l.etat)}${l.etat === 'echec' && l.essais ? ` <span class="t-petit t-3">${echapper(pluriel(l.essais, 'tentative'))}</span>` : ''}</td>
 </tr>`;
 
 /* --- La lettre ouverte --------------------------------------------------- */
@@ -100,19 +104,19 @@ const ouvrirLettre = async (id) => {
     m.corps.innerHTML = encart(echapper(err.message || 'Cette lettre ne peut pas être lue.'), 'alerte', 'alerte');
     return;
   }
-  m.el.querySelector('.modale-tete h2').textContent = e.objet || 'Lettre illisible';
+  m.el.querySelector('.modale-tete h2').textContent = e.objet || 'Lettre impossible à afficher';
   const destinataires = (e.a || []).map((d) => (d.nom ? `${echapper(d.nom)} <span class="t-3">${echapper(d.email)}</span>` : echapper(d.email))).join('<br>');
   m.corps.innerHTML = `
     <dl class="faits" data-infos-envoi style="margin-bottom:var(--e-4)">
       ${fait(e.a && e.a.length > 1 ? 'Destinataires' : 'Destinataire', destinataires || TIRET)}
       ${fait('Statut', puceEtat(e.etat))}
-      ${fait('Mise en file', ouTiret(quand(e.cree)))}
-      ${fait(e.etat === 'simule' ? 'Simulé le' : 'Envoyé le', ouTiret(quand(e.envoye)))}
+      ${fait('Préparée le', ouTiret(quand(e.cree)))}
+      ${fait(e.etat === 'simule' ? 'Essayée le' : 'Envoyée le', ouTiret(quand(e.envoye)))}
       ${fait('Projet', ouTiret(e.projetNom))}
       ${fait('Événement', ouTiret(e.evenementLibelle))}
-      ${fait('Essais', String(e.essais || 0))}
-      ${fait('Modèle', `<span class="t-mono">${ouTiret(e.modele)}</span>`)}
-      ${fait('Identifiant Brevo', `<span class="t-mono">${ouTiret(e.brevo)}</span>`)}
+      ${fait('Tentatives', String(e.essais || 0))}
+      ${fait('Type de lettre', `<span class="t-mono">${ouTiret(e.modele)}</span>`)}
+      ${fait('Référence de l\'envoi', `<span class="t-mono">${ouTiret(e.brevo)}</span>`)}
     </dl>
     ${e.erreur ? encart(`<strong>Motif de l'échec</strong> : ${echapper(e.erreur)}`, 'alerte', 'alerte') : ''}
     ${e.erreurRendu ? encart(`Cette lettre ne se reconstitue pas : ${echapper(e.erreurRendu)}`, 'alerte', 'alerte') : ''}
@@ -190,14 +194,14 @@ export const vue = async (ctx, env) => {
       <div class="rang" style="gap:9px;margin-bottom:var(--e-4)">
         <select class="select" id="f-projet" aria-label="Projet" style="width:auto;max-width:100%"><option value="">Tous les projets</option>${projets.map((p) => `<option value="${echapper(p.id)}"${f.projet === p.id ? ' selected' : ''}>${echapper(p.nom)} (${p.n})</option>`).join('')}</select>
         <select class="select" id="f-destinataire" aria-label="Destinataire" style="width:auto;max-width:100%"><option value="">Tous les destinataires</option>${adresses.map((a) => `<option value="${echapper(a.email)}"${f.destinataire === a.email ? ' selected' : ''}>${echapper(a.nom ? `${a.nom} · ${a.email}` : a.email)} (${a.n})</option>`).join('')}</select>
-        <select class="select" id="f-statut" aria-label="Statut" style="width:auto"><option value="">Tous les statuts</option>${d.facettes.statuts.map((s) => `<option value="${s.cle}"${f.statut === s.cle ? ' selected' : ''}>${echapper(s.libelle)} (${s.n})</option>`).join('')}</select>
+        <select class="select" id="f-statut" aria-label="Statut" style="width:auto"><option value="">Tous les statuts</option>${d.facettes.statuts.map((s) => `<option value="${s.cle}"${f.statut === s.cle ? ' selected' : ''}>${echapper(ETATS[s.cle] || s.libelle)} (${s.n})</option>`).join('')}</select>
         ${filtre ? '<button class="btn btn-petit btn-doux" type="button" data-effacer>Effacer les filtres</button>' : ''}
       </div>
       <p class="t-petit t-2" data-resume style="margin-bottom:var(--e-3)"><strong>${pluriel(d.total, 'e-mail')}</strong>${enEchec && f.statut !== 'echec' ? ` · <button type="button" class="ligne-titre--bouton" data-voir-echecs style="display:inline;width:auto;color:var(--rouge);text-decoration:underline">${pluriel(enEchec, 'en échec', 'en échec')}</button>` : ''}${d.pages > 1 ? ` · page ${d.page} sur ${d.pages}` : ''}</p>
       ${d.lignes.length ? `<div class="cadre-defile"><table class="tableau" data-emails>
         <thead><tr><th scope="col">Date</th><th scope="col">Destinataire</th><th scope="col">Objet</th><th scope="col">Projet</th><th scope="col">Événement</th><th scope="col">Statut</th></tr></thead>
         <tbody>${d.lignes.map(ligneHtml).join('')}</tbody></table></div>`
-        : `<div class="carte"><p class="t-2" data-vide style="margin:0">${filtre || f.public ? 'Aucun e-mail ne correspond à ces filtres.' : "Aucun e-mail n'est encore parti."}</p></div>`}
+        : `<div class="vide vide--compact" data-vide><p class="vide-titre">${filtre || f.public ? 'Aucun e-mail ne correspond à ces filtres.' : "Aucun e-mail n'est encore parti."}</p><p class="vide-texte">${filtre ? 'Retirez un filtre pour élargir la liste.' : (f.public ? 'Les autres destinataires ont peut-être reçu des lettres.' : 'Chaque lettre envoyée par la plateforme apparaîtra ici.')}</p>${filtre ? '<button class="btn btn-secondaire" type="button" data-effacer>Effacer les filtres</button>' : (f.public ? '<button class="btn btn-secondaire" type="button" data-public="tous">Voir tous les e-mails</button>' : '')}</div>`}
       ${d.pages > 1 ? `<div class="rang-espace" style="margin-top:var(--e-4)">
         <button class="btn btn-secondaire" type="button" data-page="${d.page - 1}"${d.page <= 1 ? ' disabled' : ''}>Plus récents</button>
         <span class="t-petit t-3">${d.page} / ${d.pages}</span>

@@ -1,0 +1,1324 @@
+[
+ {
+  "chemin": "projets/maison",
+  "donnees": {
+   "nom": "Maison",
+   "ref": "MAISON",
+   "description": "Un projet à moi, sans client.",
+   "type": "site-web",
+   "statut": "en-cours",
+   "interne": true,
+   "plateformes": [
+    "web"
+   ],
+   "membres": [],
+   "membresOrganisation": [],
+   "compteur": 0,
+   "progression": {
+    "mode": "manuel",
+    "valeur": 20
+   },
+   "responsable": {
+    "$uid": "agent.essai@exemple.test"
+   },
+   "pulse": {},
+   "archive": false,
+   "ouvert": false,
+   "cree": {
+    "$jours": -20
+   },
+   "maj": {
+    "$jours": -1
+   }
+  }
+ },
+ {
+  "chemin": "projets/reg-g-idee",
+  "donnees": {
+   "nom": "Idée du registre",
+   "ref": "REGGIDEE",
+   "description": "Une idée notée pour le registre du Cockpit.",
+   "type": "application-mobile",
+   "statut": "brouillon",
+   "interne": true,
+   "aFaire": true,
+   "plateformes": [
+    "web"
+   ],
+   "membres": [],
+   "membresOrganisation": [],
+   "compteur": 0,
+   "progression": {
+    "mode": "manuel",
+    "valeur": 0
+   },
+   "responsable": {
+    "$uid": "agent.essai@exemple.test"
+   },
+   "pulse": {},
+   "archive": false,
+   "ouvert": false,
+   "cree": {
+    "$jours": -5
+   },
+   "maj": {
+    "$jours": -2
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "idees/reg-g-idee",
+  "donnees": {
+   "texte": "## Le constat\n\nLes clients demandent un suivi plus simple.\n\n## L'idée\n\nUn tableau de bord en une page.\n\n## La suite\n\n- Valider avec deux clients\n- Chiffrer",
+   "par": {
+    "$uid": "agent.essai@exemple.test"
+   },
+   "maj": {
+    "$jours": -1
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "projetsInternes/reg-g-idee",
+  "donnees": {
+   "rolesADefinir": 1,
+   "maj": {
+    "$jours": -1
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "projets/reg-g-archive",
+  "donnees": {
+   "nom": "Projet archivé du registre",
+   "ref": "REGGARCH",
+   "description": "Un projet rangé, pour la page Archives.",
+   "type": "site-vitrine",
+   "statut": "archive",
+   "interne": true,
+   "plateformes": [
+    "web"
+   ],
+   "membres": [],
+   "membresOrganisation": [],
+   "compteur": 0,
+   "progression": {
+    "mode": "manuel",
+    "valeur": 100
+   },
+   "responsable": {
+    "$uid": "agent.essai@exemple.test"
+   },
+   "pulse": {},
+   "archive": true,
+   "ouvert": false,
+   "cree": {
+    "$jours": -90
+   },
+   "maj": {
+    "$jours": -10
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "demandesProjet/reg-g-devis",
+  "donnees": {
+   "organisation": "atelier-nord",
+   "par": {
+    "uid": {
+     "$uid": "camille.essai@exemple.test"
+    },
+    "nom": "Camille Martin",
+    "email": "camille.essai@exemple.test"
+   },
+   "titre": "Un module de réservation (registre)",
+   "idee": "Réserver un créneau depuis l'application.",
+   "objectifs": "",
+   "type": "application-mobile",
+   "plateformes": [
+    "ios"
+   ],
+   "budget": "",
+   "delai": "",
+   "description": "",
+   "fonctionnalites": "",
+   "exemples": "",
+   "liens": "",
+   "pieces": [],
+   "statut": "devis",
+   "devis": null,
+   "projet": null,
+   "cree": {
+    "$jours": -6
+   },
+   "maj": {
+    "$jours": -1
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "notesClient/reg-g-note",
+  "donnees": {
+   "uid": {
+    "$uid": "camille.essai@exemple.test"
+   },
+   "nom": "Camille Martin",
+   "projet": "atelier",
+   "texte": "Note partagée du registre : penser au mode sombre.",
+   "epinglee": false,
+   "partagee": true,
+   "cree": {
+    "$jours": -1
+   },
+   "maj": {
+    "$jours": -1
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "documents/reg-g-retard",
+  "donnees": {
+   "projet": "boutique",
+   "type": "facture",
+   "numero": "F-2026-090",
+   "libelle": "Facture échue du registre",
+   "montant": 900,
+   "tva": 0,
+   "ttc": 900,
+   "statut": "a-payer",
+   "date": {
+    "$jours": -40
+   },
+   "echeance": {
+    "$jours": -5
+   },
+   "fichier": null,
+   "liens": [],
+   "reponse": null,
+   "archive": false
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "documents/reg-g-panier",
+  "donnees": {
+   "projet": "boutique",
+   "type": "devis",
+   "statut": "demande",
+   "origine": "panier",
+   "libelle": "Demande de devis du registre",
+   "date": {
+    "$jours": -1
+   },
+   "par": {
+    "uid": "",
+    "nom": "Léa Bernard"
+   },
+   "montant": 0,
+   "liens": [],
+   "reponse": null,
+   "archive": false
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "projets/boutique/maintenance/contrat",
+  "donnees": {
+   "genre": "contrat",
+   "statut": "actif",
+   "formule": "Forfait du registre",
+   "jours": 2,
+   "reconduction": "mensuelle",
+   "cree": {
+    "$jours": -30
+   },
+   "maj": {
+    "$jours": -1
+   }
+  },
+  "fusion": true
+ },
+ {
+  "chemin": "projets/atelier/anomalies/reg-g-anomalie",
+  "donnees": {
+   "titre": "Anomalie du registre",
+   "description": "Relevée pour le registre du Cockpit.",
+   "gravite": "important",
+   "statut": "nouvelle",
+   "plateformes": [
+    "ios"
+   ],
+   "origine": "equipe",
+   "sections": [],
+   "passages": [],
+   "temoins": [],
+   "cree": {
+    "$jours": -1
+   },
+   "maj": {
+    "$jours": -1
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "annonces/reg-g-annonce",
+  "donnees": {
+   "type": "nouveaute",
+   "titre": "Annonce du registre",
+   "texte": "Une nouveauté, pour le registre du Cockpit.",
+   "dateEffet": null,
+   "publication": "publiee",
+   "publieLe": {
+    "$jours": -1
+   },
+   "epinglee": false,
+   "cible": {
+    "tous": true,
+    "organisations": [],
+    "uids": []
+   },
+   "tarif": null,
+   "indisponibilite": null,
+   "cree": {
+    "$jours": -2
+   },
+   "maj": {
+    "$jours": -1
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "tickets/reg-m-rdv",
+  "donnees": {
+   "projet": "atelier",
+   "numero": "ATELIER-090",
+   "titre": "Rendez-vous : point du registre",
+   "description": "Un point pour faire le tour des demandes.",
+   "type": "demande",
+   "urgence": "important",
+   "statut": "acceptee",
+   "plateforme": "",
+   "version": "",
+   "etapes": "",
+   "attendu": "",
+   "obtenu": "",
+   "contexte": "",
+   "appareil": "",
+   "liens": [],
+   "pieces": [],
+   "archive": false,
+   "composant": "",
+   "qualification": null,
+   "devis": null,
+   "suite": null,
+   "auteur": {
+    "uid": {
+     "$uid": "camille.essai@exemple.test"
+    },
+    "nom": "Camille Martin",
+    "email": "camille.essai@exemple.test",
+    "cote": "client"
+   },
+   "assigne": null,
+   "cree": {
+    "$jours": -1
+   },
+   "maj": {
+    "$jours": -1
+   },
+   "resolu": null,
+   "lu": {
+    "client": {
+     "$jours": -1
+    },
+    "equipe": null
+   },
+   "rendezVous": {
+    "date": "2027-03-15",
+    "creneau": "matin",
+    "heure": "",
+    "sujet": "Point du registre"
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "documents/reg-m-retard",
+  "donnees": {
+   "projet": "boutique",
+   "type": "facture",
+   "numero": "F-2026-090",
+   "libelle": "Facture du registre, échéance passée",
+   "montant": 900,
+   "tva": 0,
+   "ttc": 900,
+   "statut": "a-payer",
+   "date": {
+    "$jours": -40
+   },
+   "echeance": {
+    "$jours": -5
+   },
+   "fichier": null,
+   "liens": [],
+   "reponse": null,
+   "archive": false,
+   "reglementDeclare": {
+    "uid": {
+     "$uid": "lea.essai@exemple.test"
+    },
+    "nom": "Léa Bernard",
+    "date": {
+     "$jours": -2
+    },
+    "le": {
+     "$jours": -2
+    },
+    "montant": 900,
+    "moyen": "virement",
+    "reference": "VIR-REG-M",
+    "confirme": false
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "documents/reg-m-panier",
+  "donnees": {
+   "projet": "boutique",
+   "type": "devis",
+   "origine": "panier",
+   "statut": "demande",
+   "numero": null,
+   "libelle": "Demande de devis du registre",
+   "montant": null,
+   "tva": 0,
+   "ttc": null,
+   "date": {
+    "$jours": -1
+   },
+   "demandeLe": {
+    "$jours": -1
+   },
+   "par": {
+    "uid": {
+     "$uid": "lea.essai@exemple.test"
+    },
+    "nom": "Léa Bernard"
+   },
+   "photo": {
+    "lignes": [
+     {
+      "axe": "reg-m-axe-boutique",
+      "titre": "Commande en ligne",
+      "plateforme": "web",
+      "jours": 2
+     }
+    ],
+    "jours": 2,
+    "long": false,
+    "tva": 0,
+    "periode": {
+     "debut": "2026-01-01",
+     "tjm": 450,
+     "ht": 900
+    }
+   },
+   "fichier": null,
+   "liens": [],
+   "reponse": null,
+   "archive": false
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "projets/prepa/jalons/reg-m-etape",
+  "donnees": {
+   "projet": "prepa",
+   "titre": "Étape du registre",
+   "phase": "Cadrage",
+   "statut": "a-venir",
+   "progression": 0,
+   "ordre": 2,
+   "devis": "d-refonte",
+   "debut": {
+    "$jours": 10
+   },
+   "fin": {
+    "$jours": 25
+   },
+   "description": "",
+   "composants": [],
+   "dependances": [],
+   "reports": [],
+   "cree": {
+    "$jours": -2
+   },
+   "maj": {
+    "$jours": -2
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "annonces/reg-m-annonce",
+  "donnees": {
+   "type": "nouveaute",
+   "titre": "Annonce du registre",
+   "texte": "Une nouveauté, en brouillon.",
+   "dateEffet": "",
+   "publication": "brouillon",
+   "publieLe": null,
+   "epinglee": true,
+   "cible": {
+    "tous": true,
+    "organisations": [],
+    "uids": []
+   },
+   "tarif": null,
+   "indisponibilite": null,
+   "cree": {
+    "$jours": -1
+   },
+   "maj": {
+    "$jours": -1
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "projets/atelier/maintenance/contrat",
+  "donnees": {
+   "projet": "atelier",
+   "genre": "contrat",
+   "statut": "demande",
+   "formule": "Forfait du registre",
+   "jours": 4,
+   "reconduction": "mensuelle",
+   "debut": {
+    "$jours": -10
+   },
+   "fin": {
+    "$jours": 20
+   },
+   "horaires": "Du lundi au vendredi",
+   "delaiReponse": "Sous 24 h ouvrées",
+   "delaiCorrection": "Sous 48 h ouvrées",
+   "inclus": [
+    "Corrections de défauts"
+   ],
+   "exclus": [
+    "Refonte graphique"
+   ],
+   "modalites": "Les jours non consommés ne se reportent pas.",
+   "devis": null,
+   "demande": {
+    "message": "Nous voulons un suivi chaque mois.",
+    "rythme": "Chaque mois",
+    "le": {
+     "$jours": -3
+    },
+    "par": {
+     "uid": {
+      "$uid": "camille.essai@exemple.test"
+     },
+     "nom": "Camille Martin",
+     "email": "camille.essai@exemple.test"
+    }
+   },
+   "cree": {
+    "$jours": -3
+   },
+   "maj": {
+    "$jours": -3
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "projets/atelier/maintenance/reg-m-seq",
+  "donnees": {
+   "projet": "atelier",
+   "genre": "sequence",
+   "titre": "Séquence du registre",
+   "statut": "en-cours",
+   "jours": 4,
+   "note": "",
+   "debut": {
+    "$jours": -10
+   },
+   "fin": {
+    "$jours": 20
+   },
+   "cree": {
+    "$jours": -3
+   },
+   "maj": {
+    "$jours": -3
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "projets/atelier/maintenance/reg-m-jour",
+  "donnees": {
+   "projet": "atelier",
+   "genre": "journee",
+   "date": {
+    "$jours": -2
+   },
+   "duree": 1,
+   "objet": "Corrections du registre",
+   "statut": "faite",
+   "sequence": "reg-m-seq",
+   "cree": {
+    "$jours": -2
+   },
+   "maj": {
+    "$jours": -2
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "projets/atelier/maintenance/reg-m-evo",
+  "donnees": {
+   "projet": "atelier",
+   "genre": "evolution",
+   "titre": "Évolution du registre",
+   "description": "Une idée du client.",
+   "statut": "proposee",
+   "origine": "client",
+   "par": {
+    "uid": {
+     "$uid": "camille.essai@exemple.test"
+    },
+    "nom": "Camille Martin"
+   },
+   "estimation": 1,
+   "sequence": "",
+   "version": "",
+   "pieces": [],
+   "reponse": "",
+   "cree": {
+    "$jours": -2
+   },
+   "maj": {
+    "$jours": -2
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "notes/reg-m-prop",
+  "donnees": {
+   "projet": "atelier",
+   "type": "proposition",
+   "etat": "a-valider",
+   "origine": "equipe",
+   "titre": "Proposition du registre",
+   "contenu": "À valider par le client.",
+   "composant": "",
+   "contexte": "",
+   "impact": "",
+   "decidePar": "",
+   "visibilite": "client",
+   "date": {
+    "$jours": -1
+   },
+   "cree": {
+    "$jours": -1
+   },
+   "maj": {
+    "$jours": -1
+   },
+   "par": {
+    "uid": {
+     "$uid": "agent.essai@exemple.test"
+    },
+    "nom": "Alex Durand",
+    "cote": "equipe"
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "notes/reg-m-refus",
+  "donnees": {
+   "projet": "atelier",
+   "type": "proposition",
+   "etat": "refusee",
+   "origine": "equipe",
+   "titre": "Proposition refusée du registre",
+   "contenu": "",
+   "composant": "",
+   "contexte": "",
+   "impact": "",
+   "decidePar": "",
+   "visibilite": "client",
+   "date": {
+    "$jours": -5
+   },
+   "cree": {
+    "$jours": -5
+   },
+   "maj": {
+    "$jours": -4
+   },
+   "par": {
+    "uid": {
+     "$uid": "agent.essai@exemple.test"
+    },
+    "nom": "Alex Durand",
+    "cote": "equipe"
+   },
+   "reponse": {
+    "par": {
+     "$uid": "camille.essai@exemple.test"
+    },
+    "date": {
+     "$jours": -4
+    },
+    "motif": "Pas pour cette version."
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "notesClient/reg-m-partagee",
+  "donnees": {
+   "uid": {
+    "$uid": "camille.essai@exemple.test"
+   },
+   "nom": "Camille Martin",
+   "projet": "atelier",
+   "texte": "Une note partagée pour le registre.",
+   "epinglee": false,
+   "partagee": true,
+   "cree": {
+    "$jours": -1
+   },
+   "maj": {
+    "$jours": -1
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "projets/atelier/axes/reg-m-axe",
+  "donnees": {
+   "plateforme": "ios",
+   "titre": "Axe du registre",
+   "description": "Une piste pour l'application.",
+   "detail": "",
+   "apport": "engagement",
+   "ampleur": "petit",
+   "jours": 3,
+   "etat": "propose",
+   "publication": "brouillon",
+   "publieLe": null,
+   "ordre": 1,
+   "devis": null,
+   "reponse": null,
+   "origine": "equipe",
+   "cree": {
+    "$jours": -2
+   },
+   "maj": {
+    "$jours": -2
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "projets/atelier/montants/axe-reg-m-axe",
+  "donnees": {
+   "projet": "atelier",
+   "montant": 1200,
+   "maj": {
+    "$maintenant": true
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "projets/atelier",
+  "donnees": {
+   "reports": [
+    {
+     "de": {
+      "$jours": 30
+     },
+     "vers": {
+      "$jours": 45
+     },
+     "motif": "tiers",
+     "note": "Compte développeur Google attendu (registre).",
+     "le": {
+      "$jours": -10
+     },
+     "par": "Alex Durand"
+    }
+   ]
+  },
+  "fusion": true
+ },
+ {
+  "chemin": "projets/atelier/composants/web",
+  "donnees": {
+   "lien": "https://app.atelier.net"
+  },
+  "fusion": true
+ },
+ {
+  "chemin": "projets/reg-p-afaire",
+  "donnees": {
+   "nom": "Idée du registre",
+   "ref": "IDEE",
+   "description": "Un projet rangé dans les projets à faire.",
+   "type": "site-web",
+   "statut": "brouillon",
+   "interne": true,
+   "aFaire": true,
+   "plateformes": [],
+   "membres": [],
+   "membresOrganisation": [],
+   "compteur": 0,
+   "progression": {
+    "mode": "manuel",
+    "valeur": 0
+   },
+   "responsable": {
+    "$uid": "agent.essai@exemple.test"
+   },
+   "pulse": {},
+   "archive": false,
+   "ouvert": false,
+   "cree": {
+    "$jours": -5
+   },
+   "maj": {
+    "$jours": -1
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "notesClient/reg-p-note",
+  "donnees": {
+   "uid": {
+    "$uid": "camille.essai@exemple.test"
+   },
+   "nom": "Camille Martin",
+   "projet": "atelier",
+   "texte": "Penser à un export des habitudes (note du registre).",
+   "epinglee": false,
+   "partagee": true,
+   "cree": {
+    "$jours": -1
+   },
+   "maj": {
+    "$jours": -1
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "taches/reg-p-tache",
+  "donnees": {
+   "projet": "atelier",
+   "titre": "Tâche du registre",
+   "description": "Ouverte par son adresse.",
+   "statut": "a-faire",
+   "priorite": "normale",
+   "assigne": {
+    "$uid": "agent.essai@exemple.test"
+   },
+   "echeance": null,
+   "composant": "web",
+   "jalon": "dev",
+   "visibilite": "interne",
+   "progression": 0,
+   "checklist": [
+    {
+     "texte": "Relire le registre",
+     "fait": false
+    }
+   ],
+   "ticket": "",
+   "estimation": "",
+   "pieces": [],
+   "ordre": 0,
+   "archive": false,
+   "par": {
+    "uid": {
+     "$uid": "agent.essai@exemple.test"
+    },
+    "nom": "Alex Durand"
+   },
+   "cree": {
+    "$jours": -2
+   },
+   "maj": {
+    "$jours": -2
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "blocages/reg-p-blocage",
+  "donnees": {
+   "projet": "atelier",
+   "titre": "Accès Firebase en attente (registre)",
+   "description": "Point levé, gardé pour la fiche ouverte par l'adresse.",
+   "responsable": "capmedia",
+   "impact": "",
+   "depuis": {
+    "$jours": -6
+   },
+   "resolu": {
+    "$jours": -2
+   },
+   "visibilite": "client",
+   "cree": {
+    "$jours": -6
+   },
+   "maj": {
+    "$jours": -2
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "projets/atelier/jalons/reg-p-etape-devis",
+  "donnees": {
+   "projet": "atelier",
+   "titre": "Recette de la campagne QA",
+   "phase": "Tests",
+   "statut": "a-venir",
+   "progression": 0,
+   "ordre": 6,
+   "debut": {
+    "$jours": 20
+   },
+   "fin": {
+    "$jours": 35
+   },
+   "devis": "d-qa",
+   "description": "",
+   "composants": [],
+   "responsable": {
+    "$uid": "agent.essai@exemple.test"
+   },
+   "dependances": [],
+   "reports": [],
+   "cree": {
+    "$jours": -2
+   },
+   "maj": {
+    "$jours": -2
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "projets/atelier/montants/jalon-reg-p-etape-devis",
+  "donnees": {
+   "projet": "atelier",
+   "montant": 1500,
+   "maj": {
+    "$maintenant": true
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "projets/atelier/liens/reg-p-acces",
+  "donnees": {
+   "nom": "Compte de test",
+   "categorie": "acces",
+   "url": "https://app.atelier.net/connexion",
+   "identifiants": "compte@atelier.exemple.test",
+   "environnement": "Test",
+   "composant": "",
+   "description": "",
+   "etat": "actif",
+   "visibilite": "client",
+   "cree": {
+    "$jours": -3
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "projets/atelier/axes/reg-q-axe",
+  "donnees": {
+   "plateforme": "ios",
+   "titre": "Widgets sur l'écran d'accueil",
+   "description": "Les tâches du jour visibles sans ouvrir l'application.",
+   "detail": "",
+   "apport": "engagement",
+   "ampleur": "moyen",
+   "jours": 3,
+   "etat": "propose",
+   "publication": "publiee",
+   "publieLe": {
+    "$jours": -10
+   },
+   "ordre": 1,
+   "devis": "",
+   "reponse": {
+    "choix": "interesse",
+    "par": {
+     "$uid": "camille.essai@exemple.test"
+    },
+    "nom": "Camille Martin",
+    "le": {
+     "$jours": -2
+    }
+   },
+   "cree": {
+    "$jours": -12
+   },
+   "maj": {
+    "$jours": -2
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "notes/reg-q-proposition",
+  "donnees": {
+   "projet": "atelier",
+   "composant": "",
+   "plateforme": "",
+   "type": "proposition",
+   "etat": "a-valider",
+   "origine": "equipe",
+   "titre": "Garder la connexion par e-mail seule pour la version 1",
+   "contenu": "La connexion Google viendra en 1.3.",
+   "contexte": "",
+   "impact": "",
+   "decidePar": "",
+   "visibilite": "client",
+   "date": {
+    "$jours": -1
+   },
+   "cree": {
+    "$jours": -1
+   },
+   "maj": {
+    "$jours": -1
+   },
+   "par": {
+    "uid": {
+     "$uid": "agent.essai@exemple.test"
+    },
+    "nom": "Alex Durand"
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "notes/reg-q-refusee",
+  "donnees": {
+   "projet": "atelier",
+   "composant": "",
+   "plateforme": "",
+   "type": "proposition",
+   "etat": "refusee",
+   "origine": "equipe",
+   "titre": "Retirer le mode sombre de la version 1",
+   "contenu": "",
+   "contexte": "",
+   "impact": "",
+   "decidePar": "",
+   "visibilite": "client",
+   "date": {
+    "$jours": -6
+   },
+   "cree": {
+    "$jours": -6
+   },
+   "maj": {
+    "$jours": -4
+   },
+   "par": {
+    "uid": {
+     "$uid": "agent.essai@exemple.test"
+    },
+    "nom": "Alex Durand"
+   },
+   "reponse": {
+    "par": {
+     "$uid": "camille.essai@exemple.test"
+    },
+    "nom": "Camille Martin",
+    "date": {
+     "$jours": -4
+    },
+    "motif": "Nos utilisateurs le demandent, on le garde."
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "projets/atelier/anomalies/reg-q-anomalie",
+  "donnees": {
+   "titre": "L'application se ferme à l'ouverture des rappels",
+   "description": "",
+   "scenario": "",
+   "gravite": "bloquant",
+   "statut": "nouvelle",
+   "plateformes": [
+    "ios"
+   ],
+   "origine": "equipe",
+   "passages": [],
+   "temoins": [],
+   "cree": {
+    "$jours": -1
+   },
+   "maj": {
+    "$jours": -1
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "coffres/boutique",
+  "donnees": {
+   "version": 1,
+   "kdf": "PBKDF2-SHA256",
+   "iterations": 600000,
+   "sel": "AAAAAAAAAAAAAAAAAAAAAA",
+   "iv": "AAAAAAAAAAAAAAAA",
+   "cle": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+   "enveloppe": 1,
+   "porteurs": [
+    "client:reg-q-ancien-client"
+   ],
+   "creePar": "reg-q-ancien-client",
+   "cree": {
+    "$jours": -30
+   },
+   "maj": {
+    "$jours": -30
+   },
+   "phraseLe": {
+    "$jours": -30
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "projetsInternes/atelier",
+  "donnees": {
+   "arbitragesAcces": [
+    {
+     "type": "membre-sans-compte",
+     "detail": "reg-q : ancien membre sans compte, posé par le banc du registre"
+    }
+   ]
+  },
+  "fusion": true
+ },
+ {
+  "chemin": "projets/atelier/interlocuteurs/reg-q-retire",
+  "donnees": {
+   "email": "paul.retire@exemple.test",
+   "nom": "Paul Retiré",
+   "uid": null,
+   "role": "collaborateur",
+   "statut": "retire",
+   "retireLe": {
+    "$jours": -5
+   },
+   "retirePar": {
+    "$uid": "agent.essai@exemple.test"
+   },
+   "invitation": {
+    "etat": "revoquee"
+   },
+   "ajoute": {
+    "$jours": -40
+   },
+   "maj": {
+    "$jours": -5
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "projets/atelier/technique/ios",
+  "donnees": {
+   "lignes": 42000,
+   "fichiers": 310,
+   "poids": "320 Mo",
+   "releve": {
+    "$jours": -3
+   },
+   "technos": [
+    {
+     "nom": "React Native",
+     "version": "0.80.2"
+    }
+   ],
+   "dependances": [
+    {
+     "nom": "react-native",
+     "version": "0.80.2",
+     "dev": false
+    }
+   ],
+   "assets": [],
+   "acces": [],
+   "alertes": [
+    {
+     "gravite": "attention",
+     "titre": "Passer à React Native 0.81",
+     "echeance": "",
+     "texte": "Requis avant la prochaine publication."
+    }
+   ],
+   "maj": {
+    "$jours": -3
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "activite/reg-q-journal",
+  "donnees": {
+   "projet": "atelier",
+   "type": "demande",
+   "texte": "a répondu sur la demande « Les validations de tâches de la veille ne fonctionnent plus »",
+   "par": {
+    "uid": {
+     "$uid": "agent.essai@exemple.test"
+    },
+    "nom": "Alex Durand",
+    "cote": "equipe"
+   },
+   "parNom": "Alex Durand",
+   "cible": "t-veille",
+   "lien": "/projets/atelier/demandes/t-veille",
+   "visibilite": "client",
+   "date": {
+    "$heures": -3
+   }
+  },
+  "fusion": false
+ },
+ {
+  "chemin": "projets/atelier/anomalies/reg-t-anomalie",
+  "fusion": false,
+  "donnees": {
+   "projet": "atelier",
+   "titre": "Le rappel du registre ne part jamais",
+   "gravite": "bloquant",
+   "statut": "nouvelle",
+   "origine": "equipe",
+   "plateformes": [
+    "ios"
+   ],
+   "scenario": "",
+   "bloc": "",
+   "scenarios": [],
+   "temoins": [],
+   "description": "Posée par le semis du registre du Cockpit.",
+   "obtenu": "",
+   "attendu": "",
+   "etapes": "",
+   "cree": {
+    "$jours": -1
+   },
+   "maj": {
+    "$jours": -1
+   }
+  }
+ },
+ {
+  "chemin": "projets/atelier/campagnes/reg-t-prepa",
+  "fusion": false,
+  "donnees": {
+   "titre": "Campagne du registre",
+   "statut": "preparation",
+   "plan": true,
+   "scenarios": [],
+   "testeurs": [
+    "reg-t-testeur"
+   ],
+   "affectation": {},
+   "fins": {
+    "reg-t-testeur": {
+     "$jours": 3
+    }
+   },
+   "builds": {},
+   "installation": {},
+   "cree": {
+    "$jours": -1
+   },
+   "maj": {
+    "$jours": -1
+   }
+  }
+ },
+ {
+  "chemin": "projets/atelier/jalons/reg-t-etape",
+  "fusion": false,
+  "donnees": {
+   "projet": "atelier",
+   "titre": "Étape du devis (registre)",
+   "phase": "Campagne de tests",
+   "statut": "en-cours",
+   "progression": 50,
+   "description": "",
+   "devis": "d-qa",
+   "ordre": 150,
+   "composants": [],
+   "dependances": [],
+   "reports": [],
+   "debut": {
+    "$jours": -5
+   },
+   "fin": {
+    "$jours": 10
+   },
+   "cree": {
+    "$jours": -5
+   },
+   "maj": {
+    "$jours": -1
+   }
+  }
+ },
+ {
+  "chemin": "conversationsTesteurs/reg-t-conv",
+  "fusion": false,
+  "donnees": {
+   "testeur": "reg-t-conv",
+   "prenom": "Karim",
+   "email": "karim.testeur@essai.test",
+   "nonLusEquipe": 0,
+   "nonLusTesteur": 0,
+   "dernier": {
+    "texte": "Bonjour, une question sur la campagne.",
+    "cote": "testeur",
+    "nom": "Karim"
+   },
+   "maj": {
+    "$heures": -2
+   }
+  }
+ }
+]

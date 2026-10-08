@@ -238,6 +238,16 @@ await refuse('mais pas un état inventé', setDoc(doc(camille(), `profils/${CAMI
 await refuse('ni une autre clé dans le choix', setDoc(doc(camille(), `profils/${CAMILLE}`), { pavesAttente: { role: 'admin' } }, { merge: true }));
 await refuse('ni autre chose qu une carte', setDoc(doc(camille(), `profils/${CAMILLE}`), { pavesAttente: 'ferme' }, { merge: true }));
 await refuse("Camille ne range pas le pavé de Léa", setDoc(doc(camille(), `profils/${LEA}`), { pavesAttente: { accueil: 'ferme' } }, { merge: true }));
+/* Le Cockpit (refonte, lot 5) : le même champ porte les pavés de l'équipe,
+   « À traiter » (accueil), « Attendent le client » de tous les projets
+   (projets['*']) et « En attente du client » d'un projet ; la date de son
+   passage (« Depuis mon passage »). */
+await doit('L équipe replie son pavé « À traiter »', setDoc(doc(equipe(), `profils/${AGENT}`), { pavesAttente: { accueil: 'replie' } }, { merge: true }));
+await doit('et « Attendent le client » de tous les projets, et celui d un projet', setDoc(doc(equipe(), `profils/${AGENT}`), { pavesAttente: { projets: { '*': 'replie', atelier: 'replie' } } }, { merge: true }));
+await doit('et le déplie', setDoc(doc(equipe(), `profils/${AGENT}`), { pavesAttente: { accueil: 'ouvert', projets: { '*': 'ouvert' } } }, { merge: true }));
+await doit('et pose la date de son passage', setDoc(doc(equipe(), `profils/${AGENT}`), { derniereVisite: new Date() }, { merge: true }));
+await refuse('mais pas un état inventé', setDoc(doc(equipe(), `profils/${AGENT}`), { pavesAttente: { accueil: 'plie' } }, { merge: true }));
+await refuse('ni le pavé d une cliente', setDoc(doc(equipe(), `profils/${CAMILLE}`), { pavesAttente: { accueil: 'replie' } }, { merge: true }));
 
 // Les abonnements push (notifications des messages, espace fermé) : les siens seulement, champs fermés.
 const PUSH_ID = 'a'.repeat(40);
@@ -1523,6 +1533,23 @@ await refuse('ni le signal de présence d un écran (il passe par le serveur)', 
 await refuse('ni un incident', setDoc(doc(equipe(), 'controle/atelier/incidents/i2'), { cible: 'web', fin: null }));
 await refuse('ni la fin d un incident', updateDoc(doc(equipe(), 'controle/atelier/incidents/i1'), { fin: new Date() }));
 await refuse('L administrateur ne pose pas les adresses sondées depuis le navigateur', updateDoc(doc(equipe(), 'sentryLiaisons/atelier'), { sondes: { web: 'https://169.254.169.254/' } }));
+
+/* Refonte du Cockpit, lot 6 (D6) : une ressource (lien du projet) se
+   supprime, par l'équipe du projet seulement ; ses autres écritures gardent
+   leurs contrôles (adresse en http, identifiant borné). */
+await env.withSecurityRulesDisabled(async (ctx) => {
+  const b = ctx.firestore();
+  for (const id of ['r6-a', 'r6-b', 'r6-c', 'r6-d']) await setDoc(doc(b, `projets/atelier/liens/${id}`), { nom: 'Ressource', url: 'https://exemple.test', visibilite: 'client' });
+  await setDoc(doc(b, 'projets/boutique/liens/r6-e'), { nom: 'Ressource', url: 'https://exemple.test', visibilite: 'client' });
+});
+await doit('L administrateur supprime une ressource', deleteDoc(doc(equipe(), 'projets/atelier/liens/r6-a')));
+await doit('Un agent du projet supprime une ressource de son projet', deleteDoc(doc(agentSansFinance(), 'projets/atelier/liens/r6-b')));
+await refuse('Un agent d un autre projet ne la supprime pas', deleteDoc(doc(agentAilleurs(), 'projets/atelier/liens/r6-c')));
+await refuse('Camille, cliente, ne supprime pas une ressource', deleteDoc(doc(camille(), 'projets/atelier/liens/r6-d')));
+await refuse('Léa ne supprime pas une ressource de son projet non plus', deleteDoc(doc(lea(), 'projets/boutique/liens/r6-e')));
+await refuse('Un testeur ne supprime pas une ressource', deleteDoc(doc(karim(), 'projets/atelier/liens/r6-c')));
+await refuse('L équipe n écrit toujours pas un lien sans adresse http', updateDoc(doc(equipe(), 'projets/atelier/liens/r6-c'), { url: 'javascript:alert(1)' }));
+await doit('et le modifie toujours avec une adresse http', updateDoc(doc(equipe(), 'projets/atelier/liens/r6-c'), { nom: 'Ressource modifiée', url: 'https://exemple.test/2' }));
 
 console.log(`\n${ok} contrôle(s) conforme(s)${ecarts.length ? `, ${ecarts.length} ÉCART(S) :\n  - ${ecarts.join('\n  - ')}` : ''}`);
 await env.cleanup();

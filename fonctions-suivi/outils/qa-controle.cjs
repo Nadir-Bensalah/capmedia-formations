@@ -311,12 +311,19 @@ const fauxAudio = () => {
     const fuites = [];
     pe.on('request', (r) => { if (/sentry\.io|127\.0\.0\.1:(9877|19877|9878|19878)/.test(r.url())) fuites.push(r.url()); });
     await connecter(pe, 'agent.essai@exemple.test');
-    await aller(pe, '#/projets/atelier', '#onglets-projet');
-    verifier(Boolean(await pe.$('#onglets-projet a[href="#/projets/atelier/controle"]')), 'l onglet « Salle de contrôle » est sur la page du projet relié');
+    /* Refonte du Cockpit, lot 3 : Stabilité et Salle de contrôle font une
+       entrée, « Santé de l'app », dans l'arbre du projet relié ; la page
+       ouvre la Salle de contrôle d'un bouton, et la Salle allume l'entrée. */
+    await aller(pe, '#/projets/atelier', '#lat-corps .lat-arbre[data-arbre="atelier"]');
+    const sante = '#lat-corps .lat-arbre[data-arbre="atelier"] a[data-chemin="/projets/atelier/stabilite"]';
+    verifier(/Santé de l.app/.test(await pe.textContent(sante).catch(() => '')), 'l entrée « Santé de l app » est dans l arbre du projet relié');
+    await aller(pe, '#/projets/atelier/stabilite', '.page-stabilite');
+    verifier(Boolean(await pe.$('.page-stabilite .page-tete a[href="#/projets/atelier/controle"]')), 'sa page porte le bouton « Salle de contrôle »');
     verifier(Boolean(await pe.$('#lat-corps [data-chemin="/controle"]')), 'et l entrée « Salle de contrôle » dans la barre de l administrateur');
     const ecranAvant = Date.parse((await lireObjet('controle/atelier')).ecranVu || 0) || 0;
     await aller(pe, '#/projets/atelier/controle', '[data-salle] .voyant');
     await pe.waitForSelector('[data-region="tuiles"] .tuile', { timeout: 15000 }).catch(() => {});
+    verifier(await pe.$eval(`${sante}.actif`, (a) => a.getAttribute('aria-current') === 'page').catch(() => false), 'la Salle de contrôle allume « Santé de l app » dans l arbre');
     verifier(Boolean(await attendre(async () => { const c = await lireObjet('controle/atelier'); return Date.parse(c.ecranVu || 0) > ecranAvant; }, 15000)), 'l écran ouvert se signale au serveur');
     const voyants = await pe.$$eval('[data-voyant]', (els) => els.map((e) => `${e.dataset.voyant}:${e.dataset.etat}`));
     verifier(voyants.join(',') === 'web:orange,landing:vert,ios:orange,android:vert,fonctions:vert,hub:vert', 'six voyants, dans l ordre, avec leur état', voyants.join(','));

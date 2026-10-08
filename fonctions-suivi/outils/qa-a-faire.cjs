@@ -79,7 +79,12 @@ const NOTE=[
   await page.reload({waitUntil:'domcontentloaded'}); await pause(2500);
   const entrees=await page.$$eval('#lat-corps .lat-lien',as=>as.map(a=>a.dataset.chemin));
   verifier(entrees.includes('/a-faire'),'la barre porte « Projets à faire »');
-  verifier(entrees.indexOf('/a-faire')===entrees.indexOf('/projets')+1,'juste sous « Projets », dans le portefeuille');
+  /* Refonte du Cockpit, lot 3 : « Projets » devient « Tous les projets »,
+     au bas de l'arbre des projets en cours ; le portefeuille suit, avec
+     les projets à faire. Lot 4 : le portefeuille est un groupe qui se
+     plie (son arbre « :portefeuille »). */
+  const portefeuille=await page.$eval('#lat-corps .lat-arbre[data-arbre=":portefeuille"]',g=>({titre:((g.querySelector('.lat-groupe-tete .tronque')||{}).textContent||'').trim(),chemins:[...g.querySelectorAll('.lat-branche .lat-lien')].map(a=>a.dataset.chemin)})).catch(()=>null);
+  verifier(portefeuille&&portefeuille.chemins.includes('/a-faire')&&entrees.indexOf('/a-faire')>entrees.indexOf('/projets')&&entrees.indexOf('/projets')>=0,'dans le portefeuille, sous « Tous les projets »',portefeuille&&portefeuille.chemins.join(' '));
   verifier(await compteBarre(page,'/a-faire')===0,'sans compte tant que rien n est rangé');
   /* Le compte ne se lit qu'une fois les projets chargés, et stable : lu
      trop tôt, il vaut encore zéro. */
@@ -195,6 +200,10 @@ const NOTE=[
   await aller(page,'#/projets','.filtres');
   await page.click('[data-filtre="maison"]'); await pause(400);
   verifier(/Wealth Simulator/.test(await page.textContent('.page')),'il est dans « Mes projets »');
+  /* Lot 3 : « Tous les projets » compte aussi les projets internes. L'idée
+     devenue projet y entre : un de plus, qui devient la référence. */
+  verifier(await attendre(async()=>(await compteBarre(page,'/projets'))===actifsAvant+1,20,300),'l idée devenue projet rejoint « Tous les projets »',`${await compteBarre(page,'/projets')} contre ${actifsAvant}+1`);
+  actifsAvant=await compteBarre(page,'/projets');
 
   console.log('\n== Ranger un projet client, puis le ramener');
   await aller(page,'#/projets/atelier','[data-action="menu-projet"]');

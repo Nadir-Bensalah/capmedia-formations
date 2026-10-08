@@ -161,15 +161,19 @@ export const liste = async (ctx, env) => {
     </div>`;
   };
   const gestes = sur(sortie, 'click', '[data-noter]', () => noterIdee(env));
-  [K.projets, K.idees].forEach((c) => lot.sur(c, rendre));
-  rendre();
+  /* Un seul dessin, les projets et les notes arrivés (lot 6, H-30) : sans
+     lui, les cartes se peignaient sans leur extrait, puis avec. */
+  const cles = [K.projets, K.idees];
+  const planifier = magasin.dessinateur(rendre, 40, cles);
+  cles.forEach((c) => lot.sur(c, planifier));
+  planifier();
   /* « Noter une idée » depuis la recherche : la feuille s'ouvre sur la page,
      et l'adresse perd sa demande sans renaviguer, ce qui refermerait tout. */
   if (ctx.requete && ctx.requete.noter) {
     try { history.replaceState(null, '', '#/a-faire'); } catch (e) { /* adresse laissée telle quelle */ }
     noterIdee(env);
   }
-  return () => { gestes(); lot.fin(); };
+  return () => { planifier.arreter(); gestes(); lot.fin(); };
 };
 
 /* ==========================================================================
@@ -257,8 +261,10 @@ export const detail = async (ctx, env) => {
       ]);
     }
   });
-  [K.projets, K.idees].forEach((c) => lot.sur(c, rendre));
-  rendre();
-  return () => { gestes(); lot.fin(); };
+  const cles = [K.projets, K.idees];
+  const planifier = magasin.dessinateur(rendre, 40, cles);
+  cles.forEach((c) => lot.sur(c, planifier));
+  planifier();
+  return () => { planifier.arreter(); gestes(); lot.fin(); };
 };
 

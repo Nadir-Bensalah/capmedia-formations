@@ -1,6 +1,8 @@
 /* ==========================================================================
-   La boîte des demandes : toutes les demandes de tous les clients, par
-   étape de traitement, avec filtres par projet, urgence et assignation.
+   Les tickets de tous les clients (les « demandes » de l'équipe ; depuis
+   le lot 4 de la refonte, le mot du client), par étape de traitement, avec
+   filtres par projet, urgence et assignation. « Nouveau ticket » demande
+   le projet, sauf quand la page est déjà filtrée sur l'un d'eux.
    ========================================================================== */
 
 import { echapper, depuis, pluriel, parDateDesc, STATUTS, TYPES, URGENCES, QUALIFICATIONS, OUVERTS, ATTEND_EQUIPE, ATTEND_CLIENT, age } from '../noyau.js';
@@ -8,21 +10,34 @@ import { icone, pastille, puce, pucePlateforme, iconePlateforme, tonPlateforme, 
 import * as magasin from '../magasin.js';
 import { K } from '../donnees.js';
 import { filAriane } from '../coquille.js';
+import { naviguer, reecrire, adresseAvec } from '../routeur.js';
+import { choisirProjet } from './accueil.js';
+import { projetEstActif } from '../noyau.js';
 
 const COLONNES = [
-  { cle: 'nouveau', libelle: 'Nouvelles', statuts: ['nouveau'] },
+  { cle: 'nouveau', libelle: 'Nouveaux', statuts: ['nouveau'] },
   { cle: 'a-traiter', libelle: 'À traiter', statuts: ['a-analyser', 'acceptee', 'planifiee', 'en-cours', 'en-revue'] },
   { cle: 'client', libelle: 'En attente client', statuts: ATTEND_CLIENT },
-  { cle: 'terminees', libelle: 'Terminées', statuts: ['resolu', 'refuse', 'annulee', 'ferme'] },
+  { cle: 'terminees', libelle: 'Terminés', statuts: ['resolu', 'refuse', 'annulee', 'ferme'] },
 ];
 
 export const vue = async (ctx, env) => {
   const lot = magasin.lot();
   const sortie = ctx.sortie;
-  titrePage('Demandes');
-  filAriane([{ libelle: 'Demandes' }]);
+  titrePage('Tickets');
+  filAriane([{ libelle: 'Tickets' }]);
   sortie.innerHTML = `<div class="page">${squelette('page', 6)}</div>`;
-  const etat = { colonne: 'nouveau', projet: '', urgence: '', moi: false, terme: '' };
+  /* Les filtres vivent dans l'adresse (#/demandes?colonne=…&projet=…) : le
+     Retour et un lien copié les retrouvent. Changer un filtre change
+     l'adresse ; le routeur rend la main par « maj », qui redessine une
+     fois, en place. Le terme de recherche se réécrit sans redessiner. */
+  const lireFiltres = (requete = {}) => ({
+    colonne: COLONNES.some((c) => c.cle === requete.colonne) ? requete.colonne : 'nouveau',
+    projet: requete.projet || '', urgence: requete.urgence || '', moi: requete.moi === '1', terme: requete.terme || '',
+  });
+  const etat = lireFiltres(ctx.requete);
+  const adresse = (f = etat) => adresseAvec('/demandes', { colonne: f.colonne === 'nouveau' ? '' : f.colonne, projet: f.projet, urgence: f.urgence, moi: f.moi, terme: f.terme });
+  const poser = (changes) => naviguer(adresse({ ...etat, ...changes }));
 
   const rendre = () => {
     const projets = magasin.lire(K.projets) || [];
@@ -34,12 +49,13 @@ export const vue = async (ctx, env) => {
     const nonLu = (t) => { const l = (t.lu || {}).equipe; return !l || ((t.maj && t.maj.toMillis ? t.maj.toMillis() : 0) > (l.toMillis ? l.toMillis() : 0)); };
 
     sortie.innerHTML = `<div class="page">
-      <div class="page-tete"><div><h1>Demandes</h1><p class="chapo">${pluriel(tous.filter((t) => OUVERTS.includes(t.statut)).length, 'demande ouverte', 'demandes ouvertes')}, ${tous.filter((t) => ATTEND_EQUIPE.includes(t.statut)).length} de notre côté.</p></div></div>
+      <div class="page-tete"><div><h1>Tickets</h1><p class="chapo">${pluriel(tous.filter((t) => OUVERTS.includes(t.statut)).length, 'ticket ouvert', 'tickets ouverts')}, ${tous.filter((t) => ATTEND_EQUIPE.includes(t.statut)).length} de notre côté.</p></div>
+        <div class="actions"><button class="btn btn-principal" type="button" data-nouveau-ticket>${icone('plus')} Nouveau ticket</button></div></div>
       <div class="rang" style="margin-bottom:12px;gap:10px">
         <input class="champ" type="search" id="terme" placeholder="Numéro, titre, projet" value="${echapper(etat.terme)}" style="flex:1;min-width:200px" aria-label="Rechercher">
         <select class="select" id="f-projet" style="width:auto"><option value="">Tous les projets</option>${projets.map((p) => `<option value="${echapper(p.id)}" ${etat.projet === p.id ? 'selected' : ''}>${echapper(p.nom)}</option>`).join('')}</select>
         <select class="select" id="f-urgence" style="width:auto"><option value="">Toute urgence</option>${Object.entries(URGENCES).map(([c, u]) => `<option value="${c}" ${etat.urgence === c ? 'selected' : ''}>${echapper(u.libelle)}</option>`).join('')}</select>
-        <label class="case"><input type="checkbox" id="f-moi" ${etat.moi ? 'checked' : ''}> Assignées à moi</label>
+        <label class="case"><input type="checkbox" id="f-moi" ${etat.moi ? 'checked' : ''}> Confiés à moi</label>
       </div>
       <div class="onglets">${COLONNES.map((c) => `<button class="onglet${etat.colonne === c.cle ? ' actif' : ''}" type="button" data-colonne="${c.cle}">${echapper(c.libelle)}<span class="badge${c.cle === 'nouveau' && tous.filter(filtres).filter((t) => c.statuts.includes(t.statut)).length ? ' badge--vif' : ''}">${tous.filter(filtres).filter((t) => c.statuts.includes(t.statut)).length}</span></button>`).join('')}</div>
       ${liste.length ? `<div class="liste">${liste.map((t) => ligne({
@@ -49,17 +65,41 @@ export const vue = async (ctx, env) => {
         nonLu: nonLu(t) && OUVERTS.includes(t.statut),
         titre: `${t.numero ? `<span class="t-mono t-3" style="font-weight:400">${echapper(t.numero)}</span> ` : ''}${echapper(t.titre)}`,
         sous: `${echapper(nomProjet(t.projet))} · ${echapper((TYPES[t.type] || {}).libelle || t.type)} · ${echapper(OUVERTS.includes(t.statut) ? `ouverte depuis ${age(t.cree)}` : depuis(t.maj))}${t.plateforme ? ` ${pucePlateforme(t.plateforme, { court: true })}` : ''}${t.qualification ? ` ${pastille(QUALIFICATIONS, t.qualification)}` : ''}`,
-        fin: `${puce(URGENCES, t.urgence || 'important')}${pastille(STATUTS, t.statut)}${t.assigne ? '' : '<span class="etiquette">Sans assigné</span>'}`,
-      })).join('')}</div>` : vide({ icone: 'inbox', titre: 'Rien dans cette colonne', texte: etat.colonne === 'nouveau' ? 'Aucune nouvelle demande. Tout est pris en charge.' : '', compact: true })}
+        /* L'étiquette d'abord : l'urgence et le statut restent alignés en
+           colonne, au bout de chaque ligne. */
+        fin: `${t.assigne ? '' : '<span class="etiquette">À attribuer</span>'}${puce(URGENCES, t.urgence || 'important')}${pastille(STATUTS, t.statut)}`,
+      })).join('')}</div>` : vide({ icone: 'inbox', titre: 'Rien dans cette colonne', texte: etat.terme || etat.projet || etat.urgence || etat.moi ? 'Aucun ticket ne correspond à ces filtres.' : ({ nouveau: 'Aucun nouveau ticket. Tout est pris en charge.', 'a-traiter': 'Aucun ticket ne nous attend.', client: 'Aucun ticket n\'attend le client.', terminees: 'Aucun ticket terminé.' })[etat.colonne] || '', action: etat.terme || etat.projet || etat.urgence || etat.moi ? `<a class="btn btn-secondaire" href="#${adresse({ colonne: etat.colonne, projet: '', urgence: '', moi: false, terme: '' })}">Effacer les filtres</a>` : '<button class="btn btn-secondaire" type="button" data-nouveau-ticket>Nouveau ticket</button>', compact: true })}
     </div>`;
-    sortie.querySelector('#terme').addEventListener('input', (e) => { etat.terme = e.target.value; const pos = e.target.selectionStart; rendre(); const c = sortie.querySelector('#terme'); c.focus(); c.setSelectionRange(pos, pos); });
-    sortie.querySelector('#f-projet').addEventListener('change', (e) => { etat.projet = e.target.value; rendre(); });
-    sortie.querySelector('#f-urgence').addEventListener('change', (e) => { etat.urgence = e.target.value; rendre(); });
-    sortie.querySelector('#f-moi').addEventListener('change', (e) => { etat.moi = e.target.checked; rendre(); });
+    sortie.querySelector('#terme').addEventListener('input', (e) => { etat.terme = e.target.value; reecrire(adresse()); const pos = e.target.selectionStart; rendre(); const c = sortie.querySelector('#terme'); c.focus(); c.setSelectionRange(pos, pos); });
+    sortie.querySelector('#f-projet').addEventListener('change', (e) => { poser({ projet: e.target.value }); });
+    sortie.querySelector('#f-urgence').addEventListener('change', (e) => { poser({ urgence: e.target.value }); });
+    sortie.querySelector('#f-moi').addEventListener('change', (e) => { poser({ moi: e.target.checked }); });
   };
-  const gestes = sur(sortie, 'click', '[data-colonne]', (el) => { etat.colonne = el.dataset.colonne; rendre(); });
-  [K.projets, K.ticketsTous].forEach((c) => lot.sur(c, rendre));
-  return () => { gestes(); lot.fin(); };
+  const gestes = sur(sortie, 'click', '[data-colonne], [data-nouveau-ticket]', async (el) => {
+    if (el.hasAttribute('data-nouveau-ticket')) {
+      /* Le projet du filtre, sinon le choix (le seul, s'il n'y en a qu'un). */
+      const projets = (magasin.lire(K.projets) || []).filter((p) => !p.archive && !p.aFaire);
+      const pid = etat.projet || await choisirProjet(projets.filter(projetEstActif).length ? projets.filter(projetEstActif) : projets, { titre: 'Nouveau ticket : pour quel projet ?' });
+      if (pid) naviguer(`/projets/${encodeURIComponent(pid)}/nouvelle-demande`);
+      return;
+    }
+    poser({ colonne: el.dataset.colonne });
+  });
+  /* Un seul dessin, les tickets arrivés (lot 6, H-30). */
+  const cles = [K.projets, K.ticketsTous];
+  const planifier = magasin.dessinateur(rendre, 40, cles);
+  cles.forEach((c) => lot.sur(c, planifier));
+  planifier();
+  return {
+    fin: () => { planifier.arreter(); gestes(); lot.fin(); },
+    /* Même page, autres filtres : un dessin, en place. */
+    maj: (suite) => {
+      const f = lireFiltres(suite.requete);
+      if (JSON.stringify(f) === JSON.stringify(etat)) return;
+      Object.assign(etat, f);
+      rendre();
+    },
+  };
 };
 
 void icone;

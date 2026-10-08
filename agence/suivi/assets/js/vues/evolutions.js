@@ -28,6 +28,7 @@ import * as magasin from '../magasin.js';
 import { K, ecrire, abonnerProjet, abonnerPanier, montantDe, horodatage } from '../donnees.js';
 import { photoDuPanier, dessinPhoto, libelleDemande, axePanierable, MAX_PANIER } from '../panier.js';
 import { filAriane } from '../coquille.js';
+import { naviguer, adresseAvec } from '../routeur.js';
 import { feuille, champ, zone, choix as select } from './editeurs.js';
 import {
   PLATEFORMES_AXE, APPORTS_AXE, AMPLEURS_AXE, ETATS_AXE, ETATS_AXE_CLIENT_AGIT, PUBLICATIONS_AXE, CHOIX_AXE, BORNES_AXE, joursTexte, joursValides,
@@ -204,7 +205,7 @@ const pageHtml = (d, c, ouverts, filtre = '') => {
     </div>` : ''}
   </header>`;
   if (!plateformes.length) {
-    return `<div class="page page-axes${ancre ? ' page-axes--panier' : ''}">${tete}${vide({ icone: 'ampoule', titre: equipe ? 'Aucun axe pour le moment' : 'Bientôt ici', texte: equipe ? 'Ajoutez un axe, ou versez le fichier du projet avec axes-importer.mjs. Le client le voit une fois publié.' : 'Nos pistes pour faire grandir votre projet apparaîtront ici.' })}</div>`;
+    return `<div class="page page-axes${ancre ? ' page-axes--panier' : ''}">${tete}${vide({ icone: 'ampoule', titre: equipe ? 'Aucun axe pour le moment' : 'Bientôt ici', texte: equipe ? 'Une piste pour faire grandir le projet, avec son prix et sa plateforme. Le client la voit une fois publiée.' : 'Nos pistes pour faire grandir votre projet apparaîtront ici.', action: equipe ? `<button class="btn btn-secondaire" type="button" data-axe-action="nouveau">Ajouter le premier axe</button>` : '' })}</div>`;
   }
   const filtres = plateformes.length > 1 ? `<div class="segments axes-filtre" role="group" aria-label="Plateforme">
       ${[['', 'Tout'], ...plateformes.map((p) => [p, PLATEFORMES_AXE[p].libelle])].map(([cle, lib]) => `<button type="button" class="segment${(filtre || '') === cle ? ' actif' : ''}" data-axe-filtre="${echapper(cle)}" aria-pressed="${(filtre || '') === cle}">${echapper(lib)}</button>`).join('')}
@@ -425,7 +426,11 @@ export const vue = async (ctx, env) => {
      dessin à l'autre. Cocher ne redessine rien : la classe suffit. */
   const ouverts = new Set();
   let derniere = '';
-  let filtre = '';
+  /* Le filtre de plateforme vit dans l'adresse côté équipe
+     (#/projets/<p>/evolutions?plateforme=ios) : le Retour et un lien copié
+     le retrouvent, et le changer redessine en place (« maj »). Chez le
+     client, il reste sur place, comme avant. */
+  let filtre = equipe ? String((ctx.requete || {}).plateforme || '') : '';
   let dernierFiltre = null;
 
   const rendre = () => {
@@ -477,7 +482,11 @@ export const vue = async (ctx, env) => {
   };
   sortie.addEventListener('change', surCase);
   /* Le filtre de plateforme, en haut : « Tout » par défaut. */
-  const gesteFiltre = sur(sortie, 'click', '[data-axe-filtre]', (el) => { filtre = el.dataset.axeFiltre || ''; rendre(); });
+  const gesteFiltre = sur(sortie, 'click', '[data-axe-filtre]', (el) => {
+    const voulu = el.dataset.axeFiltre || '';
+    if (equipe) { naviguer(adresseAvec(`/projets/${encodeURIComponent(pid)}/evolutions`, { plateforme: voulu })); return; }
+    filtre = voulu; rendre();
+  });
 
   const gestesClient = sur(sortie, 'click', '[data-axe-geste]', async (el) => {
     const d = lireTout(pid, env);
@@ -543,6 +552,15 @@ export const vue = async (ctx, env) => {
 
   return {
     fin: () => { planifier.arreter(); sortie.removeEventListener('change', surCase); gestesClient(); gestesPanier(); gestesEquipe(); gesteFiltre(); lot.fin(); },
+    /* Même page, autre plateforme (Cockpit : la route a une clé) : un
+       dessin, en place. */
+    maj: (suite) => {
+      if (!equipe) return;
+      const voulu = String((suite.requete || {}).plateforme || '');
+      if (voulu === filtre) return;
+      filtre = voulu;
+      rendre();
+    },
   };
 };
 

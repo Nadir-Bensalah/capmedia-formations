@@ -156,7 +156,9 @@ export const ouvrirDocument = (d, env, { projets, paiements, documents = [] }) =
   const ibanLisible = avecIban ? String(coordonnees.iban).replace(/(.{4})/g, '$1 ').trim() : '';
 
   const encartDeclaration = declare ? encart(confirme
-    ? `<strong>Confirmé.</strong> Vous avez déclaré un règlement de ${echapper(montantDu(declare.montant, franc, 2))} le ${echapper(dateCourte(declare.date))}${declare.moyen ? ` par ${echapper((MOYENS_PAIEMENT[declare.moyen] || declare.moyen).toLowerCase())}` : ''} : nous l'avons enregistré.`
+    ? (equipe
+      ? `<strong>Confirmé.</strong> ${echapper(declare.nom || 'Le client')} a déclaré un règlement de ${echapper(montantDu(declare.montant, franc, 2))} le ${echapper(dateCourte(declare.date))}${declare.moyen ? ` par ${echapper((MOYENS_PAIEMENT[declare.moyen] || declare.moyen).toLowerCase())}` : ''} : il est enregistré.`
+      : `<strong>Confirmé.</strong> Vous avez déclaré un règlement de ${echapper(montantDu(declare.montant, franc, 2))} le ${echapper(dateCourte(declare.date))}${declare.moyen ? ` par ${echapper((MOYENS_PAIEMENT[declare.moyen] || declare.moyen).toLowerCase())}` : ''} : nous l'avons enregistré.`)
     : (equipe
       ? `<strong>Règlement déclaré par ${echapper(declare.nom || 'le client')}</strong> le ${echapper(dateHeure(declare.le || declare.date))} : ${echapper(montantDu(declare.montant, franc, 2))} · ${echapper(MOYENS_PAIEMENT[declare.moyen] || declare.moyen || TIRET)} · réf. ${echapper(declare.reference || TIRET)} · réglé le ${echapper(dateCourte(declare.date))}. En attente de votre confirmation : enregistrez le paiement dès réception.`
       : `<strong>Vous avez déclaré un règlement le ${echapper(dateCourte(declare.date))}</strong> · ${echapper(montantDu(declare.montant, franc, 2))}${declare.moyen ? ` par ${echapper((MOYENS_PAIEMENT[declare.moyen] || declare.moyen).toLowerCase())}` : ''}${declare.reference ? ` · réf. ${echapper(declare.reference)}` : ''} · en attente de confirmation. La facture reste « ${echapper((STATUTS_FACTURE[etat] || {}).libelle || '')} » jusqu'à ce que nous l'ayons enregistré.`),

@@ -427,23 +427,33 @@ const texteDe = (page, sel) => page.$eval(sel, (el) => el.textContent.replace(/\
   verifier(erreursS.length === 0, `squelette : aucune erreur de page ${erreursS.join(' | ')}`);
   await ctxS.close();
 
-  console.log('\n== Le Cockpit ne change pas');
+  /* Refonte du Cockpit, lot 3 : cette section s'inverse. Le Cockpit a
+     désormais l'arbre des projets, comme le Hub, et plus d'onglets
+     horizontaux ; il garde ce qui est à l'équipe (Marketing « À venir »,
+     la frise du devis ; depuis le lot 4, les mots du client). */
+  console.log('\n== Le Cockpit prend l arbre du Hub');
   const ctxE = await nav.newContext({ viewport: { width: 1440, height: 900 } });
   const eq = await ctxE.newPage(); garder(eq);
   await connecter(eq, 'agent.essai@exemple.test');
-  await eq.evaluate(() => { location.hash = '#/projets/atelier'; }); await eq.waitForSelector('#onglets-projet', { timeout: 30000 }).catch(() => {}); await pause(1500);
-  verifier(Boolean(await eq.$('#onglets-projet')) && !(await eq.$('#lat-corps .lat-arbre')), 'le Cockpit garde ses onglets horizontaux et son rail');
-  verifier(/Les personnes/.test(await texteDe(eq, '#personnes h2')) && !(await eq.$('#bouton-retour')), 'et « Les personnes », sans bouton Retour');
+  const arbreEq = '#lat-corps .lat-arbre[data-arbre="atelier"]';
+  await eq.evaluate(() => { location.hash = '#/projets/atelier'; }); await eq.waitForSelector(`${arbreEq}.deplie`, { timeout: 30000 }).catch(() => {}); await pause(1500);
+  verifier(!(await eq.$('#onglets-projet')) && !(await eq.$('.onglets-enveloppe')) && Boolean(await eq.$(`${arbreEq}.deplie .lat-branche a[data-chemin="/projets/atelier/demandes"]`)), 'le Cockpit n a plus d onglets horizontaux : l arbre du projet, déplié, dans le rail');
+  /* Depuis la refonte du Cockpit (lot 1), l'équipe a aussi le Retour :
+     présent, et visible hors de l'accueil. */
+  verifier(/Les personnes/.test(await texteDe(eq, '#personnes h2')) && await eq.$eval('#bouton-retour', (b) => !b.hidden).catch(() => false), 'et « Les personnes » ; le Retour, comme dans le Hub');
   await eq.evaluate(() => { location.hash = '#/projets/atelier/etapes'; }); await pause(2500);
   verifier(Boolean(await eq.$('.frise')), 'l équipe voit toujours la frise du devis pour cocher');
+  /* Refonte du Cockpit, lot 2 : « Documents » devient « Fichiers », comme
+     dans le Hub ; l'ancienne adresse y mène. */
   await eq.evaluate(() => { location.hash = '#/documents'; }); await pause(2500);
-  verifier((await texteDe(eq, '.page h1')) === 'Documents', 'et sa page Documents');
-  await eq.evaluate(() => { location.hash = '#/projets/atelier'; }); await eq.waitForSelector('#onglets-projet', { timeout: 30000 }).catch(() => {}); await pause(1500);
-  const ongletMarketing = await texteDe(eq, '#onglets-projet a[href="#/projets/atelier/marketing"]');
-  verifier(/Marketing/.test(ongletMarketing) && /À venir/.test(ongletMarketing), 'l équipe voit l onglet Marketing, marqué « À venir »', ongletMarketing);
-  await eq.click('#onglets-projet a[href="#/projets/atelier/marketing"]'); await pause(1500);
+  verifier((await texteDe(eq, '.page h1')) === 'Fichiers' && /^#\/fichiers$/.test(hash(eq)), 'et sa page Fichiers (l ancienne adresse #/documents y mène)', `${await texteDe(eq, '.page h1')} ${hash(eq)}`);
+  await eq.evaluate(() => { location.hash = '#/projets/atelier'; }); await eq.waitForSelector(`${arbreEq}.deplie`, { timeout: 30000 }).catch(() => {}); await pause(1500);
+  const entreeMarketing = await texteDe(eq, `${arbreEq} a[data-chemin="/projets/atelier/marketing"]`);
+  verifier(/Marketing/.test(entreeMarketing) && /À venir/.test(entreeMarketing), 'l équipe voit l entrée Marketing, marquée « À venir »', entreeMarketing);
+  await eq.click(`${arbreEq} a[data-chemin="/projets/atelier/marketing"]`); await pause(1500);
   verifier(/^#\/projets\/atelier\/marketing$/.test(hash(eq)) && /À venir/.test(await texteDe(eq, '#onglet-corps')), 'et sa page, vide pour l instant', hash(eq));
-  verifier(/Feuille de route/.test(await texteDe(eq, '#onglets-projet')) && /Demandes/.test(await texteDe(eq, '#onglets-projet')), 'le Cockpit garde ses mots (Demandes, Feuille de route)');
+  /* Lot 4 : le Cockpit parle comme le client pour ce qui est partagé. */
+  verifier(/Planning/.test(await texteDe(eq, arbreEq)) && /Tickets/.test(await texteDe(eq, arbreEq)) && /Campagne de tests/.test(await texteDe(eq, arbreEq)) && !/Feuille de route|Demandes/.test(await texteDe(eq, arbreEq)), 'le Cockpit dit comme le client : Tickets, Planning, Campagne de tests');
   await ctxE.close();
 
   verifier(erreurs.length === 0, `aucune erreur de page ${erreurs.join(' | ')}`);

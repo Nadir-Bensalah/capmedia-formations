@@ -68,7 +68,7 @@ export const phraseTendance = (app) => {
 
 /* Le lien vers Sentry : seulement s'il y mène (ou au faux serveur du banc). */
 const lienSur = (u) => (/^https:\/\/([a-z0-9-]+\.)*sentry\.io\//i.test(String(u || '')) || /^http:\/\/127\.0\.0\.1:\d+\//.test(String(u || '')) ? String(u) : '');
-const lienSentryHtml = (u) => (lienSur(u) ? `<a class="lien stab-sentry" href="${echapper(lienSur(u))}" target="_blank" rel="noopener noreferrer" data-stab-sentry>Sentry</a>` : '');
+const lienSentryHtml = (u) => (lienSur(u) ? `<a class="lien stab-sentry" href="${echapper(lienSur(u))}" target="_blank" rel="noopener noreferrer" data-stab-sentry title="Ouvrir la fiche de l'erreur chez Sentry">Détail</a>` : '');
 
 /* ==========================================================================
    Le Cockpit
@@ -180,23 +180,29 @@ const pageEquipe = (d, env) => {
   const tete = `<header class="page-tete">
     <div>
       <p class="surtitre">${echapper(d.projet.nom || '')}</p>
-      <h1 style="margin-top:2px">Stabilité</h1>
-      <p class="chapo">${lie ? `Ce que Sentry voit de l'application, relevé toutes les quinze minutes${r.le ? ` · dernier relevé <span data-stab-releve>${echapper(depuis(r.le))}</span>` : ''}.` : 'Ce projet n\'est pas encore relié à Sentry.'}</p>
+      <h1 style="margin-top:2px">Santé de l'app</h1>
+      <p class="chapo">${lie ? `Les erreurs, les versions et les sessions de l'application, relevées toutes les quinze minutes${r.le ? ` · dernier relevé <span data-stab-releve>${echapper(depuis(r.le))}</span>` : ''}.` : 'Le suivi des erreurs n\'est pas encore branché sur ce projet.'}</p>
     </div>
     <div class="actions">
       ${lie ? `<a class="btn btn-secondaire" href="#/projets/${echapper(d.projet.id)}/controle">Salle de contrôle</a>` : ''}
       ${lie ? '<button class="btn btn-secondaire" type="button" data-stab-action="actualiser">Actualiser</button>' : ''}
-      ${admin ? `<button class="btn ${lie ? 'btn-fantome' : 'btn-principal'}" type="button" data-stab-action="lier">${lie ? 'Liaison Sentry' : 'Relier à Sentry'}</button>` : ''}
+      ${admin ? `<button class="btn ${lie ? 'btn-fantome' : 'btn-principal'}" type="button" data-stab-action="lier">${lie ? 'Réglages du suivi' : 'Brancher le suivi des erreurs'}</button>` : ''}
     </div>
   </header>`;
   if (!lie) {
-    return `<div class="page page-stabilite">${tete}${vide({ icone: 'activite', titre: 'Pas encore de relevé', texte: admin ? 'Reliez le projet à son organisation Sentry : les erreurs, les versions et les sessions arriveront ici.' : 'Un administrateur peut relier ce projet à Sentry.' })}</div>`;
+    return `<div class="page page-stabilite">${tete}${vide({ icone: 'activite', titre: 'Pas encore de relevé', texte: admin ? 'Branchez le suivi des erreurs (le service Sentry de l\'application) : les erreurs, les versions et les sessions arriveront ici.' : 'Un administrateur peut brancher le suivi des erreurs sur ce projet.', action: admin ? '<button class="btn btn-secondaire" type="button" data-stab-action="lier">Brancher le suivi</button>' : '' })}</div>`;
   }
   const soucis = (r.erreurs || []).filter((e) => e && e.etape);
   const avertissement = r.le && soucis.length
     ? encart(`Le dernier relevé n'a pas tout lu : ${echapper(soucis.map((e) => `${e.etape}${e.code ? ` (${e.code})` : ''}`).join(', '))}. Le reste garde la valeur d'avant.`, 'attention', 'alerte')
     : '';
-  if (!r.le) return `<div class="page page-stabilite">${tete}${squelette('lignes', 3)}</div>`;
+  /* Relié, mais aucun relevé encore lu : un squelette attendait ici une
+     donnée qui peut ne jamais venir (premier relevé raté, Sentry muet).
+     La page le dit, avec ce que le relevé a manqué s'il l'a noté. */
+  if (!r.le) {
+    const manques = soucis.length ? ` Le dernier essai n'a pas tout lu : ${soucis.map((e) => `${e.etape}${e.code ? ` (${e.code})` : ''}`).join(', ')}.` : '';
+    return `<div class="page page-stabilite" data-stab-attente>${tete}${vide({ icone: 'activite', titre: 'Pas encore de relevé', texte: `Le suivi des erreurs est branché, mais aucun relevé n'est encore arrivé. Il passe toutes les quinze minutes ; « Actualiser » le lance tout de suite.${manques}` })}</div>`;
+  }
   return `<div class="page page-stabilite">${tete}${avertissement}
     <section class="section" data-stab-section="jour">
       <div class="section-tete"><h2>Erreurs du jour</h2><span class="t-petit t-3">depuis minuit</span></div>
@@ -221,10 +227,10 @@ const pageEquipe = (d, env) => {
 
 /* Relier le projet : l'organisation et ses deux projets Sentry. */
 const editerLiaison = (pid, liaison) => feuille({
-  titre: 'Liaison Sentry',
-  sousTitre: 'Le jeton reste côté serveur (secret SENTRY_JETON) : ici, seulement les noms.',
+  titre: 'Le suivi des erreurs',
+  sousTitre: 'Les noms du compte Sentry de l\'application. Sa clé d\'accès reste sur le serveur, jamais ici.',
   corps: `
-    ${champ('org', 'Organisation', (liaison && liaison.org) || 'forgeme', { placeholder: 'forgeme' })}
+    ${champ('org', 'Organisation Sentry', (liaison && liaison.org) || 'forgeme', { placeholder: 'forgeme' })}
     <div class="forme-rang">
       ${champ('web', 'Projet web', (liaison && liaison.web) || '', { placeholder: 'forgeme-web', facultatif: true })}
       ${champ('mobile', 'Projet mobile', (liaison && liaison.mobile) || '', { placeholder: 'forgeme-mobile', facultatif: true })}
@@ -232,9 +238,9 @@ const editerLiaison = (pid, liaison) => feuille({
     <p class="etiquette-champ">La salle de contrôle sonde ces adresses chaque minute</p>
     ${champ('sondeWeb', 'App web', ((liaison && liaison.sondes) || {}).web || '', { placeholder: 'https://app.forgeme.net/', facultatif: true })}
     ${champ('sondeLanding', 'Landing', ((liaison && liaison.sondes) || {}).landing || '', { placeholder: 'https://forgeme.net/', facultatif: true })}
-    ${champ('sondeFonctions', 'Fonction publique, en lecture seule', ((liaison && liaison.sondes) || {}).fonctions || '', { placeholder: 'https://us-central1-forgeme-project.cloudfunctions.net/getLegalTextPublic?type=legal-mentions&locale=fr', facultatif: true })}
-    <p class="aide">Un simple GET, sans jeton : jamais une adresse qui écrit chez l'application. https et un nom de domaine public seulement.</p>`,
-  libelle: 'Relier et relever',
+    ${champ('sondeFonctions', 'Serveur de l\'application (une adresse en lecture seule)', ((liaison && liaison.sondes) || {}).fonctions || '', { placeholder: 'https://', facultatif: true })}
+    <p class="aide">Des adresses qui s'ouvrent sans compte et ne changent rien chez l'application, en https, sur un nom de domaine public.</p>`,
+  libelle: 'Brancher et relever',
   regles: {
     org: (v) => (!/^[a-z0-9][a-z0-9_-]{0,49}$/.test(v || '') ? 'Lettres minuscules, chiffres et tirets.' : ''),
     web: (v) => (v && !/^[a-z0-9][a-z0-9_-]{0,49}$/.test(v) ? 'Lettres minuscules, chiffres et tirets.' : ''),
@@ -262,13 +268,13 @@ export const creerTicket = (pid, p, { incident = false, naviguerApres = true, ap
   titre: 'Créer un ticket',
   sousTitre: 'Le client lit le titre et le texte tels quels : écrivez-les pour lui, sans jargon.',
   corps: `
-    <div class="stab-reference"><p class="etiquette-champ">${incident ? "L'incident" : "L'erreur dans Sentry"}</p><p class="stab-mono">${echapper(p.court ? `${p.court} · ` : '')}${echapper(p.titre)}</p></div>
+    <div class="stab-reference"><p class="etiquette-champ">${incident ? "L'incident" : "L'erreur relevée"}</p><p class="stab-mono">${echapper(p.court ? `${p.court} · ` : '')}${echapper(p.titre)}</p></div>
     ${champ('titre', 'Titre, pour le client', '', { placeholder: incident ? 'Ex. : Le site a été inaccessible quelques minutes' : 'Ex. : L\'écran Tâches se ferme parfois à l\'ouverture' })}
     ${zone('description', 'Ce que le client lira', incident
     ? `Nous avons repéré que ${p.app === 'landing' ? 'le site vitrine' : p.app === 'web' ? "l'application web" : "un service de l'application"} ne répondait plus, et nous nous en occupons. Rien à faire de votre côté.`
     : `Nous avons repéré une erreur sur ${p.app === 'mobile' ? "l'application mobile" : 'le site web'} et nous la corrigeons. Rien à faire de votre côté.`, { lignes: 3 })}
     ${choix('urgence', 'Urgence', URGENCES_TICKET, incident || p.etat === 'nouvelle' || p.etat === 'regression' ? 'critique' : 'important')}
-    <p class="aide">${incident ? "L'adresse, le code de réponse et les heures de l'incident partent" : "Le lien Sentry, le nombre d'occurrences, les versions et les plateformes partent"} dans une note interne du ticket, invisible au client.</p>`,
+    <p class="aide">${incident ? "L'adresse, le code de réponse et les heures de l'incident partent" : "Le lien vers l'erreur, le nombre de fois, les versions et les plateformes partent"} dans une note interne du ticket, invisible au client.</p>`,
   libelle: 'Créer le ticket',
   regles: {
     titre: (v) => (!v ? 'Un titre en clair, s\'il vous plaît.' : (v.length > 120 ? '120 caractères au plus.' : '')),
@@ -307,8 +313,8 @@ const vueEquipe = (ctx, env) => {
     if (emp === derniere) return;
     derniere = emp;
     if (!d.projet) { sortie.innerHTML = `<div class="page">${vide({ icone: 'projets', titre: 'Ce projet est introuvable', texte: 'Il a peut-être été archivé, ou vous n\'y avez plus accès.' })}</div>`; return; }
-    titrePage(`Stabilité · ${d.projet.nom}`);
-    filAriane([{ libelle: 'Projets', chemin: '/projets' }, { libelle: d.projet.nom, chemin: `/projets/${pid}` }, { libelle: 'Stabilité' }]);
+    titrePage(`Santé de l'app · ${d.projet.nom}`);
+    filAriane([{ libelle: 'Projets', chemin: '/projets' }, { libelle: d.projet.nom, chemin: `/projets/${pid}` }, { libelle: 'Santé de l\'app' }]);
     sortie.innerHTML = pageEquipe(d, env);
   };
   const planifier = magasin.dessinateur(rendre, 60, cles);
@@ -329,10 +335,10 @@ const vueEquipe = (ctx, env) => {
     if (action === 'lier') {
       if (!d.liaison || d.liaison.actif === false) { editerLiaison(pid, d.liaison); return; }
       menu(el, [
-        { libelle: 'Modifier la liaison', icone: 'edit', action: () => editerLiaison(pid, d.liaison) },
-        { libelle: 'Délier de Sentry', icone: 'corbeille', danger: true, action: async () => {
-          if (await confirmer({ titre: 'Délier ce projet de Sentry ?', texte: 'Le relevé s\'arrête. Ce qui a été relevé reste lisible.', ok: 'Délier', danger: true })) {
-            agir(null, () => appelServeur('sentryLier', { projet: pid, actif: false }), 'Projet délié de Sentry.');
+        { libelle: 'Modifier les réglages', cle: 'Modifier la liaison', icone: 'edit', action: () => editerLiaison(pid, d.liaison) },
+        { libelle: 'Débrancher le suivi', icone: 'corbeille', danger: true, action: async () => {
+          if (await confirmer({ titre: 'Débrancher le suivi des erreurs ?', texte: 'Le relevé s\'arrête. Ce qui a été relevé reste lisible.', ok: 'Débrancher', danger: true })) {
+            agir(null, () => appelServeur('sentryLier', { projet: pid, actif: false }), 'Suivi des erreurs débranché.');
           }
         } },
       ]);
