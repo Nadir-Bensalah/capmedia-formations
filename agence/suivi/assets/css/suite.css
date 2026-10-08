@@ -1479,6 +1479,14 @@ html.accueil-ouvert { overflow: hidden; }
 .appareil-releve { padding: 12px 14px; border-radius: 10px; background: var(--fond-2); margin-bottom: 12px; }
 .appareil-releve p { margin: 0; }
 .identifiants-test { margin-top: 14px; }
+/* Mon compte de test : deux rangées (abonnement, contenu), le plan actuel
+   en clair. Le plan en vigueur se lit sur son bouton enfoncé. */
+.compte-test-etat { margin: 4px 0 14px; font: 500 14px/1.4 var(--police); color: var(--encre); font-variant-numeric: tabular-nums; }
+.compte-test-rangee { display: grid; grid-template-columns: 110px 1fr; align-items: center; gap: 10px; margin-bottom: 10px; }
+.compte-test-boutons { gap: 8px; flex-wrap: wrap; }
+.compte-test-boutons .btn[aria-pressed="true"] { background: var(--encre); color: var(--fond); }
+.fs-bloc--compte .compte-test-boutons { margin-top: 2px; }
+@media (max-width: 560px) { .compte-test-rangee { grid-template-columns: 1fr; gap: 6px; } }
 .identifiants-bloc { margin: 6px 0 10px; padding: 12px 14px; border-radius: 10px; background: var(--fond-2); font: 500 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; }
 .fin-test--magasins { background: var(--fond-2); }
 .fin-test--magasins .actions a { text-decoration: none; }

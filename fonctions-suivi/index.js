@@ -64,3 +64,7 @@ exports.sentryWebhook = sentry.sentryWebhook;
 /* L'avis anonyme d'un testeur : rangé sans son nom, compté, et « a répondu »
    posé sur son appréciation (avis.js). */
 exports.hubAvisTesteur = require('./avis').hubAvisTesteur;
+
+/* Le compte ForgeMe de test d'un testeur : plan, remplissage, remise à zéro,
+   dans le projet forgeme-test seulement (compte-test.js). */
+exports.hubCompteTest = require('./compte-test').hubCompteTest;
