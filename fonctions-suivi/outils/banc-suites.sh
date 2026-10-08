@@ -95,6 +95,8 @@ for n in "${SUITES[@]}"; do
   perl -e 'alarm shift; exec @ARGV' 600 node "outils/$n.cjs" > "$SORTIE/$n.txt" 2>&1
   code=$?
   [ $code -ne 0 ] && echec=1
-  echo "$n exit=$code ok=$(grep -c '^  ok' "$SORTIE/$n.txt") ecarts=$(grep -c 'ÉCART' "$SORTIE/$n.txt")"
+  # Les lignes d'écart seules : le bilan final « 0 ÉCART(S) » de certaines
+  # suites (qa-bugs) se comptait comme un écart.
+  echo "$n exit=$code ok=$(grep -c '^  ok' "$SORTIE/$n.txt") ecarts=$(grep -c '^ *ÉCART' "$SORTIE/$n.txt")"
 done
 exit $echec
