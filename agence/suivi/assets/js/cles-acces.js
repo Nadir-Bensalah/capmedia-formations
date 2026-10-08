@@ -211,5 +211,20 @@ export const proposerCle = async (uid = '') => {
   const deja = `suivi:cle-proposee:${uid || 'anonyme'}`;
   try { if (localStorage.getItem(deja)) return; localStorage.setItem(deja, '1'); } catch (e) { /* stockage refusé : on propose, sans retenir */ }
   const { toast } = await import('./ui.js');
-  toast('Ouvrir plus vite la prochaine fois, sans code ?', 'ok', { libelle: 'Ajouter une clé d\'accès', action: ouvrirClesAcces, duree: 12000 });
+  /* Le message ne couvre jamais une feuille : posé en bas de l'écran, il
+     cachait les boutons « Échec » et « Enregistrer l'échec » du premier
+     scénario d'un testeur sur téléphone (audit du 08/10/2026). Il attend
+     qu'aucune feuille ne soit ouverte, et s'efface dès qu'une s'ouvre. */
+  const feuilleOuverte = () => Boolean(document.querySelector('.voile'));
+  for (let i = 0; i < 120 && feuilleOuverte(); i += 1) await new Promise((r) => setTimeout(r, 500));
+  if (feuilleOuverte()) return;
+  const duree = 12000;
+  toast('Ouvrir plus vite la prochaine fois, sans code ?', 'ok', { libelle: 'Ajouter une clé d\'accès', action: ouvrirClesAcces, duree });
+  const zone = document.querySelector('.toasts');
+  const message = zone && zone.lastElementChild;
+  if (!message || typeof MutationObserver === 'undefined') return;
+  message.setAttribute('data-proposer-cle', '');
+  const garde = new MutationObserver(() => { if (feuilleOuverte()) { message.remove(); garde.disconnect(); } });
+  garde.observe(document.body, { childList: true });
+  setTimeout(() => garde.disconnect(), duree + 500);
 };
