@@ -181,6 +181,14 @@ const retourVisible = (page) => page.$eval('#bouton-retour', (b) => !b.hidden &&
   verifier(Boolean(await pa.$('.menu [data-cle="Refermer au client"]')), 'l administrateur peut refermer Atelier au client');
   await pa.keyboard.press('Escape');
 
+  /* Lot 8 : la fiche d'un client n'écoute plus que les profils des clients
+     (ceux qui portent « accueil ») ; les premiers pas de Camille y sont. */
+  console.log('\n== La fiche d un client');
+  await aller(pa, '#/clients/atelier-nord', '#vue .page-tete');
+  await pa.waitForFunction(() => /Premiers pas faits/.test((document.querySelector('#vue') || {}).innerText || ''), null, { timeout: 15000 }).catch(() => {});
+  const ficheClient = await texteDe(pa, '#vue');
+  verifier(/Camille Martin/.test(ficheClient) && /Premiers pas faits/.test(ficheClient), 'la fiche d un client dit les premiers pas de ses contacts', ficheClient.slice(0, 200));
+
   /* ---------------------------------------------------------------- */
   console.log('\n== Un agent du socle');
   const pg = await contexte();

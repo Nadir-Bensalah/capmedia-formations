@@ -3,7 +3,7 @@
    ses projets, ses pièces comptables, ses notes internes.
    ========================================================================== */
 
-import { echapper, dateCourte, montant, pluriel, parDateDesc, STATUTS_PROJET, STATUTS_FACTURE, STATUTS_DEVIS, statutProjet, projetEstActif, estAdmin, peut, bdd, collection } from '../noyau.js';
+import { echapper, dateCourte, montant, pluriel, parDateDesc, STATUTS_PROJET, STATUTS_FACTURE, STATUTS_DEVIS, statutProjet, projetEstActif, estAdmin, peut, bdd, collection, query, where } from '../noyau.js';
 
 const TIRET = '–';
 /* Les clés d'une page de clients : les pièces et les paiements seulement
@@ -84,8 +84,12 @@ export const detail = async (ctx, env) => {
   const id = ctx.params.id;
   const lot = magasin.lot();
   /* Les premiers pas des contacts (l'accueil du Hub) : dans leur profil,
-     que seul l'administrateur lit. */
-  if (estAdmin(env.session)) lot.abonner(K.profilsClients, () => collection(bdd, 'profils'));
+     que seul l'administrateur lit. Seuls les profils qui portent « accueil »
+     (un client qui a fait ses premiers pas) : celui de l'équipe, que le
+     Cockpit écrit (dernière visite), n'y entre pas. Sans ce filtre, le cache
+     local, qui tient déjà le profil de l'équipe, donnait un premier
+     instantané partiel, puis le complet : la fiche se peignait deux fois. */
+  if (estAdmin(env.session)) lot.abonner(K.profilsClients, () => query(collection(bdd, 'profils'), where('accueil', '!=', null)));
   const sortie = ctx.sortie;
   sortie.innerHTML = `<div class="page">${squelette('page', 5)}</div>`;
   const rendre = () => {
