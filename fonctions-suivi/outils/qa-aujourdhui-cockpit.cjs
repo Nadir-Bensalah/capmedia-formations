@@ -160,6 +160,14 @@ const rouvrir = async (page, url, avant) => {
   await pa.click(`${PAVE} [data-pave-geste="deplier"]`);
   verifier(await attendre(async () => (await replie(pa, PAVE)) === false && Boolean(await pa.$(`${PAVE} a.ligne`))) && await attendre(async () => (await choixPaves(fs, uidAdmin)).accueil === 'ouvert'), 'déplié : les lignes reviennent, le profil dit « ouvert »');
 
+  /* Le profil change souvent sans rien changer ici (une conversation lue,
+     la date du passage) : la page ne se repeint pas pour rien. */
+  await sonder(pa);
+  await fs.doc(`profils/${uidAdmin}`).set({ lus: { 'messages:projet-sans-fil': T.now() } }, { merge: true });
+  await pause(2500);
+  const r0 = await releve(pa);
+  verifier(r0.dessins === 0, 'une écriture du profil qui ne change rien à la page ne la repeint pas', JSON.stringify(r0));
+
   console.log('\n== « Attendent le client » se replie aussi');
   verifier(Boolean(await pa.$(`aside ${PAVE_CLIENT}`)) && /Attendent le client/.test(await texteDe(pa, `${PAVE_CLIENT} .attente-titre`)), '« Attendent le client » est un pavé, à droite');
   verifier((await nombre(pa, `${PAVE_CLIENT} .attente-tete .badge`)) >= 6, 'il compte les points qui attendent le client', await nombre(pa, `${PAVE_CLIENT} .attente-tete .badge`));
