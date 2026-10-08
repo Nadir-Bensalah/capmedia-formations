@@ -41,6 +41,8 @@ rules_version = '2';
     projets/{p}/validations/{v}/reponse/.. pièces de la réponse du client à cette validation
     projets/{p}/taches/{t}/reponse/...     pièces de la réponse du client sur une tâche
     campagnes/{p}/{c}/{uid}/...            preuves d'un testeur de la campagne
+    projets/{p}/campagnes/{c}/visuels/...  écrans de l'application en campagne
+    projets/{p}/campagnes/{c}/logo/{f}     logo de l'application en campagne (image, 2 Mo)
     preprojets/{uid}/...                   pièces d'une demande de nouveau projet
     conversationsTesteurs/{uid}/...        pièces de la conversation d'un testeur avec l'équipe
     projets/{p}/documents/...              ANCIEN rangement, en attente de migration
@@ -313,6 +315,34 @@ service firebase.storage {
            : surSonProjet(projetId));
       allow list: if equipeSurProjet(projetId);
       allow create, update: if equipeSurProjet(projetId) && fichierAccepte();
+      allow delete: if equipeSurProjet(projetId);
+    }
+
+    // Le logo de l'application en campagne (08/10/2026) : la même lecture
+    // que les écrans (le testeur de la campagne tant que son accès court,
+    // le client du projet, l'équipe), et une écriture plus étroite : une
+    // image PNG, JPEG ou WebP de 2 Mo au plus. Jamais de SVG, qui porte du
+    // script. Un dossier à part, sinon la règle des écrans, plus large,
+    // l'emporterait.
+    match /projets/{projetId}/campagnes/{campagneId}/logo/{fichier} {
+      function testeurDeLaCampagne() {
+        return request.auth != null
+          && request.auth.token.get('testeur', false) == true
+          && fiche(/databases/(default)/documents/testeurs/$(request.auth.uid)).get('actif', true) != false
+          && request.auth.uid in fiche(/databases/(default)/documents/projets/$(projetId)/campagnes/$(campagneId)).get('testeurs', [])
+          && (!(request.auth.uid in fiche(/databases/(default)/documents/projets/$(projetId)/campagnes/$(campagneId)).get('fins', {}))
+              || fiche(/databases/(default)/documents/projets/$(projetId)/campagnes/$(campagneId)).get('fins', {})[request.auth.uid] > request.time);
+      }
+      allow get: if jetonEquipe() ? equipeSurProjet(projetId)
+        : (request.auth != null && request.auth.token.get('testeur', false) == true
+           ? testeurDeLaCampagne()
+           : surSonProjet(projetId));
+      allow list: if equipeSurProjet(projetId);
+      function logoAccepte() {
+        return request.resource.size < 2 * 1024 * 1024
+          && request.resource.contentType.matches('image/(png|jpeg|webp)');
+      }
+      allow create, update: if equipeSurProjet(projetId) && logoAccepte();
       allow delete: if equipeSurProjet(projetId);
     }
 

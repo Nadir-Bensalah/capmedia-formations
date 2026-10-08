@@ -1170,7 +1170,7 @@ exports.hubAppreciationEcrite = onDocumentWritten({ region: REGION, document: 'p
       ok: bilan.compte.ok, ko: bilan.compte.ko, na: bilan.compte.na, total: bilan.total, temps: dureeLisible(bilan.temps),
       finAcces: fin.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }),
       echecs: bilan.echecs.map((e) => `${e.ref}${e.titre ? ` · ${e.titre}` : ''}${e.plateforme ? ` (${e.plateforme})` : ''}${e.commentaire ? ` : ${e.commentaire.slice(0, 200)}` : ''}`),
-      avisDonne: Object.keys(apres).some((k) => k.startsWith('esthetique.')) ? 'oui' : 'pas encore',
+      avisDonne: ((apres.avisRendus || {}).apres === true || Object.keys(apres).some((k) => k.startsWith('esthetique.'))) ? 'oui' : 'pas encore',
       noteTest: noteTest && noteTest.note ? `${noteTest.note} sur 5` : '',
       noteTestCommentaire: noteTest ? String(noteTest.commentaire || '').slice(0, 2000) : '',
       lien: LIEN_ADMIN(lienAdmin),

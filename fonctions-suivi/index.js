@@ -60,3 +60,7 @@ exports.hubCampagneTesteurs = require('./testeurs-lettres').hubCampagneTesteurs;
 const sentry = require('./sentry');
 exports.sentryReleve = require('./controle').sentryReleve;
 exports.sentryWebhook = sentry.sentryWebhook;
+
+/* L'avis anonyme d'un testeur : rangé sans son nom, compté, et « a répondu »
+   posé sur son appréciation (avis.js). */
+exports.hubAvisTesteur = require('./avis').hubAvisTesteur;
