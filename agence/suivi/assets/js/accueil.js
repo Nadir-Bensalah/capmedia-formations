@@ -296,6 +296,9 @@ export const ouvrirAccueil = ({ service, prenom = '', titre = '', texte, visuel 
   el.addEventListener('pointerdown', (e) => {
     const piste = e.target.closest('.accueil-piste');
     if (!piste || e.button !== 0) return;
+    /* Un bouton ou un lien posé sur un écran garde son clic : la capture
+       du glissé lui volait la cible (« Me faire visiter l'espace »). */
+    if (e.target.closest('button, a[href], input, select, textarea')) return;
     glisse = { x: e.clientX, dx: 0, piste };
     piste.classList.add('glisse');
     try { piste.setPointerCapture(e.pointerId); } catch (err) { /* rien */ }

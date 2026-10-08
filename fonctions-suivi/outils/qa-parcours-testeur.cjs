@@ -198,9 +198,11 @@ let page = null;
   await page.waitForSelector('[data-feuille-poser]', { timeout: 10000 });
   verifier(/Refaites-le/.test(await page.textContent('.modale--scenario')), 'sa feuille demande de le refaire');
   await page.click('[data-feuille-poser]:first-child');
-  const fin = await attendre(async () => page.$('[data-terminer]'), 30, 500);
-  verifier(fin, 'rejoué, le bouton de fin apparaît');
-  verifier(/Terminer et donner mon avis/.test(await page.textContent('[data-terminer]').catch(() => '')) && !(await page.$('.page--testeur [data-avis="apres"]')), 'un seul bouton à la fin : « Terminer et donner mon avis »');
+  /* Le questionnaire est obligatoire (08/10/2026) : tout rejoué, l'avis
+     est demandé d'abord, « J'ai terminé » vient après (qa-fin-de-test). */
+  const fin = await attendre(async () => page.$('[data-fin-avis] [data-avis="apres"]'), 30, 500);
+  verifier(fin, 'rejoué, la fin s annonce : l avis d abord');
+  verifier(!(await page.$('[data-terminer]')), 'un seul bouton à la fin : « Donner mon avis », pas encore « J ai terminé »');
   if (await page.$('.voile')) { await page.keyboard.press('Escape'); await pause(500); }
 
   console.log('\n== Après la fin, plus rien à refaire');

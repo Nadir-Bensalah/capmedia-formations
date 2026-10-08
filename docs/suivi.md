@@ -711,6 +711,63 @@ ligne d'état sous le numéro du testeur, sans nom, sans remarque, sans geste.
 `qa-fin-de-test.cjs` (33 contrôles dans trois navigateurs : testeur, équipe,
 client).
 
+### 14 bis. L'avis anonyme et obligatoire, le logo, la présentation, la visite (08/10/2026)
+
+**L'avis avant la fin.** Tout déroulé, la page demande l'avis de fin ;
+« J'ai terminé » n'apparaît qu'une fois l'avis envoyé. Les règles le
+garantissent : `termine` ne se pose que si l'appréciation porte
+`avisRendus.apres == true`, et seul le serveur l'écrit.
+
+**L'avis sans nom.** Le testeur n'écrit plus ses réponses dans
+`appreciations/{uid}`. Il les envoie à `hubAvisTesteur` (`avis.js`), qui
+vérifie qui il est (testeur actif, affecté, campagne en cours, accès qui
+court), valide avec la source du questionnaire (`questionnaire-avis.mjs`,
+copie conforme de `agence/suivi/assets/js/questionnaire-avis.js`), puis,
+dans une transaction :
+
+- range `{ moment, reponses }` dans
+  `projets/{p}/campagnes/{c}/avisAnonymes/{moment}/reponses/{id au hasard}`,
+  sans identifiant, sans date, sans appareil ;
+- compte une réponse de plus dans `avisAnonymes/{moment}.recus` ;
+- pose `avisRendus.{moment}: true` sur l'appréciation, et rien d'autre.
+
+Une seconde réponse au même moment est refusée (409) : un avis envoyé ne se
+relit ni ne se modifie, même par son auteur. Les questions fermées sont
+requises, les textes et les montants facultatifs.
+
+Qui lit quoi : l'équipe voit par testeur « Avis : oui / non » (l'appréciation,
+qu'elle seule lit désormais) ; les réponses d'un moment ne s'ouvrent, à
+l'équipe comme au client du projet, qu'à partir de trois (`recus >= 3`, tenu
+par les règles) ; elles s'affichent sans nom, sans numéro, sans profil. La
+note du test (`equipe/retour`), les échecs et les remarques restent
+nominatifs pour l'équipe. Les anciennes réponses nominatives écrites dans
+une appréciation avant cette date ne sont ni migrées ni affichées.
+
+Limite connue : la console Firebase garde l'heure de création de chaque
+document ; un administrateur qui la rapprocherait de la mise à jour d'une
+appréciation pourrait relier une réponse à son auteur. Aucun écran ni
+aucune règle ne l'ouvre.
+
+**Le logo et la présentation.** La campagne porte `logo` (`{ chemin, nom,
+type }`, un fichier de `projets/{p}/campagnes/{c}/logo/`, PNG, JPEG ou WebP
+de 2 Mo au plus, storage.rules), `discours` et `fonctionnalites` (`[{ titre,
+phrase, capture }]`, la capture étant le chemin d'un des écrans de la
+campagne). Le testeur voit le logo dans les premiers pas, l'en-tête de « Ma
+campagne », « L'application » et « Présentation » (initiale du nom à
+défaut), et lit dans « Présentation » le discours puis les fonctionnalités
+une par une. Tout se remplit dans la fiche de la campagne du Cockpit.
+
+**La visite guidée** (`visite-testeur.js`) : proposée au dernier écran des
+premiers pas, elle part une fois la fiche remplie et montre sur la vraie
+page Ma campagne, la case suivante, une feuille de scénario, Mes
+signalements, Mon avis et la bulle. Clavier (flèches, Entrée, Échap,
+tabulation tenue), dialogue annoncé au lecteur d'écran, aucune animation
+quand la réduction est demandée. Rejouable depuis le guide et le menu du
+compte.
+
+Épreuves : `regles-avis.test.mjs`, `regles.test.mjs`, `avis-serveur.test.mjs`,
+`questionnaire-avis.test.mjs`, `storage.test.mjs`, `qa-experience-testeur.cjs`.
+
 ## 15. Le testeur : sa fiche, sa bulle, ce qu'il trouve (septembre 2026)
 
 **Sa fiche, à sa première connexion.** Le Cockpit inscrit un testeur avec

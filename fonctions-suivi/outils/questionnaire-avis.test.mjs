@@ -19,6 +19,7 @@ import { readFileSync } from 'node:fs';
 import {
   FAMILLES_AVIS, MOMENTS_AVIS, questionsAvis, famillesDu, lireReponse, aRepondu, avisRepondus,
   resumeQuestionnaire, REMARQUE_MAX, remarqueAEnvoyer,
+  SEUIL_AVIS, MOMENTS_ENVOYES, questionsRequises, validerAvis, avisRendu,
 } from '../../agence/suivi/assets/js/questionnaire-avis.js';
 
 let ok = 0; const ecarts = [];
@@ -92,7 +93,7 @@ verifier(!/Confus, pénible|Limpide, agréable|clair et faisable/.test(testeur),
 verifier(!/L'esthétique, la facilité, l'utilité/.test(testeur), 'la page « Mon avis » ne résume plus le questionnaire à la main');
 verifier(!/sept familles|Trois avant de commencer|Trois questions <b>avant/.test(tests), 'le Cockpit et le Hub ne comptent plus les questions à la main');
 verifier(/lireReponse\(/.test(tests) && !/a\[cle\]|a\[id\]/.test(tests), 'la restitution lit chaque réponse par lireReponse, pas par une clé à plat');
-verifier(/avisRepondus\(/.test(tests), 'et ne compte que ceux qui ont répondu');
+verifier(/avisDe\(/.test(tests) && /avisAnonymes/.test(tests), 'et lit les réponses anonymes, pas les appréciations');
 
 console.log('\n== Les remarques libres partent bornées');
 egal(remarqueAEnvoyer({ texte: '   ' }).erreur ? 'refus' : 'parti', 'refus', 'une remarque vide ne part pas');
@@ -101,6 +102,35 @@ egal(remarqueAEnvoyer({ texte: 'x'.repeat(REMARQUE_MAX) }).remarque.texte.length
 egal(remarqueAEnvoyer({ texte: '  Le bouton Retour est petit.  ', scenario: 'DI-01', plateforme: 'ios' }).remarque, { texte: 'Le bouton Retour est petit.', scenario: 'DI-01', plateforme: 'ios' }, 'sur un scénario : texte nettoyé, scénario et plateforme');
 egal(remarqueAEnvoyer({ texte: 'En général', scenario: '', plateforme: 'mac' }).remarque, { texte: 'En général' }, 'en général : ni scénario ni plateforme inventée');
 egal(REMARQUE_MAX, 2000, 'la borne est celle du modèle et des règles (2 000)');
+
+console.log('\n== L avis anonyme : ce qui part, et ce qui est refusé');
+egal(SEUIL_AVIS, 3, 'rien ne se montre sous trois réponses');
+egal(MOMENTS_ENVOYES, ['avant', 'apres'], 'le testeur envoie deux moments ; la note du test reste à part');
+egal(questionsRequises('avant').map((x) => x.id), ['impression.compris'], 'avant : la seule question fermée est requise');
+verifier(questionsRequises('apres').every(({ q }) => ['echelle', 'note10', 'choix'].includes(q.type)), 'après : les notes et les choix sont requis, jamais un texte ni un montant');
+const complet = (quand) => Object.fromEntries(questionsRequises(quand).map(({ id, q }) => [id, q.type === 'choix' ? q.options[0] : (q.type === 'note10' ? 8 : 4)]));
+egal(Object.keys(validerAvis('apres', complet('apres')).reponses || {}).length, questionsRequises('apres').length, 'un avis de fin complet part');
+verifier(Boolean(validerAvis('apres', {}).manquantes), 'un avis vide est refusé, avec la liste de ce qui manque');
+verifier(/Question inconnue/.test(validerAvis('apres', { ...complet('apres'), testeur: 'uid-karim' }).erreur || ''), 'un champ « testeur » glissé dans les réponses est refusé');
+verifier(/Question inconnue/.test(validerAvis('apres', { ...complet('apres'), 'test.note': 5 }).erreur || ''), 'la note du test ne passe pas par l avis anonyme');
+verifier(/Question inconnue/.test(validerAvis('avant', { ...complet('avant'), 'esthetique.belle': 4 }).erreur || ''), 'une question d un autre moment est refusée');
+verifier(/hors bornes/.test(validerAvis('apres', { ...complet('apres'), 'esthetique.belle': 9 }).erreur || ''), 'une note hors de 1 à 5 est refusée');
+verifier(/hors bornes/.test(validerAvis('apres', { ...complet('apres'), 'facilite.recommande': 11 }).erreur || ''), 'une recommandation hors de 0 à 10 est refusée');
+verifier(/hors bornes/.test(validerAvis('apres', { ...complet('apres'), 'esthetique.couleurs': 'Superbes' }).erreur || ''), 'une option inventée est refusée');
+egal(validerAvis('apres', { ...complet('apres'), 'argent.spontane': '4,5' }).reponses['argent.spontane'], 4.5, 'un montant à virgule devient un nombre');
+egal(validerAvis('apres', { ...complet('apres'), 'libre.agace': 'x'.repeat(3000) }).reponses['libre.agace'].length, 2000, 'un texte est borné à 2 000 caractères');
+verifier(validerAvis('apres', { ...complet('apres'), 'libre.agace': '   ' }).reponses['libre.agace'] === undefined, 'un texte vide n est pas une réponse');
+verifier(Boolean(validerAvis('fin', {}).erreur), 'le moment « fin » ne s envoie pas ici');
+verifier(avisRendu({ avisRendus: { apres: true } }, 'apres') && !avisRendu({ 'esthetique.belle': 4 }, 'apres'), 'seul « avisRendus », posé par le serveur, dit qu un avis est rendu');
+
+console.log('\n== Le serveur valide avec la même liste, copie conforme');
+const source = readFileSync(new URL('../../agence/suivi/assets/js/questionnaire-avis.js', import.meta.url), 'utf8');
+const copie = readFileSync(new URL('../questionnaire-avis.mjs', import.meta.url), 'utf8');
+verifier(source === copie, 'fonctions-suivi/questionnaire-avis.mjs est identique, octet pour octet', 'recopiez agence/suivi/assets/js/questionnaire-avis.js');
+const serveur = readFileSync(new URL('../avis.js', import.meta.url), 'utf8');
+verifier(/validerAvis\(/.test(serveur) && /import\('\.\/questionnaire-avis\.mjs'\)/.test(serveur), 'hubAvisTesteur valide avec cette copie');
+const ecrit = (serveur.match(/t\.set\(refReponse, ([^;]+);/) || [])[1] || '';
+verifier(ecrit === "{ moment, reponses: v.reponses })", 'la réponse anonyme ne porte que le moment et les réponses', ecrit);
 
 console.log(`\n${ok} contrôle(s) conforme(s)${ecarts.length ? `, ${ecarts.length} ÉCART(S) :\n  - ${ecarts.join('\n  - ')}` : ''}`);
 process.exit(ecarts.length ? 1 : 0);

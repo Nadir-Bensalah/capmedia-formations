@@ -113,6 +113,12 @@ let page = null;
   const refs = await page.$$eval('.tb--testeur [data-case]', (l) => l.map((c) => c.dataset.case));
   /* Une case est une clé « scénario du plan, plateforme » (03/10/2026). */
   for (const ref of refs) { const [scen, plat] = ref.split('__'); await poser(`projets/${PID}/campagnes/${CID}/passages/${uid}__${ref}`, { scenario: S(scen), testeur: S(uid), plateforme: S(plat), resultat: S('reussi'), commentaire: S(''), preuves: L([]), contexte: { mapValue: { fields: {} } }, cree: T(new Date()), maj: T(new Date()) }); }
+  /* L'avis de fin d'abord : obligatoire depuis le 08/10/2026. */
+  await attendre(async () => page.$('[data-fin-avis] [data-avis="apres"]'), 30, 500);
+  await page.click('[data-fin-avis] [data-avis="apres"]');
+  await page.waitForSelector('.voile [data-question] button[data-avis]', { timeout: 15000 });
+  await page.evaluate(() => document.querySelectorAll('.voile [data-question]').forEach((g) => { const b = g.querySelectorAll('button[data-avis]'); if (b.length) b[Math.min(3, b.length - 1)].click(); }));
+  await page.click('.voile [data-envoyer]');
   await attendre(async () => page.$('[data-terminer]'), 30, 500);
   await page.click('[data-terminer]'); await page.waitForSelector('[data-note-test]', { timeout: 10000 });
   await page.click('[data-valider]'); await pause(400);

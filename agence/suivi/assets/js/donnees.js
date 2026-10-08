@@ -70,6 +70,10 @@ export const K = {
   /* Les avis et les passages vivent sous une campagne, pas sous un projet :
      c'est la seule granularité que les règles ouvrent au client. */
   appreciations: (c) => `appreciations:${c}`,
+  /* L'avis anonyme : le compte d'un moment (avisAnonymes/{moment}), puis
+     ses réponses, lisibles seulement à partir de trois (règles). */
+  avisCompteur: (c, m) => `avis-compte:${c}:${m}`,
+  avisAnonymes: (c, m) => `avis-anonymes:${c}:${m}`,
   passages: (c) => `passages:${c}`,
   /* Les remarques libres des testeurs (campagnes/{c}/remarques). */
   remarques: (c) => `remarques:${c}`,
@@ -1145,6 +1149,13 @@ export const ecrire = {
        perdait son socle et son plafond à la création. */
     ...(d.regle === 'socle' ? { regle: 'socle', socle: Array.isArray(d.socle) ? d.socle : [], plafond: d.plafond } : {}),
     ...(d.plan === true ? { plan: true } : {}),
+    /* Ce que le testeur lit de l'application (premiers pas, « Présentation »,
+       « L'application ») : saisi dès la création, il était perdu ici et ne
+       survivait qu'à une seconde modification. */
+    application: d.application || '', accroche: d.accroche || '', presentation: d.presentation || '',
+    discours: d.discours || '', atouts: d.atouts || [], fonctionnalites: d.fonctionnalites || [],
+    consignes: d.consignes || '', acces: d.acces || {}, magasins: d.magasins || {}, installation: d.installation || {},
+    visuels: d.visuels || [],
     cree: serverTimestamp(), maj: serverTimestamp(),
   })),
   majCampagne: (pid, cid, d) => updateDoc(doc(bdd, 'projets', pid, 'campagnes', cid), nettoyer({ ...d, maj: serverTimestamp() })),

@@ -592,6 +592,7 @@ export const ETATS_REGLE = {
 export {
   FAMILLES_AVIS, MOMENTS_AVIS, famillesDu, questionsAvis, lireReponse, aRepondu, avisRepondus,
   resumeQuestionnaire, REMARQUE_MAX, remarqueAEnvoyer,
+  SEUIL_AVIS, MOMENTS_ENVOYES, estRequise, questionsRequises, validerAvis, avisRendu,
 } from './questionnaire-avis.js';
 
 export const STATUTS_TACHE = {

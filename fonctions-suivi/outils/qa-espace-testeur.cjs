@@ -56,6 +56,7 @@ let page = null;
   while (await page.$('[data-accueil="suivant"]')) { await page.click('[data-accueil="suivant"]'); n += 1; await pause(350); if (n > 12) break; }
   verifier(n === 4, `quatre écrans en tout, comme le Hub (${n})`);
   verifier(/Votre campagne vous attend/.test(await page.textContent('.ecran.actif')), 'le dernier sait que la campagne est ouverte');
+  verifier(await page.$('.ecran.actif [data-visite-demandee]'), 'et propose la visite guidée de l espace');
   await page.click('[data-accueil="fin"]'); await pause(900);
   verifier(!(await page.$('.accueil')), 'C est parti efface l accueil');
   verifier(await page.isVisible('.testeur-tete .tb-barre'), 'et la campagne est là, avec sa jauge');

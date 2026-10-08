@@ -40,6 +40,16 @@ const envoisDe = async (modele) => (((await lire('envois?pageSize=300')) || {}).
 let ok = 0; const ecarts = [];
 const verifier = (c, m, detail) => { if (c) { ok += 1; console.log(`  ok     ${m}`); } else { ecarts.push(m); console.log(`  ÉCART  ${m}${detail ? ` · ${detail}` : ''}`); } };
 let page = null;
+/* L'avis de fin, rempli comme un testeur pressé : une réponse à chaque
+   question fermée (requises), rien aux textes. Puis « Envoyer ». */
+const remplirAvis = async (p) => {
+  await p.waitForSelector('.voile [data-question] button[data-avis]', { timeout: 15000 });
+  await p.evaluate(() => document.querySelectorAll('.voile [data-question]').forEach((g) => {
+    const b = g.querySelectorAll('button[data-avis]'); if (b.length) b[Math.min(3, b.length - 1)].click();
+  }));
+  await p.click('.voile [data-envoyer]');
+  await p.waitForSelector('.voile [data-envoyer]', { state: 'detached', timeout: 20000 }).catch(() => {});
+};
 
 (async () => {
   const nav = await chromium.launch();
@@ -91,14 +101,21 @@ let page = null;
     const [scen, plat] = ref.split('__');
     await poser(`${passages}/${uid}__${ref}`, { scenario: S(scen), testeur: S(uid), plateforme: S(plat), resultat: S(ko ? 'echec' : 'reussi'), commentaire: S(ko ? 'Rien ne se passe.' : ''), preuves: L(ko ? [S(dossierPreuve)] : []), contexte: { mapValue: { fields: {} } }, cree: T(new Date()), maj: T(new Date()) });
   }
+  /* Le questionnaire est obligatoire (08/10/2026) : tout déroulé, l'avis
+     d'abord ; « J'ai terminé » n'apparaît qu'une fois l'avis envoyé. */
+  await attendre(async () => page.$('[data-fin-avis] [data-avis="apres"]'), 30, 500);
+  verifier(await page.$('[data-fin-avis] [data-avis="apres"]'), 'tout déroulé, son avis lui est demandé d abord');
+  verifier(!(await page.$('[data-terminer]')), 'et « J ai terminé » n est pas encore là');
+  await page.click('[data-fin-avis] [data-avis="apres"]');
+  await remplirAvis(page);
   await attendre(async () => page.$('[data-terminer]'), 30, 500);
-  verifier(await page.$('[data-terminer]'), 'tout déroulé, le bouton « J ai terminé » apparaît');
+  verifier(await page.$('[data-terminer]'), 'avis envoyé, le bouton « J ai terminé » apparaît');
   await page.click('[data-terminer]'); await page.waitForSelector('[data-valider]', { timeout: 10000 });
   verifier(/figés/.test(await page.textContent('.modale, .feuille')), 'il prévient que les résultats seront figés');
   /* La note du test est demandée en terminant (qa-fiche-testeur l'éprouve). */
   await page.click('[data-note-test="5"]');
   await page.click('[data-valider]'); await pause(2000);
-  if (await page.$('[data-envoyer]')) { await page.keyboard.press('Escape'); await pause(500); }
+  verifier(!(await page.$('[data-envoyer]')), 'l avis n est plus redemandé après la fin');
   verifier(/Test terminé le/.test(await page.textContent('.fin-test')), 'la page dit « Test terminé le … »');
   const campagne = await attendre(async () => { const c = await lire(`projets/${PID}/campagnes/${CID}`); return Boolean(((champ(c, 'termines').mapValue || {}).fields || {})[uid]) && Boolean(((champ(c, 'fins').mapValue || {}).fields || {})[uid]); }, 60, 500);
   verifier(campagne, 'le serveur fige (termines) et ouvre sept jours (fins) sur la campagne');

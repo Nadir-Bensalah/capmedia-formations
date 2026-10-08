@@ -22,7 +22,7 @@ import {
   EXPLICATION_A_CONFIRMER, ORIGINES_ANOMALIE, anomalieOuverte, STATUTS, TERMINES, getDoc,
   ETATS_PARCOURS, OUTILS_PARCOURS, PARCOURS_A_REGARDER, RESULTATS_PASSAGE,
   dateHeure, enDate,
-  MOMENTS_AVIS, lireReponse, avisRepondus, resumeQuestionnaire,
+  MOMENTS_AVIS, lireReponse, resumeQuestionnaire, SEUIL_AVIS, MOMENTS_ENVOYES, avisRendu,
 } from '../noyau.js';
 import {
   icone, pastille, ligne, vide, squelette, titrePage, sur, modale, toast, agir, confirmer,
@@ -129,8 +129,35 @@ const lireTout = (env) => {
    campagne par campagne : c'est la seule porte que les règles ouvrent au
    client. Le magasin garde l'identifiant du testeur (le nom du document)
    et celui de la campagne (son parent). */
-const avisDe = (campagnes) => campagnes.flatMap((c) => (magasin.lire(K.appreciations(c.id)) || [])
+/* Les traces de chaque testeur sur la campagne (premiers pas, fin de
+   test, « a répondu », note du test) : l'appréciation, que l'équipe seule
+   lit depuis le 08/10/2026. */
+const tracesDe = (campagnes) => campagnes.flatMap((c) => (magasin.lire(K.appreciations(c.id)) || [])
   .map((a) => ({ ...avecRetour(c, a), testeur: a.id, campagne: c.id })));
+
+/* L'avis anonyme (08/10/2026) : les réponses au questionnaire, rangées par
+   le serveur sans identifiant de testeur, moment par moment. Le compte de
+   chaque moment se lit toujours ; ses réponses, seulement à partir de
+   SEUIL_AVIS (les règles le tiennent, l'écran le dit). Aucune réponse ne
+   porte de nom ni de profil, pour l'équipe comme pour le client. */
+const recusDe = (campagnes) => {
+  const r = { avant: 0, apres: 0 };
+  campagnes.forEach((c) => MOMENTS_ENVOYES.forEach((m) => { r[m] += Number((magasin.lire(K.avisCompteur(c.id, m)) || {}).recus) || 0; }));
+  return r;
+};
+const avisDe = (campagnes) => campagnes.flatMap((c) => MOMENTS_ENVOYES.flatMap((m) => {
+  const n = Number((magasin.lire(K.avisCompteur(c.id, m)) || {}).recus) || 0;
+  if (n < SEUIL_AVIS) return [];
+  return (magasin.lire(K.avisAnonymes(c.id, m)) || []).map((r) => ({ ...((r && r.reponses) || {}) }));
+}));
+/* La note du test (« Le test lui-même ») : nominative, pour l'équipe seule,
+   relue dans equipe/retour. Elle rejoint la restitution de l'équipe sans
+   nom : le nom, la fiche de la campagne le donne déjà. */
+const notesTestDe = (campagnes) => tracesDe(campagnes).filter((a) => a.noteTest && typeof a.noteTest === 'object').map((a) => ({ noteTest: a.noteTest }));
+/* Combien de personnes ont répondu : le plus grand des deux moments. */
+const repondantsDe = (recus) => Math.max(recus.avant, recus.apres);
+/* Un moment qui a des réponses, mais pas encore assez pour les montrer. */
+const enAttenteDe = (recus) => MOMENTS_ENVOYES.filter((m) => recus[m] > 0 && recus[m] < SEUIL_AVIS);
 /* Les remarques libres, campagne par campagne. Les anciennes, rangées dans
    l'appréciation après la fin du test, n'ont été écrites que pour
    l'équipe : elle seule les relit, marquées comme telles. */
@@ -154,8 +181,9 @@ const sectionsDuPlan = (pid) => (pid ? rangerSections(magasin.lire(K.planTests(p
 /* Comment on nomme un testeur. L'équipe lit son prénom ; le client lit un
    numéro, le MÊME partout sur la page, du vivier aux réponses libres :
    « Testeur 2 » doit désigner la même personne dans toutes les sections,
-   sinon le numéro ne dit rien. Le profil, lui, reste : un avis de 22 ans
-   et un de 55 ans ne disent pas la même chose. */
+   sinon le numéro ne dit rien. Le profil reste dans la liste des testeurs
+   et sous les remarques libres ; les réponses au questionnaire, elles, ne
+   portent plus ni nom ni profil (avis anonyme, 08/10/2026). */
 export const nommeur = (d, { equipe, pid }) => {
   const gens = (equipe ? (d.testeurs || []) : (d.profils || [])).filter((t) => (t.projets || []).includes(pid));
   const rangs = new Map(gens.map((t, i) => [t.id, i + 1]));
@@ -233,7 +261,7 @@ const EXPLICATIONS = {
   'testeurs': { titre: 'Les testeurs', corps: `
     <p>Les personnes qui utilisent l'application pour de vrai et notent ce qui cloche. Elles ne travaillent pas sur le projet : c'est justement ce qui rend leur regard utile.</p>
     <p>Chacune teste sur son propre téléphone, iPhone ou Android, et sur le web. On s'arrange pour que les vérifications importantes soient faites par au moins deux personnes sur deux systèmes différents.</p>
-    <p>Côté client, les testeurs apparaissent sans leur nom ni leur adresse : on voit l'âge, le métier, l'aisance avec un téléphone et les appareils. C'est ce qu'il faut pour lire un avis en sachant d'où il vient, et rien de plus.</p>` },
+    <p>Côté client, les testeurs apparaissent sans leur nom ni leur adresse : on voit l'âge, le métier, l'aisance avec un téléphone et les appareils, pour savoir qui a testé quoi. Leurs réponses au questionnaire, elles, restent anonymes : aucun profil n'y est attaché.</p>` },
   'parcours': { titre: 'Les parcours automatisés', corps: `
     <p>Un parcours automatisé, c'est une vérification rejouée toute seule par un programme, à chaque nouvelle version de l'application, sans qu'un humain touche à rien. Par exemple : « créer un rappel, puis vérifier qu'il apparaît bien dans la liste ».</p>
     <p>L'intérêt : une fois écrit, il tourne à chaque fois, pour toujours. Un défaut corrigé ne peut plus revenir sans qu'on le voie.</p>
@@ -260,6 +288,7 @@ const EXPLICATIONS = {
     <p>Les scénarios disent si l'application <b>marche</b>. Le questionnaire dit si elle <b>plaît</b>, et c'est la seconde question qui décide si les gens la gardent.</p>
     <p>Chaque testeur y répond en trois temps. ${QUESTIONNAIRE.avant} questions <b>avant de commencer</b>, en deux minutes : c'est le seul regard qu'on ne retrouve jamais, une fois qu'on connaît l'application. Une note sur le test lui-même <b>en terminant</b>, lue par l'équipe Capmedia seule. Puis ${QUESTIONNAIRE.apres} questions <b>après avoir tout déroulé</b> : ${echapper(QUESTIONNAIRE.sujetsApres)}.</p>
     <p>Ce sont exactement les questions posées au testeur, dans ses mots : la page et son questionnaire lisent la même liste.</p>
+    <p>Les réponses sont <b>anonymes</b> : elles arrivent sans nom ni profil, et personne, pas même l'équipe Capmedia, ne sait qui a dit quoi. Elles ne s'affichent qu'à partir de ${SEUIL_AVIS} réponses, pour qu'aucune ne soit reconnaissable. Un testeur répond donc franchement, et c'est ce qui rend ses réponses utiles.</p>
     <p>Les notes sont des moyennes. Les réponses libres sont rendues <b>mot pour mot</b>, jamais résumées : c'est là qu'est la vraie information.</p>
     <p>Les quatre questions sur le prix ne sont pas une invention : c'est une méthode connue qui donne une <b>fourchette</b> plutôt qu'un chiffre en l'air. En dessous du bas de la fourchette, les gens se méfient de la qualité ; au-dessus du haut, ils renoncent.</p>
     <p>Quand personne n'a encore répondu, la page montre quand même toutes les questions : c'est ce qui sera demandé, et vous pouvez le lire avant que la campagne commence.</p>
@@ -832,13 +861,16 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAU
   const nommer = nommeur(d, { equipe, pid });
   /* Ne comptent que les appréciations qui portent une réponse : des
      premiers pas ou une fin de test seuls ne sont pas un avis. */
-  const avis = avisRepondus(avisDe(camp));
+  const avis = avisDe(camp);
+  const notesTest = equipe ? notesTestDe(camp) : [];
+  const recus = recusDe(camp);
+  const repondants = repondantsDe(recus);
   const remarques = remarquesDe(camp, { equipe });
   const { recommande, suspect, cher } = mesuresAvis(avis);
   const nbQuestions = resumeQuestionnaire({ pourClient: !equipe }).total;
   const resumeRemarques = remarques.length ? ` <b>${remarques.length}</b> ${remarques.length > 1 ? 'remarques libres' : 'remarque libre'}.` : '';
-  const resumeAvis = (avis.length
-    ? `<b>${avis.length}</b> ${avis.length > 1 ? 'testeurs ont répondu' : 'testeur a répondu'} au questionnaire${recommande ? `, recommandation <b>${recommande.v.toFixed(1)}</b> sur 10` : ''}${suspect && cher ? `, prix acceptable entre <b>${suspect.median}</b> et <b>${cher.median} €</b> par mois` : ''}.`
+  const resumeAvis = (repondants
+    ? `<b>${repondants}</b> ${repondants > 1 ? 'testeurs ont répondu' : 'testeur a répondu'} au questionnaire, sans leur nom${recommande ? `, recommandation <b>${recommande.v.toFixed(1)}</b> sur 10` : ''}${suspect && cher ? `, prix acceptable entre <b>${suspect.median}</b> et <b>${cher.median} €</b> par mois` : ''}.${avis.length ? '' : ` Les réponses s'affichent à partir de <b>${SEUIL_AVIS}</b>.`}`
     : `Personne n'a encore répondu. Les <b>${nbQuestions}</b> questions posées à chaque testeur sont ci-dessous.`) + resumeRemarques;
 
   /* Les onglets et leur compte : un devis absent n'a pas d'onglet. Le
@@ -940,7 +972,7 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAU
   <div id="onglet-tests" data-onglet="${actif}">
     ${actif === 'devis' ? etage('etage-devis', 'Le devis, ligne par ligne', resumeDevis, `<div style="margin-top:20px">${devisProjet.map((dv) => friseDevis(dv, jalonsProjet, { equipe, pid })).join('')}</div>`) : ''}
     ${actif === 'humains' ? `${etage('etage-humain', 'Testeurs humains', humain, `${sectionCampagnes}${sectionAnomalies}${vivierHtml({ ...d, testeurs: gens, profils: gens }, { equipe })}`)}
-      ${etage('etage-avis', 'Ce que les testeurs ont pensé de l\'app', resumeAvis, `${avisHtml(avis, { nommer, equipe })}${remarquesHtml(remarques, { nommer })}`)}` : ''}
+      ${etage('etage-avis', 'Ce que les testeurs ont pensé de l\'app', resumeAvis, `${avisHtml(avis, { nommer, equipe, recus, notesTest })}${remarquesHtml(remarques, { nommer })}`)}` : ''}
     ${actif === 'automatises' ? etage('etage-machine', 'Tests par robot', machine, `${parcoursHtml(d, { pid, equipe, plateforme })}${reglesHtml(d, { pid, equipe })}`) : ''}
     ${actif === 'problemes' ? problemesHtml(tousProblemes, { pid, equipe, filtres, plateforme, tickets: (d.tickets || []).filter((t) => t.projet === pid) }) : ''}
     ${actif === 'bibliotheque' ? etage('etage-bibli', 'Ce qu\'on vérifie', bibli, sectionScenarios) : ''}
@@ -1286,7 +1318,10 @@ const formeDe = (q) => {
   return 'Une réponse libre, rendue mot pour mot';
 };
 
-const restitutionHtml = (avis, { nommer, toutes = false, equipe = false }) => {
+/* Une empreinte stable d'un texte (FNV-1a) : l'ordre des réponses libres. */
+const empreinte = (t) => { let h = 2166136261; for (let i = 0; i < t.length; i += 1) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+
+const restitutionHtml = (avis, { toutes = false, equipe = false }) => {
   const { moyenne, euros } = mesuresAvis(avis);
   const repondu = (cle) => avis.filter((a) => lireReponse(a, cle) !== undefined);
 
@@ -1325,12 +1360,15 @@ const restitutionHtml = (avis, { nommer, toutes = false, equipe = false }) => {
         <p class="aide" style="margin-top:4px">${e.bas === e.haut ? `${pluriel(e.sur, 'réponse', 'réponses')}` : `de ${e.bas} à ${e.haut} €, sur ${pluriel(e.sur, 'réponse', 'réponses')}`}</p>
       </div>`;
     }
-    const dits = avis.map((a) => ({ texte: lireReponse(a, id), uid: a.testeur })).filter((x) => x.texte !== undefined);
+    /* Sans nom ni profil, et dans un ordre propre à chaque question : le
+       deuxième texte d'une question n'est pas celui de la même personne que
+       le deuxième de la suivante. */
+    const dits = avis.map((a) => lireReponse(a, id)).filter((x) => x !== undefined)
+      .map((texte) => ({ texte: String(texte), cle: empreinte(`${id}|${texte}`) })).sort((a, b) => a.cle - b.cle);
     return `<div class="avis-mesure">${enonce}
       <div class="avis-verbatims">${dits.map((x) => `
         <blockquote class="avis-verbatim">
-          <p>${echapper(String(x.texte))}</p>
-          <cite>${echapper(nommer(x.uid).libelle)}</cite>
+          <p>${echapper(x.texte)}</p>
         </blockquote>`).join('')}</div>
     </div>`;
   };
@@ -1345,21 +1383,29 @@ const restitutionHtml = (avis, { nommer, toutes = false, equipe = false }) => {
 
 /* Les trois chiffres qui résument un questionnaire : qui recommande, à
    quel prix, et combien de personnes l'ont dit. */
-const chiffresAvis = (avis) => {
+const chiffresAvis = (avis, repondants = avis.length) => {
   const { recommande, suspect, cher } = mesuresAvis(avis);
   return `<div class="rang chiffres-tests" style="margin-bottom:22px">
     ${recommande ? `<div class="chiffre"><span class="chiffre-valeur">${recommande.v.toFixed(1)}</span><span class="chiffre-nom">recommandation sur 10</span></div>` : ''}
     ${suspect && cher ? `<div class="chiffre"><span class="chiffre-valeur">${suspect.median} à ${cher.median} €</span><span class="chiffre-nom">fourchette acceptable</span></div>` : ''}
-    <div class="chiffre"><span class="chiffre-valeur">${avis.length}</span><span class="chiffre-nom">${avis.length > 1 ? 'testeurs ont répondu' : 'testeur a répondu'}</span></div>
+    <div class="chiffre"><span class="chiffre-valeur">${repondants}</span><span class="chiffre-nom">${repondants > 1 ? 'testeurs ont répondu' : 'testeur a répondu'}</span></div>
   </div>
-  ${suspect && cher ? `<p class="aide" style="margin-bottom:22px">En dessous de ${suspect.median} €, ils se méfient de la qualité. Au-dessus de ${cher.median} €, ils renoncent. Sur ${pluriel(avis.length, 'réponse', 'réponses')}, c'est une direction, pas une étude de marché.</p>` : ''}`;
+  ${suspect && cher ? `<p class="aide" style="margin-bottom:22px">En dessous de ${suspect.median} €, ils se méfient de la qualité. Au-dessus de ${cher.median} €, ils renoncent. Sur ${pluriel(suspect.sur, 'réponse', 'réponses')}, c'est une direction, pas une étude de marché.</p>` : ''}`;
+};
+
+/* Ce que dit la page de l'anonymat, et de ce qui attend le seuil. */
+const anonymatHtml = (recus) => {
+  const attente = enAttenteDe(recus);
+  return `<p class="aide avis-anonymat" data-avis-anonymat>Les réponses arrivent sans nom ni profil : personne, pas même l'équipe Capmedia, ne sait qui a dit quoi. Elles s'affichent à partir de ${SEUIL_AVIS} réponses, pour qu'aucune ne soit reconnaissable.${attente.length ? ` <b data-avis-attente>${attente.map((m) => `${pluriel(recus[m], 'réponse', 'réponses')} ${m === 'avant' ? 'avant le test' : 'après le test'}`).join(', ')}</b>, en attente d'en avoir ${SEUIL_AVIS}.` : ''}</p>`;
 };
 
 const ouvrirAvis = (campagne, { nommer, equipe = false }) => {
-  const avis = avisRepondus(campagne._avis || []);
+  const avis = campagne._avis || [];
+  const recus = campagne._recus || { avant: 0, apres: 0 };
+  const repondants = repondantsDe(recus);
   const remarques = campagne._remarques || [];
 
-  if (!avis.length && !remarques.length) {
+  if (!avis.length && !remarques.length && !repondants) {
     return modale({
       titre: 'Ce que les testeurs en pensent', feuille: true,
       corps: vide({ icone: 'coeur', titre: 'Aucun avis pour l\'instant',
@@ -1370,25 +1416,29 @@ const ouvrirAvis = (campagne, { nommer, equipe = false }) => {
 
   return modale({
     titre: 'Ce que les testeurs en pensent',
-    sousTitre: `${pluriel(avis.length, 'réponse', 'réponses')}${remarques.length ? ` · ${pluriel(remarques.length, 'remarque', 'remarques')}` : ''} · ${echapper(campagne.titre || '')}`,
+    sousTitre: `${pluriel(repondants, 'réponse', 'réponses')}${remarques.length ? ` · ${pluriel(remarques.length, 'remarque', 'remarques')}` : ''} · ${echapper(campagne.titre || '')}`,
     feuille: true,
-    corps: `${avis.length ? `${chiffresAvis(avis)}${restitutionHtml(avis, { nommer, equipe })}` : ''}${remarquesHtml(remarques, { nommer })}`,
+    corps: `${anonymatHtml(recus)}${avis.length ? chiffresAvis(avis, repondants) : ''}${avis.length || (campagne._notesTest || []).length ? restitutionHtml([...avis, ...(campagne._notesTest || [])], { equipe }) : ''}${remarquesHtml(remarques, { nommer })}`,
     pied: '<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>',
   }).fin;
 };
 
 /* Le questionnaire sur la page : ce qui sera demandé, et ce qui a été
    répondu, toutes campagnes du projet confondues. */
-const avisHtml = (avis, { nommer, equipe = false }) => {
+const avisHtml = (avis, { equipe = false, recus = { avant: 0, apres: 0 }, notesTest = [] }) => {
+  /* La restitution lit les réponses anonymes, et pour l'équipe la note du
+     test ; les chiffres d'en-tête, les réponses anonymes seules. */
+  const lus = [...avis, ...notesTest];
   const q = resumeQuestionnaire({ pourClient: !equipe });
   const nbQuestions = q.total;
   return `<section class="section" id="avis">
     <div class="section-tete">
-      <div><h2>Le questionnaire ${infoBouton('avis')}</h2><p class="chapo">${nbQuestions} questions en ${q.familles} familles, les mêmes que celles posées au testeur. ${q.avant} avant de commencer, ${equipe ? `${q.fin} en terminant le test (pour l'équipe seule), ` : ''}${q.apres} après avoir tout déroulé. ${avis.length ? 'Les réponses libres sont rendues mot pour mot.' : 'Personne n\'a encore répondu : voici ce qui sera demandé.'}</p></div>
+      <div><h2>Le questionnaire ${infoBouton('avis')}</h2><p class="chapo">${nbQuestions} questions en ${q.familles} familles, les mêmes que celles posées au testeur. ${q.avant} avant de commencer, ${equipe ? `${q.fin} en terminant le test (pour l'équipe seule), ` : ''}${q.apres} après avoir tout déroulé. ${avis.length ? 'Les réponses libres sont rendues mot pour mot, sans nom.' : (repondantsDe(recus) ? 'Voici ce qui est demandé.' : 'Personne n\'a encore répondu : voici ce qui sera demandé.')}</p></div>
     </div>
-    ${avis.length ? `${chiffresAvis(avis)}${restitutionHtml(avis, { nommer, toutes: true, equipe })}`
+    ${anonymatHtml(recus)}
+    ${lus.length ? `${avis.length ? chiffresAvis(avis, repondantsDe(recus)) : ''}${restitutionHtml(lus, { toutes: true, equipe })}`
     : `<button class="btn btn-secondaire btn-petit" type="button" data-plier-questions aria-expanded="false">${icone('deplier')} Voir les ${nbQuestions} questions</button>
-    <div id="questions-avis" hidden style="margin-top:14px">${restitutionHtml(avis, { nommer, toutes: true, equipe })}</div>`}
+    <div id="questions-avis" hidden style="margin-top:14px">${restitutionHtml(lus, { toutes: true, equipe })}</div>`}
   </section>`;
 };
 
@@ -1540,7 +1590,7 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
   /* Les premiers pas (l'accueil de l'espace Test) : consignés par le
      testeur dans son appréciation. L'équipe voit qui les a faits, le client
      aussi, sous le numéro. */
-  const avis = avisDe([c]);
+  const avis = tracesDe([c]);
   /* La fin de test : « termine » sur l'appréciation, la date de fin
      d'accès sur la campagne (fins), posée par le serveur et déplacée par
      l'équipe. Les remarques d'après ne se lisent qu'ici. */
@@ -1549,7 +1599,11 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
     const a = avis.find((x) => x.id === id) || {};
     return {
       id, nom: nommer(id).nom, mobile: t.mobile || '', n: clesDe(affectation, id).length, accueil: Boolean(a.accueil),
-      termine: enDate(a.termine), fin: enDate((c.fins || {})[id]), remarques: Array.isArray(a.remarques) ? a.remarques : [],
+      /* Le client ne lit plus l'appréciation : la fin de test, il la lit
+         sur la campagne (« termines », posé par le serveur). */
+      termine: enDate(a.termine) || enDate((c.termines || {})[id]), fin: enDate((c.fins || {})[id]), remarques: Array.isArray(a.remarques) ? a.remarques : [],
+      /* A répondu, oui ou non : jamais quoi (l'équipe seule). */
+      avisAvant: avisRendu(a, 'avant'), avisApres: avisRendu(a, 'apres'),
       noteTest: equipe && a.noteTest && a.noteTest.note ? a.noteTest : null,
     };
   });
@@ -1630,6 +1684,7 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
               <span>${echapper(t.nom)}${t.mobile ? ` <span class="puce puce--mini">${echapper(NOMS_PLATEFORMES[t.mobile] || t.mobile)}</span>` : ''}${nommer(t.id).traits ? ` <span class="t-micro t-3" data-profil>${echapper(nommer(t.id).traits)}</span>` : ''}</span>
               <span class="rang" style="gap:10px;align-items:center">
                 ${!equipe ? '' : t.accueil ? '<span class="pastille pastille--vert" title="A parcouru l\'accueil de son espace">Premiers pas faits</span>' : '<span class="t-micro t-3">premiers pas à faire</span>'}
+                ${!equipe ? '' : `<span class="t-micro ${t.avisApres ? 't-ok' : 't-3'}" data-a-repondu="${t.avisApres ? 'oui' : 'non'}" title="Ses réponses sont anonymes : on sait seulement s'il a répondu">Avis : ${t.avisApres ? 'oui' : (t.avisAvant ? 'première impression seulement' : 'non')}</span>`}
                 <span class="t-micro">${t.n ? pluriel(t.n, 'passage', 'passages') : 'rien encore'}</span>
               </span>
             </div>
@@ -1711,7 +1766,7 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
   if (voir) voir.addEventListener('click', () => agir(voir, async () => {
     /* Les avis de la campagne sont déjà dans le magasin, abonnés par la
        page : la feuille les lit tels quels, sans requête de plus. */
-    await ouvrirAvis({ ...c, _avis: avisDe([c]), _remarques: remarquesDe([c], { equipe }) }, { nommer, equipe });
+    await ouvrirAvis({ ...c, _avis: avisDe([c]), _notesTest: equipe ? notesTestDe([c]) : [], _recus: recusDe([c]), _remarques: remarquesDe([c], { equipe }) }, { nommer, equipe });
   }));
 
   /* L'accès d'un testeur après son test : prolonger de sept jours (depuis
@@ -1834,12 +1889,16 @@ export const vue = async (ctx, env) => {
   const campagnesSuivies = new Set();
   /* « campagne/testeur » : la note du test de chacun, pour l'équipe seule. */
   const retoursSuivis = new Set();
+  /* L'avis anonyme : le compte de chaque moment, puis ses réponses une fois
+     le seuil atteint (avant, les règles les refusent). */
+  const avisSuivis = new Set();
   const clesSuivies = () => [
     ...(env.role === 'equipe'
       ? [K.projets, K.scenariosTous, K.campagnesToutes, K.anomaliesToutes, K.parcoursTous, K.reglesToutes, K.documentsTous, K.jalonsTous, K.montantsTous, K.testeurs, K.profils, K.ticketsTous]
       : [K.projets, ...(magasin.lire(K.projets) || (env.session || {}).projets || [])
           .flatMap((p) => [K.scenarios(p.id), K.campagnes(p.id), K.anomalies(p.id), K.parcours(p.id), K.regles(p.id), K.documents(p.id), K.jalons(p.id), K.montants(p.id), K.profilsTesteurs(p.id), K.planPresentation(p.id), K.tickets(p.id)])]),
-    ...[...campagnesSuivies].flatMap((cid) => [K.appreciations(cid), K.passages(cid), K.remarques(cid)]),
+    ...[...campagnesSuivies].flatMap((cid) => [...(env.role === 'equipe' ? [K.appreciations(cid)] : []), K.passages(cid), K.remarques(cid)]),
+    ...avisSuivis,
     ...[...retoursSuivis].map((x) => K.retourTesteur(...x.split('/'))),
   ];
 
@@ -1893,12 +1952,30 @@ export const vue = async (ctx, env) => {
           lot.sur(K.retourTesteur(c.id, uid), redessiner);
         });
       }
+      MOMENTS_ENVOYES.forEach((m) => {
+        const kc = K.avisCompteur(c.id, m);
+        if (!avisSuivis.has(kc)) {
+          avisSuivis.add(kc);
+          lot.abonner(kc, () => doc(bdd, 'projets', pid, 'campagnes', c.id, 'avisAnonymes', m));
+          lot.sur(kc, redessiner);
+        }
+        const kr = K.avisAnonymes(c.id, m);
+        if (!avisSuivis.has(kr) && (Number((magasin.lire(kc) || {}).recus) || 0) >= SEUIL_AVIS) {
+          avisSuivis.add(kr);
+          lot.abonner(kr, () => collection(bdd, 'projets', pid, 'campagnes', c.id, 'avisAnonymes', m, 'reponses'));
+          lot.sur(kr, redessiner);
+        }
+      });
       if (campagnesSuivies.has(c.id)) return;
       campagnesSuivies.add(c.id);
-      lot.abonner(K.appreciations(c.id), () => collection(bdd, 'projets', pid, 'campagnes', c.id, 'appreciations'));
+      /* L'appréciation (traces, a répondu, note du test) : l'équipe seule.
+         Le client ne la lit plus depuis l'avis anonyme. */
+      if (env.role === 'equipe') {
+        lot.abonner(K.appreciations(c.id), () => collection(bdd, 'projets', pid, 'campagnes', c.id, 'appreciations'));
+        lot.sur(K.appreciations(c.id), redessiner);
+      }
       lot.abonner(K.passages(c.id), () => collection(bdd, 'projets', pid, 'campagnes', c.id, 'passages'));
       lot.abonner(K.remarques(c.id), () => collection(bdd, 'projets', pid, 'campagnes', c.id, 'remarques'));
-      lot.sur(K.appreciations(c.id), redessiner);
       lot.sur(K.passages(c.id), redessiner);
       lot.sur(K.remarques(c.id), redessiner);
     });

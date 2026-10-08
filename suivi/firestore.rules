@@ -1954,8 +1954,16 @@ service cloud.firestore {
 
         // L'appréciation : ce que le testeur pense de l'application. Une par
         // testeur et par campagne, et l'identifiant est son propre uid.
+        //
+        // Depuis le 08/10/2026, les réponses au questionnaire n'y vivent plus :
+        // le testeur les envoie au serveur (hubAvisTesteur), qui les range
+        // sans son nom dans avisAnonymes et pose ici « avisRendus » (lui
+        // seul). L'appréciation ne porte plus que des traces (premiers pas,
+        // visite guidée, fin de test, a répondu), et les anciennes réponses
+        // nominatives d'avant cette date : le client ne la lit donc plus,
+        // il lirait un « Testeur N » et son profil à côté de ses réponses.
         match /appreciations/{testeurId} {
-          allow read:   if accesProjet(projetId)
+          allow read:   if equipeSurProjet(projetId)
                         || (estTesteur() && testeurId == moi());
 
           // Bornée, comme tout ce qu'un testeur écrit : sans plafond, un
@@ -1991,23 +1999,43 @@ service cloud.firestore {
                               && texteRequis(d.remarques[d.remarques.size() - 1].get('texte', ''), 4000)))));
           }
 
+          // Ce que le testeur écrit lui-même : ses traces, rien d'autre. Ni
+          // réponse au questionnaire (elle passe par le serveur, sans son
+          // nom), ni « avisRendus » (le serveur seul le pose).
+          function champsDuTesteur() {
+            return ['accueil', 'testeur', 'maj', 'termine'];
+          }
+
+          // « J'ai terminé » : seulement une fois son avis de fin rendu, ce
+          // que le serveur a posé sur l'appréciation (avisRendus.apres). Le
+          // bouton de l'écran le suit ; c'est cette ligne qui le garantit.
+          function avisDeFinRendu() {
+            return resource != null
+              && resource.data.get('avisRendus', {}).get('apres', false) == true;
+          }
+
           allow create: if estTesteur()
             && testeurId == moi()
             && testeurDeLaCampagne(projetId, campagneId)
             && campagneOuverte(projetId, campagneId)
             && accesTesteurEnCours(projetId, campagneId)
+            && request.resource.data.keys().hasOnly(champsDuTesteur())
+            && request.resource.data.get('testeur', moi()) == moi()
             && appreciationBornee(request.resource.data, null)
-            && (!('termine' in request.resource.data) || request.resource.data.termine == request.time);
+            && !('termine' in request.resource.data);
 
           allow update: if estTesteur()
             && testeurId == moi()
             && testeurDeLaCampagne(projetId, campagneId)
             && campagneOuverte(projetId, campagneId)
             && accesTesteurEnCours(projetId, campagneId)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(champsDuTesteur())
+            && request.resource.data.get('testeur', moi()) == moi()
             && appreciationBornee(request.resource.data, resource.data)
             && ('termine' in resource.data
                   ? request.resource.data.termine == resource.data.termine
-                  : (!('termine' in request.resource.data) || request.resource.data.termine == request.time));
+                  : (!('termine' in request.resource.data)
+                     || (request.resource.data.termine == request.time && avisDeFinRendu())));
 
           // Une appréciation ne s'efface pas plus qu'un passage : c'est la
           // mémoire de la campagne, et se raviser après coup la falsifie.
@@ -2039,6 +2067,23 @@ service cloud.firestore {
               && texteBorne(request.resource.data.noteTest.get('commentaire', ''), 2000)
               && request.resource.data.noteTest.le == request.time;
             allow delete: if false;
+          }
+        }
+
+        // Les avis anonymes : les réponses au questionnaire, rangées par le
+        // serveur (hubAvisTesteur) sans identifiant de testeur ni date. Le
+        // document du moment ne porte que le compte (« recus ») ; ses
+        // réponses ne s'ouvrent à l'équipe et au client du projet qu'à
+        // partir de trois, pour qu'aucune ne soit reconnaissable. Personne
+        // ne les écrit depuis un navigateur, testeur compris.
+        match /avisAnonymes/{moment} {
+          allow read:  if accesProjet(projetId);
+          allow write: if false;
+
+          match /reponses/{reponseId} {
+            allow read:  if accesProjet(projetId)
+                         && get(/databases/$(database)/documents/projets/$(projetId)/campagnes/$(campagneId)/avisAnonymes/$(moment)).data.get('recus', 0) >= 3;
+            allow write: if false;
           }
         }
 
