@@ -19,6 +19,7 @@ import { echapper, lienPiece } from './noyau.js';
 import { icone } from './ui.js';
 import { ouvrirAccueil as ouvrirMoteur, accueilVu as vu, marquerAccueilVu as marquer, paragraphes, mascotteHtml, ecranInstallerApp, ecranPret } from './accueil.js';
 import { installable } from './installer.js';
+import { propositionVisiteHtml } from './visite-testeur.js';
 
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const CLE = (uid) => `suivi:testeur-accueil:${uid || ''}`;
@@ -54,12 +55,18 @@ const ecranApplication = (moi, c, liens) => {
   const nom = c.application || c.titre || 'L\'application';
   const visuels = (c.visuels || []).filter((v) => v && /^image\//.test(v.type || '') && v.chemin);
   const initiale = echapper(nom.trim().slice(0, 1).toUpperCase() || 'A');
+  /* Le logo de l'application, s'il est posé sur la campagne : à la place
+     de l'initiale, dès que son adresse est arrivée. */
+  const logo = c.logo && c.logo.chemin ? liens[c.logo.chemin] : '';
+  const marque = logo
+    ? `<span class="accueil-appli-icone accueil-appli-icone--logo"><img src="${echapper(logo)}" alt="" data-logo-accueil draggable="false"></span>`
+    : `<span class="accueil-appli-icone accueil-appli-icone--initiales">${initiale}</span>`;
   const visuel = visuels.length
     ? `<div class="telephone" aria-hidden="true">
         <div class="telephone-ecran"><span class="telephone-initiale">${initiale}</span>${visuels.map((v, i) => `<img${liens[v.chemin] ? ` src="${echapper(liens[v.chemin])}"` : ''} data-chemin="${echapper(v.chemin)}" alt="" class="${i === 0 ? 'actif' : ''}" draggable="false">`).join('')}</div>
         ${visuels.length > 1 ? `<span class="telephone-points">${visuels.map((v, i) => `<i class="${i === 0 ? 'actif' : ''}"></i>`).join('')}</span>` : ''}
       </div>`
-    : `<div class="accueil-appli"><span class="accueil-appli-icone accueil-appli-icone--initiales">${initiale}</span><p class="accueil-appli-nom">${echapper(nom)}</p></div>`;
+    : `<div class="accueil-appli">${marque}<p class="accueil-appli-nom">${echapper(nom)}</p></div>`;
   const tel = telephone();
   const lien = tel && /^https:\/\/[^\s"'<>]+$/.test(String((c.installation || {})[tel] || '')) ? c.installation[tel] : '';
   const atouts = (c.atouts || []).map((a) => String(a || '').trim()).filter(Boolean).slice(0, 4);
@@ -67,7 +74,7 @@ const ecranApplication = (moi, c, liens) => {
     cle: 'application',
     visuel,
     texte: `<p class="surtitre">Ce que vous allez tester</p>
-      <h2>${echapper(nom)}</h2>
+      <h2 class="accueil-appli-titre">${visuels.length ? `${marque} ` : ''}<span>${echapper(nom)}</span></h2>
       ${c.accroche ? `<p class="accroche">${echapper(c.accroche)}</p>` : ''}
       ${paragraphes(c.presentation, 1)}
       ${atouts.length ? `<ul class="atouts">${atouts.map((a) => `<li>${icone('check')}<span>${echapper(a)}</span></li>`).join('')}</ul>` : ''}
@@ -91,10 +98,17 @@ const ecranVerdicts = () => ({
    ceux du Hub (accueil.js). */
 const ecranOrdinateur = () => ecranInstallerApp('test', { texte: 'Les notifications de votre ordinateur, dès qu\'une campagne vous attend.' });
 
-const ecranFin = (moi, c) => ecranPret({
-  prenom: moi.prenom || '',
-  texte: `${c ? 'Votre campagne vous attend.' : 'Votre campagne arrive bientôt.'} Le guide du testeur et ces écrans se revoient depuis le menu de votre compte.`,
-});
+/* Le dernier écran propose la visite guidée de l'espace, sur la vraie
+   page : elle part dès que la fiche du testeur est remplie. */
+const ecranFin = (moi, c) => {
+  const e = ecranPret({
+    prenom: moi.prenom || '',
+    texte: `${c ? 'Votre campagne vous attend.' : 'Votre campagne arrive bientôt.'} Le guide du testeur et ces écrans se revoient depuis le menu de votre compte.`,
+  });
+  return { ...e, texte: `${e.texte}
+    <p class="aide">Deux minutes pour voir où tout se trouve, sur votre vraie page : la visite guidée.</p>
+    ${propositionVisiteHtml()}` };
+};
 
 /* --------------------------------------------------------------------------
    L'ouverture
@@ -124,7 +138,8 @@ export const ouvrirAccueil = ({ moi, campagne = null, surFin = null }) => {
      quelques secondes à répondre à froid) se redemande, deux fois, avant
      de laisser l'initiale tenir l'écran. */
   const chargerLiens = async (essai = 0) => {
-    const visuels = ((c && c.visuels) || []).filter((v) => v && v.chemin && !liens[v.chemin]);
+    const logo = c && c.logo && c.logo.chemin ? [{ chemin: c.logo.chemin, logo: true }] : [];
+    const visuels = [...logo, ...((c && c.visuels) || [])].filter((v) => v && v.chemin && !liens[v.chemin]);
     if (!visuels.length) return;
     await Promise.all(visuels.map(async (v) => {
       try { liens[v.chemin] = await lienPiece({ chemin: v.chemin }); } catch (e) { /* pas lisible : l'initiale tient l'écran */ }
@@ -133,6 +148,8 @@ export const ouvrirAccueil = ({ moi, campagne = null, surFin = null }) => {
       const url = liens[img.dataset.chemin];
       if (url && img.getAttribute('src') !== url) img.src = url;
     });
+    /* Le logo arrivé après le premier dessin : l'écran se redessine. */
+    if (logo.length && liens[logo[0].chemin] && !$$('[data-logo-accueil]', moteur.el).length) moteur.redessiner('application');
     if (visuels.some((v) => !liens[v.chemin]) && essai < 2 && moteur.el.isConnected) setTimeout(() => chargerLiens(essai + 1), 2500 * (essai + 1));
   };
   chargerLiens();
@@ -146,5 +163,14 @@ export const ouvrirAccueil = ({ moi, campagne = null, surFin = null }) => {
     chargerLiens();
   };
 
-  return { el: moteur.el, majCampagne, fermer: moteur.fermer, get entame() { return moteur.entame; } };
+  /* « Me faire visiter l'espace » ferme l'accueil comme « C'est parti »,
+     et laisse la demande à testeur.js (lue dans surFin). */
+  let visiteDemandee = false;
+  moteur.el.addEventListener('click', (e) => {
+    if (!e.target.closest('[data-visite-demandee]')) return;
+    visiteDemandee = true;
+    moteur.fermer();
+  });
+
+  return { el: moteur.el, majCampagne, fermer: moteur.fermer, get entame() { return moteur.entame; }, get visiteDemandee() { return visiteDemandee; } };
 };

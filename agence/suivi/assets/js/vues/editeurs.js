@@ -14,6 +14,7 @@ import {
   ETATS_PARCOURS, OUTILS_PARCOURS, FAMILLES_REGLE, ETATS_REGLE,
   GRAVITES_ANOMALIE, STATUTS_ANOMALIE,
   STATUTS_MAINTENANCE, RECONDUCTIONS_MAINTENANCE, STATUTS_SEQUENCE, STATUTS_JOURNEE, DUREES_JOURNEE, STATUTS_EVOLUTION,
+  envoyerPiece,
 } from '../noyau.js';
 import { icone, modale, confirmer, toast, lireForme, valider, obligatoire, longueurMax, urlValide, emailValide, optionsDe, depot, agir, lisible, choixPlateformes } from '../ui.js';
 import { appelServeur } from '../serveur.js';
@@ -244,6 +245,28 @@ const feuille = ({ titre, sousTitre, corps, enregistrer, libelle = 'Enregistrer'
   });
   return m.fin;
 };
+
+/* --------------------------------------------------------------------------
+   La présentation d'une application en campagne : les fonctionnalités, une
+   ligne chacune (un titre, une phrase, un écran choisi parmi ceux de la
+   campagne). Le testeur les lit une par une dans « Présentation ».
+   -------------------------------------------------------------------------- */
+const FONCTIONNALITES_MAX = 12;
+const ligneFonctionnalite = (f, i, ecrans) => `<div class="ed-fonction" data-fonction-ligne>
+    <span class="ed-fonction-numero" aria-hidden="true">${String(i + 1).padStart(2, '0')}</span>
+    <div class="ed-fonction-champs">
+      <label class="etiquette-champ" for="fct-titre-${i}">Titre</label>
+      <input class="champ" id="fct-titre-${i}" data-fct="titre" maxlength="80" value="${echapper(f.titre || '')}" placeholder="Ce que la fonctionnalité permet, en quelques mots">
+      <label class="etiquette-champ" for="fct-phrase-${i}">Une phrase</label>
+      <input class="champ" id="fct-phrase-${i}" data-fct="phrase" maxlength="220" value="${echapper(f.phrase || '')}" placeholder="Ce qu'elle change pour la personne qui l'utilise">
+      <label class="etiquette-champ" for="fct-capture-${i}">Un écran <span class="facultatif">(facultatif)</span></label>
+      <select class="select" id="fct-capture-${i}" data-fct="capture">
+        <option value="">Aucun</option>
+        ${ecrans.map((v) => `<option value="${echapper(v.chemin)}"${v.chemin === f.capture ? ' selected' : ''}>${echapper(v.nom || 'Écran')}</option>`).join('')}
+      </select>
+    </div>
+    <button class="btn btn-fantome btn-petit" type="button" data-fct-retirer aria-label="Retirer la fonctionnalité ${i + 1}">Retirer</button>
+  </div>`;
 
 /* ==========================================================================
    Les genres
@@ -563,8 +586,25 @@ const editeurs = {
           <span class="etiquette-champ">Pour les testeurs</span>
           <p class="aide">Ils le lisent dans « L'application » de leur espace, avant de commencer.</p>
           ${champ('application', "Nom de l'application", fiche ? (fiche.application || '') : '', { facultatif: true, placeholder: "Nom de l'application" })}
+          <div class="groupe" id="ed-logo-campagne">
+            <span class="etiquette-champ">Logo de l'application <span class="facultatif">(facultatif)</span></span>
+            ${fiche ? `<div class="rang" style="gap:10px;flex-wrap:wrap;align-items:center">
+              <label class="btn btn-secondaire btn-petit" style="position:relative;overflow:hidden">${fiche.logo && fiche.logo.chemin ? 'Changer le logo' : 'Choisir une image'}<input type="file" id="ed-logo-fichier" accept="image/png,image/jpeg,image/webp" style="position:absolute;inset:0;opacity:0;cursor:pointer"></label>
+              <span class="t-petit t-2" id="ed-logo-nom">${fiche.logo && fiche.logo.chemin ? echapper(fiche.logo.nom || 'Logo posé') : 'Aucun logo : le testeur voit l\'initiale du nom.'}</span>
+              ${fiche.logo && fiche.logo.chemin ? '<label class="case"><input type="checkbox" id="ed-logo-retirer"> Retirer le logo</label>' : ''}
+            </div>
+            <p class="aide">Une image carrée, PNG, JPEG ou WebP, 2 Mo au plus. Dans les premiers pas, l'en-tête de sa campagne, « L'application » et « Présentation ».</p>`
+              : '<p class="aide">Le logo se pose une fois la campagne créée.</p>'}
+          </div>
           ${champ('accroche', 'En une phrase', fiche ? (fiche.accroche || '') : '', { facultatif: true, placeholder: "Ce que l'application promet, en une phrase.", aide: 'Sous le nom, dans les premiers pas du testeur.' })}
           ${zone('presentation', 'À quoi elle sert', fiche ? (fiche.presentation || '') : '', { facultatif: true, lignes: 4, placeholder: "Ce que fait l'application, pour qui, et ce qui change dans cette version." })}
+          ${zone('discours', 'Le discours', fiche ? (fiche.discours || '') : '', { facultatif: true, lignes: 5, placeholder: "Ce que vous diriez de l'application à quelqu'un qui la découvre. Plusieurs paragraphes possibles.", aide: 'En tête de « Présentation ». Sans discours, le testeur y lit « À quoi elle sert ».' })}
+          <div class="groupe" id="ed-fonctionnalites">
+            <span class="etiquette-champ">Les fonctionnalités, une par une <span class="facultatif">(facultatif)</span></span>
+            <p class="aide">Un titre, une phrase, un écran pris parmi les captures de la campagne. Le testeur les lit dans cet ordre, dans « Présentation ».</p>
+            <div class="ed-fonctions" data-fonctions>${(fiche && Array.isArray(fiche.fonctionnalites) ? fiche.fonctionnalites : []).map((f, i) => ligneFonctionnalite(f, i, (fiche.visuels || []).filter((v) => v && /^image\//.test(v.type || '')))).join('')}</div>
+            <button class="btn btn-secondaire btn-petit" type="button" data-fct-ajouter>Ajouter une fonctionnalité</button>
+          </div>
           ${zone('atouts', 'Points forts', (fiche ? (fiche.atouts || []) : []).join('\n'), { facultatif: true, lignes: 3, placeholder: 'Un par ligne, quatre au plus.', aide: 'Ce que le testeur retient de l\'application avant de l\'ouvrir.' })}
           ${zone('consignes', "Ce qu'on attend d'eux", fiche ? (fiche.consignes || '') : '', { facultatif: true, lignes: 3, placeholder: 'Consignes particulières de la campagne.' })}
           ${zone('acces_instructions', "Pour entrer dans l'application", fiche ? ((fiche.acces || {}).instructions || '') : '', { facultatif: true, lignes: 3, placeholder: "Comment s'inscrire ou se connecter : les étapes, le code d'invitation, ce qu'il faut accepter.", aide: 'Dans « L\'application » de leur espace, avec les identifiants.' })}
@@ -617,6 +657,35 @@ const editeurs = {
         texte: 'Déposez les écrans de l\'application ici, ou <strong>choisissez-les</strong>.', aide: 'Images seulement, 10 Mo par fichier.',
       } : null,
       surMontage: (racine) => {
+        /* Les fonctionnalités : ajouter une ligne, en retirer une. */
+        const ecransImages = fiche ? (fiche.visuels || []).filter((v) => v && /^image\//.test(v.type || '')) : [];
+        const boiteFct = racine.querySelector('[data-fonctions]');
+        const renumeroter = () => boiteFct.querySelectorAll('[data-fonction-ligne]').forEach((l, i) => {
+          const n = l.querySelector('.ed-fonction-numero'); if (n) n.textContent = String(i + 1).padStart(2, '0');
+          const r = l.querySelector('[data-fct-retirer]'); if (r) r.setAttribute('aria-label', `Retirer la fonctionnalité ${i + 1}`);
+        });
+        const ajouterFct = racine.querySelector('[data-fct-ajouter]');
+        if (ajouterFct) ajouterFct.addEventListener('click', () => {
+          const n = boiteFct.querySelectorAll('[data-fonction-ligne]').length;
+          if (n >= FONCTIONNALITES_MAX) { toast(`${FONCTIONNALITES_MAX} fonctionnalités au plus.`, 'erreur'); return; }
+          boiteFct.insertAdjacentHTML('beforeend', ligneFonctionnalite({}, n, ecransImages).replace(/fct-(titre|phrase|capture)-\d+/g, `fct-$1-n${Date.now()}`));
+          renumeroter();
+          const champs = boiteFct.querySelectorAll('[data-fct="titre"]');
+          if (champs.length) champs[champs.length - 1].focus();
+        });
+        if (boiteFct) boiteFct.addEventListener('click', (e) => {
+          const b = e.target.closest('[data-fct-retirer]');
+          if (!b) return;
+          b.closest('[data-fonction-ligne]').remove();
+          renumeroter();
+        });
+        const logoEntree = racine.querySelector('#ed-logo-fichier');
+        if (logoEntree) logoEntree.addEventListener('change', () => {
+          const f = logoEntree.files && logoEntree.files[0];
+          const nom = racine.querySelector('#ed-logo-nom');
+          if (f && nom) nom.textContent = `${f.name}, posé à l'enregistrement`;
+        });
+
         const cases = [...racine.querySelectorAll(surPlan ? '[data-section]' : '[data-bloc]')];
         const compte = racine.querySelector('#compte-scenarios');
         /* Une case touchée, et seulement alors, la sélection se réécrit. */
@@ -682,6 +751,24 @@ const editeurs = {
         const deposes = (pieces || []).filter((p) => /^image\//.test(p.type || ''));
         if ((pieces || []).length !== deposes.length) { toast('Seules des images peuvent servir d\'écrans de l\'application.', 'erreur'); return false; }
         const atouts = String(d.atouts || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 4).map((x) => x.slice(0, 90));
+        /* Les fonctionnalités : une ligne sans titre ne compte pas. L'écran
+           choisi doit être l'un de ceux qu'on garde. */
+        const ecransGardes = new Set([...gardes, ...deposes].map((v) => v.chemin));
+        const fonctionnalites = [...boite.querySelectorAll('[data-fonction-ligne]')].map((l) => ({
+          titre: String((l.querySelector('[data-fct="titre"]') || {}).value || '').trim().slice(0, 80),
+          phrase: String((l.querySelector('[data-fct="phrase"]') || {}).value || '').trim().slice(0, 220),
+          capture: String((l.querySelector('[data-fct="capture"]') || {}).value || ''),
+        })).filter((f) => f.titre).slice(0, FONCTIONNALITES_MAX).map((f) => ({ ...f, capture: ecransGardes.has(f.capture) ? f.capture : '' }));
+        /* Le logo : une image envoyée dans le dossier de la campagne
+           (storage.rules : PNG, JPEG ou WebP, 2 Mo), ou retiré. */
+        let logo;
+        const fichierLogo = fiche ? ((boite.querySelector('#ed-logo-fichier') || {}).files || [])[0] : null;
+        if (fichierLogo) {
+          if (!/^image\/(png|jpeg|webp)$/.test(fichierLogo.type || '')) { toast('Le logo : une image PNG, JPEG ou WebP.', 'erreur'); return false; }
+          if (fichierLogo.size >= 2 * 1024 * 1024) { toast('Le logo tient en 2 Mo.', 'erreur'); return false; }
+        } else if (fiche && (boite.querySelector('#ed-logo-retirer') || {}).checked) {
+          logo = null;
+        }
         const seulementSocle = Boolean((boite.querySelector('#ed-socle-seul') || {}).checked);
         const sectionsPrises = new Set([...boite.querySelectorAll('[data-section]')].filter((c) => c.checked).map((c) => c.dataset.section));
         const choisies = surPlan
@@ -718,12 +805,21 @@ const editeurs = {
           toast('Une fiche de magasin est une adresse https://.', 'erreur');
           return false;
         }
+        /* Envoyé en dernier, une fois tout vérifié : un refus plus haut ne
+           laisse pas de fichier orphelin. */
+        if (fichierLogo) {
+          const p = await envoyerPiece(fichierLogo, `projets/${pid}/campagnes/${fiche.id}/logo`);
+          logo = { chemin: p.chemin, nom: p.nom, type: p.type };
+        }
         const donnees = {
           titre: d.titre, statut: d.statut,
           application: (d.application || '').trim(),
           accroche: (d.accroche || '').trim().slice(0, 140),
           presentation: (d.presentation || '').trim(),
           atouts,
+          discours: (d.discours || '').trim().slice(0, 6000),
+          fonctionnalites,
+          ...(logo !== undefined ? { logo } : {}),
           consignes: (d.consignes || '').trim(),
           /* Les instructions seules : les identifiants vivent par testeur
              (campagnes/{c}/acces/{uid}), et l'ancien bloc commun se vide

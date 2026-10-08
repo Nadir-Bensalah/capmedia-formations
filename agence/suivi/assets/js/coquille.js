@@ -466,6 +466,7 @@ const brancherCompte = () => {
       menu($('#bouton-compte'), [
         { libelle: 'Guide du testeur', icone: 'ampoule', action: () => naviguer('/guide') },
         { libelle: 'Revoir les premiers pas', icone: 'sparkle', action: revoirAccueil },
+        { libelle: 'Visite guidée', icone: 'route', action: () => document.dispatchEvent(new CustomEvent('suivi:visite-revoir')) },
         ...installer,
         { libelle: 'Clés d\'accès', icone: 'cle', action: clesAcces },
         { libelle: 'Apparence', icone: 'soleil', action: modaleTheme },

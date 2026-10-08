@@ -2543,3 +2543,85 @@ html.salle-plein .lat, html.salle-plein .haut, html.salle-plein .voile-lat, html
 .lien-partie { color: inherit; text-decoration: none; }
 .lien-partie:hover, .lien-partie:focus-visible { text-decoration: underline; text-underline-offset: 3px; }
 #versions-projet { margin-top: var(--e-7); }
+
+/* ==========================================================================
+   26. L'espace Test, 08/10/2026 : le logo de l'application testée, la
+   présentation fonctionnalité par fonctionnalité, l'avis sans nom et la
+   visite guidée. Des fonds et des retraits, jamais un liseré ni un
+   pictogramme dans une pastille : le repère vient du numéro en chasse fixe
+   et de l'ordre.
+   ========================================================================== */
+
+/* Le logo, ou l'initiale du nom, à la façon d'une icône d'application. */
+.appli-logo {
+  flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 11px; overflow: hidden;
+  background: var(--fond-2); color: var(--encre); font: 700 19px var(--titre); letter-spacing: -.02em;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, .12), 0 1px 3px rgba(0, 0, 0, .08);
+}
+.appli-logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.appli-logo--grand { width: 64px; height: 64px; border-radius: 15px; font-size: 27px; }
+.t-tete-appli { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.t-tete-nom { margin: 2px 0 0; font: 500 13px var(--police); color: var(--encre-2); }
+.pres-tete { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.accueil-appli-titre { display: flex; align-items: center; gap: 12px; }
+.accueil-appli-titre .accueil-appli-icone { width: 44px; height: 44px; border-radius: 11px; font-size: 19px; box-shadow: 0 6px 16px rgba(0, 0, 0, .14); }
+.accueil-visite { margin: 14px 0 0; }
+
+/* La présentation : le discours, puis une fonctionnalité par rangée. */
+.pres-discours .prose { max-width: 68ch; font: 400 16px/1.6 var(--police); }
+.pres-discours .prose p + p { margin-top: 12px; }
+.pres-fonctions { margin-top: var(--e-7, 40px); }
+.pres-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: 18px; }
+.pres-fonction {
+  display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 24px; align-items: center;
+  padding: 22px 24px; border-radius: var(--r-carte); background: var(--blanc); box-shadow: var(--ombre-sm), 0 0 0 1px var(--lisere-carte);
+}
+.pres-fonction--sans-capture { grid-template-columns: minmax(0, 1fr); }
+.pres-numero { display: block; font: 600 12px var(--mono); letter-spacing: .08em; color: var(--encre-3); }
+.pres-fonction h3 { margin: 6px 0 6px; font: 600 20px/1.25 var(--titre); letter-spacing: -.018em; text-wrap: balance; }
+.pres-fonction p { margin: 0; font: 400 15px/1.5 var(--police); color: var(--encre-2); max-width: 52ch; text-wrap: pretty; }
+.pres-capture { margin: 0; justify-self: center; width: 100%; max-width: 220px; aspect-ratio: 9 / 19.5; border-radius: 26px; overflow: hidden; background: var(--fond-2); box-shadow: 0 18px 40px rgba(0, 0, 0, .18), 0 2px 6px rgba(0, 0, 0, .1); }
+.pres-capture img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pres-attente { margin-top: 18px; }
+@media (max-width: 700px) {
+  .pres-fonction { grid-template-columns: minmax(0, 1fr); padding: 18px; }
+  .pres-capture { max-width: 200px; }
+}
+
+/* Dans le Cockpit, la fiche de la campagne : une ligne par fonctionnalité. */
+.ed-fonctions { display: grid; gap: 10px; margin-bottom: 10px; }
+.ed-fonction { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 12px; border-radius: 12px; background: var(--fond-2); }
+.ed-fonction-numero { padding-top: 6px; font: 600 12px var(--mono); color: var(--encre-3); }
+.ed-fonction-champs { display: grid; gap: 4px; min-width: 0; }
+.ed-fonction-champs .etiquette-champ { margin-top: 4px; }
+
+/* L'avis sans nom : ce que le testeur doit savoir avant d'écrire. */
+.avis-anonyme { margin: 0 0 18px; padding: 14px 16px; border-radius: 14px; background: var(--fond-2); }
+.avis-anonyme .surtitre { margin: 0 0 4px; }
+.avis-anonyme p:last-child { margin: 0; font: 400 14px/1.5 var(--police); color: var(--encre-2); }
+.page .avis-anonyme { margin-bottom: 22px; max-width: 80ch; }
+.groupe--manque { background: var(--ambre-clair, rgba(255, 159, 10, .12)); border-radius: 12px; padding: 10px 12px; margin-left: -12px; margin-right: -12px; }
+.avis-anonymat { margin: 0 0 16px; max-width: 80ch; }
+
+/* La visite guidée : un voile qui laisse voir l'élément, une carte. */
+.visite { position: fixed; inset: 0; z-index: 2000; }
+.visite-voile { position: absolute; inset: 0; }
+.visite-trou { position: fixed; border-radius: 14px; box-shadow: 0 0 0 200vmax rgba(0, 0, 0, .58); pointer-events: none; }
+.visite-trou[hidden] { display: none; }
+.visite:has(.visite-trou[hidden]) .visite-voile { background: rgba(0, 0, 0, .58); }
+.visite-carte {
+  position: fixed; width: min(380px, calc(100vw - 24px)); padding: 18px 20px 16px; border-radius: var(--r-carte);
+  background: var(--blanc); color: var(--encre); box-shadow: 0 24px 60px rgba(0, 0, 0, .35), 0 2px 8px rgba(0, 0, 0, .12);
+}
+.visite-carte--centre { top: 50%; left: 50%; transform: translate(-50%, -50%); }
+.visite-carte--bas { left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); top: auto; width: auto; }
+.visite-sur { margin: 0; font: 500 11.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--encre-3); }
+.visite-carte h2 { margin: 6px 0 6px; font: 600 19px/1.25 var(--titre); letter-spacing: -.018em; outline: none; }
+.visite-carte h2:focus-visible { text-decoration: underline; text-underline-offset: 4px; }
+.visite-carte p#visite-texte { margin: 0; font: 400 14.5px/1.5 var(--police); color: var(--encre-2); }
+.visite-gestes { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+.visite-pas { display: flex; gap: 8px; }
+@media (prefers-reduced-motion: no-preference) {
+  .visite--animee .visite-trou { transition: top .3s var(--courbe), left .3s var(--courbe), width .3s var(--courbe), height .3s var(--courbe); }
+  .visite--animee .visite-carte { transition: top .3s var(--courbe), left .3s var(--courbe); }
+}

@@ -202,3 +202,83 @@ export const remarqueAEnvoyer = ({ texte, scenario, plateforme } = {}) => {
   if (['ios', 'android', 'web'].includes(plateforme)) r.plateforme = plateforme;
   return { remarque: r };
 };
+
+/* --------------------------------------------------------------------------
+   L'avis anonyme (08/10/2026)
+
+   Les réponses ne s'écrivent plus dans l'appréciation du testeur : il les
+   envoie au serveur (fonction hubAvisTesteur), qui les range dans
+   projets/{p}/campagnes/{c}/avisAnonymes/{moment}/reponses/{id}, un
+   document sans identifiant de testeur ni date, et pose seulement
+   « avisRendus.{moment} : true » sur son appréciation. L'équipe sait qui a
+   répondu, jamais quoi ; personne ne lit les réponses d'un moment tant
+   qu'il y en a moins de SEUIL_AVIS (les règles le tiennent). Une fois
+   envoyé, un avis ne se relit ni ne se modifie, même par son auteur : il
+   n'y a plus rien qui le relie à lui.
+
+   Ce fichier est recopié tel quel dans fonctions-suivi/questionnaire-avis.mjs :
+   le serveur valide avec la même liste que l'écran (épreuve
+   questionnaire-avis.test.mjs, copie conforme octet pour octet).
+   -------------------------------------------------------------------------- */
+
+export const SEUIL_AVIS = 3;
+
+/* Les moments que le testeur envoie lui-même (la note du test reste à
+   part, nominative, pour l'équipe). */
+export const MOMENTS_ENVOYES = ['avant', 'apres'];
+
+/* Une question fermée (une note, un choix) est requise ; un texte libre et
+   un montant restent facultatifs : on ne force pas quelqu'un à inventer un
+   prix ou une phrase. */
+export const estRequise = (q) => ['echelle', 'note10', 'choix'].includes(q.type) && !q.facultatif;
+export const questionsRequises = (quand) => questionsAvis(quand).filter(({ q, f }) => !f.equipe && estRequise(q));
+
+export const TEXTE_AVIS_MAX = 2000;
+
+/* La réponse à une question, rendue propre, ou undefined si elle ne vaut
+   rien (vide, hors bornes, option inconnue). */
+const normaliser = (q, v) => {
+  if (v === undefined || v === null) return undefined;
+  if (q.type === 'echelle' || q.type === 'note10') {
+    const n = Number(v);
+    const max = q.type === 'echelle' ? 5 : 10;
+    const min = q.type === 'echelle' ? 1 : 0;
+    return Number.isInteger(n) && n >= min && n <= max ? n : undefined;
+  }
+  if (q.type === 'choix') return (q.options || []).includes(v) ? v : undefined;
+  if (q.type === 'euros') {
+    if (typeof v === 'string' && v.trim() === '') return undefined;
+    const n = Math.round(Number(String(v).replace(',', '.')) * 100) / 100;
+    return Number.isFinite(n) && n >= 0 && n <= 10000 ? n : undefined;
+  }
+  const t = String(v).trim();
+  return t ? t.slice(0, TEXTE_AVIS_MAX) : undefined;
+};
+
+/**
+ * Ce qui part au serveur pour un moment : { reponses } (clés
+ * « famille.question », valeurs propres), ou { erreur, manquantes }. Le
+ * serveur rappelle la même fonction : une clé inconnue ou une valeur
+ * hors bornes est refusée, jamais devinée.
+ */
+export const validerAvis = (quand, brutes) => {
+  if (!MOMENTS_ENVOYES.includes(quand)) return { erreur: 'Moment inconnu.' };
+  if (!brutes || typeof brutes !== 'object' || Array.isArray(brutes)) return { erreur: 'Réponses illisibles.' };
+  const questions = questionsAvis(quand).filter(({ f }) => !f.equipe);
+  const connues = new Map(questions.map((x) => [x.id, x.q]));
+  const inconnue = Object.keys(brutes).find((k) => !connues.has(k));
+  if (inconnue) return { erreur: `Question inconnue : ${inconnue}.` };
+  const reponses = {};
+  for (const [id, q] of connues) {
+    const brute = brutes[id];
+    const v = normaliser(q, brute);
+    if (v === undefined && brute !== undefined && brute !== null && String(brute).trim() !== '') return { erreur: `Réponse hors bornes : ${id}.` };
+    if (v !== undefined) reponses[id] = v;
+  }
+  const manquantes = questionsRequises(quand).filter(({ id }) => reponses[id] === undefined).map(({ id }) => id);
+  if (manquantes.length) return { erreur: manquantes.length > 1 ? `Il manque ${manquantes.length} réponses.` : 'Il manque une réponse.', manquantes };
+  return { reponses };
+};
+
+/* A-t-il rendu son avis anonyme pour ce moment ? Le serveur seul le pose. */
+export const avisRendu = (a, quand) => Boolean(a && a.avisRendus && a.avisRendus[quand] === true);
