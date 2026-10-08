@@ -946,7 +946,7 @@
    "nom": "Compte de test",
    "categorie": "acces",
    "url": "https://app.atelier.net/connexion",
-   "identifiants": "test@atelier.net",
+   "identifiants": "compte@atelier.exemple.test",
    "environnement": "Test",
    "composant": "",
    "description": "",
