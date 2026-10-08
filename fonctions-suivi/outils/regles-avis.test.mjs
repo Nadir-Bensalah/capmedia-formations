@@ -6,6 +6,10 @@
    campagne ouverte et tant que son accès court ; l'équipe et le client du
    projet lisent tout ; personne ne modifie ni n'efface une remarque.
 
+   L'avis anonyme (avisAnonymes/{moment}/reponses) : écrit par le serveur
+   seul, lu par l'équipe et le client du projet à partir de trois réponses.
+   « J'ai terminé » n'est possible qu'une fois l'avis de fin rendu.
+
    La note du test (appreciations/{uid}/equipe/retour) ne regarde que
    l'équipe : le client ne la lit pas, le testeur l'écrit avant d'avoir
    terminé et ne touche pas aux anciennes remarques qu'on y range.
@@ -119,6 +123,53 @@ await doit('Karim relit la sienne', getDoc(doc(karim(), `projets/atelier/campagn
 await refuse('Le client ne la lit pas', getDoc(doc(camille(), `projets/atelier/campagnes/c-fin/appreciations/${KARIM}/equipe/retour`)));
 await refuse('Sonia ne lit pas celle de Karim', getDoc(doc(sonia(), `projets/atelier/campagnes/c-fin/appreciations/${KARIM}/equipe/retour`)));
 await refuse('Un inconnu non plus', getDoc(doc(anonyme(), `projets/atelier/campagnes/c-fin/appreciations/${KARIM}/equipe/retour`)));
+
+console.log('\n== L avis anonyme : personne ne l écrit depuis un navigateur');
+/* Les réponses au questionnaire (08/10/2026) : rangées par le serveur
+   (hubAvisTesteur) dans avisAnonymes/{moment}/reponses, sans identifiant ni
+   date. Le compte du moment se lit ; les réponses, seulement à partir de
+   trois. */
+const AVIS = (m) => `projets/atelier/campagnes/c1/avisAnonymes/${m}`;
+await env.withSecurityRulesDisabled(async (ctx) => {
+  const b = ctx.firestore();
+  await setDoc(doc(b, AVIS('avant')), { recus: 2 });
+  await setDoc(doc(b, `${AVIS('avant')}/reponses/x1`), { moment: 'avant', reponses: { 'impression.compris': 4 } });
+  await setDoc(doc(b, `${AVIS('avant')}/reponses/x2`), { moment: 'avant', reponses: { 'impression.compris': 2 } });
+  await setDoc(doc(b, AVIS('apres')), { recus: 3 });
+  for (const [i, n] of [[1, 5], [2, 4], [3, 3]]) await setDoc(doc(b, `${AVIS('apres')}/reponses/y${i}`), { moment: 'apres', reponses: { 'esthetique.belle': n } });
+});
+await refuse('Karim n écrit pas une réponse anonyme lui-même', setDoc(doc(karim(), `${AVIS('apres')}/reponses/moi`), { moment: 'apres', reponses: { 'esthetique.belle': 5 } }));
+await refuse('ni n ajoute au compte', setDoc(doc(karim(), AVIS('apres')), { recus: 4 }));
+await refuse('L équipe n écrit pas de réponse à sa place', setDoc(doc(equipe(), `${AVIS('apres')}/reponses/faux`), { moment: 'apres', reponses: { 'esthetique.belle': 5 } }));
+await refuse('ni n efface une réponse', deleteDoc(doc(equipe(), `${AVIS('apres')}/reponses/y1`)));
+await refuse('Le client n écrit rien non plus', setDoc(doc(camille(), `${AVIS('apres')}/reponses/faux`), { moment: 'apres', reponses: {} }));
+
+console.log('\n== L avis anonyme : rien sous trois réponses');
+await doit('Le client lit le compte d un moment', getDoc(doc(camille(), AVIS('avant'))));
+await refuse('Deux réponses : le client ne les lit pas', getDocs(collection(camille(), `${AVIS('avant')}/reponses`)));
+await refuse('ni une à une', getDoc(doc(camille(), `${AVIS('avant')}/reponses/x1`)));
+await refuse('L équipe non plus, sous trois', getDocs(collection(equipe(), `${AVIS('avant')}/reponses`)));
+await doit('Trois réponses : le client les lit', getDocs(collection(camille(), `${AVIS('apres')}/reponses`)));
+await doit('l équipe aussi', getDocs(collection(equipe(), `${AVIS('apres')}/reponses`)));
+await refuse('Le client d un autre projet, jamais', getDocs(collection(lea(), `${AVIS('apres')}/reponses`)));
+await refuse('Un testeur ne lit pas les réponses des autres', getDocs(collection(sonia(), `${AVIS('apres')}/reponses`)));
+await refuse('ni le compte', getDoc(doc(sonia(), AVIS('apres'))));
+await refuse('Un inconnu, rien', getDoc(doc(anonyme(), AVIS('apres'))));
+
+console.log('\n== Le testeur n écrit que ses traces, et « J ai terminé » attend son avis');
+const APP = (uid, c = 'c1') => `projets/atelier/campagnes/${c}/appreciations/${uid}`;
+await doit('Sonia consigne ses premiers pas', setDoc(doc(sonia(), APP(SONIA)), { accueil: serverTimestamp(), testeur: SONIA, maj: serverTimestamp() }, { merge: true }));
+await refuse('Sonia n écrit plus de réponse dans son appréciation', setDoc(doc(sonia(), APP(SONIA)), { 'esthetique.belle': 5 }, { merge: true }));
+await refuse('ni « a répondu » à la place du serveur', setDoc(doc(sonia(), APP(SONIA)), { avisRendus: { apres: true } }, { merge: true }));
+await refuse('Sans avis de fin, pas de « J ai terminé »', setDoc(doc(sonia(), APP(SONIA)), { termine: serverTimestamp(), testeur: SONIA, maj: serverTimestamp() }, { merge: true }));
+await refuse('ni dès la création de l appréciation', setDoc(doc(karim(), APP(KARIM)), { termine: serverTimestamp(), testeur: KARIM }));
+await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), APP(SONIA)), { avisRendus: { apres: true }, testeur: SONIA }, { merge: true }); });
+await refuse('Avis rendu, mais une date inventée : refusé', setDoc(doc(sonia(), APP(SONIA)), { termine: new Date(Date.now() - 3600000), testeur: SONIA }, { merge: true }));
+await doit('Avis de fin rendu : Sonia dit « J ai terminé »', setDoc(doc(sonia(), APP(SONIA)), { termine: serverTimestamp(), testeur: SONIA, maj: serverTimestamp() }, { merge: true }));
+await refuse('Sonia ne retire pas son « a répondu »', updateDoc(doc(sonia(), APP(SONIA)), { avisRendus: {} }));
+await doit('L équipe voit qui a répondu', getDoc(doc(equipe(), APP(SONIA))));
+await refuse('Le client ne lit pas l appréciation d un testeur', getDoc(doc(camille(), APP(SONIA))));
+await refuse('ni la liste', getDocs(collection(camille(), 'projets/atelier/campagnes/c1/appreciations')));
 
 console.log(`\n${ok} contrôle(s) conforme(s)${ecarts.length ? `, ${ecarts.length} ÉCART(S) :\n  - ${ecarts.join('\n  - ')}` : ''}`);
 await env.cleanup();

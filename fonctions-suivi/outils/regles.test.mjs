@@ -464,16 +464,20 @@ console.log('\n== La plateforme de tests : la campagne close est figée');
 await doit('Karim relit une campagne close', getDoc(doc(karim(), 'projets/atelier/campagnes/close')));
 await refuse('Karim ne corrige pas un passage d une campagne close', updateDoc(doc(karim(), `projets/atelier/campagnes/close/passages/${KARIM}__ID-01`), { resultat: 'ko', preuves: ['p/3.mp4'] }));
 await refuse('Karim n ajoute pas un passage à une campagne close', setDoc(doc(karim(), CHEMIN('close', KARIM, 'DI-15', 'ios')), PASSAGE(KARIM, 'DI-15', 'ios')));
-await refuse('Karim ne dépose pas son appréciation sur une campagne close', setDoc(doc(karim(), `projets/atelier/campagnes/close/appreciations/${KARIM}`), { beaute: 5 }));
+await refuse('Karim ne dépose pas son appréciation sur une campagne close', setDoc(doc(karim(), `projets/atelier/campagnes/close/appreciations/${KARIM}`), { accueil: serverTimestamp(), testeur: KARIM }));
 
 console.log('\n== La plateforme de tests : l appréciation');
 /* Ce que le testeur pense de l'application. Une par testeur et par
    campagne, et l'identifiant est son propre uid. */
-await doit('Sonia dépose son appréciation', setDoc(doc(sonia(), `projets/atelier/campagnes/c1/appreciations/${SONIA}`), { beaute: 3, prix: 7, utile: 'oui' }));
+/* Depuis le 08/10/2026, elle ne porte plus que des traces (premiers pas,
+   fin de test, « a répondu » posé par le serveur) : les réponses passent
+   par le serveur, sans nom (regles-avis.test.mjs). */
+await doit('Sonia dépose son appréciation (ses premiers pas)', setDoc(doc(sonia(), `projets/atelier/campagnes/c1/appreciations/${SONIA}`), { accueil: serverTimestamp(), testeur: SONIA, maj: serverTimestamp() }));
+await refuse('Sonia n y écrit plus de réponse au questionnaire', setDoc(doc(sonia(), `projets/atelier/campagnes/c1/appreciations/${SONIA}`), { 'esthetique.belle': 3, testeur: SONIA }, { merge: true }));
 await doit('Karim relit la sienne', getDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`)));
 await refuse("Karim ne lit pas l'appréciation de Sonia", getDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${SONIA}`)));
-await refuse("Karim n'écrit pas au nom de Sonia", setDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${SONIA}`), { beaute: 1 }));
-await doit("Camille lit les appréciations de son projet", getDocs(collection(camille(), 'projets/atelier/campagnes/c1/appreciations')));
+await refuse("Karim n'écrit pas au nom de Sonia", setDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${SONIA}`), { accueil: serverTimestamp(), testeur: SONIA }));
+await refuse("Camille ne lit plus les appréciations (d'anciennes réponses nominatives y dorment)", getDocs(collection(camille(), 'projets/atelier/campagnes/c1/appreciations')));
 await doit("L'équipe lit les appréciations", getDocs(collection(equipe(), 'projets/atelier/campagnes/c1/appreciations')));
 
 console.log('\n== La plateforme de tests : les anomalies');
@@ -540,29 +544,18 @@ await refuse("Mais rien d'autre sur une campagne close", updateDoc(doc(equipe(),
 /* 3. L'appréciation n'avait ni borne ni protection contre l'effacement,
       alors que le passage voisin refuse les deux. Une appréciation est une
       donnée de campagne au même titre : se raviser après coup la falsifie. */
-await doit('Sonia dépose une appréciation bornée', setDoc(doc(sonia(), `projets/atelier/campagnes/c1/appreciations/${SONIA}`), { beaute: 3, prix: 7, libre: 'Rien à signaler' }));
-await refuse('Un texte libre sans fin est refusé', setDoc(doc(sonia(), `projets/atelier/campagnes/c1/appreciations/${SONIA}`), { beaute: 3, libre: 'x'.repeat(9000) }));
+await doit('Sonia met à jour ses traces', setDoc(doc(sonia(), `projets/atelier/campagnes/c1/appreciations/${SONIA}`), { accueil: serverTimestamp(), testeur: SONIA, maj: serverTimestamp() }, { merge: true }));
+await refuse('Un texte libre sans fin est refusé', setDoc(doc(sonia(), `projets/atelier/campagnes/c1/appreciations/${SONIA}`), { libre: 'x'.repeat(9000) }, { merge: true }));
 await refuse('Une appréciation ne s efface pas', deleteDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`)));
 await refuse("L'équipe non plus n'efface pas une appréciation", deleteDoc(doc(equipe(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`)));
 
-console.log('\n== La plateforme de tests : le questionnaire tient dans les bornes');
-/* Le questionnaire porte 35 questions en 7 familles, plus l'auteur et la
-   date : 37 champs. Le plafond est à 60, et cette marge doit rester
-   vérifiée, pas supposée. Une famille ajoutée sans y penser ferait
-   refuser l'enregistrement du testeur au dernier moment, après qu'il a
-   tout rempli. */
-const avisComplet = { testeur: KARIM, maj: new Date() };
-for (let f = 0; f < 7; f += 1) for (let q = 0; q < 5; q += 1) avisComplet[`f${f}.q${q}`] = q % 2 ? 'texte de réponse' : 4;
-await doit(`Karim dépose un questionnaire de ${Object.keys(avisComplet).length} champs`, setDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`), avisComplet));
-
-const trop = { testeur: KARIM };
-for (let i = 0; i < 70; i += 1) trop[`q${i}`] = i;
-await refuse('Un questionnaire démesuré est refusé', setDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`), trop));
-
-/* Les deux moments écrivent dans le même document : l'après ne doit pas
-   effacer l'avant, et la règle doit accepter la fusion. */
-await doit('La première impression se dépose seule', setDoc(doc(sonia(), `projets/atelier/campagnes/c1/appreciations/${SONIA}`), { 'impression.compris': 4, testeur: SONIA }, { merge: true }));
-await doit('Le reste vient s y ajouter', setDoc(doc(sonia(), `projets/atelier/campagnes/c1/appreciations/${SONIA}`), { 'esthetique.belle': 5, testeur: SONIA }, { merge: true }));
+console.log('\n== La plateforme de tests : une ancienne appréciation nominative');
+/* Celle de Karim porte encore des réponses d'avant l'avis anonyme
+   (« beaute », « prix ») : elles ne se migrent pas. Il met ses traces à
+   jour sans y toucher, et ne peut plus les réécrire. */
+await doit('Karim met ses traces à jour à côté des anciennes réponses', setDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`), { accueil: serverTimestamp(), testeur: KARIM, maj: serverTimestamp() }, { merge: true }));
+await refuse('mais ne réécrit pas une ancienne réponse', updateDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`), { beaute: 1 }));
+await refuse('ni ne pose « a répondu » lui-même', updateDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`), { 'avisRendus.apres': true }));
 
 console.log('\n== La plateforme de tests : les parcours automatisés');
 /* Le client les lit : savoir que quarante-huit parcours sont rejoués à
@@ -794,13 +787,23 @@ await env.withSecurityRulesDisabled(async (ctx) => {
   await setDoc(doc(b, `projets/atelier/campagnes/c-fin/appreciations/${KARIM}`), { termine: new Date(Date.now() - 3600000), remarques: [PREMIERE_REMARQUE] });
 });
 await refuse('Karim ne date pas sa fin de test lui-même', setDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`), { termine: new Date(Date.now() - 86400000) }, { merge: true }));
+/* Le questionnaire est obligatoire (08/10/2026) : « J'ai terminé » ne passe
+   qu'une fois l'avis de fin rendu, ce que seul le serveur pose. */
+await refuse('Sans son avis de fin, Karim ne dit pas « j ai terminé »', setDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`), { termine: serverTimestamp(), testeur: KARIM, maj: serverTimestamp() }, { merge: true }));
+await env.withSecurityRulesDisabled(async (ctx) => {
+  await setDoc(doc(ctx.firestore(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`), { avisRendus: { avant: true } }, { merge: true });
+});
+await refuse('ni avec sa seule première impression', setDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`), { termine: serverTimestamp(), testeur: KARIM, maj: serverTimestamp() }, { merge: true }));
+await env.withSecurityRulesDisabled(async (ctx) => {
+  await setDoc(doc(ctx.firestore(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`), { avisRendus: { apres: true } }, { merge: true });
+});
 await doit('Karim dit « j ai terminé » avec la date du serveur', setDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`), { termine: serverTimestamp(), testeur: KARIM, maj: serverTimestamp() }, { merge: true }));
 await refuse('Karim ne redate pas sa fin de test', updateDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`), { termine: serverTimestamp() }));
 await refuse('Karim ne retire pas sa fin de test', setDoc(doc(karim(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`), { beaute: 4, prix: 5, testeur: KARIM }));
 /* Les remarques ont quitté l'appréciation (campagnes/{c}/remarques) : une
    ancienne liste reste telle quelle, rien ne s'y ajoute. */
 await refuse('Karim n ajoute plus de remarque dans l appréciation', updateDoc(doc(karim(), `projets/atelier/campagnes/c-fin/appreciations/${KARIM}`), { remarques: [PREMIERE_REMARQUE, SECONDE_REMARQUE], maj: serverTimestamp() }));
-await doit('mais met à jour son appréciation sans toucher l ancienne liste', updateDoc(doc(karim(), `projets/atelier/campagnes/c-fin/appreciations/${KARIM}`), { 'esthetique.belle': 4, maj: serverTimestamp() }));
+await doit('mais met à jour son appréciation sans toucher l ancienne liste', updateDoc(doc(karim(), `projets/atelier/campagnes/c-fin/appreciations/${KARIM}`), { accueil: serverTimestamp(), maj: serverTimestamp() }));
 await refuse('Karim n efface pas une remarque', updateDoc(doc(karim(), `projets/atelier/campagnes/c-fin/appreciations/${KARIM}`), { remarques: [] }));
 await refuse('Karim ne réécrit pas une remarque déjà envoyée', updateDoc(doc(karim(), `projets/atelier/campagnes/c-fin/appreciations/${KARIM}`), { remarques: [{ texte: 'autre chose', le: new Date() }] }));
 await refuse('Une appréciation neuve ne porte pas de remarques', setDoc(doc(sonia(), `projets/atelier/campagnes/c-fin/appreciations/${SONIA}`), { remarques: [{ texte: 'x', le: new Date() }], testeur: SONIA }));
@@ -813,7 +816,7 @@ await doit('Sonia, elle, pose encore sur la même campagne', setDoc(doc(sonia(),
 await doit('Karim lit encore la campagne pendant ses sept jours', getDoc(doc(karim(), 'projets/atelier/campagnes/c-fin')));
 await refuse('Accès expiré : Karim n écrit plus son appréciation', setDoc(doc(karim(), `projets/atelier/campagnes/c-expiree/appreciations/${KARIM}`), { remarques: [{ texte: 'trop tard', le: new Date() }], testeur: KARIM }, { merge: true }));
 await refuse('ni un passage', setDoc(doc(karim(), CHEMIN('c-expiree', KARIM, 'DI-15', 'ios')), PASSAGE(KARIM, 'DI-15', 'ios')));
-await doit('Sonia, sans date de fin, écrit encore', setDoc(doc(sonia(), `projets/atelier/campagnes/c-expiree/appreciations/${SONIA}`), { 'libre.garder': 'tout', testeur: SONIA }, { merge: true }));
+await doit('Sonia, sans date de fin, écrit encore', setDoc(doc(sonia(), `projets/atelier/campagnes/c-expiree/appreciations/${SONIA}`), { accueil: serverTimestamp(), testeur: SONIA }, { merge: true }));
 await refuse('Karim ne déplace pas sa propre date de fin', updateDoc(doc(karim(), 'projets/atelier/campagnes/c-expiree'), { [`fins.${KARIM}`]: new Date(Date.now() + 86400000) }));
 await doit("L'équipe prolonge l accès d un testeur", updateDoc(doc(equipe(), 'projets/atelier/campagnes/c-expiree'), { [`fins.${KARIM}`]: new Date(Date.now() + 7 * 86400000) }));
 

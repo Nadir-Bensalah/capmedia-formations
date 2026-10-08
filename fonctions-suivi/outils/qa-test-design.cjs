@@ -187,7 +187,7 @@ const coupes = (p) => p.evaluate(() => [...document.querySelectorAll('#vue *')].
   await tel.waitForSelector('#vue .page--testeur', { timeout: 20000 }); await pause(1500);
   verifier(await tel.isVisible('#haut .pastille-beta'), '390 : « Bêta » reste visible');
   verifier(await tel.$eval('#bouton-recherche kbd', (k) => getComputedStyle(k).display === 'none').catch(() => true), '390 tactile : « ⌘K » masqué');
-  for (const [chemin, nom, sel] of [['#/', 'campagne', '#vue .page--testeur'], ['#/application', 'application', '#vue .page-tete'], ['#/signalements', 'signalements', '#vue .page-tete'], ['#/guide', 'guide', '.page--guide']]) {
+  for (const [chemin, nom, sel] of [['#/', 'campagne', '#vue .page--testeur'], ['#/presentation', 'presentation', '#vue .page--presentation'], ['#/application', 'application', '#vue .page-tete'], ['#/signalements', 'signalements', '#vue .page-tete'], ['#/guide', 'guide', '.page--guide']]) {
     await aller(tel, chemin, sel);
     const large = await tel.evaluate(() => document.documentElement.scrollWidth);
     verifier(large <= 391, `390 : ${nom} sans défilement de côté`, `${large} px`);

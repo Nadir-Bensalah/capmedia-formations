@@ -46,6 +46,9 @@ prealables() {
       node outils/semer-etapes-devis.mjs atelier d-qa --vrai ;;
     qa-espace-testeur|qa-test-design)
       node outils/semer-campagne.mjs "$PLAN_DE_TESTS" ;;
+    qa-experience-testeur)
+      node outils/semer-campagne.mjs "$PLAN_DE_TESTS"
+      node outils/semer-presentation-forgeme.mjs atelier c-oct ;;
   esac
 }
 

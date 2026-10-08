@@ -106,6 +106,7 @@ await env.withSecurityRulesDisabled(async (ctx) => {
   await uploadString(ref(s, `projets/${P}/documents/devis/ancien-devis.pdf`), 'x', 'raw', pdf);
   await uploadString(ref(s, `campagnes/${P}/st-en-cours/st-testeur/preuve.png`), 'x', 'raw', png);
   for (const c of ['st-en-cours', 'st-acces-clos', 'st-retire']) await uploadString(ref(s, `projets/${P}/campagnes/${c}/visuels/ecran.png`), 'x', 'raw', png);
+  for (const c of ['st-en-cours', 'st-acces-clos']) await uploadString(ref(s, `projets/${P}/campagnes/${c}/logo/logo.png`), 'x', 'raw', png);
   await uploadString(ref(s, 'preprojets/st-client/demande.png'), 'x', 'raw', png);
 });
 
@@ -188,6 +189,20 @@ await refuse('Accès clos : le testeur ne voit plus les écrans', getBytes(ref(t
 await refuse('Testeur retiré, jeton encore valide : plus d écrans', getBytes(ref(env.authenticatedContext('st-retire', jeton('st-retire', { testeur: true })).storage(), `projets/${P}/campagnes/st-retire/visuels/ecran.png`)));
 await doit('Le client du projet les voit', getBytes(ref(client(), `projets/${P}/campagnes/st-en-cours/visuels/ecran.png`)));
 
+console.log('\n== Le logo de l application en campagne (08/10/2026)');
+await doit('Le testeur de la campagne voit le logo', getBytes(ref(testeur(), `projets/${P}/campagnes/st-en-cours/logo/logo.png`)));
+await refuse('Un testeur hors de la campagne, non', getBytes(ref(intrus(), `projets/${P}/campagnes/st-en-cours/logo/logo.png`)));
+await refuse('Accès clos : plus de logo', getBytes(ref(testeur(), `projets/${P}/campagnes/st-acces-clos/logo/logo.png`)));
+await doit('Le client du projet le voit', getBytes(ref(client(), `projets/${P}/campagnes/st-en-cours/logo/logo.png`)));
+await doit('L équipe dépose un logo PNG', uploadString(ref(equipe(), `projets/${P}/campagnes/st-en-cours/logo/neuf.png`), 'x', 'raw', png));
+await doit('ou WebP', uploadString(ref(equipe(), `projets/${P}/campagnes/st-en-cours/logo/neuf.webp`), 'x', 'raw', { contentType: 'image/webp' }));
+await refuse('mais pas un SVG', uploadString(ref(equipe(), `projets/${P}/campagnes/st-en-cours/logo/logo.svg`), '<svg/>', 'raw', { contentType: 'image/svg+xml' }));
+await refuse('ni un PDF', uploadString(ref(equipe(), `projets/${P}/campagnes/st-en-cours/logo/logo.pdf`), 'x', 'raw', pdf));
+await refuse('ni une image de 2 Mo ou plus', uploadBytes(ref(equipe(), `projets/${P}/campagnes/st-en-cours/logo/lourd.png`), new Uint8Array(2 * MO), png));
+await refuse('Le testeur ne dépose pas de logo', uploadString(ref(testeur(), `projets/${P}/campagnes/st-en-cours/logo/moi.png`), 'x', 'raw', png));
+await refuse('ni le client', uploadString(ref(client(), `projets/${P}/campagnes/st-en-cours/logo/moi.png`), 'x', 'raw', png));
+await refuse('Personne d autre que l équipe ne liste le dossier', listAll(ref(client(), `projets/${P}/campagnes/st-en-cours/logo`)));
+
 console.log('\n== Une demande de nouveau projet');
 await doit('L équipe dépose sa réponse dans le dossier du demandeur', uploadString(ref(equipe(), 'preprojets/st-client/reponse.png'), 'x', 'raw', png));
 await doit('Le demandeur la lit', getBytes(ref(client(), 'preprojets/st-client/reponse.png')));
@@ -209,7 +224,7 @@ for (const [, ops, cond] of clausesUpdate) {
   /* Réservé à l'équipe : l'équipe entière, un administrateur, ou l'équipe
      autorisée sur le projet (Gate 2), avec ou sans contrôle du fichier. */
   /* Et, pour les pièces comptables, la finance de l'équipe (Gate 2). */
-  const reserve = c === 'false' || /^(estEquipe\(\)|estAdmin\(\)|equipeSurProjet\(projetId\)|financeGerer\(projetId\))( && fichierAccepte\(\))?$/.test(c);
+  const reserve = c === 'false' || /^(estEquipe\(\)|estAdmin\(\)|equipeSurProjet\(projetId\)|financeGerer\(projetId\))( && (fichierAccepte|logoAccepte)\(\))?$/.test(c);
   if (reserve) { ok += 1; console.log(`  ok     allow ${ops.trim()} : ${c}`); }
   else { ecarts.push(`allow ${ops.trim()} : ${c}`); console.log(`  ÉCART  allow ${ops.trim()} ouvert au-delà de l équipe : ${c}`); }
 }

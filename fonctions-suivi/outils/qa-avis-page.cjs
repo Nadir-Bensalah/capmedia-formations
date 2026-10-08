@@ -9,6 +9,11 @@ const { lireRest } = require('./lib/rest-banc.cjs');
    avec sa preuve. Ce qu'il ne voit jamais, c'est un nom : un testeur est
    un numéro, le même partout sur la page.
 
+   Depuis le 08/10/2026, les réponses au questionnaire sont anonymes pour
+   tout le monde, équipe comprise : ni nom ni profil à côté, rien sous
+   trois réponses. Une ancienne appréciation nominative (Karim) dort dans
+   la base : elle ne doit apparaître nulle part.
+
      (émulateurs avec les fonctions, semis, scénarios importés)
      node fonctions-suivi/outils/qa-avis-page.cjs
    ========================================================================== */
@@ -47,12 +52,25 @@ const nombre=(page,sel)=>page.evaluate((s)=>document.querySelectorAll(s).length,
     testeurs:L([S('uid-karim'),S('uid-sonia')]),scenarios:L([S('DI-06'),S('DI-07')]),
     affectation:M({'uid-karim':L([S('DI-06'),S('DI-07')]),'uid-sonia':L([S('DI-06')])}),maj:T(new Date())});
   await vider(`projets/atelier/campagnes/${cid}/passages`); await vider(`projets/atelier/campagnes/${cid}/appreciations`);
+  await vider(`projets/atelier/campagnes/${cid}/avisAnonymes/apres/reponses`); await vider(`projets/atelier/campagnes/${cid}/avisAnonymes/avant/reponses`);
   const passage=(uid,scen,plat,res,com,preuves,appareil)=>poser(`projets/atelier/campagnes/${cid}/passages/${uid}__${scen}`,{scenario:S(scen),testeur:S(uid),plateforme:S(plat),resultat:S(res),commentaire:S(com),preuves:L(preuves.map(S)),contexte:M({appareil:S(appareil)}),le:T(new Date())});
   await passage('uid-karim','DI-06','android','ok','Comme prévu, la date sans heure reste sans heure',[],'Pixel 8');
   await passage('uid-sonia','DI-06','ios','ko','La date sans heure affiche 00:00',['projets/atelier/preuves/qa-avis-1.png'],'iPhone 15');
   await passage('uid-karim','DI-07','web','ok','',[],'Chrome');
-  await poser(`projets/atelier/campagnes/${cid}/appreciations/uid-karim`,{'impression.sert-a-quoi':S('À gérer mes tâches et mes récurrences'),'impression.compris':N(5),'esthetique.belle':N(4),'facilite.recommande':N(8),'argent.paierait':S('Oui'),'argent.suspect':N(2),'argent.cher':N(9),'utilite.vraie-vie':S('Oui, tous les jours'),'libre.garder':S('Les récurrences, le calendrier, les objectifs')});
-  await poser(`projets/atelier/campagnes/${cid}/appreciations/uid-sonia`,{'impression.sert-a-quoi':S('Un agenda avec des objectifs'),'impression.compris':N(4),'esthetique.belle':N(3),'facilite.recommande':N(7),'argent.paierait':S('Peut-être'),'argent.suspect':N(3),'argent.cher':N(12),'utilite.vraie-vie':S('Oui, de temps en temps'),'libre.garder':S('Le calendrier, la simplicité, les couleurs')});
+  /* L'ancienne réponse nominative de Karim (avant l'avis anonyme) : elle
+     reste dans la base, et ne doit plus apparaître nulle part. */
+  await poser(`projets/atelier/campagnes/${cid}/appreciations/uid-karim`,{'impression.sert-a-quoi':S('Ancienne réponse signée Karim'),'libre.garder':S('Ancien texte nominatif'),avisRendus:M({avant:B(true),apres:B(true)})});
+  await poser(`projets/atelier/campagnes/${cid}/appreciations/uid-sonia`,{avisRendus:M({avant:B(true)})});
+  /* Les réponses anonymes, comme les range hubAvisTesteur : trois après le
+     test (lisibles), deux avant (sous le seuil). */
+  const rep=(m,id,f)=>poser(`projets/atelier/campagnes/${cid}/avisAnonymes/${m}/reponses/${id}`,{moment:S(m),reponses:M(f)});
+  await rep('apres','a1',{'esthetique.belle':N(4),'facilite.recommande':N(8),'argent.paierait':S('Oui'),'argent.suspect':N(2),'argent.cher':N(9),'utilite.vraie-vie':S('Oui, tous les jours'),'libre.garder':S('Les récurrences, le calendrier, les objectifs')});
+  await rep('apres','a2',{'esthetique.belle':N(3),'facilite.recommande':N(7),'argent.paierait':S('Peut-être'),'argent.suspect':N(3),'argent.cher':N(12),'utilite.vraie-vie':S('Oui, de temps en temps'),'libre.garder':S('Le calendrier, la simplicité, les couleurs')});
+  await rep('apres','a3',{'esthetique.belle':N(5),'facilite.recommande':N(9),'argent.paierait':S('Oui'),'argent.suspect':N(2),'argent.cher':N(10),'utilite.vraie-vie':S('Non'),'libre.garder':S('Le mode sombre, rien d autre')});
+  await poser(`projets/atelier/campagnes/${cid}/avisAnonymes/apres`,{recus:N(3)});
+  await rep('avant','b1',{'impression.sert-a-quoi':S('Un agenda avec des objectifs'),'impression.compris':N(4)});
+  await rep('avant','b2',{'impression.sert-a-quoi':S('Gérer mes tâches'),'impression.compris':N(5)});
+  await poser(`projets/atelier/campagnes/${cid}/avisAnonymes/avant`,{recus:N(2)});
   /* Le profil sans nom, recopié par le serveur sous le projet : c'est lui que le client lit. */
   for(let i=0;i<30;i++){const p=await lire('projets/atelier/profilsTesteurs/uid-sonia');if(p&&p.fields)break;await pause(700);}
 
@@ -68,15 +86,19 @@ const nombre=(page,sel)=>page.evaluate((s)=>document.querySelectorAll(s).length,
   verifier(await page.evaluate(()=>!!document.querySelector('#etage-avis')),'l étage « Ce que les testeurs ont pensé de l app » existe');
   verifier(/Ce que les testeurs ont pensé de l.app/i.test(await texte(page,'#etage-avis .etage-sur')),'sous ce titre',await texte(page,'#etage-avis .etage-sur'));
   const resume=await texte(page,'#etage-avis .etage-resume');
-  verifier(/2 testeurs ont répondu/.test(resume),'le résumé compte deux réponses',resume);
-  verifier(/7[,.]5/.test(resume),'et une recommandation de 7,5',resume);
-  verifier(/3.*12 €/.test(resume),'et une fourchette de 3 à 12 €',resume);
+  verifier(/3 testeurs ont répondu/.test(resume)&&/sans leur nom/.test(resume),'le résumé compte trois réponses, sans nom',resume);
+  verifier(/8[,.]0/.test(resume),'et une recommandation de 8,0',resume);
+  verifier(/2.*10 €/.test(resume),'et une fourchette de 2 à 10 €',resume);
   verifier(await nombre(page,'#avis .avis-famille')===8,'les huit familles sont là (le test lui-même compris)',String(await nombre(page,'#avis .avis-famille')));
   const nq=await nombre(page,'#avis .avis-question');
   verifier(nq===37,`les 37 questions de la source sont toutes visibles (${nq})`);
   const avisT=await texte(page,'#avis');
   verifier(/Les récurrences, le calendrier, les objectifs/.test(avisT),'une réponse libre est rendue mot pour mot');
-  verifier(/Karim/.test(avisT)&&/Infirmier/.test(avisT),'signée du prénom et du profil pour l équipe');
+  verifier(!/Karim|Sonia|Infirmier|Comptable|25-34|35-44/.test(avisT),'sans prénom ni profil, même pour l équipe');
+  verifier(!/Ancienne réponse signée|Ancien texte nominatif/.test(avisT),'l ancienne réponse nominative n apparaît pas');
+  verifier(await page.evaluate(()=>!document.querySelector('#avis .avis-verbatim cite')),'aucune citation n est signée');
+  verifier(/anonymes|sans nom ni profil/i.test(avisT)&&/2 réponses avant le test/.test(avisT),'la page dit l anonymat, et que deux premières impressions attendent le seuil',avisT.slice(0,300));
+  verifier(!/Un agenda avec des objectifs/.test(avisT),'les premières impressions, sous trois, ne se lisent pas');
   verifier(/Une note de 1 à 5/.test(avisT),'une question sans réponse dit ce qu elle attend');
   verifier(/Avant de commencer/i.test(avisT)&&/Après avoir tout déroulé/i.test(avisT),'chaque famille dit quand elle est posée');
   /* Plus d'onglet « Questionnaire » : l'ancienne adresse ouvre « Testeurs
@@ -112,7 +134,10 @@ const nombre=(page,sel)=>page.evaluate((s)=>document.querySelectorAll(s).length,
   await page.click('.voile [data-voir-avis]'); await pause(1800);
   const modal=await page.evaluate(()=>{const v=[...document.querySelectorAll('.voile')].pop();return v?v.innerText:'';});
   verifier(/Ce que les testeurs en pensent/.test(modal)&&/recommandation sur 10/.test(modal),'« Leur avis » ouvre toujours la restitution');
-  verifier(/Karim/.test(modal),'avec les prénoms pour l équipe');
+  verifier(!/Karim|Sonia|Infirmier/.test(modal),'sans prénom ni profil, même pour l équipe');
+  await page.keyboard.press('Escape'); await pause(400);
+  const ficheT=await texte(page,'.voile .modale-corps');
+  verifier(/Avis : oui/.test(ficheT)&&/Avis : première impression seulement/.test(ficheT),'la fiche de campagne dit seulement qui a répondu',ficheT.slice(0,300));
   await page.keyboard.press('Escape'); await pause(400); await page.keyboard.press('Escape'); await pause(400);
 
   console.log('\n== Le client : tout, sauf les noms');
@@ -122,27 +147,15 @@ const nombre=(page,sel)=>page.evaluate((s)=>document.querySelectorAll(s).length,
   await aller(cl,'/tests?onglet=avis','#etage-avis'); await pause(3000);
   verifier(await cl.evaluate(()=>!!document.querySelector('#etage-avis')),'l étage du questionnaire est chez le client');
   const resumeC=await texte(cl,'#etage-avis .etage-resume');
-  verifier(/2 testeurs ont répondu/.test(resumeC),'avec les deux réponses',resumeC);
+  verifier(/3 testeurs ont répondu/.test(resumeC),'avec les trois réponses',resumeC);
   const avisC=await texte(cl,'#avis');
   verifier(/Les récurrences, le calendrier, les objectifs/.test(avisC),'les réponses libres, intégrales');
   verifier(!/Karim|Sonia|karim\.essai|sonia\.essai/.test(avisC),'mais aucun prénom ni adresse');
-  verifier(/Testeur \d/.test(avisC),'les testeurs sont numérotés');
-  verifier(/Infirmier/.test(avisC)&&/25-34 ans/.test(avisC),'et leur profil reste');
+  verifier(!/Testeur \d/.test(avisC),'ni numéro de testeur à côté des réponses');
+  verifier(!/Infirmier|Comptable|25-34|35-44|homme|femme/.test(avisC),'ni profil (sexe, âge, métier)');
+  verifier(!/Ancienne réponse signée|Ancien texte nominatif/.test(avisC),'ni l ancienne réponse nominative');
   verifier(await nombre(cl,'#avis .avis-question')===35,'les 35 questions sont là aussi (la note du test reste à l équipe)');
-  /* Le même numéro partout : celui du vivier et celui de la citation. */
-  const numCite=await cl.evaluate(()=>{
-    const cite=[...document.querySelectorAll('#avis .avis-verbatim')].find(b=>/récurrences, le calendrier/.test(b.innerText));
-    return cite?(cite.querySelector('cite').innerText.match(/Testeur (\d+)/)||[])[1]:'';
-  });
-  /* Le vivier est dans l'onglet « Testeurs humains » : on y va pour lire son numéro. */
-  await aller(cl,'/tests?projet=atelier','#testeurs'); await pause(800);
-  const numVivier=await cl.evaluate(()=>{
-    const ligneInf=[...document.querySelectorAll('#testeurs .ligne')].map(l=>l.innerText).find(t=>/Infirmier/.test(t))||'';
-    return (ligneInf.match(/Testeur (\d+)/)||[])[1];
-  });
-  await aller(cl,'/tests?projet=atelier&onglet=avis','#avis'); await pause(800);
-  const coherence={numVivier,numCite};
-  verifier(coherence.numVivier&&coherence.numVivier===coherence.numCite,'le numéro d un testeur est le même au vivier et sous sa citation',JSON.stringify(coherence));
+  verifier(await cl.evaluate(()=>!document.querySelector('#avis .avis-verbatim cite')),'aucune citation n est signée chez le client');
   verifier(await cl.evaluate(()=>!!document.querySelector('.section--alerte, .calme')),'« Ce qui ne va pas » est aussi chez le client');
 
   await aller(cl,'/tests?projet=atelier','#campagnes'); await pause(800);

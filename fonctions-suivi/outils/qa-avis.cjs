@@ -6,10 +6,11 @@ const { lireRest } = require('./lib/rest-banc.cjs');
    Les 173 scénarios disent si l'application MARCHE. Ceci dit si elle
    PLAÎT, et c'est la seconde question qui décide du chiffre d'affaires.
 
-   Le piège gardé ici est muet : les deux moments écrivent dans le même
-   document, et un enregistrement qui remplacerait au lieu de fusionner
-   effacerait la première impression sans que personne s'en aperçoive.
-   Or c'est le seul regard qu'on ne peut pas retrouver ensuite.
+   Depuis le 08/10/2026, les réponses partent sans nom (hubAvisTesteur) :
+   un document par moment, sans identifiant, et seulement « a répondu »
+   sur l'appréciation. Gardé ici : les deux moments arrivent chacun de
+   leur côté, rien n'est perdu, rien ne dit qui ; et l'avis de fin est
+   demandé AVANT « J'ai terminé ».
 
    Cette suite attend un testeur qui n'a RIEN coché : le premier bandeau ne
    s'affiche qu'avant le premier passage. Lancée après une autre suite qui
@@ -70,6 +71,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   verifier(f.feuille,'la feuille s\'ouvre');
   verifier(f.familles.length===1,'elle ne montre que la première impression',f.familles.join('/'));
   verifier(f.questions===3,'ses trois questions',`${f.questions}`);
+  verifier(/sans votre nom/i.test(await page.evaluate(()=>((document.querySelector('.voile [data-avis-anonyme]')||{}).innerText||''))),'la feuille dit que l avis part sans nom');
 
   await page.click('[data-avis="compris"][data-valeur="4"]'); await pause(300);
   await page.fill('#av-sert-a-quoi','À ne plus repousser ce que je prévois.');
@@ -77,12 +79,15 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
 
   const a1 = await lire(`projets/atelier/campagnes/c-oct/appreciations?pageSize=20`);
   const d1 = ((a1&&a1.documents)||[])[0];
-  verifier(!!d1,'l\'avis est enregistré');
+  verifier(!!d1,'« a répondu » est posé sur son appréciation');
   if (d1) {
     const ch = Object.keys(d1.fields||{});
-    verifier(ch.includes('impression.compris'),'l\'échelle est retenue',ch.join(','));
-    verifier(ch.includes('impression.sert-a-quoi'),'le texte aussi');
+    verifier(!ch.some(k=>k.includes('.')),'mais aucune réponse n y est écrite',ch.join(','));
   }
+  const r1 = ((await lire('projets/atelier/campagnes/c-oct/avisAnonymes/avant/reponses?pageSize=20'))||{}).documents||[];
+  const rf = r1.length ? ((r1[0].fields.reponses||{}).mapValue||{}).fields||{} : {};
+  verifier(r1.length===1 && Object.keys(r1[0].fields).sort().join(',')==='moment,reponses','la première impression est rangée à part, sans identifiant');
+  verifier((rf['impression.compris']||{}).integerValue==='4' && /repousser/.test((rf['impression.sert-a-quoi']||{}).stringValue||''),'l échelle et le texte y sont');
   const apres = await page.evaluate(()=>!!document.querySelector('[data-avis="avant"]'));
   verifier(!apres,'le bandeau ne redemande plus');
 
@@ -109,13 +114,11 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   }));
   console.log('    ', fin.chapo);
   verifier(/100 %/.test(fin.chapo),'la jauge est pleine',fin.chapo);
-  /* Un seul bouton à la fin : terminer ouvre l'avis tout seul. */
-  verifier(/Terminer et donner mon avis/.test(fin.bouton),'le questionnaire complet est proposé, par « Terminer et donner mon avis »',fin.bouton);
+  /* L'avis de fin est obligatoire : il passe avant « J'ai terminé ». */
+  verifier(!fin.bouton && await page.$('.fin-test [data-avis="apres"]'),'le questionnaire complet est demandé avant « J ai terminé »',fin.bouton);
   verifier(/tout est déroulé/i.test(fin.texte),'et la page le dit',fin.texte.slice(0,50));
 
-  await page.click('.fin-test [data-terminer]'); await page.waitForSelector('[data-valider]',{timeout:10000}).catch(()=>{});
-  if (await page.$('[data-note-test="5"]')) await page.click('[data-note-test="5"]');
-  await page.click('[data-valider]'); await page.waitForSelector('[data-avis="belle"]',{timeout:15000}).catch(()=>{}); await pause(800);
+  await page.click('.fin-test [data-avis="apres"]'); await page.waitForSelector('[data-avis="belle"]',{timeout:15000}).catch(()=>{}); await pause(800);
   const f2 = await page.evaluate(()=>({
     familles: [...document.querySelectorAll('.avis-famille .bloc-tete')].map(h=>h.innerText.trim()),
     prix: document.querySelectorAll('[data-avis-champ*="cher"],[data-avis-champ*="affaire"],[data-avis-champ*="suspect"]').length,
@@ -127,6 +130,9 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   verifier(f2.prix===4,'les quatre questions de prix sont là',`${f2.prix}`);
   verifier(f2.note10===11,'la note va de 0 à 10',`${f2.note10}`);
 
+  /* Les questions fermées sont requises : une réponse à chacune, puis nos
+     valeurs à nous. */
+  await page.evaluate(()=>document.querySelectorAll('.voile [data-question]').forEach(g=>{const b=g.querySelectorAll('button[data-avis]');if(b.length)b[0].click();}));
   await page.click('[data-avis="belle"][data-valeur="4"]'); await pause(200);
   await page.click('[data-avis="recommande"][data-valeur="8"]'); await pause(200);
   await page.click('[data-avis="paierait"][data-valeur="Oui"]'); await pause(200);
@@ -135,16 +141,18 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   await page.fill('#av-garder','La vue du jour, les récurrences, la synchronisation.');
   await page.click('[data-envoyer]'); await pause(2800);
 
+  const r2 = ((await lire('projets/atelier/campagnes/c-oct/avisAnonymes/apres/reponses?pageSize=20'))||{}).documents||[];
+  const f3 = r2.length ? ((r2[0].fields.reponses||{}).mapValue||{}).fields||{} : {};
+  verifier(r2.length===1,'l avis de fin est rangé, à part de la première impression');
+  verifier((f3['esthetique.belle']||{}).integerValue==='4','le nouvel avis y est');
+  verifier(Number(((f3['argent.trop-cher']||{}).integerValue)||((f3['argent.trop-cher']||{}).doubleValue))===12,'les prix sont enregistrés');
+  verifier(/récurrences/.test((f3['libre.garder']||{}).stringValue||''),'le texte libre aussi');
+  verifier(((await lire('projets/atelier/campagnes/c-oct/avisAnonymes/avant/reponses?pageSize=20'))||{}).documents.length===1,'la première impression est conservée');
   const a2 = await lire(`projets/atelier/campagnes/c-oct/appreciations?pageSize=20`);
   const d2 = ((a2&&a2.documents)||[])[0];
-  if (d2) {
-    const ch = Object.keys(d2.fields||{});
-    verifier(ch.includes('impression.compris'),'la première impression est conservée',`${ch.length} champs`);
-    verifier(ch.includes('esthetique.belle'),'et le nouvel avis ajouté');
-    verifier(ch.includes('argent.trop-cher'),'les prix sont enregistrés');
-    verifier(ch.includes('libre.garder'),'le texte libre aussi');
-    console.log(`     ${ch.length} champs au total`);
-  } else dire('l\'avis complet n\'est pas enregistré');
+  const rendus = d2 ? (((d2.fields.avisRendus||{}).mapValue||{}).fields||{}) : {};
+  verifier((rendus.avant||{}).booleanValue===true && (rendus.apres||{}).booleanValue===true,'l appréciation dit « a répondu » aux deux moments, et rien d autre');
+  verifier(await page.$('.fin-test [data-terminer]'),'« J ai terminé » apparaît, une fois l avis envoyé');
 
   console.log('\n'+(soucis.length?`${soucis.length} ÉCART(S)`:'tout est conforme'));
   console.log('Erreurs JS :', err.length?err.slice(0,4).join('\n  '):'aucune');

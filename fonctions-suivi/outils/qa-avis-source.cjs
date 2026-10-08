@@ -69,9 +69,13 @@ const derniere=()=>{const v=[...document.querySelectorAll('.voile')];return v[v.
   await vider('projets/atelier/campagnes/c-oct/appreciations');
   await vider('projets/atelier/campagnes/c-oct/remarques');
   await poser(`projets/atelier/campagnes/c-oct/appreciations/${SONIA}`,{accueil:T(new Date()),testeur:S(SONIA)});
-  await poser(`projets/atelier/campagnes/c-oct/appreciations/${MARC}`,{
-    'facilite.recommande':N(7),'facilite.trouve':S('3'),'libre.garder':S('Le calendrier du mois, sans hésiter.'),testeur:S(MARC),
-  });
+  await poser(`projets/atelier/campagnes/c-oct/appreciations/${MARC}`,{avisRendus:{mapValue:{fields:{apres:{booleanValue:true}}}},testeur:S(MARC)});
+  /* Les réponses, anonymes depuis le 08/10/2026 : trois (le seuil), comme
+     les range hubAvisTesteur, sans nom. */
+  await vider('projets/atelier/campagnes/c-oct/avisAnonymes/apres/reponses');
+  for(const [i,g] of [[1,'Le calendrier du mois, sans hésiter.'],[2,'Les rappels.'],[3,'La liste de courses.']])
+    await poser(`projets/atelier/campagnes/c-oct/avisAnonymes/apres/reponses/r${i}`,{moment:S('apres'),reponses:{mapValue:{fields:{'facilite.recommande':N(7),'facilite.trouve':N(3),'libre.garder':S(g)}}}});
+  await poser('projets/atelier/campagnes/c-oct/avisAnonymes/apres',{recus:N(3)});
   /* La note du test et l'ancienne remarque, rangées à part (equipe/retour) :
      l'équipe seule les lit. */
   await poser(`projets/atelier/campagnes/c-oct/appreciations/${MARC}/equipe/retour`,{testeur:S(MARC),
@@ -102,7 +106,7 @@ const derniere=()=>{const v=[...document.querySelectorAll('.voile')];return v[v.
   const e1=await lirePage(eq);
   verifier(memes(e1.questions,TOUTES),`les ${TOUTES.length} questions, dans l'ordre de la source`,ecartListes(e1.questions,TOUTES));
   verifier(e1.chapo.includes(`${Q.resumeQuestionnaire().total} questions`),'le compte annoncé est celui de la source',e1.chapo.slice(0,90));
-  verifier(e1.chiffres.some(c=>/^1 testeur a répondu/.test(c)),'des premiers pas seuls ne comptent pas comme une réponse',e1.chiffres.join(' | '));
+  verifier(e1.chiffres.some(c=>/^3 testeurs ont répondu/.test(c)),'le compte vient des avis rendus, pas des premiers pas',e1.chiffres.join(' | '));
   verifier(/7\.0 \/ 10/.test(e1.avis),'la note de recommandation se lit');
   verifier(/4\.0 \/ 5/.test(e1.avis),'la note du test se lit aussi, puisqu\'elle est demandée');
   verifier(/lien TestFlight/.test(e1.avis),'l\'équipe lit le commentaire sur le test');
@@ -117,7 +121,7 @@ const derniere=()=>{const v=[...document.querySelectorAll('.voile')];return v[v.
   await cl.waitForSelector('#remarques .avis-verbatim',{timeout:20000}).catch(()=>null);
   const c1=await lirePage(cl);
   verifier(memes(c1.questions,POUR_CLIENT),`les ${POUR_CLIENT.length} questions de la source, sans celle réservée à l'équipe`,ecartListes(c1.questions,POUR_CLIENT));
-  verifier(c1.chiffres.some(c=>/^1 testeur a répondu/.test(c)),'le même compte que l\'équipe',c1.chiffres.join(' | '));
+  verifier(c1.chiffres.some(c=>/^3 testeurs ont répondu/.test(c)),'le même compte que l\'équipe',c1.chiffres.join(' | '));
   verifier(!/lien TestFlight/.test(c1.avis)&&!/4\.0 \/ 5/.test(c1.avis)&&!/Le test lui-même/.test(c1.avis),'la note du test et ses mots ne sortent pas de l\'équipe (M2)');
   const lu=await cl.evaluate(async(uid)=>{try{const m=await import('/suivi/assets/js/noyau.js');const d=await m.getDoc(m.doc(m.bdd,'projets','atelier','campagnes','c-oct','appreciations',uid,'equipe','retour'));return d.exists()?'lu':'vide';}catch(e){return String(e.code||e.message);}},MARC);
   verifier(/permission/.test(lu),'et le client ne peut pas la lire par la base non plus',lu);
@@ -134,7 +138,7 @@ const derniere=()=>{const v=[...document.querySelectorAll('.voile')];return v[v.
   const page=await te.evaluate(()=>(document.querySelector('.page')||{}).innerText||'');
   const q=Q.resumeQuestionnaire();
   verifier(page.includes(`${q.avant} questions`)&&page.includes(`${q.apres} questions`),'« Mon avis » annonce les comptes de la source',page.slice(0,160).replace(/\n/g,' '));
-  const etiquettes=async()=>te.evaluate(()=>{const v=[...document.querySelectorAll('.voile')].pop();return v?[...v.querySelectorAll('.avis-famille .etiquette-champ')].map(x=>x.innerText.trim()):[];});
+  const etiquettes=async()=>te.evaluate(()=>{const v=[...document.querySelectorAll('.voile')].pop();return v?[...v.querySelectorAll('.avis-famille .etiquette-champ')].map(x=>x.innerText.replace(/\s*\(facultatif\)\s*$/,'').trim()):[];});
   await te.click('[data-avis-page="avant"]');await pause(1300);
   const avant=await etiquettes();
   verifier(memes(avant,libelles('avant')),'la première impression pose les questions « avant » de la source',ecartListes(avant,libelles('avant')));
@@ -180,8 +184,18 @@ const derniere=()=>{const v=[...document.querySelectorAll('.voile')];return v[v.
   }
   await te.reload({waitUntil:'domcontentloaded'});await pause(5000);
   if(await te.$('.accueil')){await te.click('.accueil [data-accueil="passer"]').catch(()=>null);await pause(800);}
+  /* L'avis de fin d'abord (obligatoire depuis le 08/10/2026), puis « J'ai terminé ». */
+  const avisFin=await te.$('[data-fin-avis] [data-avis="apres"]');
+  verifier(!!avisFin,'tout déroulé, l avis de fin est demandé avant « J ai terminé »');
+  if(avisFin){
+    await avisFin.click();
+    await te.waitForSelector('.voile [data-question] button[data-avis]',{timeout:15000});
+    await te.evaluate(()=>document.querySelectorAll('.voile [data-question]').forEach(g=>{const b=g.querySelectorAll('button[data-avis]');if(b.length)b[Math.min(3,b.length-1)].click();}));
+    await te.click('.voile [data-envoyer]');
+    await te.waitForSelector('[data-terminer]',{timeout:20000}).catch(()=>null);
+  }
   const terminer=await te.$('[data-terminer]');
-  verifier(!!terminer,'« J\'ai terminé » est proposé une fois tout déroulé');
+  verifier(!!terminer,'« J\'ai terminé » est proposé une fois tout déroulé et l avis envoyé');
   if(terminer){
     await terminer.click();await pause(1200);
     const vu=await te.evaluate(()=>{const v=[...document.querySelectorAll('.voile')].pop();return v?[...v.querySelectorAll('.etiquette-champ')].map(x=>x.innerText.replace(/\s*\(facultatif\)\s*$/,'').trim()):[];});
