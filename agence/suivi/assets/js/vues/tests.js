@@ -41,6 +41,9 @@ import { filAriane } from '../coquille.js';
 import { monter as monterTableau } from './tableau.js';
 import { ordonnerSections as rangerSections } from './plan-tests.js';
 import { scenariosHumainsDuPlan, estSurLePlan, clesAttendues, vivierPropose, pretALancer, verdictDe, VERDICTS, NOMS_PLATEFORMES } from '../campagne-plan.js';
+import {
+  repartirSocle, controlerSocle, chargeSocle, retraitsConnus, proposerSocle, plafondDe, regleSocle, MOTIFS_RETRAIT, MINUTES_PAR_TEST,
+} from '../repartition.js';
 /* Les identifiants de test d'un testeur (campagnes/{c}/acces/{uid}). */
 import { doc as docAcces, getDoc as lireAcces, setDoc as poserAcces, serverTimestamp as heureServeur } from '../noyau.js';
 
@@ -1442,6 +1445,70 @@ const resultatsHtml = (c, { dedans, nommer }) => {
   </div>`;
 };
 
+/* Répartir à la règle du socle (08/10/2026) : l'aperçu, puis l'écriture.
+   Les retraits viennent du Hub (les parcours des robots et les anomalies
+   du projet, déjà dans le magasin de la page), jamais d'un fichier. Rien
+   n'est écrit avant « Enregistrer ». */
+const apercuSocle = async ({ c, pid, env, scenariosPlan, gens, garder, nommer, fermerFeuille }) => {
+  const d = lireTout(env);
+  const parcours = d.parcours.filter((x) => projetDe(x) === pid);
+  const anomalies = d.anomalies.filter((x) => projetDe(x) === pid);
+  const retraits = retraitsConnus({ scenarios: scenariosPlan, parcours, anomalies });
+  const ids = new Set(scenariosPlan.map((x) => x.id));
+  const socle = regleSocle(c) && Array.isArray(c.socle) ? c.socle.filter((x) => ids.has(x)) : proposerSocle(scenariosPlan, { retraits });
+  const plafond = plafondDe(c);
+  const r = repartirSocle(scenariosPlan, gens, { socle, plafond, retraits, garder, graine: c.id || '' });
+  const ctl = controlerSocle(r.affectation, scenariosPlan, { socle, retraits, plafond });
+  const charges = chargeSocle(r.affectation, socle);
+  const total = charges.reduce((n, x) => n + x.total, 0);
+  const nom = (id) => nommer(id).nom;
+  const PLAT = { ios: 'iPhone', android: 'Android', web: 'Web' };
+  const auxRobots = r.laisses.filter((x) => x.qui !== 'humain');
+  const personne = r.laisses.filter((x) => x.qui === 'humain');
+  const motifs = {};
+  r.retires.forEach((x) => { motifs[x.motif] = (motifs[x.motif] || 0) + 1; });
+  const socleVide = socle.filter((id) => !r.affectation || !Object.values(r.affectation).some((a) => a.cles.some((k) => k.startsWith(`${id}__`))));
+  const bloque = !ctl.conforme || r.depassements.length > 0 || !Object.keys(r.affectation).length;
+  const avant = Object.keys(c.affectation || {});
+  const dejaFaits = Object.values(garder).reduce((n, l) => n + l.length, 0);
+  const heures = (n) => `${String(Math.round(n * MINUTES_PAR_TEST / 6) / 10).replace('.', ',')} h`;
+  const corps = `
+    <p class="t-corps t-2" style="margin:0 0 14px">Le socle (${pluriel(socle.length, 'scénario', 'scénarios')}) chez tous, sur son téléphone et sur le web. Le reste une fois chacun, par priorité (haute, puis moyenne, puis basse), tiré au sort à priorité égale, jusqu'à ${plafond} tests par testeur (${heures(plafond)}).</p>
+    <table class="tableau" data-apercu-charges>
+      <thead><tr><th>Testeur</th><th>Téléphone</th><th class="droite">Socle</th><th class="droite">Reste</th><th class="droite">Dont web</th><th class="droite">Total</th><th class="droite">Heures</th></tr></thead>
+      <tbody>${charges.map((x) => `<tr data-charge="${echapper(x.id)}"><td>${echapper(nom(x.id))}</td><td>${echapper(PLAT[x.telephone] || '-')}</td><td class="droite">${x.socle}</td><td class="droite">${x.reste}</td><td class="droite">${x.webN}</td><td class="droite"><b>${x.total}</b></td><td class="droite">${heures(x.total)}</td></tr>`).join('')}</tbody>
+    </table>
+    <p class="aide" data-apercu-robots style="margin-top:12px">${pluriel(auxRobots.length, 'test laissé', 'tests laissés')} aux robots, faute de place sous le plafond.${personne.length ? ` ${pluriel(personne.length, 'test « humain » seul ne trouve', 'tests « humain » seuls ne trouvent')} pas de place : aucun robot ne les joue, ils attendront une autre campagne.` : ''}</p>
+    ${r.retires.length ? `<p class="aide" data-apercu-retires style="margin-top:8px">${pluriel(r.retires.length, 'passage retiré', 'passages retirés')} : ${Object.keys(MOTIFS_RETRAIT).filter((k) => motifs[k]).map((k) => `${motifs[k]} ${MOTIFS_RETRAIT[k]}`).join(', ')}. Un scénario « humain » seul n'est jamais retiré.</p>` : ''}
+    ${socleVide.length ? `<p class="aide" data-apercu-socle-vide style="margin-top:8px">${pluriel(socleVide.length, 'scénario du socle n\'a', 'scénarios du socle n\'ont')} aucun passage à faire (tous retirés, ou hors du téléphone des testeurs) : ${socleVide.map(echapper).join(', ')}.</p>` : ''}
+    ${r.ecartes.length ? `<p class="aide" data-apercu-ecartes style="margin-top:12px">Sans téléphone dans sa fiche, donc laissé de côté : ${r.ecartes.map((id) => echapper(nom(id))).join(', ')}.</p>` : ''}
+    ${r.depassements.length ? `<p class="aide t-alerte" data-apercu-depasse style="margin-top:12px">Le socle dépasse à lui seul le plafond chez ${r.depassements.map((x) => `${echapper(nom(x.id))} (${x.socle})`).join(', ')} : allégez le socle ou montez le plafond.</p>` : ''}
+    ${ctl.conforme ? '' : '<p class="aide t-alerte" data-apercu-controle style="margin-top:12px">Le contrôle a trouvé un écart dans ce calcul. Rien ne sera enregistré.</p>'}
+    ${avant.length ? `<p class="aide" data-apercu-ecrase style="margin-top:12px">Une répartition existe déjà (${pluriel(avant.length, 'testeur', 'testeurs')}${dejaFaits ? `, ${pluriel(dejaFaits, 'passage déjà consigné', 'passages déjà consignés')}, qui restent chez leur auteur` : ''}). Elle sera remplacée par celle-ci.</p>` : ''}`;
+  const apercu = modale({
+    titre: 'Aperçu de la répartition', sousTitre: c.titre || 'Campagne', large: true, corps,
+    pied: `<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button>
+      <button class="btn btn-principal" type="button" data-enregistrer-repartition ${bloque ? 'disabled' : ''}>${avant.length ? 'Remplacer la répartition' : 'Enregistrer la répartition'}</button>`,
+  });
+  const valider = apercu.el.querySelector('[data-enregistrer-repartition]');
+  valider.addEventListener('click', () => agir(valider, async () => {
+    if (bloque) return;
+    await ecrire.majCampagne(pid, c.id, {
+      testeurs: Object.keys(r.affectation), affectation: r.affectation,
+      regle: 'socle', socle, plafond, retraits: r.retires.map((x) => x.cle),
+      repartition: {
+        laissesAuxRobots: auxRobots.length, sansPersonne: personne.length, retires: r.retires.length,
+        motifs: { robot: motifs.robot || 0, bug: motifs.bug || 0, webVert: motifs['web-vert'] || 0 },
+        le: new Date(),
+      },
+    });
+    toast(`${total} passages répartis entre ${pluriel(Object.keys(r.affectation).length, 'testeur', 'testeurs')}. ${pluriel(auxRobots.length, 'test laissé', 'tests laissés')} aux robots.`);
+    apercu.fermer(true);
+    fermerFeuille();
+  }));
+  await apercu.fin;
+};
+
 /* L'affectation des testeurs à une campagne.
    Le calcul propose, il ne décide pas : un testeur tombe malade, un autre
    demande un bloc précis, et aucun calcul ne prévoit cela. */
@@ -1460,6 +1527,11 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
   const doubles = surPlan
     ? [...clesAttendues(dedans).values()].reduce((a, b) => a + b, 0) - dedans.length
     : dedans.filter((s) => (NIVEAUX_SCENARIO[s.niveau] || {}).double).length;
+  /* À la règle du socle, les passages sont ceux qui sont confiés, pas
+     ceux que le plan permettrait ; le reste est aux robots. */
+  const socleRegle = surPlan && regleSocle(c);
+  const passagesConfies = Object.values(c.affectation || {}).reduce((n, e) => n + clesDe({ x: e }, 'x').length, 0);
+  const bilanRepartition = c.repartition || {};
 
   const affectation = c.affectation || {};
   /* Le nom passe par le nommeur : prénom pour l'équipe, « Testeur N » pour
@@ -1534,9 +1606,11 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
     corps: `
       <div class="rang chiffres-tests" style="margin-bottom:18px">
         <div class="chiffre"><span class="chiffre-valeur">${dedans.length}</span><span class="chiffre-nom">scénarios</span></div>
-        <div class="chiffre"><span class="chiffre-valeur">${dedans.length + doubles}</span><span class="chiffre-nom">${surPlan ? 'passages' : 'passages mobiles'}</span></div>
+        <div class="chiffre"><span class="chiffre-valeur">${socleRegle ? passagesConfies : dedans.length + doubles}</span><span class="chiffre-nom">${socleRegle ? 'passages confiés' : surPlan ? 'passages' : 'passages mobiles'}</span></div>
         <div class="chiffre"><span class="chiffre-valeur">${(c.testeurs || []).length}</span><span class="chiffre-nom">testeurs</span></div>
+        ${socleRegle && equipe && Number.isFinite(bilanRepartition.laissesAuxRobots) ? `<div class="chiffre" data-chiffre-robots><span class="chiffre-valeur">${bilanRepartition.laissesAuxRobots}</span><span class="chiffre-nom">laissés aux robots</span></div>` : ''}
       </div>
+      ${socleRegle && equipe ? `<p class="aide" data-regle-socle style="margin:-6px 0 14px">Socle de ${pluriel((c.socle || []).length, 'scénario', 'scénarios')}, fait par tous. Plafond de ${plafondDe(c)} tests par testeur, soit ${Math.round(plafondDe(c) * MINUTES_PAR_TEST / 6) / 10} h. Le reste, une fois chacun, par priorité.${(c.retraits || []).length ? ` ${pluriel(c.retraits.length, 'passage retiré', 'passages retirés')} (bug déjà connu, ou déjà vert chez les robots sur le web).` : ''}</p>` : ''}
 
       ${lancementHtml}
 
@@ -1580,7 +1654,7 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
         <span class="etiquette-champ">Le vivier</span>
         <div class="cases-blocs">${vivier.map((t) => `
           <label class="case"><input type="checkbox" data-testeur="${echapper(t.id)}" ${(c.testeurs || []).includes(t.id) ? 'checked' : ''}> ${echapper(t.prenom || t.email || t.id)}${t.mobile ? ` · ${echapper((PLATEFORMES_TEST[t.mobile] || {}).court || t.mobile)}` : ''}</label>`).join('')}</div>
-        <p class="aide">Chacun fait son téléphone et le web. Un passage « humain seul » part chez deux testeurs, un passage « humain et robot » chez un seul. Répartir montre la charge de chacun avant d'enregistrer.</p>
+        <p class="aide">${socleRegle || (surPlan && (c.statut || 'preparation') === 'preparation') ? 'Chacun fait son téléphone et le web. Le socle chez tous, le reste une fois chacun, par priorité, jusqu\'au plafond. Répartir montre la charge de chacun avant d\'enregistrer.' : 'Chacun fait son téléphone et le web. Un passage « humain seul » part chez deux testeurs, un passage « humain et robot » chez un seul. Répartir montre la charge de chacun avant d\'enregistrer.'}</p>
       </div>` : ''}`,
     pied: `<button class="btn btn-secondaire" type="button" data-fermer>Fermer</button>
       <button class="btn btn-secondaire" type="button" data-voir-avis>${icone('coeur')} Leur avis</button>
@@ -1676,6 +1750,9 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
        la feuille. Une campagne d'avant le plan se passe d'abord sur le plan. */
     if (!estSurLePlan(c, toutLePlan)) { toast('Cette campagne reprend l\'ancienne bibliothèque : modifiez-la pour choisir les sections du plan, puis répartissez.', 'erreur'); return; }
     const scenariosPlan = toutLePlan.filter((s) => (c.scenarios || []).includes(s.id));
+    /* La règle du socle pour toute campagne neuve ou en préparation ; une
+       campagne lancée sous l'ancienne règle la garde jusqu'au bout. */
+    const auSocle = regleSocle(c) || (c.statut || 'preparation') === 'preparation';
     const gens = ids.map((id) => {
       const t = vivier.find((x) => x.id === id) || {};
       const siennes = Array.isArray(t.plateformes) ? t.plateformes : [];
@@ -1686,6 +1763,7 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
       if (!x.testeur || !x.scenario || !x.plateforme) return;
       (garder[x.testeur] = garder[x.testeur] || []).push(`${x.scenario}__${x.plateforme}`);
     });
+    if (auSocle) { await apercuSocle({ c, pid, env, scenariosPlan, gens, garder, nommer, fermerFeuille: () => m.fermer(true) }); return; }
     const { affectation, manques, ecartes, attendus } = repartir(scenariosPlan, gens, { garder });
     const controle = controler(affectation, scenariosPlan);
     /* Un manque se voit et s'accepte ; un écart du contrôle qui n'est pas un

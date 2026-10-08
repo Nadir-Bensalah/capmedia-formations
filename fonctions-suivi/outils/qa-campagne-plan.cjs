@@ -128,6 +128,10 @@ const SECTIONS = [
   verifier(!!camp, 'la campagne est créée');
   const cid = camp ? camp.name.split('/').pop() : '';
   verifier(camp && liste(camp.fields, 'scenarios').join(',') === 'cp-c-1,cp-c-2', 'elle retient les deux scénarios d\'humains de sa section', camp ? liste(camp.fields, 'scenarios').join(',') : '');
+  /* La règle du socle (08/10/2026) : une campagne neuve la prend, avec le
+     socle proposé (la priorité haute qui a un téléphone : cp-c-1) et le
+     plafond par défaut. */
+  verifier(camp && texte(camp.fields, 'regle') === 'socle' && liste(camp.fields, 'socle').join(',') === 'cp-c-1' && ((camp.fields.plafond || {}).integerValue === '120'), 'elle suit la règle du socle : socle proposé (cp-c-1), plafond de 120', camp ? `${texte(camp.fields, 'regle')} ${liste(camp.fields, 'socle').join(',')} ${JSON.stringify(camp.fields.plafond || {})}` : '');
 
   /* Un ancien bloc commun d'identifiants, comme en avaient les campagnes
      d'avant le 03/10/2026 : la feuille ne doit plus le réécrire. */
@@ -197,13 +201,14 @@ const SECTIONS = [
   }));
   verifier(l.lignes.join(',') === 'scenarios:1,repartition:0,installation:0,presentation:0', 'la liste dit ce qui manque, ligne par ligne', l.lignes.join(','));
   verifier(l.lancer === true, '« Lancer la campagne » est éteint', `${l.lancer}`);
-  verifier(l.chiffres.some((x) => /5 passages/.test(x)), 'la fiche compte 5 passages', l.chiffres.join(' | '));
+  verifier(l.chiffres.some((x) => /^0 passages confiés/.test(x)), 'la fiche compte les passages confiés (aucun avant de répartir)', l.chiffres.join(' | '));
   verifier(l.vivier.length === 6 && !l.vivier.some((x) => /Rita/.test(x)), 'le vivier propose les six testeurs actifs, pas la retirée', l.vivier.join(' / '));
   await fermer(page);
 
-  /* Une affectation conforme au modèle, posée comme « Répartir » la
-     poserait : chaque clé « humain » chez deux testeurs, la clé web chez
-     un seul. Avec le nom de l'application et les deux liens, tout est vrai. */
+  /* Une affectation conforme à la règle du socle, posée comme « Répartir »
+     la poserait : le socle (cp-c-1) chez chacun sur son téléphone, la clé
+     web une seule fois. Avec le nom de l'application et les deux liens,
+     tout est vrai. */
   const affectation = {
     [karim]: { telephone: 'ios', web: true, cles: ['cp-c-1__ios', 'cp-c-2__web'], vague: 1 },
     [marc]: { telephone: 'ios', web: true, cles: ['cp-c-1__ios'], vague: 1 },

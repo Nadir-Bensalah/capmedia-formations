@@ -20,6 +20,7 @@ import { appelServeur } from '../serveur.js';
 import * as magasin from '../magasin.js';
 import { K, ecrire, nouvelId, interneDuProjet, montantDe, horodatage } from '../donnees.js';
 import { scenariosHumainsDuPlan, estSurLePlan, sectionsCochees, scenariosAEcrire, clesAttendues, nombreDeCles, pretALancer, NOMS_PLATEFORMES } from '../campagne-plan.js';
+import { proposerSocle, retraitsConnus, plafondDe, regleSocle, PLAFOND_DEFAUT, MINUTES_PAR_TEST, SECTIONS_CRITIQUES } from '../repartition.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 
@@ -513,6 +514,31 @@ const editeurs = {
     });
     const cochees = sectionsCochees(fiche, humains);
     const ancienne = Boolean(fiche) && surPlan && !estSurLePlan(fiche, humains);
+    /* La règle du socle (08/10/2026) : un socle décisif fait par tous, un
+       plafond par testeur, le reste une fois chacun par priorité. Une
+       campagne neuve ou en préparation la prend ; une campagne déjà lancée
+       sous l'ancienne règle la garde jusqu'au bout. */
+    const avecSocle = surPlan && !ancienne && (!fiche || regleSocle(fiche) || (fiche.statut || 'preparation') === 'preparation');
+    const parcoursProjet = [...(magasin.lire(K.parcours(pid)) || []), ...(magasin.lire(K.parcoursTous) || []).filter((x) => (x.projet || x._parent) === pid)]
+      .filter((x, i, l) => l.findIndex((y) => y.ref === x.ref) === i);
+    const anomaliesProjet = [...(magasin.lire(K.anomalies(pid)) || []), ...(magasin.lire(K.anomaliesToutes) || []).filter((x) => (x.projet || x._parent) === pid)]
+      .filter((x, i, l) => l.findIndex((y) => y.id === x.id) === i);
+    const retraitsSocle = avecSocle ? retraitsConnus({ scenarios: humains, parcours: parcoursProjet, anomalies: anomaliesProjet }) : new Map();
+    const soclePropose = avecSocle ? proposerSocle(humains, { retraits: retraitsSocle }) : [];
+    const socleAvant = fiche && regleSocle(fiche) && Array.isArray(fiche.socle) ? fiche.socle : null;
+    const socleChoisi = new Set(socleAvant || soclePropose);
+    /* Les candidats : les scénarios humains de priorité haute, les
+       sections critiques d'abord. */
+    const candidatsSocle = humains.filter((x) => x.priorite === 'haute' || socleChoisi.has(x.id));
+    const sectionsSocle = [];
+    candidatsSocle.forEach((x) => {
+      let g = sectionsSocle.find((y) => y.cle === x.section);
+      if (!g) { g = { cle: x.section, libelle: x.sectionTitre, items: [] }; sectionsSocle.push(g); }
+      g.items.push(x);
+    });
+    const rangCritique = (k) => { const i = SECTIONS_CRITIQUES.indexOf(k); return i < 0 ? 99 : i; };
+    sectionsSocle.sort((a, b) => rangCritique(a.cle) - rangCritique(b.cle));
+    const plafondAvant = fiche ? plafondDe(fiche) : PLAFOND_DEFAUT;
     /* L'équipe lit les scénarios en groupe, tous projets confondus : la
        clé par projet n'est alimentée que côté client. On prend la première
        qui répond, et on retient ceux de ce projet. */
@@ -599,7 +625,21 @@ const editeurs = {
           <div class="cases-blocs">${sectionsPlan.map((b) => `
             <label class="case"><input type="checkbox" data-section="${echapper(b.cle)}"${cochees.has(b.cle) ? ' checked' : ''}> ${echapper(b.libelle)} <span class="badge">${b.n}</span></label>`).join('')}</div>
           <p class="aide" id="compte-scenarios"></p>
-        </div>` : `<div class="groupe">
+        </div>
+        ${avecSocle ? `<div class="groupe" data-socle-groupe>
+          <span class="etiquette-champ">Le socle décisif</span>
+          <p class="aide">Fait par tous les testeurs, sur leur téléphone, et sur le web quand le scénario y existe. Aucun bug n'y est toléré : inscription, connexion, session, premier lancement, tâches, abonnement et achat, synchro, compte, données. La proposition prend la priorité haute de ces sections ; cochez ou décochez.</p>
+          <p class="aide" id="compte-socle"></p>
+          <div class="rang" style="gap:8px;flex-wrap:wrap;margin-bottom:10px">
+            <button class="btn btn-secondaire btn-petit" type="button" data-socle-proposer>Reprendre la proposition (${soclePropose.length})</button>
+            <button class="btn btn-secondaire btn-petit" type="button" data-socle-vider>Vider le socle</button>
+          </div>
+          <details data-socle-liste><summary class="t-petit">Les scénarios de priorité haute (${candidatsSocle.length})</summary>
+            ${sectionsSocle.map((g) => `<p class="t-micro t-3" style="margin:10px 0 4px">${echapper(g.libelle)}</p>
+              <div class="liste liste--serree">${g.items.map((x) => `<label class="case"><input type="checkbox" data-socle="${echapper(x.id)}"${socleChoisi.has(x.id) ? ' checked' : ''}> <span class="t-micro t-3">${echapper(x.id)}</span> ${echapper(x.titre || x.id)}</label>`).join('')}</div>`).join('')}
+          </details>
+        </div>
+        ${champ('plafond', 'Plafond par testeur', String(plafondAvant), { type: 'number', attrs: 'min="1" max="1000" step="1"', aide: `Le nombre de tests au plus pour chacun, socle compris, à ${MINUTES_PAR_TEST} minutes le test : ${PLAFOND_DEFAUT} tests font 10 heures. Ce qui ne rentre pas reste aux robots.` })}` : ''}` : `<div class="groupe">
           <span class="etiquette-champ">Scénarios déroulés</span>
           <div class="rang" style="gap:8px;flex-wrap:wrap;margin-bottom:10px">
             <button class="btn btn-secondaire btn-petit" type="button" data-tout>Tous les blocs</button>
@@ -656,7 +696,29 @@ const editeurs = {
             : (ancienne ? 'Aucune section cochée : la campagne garde sa sélection d\'avant.' : 'Aucun scénario : la campagne n\'aurait rien à distribuer.');
         };
 
+        /* Le socle : combien de scénarios, et le temps qu'il prend à
+           chacun au plus (tous ses passages au téléphone et au web). */
+        const casesSocle = [...racine.querySelectorAll('[data-socle]')];
+        const compteSocle = racine.querySelector('#compte-socle');
+        const majSocle = () => {
+          if (!compteSocle) return;
+          const pris = new Set(casesSocle.filter((c) => c.checked).map((c) => c.dataset.socle));
+          const sections = new Set(cases.filter((c) => c.checked).map((c) => c.dataset.section));
+          const dehors = humains.filter((x) => pris.has(x.id) && !sections.has(x.section)).length;
+          const parTel = Math.max(0, ...['ios', 'android'].map((t) => humains.filter((x) => pris.has(x.id) && sections.has(x.section))
+            .reduce((n, x) => n + (x.plateformes || []).filter((p) => p === t || p === 'web').length, 0)));
+          compteSocle.textContent = pris.size
+            ? `${pris.size} ${pris.size > 1 ? 'scénarios' : 'scénario'} dans le socle, soit ${parTel} tests au plus par testeur (${Math.round(parTel * MINUTES_PAR_TEST / 6) / 10} h).${dehors ? ` ${dehors} hors des sections cochées : ${dehors > 1 ? 'ils ne seront pas faits' : 'il ne sera pas fait'}.` : ''}`
+            : 'Aucun scénario dans le socle : chaque test ne sera fait qu\'une fois.';
+        };
+        casesSocle.forEach((c) => c.addEventListener('change', () => { racine.dataset.socleTouche = '1'; majSocle(); }));
+        const proposer = racine.querySelector('[data-socle-proposer]');
+        if (proposer) proposer.addEventListener('click', () => { racine.dataset.socleTouche = '1'; const p = new Set(soclePropose); casesSocle.forEach((c) => { c.checked = p.has(c.dataset.socle); }); majSocle(); });
+        const viderSocle = racine.querySelector('[data-socle-vider]');
+        if (viderSocle) viderSocle.addEventListener('click', () => { racine.dataset.socleTouche = '1'; casesSocle.forEach((c) => { c.checked = false; }); majSocle(); });
+
         const majCompte = () => {
+          majSocle();
           if (surPlan) { majComptePlan(); return; }
           const liste = retenus();
           const doubles = liste.filter((x) => (NIVEAUX_SCENARIO[x.niveau] || {}).double).length;
@@ -691,11 +753,24 @@ const editeurs = {
         /* null : la sélection n'a pas bougé, on ne la réécrit pas. */
         const refs = scenariosAEcrire({ fiche, touche, choisies, avant: fiche ? fiche.scenarios : [] });
         if (refs && !refs.length) { toast(surPlan ? 'Choisissez au moins une section du plan.' : 'Choisissez au moins un bloc de scénarios.', 'erreur'); return false; }
+        /* La règle du socle : le socle coché et le plafond. Changer l'un
+           ou l'autre sous une répartition existante demande de répartir
+           de nouveau, comme un changement de sections. */
+        let socleChange = false;
+        let regleEcrite = null;
+        if (avecSocle) {
+          const socle = [...boite.querySelectorAll('[data-socle]')].filter((c) => c.checked).map((c) => c.dataset.socle);
+          const plafond = Math.floor(Number(d.plafond));
+          if (!Number.isFinite(plafond) || plafond < 1 || plafond > 1000) { toast('Le plafond est un nombre de tests, de 1 à 1000.', 'erreur'); return false; }
+          socleChange = Boolean(fiche) && (!regleSocle(fiche) || plafond !== plafondDe(fiche) || JSON.stringify([...socle].sort()) !== JSON.stringify([...(fiche.socle || [])].sort()));
+          regleEcrite = { regle: 'socle', socle, plafond };
+        }
         /* Lancer, c'est la fiche de la campagne qui le fait, une fois tout
            prêt. La feuille refuse de passer « En cours » une campagne à
            laquelle il manque quelque chose : le client lirait « Testeurs 0 ». */
         if (d.statut === 'en-cours' && (!fiche || fiche.statut !== 'en-cours')) {
-          const apres = { ...(fiche || {}), scenarios: refs || (fiche ? fiche.scenarios : []), plan: surPlan || (fiche || {}).plan, application: (d.application || '').trim(), installation: { ios: (d.lien_ios || '').trim(), android: (d.lien_android || '').trim(), web: (d.lien_web || '').trim() } };
+          if (socleChange && nombreDeCles((fiche || {}).affectation)) { toast('Le socle ou le plafond a changé : répartissez de nouveau avant de lancer.', 'erreur'); return false; }
+          const apres = { ...(fiche || {}), ...(regleEcrite || {}), scenarios: refs || (fiche ? fiche.scenarios : []), plan: surPlan || (fiche || {}).plan, application: (d.application || '').trim(), installation: { ios: (d.lien_ios || '').trim(), android: (d.lien_android || '').trim(), web: (d.lien_web || '').trim() } };
           const manque = surPlan ? pretALancer(apres, { humains }).filter((x) => !x.ok) : (nombreDeCles(apres.affectation) ? [] : [{ libelle: 'Les testeurs, répartis' }]);
           if (manque.length) { toast(`Pas encore prête à lancer : ${manque.map((x) => x.libelle.toLowerCase()).join(', ')}.`, 'erreur'); return false; }
         }
@@ -740,11 +815,12 @@ const editeurs = {
           donnees.scenarios = refs;
           if (surPlan) donnees.plan = true;
         }
+        if (regleEcrite) Object.assign(donnees, regleEcrite);
         if (fiche) await ecrire.majCampagne(pid, fiche.id, donnees);
         else await ecrire.creerCampagne(pid, { ...donnees, testeurs: [], affectation: {} });
         /* La sélection a changé sous une affectation existante : celle-ci
            ne correspond plus, il faut répartir de nouveau. */
-        const reRepartir = Boolean(fiche && refs && nombreDeCles(fiche.affectation));
+        const reRepartir = Boolean(fiche && (refs || socleChange) && nombreDeCles(fiche.affectation));
         toast(fiche ? (reRepartir ? 'Campagne enregistrée. La sélection a changé : répartissez de nouveau.' : 'Campagne enregistrée.') : `Campagne créée, ${refs.length} scénarios retenus.`);
         return true;
       },
