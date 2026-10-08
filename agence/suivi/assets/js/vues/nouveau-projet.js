@@ -65,7 +65,7 @@ export const liste = async (ctx, env) => {
     const demandes = (magasin.lire(K.demandesProjet) || []).slice().sort(parDateDesc('maj'));
     const enCours = demandes.filter((d) => !['projet', 'refusee'].includes(d.statut));
     const closes = demandes.filter((d) => ['projet', 'refusee'].includes(d.statut));
-    const bloc = (d) => ligne({ href: `#/nouveaux-projets/${echapper(d.id)}`, icone: 'sparkle', ton: d.statut === 'nouvelle' ? 'violet' : '', titre: echapper(d.titre), sous: `${echapper((d.par || {}).nom || '')} · ${echapper((d.par || {}).email || '')} · ${echapper(TYPES_PROJET[d.type] || d.type || '')} · ${echapper(depuis(d.maj))}`, fin: pastille(STATUTS_PREPROJET, d.statut) });
+    const bloc = (d) => ligne({ href: `#/nouveaux-projets/${echapper(d.id)}`, icone: 'sparkle', ton: d.statut === 'nouvelle' ? 'violet' : '', titre: echapper(d.titre), sous: `${echapper((d.par || {}).nom || '–')} · ${echapper((d.par || {}).email || '–')} · ${echapper(TYPES_PROJET[d.type] || d.type || '–')} · ${echapper(depuis(d.maj) || '–')}`, fin: pastille(STATUTS_PREPROJET, d.statut) });
     sortie.innerHTML = `<div class="page">
       <div class="page-tete">
         <div><h1>Nouveaux projets</h1><p class="chapo">Vous créez les projets. Les clients, eux, décrivent leur idée ici : vous la qualifiez, vous chiffrez, puis vous ouvrez le projet quand vous le décidez.</p></div>
@@ -76,8 +76,11 @@ export const liste = async (ctx, env) => {
       ${closes.length ? `<section class="section"><div class="section-tete"><h2>Clôturées</h2></div><div class="liste">${closes.map(bloc).join('')}</div></section>` : ''}
     </div>`;
   };
-  lot.sur(K.demandesProjet, rendre);
-  return () => lot.fin();
+  /* Un seul dessin, les demandes arrivées (lot 6, H-30). */
+  const planifier = magasin.dessinateur(rendre, 40, [K.demandesProjet]);
+  lot.sur(K.demandesProjet, planifier);
+  planifier();
+  return () => { planifier.arreter(); lot.fin(); };
 };
 
 export const detail = async (ctx, env) => {

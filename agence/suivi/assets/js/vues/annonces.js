@@ -176,7 +176,7 @@ const editerAnnonce = (fiche = null) => {
       ${pour('tarif', `
         <p class="surtitre" style="margin-top:6px">L'encart de chaque client</p>
         <p class="aide">Les prix viennent de la grille de tarifs (plus bas sur cette page) à la date d'effet : l'annonce n'en porte aucun.</p>
-        ${zone('texteLong', 'Phrase pour un projet long', t.texteLong || PHRASE_LONG, { lignes: 2, aide: 'Repères : {projet}, {demarrage}, {evolution} (« reste à … » ou « passe de … à … »), {tjm}, {tjmAvant}, {date}, {seuil}.' })}
+        ${zone('texteLong', 'Phrase pour un projet long', t.texteLong || PHRASE_LONG, { lignes: 2, aide: 'Les mots entre accolades sont remplacés pour chaque client : {projet} son projet, {demarrage} son début (« commencé le … »), {evolution} le changement de prix (« reste à … » ou « passe de … à … »), {tjm} le nouveau prix d\'une journée, {tjmAvant} l\'ancien, {date} la date d\'effet, {seuil} la durée en mois qui fait un projet long.' })}
         ${zone('texteCourt', 'Phrase pour un projet court', t.texteCourt || PHRASE_COURT, { lignes: 2 })}`)}
       ${pour('indisponibilite', `
         <p class="surtitre" style="margin-top:6px">La période</p>

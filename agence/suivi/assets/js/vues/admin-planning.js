@@ -95,7 +95,7 @@ export const vue = async (ctx, env) => {
         <div class="section-tete"><h2>Réunions${nom ? ` de ${echapper(nom)}` : ''}</h2></div>
         ${prochaines.length ? `<p class="surtitre" style="margin-bottom:8px">À venir</p><div class="liste" style="margin-bottom:var(--e-6)">${prochaines.map(ligneReunion).join('')}</div>` : ''}
         ${passees.length ? `<p class="surtitre" style="margin-bottom:8px">Passées</p><div class="liste">${passees.map(ligneReunion).join('')}</div>` : ''}
-        ${!reunions.length ? vide({ icone: 'reunions', titre: 'Aucune réunion', texte: 'Les rendez-vous, leur ordre du jour et leur compte rendu seront ici.', compact: true }) : ''}
+        ${!reunions.length ? vide({ icone: 'reunions', titre: 'Aucune réunion', texte: 'Les rendez-vous, leur ordre du jour et leur compte rendu seront ici.', action: '<button class="btn btn-secondaire" type="button" data-reunion>Programmer une réunion</button>', compact: true }) : ''}
       </section>` : '';
     sortie.innerHTML = `<div class="page">
       <div class="page-tete"><div><h1>Calendrier</h1><p class="chapo">${nom ? `Réunions, rendez-vous demandés, étapes, échéances et versions de ${echapper(nom)}.` : 'Réunions, rendez-vous demandés, étapes, échéances et versions de tous les projets.'}</p></div>
@@ -105,7 +105,7 @@ export const vue = async (ctx, env) => {
         <aside class="pile" style="gap:var(--e-5)">
           ${demandes.length ? `<div><p class="surtitre" style="margin-bottom:8px">Rendez-vous demandés</p><div class="liste">${demandes.map((e) => ligneEvenement(e)).join('')}</div></div>` : ''}
           ${enRetard.length ? `<div><p class="surtitre" style="margin-bottom:8px;color:var(--alerte)">En retard</p><div class="liste">${enRetard.map((e) => ligneEvenement(e)).join('')}</div></div>` : ''}
-          <div><p class="surtitre" style="margin-bottom:8px">À venir</p>${aVenir.length ? `<div class="liste">${aVenir.map((e) => ligneEvenement(e)).join('')}</div>` : vide({ icone: 'calendrier', titre: 'Rien de programmé', compact: true })}</div>
+          <div><p class="surtitre" style="margin-bottom:8px">À venir</p>${aVenir.length ? `<div class="liste">${aVenir.map((e) => ligneEvenement(e)).join('')}</div>` : vide({ icone: 'calendrier', titre: 'Rien de programmé', texte: 'Réunions, étapes et échéances à venir.', action: '<button class="btn btn-secondaire btn-petit" type="button" data-reunion>Programmer une réunion</button>', compact: true })}</div>
         </aside>
       </div>
       ${blocReunions}</div>`;

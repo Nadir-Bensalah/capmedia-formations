@@ -631,10 +631,14 @@ service cloud.firestore {
         allow read:   if accesProjet(projetId) && visiblePourMoi();
         // Un lien de catégorie « acces » peut porter un identifiant (jamais
         // un mot de passe) : un texte court, écrit par l'équipe seule.
-        allow write:  if equipeSurProjet(projetId)
+        allow create, update: if equipeSurProjet(projetId)
           && request.resource.data.url is string
           && request.resource.data.url.matches('https?://.*')
           && (!('identifiants' in request.resource.data) || texteBorne(request.resource.data.identifiants, 300));
+        // Refonte du Cockpit, lot 6 (D6) : l'équipe du projet supprime une
+        // ressource. Avant, « write » exigeait une adresse dans la donnée
+        // écrite, qu'une suppression n'a pas : supprimer était refusé.
+        allow delete: if equipeSurProjet(projetId);
       }
 
       // La conversation du projet : deux voix, jamais de note interne ici.

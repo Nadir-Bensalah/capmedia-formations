@@ -1185,7 +1185,8 @@ const editeurs = {
       ${champ('description', 'Description', fiche ? fiche.description : '', { facultatif: true })}
       ${visibilite(fiche ? fiche.visibilite : 'client')}
       <div id="ed-acces" hidden>${champ('identifiants', 'Identifiants', fiche ? fiche.identifiants : '', { facultatif: true, placeholder: 'compte-test@exemple.fr', aide: "L'identifiant que le client doit connaître pour ce compte (adresse, nom d'utilisateur). Le mot de passe se transmet autrement, jamais ici." })}</div>
-      <p class="aide">Jamais de mot de passe, de jeton ni de clé dans un lien ou sa description.</p>`,
+      <p class="aide">Jamais de mot de passe, de jeton ni de clé dans un lien ou sa description.</p>
+      ${fiche ? `<div class="groupe" style="margin-top:8px"><button class="btn btn-doux btn-petit" type="button" data-supprimer>${icone('corbeille')} Supprimer ce lien</button></div>` : ''}`,
     /* Le champ « Identifiants » n'a de sens que pour un accès partagé au
        client : il apparaît quand la catégorie et la visibilité le disent,
        et se vide sinon, pour ne pas laisser traîner un identifiant sur un
@@ -1200,6 +1201,18 @@ const editeurs = {
       cat.addEventListener('change', montrer);
       racine.querySelectorAll('[name="visibilite"]').forEach((el) => el.addEventListener('change', montrer));
       montrer();
+      /* D6 (refonte du Cockpit, lot 6) : une ressource se supprime, depuis
+         sa fiche comme depuis sa carte. Avant, rien ne l'appelait. */
+      const b = racine.querySelector('[data-supprimer]');
+      if (b && fiche) {
+        b.addEventListener('click', async () => {
+          if (!(await confirmer({ titre: 'Supprimer ce lien ?', texte: fiche.visibilite === 'interne' ? 'Il disparaît des ressources du projet.' : 'Il disparaît aussi des ressources du client.', ok: 'Supprimer', danger: true }))) return;
+          try { await ecrire.supprimerLien(pid, fiche.id); } catch (e) { toast(lisible(e), 'erreur'); return; }
+          toast('Lien supprimé.');
+          const fermer = racine.querySelector('[data-fermer]');
+          if (fermer) fermer.click();
+        });
+      }
     },
     regles: { nom: obligatoire(), url: (v) => obligatoire()(v) || urlValide()(v), identifiants: longueurMax(300) },
     enregistrer: async (d) => {

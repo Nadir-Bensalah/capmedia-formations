@@ -3,7 +3,13 @@
    ses projets, ses pièces comptables, ses notes internes.
    ========================================================================== */
 
-import { echapper, dateCourte, montant, pluriel, parDateDesc, STATUTS_PROJET, STATUTS_FACTURE, STATUTS_DEVIS, statutProjet, projetEstActif, estAdmin, bdd, collection } from '../noyau.js';
+import { echapper, dateCourte, montant, pluriel, parDateDesc, STATUTS_PROJET, STATUTS_FACTURE, STATUTS_DEVIS, statutProjet, projetEstActif, estAdmin, peut, bdd, collection } from '../noyau.js';
+
+const TIRET = '–';
+/* Les clés d'une page de clients : les pièces et les paiements seulement
+   pour qui lit la finance (sans elle, ces clés ne se rempliraient jamais
+   et le premier dessin les attendrait). */
+const clesClients = (session, plus = []) => [K.organisations, K.projets, ...(peut(session, 'finance.lecture') ? [K.documentsTous, K.paiementsTous] : []), ...plus];
 import { icone, pastille, pastilleTexte, avatar, avatarEmpile, avatarProjet, pileProjets, ligne, vide, squelette, titrePage, modale, confirmer, toast, sur, agir, lireForme, valider, obligatoire, emailValide, fait, metrique, menu } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K, resteAPayer, interneDeLOrganisation } from '../donnees.js';
@@ -35,8 +41,12 @@ export const liste = async (ctx, env) => {
       }).join('')}</div>` : vide({ icone: 'entreprise', titre: 'Aucun client', texte: 'Créez la première organisation, puis rattachez-lui ses projets.', action: '<a class="btn btn-principal" href="#/clients/nouveau">Nouveau client</a>' })}
     </div>`;
   };
-  [K.organisations, K.projets, K.documentsTous, K.paiementsTous].forEach((c) => lot.sur(c, rendre));
-  return () => lot.fin();
+  /* Un seul dessin, toutes les clés arrivées (lot 6, H-30). */
+  const cles = clesClients(env.session);
+  const planifier = magasin.dessinateur(rendre, 40, cles);
+  cles.forEach((c) => lot.sur(c, planifier));
+  planifier();
+  return () => { planifier.arreter(); lot.fin(); };
 };
 
 const formulaireOrganisation = (o = {}) => `
@@ -89,7 +99,7 @@ export const detail = async (ctx, env) => {
     const totalPaye = paiements.reduce((s, p) => s + (Number(p.montant) || 0), 0);
     const contacts = o.contacts || [];
     const profils = magasin.lire(K.profilsClients) || [];
-    const premiersPas = (c) => { const pr = c.uid ? profils.find((x) => x.id === c.uid) : null; return pr && dateCourte(pr.accueil) ? `<span class="pastille pastille--vert">Premiers pas faits · ${echapper(dateCourte(pr.accueil))}</span>` : (estAdmin(env.session) && c.uid ? '<span class="t-micro t-3">premiers pas à faire</span>' : ''); };
+    const premiersPas = (c) => { const pr = c.uid ? profils.find((x) => x.id === c.uid) : null; return pr && dateCourte(pr.accueil) ? `<span class="pastille pastille--vert">Premiers pas faits · ${echapper(dateCourte(pr.accueil))}</span>` : (estAdmin(env.session) && c.uid ? '<span class="pastille pastille--gris">Accueil pas encore vu</span>' : ''); };
     titrePage(o.entreprise || o.nom);
     filAriane([{ libelle: 'Clients', chemin: '/clients' }, { libelle: o.entreprise || o.nom }]);
     sortie.innerHTML = `<div class="page">
@@ -100,16 +110,16 @@ export const detail = async (ctx, env) => {
         <div class="pile" style="gap:var(--e-7)">
           <section><div class="section-tete"><h2>Projets</h2></div>${projets.length ? `<div class="liste">${projets.map((p) => ligne({ href: `#/projets/${echapper(p.id)}`, titre: `<span class="rang" style="gap:10px">${avatarProjet(p, 'petit')} ${echapper(p.nom)}</span>`, sous: echapper(p.ref || ''), fin: pastille(STATUTS_PROJET, statutProjet(p)) })).join('')}</div>` : vide({ icone: 'projets', titre: 'Aucun projet', compact: true, action: `<a class="btn btn-secondaire" href="#/projets/nouveau?organisation=${echapper(id)}">Créer un projet</a>` })}</section>
           <section><div class="section-tete"><h2>Accès aux projets</h2></div>
-            ${projets.filter((p) => !p.interne).length ? `<div class="liste">${projets.filter((p) => !p.interne).map((p) => ligne({ href: `#/projets/${echapper(p.id)}/acces`, titre: `<span class="rang" style="gap:10px">${avatarProjet(p, 'petit')} ${echapper(p.nom)} ${p.ouvert === true ? pastilleTexte('Ouvert au client', 'vert') : pastilleTexte('Fermé au client', 'gris')}${p.emailsClient === 'coupes' ? ` ${pastilleTexte('E-mails coupés', 'ambre')}` : ''}</span>`, sous: echapper(`${(p.personnes || []).length} personne${(p.personnes || []).length > 1 ? 's' : ''} ${p.ouvert === true ? 'avec accès' : 'préparée(s)'}`) })).join('')}</div>` : vide({ icone: 'projets', titre: 'Aucun projet client', compact: true })}
+            ${projets.filter((p) => !p.interne).length ? `<div class="liste">${projets.filter((p) => !p.interne).map((p) => ligne({ href: `#/projets/${echapper(p.id)}/acces`, titre: `<span class="rang" style="gap:10px">${avatarProjet(p, 'petit')} ${echapper(p.nom)} ${p.ouvert === true ? pastilleTexte('Ouvert au client', 'vert') : pastilleTexte('Fermé au client', 'gris')}${p.emailsClient === 'coupes' ? ` ${pastilleTexte('E-mails coupés', 'ambre')}` : ''}</span>`, sous: echapper(`${(p.personnes || []).length} personne${(p.personnes || []).length > 1 ? 's' : ''} ${p.ouvert === true ? 'avec accès' : 'préparée(s)'}`) })).join('')}</div>` : vide({ icone: 'projets', titre: 'Aucun projet client', texte: 'Un accès se donne sur un projet client de cette société.', action: `<a class="btn btn-secondaire" href="#/projets/nouveau?organisation=${echapper(id)}">Créer un projet</a>`, compact: true })}
             <p class="t-micro t-3" style="margin-top:8px">L'accès se donne projet par projet, dans l'onglet « Accès client » de chaque projet. Appartenir à cette société ne donne accès à aucun projet.</p></section>
           <section><div class="section-tete"><h2>Contacts de la société</h2></div>
-            ${contacts.length ? `<div class="liste">${contacts.map((c) => ligne({ titre: `<span class="rang" style="gap:10px">${avatar(c.nom || c.email)} ${echapper(c.nom || c.email)}</span>`, sous: echapper(c.email || ''), fin: premiersPas(c), attrs: 'style="cursor:default"' })).join('')}</div>` : vide({ icone: 'utilisateurs', titre: 'Aucun contact', compact: true })}
+            ${contacts.length ? `<div class="liste">${contacts.map((c) => ligne({ titre: `<span class="rang" style="gap:10px">${avatar(c.nom || c.email)} ${echapper(c.nom || c.email)}</span>`, sous: echapper(c.email || ''), fin: premiersPas(c), attrs: 'style="cursor:default"' })).join('')}</div>` : vide({ icone: 'utilisateurs', titre: 'Aucun contact', texte: 'Les contacts commerciaux de la société se notent dans sa fiche.', action: '<button class="btn btn-secondaire" type="button" data-action="modifier">Modifier la fiche</button>', compact: true })}
             <p class="t-micro t-3" style="margin-top:8px">Les coordonnées commerciales de la société. Elles ne donnent aucun accès et ne reçoivent aucun e-mail de suivi.</p></section>
-          <section><div class="section-tete"><h2>Devis et factures</h2><a class="lien" href="#/finances">Finances</a></div>${documents.length ? `<div class="liste">${documents.slice(0, 12).map((d) => ligne({ href: `#/finances/${echapper(d.id)}`, icone: d.type === 'devis' ? 'receipt' : 'euro', titre: `${echapper(d.numero || '')} ${echapper(d.libelle || '')}`, sous: echapper(dateCourte(d.date)), fin: `<span class="nb t-fort">${echapper(montant(d.montant))}</span>${pastille(d.type === 'devis' ? STATUTS_DEVIS : STATUTS_FACTURE, d.statut, { equipe: true })}` })).join('')}</div>` : vide({ icone: 'receipt', titre: 'Aucune pièce', compact: true })}</section>
+          ${peut(env.session, 'finance.lecture') ? `<section><div class="section-tete"><h2>Devis et factures</h2><a class="lien" href="#/finances">Finances</a></div>${documents.length ? `<div class="liste">${documents.slice(0, 12).map((d) => ligne({ href: `#/finances/${echapper(d.id)}`, icone: d.type === 'devis' ? 'receipt' : 'euro', titre: `${echapper(d.numero || '')} ${echapper(d.libelle || '')}`, sous: echapper(dateCourte(d.date)), fin: `<span class="nb t-fort">${echapper(montant(d.montant))}</span>${pastille(d.type === 'devis' ? STATUTS_DEVIS : STATUTS_FACTURE, d.statut, { equipe: true })}` })).join('')}</div>` : vide({ icone: 'receipt', titre: 'Aucune pièce', texte: 'Les devis et factures de ses projets apparaîtront ici.', action: `<a class="btn btn-secondaire" href="#/finances${projets[0] ? `?projet=${echapper(projets[0].id)}` : ''}">Ouvrir les finances</a>`, compact: true })}</section>` : ''}
         </div>
         <aside class="pile" style="gap:var(--e-5)">
-          <div class="carte carte--creuse"><p class="surtitre">Coordonnées</p><dl class="faits" style="margin-top:10px;grid-template-columns:1fr">${fait('Contact', echapper(o.nom || ''))}${fait('E-mail', echapper(o.email || ''))}${fait('Téléphone', echapper(o.telephone || ''))}${fait('Adresse', echapper(o.adresse || ''))}</dl></div>
-          <div class="carte carte--creuse"><p class="surtitre">Notes internes</p><p class="t-petit" style="margin-top:8px;white-space:pre-wrap">${echapper(interneDeLOrganisation(o.id).notesInternes || 'Aucune note.')}</p></div>
+          <div class="carte carte--creuse"><p class="surtitre">Coordonnées</p><dl class="faits" style="margin-top:10px;grid-template-columns:1fr">${fait('Contact', echapper(o.nom || '') || TIRET)}${fait('E-mail', echapper(o.email || '') || TIRET)}${fait('Téléphone', echapper(o.telephone || '') || TIRET)}${fait('Adresse', echapper(o.adresse || '') || TIRET)}</dl></div>
+          <div class="carte carte--creuse"><p class="surtitre">Notes internes</p><p class="t-petit${interneDeLOrganisation(o.id).notesInternes ? '' : ' t-3'}" style="margin-top:8px;white-space:pre-wrap">${echapper(interneDeLOrganisation(o.id).notesInternes || 'Aucune note.')}</p></div>
         </aside>
       </div></div>`;
   };
@@ -121,8 +131,11 @@ export const detail = async (ctx, env) => {
       m.el.querySelector('#f-org').addEventListener('submit', async (e) => { e.preventDefault(); if (!valider(e.target, { entreprise: obligatoire(), nom: obligatoire(), email: emailValide() })) return; if (await agir(m.pied.querySelector('[type="submit"]'), () => appelServeur('majOrganisation', { id, ...lireForme(e.target), versionInterne: 2 }), 'Client mis à jour.')) m.fermer(true); });
     }
   });
-  [K.organisations, K.projets, K.documentsTous, K.paiementsTous, K.organisationsInternes, K.profilsClients].forEach((c) => lot.sur(c, rendre));
-  return () => { gestes(); lot.fin(); };
+  const cles = clesClients(env.session, [K.organisationsInternes, ...(estAdmin(env.session) ? [K.profilsClients] : [])]);
+  const planifier = magasin.dessinateur(rendre, 40, cles);
+  cles.forEach((c) => lot.sur(c, planifier));
+  planifier();
+  return () => { planifier.arreter(); gestes(); lot.fin(); };
 };
 
 void toast;

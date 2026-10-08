@@ -23,6 +23,14 @@ const CATEGORIES = [
   ['releases', 'Nouvelles versions', 'Une version publiée.'],
   ['relance', 'Rappel hebdomadaire', "Le lundi matin, et seulement s'il reste des points en attente de vous."],
 ];
+/* Les mêmes catégories, dites à l'équipe : elle reçoit ce que font les
+   clients, pas ce que Capmedia leur demande. */
+const POUR_EQUIPE = {
+  messages: ['Messages et réponses', 'Un message d\'un client, dans une conversation ou un ticket.'],
+  demandes: ['Mouvements des tickets', 'Un nouveau ticket, un changement de statut, une réponse du client.'],
+  validations: ['Réponses aux validations', 'Quand un client approuve ou demande des modifications.'],
+  relance: ['Rappel hebdomadaire', 'Le lundi matin, et seulement s\'il reste des points en attente.'],
+};
 
 export const vue = async (ctx, env) => {
   const { session } = env;
@@ -35,6 +43,8 @@ export const vue = async (ctx, env) => {
   filAriane([{ libelle: titre }]);
   sortie.innerHTML = `<div class="page">${squelette('page', 4)}</div>`;
 
+  const equipe = env.role === 'equipe';
+  const categories = CATEGORIES.map(([cle, lib, aide]) => (equipe && POUR_EQUIPE[cle] ? [cle, ...POUR_EQUIPE[cle]] : [cle, lib, aide]));
   const rendre = () => {
     const profil = magasin.lire(K.profil) || {};
     const prefs = profil.notifications || {};
@@ -52,7 +62,7 @@ export const vue = async (ctx, env) => {
           <div class="forme-rang">
             <div class="groupe"><label class="etiquette-champ" for="entreprise">Entreprise <span class="facultatif">(facultatif)</span></label><input class="champ" id="entreprise" name="entreprise" value="${echapper(profil.entreprise || ((session.organisations[0] || {}).entreprise || ''))}" maxlength="80"></div>
           </div>
-          <div class="groupe"><label class="etiquette-champ">Adresse e-mail</label><p class="t-corps">${echapper(session.utilisateur.email || '')}</p><p class="aide">C'est votre identifiant. Pour en changer, prévenez Capmedia.</p></div>
+          <div class="groupe"><label class="etiquette-champ">Adresse e-mail</label><p class="t-corps">${echapper(session.utilisateur.email || '')}</p><p class="aide">C'est votre identifiant. Pour en changer, ${equipe ? 'demandez à un administrateur' : 'prévenez Capmedia'}.</p></div>
           <div class="forme-pied"><button class="btn btn-principal" type="submit">Enregistrer</button></div>
         </form>
       </section>
@@ -61,7 +71,7 @@ export const vue = async (ctx, env) => {
         <div class="section-tete"><h2>Notifications par e-mail</h2></div>
         <div class="carte">
           <p class="t-petit t-2" style="margin-bottom:12px">Les notifications dans l'espace restent toujours actives. Ici, vous choisissez ce qui vous arrive aussi par e-mail.</p>
-          <div class="liste">${CATEGORIES.map(([cle, lib, aide]) => `<div class="ligne ligne--sans-icone" style="cursor:default"><span class="ligne-corps"><span class="ligne-titre">${echapper(lib)}</span><span class="ligne-sous">${echapper(aide)}</span></span><span class="ligne-fin"><select class="select" style="width:auto" data-pref="${cle}"><option value="immediat" ${prefs[cle] !== 'off' ? 'selected' : ''}>Immédiat</option><option value="off" ${prefs[cle] === 'off' ? 'selected' : ''}>Désactivé</option></select></span></div>`).join('')}</div>
+          <div class="liste">${categories.map(([cle, lib, aide]) => `<div class="ligne ligne--sans-icone" style="cursor:default"><span class="ligne-corps"><span class="ligne-titre">${echapper(lib)}</span><span class="ligne-sous">${echapper(aide)}</span></span><span class="ligne-fin"><select class="select" style="width:auto" data-pref="${cle}"><option value="immediat" ${prefs[cle] !== 'off' ? 'selected' : ''}>Immédiat</option><option value="off" ${prefs[cle] === 'off' ? 'selected' : ''}>Désactivé</option></select></span></div>`).join('')}</div>
         </div>
       </section>
 
@@ -106,12 +116,13 @@ export const vue = async (ctx, env) => {
     const notifications = { ...(profil.notifications || {}), [el.dataset.pref]: el.value };
     await agir(null, () => ecrire.majProfil(session.utilisateur.uid, { notifications, email: String(session.utilisateur.email || '').toLowerCase() }), 'Préférence enregistrée.');
   });
-  let premier = true;
-  lot.sur(K.profil, () => { if (premier) { premier = false; rendre(); } });
-  /* Le même délai que l'accueil, et le même piège : il meurt avec la vue,
-     sinon il dessine les paramètres par-dessus la page suivante. */
-  const garde = setTimeout(() => { if (premier) { premier = false; rendre(); } }, 600);
-  return () => { premier = false; clearTimeout(garde); gestes(); lot.fin(); };
+  /* Un seul dessin, le profil arrivé (lot 6, H-30), et jamais un second :
+     une mise à jour du profil n'efface pas une saisie en cours. Sans profil
+     au bout de 600 ms, on dessine avec la session (même délai qu'avant). */
+  const planifier = magasin.dessinateur(rendre, 40, [K.profil], 600);
+  lot.sur(K.profil, () => { if (!planifier.dessine()) planifier(); });
+  planifier();
+  return () => { planifier.arreter(); gestes(); lot.fin(); };
 };
 
 void toast;

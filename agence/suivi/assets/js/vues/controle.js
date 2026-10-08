@@ -79,6 +79,9 @@ const dispo = (t) => {
   const bas = Math.floor(t * 100 + 1e-9) / 100;
   return `${bas.toLocaleString('fr-FR', { minimumFractionDigits: bas === 100 ? 0 : 2, maximumFractionDigits: 2 })}${ESPACE}%`;
 };
+/* La raison d'une panne, dite à l'équipe : « HTTP 503 » (le mot du
+   serveur) devient « erreur 503 ». */
+const raisonLisible = (r) => String(r || '').replace(/^HTTP\s+(\d+)/i, 'erreur $1');
 const secondesOuMs = (v) => (v >= 1000 ? `${(Math.round(v / 100) / 10).toLocaleString('fr-FR')}${ESPACE}s` : `${nombre(v)}${ESPACE}ms`);
 
 /* --- Les erreurs par tranche, recalées sur l'instant ------------------------- */
@@ -311,7 +314,7 @@ const voyantsHtml = (d) => servicesDe(d).map((cle) => {
       <span class="voyant-feu" aria-hidden="true"></span>
       <span class="voyant-nom">${echapper(SERVICES[cle])}</span>
       <span class="voyant-etat">${echapper(ETATS[v.etat] || '')}</span>
-      <span class="voyant-raison" data-v="v-${cle}">${echapper(v.raison || '')}</span>
+      <span class="voyant-raison" data-v="v-${cle}">${echapper(raisonLisible(v.raison))}</span>
       ${depuisTexte ? `<span class="voyant-depuis">${echapper(depuisTexte)}</span>` : ''}
     </div>`;
 }).join('');
@@ -392,7 +395,7 @@ const dispoHtml = (d) => {
         <span class="dispo-nom"><span class="dispo-feu" aria-hidden="true"></span>${echapper(SERVICES[cle])}<span class="dispo-hote">${echapper(s.hote || '')}</span></span>
         <span class="dispo-schiffre"><span class="dispo-v" data-v="d-${cle}-pct">${echapper(dispo(s.dispo))}</span><span class="dispo-l">dispo 24 h</span></span>
         <span class="dispo-schiffre"><span class="dispo-v" data-v="d-${cle}-ms">${s.code ? echapper(secondesOuMs(s.ms || 0)) : '-'}</span><span class="dispo-l">réponse</span></span>
-        <span class="dispo-schiffre"><span class="dispo-v" data-v="d-${cle}-code">${s.code ? echapper(String(s.code)) : echapper(s.raison || '-')}</span><span class="dispo-l">${s.code ? 'code HTTP' : 'état'}</span></span>
+        <span class="dispo-schiffre"><span class="dispo-v" data-v="d-${cle}-code">${s.code ? echapper(String(s.code)) : echapper(raisonLisible(s.raison) || '-')}</span><span class="dispo-l">${s.code ? 'code de réponse' : 'état'}</span></span>
         <span class="dispo-courbe">${courbeReponse(s)}</span>
       </div>`;
   }).join('')}</div>`;
@@ -403,7 +406,7 @@ const incidentsHtml = (d, env) => {
   if (!d.incidents.length) return `${tete}<p class="salle-vide" data-incidents-vide>Aucun incident enregistré.</p>`;
   return `${tete}<ul class="incidents">${d.incidents.map((i) => `<li class="incident" data-incident="${echapper(i.id)}" data-ouvert="${i.fin ? 'non' : 'oui'}">
       <span class="incident-nom">${echapper(i.nom || SERVICES[i.cible] || '')}</span>
-      <span class="incident-quoi">${echapper(i.code ? `HTTP ${i.code}` : (i.raison || 'injoignable'))}</span>
+      <span class="incident-quoi">${echapper(i.code ? `erreur ${i.code}` : (raisonLisible(i.raison) || 'injoignable'))}</span>
       <span class="incident-quand">${echapper(`${dateCourte(i.debut)} ${heureCourte(i.debut)}`)}${i.fin ? ` → ${echapper(heureCourte(i.fin))}` : ''}</span>
       <span class="incident-duree">${i.fin ? echapper(`${i.minutes || 1}${ESPACE}min`) : echapper(`en cours, ${duree(i.debut)}`)}</span>
       <span class="incident-fin">${boutonTicket(d, env, { genre: 'incident', id: i.id, cleLien: `incident-${i.id}` })}</span>
@@ -491,7 +494,7 @@ const vueEquipe = (ctx, env) => {
     if (!d.liaison || d.liaison.actif === false) {
       monte = '';
       titrePage(`Salle de contrôle · ${d.projet.nom}`);
-      sortie.innerHTML = `<div class="page">${vide({ icone: 'activite', titre: 'Pas encore de salle de contrôle', texte: 'Reliez le projet à Sentry et donnez les adresses à surveiller, depuis la page Santé de l\'app.', action: `<a class="btn btn-principal" href="#/projets/${echapper(pid)}/stabilite">Aller à Santé de l'app</a>` })}</div>`;
+      sortie.innerHTML = `<div class="page">${vide({ icone: 'activite', titre: 'Pas encore de salle de contrôle', texte: 'Branchez le suivi des erreurs et donnez les adresses à surveiller, depuis la page Santé de l\'app.', action: `<a class="btn btn-principal" href="#/projets/${echapper(pid)}/stabilite">Aller à Santé de l'app</a>` })}</div>`;
       return;
     }
     if (monte !== pid) {
@@ -505,7 +508,7 @@ const vueEquipe = (ctx, env) => {
     const nouvelles = regions({
       global: globalHtml(d.c.global || {}),
       voyants: voyantsHtml(d),
-      tuiles: tuilesCles(d).map((c) => tuileHtml(c, d, t)).join('') || '<p class="salle-vide">Aucune application reliée à Sentry.</p>',
+      tuiles: tuilesCles(d).map((c) => tuileHtml(c, d, t)).join('') || '<p class="salle-vide">Aucune application suivie pour l\'instant.</p>',
       fil: filHtml(d, env),
       dispo: dispoHtml(d),
       versions: versionsHtml(d),
@@ -567,7 +570,7 @@ const vueEquipe = (ctx, env) => {
       const i = d.incidents.find((x) => x.id === el.dataset.id);
       const a = d.alertes.find((x) => x.incident === el.dataset.id);
       const cible = i ? i.cible : (a ? a.app : '');
-      const quoi = i ? `${i.nom || SERVICES[i.cible] || ''} : ${i.code ? `HTTP ${i.code}` : (i.raison || 'injoignable')}, depuis ${heureCourte(i.debut)}` : (a ? a.texte : '');
+      const quoi = i ? `${i.nom || SERVICES[i.cible] || ''} : ${i.code ? `erreur ${i.code}` : (raisonLisible(i.raison) || 'injoignable')}, depuis ${heureCourte(i.debut)}` : (a ? a.texte : '');
       creerTicket(pid, { id: el.dataset.id, court: '', titre: quoi, app: cible, etat: 'nouvelle' }, { ...options, incident: true });
     }
   });
@@ -706,7 +709,7 @@ export const entree = (ctx, env) => {
   const sortie = ctx.sortie;
   const lot = magasin.lot();
   sortie.innerHTML = `<div class="page">${squelette('lignes', 3)}</div>`;
-  if (!estAdmin(env.session)) { sortie.innerHTML = `<div class="page">${vide({ icone: 'activite', titre: 'Salle de contrôle', texte: 'Ouvrez-la depuis la page d\'un projet relié à Sentry.' })}</div>`; return { fin: () => lot.fin() }; }
+  if (!estAdmin(env.session)) { sortie.innerHTML = `<div class="page">${vide({ icone: 'activite', titre: 'Salle de contrôle', texte: 'Ouvrez-la depuis la page d\'un projet, entrée Santé de l\'app.' })}</div>`; return { fin: () => lot.fin() }; }
   abonnerLiaisons(lot);
   const rendre = () => {
     const liaisons = magasin.lire(K.liaisonsSentry);
@@ -716,9 +719,9 @@ export const entree = (ctx, env) => {
     titrePage('Salle de contrôle');
     filAriane([{ libelle: 'Salle de contrôle' }]);
     if (liste.length === 1) { naviguer(`/projets/${liste[0].id}/controle`, { remplacer: true }); return; }
-    sortie.innerHTML = `<div class="page"><header class="page-tete"><div><h1>Salle de contrôle</h1><p class="chapo">La santé en direct de chaque application reliée à Sentry.</p></div></header>
+    sortie.innerHTML = `<div class="page"><header class="page-tete"><div><h1>Salle de contrôle</h1><p class="chapo">La santé en direct de chaque application suivie.</p></div></header>
       ${liste.length ? `<ul class="liste-simple">${liste.map((p) => `<li><a class="lien" href="#/projets/${echapper(p.id)}/controle">${echapper(p.nom)}</a></li>`).join('')}</ul>`
-    : vide({ icone: 'activite', titre: 'Aucun projet relié', texte: 'Reliez un projet à Sentry depuis sa page Santé de l\'app.' })}</div>`;
+    : vide({ icone: 'activite', titre: 'Aucun projet relié', texte: 'Branchez le suivi des erreurs d\'un projet depuis sa page Santé de l\'app.', action: '<a class="btn btn-secondaire" href="#/projets">Voir les projets</a>' })}</div>`;
   };
   const planifier = magasin.dessinateur(rendre, 60, [K.liaisonsSentry]);
   lot.sur(K.liaisonsSentry, planifier);

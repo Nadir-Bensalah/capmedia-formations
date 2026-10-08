@@ -10,7 +10,6 @@ import { icone, squelette, titrePage, encart, sur, agir, lireForme, valider, lon
 import * as magasin from '../magasin.js';
 import { K, ecrire } from '../donnees.js';
 import { filAriane } from '../coquille.js';
-import { URL_SUIVI } from '../serveur.js';
 
 /* Les coordonnées de règlement de l'agence : ce que le client lit sur une
    facture due (« Pour régler : virement à … »). La finance les écrit. */
@@ -25,7 +24,7 @@ const sectionReglement = (session, coordonnees) => {
         <div class="forme-rang">${champ('titulaire', 'Titulaire du compte', c.titulaire, { attrs: 'maxlength="120" placeholder="Capmedia Digital"' })}${champ('banque', 'Banque', c.banque, { attrs: 'maxlength="120"', facultatif: true })}</div>
         <div class="forme-rang">${champ('iban', 'IBAN', c.iban, { attrs: 'maxlength="40" placeholder="FR76 …" autocomplete="off" spellcheck="false"' })}${champ('bic', 'BIC', c.bic, { attrs: 'maxlength="16" autocomplete="off" spellcheck="false"', facultatif: true })}</div>
         <div class="groupe"><label class="etiquette-champ" for="rf-mention">Mention <span class="facultatif">(facultatif)</span></label><textarea class="zone" id="rf-mention" name="mention" rows="2" maxlength="600" placeholder="Merci d'indiquer le numéro de la facture en libellé du virement." ${gere ? '' : 'disabled'}>${echapper(c.mention || '')}</textarea></div>
-        <div class="rang" style="gap:12px;align-items:center">${gere ? '<button class="btn btn-principal" type="submit">Enregistrer</button>' : '<span class="t-petit t-3">Réservé à la finance (permission « finance.gerer »).</span>'}${dateHeure(c.maj) ? `<span class="t-micro t-3">Mis à jour le ${echapper(dateHeure(c.maj))}</span>` : ''}</div>
+        <div class="rang" style="gap:12px;align-items:center">${gere ? '<button class="btn btn-principal" type="submit">Enregistrer</button>' : '<span class="t-petit t-3">Seule la personne qui tient la finance les modifie.</span>'}${dateHeure(c.maj) ? `<span class="t-micro t-3">Mis à jour le ${echapper(dateHeure(c.maj))}</span>` : ''}</div>
       </form>
     </div>
   </section>`;
@@ -47,24 +46,24 @@ export const vue = async (ctx, env) => {
       <div class="page-tete"><div><h1>Paramètres</h1><p class="chapo">Ce que la plateforme sait faire, et comment elle est branchée.</p></div><div class="actions"><a class="btn btn-secondaire" href="#/equipe">${icone('utilisateurs')} L'équipe (${equipe.filter((e) => e.actif === true).length})</a><a class="btn btn-secondaire" href="#/moi">${icone('utilisateur')} Mon profil</a></div></div>
 
       <section class="section"><div class="section-tete"><h2>Identité et numérotation</h2></div>
-        <div class="carte"><dl class="faits"><div class="fait"><dt>Expéditeur des e-mails</dt><dd>Capmedia Digital · contact@capmedia.app</dd></div><div class="fait"><dt>Numéros de demande</dt><dd>RÉFÉRENCE-001, par projet, posés par le serveur</dd></div><div class="fait"><dt>Fonction serveur</dt><dd class="t-mono t-petit">${echapper(URL_SUIVI)}</dd></div><div class="fait"><dt>Stockage des fichiers</dt><dd>projets / projet / tickets, documents, fichiers</dd></div></dl></div>
+        <div class="carte"><dl class="faits"><div class="fait"><dt>Expéditeur des e-mails</dt><dd>Capmedia Digital · contact@capmedia.app</dd></div><div class="fait"><dt>Numéros de ticket</dt><dd>La référence du projet, puis un numéro qui suit (FORGEME-001, FORGEME-002…), donné à la création</dd></div><div class="fait"><dt>Fichiers déposés</dt><dd>Rangés par projet, chacun lisible seulement par ceux qui ont accès au projet</dd></div></dl></div>
       </section>
 
       <section class="section"><div class="section-tete"><h2>Vocabulaires en service</h2></div>
         <div class="grille grille-2">
-          <div class="carte carte--creuse"><p class="surtitre">Natures de demande</p><p class="t-petit" style="margin-top:8px">${Object.values(TYPES).map((t) => echapper(t.libelle)).join(' · ')}</p></div>
-          <div class="carte carte--creuse"><p class="surtitre">Statuts de demande</p><p class="t-petit" style="margin-top:8px">${Object.values(STATUTS).map((s) => echapper(s.libelle)).join(' · ')}</p></div>
+          <div class="carte carte--creuse"><p class="surtitre">Natures de ticket</p><p class="t-petit" style="margin-top:8px">${Object.values(TYPES).map((t) => echapper(t.libelle)).join(' · ')}</p></div>
+          <div class="carte carte--creuse"><p class="surtitre">Statuts de ticket</p><p class="t-petit" style="margin-top:8px">${Object.values(STATUTS).map((s) => echapper(s.libelle)).join(' · ')}</p></div>
           <div class="carte carte--creuse"><p class="surtitre">Types de projet</p><p class="t-petit" style="margin-top:8px">${Object.values(TYPES_PROJET).map(echapper).join(' · ')}</p></div>
           <div class="carte carte--creuse"><p class="surtitre">Statuts de projet</p><p class="t-petit" style="margin-top:8px">${Object.values(STATUTS_PROJET).map((s) => echapper(s.libelle)).join(' · ')}</p></div>
           <div class="carte carte--creuse"><p class="surtitre">Catégories de fichiers</p><p class="t-petit" style="margin-top:8px">${Object.values(CATEGORIES_FICHIER).map(echapper).join(' · ')}</p></div>
         </div>
-        <p class="t-micro t-3" style="margin-top:8px">Ces listes vivent dans le code et dans les règles de sécurité : les changer se fait par une mise à jour, pas depuis cet écran.</p>
+        <p class="t-micro t-3" style="margin-top:8px">Ces listes sont fixées par la plateforme : les changer demande une mise à jour, pas un réglage ici.</p>
       </section>
 
       ${sectionReglement(env.session, coordonnees)}
 
       <section class="section"><div class="section-tete"><h2>Intégrations</h2></div>
-        ${encart('<strong>Brevo</strong> envoie les e-mails transactionnels depuis contact@capmedia.app. La clé vit dans un secret serveur. <strong>Paiement en ligne</strong> : l\'architecture est prête pour Stripe, l\'intégration se branchera dans la fonction serveur, sans donnée bancaire dans la plateforme.', 'info')}
+        ${encart('<strong>E-mails</strong> : les messages automatiques (codes de connexion, notifications, rappels) partent de contact@capmedia.app par le service d\'envoi Brevo ; sa clé n\'est jamais visible ici. <strong>Paiement en ligne</strong> : pas encore branché. Le jour venu, il passera par Stripe, sans qu\'aucune donnée bancaire ne soit gardée dans la plateforme.', 'info')}
       </section>
     </div>`;
   };
@@ -75,6 +74,10 @@ export const vue = async (ctx, env) => {
     const d = lireForme(forme);
     if (await agir(forme.querySelector('[type="submit"]'), () => ecrire.reglerFinance(d), 'Coordonnées enregistrées.')) { forme.querySelector('[type="submit"]').blur(); rendre(); }
   });
-  [K.equipe, K.reglages].forEach((c) => lot.sur(c, rendre));
-  return () => { gestes(); lot.fin(); };
+  /* Un seul dessin, l'équipe et les coordonnées arrivées (lot 6, H-30). */
+  const cles = [K.equipe, K.reglages];
+  const planifier = magasin.dessinateur(rendre, 40, cles);
+  cles.forEach((c) => lot.sur(c, planifier));
+  planifier();
+  return () => { planifier.arreter(); gestes(); lot.fin(); };
 };

@@ -261,7 +261,7 @@ export const vue = async (ctx, env) => {
       const brouillon = composeur ? composeur.value : '';
       sortie.innerHTML = `<div class="page">
         <div class="page-tete"><div><h1>Messages</h1><p class="chapo">${equipe ? 'Une conversation par projet, avec le client.' : 'Une conversation par projet, directement avec Capmedia. Pour une anomalie ou un besoin précis, préférez un ticket : il est suivi jusqu\'au bout.'}</p></div></div>
-        ${liste.length && courant ? `<div class="grille" style="grid-template-columns:${avecListe ? 'minmax(0,280px) minmax(0,1fr)' : 'minmax(0,1fr)'}">
+        ${liste.length && courant ? `<div class="grille messages-deux${avecListe ? ' messages-deux--liste' : ''}">
           ${avecListe ? '<div class="liste" id="liste-conversations" style="align-self:start"></div>' : ''}
           <section class="carte" style="display:flex;flex-direction:column;min-height:60vh">
             <div class="rang-espace" style="padding-bottom:12px;border-bottom:1px solid var(--trait)"><div class="rang">${avatarProjet(courant, 'petit')}<p class="t-titre-3">${echapper(courant.nom)}</p></div><a class="t-petit" href="#/projets/${echapper(pid)}">Ouvrir le projet</a></div>
@@ -274,7 +274,9 @@ export const vue = async (ctx, env) => {
               <div class="composer-pied"><span class="t-micro t-3 aide-clavier">Entrée pour envoyer, Maj+Entrée pour une nouvelle ligne.</span><span class="pousse"></span><button class="btn btn-principal" type="submit">${icone('envoyer')} Envoyer</button></div>
             </form>
           </section>
-        </div>` : vide({ icone: 'messages', titre: 'Aucun projet à discuter', texte: 'La messagerie s\'ouvre dès qu\'un projet est rattaché à votre compte.' })}
+        </div>` : vide(equipe
+          ? { icone: 'messages', titre: 'Aucune conversation', texte: 'Chaque projet a sa conversation avec son client : elle apparaît ici dès que le projet existe.', action: '<a class="btn btn-secondaire" href="#/projets">Voir les projets</a>' }
+          : { icone: 'messages', titre: 'Aucun projet à discuter', texte: 'La messagerie s\'ouvre dès qu\'un projet est rattaché à votre compte.' })}
       </div>`;
       composeur = null; boite = null;
       if (courant) monterComposeur();

@@ -205,7 +205,7 @@ const pageHtml = (d, c, ouverts, filtre = '') => {
     </div>` : ''}
   </header>`;
   if (!plateformes.length) {
-    return `<div class="page page-axes${ancre ? ' page-axes--panier' : ''}">${tete}${vide({ icone: 'ampoule', titre: equipe ? 'Aucun axe pour le moment' : 'Bientôt ici', texte: equipe ? 'Ajoutez un axe, ou versez le fichier du projet avec axes-importer.mjs. Le client le voit une fois publié.' : 'Nos pistes pour faire grandir votre projet apparaîtront ici.' })}</div>`;
+    return `<div class="page page-axes${ancre ? ' page-axes--panier' : ''}">${tete}${vide({ icone: 'ampoule', titre: equipe ? 'Aucun axe pour le moment' : 'Bientôt ici', texte: equipe ? 'Une piste pour faire grandir le projet, avec son prix et sa plateforme. Le client la voit une fois publiée.' : 'Nos pistes pour faire grandir votre projet apparaîtront ici.', action: equipe ? `<button class="btn btn-secondaire" type="button" data-axe-action="nouveau">Ajouter le premier axe</button>` : '' })}</div>`;
   }
   const filtres = plateformes.length > 1 ? `<div class="segments axes-filtre" role="group" aria-label="Plateforme">
       ${[['', 'Tout'], ...plateformes.map((p) => [p, PLATEFORMES_AXE[p].libelle])].map(([cle, lib]) => `<button type="button" class="segment${(filtre || '') === cle ? ' actif' : ''}" data-axe-filtre="${echapper(cle)}" aria-pressed="${(filtre || '') === cle}">${echapper(lib)}</button>`).join('')}

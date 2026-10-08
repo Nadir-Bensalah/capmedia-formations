@@ -28,7 +28,7 @@ import { naviguer } from './routeur.js';
  * l'adresse par `versChemin(id, donnees)`. Introuvable ou refusé : un écran
  * qui le dit, sans laisser croire à une page vide.
  */
-export const resolveur = (collection, versChemin, { titre = 'Introuvable', texte = "Elle a peut-être été archivée, ou vous n'y avez plus accès." } = {}) => async (ctx) => {
+export const resolveur = (collection, versChemin, { titre = 'Introuvable', texte = "Elle a peut-être été archivée, ou vous n'y avez plus accès.", texteEquipe = '', retourEquipe = null } = {}) => async (ctx, env = {}) => {
   const id = ctx.params.id || ctx.params.tid;
   ctx.sortie.innerHTML = `<div class="page">${squelette('page', 3)}</div>`;
   try {
@@ -38,12 +38,23 @@ export const resolveur = (collection, versChemin, { titre = 'Introuvable', texte
       if (chemin) { naviguer(chemin, { remplacer: true }); return () => {}; }
     }
   } catch (e) { /* refus ou absence : même écran */ }
-  ctx.sortie.innerHTML = `<div class="page">${vide({ icone: 'demandes', titre, texte, action: '<a class="btn btn-secondaire" href="#/">Retour à l\'accueil</a>' })}</div>`;
+  /* L'équipe repart vers la liste d'où le lien venait (les tickets), le
+     client vers son accueil. */
+  const equipe = env.role === 'equipe';
+  const action = equipe && retourEquipe
+    ? `<a class="btn btn-secondaire" href="#${retourEquipe.chemin}">${retourEquipe.libelle}</a>`
+    : '<a class="btn btn-secondaire" href="#/">Retour à l\'accueil</a>';
+  ctx.sortie.innerHTML = `<div class="page">${vide({ icone: 'demandes', titre, texte: (equipe && texteEquipe) || texte, action })}</div>`;
   return () => {};
 };
 
 /** La demande désignée par un lien : la même route dans le hub et le cockpit. */
-export const resoudreDemande = resolveur('tickets', (id, t) => (t.projet ? `/projets/${t.projet}/demandes/${id}` : ''), { titre: 'Ticket introuvable' });
+export const resoudreDemande = resolveur('tickets', (id, t) => (t.projet ? `/projets/${t.projet}/demandes/${id}` : ''), {
+  titre: 'Ticket introuvable',
+  texte: "Il a peut-être été archivé, ou vous n'y avez plus accès.",
+  texteEquipe: "Ce lien ne mène à aucun ticket : il a peut-être été supprimé. Un ticket archivé se retrouve dans les archives.",
+  retourEquipe: { chemin: '/demandes', libelle: 'Voir les tickets' },
+});
 
 /* La traduction d'une destination après connexion vit dans retour.js, sans
    dépendance : la porte de connexion l'importe sans charger l'interface. */

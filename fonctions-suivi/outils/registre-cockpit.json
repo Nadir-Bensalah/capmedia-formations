@@ -2395,7 +2395,7 @@
   "lot": "L6",
   "sonde": {
    "manuel": true,
-   "pourquoi": "code mort",
+   "pourquoi": "code mort ; retiré au lot 6 (refonte du Cockpit), rien à l'écran",
    "page": "/fichiers"
   }
  },
@@ -4639,7 +4639,7 @@
   "lot": "L6",
   "sonde": {
    "manuel": true,
-   "pourquoi": "code mort",
+   "pourquoi": "code mort ; retiré au lot 6 (refonte du Cockpit), rien à l'écran",
    "page": "/projets/atelier/taches"
   }
  },
@@ -4909,9 +4909,7 @@
   "lot": "L6",
   "sonde": {
    "route": "/projets/atelier/liens",
-   "cible": "#onglet-corps [data-action=\"supprimer\"][data-genre=\"lien\"]",
-   "admin": "absent",
-   "agent": "absent"
+   "cible": "#onglet-corps [data-action=\"supprimer\"][data-genre=\"lien\"]"
   }
  },
  {
@@ -5510,7 +5508,7 @@
   "lot": "L6",
   "sonde": {
    "manuel": true,
-   "pourquoi": "code mort : notes() et ouvrirNote de projet.js (projet.js:1490-1515), la route /notes est prise avant :onglet",
+   "pourquoi": "code mort : notes() et ouvrirNote de projet.js (projet.js:1490-1515), la route /notes est prise avant :onglet ; retiré au lot 6 (refonte du Cockpit), rien à l'écran",
    "page": "/projets/atelier/notes"
   }
  },
@@ -7050,7 +7048,7 @@
   "lot": "L6",
   "sonde": {
    "manuel": true,
-   "pourquoi": "code mort : [data-aller] et ONGLET_DE_SECTION, aucun élément à l'écran",
+   "pourquoi": "code mort : [data-aller] et ONGLET_DE_SECTION, aucun élément à l'écran ; retiré au lot 6 (refonte du Cockpit), rien à l'écran",
    "page": "/tests"
   }
  },
@@ -10051,7 +10049,7 @@
   "sonde": {
    "route": "/projets/atelier/nouvelle-demande",
    "cible": ".page-tete .chapo",
-   "texte": "Ouvrez une demande"
+   "texte": "Ouvrez un ticket"
   }
  },
  {
@@ -10350,7 +10348,7 @@
   "sonde": {
    "route": "/projets/atelier/demandes/t-veille",
    "cible": "aside .carte--creuse .faits dt",
-   "texte": "Demandée par"
+   "texte": "Demandé par"
   }
  },
  {
@@ -11425,7 +11423,7 @@
   "lot": "L6",
   "sonde": {
    "manuel": true,
-   "pourquoi": "code mort",
+   "pourquoi": "code mort ; retiré au lot 6 (refonte du Cockpit), rien à l'écran",
    "page": "/fichiers"
   }
  },
@@ -11907,7 +11905,7 @@
   "sonde": {
    "route": "/projets/maison/evolutions",
    "cible": ".page-axes .vide .vide-texte",
-   "texte": "axes-importer",
+   "texte": "piste pour faire grandir",
    "agent": "absent"
   }
  },

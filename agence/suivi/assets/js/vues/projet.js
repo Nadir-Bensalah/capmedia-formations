@@ -332,7 +332,7 @@ export const vue = async (ctx, env) => {
         { libelle: 'Demander une validation', icone: 'valider', action: () => editer('validation', env, { pid }) },
         { libelle: 'Nouvelle note ou décision', icone: 'note', action: () => editer('note', env, { pid }) },
         /* Relier le projet à Sentry : l'administrateur, depuis la page Stabilité. */
-        ...(env.admin && !(d.liaisonSentry && d.liaisonSentry.actif !== false) ? [{ libelle: 'Relier à Sentry', icone: 'activite', action: () => naviguer(`/projets/${pid}/stabilite`) }] : []),
+        ...(env.admin && !(d.liaisonSentry && d.liaisonSentry.actif !== false) ? [{ libelle: 'Brancher le suivi des erreurs', cle: 'Relier à Sentry', icone: 'activite', action: () => naviguer(`/projets/${pid}/stabilite`) }] : []),
       ]);
     }
     if (action === 'nouveau') return editer(el.dataset.genre, env, { pid, defaut: el.dataset.defaut ? JSON.parse(el.dataset.defaut) : {} });
@@ -350,9 +350,6 @@ export const vue = async (ctx, env) => {
       const t = d.taches.find((x) => x.id === id);
       if (t) ouvrirTache(t, d, { pid, env });
       return null;
-    }
-    if (action === 'statut-tache') {
-      return agir(null, () => ecrire.majTache(id, { statut: el.dataset.statut, progression: el.dataset.statut === 'terminee' ? 100 : undefined }));
     }
     if (action === 'resoudre-blocage') {
       return agir(null, () => ecrire.majBlocage(id, { resolu: new Date() }), 'Point bloquant levé.');
@@ -375,7 +372,6 @@ export const vue = async (ctx, env) => {
     if (action === 'ouvrir-etape') { const j = d.jalons.find((x) => x.id === id); if (j) ouvrirEtape(j, d, { pid, env }); return null; }
     if (action === 'ouvrir-reunion') { const r = d.reunions.find((x) => x.id === id); if (r) ouvrirReunion(r, d, { pid, env }); return null; }
     if (action === 'ouvrir-release') { const r = d.releases.find((x) => x.id === id); if (r) ouvrirRelease(r, d, { pid, env }); return null; }
-    if (action === 'ouvrir-note') { const n = d.notes.find((x) => x.id === id); if (n) ouvrirNote(n, { pid, env }); return null; }
     if (action === 'ouvrir-validation') return naviguer(equipe ? `/validations/${id}` : `/valider/${id}`);
     /* Un identifiant d'accès se copie d'un geste : le client le colle dans
        l'écran de connexion du store ou du compte de test. */
@@ -650,7 +646,6 @@ const rendreOnglet = (onglet, d, c) => {
     case 'releases': return releases(d, c);
     case 'liens': return liens(d, c);
     case 'reunions': return reunions(d, c);
-    case 'notes': return notes(d, c);
     case 'tests': return tests(d, c);
     case 'coffre': return '<div id="coffre-zone"></div>';
     case 'marketing': return `<section class="section" style="margin-top:0"><div class="section-tete"><h2>Marketing</h2><span class="etiquette">À venir</span></div><p class="t-petit t-2">Cette page est encore vide. Le client ne la voit pas tant qu'elle n'a rien à montrer.</p></section>`;
@@ -1445,9 +1440,9 @@ const liens = (d, { env }) => {
     ${groupes.length ? groupes.map((g) => `<div style="margin-bottom:var(--e-5)" data-groupe-liens="${echapper(g.cle)}"><p class="surtitre" style="margin-bottom:8px">${echapper(g.lib)}</p><div class="grille grille-2">${g.items.map((l) => `<a class="lien-env" href="${echapper(l.url)}" target="_blank" rel="noopener">
       <span class="ligne-icone${tonPlateforme(l.composant) ? ` ligne-icone--${tonPlateforme(l.composant)}` : ''}">${icone(iconePlateforme(l.composant) || (l.categorie === 'code' ? 'code' : l.categorie === 'design' ? 'sparkle' : l.categorie === 'mobile' ? 'releases' : l.categorie === 'acces' ? 'cle' : 'externe'))}</span>
       <span style="min-width:0"><span class="t-corps-fort" style="display:block">${echapper(l.nom)}${l.environnement ? ` <span class="etiquette" style="vertical-align:middle">${echapper(l.environnement)}</span>` : ''}${l.visibilite === 'interne' ? ' <span class="etiquette">Interne</span>' : ''}</span><span class="url" style="display:block">${echapper(l.url.replace(/^https?:\/\//, ''))}</span>${l.description ? `<span class="t-micro t-3" style="display:block">${echapper(l.description)}</span>` : ''}${l.categorie === 'acces' && l.identifiants ? `<span class="t-micro" style="display:block;margin-top:4px"><span class="t-3">Identifiant ·</span> <span class="t-mono" data-identifiants>${echapper(l.identifiants)}</span></span>` : ''}</span>
-      <span class="rang" style="gap:2px">${l.categorie === 'acces' && l.identifiants ? `<button class="btn btn-doux btn-petit" type="button" data-action="copier-identifiants" data-id="${echapper(l.id)}" data-sans-lien>${icone('copier')} Copier</button>` : ''}${env.role === 'equipe' ? `<button class="btn-icone" type="button" data-action="editer" data-genre="lien" data-id="${echapper(l.id)}" aria-label="Modifier" data-sans-lien>${icone('edit')}</button>` : ''}<span class="chevron" style="color:var(--encre-4)">${icone('externe')}</span></span>
+      <span class="rang" style="gap:2px">${l.categorie === 'acces' && l.identifiants ? `<button class="btn btn-doux btn-petit" type="button" data-action="copier-identifiants" data-id="${echapper(l.id)}" data-sans-lien>${icone('copier')} Copier</button>` : ''}${env.role === 'equipe' ? `<button class="btn-icone" type="button" data-action="editer" data-genre="lien" data-id="${echapper(l.id)}" aria-label="Modifier" data-astuce="Modifier" data-sans-lien>${icone('edit')}</button><button class="btn-icone" type="button" data-action="supprimer" data-genre="lien" data-id="${echapper(l.id)}" data-libelle="ce lien" aria-label="Supprimer" data-astuce="Supprimer" data-sans-lien>${icone('corbeille')}</button>` : ''}<span class="chevron" style="color:var(--encre-4)">${icone('externe')}</span></span>
     </a>`).join('')}</div>${g.cle === 'acces' ? '<p class="aide" style="margin-top:8px">Le mot de passe ne s\'écrit jamais ici : il vous est transmis à part.</p>' : ''}</div>`).join('')
-    : vide({ icone: 'liens', titre: 'Aucune ressource', texte: 'Production, stores, code source, environnements de test, maquettes : tout au même endroit.' })}
+    : vide({ icone: 'liens', titre: 'Aucune ressource', texte: 'Production, stores, code source, environnements de test, maquettes : tout au même endroit.', action: env.role === 'equipe' ? '<button class="btn btn-secondaire" type="button" data-action="nouveau" data-genre="lien">Ajouter un lien</button>' : '' })}
   </section>`;
 };
 
@@ -1522,32 +1517,8 @@ const ouvrirReunion = (r, d, { pid, env }) => {
     Cockpit, filtré sur un projet, y mène ses réunions. Rend la modale. */
 export const ouvrirFicheReunion = (r, { pid, env, projet = null }) => ouvrirReunion(r, { projet: projet || {} }, { pid, env });
 
-/* --- Notes et décisions ------------------------------------------------------------ */
-const notes = (d, { env }) => {
-  const liste = d.notes.slice().sort(parDateDesc('date'));
-  return `
-  <section class="section" style="margin-top:0">
-    <div class="section-tete"><h2>Décisions et notes</h2>${boutonNouveau(env, 'note', 'Nouvelle note')}</div>
-    ${liste.length ? `<div class="liste">${liste.map((n) => ligne({
-      icone: n.type === 'decision' ? 'drapeau' : n.type === 'risque' ? 'alerte' : n.type === 'idee' ? 'ampoule' : 'note', ton: (TYPES_NOTE[n.type] || {}).voile === 'violet' ? 'violet' : (TYPES_NOTE[n.type] || {}).voile === 'rouge' ? 'rouge' : '',
-      titre: echapper(n.titre), sous: `${echapper(dateCourte(n.date))}${n.decidePar ? ` · ${echapper(n.decidePar)}` : ''}${n.visibilite === 'interne' ? ' · Interne' : ''}`,
-      fin: pastille(TYPES_NOTE, n.type || 'information'), action: 'ouvrir-note', attrs: `data-id="${echapper(n.id)}"`,
-    })).join('')}</div>`
-    : vide({ icone: 'note', titre: 'Aucune décision consignée', texte: 'Les décisions importantes vivent ici plutôt que dans une conversation.' })}
-  </section>`;
-};
-
-const ouvrirNote = (n, { pid, env }) => {
-  const equipe = env.role === 'equipe';
-  const m = modale({
-    titre: n.titre, sousTitre: `${(TYPES_NOTE[n.type] || {}).libelle || ''} · ${dateCourte(n.date)}${n.decidePar ? ` · ${n.decidePar}` : ''}`, feuille: true,
-    corps: `<div class="prose t-corps">${avecLiens(n.contenu || '')}</div>
-      ${n.contexte ? `<div style="margin-top:20px"><p class="surtitre">Contexte</p><div class="prose t-corps t-2" style="margin-top:6px">${enParagraphes(n.contexte)}</div></div>` : ''}
-      ${n.impact ? `<div style="margin-top:20px"><p class="surtitre">Impact</p><div class="prose t-corps t-2" style="margin-top:6px">${enParagraphes(n.impact)}</div></div>` : ''}`,
-    pied: equipe ? `<button class="btn btn-danger" type="button" data-suppr>Supprimer</button><span class="pousse"></span><button class="btn btn-secondaire" type="button" data-fermer>Fermer</button><button class="btn btn-principal" type="button" data-editer>Modifier</button>` : `<button class="btn btn-principal" type="button" data-fermer>Fermer</button>`,
-  });
-  sur(m.el, 'click', '[data-editer]', () => { m.fermer(); editer('note', env, { pid, fiche: n }); });
-  sur(m.el, 'click', '[data-suppr]', async () => { const ok = await supprimer('note', env, { pid, fiche: n, libelle: 'cette note' }); if (ok) m.fermer(); });
-};
+/* Les notes et décisions ont leur page (vues/notes-projet.js, route
+   /projets/:id/notes) : l'ancien onglet et sa fiche, jamais atteints, sont
+   retirés (refonte du Cockpit, lot 6, P-219). */
 
 void montant; void pastilleTexte; void chronoItem; void parJour; void valider; void obligatoire; void heure; void STATUTS_VALIDATION;

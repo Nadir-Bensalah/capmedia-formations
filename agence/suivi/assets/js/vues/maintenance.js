@@ -661,6 +661,10 @@ export const vue = async (ctx, env) => {
     }
   });
 
+  /* Un seul dessin, toutes les clés suivies arrivées (lot 6, H-30) : sans
+     lui, la page se peignait sans forfaits ni pièces, puis se repeignait.
+     Les clés d'un client se découvrent avec ses projets : chaque arrivée
+     ajoute les siennes avant le premier dessin. */
   const suivies = new Set();
   const suivre = () => {
     clesSuivies().forEach((c) => {
@@ -669,11 +673,12 @@ export const vue = async (ctx, env) => {
       lot.sur(c, surChangement);
     });
   };
-  const surChangement = () => { suivre(); rendre(); };
+  const planifier = magasin.dessinateur(() => rendre(), 40, clesSuivies);
+  function surChangement() { suivre(); planifier(); }
   suivre();
-  rendre(true);
+  planifier();
 
-  return () => { gestes(); lot.fin(); };
+  return () => { planifier.arreter(); gestes(); lot.fin(); };
 };
 
 void joursAvant;

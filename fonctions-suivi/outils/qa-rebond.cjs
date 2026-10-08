@@ -50,10 +50,10 @@ const sonder=(page)=>page.evaluate(()=>{
       s.ev.push({t:Math.round(performance.now()),image:s.image,genre,squelette,taille:(n.innerHTML||'').length,scroll:Math.round(scrollY)});}}});
   obs.observe(document.querySelector('#vue'),{childList:true,subtree:true});
 });
-const relever=async(page,geste)=>{
+const relever=async(page,geste,attente=1400)=>{
   await page.evaluate(()=>{window.__sonde.ev=[];window.__sonde.t0=performance.now();});
   await geste();
-  await pause(1400);
+  await pause(attente);
   const r=await page.evaluate(()=>{const s=window.__sonde;const pages=s.ev.filter(e=>e.genre==='page');const onglets=s.ev.filter(e=>e.genre==='onglet');const tableaux=s.ev.filter(e=>e.genre==='tableau');
     const tous=[...pages,...onglets,...tableaux].sort((a,b)=>a.t-b.t);
     /* Ce qui a été PEINT : un remplacement par image affichée. Le tableau
@@ -88,7 +88,7 @@ const ligne=(nom,r)=>console.log(`  ${nom.padEnd(40)} peints=${r.peints} contenu
     await sonder(page);
     const aller=(h)=>()=>page.evaluate(x=>{location.hash=x;},h);
     const releves={};
-    const mesurer=async(nom,geste)=>{const r=await relever(page,geste);releves[nom]=r;ligne(nom,r);return r;};
+    const mesurer=async(nom,geste,attente)=>{const r=await relever(page,geste,attente);releves[nom]=r;ligne(nom,r);return r;};
 
     await mesurer('projet (arrivée)',aller('/projets/atelier'));
     /* Refonte du Cockpit, lot 2 : côté équipe, Fichiers et Activité ne sont
@@ -137,6 +137,14 @@ const ligne=(nom,r)=>console.log(`  ${nom.padEnd(40)} peints=${r.peints} contenu
       await mesurer('page Axes',aller('/projets/atelier/evolutions'));
       const plateformeAxe=await page.$$eval('[data-axe-filtre]',(bs)=>bs.map((b)=>b.dataset.axeFiltre).filter(Boolean)[0]||'').catch(()=>'');
       if(plateformeAxe)await mesurer('adresse axes : plateforme',cliquer(`[data-axe-filtre="${plateformeAxe}"]`));
+      /* Lot 6 de la refonte : les pages de l'équipe passées au dessinateur
+         à clés (H-30). Première visite : la donnée peut venir du serveur, le
+         squelette a le droit d'être peint, le contenu une seule fois (et pas
+         une page vide puis pleine). Puis un retour : la donnée est là, ni
+         squelette ni second dessin. */
+      const PAGES_L6=[['Clients','/clients'],['fiche client','/clients/atelier-nord'],['Validations','/validations'],['Équipe','/equipe'],['Archives','/archives'],['Projets à faire','/a-faire'],['Nouveaux projets','/nouveaux-projets'],['Paramètres','/parametres'],['Mon profil','/moi'],['Testeurs','/testeurs-messages'],['Maintenance','/maintenance'],['Maintenance du projet','/maintenance?projet=atelier'],['E-mails envoyés','/emails']];
+      for(const [nom,h] of PAGES_L6){await mesurer(`visite ${nom}`,aller(h),2600);await mesurer('page Projets (entre deux)',aller('/projets'));}
+      for(const [nom,h] of PAGES_L6.filter(([n])=>n!=='E-mails envoyés')){await mesurer(`page ${nom} (retour)`,aller(h));await mesurer('page Tâches (entre deux)',aller('/taches'));}
     }
     else{await mesurer('page Accueil',aller('/'));await mesurer('page Demandes',aller('/demandes'));}
     await mesurer('page Tests (retour)',aller('/tests?projet=atelier'));
@@ -179,6 +187,13 @@ const ligne=(nom,r)=>console.log(`  ${nom.padEnd(40)} peints=${r.peints} contenu
        d'être peint, mais le contenu une seule fois. Retour : plus de squelette. */
     const retours=pages.filter(([n])=>!(n.startsWith('page Tests')&&!n.includes('retour')));
     verifier(retours.every(([,r])=>!r.squelettePeint),'sans squelette peint quand la donnée est déjà là',retours.filter(([,r])=>r.squelettePeint).map(([n])=>n).join(' '));
+    if(role==='équipe'){
+      /* Lot 6 : la première visite d'une page de l'équipe ne peint son
+         contenu qu'une fois (squelette permis, jamais vide puis plein). */
+      const visites=Object.entries(releves).filter(([n])=>n.startsWith('visite '));
+      verifier(visites.length>=13,'les pages du lot 6 sont mesurées',`${visites.length}`);
+      verifier(visites.every(([,r])=>r.contenus===1),'une première visite ne peint son contenu qu une fois',visites.filter(([,r])=>r.contenus!==1).map(([n,r])=>`${n}:${r.contenus}`).join(' '));
+    }
     const arrivee=releves['projet (arrivée)'];
     verifier(arrivee&&arrivee.contenus===1,'la première arrivée sur un projet ne peint son contenu qu\'une fois',arrivee&&`${arrivee.contenus}`);
     await ctx.close();

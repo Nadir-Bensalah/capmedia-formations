@@ -45,7 +45,8 @@ export const nouvelle = async (ctx, env) => {
   abonnerProjet(lot, pid, env.role);
   const projet = await magasin.attendre(K.projet(pid)).catch(() => null);
   if (!projet) { sortie.innerHTML = `<div class="page">${vide({ icone: 'projets', titre: 'Projet introuvable' })}</div>`; return () => lot.fin(); }
-  /* Le client dit « ticket », l'équipe « demande » (02/10). */
+  /* Le client dit « ticket », l'équipe aussi depuis la refonte du Cockpit
+     (lots 4 et 6, 07/10/2026). */
   const client = env.role !== 'equipe';
   /* Les mots du client des deux côtés (refonte du Cockpit, lot 4). */
   titrePage('Nouveau ticket');
@@ -104,8 +105,8 @@ export const nouvelle = async (ctx, env) => {
   const chapo = client
     ? "Dites-nous ce dont vous avez besoin. Plus c'est précis, plus vite on avance. Vous recevrez un e-mail à chaque étape."
     : (pourQui
-      ? `Ouvrez une demande au nom du projet. Elle apparaît aussitôt dans l'espace de ${pourQui}, qui est prévenu par e-mail et peut y répondre.`
-      : "Ouvrez une demande au nom du projet. Elle apparaît aussitôt dans l'espace du client, qui est prévenu par e-mail et peut y répondre.");
+      ? `Ouvrez un ticket au nom du projet. Il apparaît aussitôt dans l'espace de ${pourQui}, qui est prévenu par e-mail et peut y répondre.`
+      : "Ouvrez un ticket au nom du projet. Il apparaît aussitôt dans l'espace du client, qui est prévenu par e-mail et peut y répondre.");
   const aideUrgence = client
     ? Object.values(URGENCES).map((u) => `${u.libelle} : ${u.aide}`).join(' ')
     : 'Bloquant : le client ne peut plus travailler. Critique : une fonction majeure est cassée, il contourne. Important : à traiter dans le cours du projet. Mineur : un détail, quand ce sera possible.';
@@ -157,7 +158,7 @@ export const nouvelle = async (ctx, env) => {
     const visibles = CHAMPS_PAR_TYPE[type] || CHAMPS_PAR_TYPE.autre;
     sortie.querySelectorAll('[data-champ]').forEach((el) => { el.classList.toggle('masque', !visibles.includes(el.dataset.champ)); });
     const bouton = forme.querySelector('[type="submit"]');
-    bouton.textContent = type === 'bug' ? "Signaler l'anomalie" : type === 'devis' ? 'Demander un devis' : (client ? 'Envoyer le ticket' : 'Envoyer la demande');
+    bouton.textContent = type === 'bug' ? "Signaler l'anomalie" : type === 'devis' ? 'Demander un devis' : 'Envoyer le ticket';
     /* « Résultat attendu » et « Ce qui devrait se passer » sont des mots
        d'anomalie : pour une nouvelle fonctionnalité, on demande ce que
        l'application devrait permettre. */
@@ -189,7 +190,7 @@ export const nouvelle = async (ctx, env) => {
     const liensSaisis = (v) => String(v || '').split(/\s+/).filter(Boolean);
     if (!valider(forme, {
       titre: (v) => obligatoire('Donnez un titre.')(v) || longueurMax(120)(v),
-      description: (v) => obligatoire(client ? 'Décrivez votre besoin.' : 'Décrivez votre demande.')(v) || longueurMax(6000)(v),
+      description: (v) => obligatoire(client ? 'Décrivez votre besoin.' : 'Décrivez le besoin.')(v) || longueurMax(6000)(v),
       liens: (v) => (liensSaisis(v).some((l) => !/^https?:\/\/\S+$/.test(l)) ? 'Une adresse commence par http:// ou https://.' : (liensSaisis(v).length > 10 ? 'Dix liens au maximum.' : '')),
     })) return;
     if (pieces.occupe) { toast('Attendez la fin des envois.', 'erreur'); return; }
@@ -202,7 +203,7 @@ export const nouvelle = async (ctx, env) => {
     await agir(forme.querySelector('[type="submit"]'), async () => {
       const id = await ecrire.creerDemande(env.session, pid, d, pieces.pieces);
       naviguer(`/projets/${pid}/demandes/${id}`);
-    }, client ? 'Ticket envoyé. Nous vous répondons vite.' : 'Demande ouverte. Le client la voit dans son espace.');
+    }, client ? 'Ticket envoyé. Nous vous répondons vite.' : 'Ticket ouvert. Le client le voit dans son espace.');
   });
 
   return () => lot.fin();
@@ -285,13 +286,13 @@ export const detail = async (ctx, env) => {
     sortie.innerHTML = `<div class="page" style="max-width:960px">
       <header class="page-tete" style="align-items:flex-start">
         <div style="min-width:0">
-          <p class="surtitre">${echapper([t.numero || 'Numéro en attente', projet.nom, (TYPES[t.type] || {}).libelle].filter(Boolean).join(' · '))}</p>
+          <p class="surtitre">${echapper([t.numero || (equipe ? '' : 'Numéro en attente'), projet.nom, (TYPES[t.type] || {}).libelle].filter(Boolean).join(' · '))}</p>
           <h1 style="margin-top:2px">${echapper(t.titre)}</h1>
           <div class="rang" style="margin-top:10px">
             ${pastille(STATUTS, t.statut, { client: !equipe })}${puce(URGENCES, t.urgence || 'important')}
             ${t.qualification ? pastille(QUALIFICATIONS, t.qualification) : ''}
             ${t.plateforme ? `${pucePlateforme(t.plateforme)}${t.version ? `<span class="puce t-3">version ${echapper(t.version)}</span>` : ''}` : ''}
-            <span class="puce t-3">${icone('horloge')} ${equipe ? 'ouverte' : 'ouvert'} ${echapper(depuis(t.cree))}</span>
+            <span class="puce t-3">${icone('horloge')} ouvert ${echapper(depuis(t.cree))}</span>
           </div>
         </div>
         <div class="actions">
@@ -327,7 +328,7 @@ export const detail = async (ctx, env) => {
           <section class="carte" style="margin-top:var(--e-5)">
             <p class="surtitre">Échanges</p>
             <div class="fil" id="fil" style="margin-top:14px">
-              ${messages.length ? messages.map((m) => messageHtml(m, { moi: env.session.utilisateur.uid })).join('') : '<p class="t-petit t-3">Pas encore d\'échange. Écrivez-nous ci-dessous.</p>'}
+              ${messages.length ? messages.map((m) => messageHtml(m, { moi: env.session.utilisateur.uid })).join('') : `<p class="t-petit t-3">${equipe ? 'Pas encore d\'échange. Écrivez au client ci-dessous : il reçoit un e-mail. Une note interne reste entre vous.' : 'Pas encore d\'échange. Écrivez-nous ci-dessous.'}</p>`}
             </div>
             ${ouverte || equipe ? `<form class="composer" id="forme-message" novalidate>
               ${equipe ? `<div class="segments" role="group"><label class="interrupteur" style="padding:6px 10px"><input type="radio" name="mode" value="client" ${!interneCoche ? 'checked' : ''}> Répondre au client</label><label class="interrupteur" style="padding:6px 10px"><input type="radio" name="mode" value="interne" id="mode-interne" ${interneCoche ? 'checked' : ''}> Note interne</label></div>` : ''}
@@ -342,11 +343,11 @@ export const detail = async (ctx, env) => {
           <div class="carte carte--creuse">
             <p class="surtitre">Fiche</p>
             <dl class="faits" style="margin-top:10px;grid-template-columns:1fr">
-              ${fait(equipe ? 'Demandée par' : 'Demandé par', `${echapper((t.auteur || {}).nom || '')}${equipe && t.auteur && t.auteur.email ? `<br><span class="t-micro t-3">${echapper(t.auteur.email)}</span>` : ''}`)}
+              ${fait('Demandé par', `${echapper((t.auteur || {}).nom || '')}${equipe && t.auteur && t.auteur.email ? `<br><span class="t-micro t-3">${echapper(t.auteur.email)}</span>` : ''}`)}
               ${fait('Le', echapper(dateHeure(t.cree)))}
               ${equipe ? fait('Dernier mouvement', echapper(dateHeure(t.maj))) : ''}
-              ${fait(equipe ? 'Suivie par' : 'Suivi par', echapper(t.assigne ? (nomEquipe(t.assigne) || 'Capmedia') : (equipe ? 'Personne' : 'Capmedia')))}
-              ${t.constatePar && t.constatePar.nom ? fait(equipe ? 'Constatée par' : 'Constaté par', echapper(t.constatePar.nom)) : ''}
+              ${fait('Suivi par', echapper(t.assigne ? (nomEquipe(t.assigne) || 'Capmedia') : (equipe ? 'Personne' : 'Capmedia')))}
+              ${t.constatePar && t.constatePar.nom ? fait('Constaté par', echapper(t.constatePar.nom)) : ''}
               ${fait('Partie concernée', echapper(nomPartie(composants, t.composant)))}
             </dl>
           </div>
@@ -414,12 +415,12 @@ export const detail = async (ctx, env) => {
       /* Rouvrir demande un motif, dans la même fenêtre que « Pas tout à
          fait » : le mot part comme message, puis la demande repasse en cours. */
       demanderMotif({
-        titre: equipe ? 'Rouvrir cette demande ?' : 'Rouvrir ce ticket ?', sousTitre: equipe ? 'Dites-nous ce qui revient : elle repasse en cours et nous sommes prévenus.' : 'Dites-nous ce qui revient : il repasse en cours et nous sommes prévenus.',
-        etiquette: 'Pourquoi vous la rouvrez', placeholder: 'Ce qui se passe à nouveau, et depuis quand.', bouton: 'Rouvrir', manque: 'Dites-nous pourquoi vous la rouvrez.',
+        titre: 'Rouvrir ce ticket ?', sousTitre: equipe ? 'Dites ce qui revient : le ticket repasse en cours et le client le lit.' : 'Dites-nous ce qui revient : il repasse en cours et nous sommes prévenus.',
+        etiquette: 'Pourquoi vous le rouvrez', placeholder: 'Ce qui se passe à nouveau, et depuis quand.', bouton: 'Rouvrir', manque: equipe ? 'Dites pourquoi vous le rouvrez.' : 'Dites-nous pourquoi vous le rouvrez.',
       }, (bouton, texte) => agir(bouton, async () => {
         await ecrire.messageDemande(env.session, tid, texte);
         await ecrire.clientRouvreDemande(tid);
-      }, equipe ? 'Demande rouverte.' : 'Ticket rouvert.'));
+      }, 'Ticket rouvert.'));
       return null;
     }
     if (action === 'retirer') {
@@ -431,7 +432,7 @@ export const detail = async (ctx, env) => {
       /* Une capture arrivée après coup rejoint le signalement, sans passer
          par un message : la fonction existait, aucun écran ne l'appelait. */
       const restantes = Math.max(0, 10 - (t.pieces || []).length);
-      if (!restantes) { toast(`Dix pièces au maximum sur ${equipe ? 'une demande' : 'un ticket'}.`, 'erreur'); return null; }
+      if (!restantes) { toast(`Dix pièces au maximum sur un ticket.`, 'erreur'); return null; }
       const m = modale({
         titre: 'Ajouter une pièce', sousTitre: 'Une capture, une vidéo, un document : elle rejoint le signalement.',
         corps: '<div id="zone-pieces-ajout"></div>',
@@ -488,7 +489,7 @@ const demanderMotif = ({ titre, sousTitre, etiquette, placeholder, bouton, manqu
 const bandeauSuivi = (t, { equipe, release, nomEquipe, evenements, tickets = [], pid = '' }) => {
   const s = STATUTS[t.statut] || {};
   /* Le numéro d'une demande liée (suite, suivante), s'il est connu. */
-  const refDe = (id) => { const x = tickets.find((y) => y.id === id); return x ? (x.numero || x.titre) : (equipe ? 'une autre demande' : 'un autre ticket'); };
+  const refDe = (id) => { const x = tickets.find((y) => y.id === id); return x ? (x.numero || x.titre) : 'un autre ticket'; };
   const ouverte = OUVERTS.includes(t.statut);
   const chez = s.chez === 'client' ? (equipe ? 'client' : 'vous') : s.chez === 'capmedia' ? 'capmedia' : '';
   const ton = !ouverte ? (t.statut === 'resolu' ? 'ok' : 'gris') : chez === 'capmedia' ? 'info' : 'attention';
@@ -505,37 +506,42 @@ const bandeauSuivi = (t, { equipe, release, nomEquipe, evenements, tickets = [],
       <span class="suivi-demande-pastille">${icone(ouverte ? (chez === 'capmedia' ? 'play' : 'help') : 'check')}</span>
       <div style="min-width:0">
         <p class="t-titre-3">${echapper((!equipe && s.client) || s.libelle || t.statut)}</p>
-        <p class="t-petit t-2" style="margin-top:2px">${echapper([balle, (!equipe && s.suiteClient) || s.suite].filter(Boolean).join(' '))}</p>
+        <p class="t-petit t-2" style="margin-top:2px">${echapper([balle, equipe ? (s.suiteEquipe || '') : (s.suiteClient || s.suite)].filter(Boolean).join(' '))}</p>
       </div>
     </div>
     <dl class="suivi-demande-faits">
-      <div><dt>${equipe ? 'Ouverte depuis' : 'Ouvert depuis'}</dt><dd>${echapper(age(t.cree))}</dd></div>
+      <div><dt>Ouvert depuis</dt><dd>${echapper(age(t.cree))}</dd></div>
       <div><dt>Dernier mouvement</dt><dd>${echapper((dernier && age(dernier.date)) || age(t.maj) || age(t.cree))}</dd></div>
-      <div><dt>${equipe ? 'Suivie par' : 'Suivi par'}</dt><dd>${echapper(suivie)}</dd></div>
-      <div><dt>${equipe ? 'Livrée dans' : 'Livré dans'}</dt><dd>${release
+      <div><dt>${'Suivi par'}</dt><dd>${echapper(suivie)}</dd></div>
+      <div><dt>Livré dans</dt><dd>${release
         ? `${echapper([release.plateforme && (PLATEFORMES[release.plateforme] || {}).libelle, release.version].filter(Boolean).join(' '))} <span class="t-3">· ${echapper((STATUTS_RELEASE[release.statut] || {}).libelle || '')}${dateCourte(release.date) ? ` ${dateCourte(release.date)}` : ''}</span>`
         : '<span class="t-3">version pas encore fixée</span>'}</dd></div>
     </dl>
-    ${t.qualification === 'hors-perimetre' || t.qualification === 'a-chiffrer' ? `<p class="suivi-demande-note">${t.qualification === 'a-chiffrer' ? (equipe ? 'Cette demande sera chiffrée.' : 'Ce ticket sera chiffré.') : (equipe ? 'Cette demande sort du périmètre prévu.' : 'Ce ticket sort du périmètre prévu.')} ${t.devis ? `Le devis <a href="#/finances/${echapper(t.devis)}">est disponible</a>.` : 'Un devis vous sera proposé avant tout développement.'}</p>` : ''}
+    ${t.qualification === 'hors-perimetre' || t.qualification === 'a-chiffrer' ? `<p class="suivi-demande-note">${t.qualification === 'a-chiffrer' ? 'Ce ticket sera chiffré.' : 'Ce ticket sort du périmètre prévu.'} ${t.devis ? `Le devis <a href="#/finances/${echapper(t.devis)}">est disponible</a>.` : (equipe ? 'Un devis est à proposer au client avant tout développement.' : 'Un devis vous sera proposé avant tout développement.')}</p>` : ''}
     ${t.statut === 'refuse' && t.motifRefus ? `<p class="suivi-demande-note">Pourquoi : ${echapper(t.motifRefus)}</p>` : ''}
     ${t.suite ? `<p class="suivi-demande-note">Suite de <a href="#/projets/${echapper(pid)}/demandes/${echapper(t.suite)}">${echapper(refDe(t.suite))}</a>.</p>` : ''}
-    ${t.suivant ? `<p class="suivi-demande-note">${equipe ? 'Suivie par' : 'Suivi par'} <a href="#/projets/${echapper(pid)}/demandes/${echapper(t.suivant)}">${echapper(refDe(t.suivant))}</a>.</p>` : ''}
+    ${t.suivant ? `<p class="suivi-demande-note">${'Suivi par'} <a href="#/projets/${echapper(pid)}/demandes/${echapper(t.suivant)}">${echapper(refDe(t.suivant))}</a>.</p>` : ''}
   </section>`;
 };
 
 const texteEvenement = (e, nomEquipe, equipe = true) => {
   const par = (e.par && e.par.nom) || 'Capmedia';
-  if (e.type === 'creation') return `${equipe ? 'Demande créée' : 'Ticket créé'} par <strong>${echapper(par)}</strong>`;
+  if (e.type === 'creation') return `Ticket créé par <strong>${echapper(par)}</strong>`;
   /* Le client lit les statuts au masculin (« Reçu », « Résolu ») : ses mots. */
   const statut = (cle) => { const f = STATUTS[cle] || {}; return (!equipe && f.client) || f.libelle || cle || ''; };
   if (e.type === 'statut') return `Statut passé de <strong>${echapper(statut(e.avant))}</strong> à <strong>${echapper(statut(e.apres))}</strong> par ${echapper(par)}`;
   /* Le champ porte un identifiant : on cherche le nom AVANT de se rabattre
      dessus, faute de quoi le client lit un code Firebase. */
-  if (e.type === 'assignation') return `${equipe ? 'Confiée' : 'Confié'} à <strong>${echapper(nomEquipe(e.apres) || 'Capmedia')}</strong>`;
+  if (e.type === 'assignation') return `Confié à <strong>${echapper(nomEquipe(e.apres) || 'Capmedia')}</strong>`;
   if (e.type === 'urgence') return `Urgence passée à <strong>${echapper((URGENCES[e.apres] || {}).libelle || e.apres || '')}</strong>`;
-  if (e.type === 'qualification') return `${equipe ? 'Qualifiée' : 'Qualifié'} <strong>${echapper((QUALIFICATIONS[e.apres] || {}).libelle || e.apres || '')}</strong>`;
-  if (e.type === 'archive') return e.apres ? (equipe ? 'Archivée' : 'Archivé') : (equipe ? 'Sortie des archives' : 'Sorti des archives');
-  return `${echapper(e.type)} : ${echapper(e.avant || 'vide')} vers ${echapper(e.apres || 'vide')}`;
+  if (e.type === 'qualification') return `Qualifié <strong>${echapper((QUALIFICATIONS[e.apres] || {}).libelle || e.apres || '')}</strong>`;
+  if (e.type === 'archive') return e.apres ? 'Archivé' : 'Sorti des archives';
+  /* Un mouvement sans phrase à lui : son nom en clair, et ce qui a changé
+     entre guillemets (jamais la clé brute « type : avant vers apres »). */
+  const nom = ({ titre: 'Titre', description: 'Description', type: 'Nature', plateforme: 'Plateforme', version: 'Version', release: 'Version de livraison', devis: 'Devis lié', echeance: 'Échéance', partie: 'Partie', composant: 'Partie' })[e.type] || 'Fiche';
+  const valeur = (v) => (v === null || v === undefined || v === '' ? '' : (typeof v === 'object' ? '' : String(v)));
+  const avant = valeur(e.avant); const apres = valeur(e.apres);
+  return `${echapper(nom)} modifié${avant && apres ? ` : « ${echapper(avant)} » devient « ${echapper(apres)} »` : (apres ? ` : « ${echapper(apres)} »` : '')}`;
 };
 
 void avatar; void parDateAsc; void parDateDesc; void modale; void ATTEND_CLIENT; void encart; void pluriel;

@@ -454,7 +454,7 @@ export const vue = async (ctx, env) => {
       return;
     }
     if (!sections.length) {
-      sortie.innerHTML = `<div class="page plan">${tete}${vide({ icone: 'liste', titre: 'Le plan de tests est en préparation', texte: equipe ? 'Versez-le avec l\'outil d\'import (plan-tests-importer.mjs) : les sections apparaîtront ici.' : 'Il apparaîtra ici dès qu\'il sera prêt.' })}</div>`;
+      sortie.innerHTML = `<div class="page plan">${tete}${vide({ icone: 'liste', titre: 'Le plan de tests est en préparation', texte: equipe ? 'Il se charge depuis le fichier de tests du projet : ses sections apparaîtront ici dès le premier chargement.' : 'Il apparaîtra ici dès qu\'il sera prêt.' })}</div>`;
       return;
     }
 

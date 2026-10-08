@@ -148,33 +148,37 @@ const entreesProjetEquipe = (p, t) => {
   const arbitrer = p.interne ? 0
     : lireP(K.interlocuteurs).filter((i) => i.statut === 'actif' && !ROLES_CLIENT[i.role]).length + (interneDuProjet(pid).arbitragesAcces || []).length;
   const tests = scenarios || campagnes || anomalies.length || de(t.campagnes).length;
+  /* H-16 (refonte du Cockpit, lot 6) : une entrée dont la page serait vide
+     reste visible pour l'équipe (c'est elle qui la remplit), mais grisée,
+     avec « à remplir ». Le Hub, lui, la masque : il ne pose jamais ce drapeau. */
+  const aRemplir = (vide) => (vide ? { aRemplir: true, marque: { texte: 'à remplir', ton: 'gris' } } : {});
   return [
     { chemin: base, libelle: 'Aperçu', icone: 'accueil', exact: true, projet: pid },
-    { chemin: `${base}/demandes`, libelle: 'Tickets', icone: 'demandes', projet: pid, aussi: [`${base}/nouvelle-demande`], compte: { total: tickets.filter((x) => OUVERTS.includes(x.statut)).length, neuf: tickets.filter((x) => ATTEND_EQUIPE.includes(x.statut)).length } },
+    { chemin: `${base}/demandes`, libelle: 'Tickets', icone: 'demandes', projet: pid, aussi: [`${base}/nouvelle-demande`], compte: { total: tickets.filter((x) => OUVERTS.includes(x.statut)).length, neuf: tickets.filter((x) => ATTEND_EQUIPE.includes(x.statut)).length }, ...aRemplir(!tickets.length) },
     /* Un projet interne n'a pas de client : pas de conversation. */
     ...(!p.interne ? [{ chemin: `/messages/${pid}`, libelle: 'Messages', icone: 'messages', projet: pid, compte: { total: 0, neuf: t.nonLus(p) } }] : []),
     { chemin: `${base}/etapes`, libelle: 'Planning', icone: 'route', projet: pid },
-    { chemin: `${base}/notes`, libelle: 'Notes', icone: 'note', projet: pid, compte: { total: aValider } },
-    { chemin: `${base}/taches`, libelle: 'Tâches', icone: 'taches', projet: pid, compte: { total: taches.length, neuf: taches.filter((x) => x.echeance && joursAvant(x.echeance) < 0).length } },
-    { chemin: '/calendrier', lien: `/calendrier?projet=${encodeURIComponent(pid)}`, libelle: 'Calendrier', icone: 'calendrier', projet: pid, compte: { total: reunions.length } },
+    { chemin: `${base}/notes`, libelle: 'Notes', icone: 'note', projet: pid, compte: { total: aValider }, ...aRemplir(!lireP(K.notes).length) },
+    { chemin: `${base}/taches`, libelle: 'Tâches', icone: 'taches', projet: pid, compte: { total: taches.length, neuf: taches.filter((x) => x.echeance && joursAvant(x.echeance) < 0).length }, ...aRemplir(!de(t.taches).length) },
+    { chemin: '/calendrier', lien: `/calendrier?projet=${encodeURIComponent(pid)}`, libelle: 'Calendrier', icone: 'calendrier', projet: pid, compte: { total: reunions.length }, ...aRemplir(!de(t.reunions).length) },
     /* La console du projet ; un projet sans aucun test garde sa page
        vide, d'où l'on écrit le premier scénario. Animée pendant une
        campagne, comme l'entrée Tests de tous les projets. */
     tests
       ? { chemin: '/tests', lien: `/tests?projet=${encodeURIComponent(pid)}`, libelle: 'Campagne de tests', icone: 'bug', projet: pid, compte: { total: 0, neuf: anomalies.length }, enCours: campagnes ? (campagnes > 1 ? `${campagnes} campagnes de tests en cours` : 'campagne de tests en cours') : '' }
-      : { chemin: `${base}/tests`, libelle: 'Campagne de tests', icone: 'bug', projet: pid },
+      : { chemin: `${base}/tests`, libelle: 'Campagne de tests', icone: 'bug', projet: pid, ...aRemplir(true) },
     { chemin: `${base}/marketing`, libelle: 'Marketing', icone: 'trend', projet: pid, marque: { texte: 'À venir' } },
     { chemin: `${base}/coffre`, libelle: 'Coffre-fort', icone: 'cadenas', projet: pid, marque: coffre ? { texte: 'Chiffré', icone: 'cadenas', ton: 'vert', titre: 'Chiffré de bout en bout : Capmedia ne lit pas son contenu' } : null },
-    { chemin: '/fichiers', lien: `/fichiers?projet=${encodeURIComponent(pid)}`, libelle: 'Fichiers', icone: 'fichiers', projet: pid, compte: { total: fichiers.length } },
-    { chemin: `${base}/liens`, libelle: 'Ressources', icone: 'liens', projet: pid, compte: { total: liens } },
-    { chemin: `${base}/evolutions`, libelle: 'Axes d\'évolution', icone: 'ampoule', projet: pid, compte: { total: axes } },
+    { chemin: '/fichiers', lien: `/fichiers?projet=${encodeURIComponent(pid)}`, libelle: 'Fichiers', icone: 'fichiers', projet: pid, compte: { total: fichiers.length }, ...aRemplir(!fichiers.length) },
+    { chemin: `${base}/liens`, libelle: 'Ressources', icone: 'liens', projet: pid, compte: { total: liens }, ...aRemplir(!liens) },
+    { chemin: `${base}/evolutions`, libelle: 'Axes d\'évolution', icone: 'ampoule', projet: pid, compte: { total: axes }, ...aRemplir(!lireP(K.axes).length) },
     ...(t.finance ? [{ chemin: '/finances', lien: `/finances?projet=${encodeURIComponent(pid)}`, libelle: 'Devis et factures', icone: 'finances', projet: pid, compte: { total: 0, neuf: dues } }] : []),
     { chemin: '/maintenance', lien: `/maintenance?projet=${encodeURIComponent(pid)}`, libelle: 'Maintenance', icone: 'sante', projet: pid, compte: { total: 0, neuf: forfaitDemande ? 1 : 0 } },
     /* Stabilité et Salle de contrôle, en une entrée : la page Stabilité,
        d'où la Salle de contrôle s'ouvre en plein écran. */
     ...(liaison && liaison.actif !== false ? [{ chemin: `${base}/stabilite`, libelle: 'Santé de l\'app', icone: 'activite', projet: pid, aussi: [`${base}/controle`] }] : []),
     /* Les parties et toutes les versions ; chaque partie mène à sa page. */
-    { chemin: `${base}/composants`, libelle: 'Plateformes et versions', icone: 'composants', projet: pid, aussi: [`${base}/brique`, `${base}/releases`], compte: { total: parties } },
+    { chemin: `${base}/composants`, libelle: 'Plateformes et versions', icone: 'composants', projet: pid, aussi: [`${base}/brique`, `${base}/releases`], compte: { total: parties }, ...aRemplir(!parties) },
     ...(!p.interne ? [{ chemin: `${base}/acces`, libelle: 'Accès client', icone: 'utilisateurs', projet: pid, compte: p.ouvert === true ? { total: 0, neuf: arbitrer } : null, marque: p.ouvert === true ? null : { texte: 'fermé' } }] : []),
   ];
 };
@@ -630,7 +634,7 @@ definir([
   { chemin: '/projets/:id/demandes/:tid', vue: (ctx) => demande.detail(ctx, env) },
   /* Le lien d'un e-mail ou d'une notification de demande : le même que
      dans le hub, résolu dans le cockpit. */
-  { chemin: '/demande/:tid', vue: (ctx) => resoudreDemande(ctx) },
+  { chemin: '/demande/:tid', vue: (ctx) => resoudreDemande(ctx, env) },
   { chemin: '/projets/:id/taches/:tid', cle: (c) => `projet:${c.params.id}`, vue: (ctx) => projet.vue({ ...ctx, onglet: 'taches' }, env) },
   /* Les réunions d'un projet vivent dans son Calendrier : la fiche d'une
      réunion s'y ouvre par-dessus (lettres, notifications, liens anciens). */

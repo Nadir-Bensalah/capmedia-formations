@@ -306,7 +306,7 @@ export const messageHtml = (m, options = {}) => {
     ${avatar(de.nom || (equipe ? 'Capmedia' : 'Client'), { equipe })}
     <div>
       <div class="message-tete">
-        <span class="message-auteur">${echapper(de.nom || (equipe ? 'Capmedia' : 'Vous'))}${moi ? ' <span class="t-3">(vous)</span>' : ''}</span>
+        <span class="message-auteur">${echapper(de.nom || (equipe ? 'Capmedia' : (moi ? 'Vous' : 'Le client')))}${moi ? ' <span class="t-3">(vous)</span>' : ''}</span>
         <span class="message-date">${echapper(depuis(m.date))}</span>
         ${m.modifie && !supprime ? '<span class="message-modifie">modifié</span>' : ''}
         ${m.interne ? '<span class="marque-interne">Note interne</span>' : ''}

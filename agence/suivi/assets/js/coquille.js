@@ -198,7 +198,7 @@ const marqueHtml = (marque) => {
 };
 
 const lienHtml = (it, classe = '') => `
-        <a class="lat-lien${classe}${it.sous ? ' lat-sous-lien' : ''}${it.enCours ? ' lat-lien--en-cours' : ''}" href="#${echapper(it.lien || it.chemin)}" data-chemin="${echapper(it.chemin)}"${it.projet ? ` data-projet="${echapper(it.projet)}"` : ''}${it.exact ? ' data-exact' : ''}${it.aussi && it.aussi.length ? ` data-aussi="${echapper(it.aussi.join(' '))}"` : ''}>
+        <a class="lat-lien${classe}${it.sous ? ' lat-sous-lien' : ''}${it.enCours ? ' lat-lien--en-cours' : ''}${it.aRemplir ? ' lat-lien--a-remplir' : ''}" href="#${echapper(it.lien || it.chemin)}" data-chemin="${echapper(it.chemin)}"${it.projet ? ` data-projet="${echapper(it.projet)}"` : ''}${it.exact ? ' data-exact' : ''}${it.aussi && it.aussi.length ? ` data-aussi="${echapper(it.aussi.join(' '))}"` : ''}>
           ${it.ecusson || (it.icone ? icone(it.icone) : '')}<span class="tronque">${echapper(it.libelle)}</span>${it.enCours ? `<span class="sr-only">, ${echapper(it.enCours)}</span>` : ''}${compteHtml(typeof it.compte === 'function' ? it.compte() : it.compte)}${repereHtml(it.repere)}${marqueHtml(it.marque)}
         </a>`;
 
