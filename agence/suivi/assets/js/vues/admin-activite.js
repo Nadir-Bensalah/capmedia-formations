@@ -3,7 +3,7 @@
    ========================================================================== */
 
 import { echapper, parDateDesc } from '../noyau.js';
-import { squelette, titrePage, sur } from '../ui.js';
+import { squelette, titrePage, sur, vide } from '../ui.js';
 import * as magasin from '../magasin.js';
 import { K, abonnerActiviteProjet } from '../donnees.js';
 import { filAriane } from '../coquille.js';
@@ -40,7 +40,8 @@ export const vue = async (ctx, env) => {
       <div class="page-tete"><div><h1>Activité</h1><p class="chapo">Chaque mouvement, issu des vrais événements des projets.</p></div>
         <div class="actions"><select class="select" id="f-projet" style="width:auto"><option value="">Tous les projets</option>${projets.map((p) => `<option value="${echapper(p.id)}" ${etat.projet === p.id ? 'selected' : ''}>${echapper(p.nom)}</option>`).join('')}</select><label class="case"><input type="checkbox" id="f-interne" ${etat.interne ? 'checked' : ''}> Inclure l'interne</label></div></div>
       <div class="filtres" style="margin-bottom:20px">${Object.entries(NATURES).map(([c, l]) => `<button class="filtre${etat.nature === c ? ' actif' : ''}" type="button" data-nature="${c}">${l}</button>`).join('')}</div>
-      ${activiteHtml(activite.slice(0, 200), { avecProjet: true, equipe: true })}
+      ${activite.length || (!etat.projet && !etat.nature && etat.interne) ? activiteHtml(activite.slice(0, 200), { avecProjet: true, equipe: true })
+        : vide({ icone: 'activite', titre: 'Aucun mouvement ici', texte: 'Rien ne correspond à ces filtres.', action: etat.nature || !etat.interne ? `<a class="btn btn-secondaire" href="#${adresseAvec('/activite', { projet: etat.projet })}">${etat.projet ? 'Tous les mouvements du projet' : 'Tous les mouvements'}</a>` : '<a class="btn btn-secondaire" href="#/activite">Tous les projets</a>', compact: true })}
     </div>`;
     /* La même page, à l'identique : rien à repeindre. */
     if (html === dernierHtml && sortie.querySelector('#f-projet')) return;

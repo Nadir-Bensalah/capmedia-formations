@@ -27,11 +27,11 @@ export const vue = async (ctx, env) => {
     const nomProjet = (pid) => ((projets.find((p) => p.id === pid) || {}).nom || '');
     const attente = validations.filter((v) => v.statut === 'en-attente').sort(parDateDesc('cree'));
     const repondues = validations.filter((v) => v.statut !== 'en-attente').sort(parDateDesc('maj'));
-    const bloc = (v) => ligne({ icone: v.statut === 'approuvee' ? 'check' : v.statut === 'modifications' ? 'edit' : 'valider', ton: v.statut === 'approuvee' ? 'vert' : v.statut === 'modifications' ? 'ambre' : 'violet', titre: echapper(v.titre), sous: `${echapper(TYPES_VALIDATION[v.type] || '')} · ${echapper(nomProjet(v.projet))} · ${echapper(depuis(v.cree))}${v.echeance && v.statut === 'en-attente' ? ` ${echeanceHtml(echeance(v.echeance))}` : ''}${v.reponse && v.reponse.nom ? ` · ${echapper(v.reponse.nom)} le ${echapper(dateCourte(v.reponse.date))}` : ''}`, fin: pastille(STATUTS_VALIDATION, v.statut), action: 'ouvrir', attrs: `data-id="${echapper(v.id)}"` });
+    const bloc = (v) => ligne({ icone: v.statut === 'approuvee' ? 'check' : v.statut === 'modifications' ? 'edit' : 'valider', ton: v.statut === 'approuvee' ? 'vert' : v.statut === 'modifications' ? 'ambre' : 'violet', titre: echapper(v.titre), sous: `${[TYPES_VALIDATION[v.type] || 'Validation', nomProjet(v.projet) || '–', depuis(v.cree) || '–'].map(echapper).join(' · ')}${v.echeance && v.statut === 'en-attente' ? ` ${echeanceHtml(echeance(v.echeance))}` : ''}${v.reponse && v.reponse.nom ? ` · ${echapper(v.reponse.nom)} le ${echapper(dateCourte(v.reponse.date))}` : ''}`, fin: pastille(STATUTS_VALIDATION, v.statut), action: 'ouvrir', attrs: `data-id="${echapper(v.id)}"` });
     sortie.innerHTML = `<div class="page">
       <div class="page-tete"><div><h1>Validations</h1><p class="chapo">${attente.length ? `${attente.length} en attente du client.` : 'Rien n\'attend le client.'}</p></div><div class="actions"><button class="btn btn-principal" type="button" data-nouvelle>${icone('plus')} Demander une validation</button></div></div>
-      ${attente.length ? `<section class="section" style="margin-top:0"><div class="section-tete"><h2>En attente</h2></div><div class="liste">${attente.map(bloc).join('')}</div></section>` : vide({ icone: 'valider', titre: 'Aucune validation en attente', compact: true })}
-      ${repondues.length ? `<section class="section"><div class="section-tete"><h2>Répondues</h2></div><div class="liste">${repondues.slice(0, 30).map(bloc).join('')}</div></section>` : ''}
+      ${attente.length ? `<section class="section" style="margin-top:0"><div class="section-tete"><h2>En attente</h2></div><div class="liste">${attente.map(bloc).join('')}</div></section>` : vide({ icone: 'valider', titre: 'Aucune validation en attente', texte: 'Une maquette, un texte, une version à faire approuver : le client répond depuis son espace.', action: '<button class="btn btn-secondaire" type="button" data-nouvelle>Demander une validation</button>', compact: true })}
+      ${repondues.length ? `<section class="section"><div class="section-tete"><h2>Répondues</h2>${repondues.length > 30 ? `<span class="t-petit t-3">les 30 dernières sur ${repondues.length}</span>` : ''}</div><div class="liste">${repondues.slice(0, 30).map(bloc).join('')}</div></section>` : ''}
     </div>`;
     ouvrirDepuisAdresse(validations, projets);
   };
@@ -60,9 +60,13 @@ export const vue = async (ctx, env) => {
     const v = (magasin.lire(K.validationsToutes) || []).find((x) => x.id === el.dataset.id);
     if (v) ouvrirValidation(v, env, projets);
   });
-  [K.projets, K.validationsToutes].forEach((c) => lot.sur(c, rendre));
+  /* Un seul dessin, les validations arrivées (lot 6, H-30). */
+  const cles = [K.projets, K.validationsToutes];
+  const planifier = magasin.dessinateur(rendre, 40, cles);
+  cles.forEach((c) => lot.sur(c, planifier));
+  planifier();
   return {
-    fin: () => { gestes(); lot.fin(); },
+    fin: () => { planifier.arreter(); gestes(); lot.fin(); },
     /* La fiche d'une autre validation par son adresse, sans remonter la page. */
     maj: (suite) => {
       const vid = (suite.params || {}).vid || null;

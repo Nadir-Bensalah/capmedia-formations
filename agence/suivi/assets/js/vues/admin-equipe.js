@@ -76,7 +76,7 @@ export const vue = async (ctx, env) => {
     const nomProjet = (pid) => ((projets.find((p) => p.id === pid) || {}).nom || pid);
     const adminsActifs = equipe.filter((e) => e.actif === true && e.role === 'admin').length;
     sortie.innerHTML = `<div class="page" style="max-width:920px">
-      <div class="page-tete"><div><h1>Équipe</h1><p class="chapo">Qui travaille dans le cockpit, avec quel rôle, sur quels projets.</p></div>
+      <div class="page-tete"><div><h1>Équipe</h1><p class="chapo">Qui travaille dans le Cockpit, avec quel rôle, sur quels projets.</p></div>
         <div class="actions">${gerer ? `<button class="btn btn-principal" type="button" data-action="ajouter">${icone('plus')} Ajouter un membre</button>` : ''}</div></div>
       ${gerer ? '' : encart("Seul un administrateur modifie l'équipe. Vous voyez ici qui y travaille.", 'info')}
       ${equipe.length ? `<div class="liste">${equipe.map((e) => {
@@ -89,8 +89,8 @@ export const vue = async (ctx, env) => {
           fin: gerer ? `<button class="btn-icone" type="button" data-action="menu" data-uid="${echapper(e.id)}" aria-label="Gérer ${echapper(e.nom || e.email)}">${icone('points')}</button>` : '',
           attrs: `data-membre="${echapper(e.id)}"`,
         });
-      }).join('')}</div>` : vide({ icone: 'utilisateurs', titre: 'Aucun membre', compact: true })}
-      <p class="t-micro t-3" style="margin-top:8px">Une fiche d'équipe est écrite par le serveur, jamais depuis le navigateur. Désactiver un membre ferme aussi sa session en cours.</p>
+      }).join('')}</div>` : vide({ icone: 'utilisateurs', titre: 'Aucun membre', texte: gerer ? 'Ajoutez la première personne : elle reçoit un e-mail et se connecte avec un code.' : 'Un administrateur ajoute les membres de l\'équipe.', action: gerer ? '<button class="btn btn-principal" type="button" data-action="ajouter">Ajouter un membre</button>' : '', compact: true })}
+      <p class="t-micro t-3" style="margin-top:8px">Seul un administrateur ajoute, modifie ou retire un membre. Désactiver un membre ferme aussi sa session en cours.</p>
     </div>`;
   };
 
@@ -145,6 +145,10 @@ export const vue = async (ctx, env) => {
     ]);
   });
 
-  [K.equipe, K.projets].forEach((c) => lot.sur(c, rendre));
-  return () => { gestes(); lot.fin(); };
+  /* Un seul dessin, l'équipe et les projets arrivés (lot 6, H-30). */
+  const cles = [K.equipe, K.projets];
+  const planifier = magasin.dessinateur(rendre, 40, cles);
+  cles.forEach((c) => lot.sur(c, planifier));
+  planifier();
+  return () => { planifier.arreter(); gestes(); lot.fin(); };
 };

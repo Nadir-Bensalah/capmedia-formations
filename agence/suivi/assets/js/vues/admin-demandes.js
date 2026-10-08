@@ -55,7 +55,7 @@ export const vue = async (ctx, env) => {
         <input class="champ" type="search" id="terme" placeholder="Numéro, titre, projet" value="${echapper(etat.terme)}" style="flex:1;min-width:200px" aria-label="Rechercher">
         <select class="select" id="f-projet" style="width:auto"><option value="">Tous les projets</option>${projets.map((p) => `<option value="${echapper(p.id)}" ${etat.projet === p.id ? 'selected' : ''}>${echapper(p.nom)}</option>`).join('')}</select>
         <select class="select" id="f-urgence" style="width:auto"><option value="">Toute urgence</option>${Object.entries(URGENCES).map(([c, u]) => `<option value="${c}" ${etat.urgence === c ? 'selected' : ''}>${echapper(u.libelle)}</option>`).join('')}</select>
-        <label class="case"><input type="checkbox" id="f-moi" ${etat.moi ? 'checked' : ''}> Assignées à moi</label>
+        <label class="case"><input type="checkbox" id="f-moi" ${etat.moi ? 'checked' : ''}> Confiés à moi</label>
       </div>
       <div class="onglets">${COLONNES.map((c) => `<button class="onglet${etat.colonne === c.cle ? ' actif' : ''}" type="button" data-colonne="${c.cle}">${echapper(c.libelle)}<span class="badge${c.cle === 'nouveau' && tous.filter(filtres).filter((t) => c.statuts.includes(t.statut)).length ? ' badge--vif' : ''}">${tous.filter(filtres).filter((t) => c.statuts.includes(t.statut)).length}</span></button>`).join('')}</div>
       ${liste.length ? `<div class="liste">${liste.map((t) => ligne({
@@ -65,8 +65,10 @@ export const vue = async (ctx, env) => {
         nonLu: nonLu(t) && OUVERTS.includes(t.statut),
         titre: `${t.numero ? `<span class="t-mono t-3" style="font-weight:400">${echapper(t.numero)}</span> ` : ''}${echapper(t.titre)}`,
         sous: `${echapper(nomProjet(t.projet))} · ${echapper((TYPES[t.type] || {}).libelle || t.type)} · ${echapper(OUVERTS.includes(t.statut) ? `ouverte depuis ${age(t.cree)}` : depuis(t.maj))}${t.plateforme ? ` ${pucePlateforme(t.plateforme, { court: true })}` : ''}${t.qualification ? ` ${pastille(QUALIFICATIONS, t.qualification)}` : ''}`,
-        fin: `${puce(URGENCES, t.urgence || 'important')}${pastille(STATUTS, t.statut)}${t.assigne ? '' : '<span class="etiquette">Sans assigné</span>'}`,
-      })).join('')}</div>` : vide({ icone: 'inbox', titre: 'Rien dans cette colonne', texte: etat.colonne === 'nouveau' ? 'Aucun nouveau ticket. Tout est pris en charge.' : '', compact: true })}
+        /* L'étiquette d'abord : l'urgence et le statut restent alignés en
+           colonne, au bout de chaque ligne. */
+        fin: `${t.assigne ? '' : '<span class="etiquette">À attribuer</span>'}${puce(URGENCES, t.urgence || 'important')}${pastille(STATUTS, t.statut)}`,
+      })).join('')}</div>` : vide({ icone: 'inbox', titre: 'Rien dans cette colonne', texte: etat.terme || etat.projet || etat.urgence || etat.moi ? 'Aucun ticket ne correspond à ces filtres.' : ({ nouveau: 'Aucun nouveau ticket. Tout est pris en charge.', 'a-traiter': 'Aucun ticket ne nous attend.', client: 'Aucun ticket n\'attend le client.', terminees: 'Aucun ticket terminé.' })[etat.colonne] || '', action: etat.terme || etat.projet || etat.urgence || etat.moi ? `<a class="btn btn-secondaire" href="#${adresse({ colonne: etat.colonne, projet: '', urgence: '', moi: false, terme: '' })}">Effacer les filtres</a>` : '<button class="btn btn-secondaire" type="button" data-nouveau-ticket>Nouveau ticket</button>', compact: true })}
     </div>`;
     sortie.querySelector('#terme').addEventListener('input', (e) => { etat.terme = e.target.value; reecrire(adresse()); const pos = e.target.selectionStart; rendre(); const c = sortie.querySelector('#terme'); c.focus(); c.setSelectionRange(pos, pos); });
     sortie.querySelector('#f-projet').addEventListener('change', (e) => { poser({ projet: e.target.value }); });
@@ -83,9 +85,13 @@ export const vue = async (ctx, env) => {
     }
     poser({ colonne: el.dataset.colonne });
   });
-  [K.projets, K.ticketsTous].forEach((c) => lot.sur(c, rendre));
+  /* Un seul dessin, les tickets arrivés (lot 6, H-30). */
+  const cles = [K.projets, K.ticketsTous];
+  const planifier = magasin.dessinateur(rendre, 40, cles);
+  cles.forEach((c) => lot.sur(c, planifier));
+  planifier();
   return {
-    fin: () => { gestes(); lot.fin(); },
+    fin: () => { planifier.arreter(); gestes(); lot.fin(); },
     /* Même page, autres filtres : un dessin, en place. */
     maj: (suite) => {
       const f = lireFiltres(suite.requete);

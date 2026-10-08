@@ -168,8 +168,10 @@ const attendre=async(fn,n=25)=>{for(let i=0;i<n;i++){const v=await fn();if(v)ret
     /* « Confiée à » dans l'historique d'une demande. */
     await aller(cl,'/projets/atelier/demandes/t-veille','.page');
     const fiche=await texte(cl,'.page');
-    if(/Confiée à/.test(fiche)){
-      verifier(!/Confiée à\s+[A-Za-z0-9]{20,}/.test(fiche),"« Confiée à » ne montre plus d'identifiant",(fiche.match(/Confiée à[^\n]{0,40}/)||[''])[0]);
+    /* « Confié à » au masculin pour le client (le ticket) : le contrôle lit
+       les deux accords, sinon il ne vérifiait plus rien. */
+    if(/Confiée? à/.test(fiche)){
+      verifier(!/Confiée? à\s+[A-Za-z0-9]{20,}/.test(fiche),"« Confié à » ne montre plus d'identifiant",(fiche.match(/Confiée? à[^\n]{0,40}/)||[''])[0]);
     } else ok("« Confiée à » ne figure pas sur cette demande, rien à vérifier");
 
     /* La feuille d'une campagne : le client lit « Testeur N ». */

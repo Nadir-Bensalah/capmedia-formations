@@ -88,7 +88,7 @@ export const vue = async (ctx, env) => {
         <label class="champ-groupe" style="display:block;margin-bottom:10px"><span class="t-petit t-2">Écrire à un testeur</span>
           <select class="champ" id="tm-nouveau"></select>
         </label>
-        <div class="tm-liste" id="tm-liste"></div>
+        <div class="tm-liste" id="tm-liste" aria-busy="true"></div>
       </aside>
       <section class="tm-fil-cadre">
         ${courante ? `
@@ -228,9 +228,15 @@ export const vue = async (ctx, env) => {
     }, (err) => console.warn('[testeurs] fil', err));
   }
 
-  const surConversations = () => { rendreListe(); rendreFil(); marquerLu(); };
-  [K.conversationsTesteurs, K.testeurs, K.campagnesToutes, K.projets].forEach((c) => lot.sur(c, surConversations));
-  rendreListe();
+  /* La liste ne se peint qu'une fois les conversations et le vivier
+     arrivés (lot 6, H-30) : avant, elle disait « Aucun message de
+     testeur » le temps que la donnée arrive. La place reste vide
+     jusque-là (le cadre de la page, lui, est peint d'un coup). */
+  const surConversations = () => { const l = $('#tm-liste'); if (l) l.removeAttribute('aria-busy'); rendreListe(); rendreFil(); marquerLu(); };
+  const cles = [K.conversationsTesteurs, K.testeurs, K.campagnesToutes, K.projets];
+  const planifier = magasin.dessinateur(surConversations, 40, cles);
+  cles.forEach((c) => lot.sur(c, planifier));
+  planifier();
   rendreFil(true);
-  return () => { if (arretFil) arretFil(); retraits.forEach((r) => r()); lot.fin(); };
+  return () => { planifier.arreter(); if (arretFil) arretFil(); retraits.forEach((r) => r()); lot.fin(); };
 };

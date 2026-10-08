@@ -86,16 +86,6 @@ const ongletValide = (o) => {
   const v = ALIAS_ONGLET[o] || o;
   return ONGLETS_TESTS.some((x) => x.cle === v) ? v : ONGLET_DEFAUT;
 };
-/* Quel onglet porte chaque section : pour un lien qui vise une section
-   (index, alerte, adresse), on ouvre d'abord le bon onglet. */
-const ONGLET_DE_SECTION = {
-  'etage-devis': 'devis',
-  'etage-humain': 'humains', campagnes: 'humains', anomalies: 'humains', testeurs: 'humains',
-  'etage-avis': 'humains', avis: 'humains',
-  'etage-machine': 'automatises', parcours: 'automatises', regles: 'automatises',
-  'etage-bibli': 'bibliotheque', scenarios: 'bibliotheque', bibliotheque: 'bibliotheque',
-  problemes: 'problemes',
-};
 
 /* --------------------------------------------------------------------------
    Ce qu'on lit, et ce qu'on en déduit
@@ -1751,8 +1741,6 @@ export const vue = async (ctx, env) => {
     /* Les filtres de la liste des problèmes. */
     filtres: Object.fromEntries(FILTRES_PROBLEMES.map((f) => [f, lire(ctx, f, '')])),
   };
-  /* Une section visée par un lien, à faire défiler une fois l'onglet ouvert. */
-  let allerA = '';
 
   let empreinte = '';
   /* Les lectures en groupe n'existent que côté équipe : les règles les lui
@@ -1907,11 +1895,6 @@ export const vue = async (ctx, env) => {
     }
 
     reglerBarreOnglets(sortie.querySelector('#onglets-tests'));
-    if (allerA) {
-      const cible = sortie.querySelector(`#${allerA}`);
-      allerA = '';
-      if (cible) cible.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
 
     const sel = sortie.querySelector('#f-projet');
     /* Changer de projet ou de plateforme, c'est changer d'adresse : le
@@ -1972,7 +1955,7 @@ export const vue = async (ctx, env) => {
     poser({ [sel.dataset.filtreProbleme]: sel.value, onglet: 'problemes' });
   };
   sortie.addEventListener('change', changeFiltre);
-  const gestes = sur(sortie, 'click', '[data-info], [data-aller], [data-nouvelle-anomalie], [data-editer-anomalie], [data-action="ouvrir-anomalie"], [data-plateforme], [data-scenario], [data-plier-bugs], [data-plier-scenarios], [data-plier-parcours], [data-plier-regles], [data-plier-questions], [data-nouvelle-regle], [data-editer-regle], [data-nouvelle-campagne], [data-editer-campagne], [data-action="ouvrir-campagne"], [data-nouveau-testeur], [data-action="ouvrir-testeur"], [data-nouveau-parcours], [data-editer-parcours], [data-action="nouveau"][data-genre="scenario"]', async (el) => {
+  const gestes = sur(sortie, 'click', '[data-info], [data-nouvelle-anomalie], [data-editer-anomalie], [data-action="ouvrir-anomalie"], [data-plateforme], [data-scenario], [data-plier-bugs], [data-plier-scenarios], [data-plier-parcours], [data-plier-regles], [data-plier-questions], [data-nouvelle-regle], [data-editer-regle], [data-nouvelle-campagne], [data-editer-campagne], [data-action="ouvrir-campagne"], [data-nouveau-testeur], [data-action="ouvrir-testeur"], [data-nouveau-parcours], [data-editer-parcours], [data-action="nouveau"][data-genre="scenario"]', async (el) => {
     /* Une référence n'est unique qu'à l'intérieur d'un projet : deux plans
        de tests portent chacun leur « DI-15 ». Chercher sans le projet
        ouvrirait l'énoncé d'une autre application, sans rien dire. */
@@ -1988,14 +1971,6 @@ export const vue = async (ctx, env) => {
     if (el.dataset.info) {
       const x = EXPLICATIONS[el.dataset.info];
       if (x) modale({ titre: x.titre, corps: `<div class="prose">${x.corps}</div>` });
-      return;
-    }
-    if (el.dataset.aller) {
-      const cible = sortie.querySelector(`#${el.dataset.aller}`);
-      if (cible) { cible.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
-      /* La section vit dans un autre onglet : on l'ouvre, puis on y va. */
-      const o = ONGLET_DE_SECTION[el.dataset.aller];
-      if (o) { allerA = el.dataset.aller; poser({ projet: etat.projet, plateforme: etat.plateforme, onglet: o === ONGLET_DEFAUT ? '' : o }); }
       return;
     }
     if (el.hasAttribute('data-plier-bugs')) {

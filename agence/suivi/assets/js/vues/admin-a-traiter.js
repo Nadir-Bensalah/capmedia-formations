@@ -175,7 +175,7 @@ export const vue = async (ctx, env) => {
           ${liste.length ? `<div class="liste">${liste.map((x) => ligne({
             href: `#${x.chemin}`, titre: echapper(x.titre), sous: echapper(x.sous), fin: x.fin || '', nonLu: x.nonLu,
             attrs: `data-genre-item="${echapper(g.cle)}"`,
-          })).join('')}</div>` : vide({ icone: 'check', titre: g.vide, compact: true })}
+          })).join('')}</div>` : vide({ icone: 'check', titre: g.vide, texte: 'Ce genre est traité.', action: '<a class="btn btn-secondaire" href="#/a-traiter">Voir tout ce qui attend</a>', compact: true })}
         </section>`;
       }).join('')}
     </div>`;

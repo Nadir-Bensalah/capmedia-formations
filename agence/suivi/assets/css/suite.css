@@ -439,6 +439,32 @@ svg[stroke-width="1.8"] { stroke-width: 1.6; }
 .forfait-chiffres, .rideau-etat, .suivi-demande-faits { border-top-color: var(--trait-fin); }
 
 /* ==========================================================================
+   Refonte du Cockpit, lot 6 : le téléphone. Les chiffres en deux colonnes
+   serrées, la messagerie en une colonne, le kanban empilé, les e-mails
+   envoyés en cartes. Rien ne défile plus de côté.
+   ========================================================================== */
+.messages-deux--liste { grid-template-columns: minmax(0, 280px) minmax(0, 1fr); }
+.messages-deux--liste > #liste-conversations { align-self: start; }
+@media (max-width: 720px) {
+  .metriques { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .metrique, .metrique:first-child { padding: 14px 16px; border-left: 0; border-top: 1px solid var(--trait-fin); }
+  .metrique:nth-child(-n+2) { border-top: 0; }
+  .metrique:nth-child(2n) { border-left: 1px solid var(--trait-fin); }
+  .metrique-valeur { font-size: 22px; }
+  .messages-deux--liste { grid-template-columns: minmax(0, 1fr); }
+  .messages-deux--liste > #liste-conversations { max-height: 32vh; overflow-y: auto; }
+  .kanban { grid-auto-flow: row; grid-auto-columns: auto; grid-template-columns: minmax(0, 1fr); overflow-x: visible; }
+  .kanban-col { min-height: 0; }
+  table[data-emails], table[data-emails] tbody, table[data-emails] tr { display: block; width: 100%; }
+  table[data-emails] thead { display: none; }
+  table[data-emails] tr { padding: 12px 4px; border-bottom: 1px solid var(--trait); }
+  table[data-emails] tr:last-child { border-bottom: 0; }
+  table[data-emails] td { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 8px; padding: 3px 0; border: 0; min-width: 0 !important; white-space: normal !important; }
+  table[data-emails] td::before { content: attr(data-libelle); font: 400 11.5px/1.6 var(--police); color: var(--encre-3); }
+  table[data-emails] tbody tr:hover td { background: none; }
+}
+
+/* ==========================================================================
    5. Les listes et les tableaux
    ========================================================================== */
 
@@ -1989,6 +2015,9 @@ button.lat-lien { background: transparent; border: 0; cursor: pointer; }
 .lat-lien .lat-marqueur { display: inline-flex; align-items: center; gap: 3px; font: 500 11.5px var(--police); letter-spacing: 0; color: var(--encre-3); white-space: nowrap; }
 .lat-lien .lat-marqueur svg { width: 12px; height: 12px; color: currentColor; stroke-width: 1.8; }
 .lat-lien .lat-marqueur--vert, .lat-lien .lat-marqueur--vert svg, .lat-lien.actif .lat-marqueur--vert svg, .lat-lien:hover .lat-marqueur--vert svg { color: var(--vert); }
+/* H-16 (Cockpit) : une entrée dont la page est encore vide, grisée, « à remplir ». */
+.lat-lien--a-remplir:not(.actif) > .tronque, .lat-lien--a-remplir:not(.actif) > svg { color: var(--encre-4); }
+.lat-lien .lat-marqueur--gris { color: var(--encre-4); font-weight: 400; }
 
 /* La bulle de discussion flotte en bas à droite sur toutes les pages du
    client : la page garde de la place en bas pour qu'aucun bouton ne passe
