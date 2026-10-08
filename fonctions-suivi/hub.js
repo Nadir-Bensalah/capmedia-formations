@@ -956,14 +956,19 @@ exports.hubProjetCree = onDocumentCreated({ region: REGION, document: 'projets/{
 /* ==========================================================================
    12 bis. Les tests avant la sortie, vus du client
 
-   Une anomalie qui naît d'un échec de testeur, une anomalie corrigée, une
-   campagne qui s'ouvre ou se ferme : le client en est prévenu dans le Hub
-   et par lettre (préférence « projet »). À la clôture d'une campagne, le
-   serveur crée la validation « Bon pour sortie », réservée au responsable :
-   c'est le feu vert du client pour la mise en ligne, et lui seul le donne.
+   Décision de Nadir du 08/10/2026 : AUCUNE notification au client pour
+   les tests. Ni lettre, ni push, ni cloche, ni activité visible quand une
+   campagne s'ouvre ou se ferme, quand un testeur termine, ni pour un
+   échec. Le client voit les résultats dans son Hub, c'est tout. Un échec
+   de testeur naît en anomalie interne « À confirmer » (suiviPassageKo) :
+   l'équipe est prévenue ; le client ne la lit qu'une fois l'équipe l'a
+   confirmée (confirmée ou corrigée), et le serveur la lui ouvre alors sans
+   bruit. Une anomalie déjà visible qui passe corrigée le dit encore au
+   client, comme avant. À la clôture d'une campagne, le serveur crée la
+   validation « Bon pour sortie », réservée au responsable : c'est le feu
+   vert du client pour la mise en ligne, et lui seul le donne.
    ========================================================================== */
 
-const LIBELLES_GRAVITE = { bloquant: 'bloquante', critique: 'critique', important: 'importante', mineur: 'mineure' };
 
 exports.hubAnomalieEcrite = onDocumentWritten({ region: REGION, document: 'projets/{projetId}/anomalies/{anomalieId}' }, async (evenement) => {
   const avant = evenement.data.before.exists ? evenement.data.before.data() : null;
@@ -971,18 +976,24 @@ exports.hubAnomalieEcrite = onDocumentWritten({ region: REGION, document: 'proje
   if (!apres) return;
   const { projetId, anomalieId } = evenement.params;
   const lien = `/tests?projet=${projetId}&anomalie=${anomalieId}`;
-  const gravite = LIBELLES_GRAVITE[apres.gravite] || apres.gravite || '';
   const variables = { projetNom: '', titre: apres.titre || '', scenario: apres.scenario || '', gravite: apres.gravite || '', description: apres.description || '', lien: LIEN(lien) };
   if (!avant) {
-    /* Une anomalie posée à la main par l'équipe n'est pas encore une
-       nouvelle pour le client : seule celle que les testeurs ont trouvée. */
+    /* Une anomalie posée à la main par l'équipe n'est pas une nouvelle ;
+       celle d'un testeur est pour l'équipe seule, à confirmer. */
     if (apres.origine !== 'testeur') return;
     const projet = await lireProjet(projetId);
-    await activite({ projet: projetId, type: 'test', texte: `Les testeurs ont trouvé une anomalie : « ${apres.titre || apres.scenario || ''} »`, par: { uid: null, nom: 'Capmedia Test', cote: 'equipe' }, lien, visibilite: 'client' });
-    await notifierClients(projet, 'anomalie', { type: 'test', titre: 'Une anomalie a été trouvée par les testeurs', texte: [apres.scenario, apres.titre, gravite].filter(Boolean).join(' · '), lien: `#${lien}`, projet: projetId });
-    await ecrireAuxClients(projet, 'anomalie', 'anomalie', { ...variables, projetNom: nomProjet(projet), evenement: 'trouvee' });
+    await activite({ projet: projetId, type: 'test', texte: `Les testeurs ont signalé un échec à confirmer : « ${apres.titre || apres.scenario || ''} »`, par: { uid: null, nom: 'Capmedia Test', cote: 'equipe' }, lien, visibilite: 'interne' });
+    await notifierEquipe(projetId, { type: 'test', titre: 'Un échec à confirmer', texte: [apres.scenario, apres.titre, nomProjet(projet), (apres.bugsConnus || []).length ? 'bug déjà connu' : ''].filter(Boolean).join(' · '), lien: `#${lien}`, projet: projetId });
     return;
   }
+  /* L'équipe a tranché : confirmée ou corrigée, l'anomalie d'un testeur
+     s'ouvre au client, sans notification. Fausse alerte : elle reste
+     interne. */
+  if (apres.interne === true && avant.statut !== apres.statut && ['confirmee', 'corrigee'].includes(apres.statut)) {
+    try { await evenement.data.after.ref.update({ interne: false }); } catch (err) { console.error('Anomalie non ouverte au client', err); }
+    return;
+  }
+  if (apres.interne === true) return;
   if (avant.statut === apres.statut || apres.statut !== 'corrigee') return;
   const projet = await lireProjet(projetId);
   await activite({ projet: projetId, type: 'test', texte: `a corrigé l'anomalie « ${apres.titre || apres.scenario || ''} »`, lien, visibilite: 'client' });
@@ -1016,23 +1027,11 @@ exports.hubCampagneEcrite = onDocumentWritten({ region: REGION, document: 'proje
   const statutAvant = avant ? avant.statut : null;
   if (statutAvant === apres.statut || !['en-cours', 'close'].includes(apres.statut)) return;
   const { projetId, campagneId } = evenement.params;
-  const projet = await lireProjet(projetId);
   const titre = apres.titre || 'Campagne de tests';
   const lien = `/tests?projet=${projetId}&campagne=${campagneId}`;
   const close = apres.statut === 'close';
-  let ouvertes = 0;
-  if (close) {
-    try {
-      const q = await bdd.collection(`projets/${projetId}/anomalies`).get();
-      ouvertes = q.docs.filter((d) => !['corrigee', 'sans-suite'].includes((d.data() || {}).statut)).length;
-    } catch (err) { console.error('Anomalies illisibles à la clôture', err); }
-  }
-  await activite({ projet: projetId, type: 'test', texte: close ? `a clos la campagne de tests « ${titre} »` : `a ouvert la campagne de tests « ${titre} »`, lien, visibilite: 'client' });
-  await notifierClients(projet, 'campagne', { type: 'test', titre: close ? 'Campagne close' : 'Campagne de tests ouverte', texte: titre, lien: `#${lien}`, projet: projetId });
-  await ecrireAuxClients(projet, 'campagne', 'campagne', {
-    projetNom: nomProjet(projet), titre, evenement: apres.statut, lien: LIEN(lien),
-    scenarios: (apres.scenarios || []).length, testeurs: (apres.testeurs || []).length, anomalies: ouvertes,
-  });
+  /* Rien pour le client (08/10/2026) : une trace interne, c'est tout. */
+  await activite({ projet: projetId, type: 'test', texte: close ? `a clos la campagne de tests « ${titre} »` : `a ouvert la campagne de tests « ${titre} »`, lien, visibilite: 'interne' });
   if (!close) return;
   /* Le feu vert de sortie : une validation par campagne close, jamais deux
      (rouvrir puis reclore la campagne ne redemande pas ce qui est déjà
@@ -1140,7 +1139,6 @@ exports.hubAppreciationEcrite = onDocumentWritten({ region: REGION, document: 'p
   const testeur = testeurDoc.exists ? testeurDoc.data() : {};
   const nomTesteur = testeur.prenom || testeur.email || 'Un testeur';
   const lienAdmin = `/tests?projet=${pid}`;
-  const lienClient = '/tests';
 
   if (vientDeTerminer) {
     const quand = enMillis(apres.termine) || Date.now();
@@ -1162,9 +1160,10 @@ exports.hubAppreciationEcrite = onDocumentWritten({ region: REGION, document: 'p
     const total = (campagne.testeurs || []).length;
     const titreCampagne = campagne.titre || 'la campagne';
 
-    await activite({ projet: pid, type: 'test', texte: `Un testeur a terminé la campagne « ${titreCampagne} » (${termines} sur ${total})`, par: { uid: null, nom: 'Capmedia Test', cote: 'equipe' }, lien: lienClient, visibilite: 'client' });
+    /* Pour l'équipe seule (08/10/2026) : le client ne reçoit rien des
+       tests, il lit les résultats dans son Hub. */
+    await activite({ projet: pid, type: 'test', texte: `Un testeur a terminé la campagne « ${titreCampagne} » (${termines} sur ${total})`, par: { uid: null, nom: 'Capmedia Test', cote: 'equipe' }, lien: lienAdmin, visibilite: 'interne' });
     await notifierEquipe(pid, { type: 'test', titre: `${nomTesteur} a terminé le test`, texte: `${titreCampagne} · ${bilan.compte.ok} réussis, ${bilan.compte.ko} échecs, ${bilan.compte.na} sans objet`, lien: `#${lienAdmin}`, projet: pid });
-    await notifierClients(projet, 'test', { type: 'test', titre: 'Un testeur a terminé', texte: `${titreCampagne} · ${termines} sur ${total} testeurs ont fini`, lien: `#${lienClient}`, projet: pid });
     await mettreEnFile('testeur-termine', contactsEquipe(), {
       projetNom: nomProjet(projet), campagne: titreCampagne, testeur: nomTesteur, email: testeur.email || '',
       ok: bilan.compte.ok, ko: bilan.compte.ko, na: bilan.compte.na, total: bilan.total, temps: dureeLisible(bilan.temps),

@@ -759,6 +759,19 @@ exports.suiviPassageKo = onDocumentWritten(
 
     const ref = bdd.doc(`projets/${projetId}/anomalies/ko-${apres.scenario}`);
     const le = dateApres && dateApres.toDate ? dateApres.toDate() : new Date();
+    /* Un bug déjà connu sur ce scénario et cette plateforme (une anomalie
+       des robots, ou d'une campagne passée) : l'échec y est rattaché, pour
+       que l'équipe tranche d'un coup d'œil. L'anomalie du testeur reste à
+       part : celle des robots se lit chez le client, les témoins non. */
+    let bugsConnus = [];
+    try {
+      const q = await bdd.collection(`projets/${projetId}/anomalies`).where('scenarios', 'array-contains', apres.scenario).get();
+      bugsConnus = q.docs.filter((d) => {
+        const x = d.data() || {};
+        const plats = Array.isArray(x.plateformes) ? x.plateformes : [];
+        return d.id !== `ko-${apres.scenario}` && x.statut !== 'sans-suite' && (!plats.length || !apres.plateforme || plats.includes(apres.plateforme));
+      }).map((d) => d.id).slice(0, 20);
+    } catch (err) { console.error('Bugs connus illisibles', err); }
     const temoin = {
       passage: `${campagneId}/${passageId}`, campagne: campagneId,
       testeur: apres.testeur || '', plateforme: apres.plateforme || '',
@@ -770,10 +783,12 @@ exports.suiviPassageKo = onDocumentWritten(
       await bdd.runTransaction(async (t) => {
         const d = await t.get(ref);
         if (!d.exists) {
+          /* Interne : rien chez le client avant que l'équipe confirme
+             (décision de Nadir du 08/10/2026). */
           t.set(ref, {
             titre: scenario.titre || apres.scenario,
             scenario: apres.scenario, bloc: scenario.bloc || '',
-            gravite: 'important', statut: 'nouvelle', origine: 'testeur',
+            gravite: 'important', statut: 'nouvelle', origine: 'testeur', interne: true, bugsConnus,
             description: '', passages: [temoin.passage], temoins: [temoin],
             plateformes: temoin.plateforme ? [temoin.plateforme] : [],
             cree: FieldValue.serverTimestamp(), maj: FieldValue.serverTimestamp(),
@@ -787,8 +802,12 @@ exports.suiviPassageKo = onDocumentWritten(
         /* Le même testeur qui corrige son commentaire ne fait pas un second
            témoin : on remplace le sien. */
         maj.temoins = (x.temoins || []).filter((w) => w.passage !== temoin.passage).concat([temoin]);
+        if (bugsConnus.length) maj.bugsConnus = FieldValue.arrayUnion(...bugsConnus);
+        /* Une anomalie close qui revient redevient « À confirmer », et
+           interne jusqu'à ce que l'équipe la confirme de nouveau. */
         if (['corrigee', 'sans-suite'].includes(x.statut)) {
           maj.statut = 'nouvelle';
+          maj.interne = true;
           maj.retours = FieldValue.increment(1);
         }
         void deja;

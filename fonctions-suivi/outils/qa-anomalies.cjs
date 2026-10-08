@@ -145,13 +145,20 @@ const str=(d,k)=>champ(d,k).stringValue||'';
     verifier(/Ce qui ne va pas/.test(await page.evaluate(()=>document.body.innerText))||true,'(la section haute existe)');
   }
 
-  console.log('\n== Le client la voit, sans la qualifier');
+  console.log('\n== Le client ne la voit qu une fois confirmée, sans la qualifier');
+  /* Décision du 08/10/2026 : l'échec d'un testeur (rouvert compris) reste
+     interne, « À confirmer », jusqu'à ce que l'équipe le confirme. */
+  verifier(champ(await lire('projets/atelier/anomalies/ko-DI-06'),'interne').booleanValue===true,'rouverte par un testeur, elle redevient interne');
   const nav2=await chromium.launch();
   const cl=await (await nav2.newContext({viewport:{width:1500,height:1100}})).newPage();
   await connecter(cl,'camille.essai@exemple.test');
   await aller(cl,'/tests?projet=atelier','#anomalies');
+  const avantC=await cl.evaluate(()=>(document.querySelector('#anomalies')||{}).innerText||'');
+  verifier(!/DI-06/.test(avantC),'le client ne la voit pas avant confirmation');
+  await fetch(bdd('projets/atelier/anomalies/ko-DI-06')+'?updateMask.fieldPaths=statut',{method:'PATCH',headers:{...prop,'Content-Type':'application/json'},body:JSON.stringify({fields:{statut:{stringValue:'confirmee'}}})});
+  for(let i=0;i<30;i++){ if(/DI-06/.test(await cl.evaluate(()=>(document.querySelector('#anomalies')||{}).innerText||''))) break; await pause(1000); }
   const c=await cl.evaluate(()=>{const s=document.querySelector('#anomalies');return{s:!!s,texte:s?s.innerText:'',boutons:s?s.querySelectorAll('[data-nouvelle-anomalie],[data-editer-anomalie]').length:0};});
-  verifier(c.s&&/DI-06/.test(c.texte),'il voit l anomalie');
+  verifier(c.s&&/DI-06/.test(c.texte),'confirmée, il la voit');
   verifier(c.boutons===0,'sans bouton pour la créer ni la qualifier');
   verifier(!/uid-karim|uid-sonia|@/.test(c.texte),'sans identifiant de testeur');
 

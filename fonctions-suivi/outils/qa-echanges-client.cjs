@@ -73,31 +73,44 @@ let page = null;
   await vider(`boites/${uid}/notifications`);
   await vider('envois');
 
-  console.log('\n== Le serveur : une anomalie trouvée par les testeurs, puis corrigée');
-  await poser('projets/atelier/anomalies/qa-ano', { titre: S('Le bouton Retour ne répond pas'), scenario: S('QA-01'), bloc: S('navigation'), gravite: S('important'), statut: S('nouvelle'), origine: S('testeur'), description: S('Sur iPhone, après le profil.'), passages: L([]), temoins: L([]), plateformes: L([S('ios')]), cree: T(new Date()), maj: T(new Date()) });
-  const notifAno = await attendre(async () => (await docs(`boites/${uid}/notifications?pageSize=100`)).find((n) => str(n, 'titre') === 'Une anomalie a été trouvée par les testeurs'));
-  verifier(Boolean(notifAno), 'Camille est notifiée « Une anomalie a été trouvée par les testeurs »');
-  verifier(notifAno && /QA-01/.test(str(notifAno, 'texte')) && /importante/.test(str(notifAno, 'texte')), 'avec le scénario et la gravité', notifAno ? str(notifAno, 'texte') : '');
-  const lettreAno = await attendre(async () => (await docs('envois?pageSize=200')).find((e) => str(e, 'modele') === 'anomalie'));
-  verifier(Boolean(lettreAno), 'et reçoit la lettre « anomalie »');
+  console.log('\n== Le serveur : un échec de testeur reste à l équipe, jusqu à ce qu elle le confirme');
+  /* Décision de Nadir du 08/10/2026 : aucune notification au client pour
+     les tests ; un échec de testeur naît interne, « À confirmer ». */
+  const agentUid = ((await admin.auth().getUserByEmail('agent.essai@exemple.test').catch(() => null)) || {}).uid || '';
+  if (agentUid) await vider(`boites/${agentUid}/notifications`);
+  await poser('projets/atelier/anomalies/qa-ano', { titre: S('Le bouton Retour ne répond pas'), scenario: S('QA-01'), bloc: S('navigation'), gravite: S('important'), statut: S('nouvelle'), origine: S('testeur'), interne: B(true), description: S('Sur iPhone, après le profil.'), passages: L([]), temoins: L([]), plateformes: L([S('ios')]), cree: T(new Date()), maj: T(new Date()) });
+  verifier(Boolean(agentUid) && Boolean(await attendre(async () => (await docs(`boites/${agentUid}/notifications?pageSize=100`)).find((n) => str(n, 'titre') === 'Un échec à confirmer'))), 'l équipe est prévenue « Un échec à confirmer »');
+  await pause(2500);
+  const notifsClient = async () => (await docs(`boites/${uid}/notifications?pageSize=200`)).filter((n) => str(n, 'type') === 'test');
+  verifier(!(await notifsClient()).length, 'Camille ne reçoit aucune notification de test', (await notifsClient()).map((n) => str(n, 'titre')).join(' | '));
+  verifier(!(await docs('envois?pageSize=200')).some((e) => ['anomalie', 'campagne'].includes(str(e, 'modele'))), 'ni lettre « anomalie »');
+  verifier(!(await docs('activite?pageSize=300')).some((a) => str(a, 'type') === 'test' && str(a, 'visibilite') === 'client'), 'ni activité de test visible du client');
+  await poser('projets/atelier/anomalies/qa-ano', { statut: S('confirmee'), maj: T(new Date()) }, ['statut', 'maj']);
+  verifier(Boolean(await attendre(async () => champ(await lire('projets/atelier/anomalies/qa-ano'), 'interne').booleanValue === false)), 'confirmée par l équipe, elle s ouvre au client (interne passe à faux)');
+  await pause(2000);
+  verifier(!(await notifsClient()).length, 'sans notification pour autant');
+  /* Une anomalie déjà visible qui passe corrigée le dit encore au client. */
   await poser('projets/atelier/anomalies/qa-ano', { statut: S('corrigee'), maj: T(new Date()) }, ['statut', 'maj']);
-  verifier(Boolean(await attendre(async () => (await docs(`boites/${uid}/notifications?pageSize=100`)).find((n) => str(n, 'titre') === 'Anomalie corrigée'))), 'puis « Anomalie corrigée » quand elle passe corrigée');
+  verifier(Boolean(await attendre(async () => (await docs(`boites/${uid}/notifications?pageSize=100`)).find((n) => str(n, 'titre') === 'Anomalie corrigée'))), 'visible, elle dit encore « Anomalie corrigée » quand elle passe corrigée');
   await poser('projets/atelier/anomalies/qa-ano', { statut: S('nouvelle'), maj: T(new Date()) }, ['statut', 'maj']);
 
-  console.log('\n== Le serveur : une campagne qui s ouvre, puis se ferme, et le feu vert de sortie');
+  console.log('\n== Le serveur : une campagne qui s ouvre, puis se ferme, sans rien dire au client ; le feu vert de sortie reste');
+  await vider(`boites/${uid}/notifications`);
   await poser('projets/atelier/campagnes/qa-sortie', { titre: S('Campagne de sortie QA'), statut: S('preparation'), actif: B(true), testeurs: L([]), scenarios: L([S('QA-01')]), affectation: M({}), maj: T(new Date()) });
   await pause(1500);
   await poser('projets/atelier/campagnes/qa-sortie', { statut: S('en-cours'), maj: T(new Date()) }, ['statut', 'maj']);
-  verifier(Boolean(await attendre(async () => (await docs(`boites/${uid}/notifications?pageSize=100`)).find((n) => str(n, 'titre') === 'Campagne de tests ouverte'))), '« Campagne de tests ouverte » à l ouverture');
+  verifier(Boolean(await attendre(async () => (await docs('activite?pageSize=300')).find((a) => /a ouvert la campagne de tests « Campagne de sortie QA »/.test(str(a, 'texte')) && str(a, 'visibilite') === 'interne'))), 'l ouverture laisse une trace interne');
   await poser('projets/atelier/campagnes/qa-sortie', { statut: S('close'), maj: T(new Date()) }, ['statut', 'maj']);
-  verifier(Boolean(await attendre(async () => (await docs(`boites/${uid}/notifications?pageSize=100`)).find((n) => str(n, 'titre') === 'Campagne close'))), '« Campagne close » à la clôture');
+  verifier(Boolean(await attendre(async () => (await docs('activite?pageSize=300')).find((a) => /a clos la campagne de tests « Campagne de sortie QA »/.test(str(a, 'texte')) && str(a, 'visibilite') === 'interne'))), 'la clôture aussi');
   const sortie = await attendre(async () => (await docs('validations?pageSize=200')).find((v) => str(v, 'type') === 'sortie' && str(v, 'projet') === 'atelier'));
   verifier(Boolean(sortie), 'le serveur crée la validation « Bon pour sortie »');
   verifier(sortie && str(sortie, 'titre') === 'Bon pour sortie : Campagne de sortie QA', 'avec le titre attendu', sortie ? str(sortie, 'titre') : '');
   verifier(sortie && champ(sortie, 'reserveeResponsable').booleanValue === true && str(sortie, 'statut') === 'en-attente', 'réservée au responsable, en attente');
   const cibleSortie = ((champ(sortie, 'cible').mapValue || {}).fields) || {};
   verifier(sortie && /campagne=qa-sortie/.test((cibleSortie.chemin || {}).stringValue || ''), 'avec le lien de la campagne');
-  verifier(Boolean(await attendre(async () => (await docs('envois?pageSize=200')).find((e) => str(e, 'modele') === 'campagne'))), 'et la lettre « campagne » part');
+  await pause(1500);
+  verifier(!(await docs('envois?pageSize=200')).some((e) => str(e, 'modele') === 'campagne'), 'aucune lettre « campagne » ne part');
+  verifier(!(await docs(`boites/${uid}/notifications?pageSize=100`)).some((n) => ['Campagne de tests ouverte', 'Campagne close'].includes(str(n, 'titre'))), 'ni notification d ouverture ou de clôture chez Camille');
   await poser('projets/atelier/campagnes/qa-sortie', { statut: S('en-cours'), maj: T(new Date()) }, ['statut', 'maj']);
   await pause(1500);
   await poser('projets/atelier/campagnes/qa-sortie', { statut: S('close'), maj: T(new Date()) }, ['statut', 'maj']);

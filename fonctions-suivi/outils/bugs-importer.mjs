@@ -386,7 +386,10 @@ const principal = async () => {
         const champsImport = { ...precedent, ...Object.fromEntries(CHAMPS_IMPORT.filter((k) => k in x.champs || !(k in precedent)).map((k) => [k, x.p.doc[k]])) };
         if (x.geste === 'creer') {
           t.set(refDoc(x.p.idDoc), {
-            ...x.champs, origine: 'robot', statut: x.p.statut, scenario: '', description: '', passages: [], temoins: [],
+            /* interne: false : un bug des robots se montre au client, « À
+               confirmer » tant que l'équipe n'a pas tranché (règle du
+               04/10/2026) ; seul l'échec d'un testeur naît interne. */
+            ...x.champs, origine: 'robot', interne: false, statut: x.p.statut, scenario: '', description: '', passages: [], temoins: [],
             import: { source: x.p.id, champs: champsImport, le: FieldValue.serverTimestamp() },
             cree: FieldValue.serverTimestamp(), maj: FieldValue.serverTimestamp(),
           });
