@@ -91,7 +91,7 @@ export const detail = async (ctx, env) => {
   const rendre = () => {
     const o = (magasin.lire(K.organisations) || []).find((x) => x.id === id);
     if (!magasin.chargee(K.organisations)) return;
-    if (!o) { sortie.innerHTML = `<div class="page">${vide({ icone: 'entreprise', titre: 'Client introuvable', action: '<a class="btn btn-secondaire" href="#/clients">Retour</a>' })}</div>`; return; }
+    if (!o) { dernierHtml = ''; sortie.innerHTML = `<div class="page">${vide({ icone: 'entreprise', titre: 'Client introuvable', action: '<a class="btn btn-secondaire" href="#/clients">Retour</a>' })}</div>`; return; }
     const projets = (magasin.lire(K.projets) || []).filter((p) => p.organisation === id);
     const documents = (magasin.lire(K.documentsTous) || []).filter((d) => projets.some((p) => p.id === d.projet) && !d.archive).sort(parDateDesc('date'));
     const paiements = (magasin.lire(K.paiementsTous) || []).filter((p) => projets.some((x) => x.id === p.projet));
@@ -102,7 +102,7 @@ export const detail = async (ctx, env) => {
     const premiersPas = (c) => { const pr = c.uid ? profils.find((x) => x.id === c.uid) : null; return pr && dateCourte(pr.accueil) ? `<span class="pastille pastille--vert">Premiers pas faits · ${echapper(dateCourte(pr.accueil))}</span>` : (estAdmin(env.session) && c.uid ? '<span class="pastille pastille--gris">Accueil pas encore vu</span>' : ''); };
     titrePage(o.entreprise || o.nom);
     filAriane([{ libelle: 'Clients', chemin: '/clients' }, { libelle: o.entreprise || o.nom }]);
-    sortie.innerHTML = `<div class="page">
+    const html = `<div class="page">
       <div class="page-tete"><div class="rang" style="gap:16px">${avatar(o.entreprise || o.nom, { taille: 'xl' })}<div><p class="surtitre">Client</p><h1 style="margin-top:2px">${echapper(o.entreprise || o.nom)}</h1><p class="t-petit t-2" style="margin-top:4px">${echapper([o.nom, o.email, o.telephone].filter(Boolean).join(' · '))}</p></div></div>
         <div class="actions"><button class="btn btn-secondaire" type="button" data-action="modifier">${icone('edit')} Modifier</button><a class="btn btn-principal" href="#/projets/nouveau?organisation=${echapper(id)}">${icone('plus')} Projet</a></div></div>
       <div class="metriques">${metrique(projets.filter((p) => !p.archive).length, 'Projets')}${metrique(montant(total), 'Reste dû', { ton: total > 0 ? 'ambre' : 'vert', nuance: factures.length ? pluriel(factures.length, 'facture') : '' })}${metrique(montant(totalPaye), 'Réglé au total')}${metrique(contacts.length, 'Contacts')}</div>
@@ -122,7 +122,14 @@ export const detail = async (ctx, env) => {
           <div class="carte carte--creuse"><p class="surtitre">Notes internes</p><p class="t-petit${interneDeLOrganisation(o.id).notesInternes ? '' : ' t-3'}" style="margin-top:8px;white-space:pre-wrap">${echapper(interneDeLOrganisation(o.id).notesInternes || 'Aucune note.')}</p></div>
         </aside>
       </div></div>`;
+    /* La même fiche, à l'identique : rien à repeindre. Elle écoute tous les
+       profils (premiers pas des contacts), donc aussi celui de l'équipe, que
+       le Cockpit réécrit (dernière visite, pavés repliés) sans rien y changer. */
+    if (html === dernierHtml && sortie.querySelector('.page-tete')) return;
+    dernierHtml = html;
+    sortie.innerHTML = html;
   };
+  let dernierHtml = '';
   const gestes = sur(sortie, 'click', '[data-action]', async (el) => {
     const o = (magasin.lire(K.organisations) || []).find((x) => x.id === id);
     if (!o) return;
