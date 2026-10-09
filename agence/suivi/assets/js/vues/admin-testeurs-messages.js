@@ -58,7 +58,7 @@ export const vue = async (ctx, env) => {
     const camp = campagnesDe(choisi);
     const lienFiche = t
       ? `<a class="lien" href="#/tests?testeur=${encodeURIComponent(choisi)}" data-fiche-testeur="${echapper(choisi)}">Voir sa fiche</a>`
-      : '<span class="t-3">Plus au vivier</span>';
+      : '<span class="t-3">Plus parmi les testeurs</span>';
     const lienCampagnes = camp.length
       ? camp.map((c) => {
         const pid = c.projet || c._parent || '';

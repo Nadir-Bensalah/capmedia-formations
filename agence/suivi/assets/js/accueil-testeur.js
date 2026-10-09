@@ -126,7 +126,7 @@ export const ouvrirAccueil = ({ moi, campagne = null, surFin = null }) => {
     service: 'Test',
     prenom: moi.prenom || '',
     classe: 'accueil-porte--test',
-    texte: 'Vous découvrez une application avant ses clients. Ce qui compte, c\'est votre regard de nouvel utilisateur.',
+    texte: 'Merci d\'avoir rejoint Capmedia Test. Votre regard compte : testez, notez, dites-nous tout.',
     visuel: mascotteHtml(),
     ecrans: () => [ecranApplication(moi, c, liens), ecranVerdicts(), ...(installable() ? [ecranOrdinateur()] : []), ecranFin(moi, c)],
     surFin,
