@@ -2633,3 +2633,23 @@ html.salle-plein .lat, html.salle-plein .haut, html.salle-plein .voile-lat, html
   .visite--animee .visite-trou { transition: top .3s var(--courbe), left .3s var(--courbe), width .3s var(--courbe), height .3s var(--courbe); }
   .visite--animee .visite-carte { transition: top .3s var(--courbe), left .3s var(--courbe); }
 }
+
+/* La fiche de suivi d'un testeur (vues/suivi-testeur.js) : des étages
+   « libellé, valeur » en colonnes fixes, une phrase de résumé aux chiffres
+   en gras. Ni pastille ni liseré : le repère vient de l'alignement. */
+.st-resume { margin: 0 0 10px; font: 400 15px/1.5 var(--police); color: var(--encre-2); }
+.st-resume b { color: var(--encre); font-weight: 600; font-variant-numeric: tabular-nums; }
+.st-paires { display: grid; gap: 4px; }
+.st-paire { display: grid; grid-template-columns: minmax(110px, 38%) 1fr; gap: 12px; font: var(--t-petit); align-items: baseline; }
+.st-libelle { color: var(--encre-3); }
+.st-valeur { color: var(--encre); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.st-valeur b { font-weight: 600; }
+.st-campagne { padding: 12px 14px; border-radius: 12px; background: var(--fond-2); display: grid; gap: 8px; }
+.st-campagne + .st-campagne { margin-top: 8px; }
+.st-campagne-tete { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.st-plus { margin-top: 8px; }
+.st-plus summary { cursor: pointer; font: var(--t-petit); color: var(--encre-2); }
+.st-plus .tb-sessions { margin-top: 6px; }
+.st-fiche .fs-bloc p.aide { margin: 8px 0 0; font: var(--t-petit); color: var(--encre-3); letter-spacing: 0; }
+.st-fiche .fs-bloc p.st-resume { font: 400 16px/1.45 var(--police); color: var(--encre-2); }
+@media (max-width: 520px) { .st-paire { grid-template-columns: 1fr; gap: 0; } }

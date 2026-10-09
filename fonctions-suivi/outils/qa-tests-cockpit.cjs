@@ -166,6 +166,10 @@ const fermer = async (page) => { await page.keyboard.press('Escape').catch(() =>
   const coct = liens.campagnes.find((c) => c.id === 'c-oct');
   verifier(coct && coct.href === `#/tests?projet=${P}&campagne=c-oct` && coct.texte === 'Campagne du banc' && /Atelier/.test(liens.texte), 'et ses campagnes, chacune vers sa fiche dans son projet', JSON.stringify(liens));
   await pa.click('#tm-liens [data-fiche-testeur]', { timeout: 5000 }).catch(() => {});
+  /* Le lien ouvre la fiche de suivi ; le formulaire, par « Modifier ». */
+  await pa.waitForSelector('.voile .feuille [data-suivi-testeur] [data-st-bloc="connexions"]', { timeout: 15000 }).catch(() => {});
+  verifier(Boolean(await pa.$('.voile .feuille [data-suivi-testeur] [data-st-bloc="avancement"]')), 'le lien ouvre sa fiche de suivi');
+  await pa.click('.voile .feuille [data-modifier-testeur]', { timeout: 5000 }).catch(() => {});
   await pa.waitForSelector('.voile .feuille #t-aisance', { timeout: 15000 }).catch(() => {});
   const prenom = await pa.$eval('.voile .feuille #t-prenom', (e) => e.value).catch(() => '');
   verifier(prenom === 'Karim', 'la fiche du testeur s ouvre dans la page Tests', `${prenom} ${await pa.evaluate(() => location.hash)}`);

@@ -8223,6 +8223,10 @@
     [
      "clic",
      "#testeurs [data-action=\"ouvrir-testeur\"]"
+    ],
+    [
+     "clic",
+     ".voile .feuille [data-modifier-testeur]"
     ]
    ]
   }
@@ -8243,6 +8247,10 @@
     [
      "clic",
      "#testeurs [data-action=\"ouvrir-testeur\"]"
+    ],
+    [
+     "clic",
+     ".voile .feuille [data-modifier-testeur]"
     ],
     [
      "clic",
