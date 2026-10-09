@@ -398,7 +398,7 @@ const alertes = (d, { nomProjet, plateforme, pid = '' }) => {
   if (!soucis.length) {
     return `<section class="section" style="margin-top:0">
       <div class="section-tete"><h2>Bugs à corriger d'urgence ${infoBouton('soucis')}</h2></div>
-      <p class="calme">${icone('check')} Rien d'urgent : aucune anomalie bloquante ou critique ouverte, aucune campagne en retard ou vide.</p>
+      <p class="calme">${icone('check')} Rien à signaler d'urgent : aucune anomalie bloquante ou critique ouverte, aucune campagne en retard ou vide.</p>
       ${syntheseRobots}
     </section>`;
   }

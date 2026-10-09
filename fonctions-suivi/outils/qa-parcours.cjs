@@ -217,6 +217,8 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   const hp=await page.evaluate(()=>{const s=document.querySelector('#robots-a-regarder');const l=document.querySelector('#liste-bugs');return {phrase:s?s.innerText:'',rouges:s?Number(s.dataset.rouges):-1,instables:s?Number(s.dataset.instables):-1,liste:l?l.innerText:''};});
   verifier(hp.rouges===nRouges&&hp.instables===nInstables&&new RegExp(`^${nRouges} tests? robots? rouges?, ${nInstables} instables? : voir Tests par robot`).test(hp.phrase),`dans Atelier, la phrase compte ${nRouges} rouges et ${nInstables} instables`,`${hp.rouges}/${hp.instables} · ${hp.phrase}`);
   verifier(!/R-04|C-02/.test(hp.liste),'et aucun test robot dans ses lignes urgentes');
+  const calmeP=await page.evaluate(()=>{const c=document.querySelector('#vue .section .calme');const u=document.querySelector('#bugs-urgents');return {calme:c?c.innerText:'',phrase:!!(c&&c.parentElement.querySelector('#robots-a-regarder')),urgents:u?Number(u.dataset.urgents):0};});
+  if(!calmeP.urgents) verifier(/Rien à signaler/.test(calmeP.calme)&&calmeP.phrase,'rien d urgent : l état calme reste, la phrase des robots dessous',calmeP.calme);
 
   console.log('\n== Le catalogue se replie');
   await aller(page,'/tests?projet=atelier&onglet=automatises','#onglets-tests','Tests');
