@@ -183,10 +183,42 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
     haut:(document.querySelector('.section')||{}).innerText||'',
     sections:[...document.querySelectorAll('.section-tete h2')].map(h=>h.innerText.trim()),
   }));
-  verifier(/R-04/.test(g.haut),'le parcours rouge est en haut',g.haut.slice(0,80));
-  verifier(/C-02/.test(g.haut),'l instable aussi');
-  verifier(/une fois sur trois/.test(g.haut),'avec sa note');
+  /* Depuis le 09/10/2026, un test robot rouge n'est plus une ligne des
+     bugs urgents (un par scénario et par plateforme, ils en faisaient
+     plus de mille) : une phrase les compte et mène aux robots, qui les
+     listent. Les comptes attendus sont lus en base. */
+  const champ=(d,k)=>(((d.fields||{})[k]||{}).stringValue)||'';
+  const actifs=tous.filter(d=>(((d.fields||{}).actif||{}).booleanValue)!==false);
+  const nRouges=actifs.filter(d=>champ(d,'etat')==='rouge').length;
+  const nInstables=actifs.filter(d=>champ(d,'etat')==='instable').length;
+  const haut = await page.evaluate(()=>{const s=document.querySelector('#robots-a-regarder');const l=document.querySelector('#liste-bugs');const u=document.querySelector('#bugs-urgents');
+    return { phrase:s?s.innerText:'', rouges:s?Number(s.dataset.rouges):-1, instables:s?Number(s.dataset.instables):-1, lien:!!(s&&s.querySelector('a')),
+      lignes:l?l.querySelectorAll('.ligne').length:0, urgents:u?Number(u.dataset.urgents):0,
+      machine:(document.querySelector('#etage-machine')||{}).innerText||'' };});
+  console.log(`    (${nRouges} rouges, ${nInstables} instables en base ; ${haut.lignes} lignes urgentes)`);
+  verifier(nRouges>0&&nInstables>0,'le banc a des robots rouges et instables',`${nRouges}/${nInstables}`);
+  verifier(haut.rouges>=nRouges&&haut.instables>=nInstables&&/tests? robots? rouges?, \d+ instables? : voir Tests par robot/.test(haut.phrase)&&haut.lien,'tous projets : une phrase compte les rouges et les instables, et mène aux robots',haut.phrase);
+  verifier(!/R-04|C-02/.test(g.haut),'aucun test robot n est une ligne des bugs urgents',g.haut.slice(0,120));
+  verifier(haut.lignes===haut.urgents,`le compteur dit les ${haut.lignes} lignes vraiment urgentes`,`${haut.urgents} annoncées`);
+  verifier(/R-04/.test(haut.machine)&&/C-02/.test(haut.machine)&&/une fois sur trois/.test(haut.machine),'le rouge et l instable restent dans « Tests par robot », avec la note');
   verifier(g.sections.includes('Robots qui utilisent l\'app'),'et la section globale existe');
+  await page.click('#robots-a-regarder a'); await pause(900);
+  verifier(await page.evaluate(()=>{const e=document.querySelector('#etage-machine');if(!e)return false;const r=e.getBoundingClientRect();return r.top<window.innerHeight&&location.hash.startsWith('#/tests');}),'le lien fait défiler jusqu aux robots, sans quitter la page');
+
+  console.log('\n== Le chiffre de l onglet « Tests par robot »');
+  await aller(page,'/tests?projet=atelier&onglet=automatises','#onglets-tests','Tests'); await pause(1200);
+  const comptes=actifs.filter(d=>champ(d,'etat')!=='suspendu');
+  const attendu=`${comptes.filter(d=>champ(d,'etat')==='vert').length}/${comptes.length}`;
+  const badge=await page.evaluate(()=>{const b=document.querySelector('#onglets-tests [data-onglet="automatises"] .badge');return b?{t:b.textContent.trim(),a:b.dataset.astuce||''}:{t:'',a:''};});
+  verifier(badge.t===attendu,`il dit ${attendu} : les tests dans l app au vert sur leur total, sans les tests de calcul`,badge.t);
+  verifier(/^Verts sur total, un test par scénario et par plateforme/.test(badge.a),'son infobulle dit ce qu il compte',badge.a);
+  const lien=await page.evaluate(()=>{const l=document.querySelector('#robots-a-regarder a');return l?l.getAttribute('href'):'';});
+  verifier(/onglet=automatises/.test(lien)&&/projet=atelier/.test(lien),'dans un projet, la phrase mène à l onglet « Tests par robot »',lien);
+  const hp=await page.evaluate(()=>{const s=document.querySelector('#robots-a-regarder');const l=document.querySelector('#liste-bugs');return {phrase:s?s.innerText:'',rouges:s?Number(s.dataset.rouges):-1,instables:s?Number(s.dataset.instables):-1,liste:l?l.innerText:''};});
+  verifier(hp.rouges===nRouges&&hp.instables===nInstables&&new RegExp(`^${nRouges} tests? robots? rouges?, ${nInstables} instables? : voir Tests par robot`).test(hp.phrase),`dans Atelier, la phrase compte ${nRouges} rouges et ${nInstables} instables`,`${hp.rouges}/${hp.instables} · ${hp.phrase}`);
+  verifier(!/R-04|C-02/.test(hp.liste),'et aucun test robot dans ses lignes urgentes');
+  const calmeP=await page.evaluate(()=>{const c=document.querySelector('#vue .section .calme');const u=document.querySelector('#bugs-urgents');return {calme:c?c.innerText:'',phrase:!!(c&&c.parentElement.querySelector('#robots-a-regarder')),urgents:u?Number(u.dataset.urgents):0};});
+  if(!calmeP.urgents) verifier(/Rien à signaler/.test(calmeP.calme)&&calmeP.phrase,'rien d urgent : l état calme reste, la phrase des robots dessous',calmeP.calme);
 
   console.log('\n== Le catalogue se replie');
   await aller(page,'/tests?projet=atelier&onglet=automatises','#onglets-tests','Tests');
