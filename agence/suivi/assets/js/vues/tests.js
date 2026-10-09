@@ -239,7 +239,8 @@ const QUESTIONNAIRE = resumeQuestionnaire();
 const EXPLICATIONS = {
   'soucis': { titre: 'Bugs à corriger d\'urgence', corps: `
     <p>C'est la liste de ce qui mérite votre attention aujourd'hui, et rien d'autre. Si elle est vide, tout va bien.</p>
-    <p>On y trouve trois choses : un problème grave trouvé par un testeur et confirmé, une campagne de tests qui a dépassé sa date de fin, et un test automatique qui vient d'échouer.</p>
+    <p>On y trouve trois choses : un problème bloquant ou critique pas encore corrigé, une campagne de tests qui a dépassé sa date de fin, et une campagne qui n'a aucun scénario à distribuer.</p>
+    <p>Les tests robots en échec n'y sont pas listés un par un : une phrase les compte, et mène à l'onglet « Tests par robot ».</p>
     <p>Quand quelque chose apparaît ici, c'est qu'il faut agir. Le reste de la page est là pour le contexte.</p>` },
   'avancement': { titre: 'Avancement', corps: `
     <p>Un projet par ligne, avec ce qu'il contient : combien de vérifications sont prévues, combien de campagnes sont en cours, et s'il reste des problèmes ouverts.</p>
@@ -322,13 +323,21 @@ const dansPlateforme = (x, plateforme) => {
    Section 1 · Ce qui ne va pas
    -------------------------------------------------------------------------- */
 
-const alertes = (d, { nomProjet, plateforme }) => {
+/* Ce qui compte comme urgent : un problème bloquant ou critique encore
+   ouvert (ni corrigé, ni fausse alerte), la même échelle que les tickets
+   et les verdicts (GRAVES). « À confirmer » compris : l'équipe le tranche,
+   et le client ne reçoit que ce qui n'est pas interne. */
+export const GRAVITES_URGENTES = ['bloquant', 'critique'];
+export const anomalieUrgente = (a) => GRAVITES_URGENTES.includes(a && a.gravite) && !['corrigee', 'sans-suite'].includes(a.statut);
+
+const alertes = (d, { nomProjet, plateforme, pid = '' }) => {
   const soucis = [];
 
-  /* Les anomalies qui bloquent, d'abord. Une anomalie bloquante non
-     corrigée est la seule chose qui justifie d'arrêter une campagne. */
+  /* Les anomalies qui bloquent, d'abord. Une anomalie bloquante ou
+     critique non corrigée est ce qui justifie d'arrêter une campagne. */
   d.anomalies
-    .filter((a) => a.gravite === 'bloquant' && !['corrigee', 'sans-suite'].includes(a.statut) && dansPlateforme(a, plateforme))
+    .filter((a) => anomalieUrgente(a) && dansPlateforme(a, plateforme))
+    .sort((a, b) => ((GRAVITES_ANOMALIE[a.gravite] || {}).rang || 9) - ((GRAVITES_ANOMALIE[b.gravite] || {}).rang || 9))
     .forEach((a) => soucis.push({
       ton: 'rouge', icone: 'alerte',
       titre: echapper(a.titre || 'Anomalie bloquante'),
@@ -347,26 +356,15 @@ const alertes = (d, { nomProjet, plateforme }) => {
       fin: pastille(STATUTS_CAMPAGNE, c.statut),
     }));
 
-  /* Un parcours rouge ou instable. L'instable est le pire des deux : le
-     rouge dit qu'il y a un défaut, l'instable n'apprend rien, et un
-     parcours qu'on finit par ignorer ne garde plus rien. */
-  (d.parcours || [])
-    .filter((x) => x.actif !== false && PARCOURS_A_REGARDER.includes(x.etat) && dansPlateforme(x, plateforme))
-    .forEach((x) => soucis.push({
-      ton: x.etat === 'rouge' ? 'rouge' : 'ambre', icone: 'code',
-      titre: `${echapper(x.ref)} · ${echapper(x.titre || '')}`,
-      sous: `${echapper(nomProjet(projetDe(x)))} · ${echapper((ETATS_PARCOURS[x.etat] || {}).libelle || '')}${x.note ? ` · ${echapper(x.note.slice(0, 50))}` : ''}`,
-      fin: pastille(ETATS_PARCOURS, x.etat),
-    }));
-
   /* Un projet qui a des campagnes mais aucun scénario : la campagne ne
      peut rien distribuer, et ça ne se voit qu'en le cherchant. */
   const avecCampagne = new Set(d.campagnes.map((c) => projetDe(c)));
-  const avecScenario = new Set(d.scenarios.map((s) => projetDe(s)));
-  [...avecCampagne].filter((pid) => pid && !avecScenario.has(pid)).forEach((pid) => soucis.push({
+  /* Un plan de tests compte comme des scénarios : la campagne y pioche. */
+  const avecScenario = new Set([...d.scenarios.map((s) => projetDe(s)), ...[...avecCampagne].filter((p) => p && sectionsDuPlan(p).length)]);
+  [...avecCampagne].filter((p) => p && !avecScenario.has(p)).forEach((p) => soucis.push({
     ton: 'ambre', icone: 'bug',
     titre: 'Campagne sans aucun scénario',
-    sous: `${echapper(nomProjet(pid))} · la campagne n'a rien à distribuer`,
+    sous: `${echapper(nomProjet(p))} · la campagne n'a rien à distribuer`,
     fin: '',
   }));
 
@@ -383,21 +381,36 @@ const alertes = (d, { nomProjet, plateforme }) => {
       fin: '',
     }));
 
+  /* Les tests robots rouges ou instables ne sont plus une ligne chacun :
+     un par scénario et par plateforme, ils noyaient les vrais bugs (plus
+     de mille lignes). Une phrase les compte et mène à « Tests par robot »,
+     où ils sont listés. Elle ne compte pas dans les lignes urgentes. */
+  const robots = (d.parcours || []).filter((x) => x.actif !== false && PARCOURS_A_REGARDER.includes(x.etat) && dansPlateforme(x, plateforme));
+  const rouges = robots.filter((x) => x.etat === 'rouge').length;
+  const instables = robots.length - rouges;
+  const lienRobots = pid
+    ? `<a href="#${echapper(adresse({ projet: pid, plateforme, onglet: 'automatises' }))}">voir Tests par robot</a>`
+    : '<a href="#etage-machine" data-voir-robots>voir Tests par robot</a>';
+  const syntheseRobots = robots.length
+    ? `<p class="aide" id="robots-a-regarder" data-rouges="${rouges}" data-instables="${instables}">${pluriel(rouges, 'test robot rouge', 'tests robots rouges')}, ${pluriel(instables, 'instable', 'instables')} : ${lienRobots}.</p>`
+    : '';
+
   if (!soucis.length) {
     return `<section class="section" style="margin-top:0">
       <div class="section-tete"><h2>Bugs à corriger d'urgence ${infoBouton('soucis')}</h2></div>
-      <p class="calme">${icone('check')} Rien à signaler : aucune anomalie bloquante, aucune campagne en retard, aucun parcours rouge.</p>
+      <p class="calme">${icone('check')} Rien d'urgent : aucune anomalie bloquante ou critique ouverte, aucune campagne en retard ou vide.</p>
+      ${syntheseRobots}
     </section>`;
   }
 
-  /* Soixante lignes rouges en tête de page, c'est la page qu'on ne voit
-     plus. Le bloc se replie ; replié, il dit combien de lignes il garde. */
+  /* Le bloc se replie ; replié, il dit combien de choses urgentes il garde. */
   const n = pluriel(soucis.length, 'ligne', 'lignes');
-  return `<section class="section section--alerte" style="margin-top:0" id="bugs-urgents">
+  return `<section class="section section--alerte" style="margin-top:0" id="bugs-urgents" data-urgents="${soucis.length}">
     <div class="section-tete">
       <div><h2>Bugs à corriger d'urgence ${infoBouton('soucis')}</h2><p class="chapo">${n} à regarder.</p></div>
       <button class="btn btn-secondaire btn-petit" type="button" data-plier-bugs aria-controls="liste-bugs" aria-expanded="${bugsDeplies}">${icone(bugsDeplies ? 'plier' : 'deplier')} ${bugsDeplies ? 'Replier' : `Voir les ${n}`}</button>
     </div>
+    ${syntheseRobots}
     <div class="liste" id="liste-bugs"${bugsDeplies ? '' : ' hidden'}>${soucis.map((s) => ligne(s)).join('')}</div>
   </section>`;
 };
@@ -826,9 +839,13 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAU
      sections en dessous lisent les mêmes listes. */
   const gens = (equipe ? (d.testeurs || []) : (d.profils || [])).filter((t) => (t.projets || []).includes(pid));
   const parc = (d.parcours || []).filter((x) => x.actif !== false && projetDe(x) === pid && dansPlateforme(x, plateforme));
+  /* Le chiffre de l'onglet « Tests par robot » : les tests qui utilisent
+     l'app (un par scénario et par plateforme), verts sur total. Les tests
+     de calcul n'y entrent pas (autre unité, comptés dans leur section), ni
+     un test suspendu, qui ne tourne plus. */
+  const parcCompte = parc.filter((x) => x.etat !== 'suspendu');
   const regl = (d.regles || []).filter((x) => x.actif !== false && projetDe(x) === pid);
   const casRegles = regl.reduce((n, x) => n + (Number(x.cas) || 0), 0);
-  const parcVerts = parc.filter((x) => x.etat === 'vert').length;
 
   const humain = `${enCours ? `<b>${enCours}</b> ${enCours > 1 ? 'campagnes en cours' : 'campagne en cours'}` : `<b>${camp.length}</b> ${camp.length > 1 ? 'campagnes' : 'campagne'}, aucune en cours`}, <b>${gens.length}</b> ${gens.length > 1 ? 'testeurs' : 'testeur'}, <b>${ouvertes}</b> ${ouvertes > 1 ? 'anomalies ouvertes' : 'anomalie ouverte'}.`;
   /* Une seule unité pour les robots : le test, comme dans l'avancement en
@@ -837,13 +854,24 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAU
   const reglVertes = regl.filter((x) => x.etat === 'vert').length;
   const nRobots = parc.length + regl.length;
   const machine = nRobots
-    ? `<b>${nRobots}</b> ${nRobots > 1 ? 'tests par robot' : 'test par robot'}, <b>${parcVerts + reglVertes}</b> ${parcVerts + reglVertes > 1 ? 'réussis' : 'réussi'} au dernier passage. Deux sortes : <b>${parc.length}</b> utilisent l'app comme un humain (ils ouvrent les écrans et cliquent), <b>${regl.length}</b> vérifient des calculs (dates, répétitions, points).`
+    ? `${parcCompte.length ? `<b>${parcCompte.filter((x) => x.etat === 'vert').length} / ${parcCompte.length}</b> tests dans l'app au vert au dernier passage, un par scénario et par plateforme (ils ouvrent les écrans et cliquent).` : 'Aucun test dans l\'app pour l\'instant.'}${regl.length ? ` À part, <b>${reglVertes} / ${regl.length}</b> ${regl.length > 1 ? 'tests de calcul' : 'test de calcul'} au vert (dates, répétitions, points).` : ''}${parc.length > parcCompte.length ? ` ${pluriel(parc.length - parcCompte.length, 'test suspendu', 'tests suspendus')}, hors compte.` : ''}`
     : 'Aucun test par robot pour l\'instant.';
   /* Qui fait chaque vérification : un testeur (elle est dans une campagne),
      un robot (un test la couvre), ou les deux. */
   const parTesteur = new Set(camp.flatMap((c) => c.scenarios || []));
   const parRobot = new Set(parc.flatMap((x) => x.scenarios || []));
   const lesDeux = scen.filter((x) => parTesteur.has(x.ref) && parRobot.has(x.ref)).length;
+  /* Avec un plan de tests, « Ce qu'on vérifie » montre le plan : ses
+     scénarios, ses sections, et qui les fait. La bibliothèque d'avant le
+     plan reste dessous, repliée, pour ce qui s'y rattache encore. */
+  const sectionsPlan = sectionsDuPlan(pid);
+  const surPlateformePlan = (x) => !plateforme || (x.plateformes || []).includes(plateforme);
+  const planParSection = sectionsPlan.map((sec) => ({ sec, items: ASPECTS_PLAN.flatMap((a) => (((sec.aspects || {})[a]) || [])).filter((x) => x && x.id && surPlateformePlan(x)) }));
+  const planTous = planParSection.flatMap((g) => g.items);
+  const planQui = (q) => planTous.filter((x) => x.qui === q).length;
+  const nPlanHumains = planTous.filter((x) => ['humain', 'les-deux'].includes(x.qui)).length;
+  const avecPlan = sectionsPlan.length > 0;
+  const bibliPlan = `<b>${planTous.length}</b> ${planTous.length > 1 ? 'vérifications' : 'vérification'} dans le plan de tests, rangées en <b>${sectionsPlan.length}</b> ${sectionsPlan.length > 1 ? 'sections' : 'section'} : <b>${planQui('humain')}</b> par un testeur seul, <b>${planQui('robot')}</b> par un robot seul, <b>${planQui('les-deux')}</b> par les deux. Une campagne reprend les <b>${nPlanHumains}</b> qu'un testeur fait.`;
   const bibli = `<b>${scen.length}</b> ${scen.length > 1 ? 'vérifications' : 'vérification'}, rangées en <b>${parBloc.length}</b> ${parBloc.length > 1 ? 'blocs' : 'bloc'}. Chacune dit qui la fait : un testeur, un robot, ou les deux${lesDeux ? ` (<b>${lesDeux}</b> par les deux)` : ''}.`;
   const quiFait = (x) => {
     const t = parTesteur.has(x.ref); const rb = parRobot.has(x.ref);
@@ -879,9 +907,17 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAU
   const comptes = {
     devis: devisProjet.length ? `${etapesFaites.length}/${etapesDevis.length}` : '',
     humains: ouvertes ? pluriel(ouvertes, 'problème', 'problèmes') : '',
-    automatises: nRobots ? `${parcVerts + reglVertes}/${nRobots}` : '',
+    automatises: parcCompte.length ? `${parcCompte.filter((x) => x.etat === 'vert').length}/${parcCompte.length}` : '',
     problemes: problemesOuverts || '',
-    bibliotheque: scen.length,
+    bibliotheque: avecPlan ? planTous.length : scen.length,
+  };
+  /* Ce que dit chaque chiffre, au survol. */
+  const astuces = {
+    devis: 'Étapes du devis faites, sur le total des étapes',
+    humains: 'Problèmes ouverts relevés par les testeurs',
+    automatises: 'Verts sur total, un test par scénario et par plateforme',
+    problemes: equipe ? 'Problèmes ouverts : ni corrigés, ni fausse alerte, « À confirmer » compris' : 'Problèmes ouverts : ni corrigés, ni fausse alerte',
+    bibliotheque: avecPlan ? 'Scénarios du plan de tests' : 'Scénarios de la bibliothèque',
   };
   /* Un onglet vide ne se montre pas au client ; l'équipe garde « Problèmes »
      pour y poser une anomalie à la main. */
@@ -924,9 +960,21 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAU
     : vide({ icone: 'alerte', titre: 'Aucune anomalie', texte: 'Un échec de testeur en fera une tout seul, regroupée par scénario. Vous pouvez aussi en poser une à la main.', compact: true })}
   </section>` : '';
 
+  const sectionPlan = avecPlan ? `<section class="section" id="plan-sections" data-plan-total="${planTous.length}" data-plan-sections="${sectionsPlan.length}">
+    <div class="section-tete">
+      <div><h2>Le plan de tests</h2><p class="chapo">${pluriel(planTous.length, 'vérification', 'vérifications')}${plateforme ? ` sur ${echapper((PLATEFORMES_TEST[plateforme] || {}).libelle || plateforme)}` : ''}, section par section.</p></div>
+      <a class="btn btn-secondaire btn-petit" href="#/tests/plan?projet=${echapper(pid)}">${icone('liste')} Ouvrir le plan</a>
+    </div>
+    <div class="liste liste--serree">${planParSection.map((g) => ligne({
+      titre: echapper(g.sec.titre || g.sec.id),
+      sous: `${pluriel(g.items.length, 'vérification', 'vérifications')}${g.items.filter((x) => x.qui === 'robot').length ? ` · ${g.items.filter((x) => x.qui === 'robot').length} par un robot seul` : ''}`,
+      fin: `<span class="badge">${g.items.length}</span>`,
+    })).join('')}</div>
+  </section>` : '';
+
   const sectionScenarios = `<section class="section" id="scenarios">
     <div class="section-tete">
-      <div><h2>Les vérifications ${infoBouton('scenarios')}</h2><p class="chapo">Tout ce qu'on vérifie dans l'app${plateforme ? `, sur ${(PLATEFORMES_TEST[plateforme] || {}).libelle}` : ''}. ${scen.length ? pluriel(scen.length, 'vérification', 'vérifications') : 'Vide.'}</p></div>
+      <div><h2>${avecPlan ? 'La bibliothèque d\'avant le plan' : 'Les vérifications'} ${infoBouton('scenarios')}</h2><p class="chapo">${avecPlan ? 'Les scénarios écrits avant le plan, auxquels des robots et des problèmes se rattachent encore. ' : ''}Tout ce qu'on vérifie dans l'app${plateforme ? `, sur ${(PLATEFORMES_TEST[plateforme] || {}).libelle}` : ''}. ${scen.length ? pluriel(scen.length, 'vérification', 'vérifications') : 'Vide.'}</p></div>
       <div class="rang">
         ${equipe ? `<button class="btn btn-principal btn-petit" type="button" data-action="nouveau" data-genre="scenario">${icone('plus')} Nouveau scénario</button>` : ''}
         <button class="btn btn-secondaire btn-petit" type="button" data-plier-scenarios aria-expanded="false">${icone('deplier')} Voir la liste</button>
@@ -964,10 +1012,10 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAU
   return `
   <div id="tableau-ici"></div>
 
-  ${alertes({ ...d, anomalies: tousProblemes, campagnes: camp, parcours: parc, scenarios: scen }, { nomProjet, plateforme })}
+  ${alertes({ ...d, anomalies: tousProblemes, campagnes: camp, parcours: parc, scenarios: scen }, { nomProjet, plateforme, pid })}
 
   <div class="onglets-enveloppe"><nav class="onglets" id="onglets-tests" aria-label="Sections des tests">
-    ${onglets.map((o) => `<a class="onglet${o.cle === actif ? ' actif' : ''}" href="#${adresse({ projet: pid, plateforme, onglet: o.cle === ONGLET_DEFAUT ? '' : o.cle })}" data-onglet="${o.cle}">${o.libelle}${comptes[o.cle] ? `<span class="badge">${echapper(String(comptes[o.cle]))}</span>` : ''}</a>`).join('')}
+    ${onglets.map((o) => `<a class="onglet${o.cle === actif ? ' actif' : ''}" href="#${adresse({ projet: pid, plateforme, onglet: o.cle === ONGLET_DEFAUT ? '' : o.cle })}" data-onglet="${o.cle}">${o.libelle}${comptes[o.cle] ? `<span class="badge" data-astuce="${echapper(astuces[o.cle] || '')}">${echapper(String(comptes[o.cle]))}</span>` : ''}</a>`).join('')}
   </nav></div>
 
   <div id="onglet-tests" data-onglet="${actif}">
@@ -976,7 +1024,7 @@ const unProjet = (d, { pid, nomProjet, plateforme, equipe, onglet = ONGLET_DEFAU
       ${etage('etage-avis', 'Ce que les testeurs ont pensé de l\'app', resumeAvis, `${avisHtml(avis, { nommer, equipe, recus, notesTest })}${remarquesHtml(remarques, { nommer })}`)}` : ''}
     ${actif === 'automatises' ? etage('etage-machine', 'Tests par robot', machine, `${parcoursHtml(d, { pid, equipe, plateforme })}${reglesHtml(d, { pid, equipe })}`) : ''}
     ${actif === 'problemes' ? problemesHtml(tousProblemes, { pid, equipe, filtres, plateforme, tickets: (d.tickets || []).filter((t) => t.projet === pid) }) : ''}
-    ${actif === 'bibliotheque' ? etage('etage-bibli', 'Ce qu\'on vérifie', bibli, sectionScenarios) : ''}
+    ${actif === 'bibliotheque' ? etage('etage-bibli', 'Ce qu\'on vérifie', avecPlan ? bibliPlan : bibli, avecPlan ? `${sectionPlan}${sectionScenarios}` : sectionScenarios) : ''}
   </div>`;
 };
 
@@ -2131,7 +2179,15 @@ export const vue = async (ctx, env) => {
     poser({ [sel.dataset.filtreProbleme]: sel.value, onglet: 'problemes' });
   };
   sortie.addEventListener('change', changeFiltre);
-  const gestes = sur(sortie, 'click', '[data-info], [data-nouvelle-anomalie], [data-editer-anomalie], [data-action="ouvrir-anomalie"], [data-plateforme], [data-scenario], [data-plier-bugs], [data-plier-scenarios], [data-plier-parcours], [data-plier-regles], [data-plier-questions], [data-nouvelle-regle], [data-editer-regle], [data-nouvelle-campagne], [data-editer-campagne], [data-action="ouvrir-campagne"], [data-nouveau-testeur], [data-action="ouvrir-testeur"], [data-nouveau-parcours], [data-editer-parcours], [data-action="nouveau"][data-genre="scenario"]', async (el) => {
+  const gestes = sur(sortie, 'click', '[data-info], [data-nouvelle-anomalie], [data-editer-anomalie], [data-action="ouvrir-anomalie"], [data-plateforme], [data-scenario], [data-plier-bugs], [data-plier-scenarios], [data-plier-parcours], [data-plier-regles], [data-plier-questions], [data-nouvelle-regle], [data-editer-regle], [data-nouvelle-campagne], [data-editer-campagne], [data-action="ouvrir-campagne"], [data-nouveau-testeur], [data-action="ouvrir-testeur"], [data-nouveau-parcours], [data-editer-parcours], [data-action="nouveau"][data-genre="scenario"], [data-voir-robots]', async (el, ev) => {
+    /* Vue de tous les projets : les robots sont plus bas sur la même page.
+       Pas d'ancre dans l'adresse (le routeur y verrait une autre vue). */
+    if (el.hasAttribute('data-voir-robots')) {
+      if (ev) ev.preventDefault();
+      const cible = sortie.querySelector('#etage-machine');
+      if (cible) cible.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
     /* Une référence n'est unique qu'à l'intérieur d'un projet : deux plans
        de tests portent chacun leur « DI-15 ». Chercher sans le projet
        ouvrirait l'énoncé d'une autre application, sans rien dire. */

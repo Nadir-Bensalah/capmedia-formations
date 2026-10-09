@@ -85,6 +85,32 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
     gravite: { stringValue: 'bloquant' }, statut: { stringValue: 'confirmee' },
     actif: { booleanValue: true }, maj: maintenant,
   });
+  /* Ce qui est urgent et ce qui ne l'est pas (09/10/2026) : une critique
+     ouverte y va, une importante non, une bloquante corrigée non plus. */
+  await poser('projets/atelier/anomalies/qa-critique', {
+    titre: { stringValue: 'Le partage de liste efface la liste' },
+    gravite: { stringValue: 'critique' }, statut: { stringValue: 'nouvelle' },
+    actif: { booleanValue: true }, maj: maintenant,
+  });
+  await poser('projets/atelier/anomalies/qa-importante', {
+    titre: { stringValue: 'Le bouton retour saute une page' },
+    gravite: { stringValue: 'important' }, statut: { stringValue: 'confirmee' },
+    actif: { booleanValue: true }, maj: maintenant,
+  });
+  await poser('projets/atelier/anomalies/qa-corrigee', {
+    titre: { stringValue: 'La connexion tourne sans fin' },
+    gravite: { stringValue: 'bloquant' }, statut: { stringValue: 'corrigee' },
+    actif: { booleanValue: true }, maj: maintenant,
+  });
+  /* Une section du plan faite par les robots seuls : sans elle, le plan
+     du banc (tiré de la bibliothèque) a autant de scénarios que la
+     bibliothèque, et compter l'une pour l'autre ne se verrait pas. */
+  const scenRobot = (n) => ({ mapValue: { fields: { id: { stringValue: `qa-robots-t-00${n}` }, titre: { stringValue: `Calcul ${n}` }, qui: { stringValue: 'robot' }, plateformes: { arrayValue: { values: [{ stringValue: 'web' }] } } } } });
+  await poser('projets/atelier/planTests/qa-robots', {
+    id: { stringValue: 'qa-robots' }, titre: { stringValue: 'Calculs vérifiés par les robots' }, groupe: { stringValue: 'fonctionnalites' }, ordre: { integerValue: '99' },
+    plateformes: { arrayValue: { values: [{ stringValue: 'web' }] } },
+    aspects: { mapValue: { fields: { fonctionnel: { arrayValue: {} }, technique: { arrayValue: { values: [scenRobot(1), scenRobot(2)] } }, ux: { arrayValue: {} }, securite: { arrayValue: {} } } } },
+  });
   await poser('projets/atelier/campagnes/qa-retard', {
     nom: { stringValue: 'Passe en retard' }, statut: { stringValue: 'en-cours' },
     fin: { stringValue: hier.slice(0, 10) }, actif: { booleanValue: true }, maj: maintenant,
@@ -126,6 +152,12 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   verifier(/rappel fin de mois/i.test(g.texte),'l\'anomalie bloquante remonte en haut');
   verifier(/dépasse sa date de fin/i.test(g.texte),'la campagne en retard est signalée');
   verifier(/sans aucun scénario|aucun scénario retenu/i.test(g.texte),'la campagne sans scénario est signalée');
+  const urg = await page.evaluate(()=>{const l=document.querySelector('#liste-bugs');const u=document.querySelector('#bugs-urgents');return {texte:l?l.innerText:'',lignes:l?l.querySelectorAll('.ligne').length:0,urgents:u?Number(u.dataset.urgents):0,chapo:((u&&u.querySelector('.chapo'))||{}).innerText||''};});
+  verifier(/partage de liste efface/i.test(urg.texte),'une anomalie critique ouverte est urgente');
+  verifier(!/bouton retour saute/i.test(urg.texte),'une anomalie importante ne l est pas');
+  verifier(!/connexion tourne sans fin/i.test(urg.texte),'une bloquante corrigée non plus');
+  verifier(urg.lignes===urg.urgents&&new RegExp(`^${urg.lignes} lignes? à regarder`).test(urg.chapo),`le compteur dit ${urg.lignes} lignes, toutes urgentes`,urg.chapo);
+  verifier(!/\b(Rouge|Instable)\b/.test(urg.texte),'aucun test robot rouge ou instable parmi elles');
 
   console.log('\n== Un projet choisi');
   /* La page d'un projet a des onglets : la campagne est dans « Testeurs
@@ -167,6 +199,31 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
      remplace, une ligne pour les testeurs humains, une pour les robots. */
   verifier(u.avancement.length===2 && u.avancement.includes('Testeurs humains') && u.avancement.includes('Tests par robot'),`l'avancement en haut (${u.avancement.length} lignes)`,u.avancement.join('/'));
   verifier(u.plier,'la bibliothèque est repliable');
+
+  /* Le projet a un plan de tests (le semis en verse un) : l'onglet et la
+     page comptent le PLAN, pas l'ancienne bibliothèque (09/10/2026). */
+  const docsPlan = (((await lire('projets/atelier/planTests?pageSize=300')) || {}).documents || []).filter((d) => !/\/presentation$/.test(d.name));
+  const ASP = ['fonctionnel', 'technique', 'ux', 'securite'];
+  const scenPlan = docsPlan.flatMap((d) => ASP.flatMap((a) => (((((d.fields || {}).aspects || {}).mapValue || {}).fields || {})[a] || { arrayValue: {} }).arrayValue.values || []));
+  const quiDe = (v) => ((((v.mapValue || {}).fields || {}).qui || {}).stringValue) || '';
+  const nPlan = scenPlan.length, nSections = docsPlan.length;
+  const nHum = scenPlan.filter((v) => ['humain', 'les-deux'].includes(quiDe(v))).length;
+  const p = await page.evaluate(() => ({
+    badge: ((document.querySelector('#onglets-tests [data-onglet="bibliotheque"] .badge') || {}).textContent || '').trim(),
+    astuce: (document.querySelector('#onglets-tests [data-onglet="bibliotheque"] .badge') || { dataset: {} }).dataset.astuce || '',
+    resume: ((document.querySelector('#etage-bibli .etage-resume') || {}).innerText || ''),
+    lignes: document.querySelectorAll('#plan-sections .ligne').length,
+    titreBibli: ((document.querySelector('#scenarios h2') || {}).innerText || '').trim(),
+  }));
+  console.log(`    (plan : ${nPlan} scénarios, ${nSections} sections, ${nHum} pour un testeur ; bibliothèque : ${nScen})`);
+  verifier(nPlan > 0 && nSections > 0 && nPlan !== nScen, 'le banc a un plan de tests, distinct de la bibliothèque', `${nPlan}/${nSections} contre ${nScen}`);
+  verifier(p.badge === String(nPlan), `l onglet « Ce qu on vérifie » compte les ${nPlan} scénarios du plan`, p.badge);
+  verifier(/^Scénarios du plan/.test(p.astuce), 'son infobulle dit qu il compte le plan', p.astuce);
+  verifier(new RegExp(`^${nPlan} vérifications? dans le plan de tests, rangées en ${nSections} sections?`).test(p.resume), `le résumé annonce ${nPlan} vérifications en ${nSections} sections`, p.resume);
+  verifier(new RegExp(`Une campagne reprend les ${nHum} qu.un testeur fait`).test(p.resume), `et les ${nHum} qu une campagne reprend`, p.resume);
+  verifier(p.lignes === nSections, `une ligne par section du plan (${nSections})`, `${p.lignes} lignes`);
+  verifier(/avant le plan/.test(p.titreBibli), 'l ancienne bibliothèque reste dessous, nommée comme telle', p.titreBibli);
+
   verifier(u.creer,'le bouton de création de campagne est là');
   verifier(u.onglets.length>=3 && u.onglets.includes('Testeurs humains') && u.onglets.includes('Tests par robot') && u.onglets.includes('Ce qu\'on vérifie'),'la page a ses onglets',u.onglets.join('/'));
 
@@ -246,7 +303,12 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   const cp = await cl.evaluate(()=>({
     scenarios: document.querySelectorAll('.scenario').length,
     avancement: document.querySelectorAll('.tb-resume .tb-ligne').length,
+    badgePlan: ((document.querySelector('#onglets-tests [data-onglet="bibliotheque"] .badge') || {}).textContent || '').trim(),
+    lignesPlan: document.querySelectorAll('#plan-sections .ligne').length,
+    bugs: ((document.querySelector('#liste-bugs') || {}).innerText || ''),
   }));
+  verifier(cp.badgePlan===String(nPlan)&&cp.lignesPlan===nSections,`le client lit le même plan : ${nPlan} scénarios, ${nSections} sections`,`${cp.badgePlan} / ${cp.lignesPlan}`);
+  verifier(!/\b(Rouge|Instable)\b/.test(cp.bugs),'ses bugs urgents ne listent aucun test robot');
   await aller(cl,'/tests?projet=atelier','#testeurs','Campagne de tests');
   await pause(1000);
   verifier(cp.scenarios===nScen,`il voit les ${nScen} scénarios de son projet`,`${cp.scenarios} vus`);
