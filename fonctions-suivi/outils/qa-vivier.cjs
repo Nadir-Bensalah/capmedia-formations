@@ -145,6 +145,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
 
   console.log('\n== La modifier, puis la retirer');
   await page.click(`[data-action="ouvrir-testeur"][data-id="${uid}"]`); await pause(1200);
+  await page.click('.voile .feuille [data-modifier-testeur]'); await pause(1200);
   const lect = await page.evaluate(()=>{const e=document.querySelector('#t-email');return e?e.hasAttribute('readonly'):null;});
   verifier(lect===true,'son adresse est en lecture seule');
   await page.fill('#t-fonction','Testeuse QA senior');
@@ -153,6 +154,7 @@ const verifier=(c,b,m)=>(c?ok(b):dire(m?`${b} · ${m}`:b));
   verifier((((maj.fields.profil||{}).mapValue||{}).fields||{}).fonction?.stringValue==='Testeuse QA senior','la modification est enregistrée');
 
   await page.click(`[data-action="ouvrir-testeur"][data-id="${uid}"]`); await pause(1200);
+  await page.click('.voile .feuille [data-modifier-testeur]'); await pause(1200);
   await page.click('[data-retirer]'); await pause(900);
   const oui = await page.$$('.voile [data-oui]');
   if (oui.length) { await oui[oui.length-1].click(); await pause(2800); }

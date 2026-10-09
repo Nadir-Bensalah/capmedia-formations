@@ -215,6 +215,8 @@ const poserPassage=async(uid)=>{
     if(!ouvrir){ dire('aucun testeur à ouvrir pour le contrôle visuel'); }
     else {
       await ouvrir.click(); await pause(1500);
+      /* Le clic ouvre la fiche de suivi ; le formulaire, par « Modifier ». */
+      await page.click('.voile .feuille [data-modifier-testeur]',{timeout:5000}).catch(()=>{}); await pause(1500);
       const vu=await page.evaluate(()=>{
         const v=document.querySelector('.voile'); if(!v) return null;
         const pied=v.querySelector('.modale-pied');

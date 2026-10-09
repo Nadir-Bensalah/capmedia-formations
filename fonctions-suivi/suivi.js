@@ -1701,6 +1701,9 @@ const ACTIONS = {
   inscrireTesteur: { permission: 'qa.gerer' },
   majTesteur: { permission: 'qa.gerer' },
   inviterTesteur: { permission: 'qa.gerer' },
+  /* La fiche de suivi d'un testeur : ses invitations (envoyée, acceptée).
+     Les invitations ne se lisent que par le serveur. */
+  suiviTesteur: { permission: 'qa.gerer' },
   retirerTesteur: { permission: 'qa.gerer' },
   creerJetonRobot: { permission: 'qa.gerer', projet: (c) => c.projet },
   revoquerJetonRobot: { permission: 'qa.gerer' },
@@ -2484,6 +2487,25 @@ exports.suiviAdmin = onRequest(
         await bdd.doc(`testeurs/${tid}`).set(changements, { merge: true });
         await audit('testeur.modifie', { uid: tid, champs: Object.keys(changements) });
         return res.json({ ok: true });
+      }
+
+      /* La fiche de suivi d'un testeur, côté invitation : quand elle est
+         partie, si elle a été acceptée (la première connexion). Les
+         invitations sont fermées au navigateur, équipe comprise (leur
+         identifiant est l'empreinte du lien) : on n'en rend que les dates
+         et l'état, jamais l'identifiant ni le lien. */
+      if (action === 'suiviTesteur') {
+        const tid = String(testeur || '');
+        if (!tid) return res.status(400).send('testeur requis');
+        const fiche = await bdd.doc(`testeurs/${tid}`).get();
+        if (!fiche.exists) return res.status(404).send('testeur inconnu');
+        const q = await bdd.collection('invitations').where('uid', '==', tid).get();
+        const ms = (x) => (x && typeof x.toMillis === 'function' ? x.toMillis() : (x instanceof Date ? x.getTime() : 0));
+        const liste = q.docs.map((d) => d.data())
+          .filter((i) => i.type === 'testeur')
+          .map((i) => ({ cree: ms(i.cree), envoyee: ms(i.envoyee), acceptee: ms(i.acceptee), etat: invitations.etatInvitation(i) }))
+          .sort((x, y) => x.cree - y.cree);
+        return res.json({ ok: true, invitations: liste });
       }
 
       /* Renvoyer l'invitation. Utile pour les testeurs inscrits avant que la

@@ -9,7 +9,7 @@
 
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
-import { doc, getDoc, getDocs, setDoc, updateDoc, addDoc, deleteDoc, collection, collectionGroup, query, where, serverTimestamp, Timestamp, writeBatch, deleteField } from 'firebase/firestore';
+import { doc, getDoc, getDocs, setDoc, updateDoc, addDoc, deleteDoc, collection, collectionGroup, query, where, orderBy, limit, serverTimestamp, Timestamp, writeBatch, deleteField } from 'firebase/firestore';
 
 const PROJET = process.env.GCLOUD_PROJECT || 'capmedia-1f90d';
 const env = await initializeTestEnvironment({
@@ -716,6 +716,22 @@ await refuse('Sonia ne lit pas la présence de Karim', getDoc(doc(sonia(), `pres
 await refuse('Karim ne relit pas même la sienne', getDoc(doc(karim(), `presences/${KARIM}`)));
 await doit('Karim relit ses sessions, pour son chronomètre', getDocs(collection(karim(), `presences/${KARIM}/sessions`)));
 await refuse('Sonia ne lit pas les sessions de Karim', getDocs(collection(sonia(), `presences/${KARIM}/sessions`)));
+/* La fiche de suivi d'un testeur (Cockpit, 09/10/2026) : ses connexions
+   et son temps se calculent sur ces sessions. Le testeur ne peut ni
+   gonfler son temps, ni déplacer une session d'une campagne à l'autre ; ses
+   lectures restent celles de l'équipe. */
+await refuse('Karim ne pousse pas la fin de sa session dans le futur', updateDoc(doc(karim(), `presences/${KARIM}/sessions/s1`), { vu: new Date(Date.now() + 3 * 3600000) }));
+await refuse('Karim ne range pas sa session dans une autre campagne', updateDoc(doc(karim(), `presences/${KARIM}/sessions/s1`), { vu: serverTimestamp(), campagne: 'c2' }));
+await refuse('Karim n ouvre pas une session au nom de Sonia', setDoc(doc(karim(), `presences/${SONIA}/sessions/s9`), { debut: serverTimestamp(), vu: serverTimestamp(), campagne: 'c1', projet: 'atelier', plateforme: 'ios', agent: '' }));
+await doit("L'équipe lit les sessions d un testeur, les plus récentes d abord", getDocs(query(collection(equipe(), `presences/${KARIM}/sessions`), orderBy('debut', 'desc'), limit(500))));
+await doit("L'équipe liste les passages d un testeur, pour sa fiche", getDocs(query(collection(equipe(), 'projets/atelier/campagnes/c1/passages'), where('testeur', '==', KARIM))));
+await doit("L'équipe liste ses remarques", getDocs(query(collection(equipe(), 'projets/atelier/campagnes/c1/remarques'), where('testeur', '==', KARIM))));
+await doit("L'équipe lit son appréciation (avis rendu, terminé)", getDoc(doc(equipe(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`)));
+await refuse('Camille ne lit pas l appréciation de Karim', getDoc(doc(camille(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`)));
+await refuse('Sonia ne lit pas l appréciation de Karim', getDoc(doc(sonia(), `projets/atelier/campagnes/c1/appreciations/${KARIM}`)));
+await refuse('Camille ne lit pas la fiche de Karim', getDoc(doc(camille(), `testeurs/${KARIM}`)));
+await refuse('Sonia ne lit pas la fiche de Karim', getDoc(doc(sonia(), `testeurs/${KARIM}`)));
+await refuse('personne ne lit les invitations depuis un navigateur, équipe comprise', getDocs(query(collection(equipe(), 'invitations'), where('uid', '==', KARIM))));
 await doit("L'équipe lit les exécutions des robots", getDocs(collection(equipe(), 'projets/atelier/executions')));
 await doit("L'équipe lit le message d erreur d un parcours", getDoc(doc(equipe(), 'projets/atelier/executions/ci-1/resultats/R-01')));
 await refuse('Camille ne lit pas la branche ni le commit', getDocs(collection(camille(), 'projets/atelier/executions')));

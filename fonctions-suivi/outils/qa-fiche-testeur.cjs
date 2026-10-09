@@ -147,6 +147,8 @@ let page = null;
     for (let i = 0; i < 6; i += 1) {
       const b = await equipe.$(`[data-action="ouvrir-testeur"][data-id="${uid}"]`);
       if (b) { await b.scrollIntoViewIfNeeded().catch(() => null); await b.click({ force: true }).catch(() => null); }
+      /* Le clic ouvre la fiche de suivi ; le formulaire, par « Modifier ». */
+      await equipe.click('.voile .feuille [data-modifier-testeur]', { timeout: 5000 }).catch(() => null);
       await pause(900);
       const t = await equipe.textContent('.feuille .modale-corps').catch(() => '');
       if (/Fiche validée/.test(t)) return t;

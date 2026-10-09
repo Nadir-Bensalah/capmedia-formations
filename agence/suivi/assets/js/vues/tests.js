@@ -39,6 +39,7 @@ import { editer } from './editeurs.js';
 import { appelServeur } from '../serveur.js';
 import { filAriane } from '../coquille.js';
 import { monter as monterTableau } from './tableau.js';
+import { ouvrirSuiviTesteur } from './suivi-testeur.js';
 import { ordonnerSections as rangerSections } from './plan-tests.js';
 import { scenariosHumainsDuPlan, estSurLePlan, clesAttendues, vivierPropose, pretALancer, verdictDe, VERDICTS, NOMS_PLATEFORMES } from '../campagne-plan.js';
 import {
@@ -2242,9 +2243,17 @@ export const vue = async (ctx, env) => {
       await ouvrirTesteur(null, { env, projets: magasin.lire(K.projets) || [] });
       return;
     }
+    /* Un clic sur un testeur ouvre sa fiche de suivi (invitation,
+       connexions, avancement) ; le formulaire, par « Modifier ». */
     if (el.dataset.action === 'ouvrir-testeur') {
       const t = (magasin.lire(K.testeurs) || []).find((x) => x.id === el.dataset.id);
-      if (t) await ouvrirTesteur(t, { env, projets: magasin.lire(K.projets) || [] });
+      if (!t) return;
+      const projets = magasin.lire(K.projets) || [];
+      await ouvrirSuiviTesteur(t, {
+        campagnes: lireTout(env).campagnes,
+        nomProjet: (pid) => (projets.find((p) => p.id === pid) || {}).nom || '',
+        modifier: () => ouvrirTesteur(t, { env, projets }),
+      });
       return;
     }
     if (el.dataset.action === 'ouvrir-campagne') {
