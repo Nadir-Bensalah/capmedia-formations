@@ -17,7 +17,7 @@
 import {
   scenariosHumainsDuPlan, estSurLePlan, sectionsCochees, scenariosAEcrire, memeSelection,
   clesAttendues, clesDe, nombreDeCles, bilanAffectation, vivierPropose,
-  pretALancer, verdictDe, VERDICTS, NOMS_PLATEFORMES,
+  pretALancer, verdictDe, VERDICTS, NOMS_PLATEFORMES, estPlace, placesDe, placesVides, nouvellesPlaces,
 } from '../../agence/suivi/assets/js/campagne-plan.js';
 
 let echecs = 0;
@@ -110,6 +110,28 @@ egal(tout({ ...base, affectation: { ...base.affectation, u3: { telephone: '', we
 egal(tout({ ...base, installation: { ios: 'https://x' } }).includes('installation:false'), true, 'un testeur Android sans lien Android, non');
 egal(tout({ ...base, application: ' ' }).includes('presentation:false'), true, 'sans nom d\'application, non');
 egal(tout({ ...base, scenarios: ['DI-01'], plan: false }).includes('scenarios:false'), true, 'une campagne de l\'ancienne bibliothèque, non');
+
+console.log('\n== Les places de testeur');
+const neuves = nouvellesPlaces({}, { ios: 3, android: 3 });
+egal(Object.keys(neuves), ['place-ios-1', 'place-ios-2', 'place-ios-3', 'place-android-1', 'place-android-2', 'place-android-3'], 'trois iPhone, trois Android, numérotés');
+egal(Object.values(neuves).map((x) => x.libelle), ['iPhone 1', 'iPhone 2', 'iPhone 3', 'Android 1', 'Android 2', 'Android 3'], 'nommées « iPhone 1 », « Android 1 »');
+egal(Object.values(neuves).every((x) => x.web === true && !('email' in x) && !('testeur' in x)), true, 'avec le web, sans adresse ni personne');
+egal(Object.keys(nouvellesPlaces({ places: neuves }, { ios: 1 })), ['place-ios-4'], 'une de plus prend le numéro suivant');
+egal([estPlace('place-ios-1'), estPlace('XM2uUSfwWecf0oxdVvgBUoFALbH3'), estPlace(undefined)], [true, false, false], 'une place ne se confond pas avec un compte');
+const avecPlaces = { ...base, testeurs: ['u1', 'u2', 'place-ios-2', 'place-android-1'], places: {
+  'place-ios-2': { libelle: 'iPhone 2', mobile: 'ios', web: true, rang: 2 },
+  'place-android-1': { libelle: 'Android 1', mobile: 'android', web: true, rang: 1 },
+  'place-ios-1': { libelle: 'iPhone 1', mobile: 'ios', web: true, rang: 1, testeur: 'u1' },
+} };
+egal(placesDe(avecPlaces).map((x) => x.id), ['place-ios-1', 'place-ios-2', 'place-android-1'], 'rangées iPhone puis Android, par numéro');
+egal(placesVides(avecPlaces).map((x) => x.id), ['place-ios-2', 'place-android-1'], 'une place attribuée n\'est plus vide');
+const lignePlaces = pretALancer(avecPlaces, { humains: H, testeurs: T }).find((x) => x.cle === 'places');
+egal([lignePlaces.ok, /^2 places sans testeur/.test(lignePlaces.detail)], [false, true], '« 2 places sans testeur » bloque le lancement');
+const unePlace = { ...avecPlaces, places: { ...avecPlaces.places, 'place-android-1': { ...avecPlaces.places['place-android-1'], testeur: 'u2' } } };
+egal(/^1 place sans testeur/.test(pretALancer(unePlace, { humains: H, testeurs: T }).find((x) => x.cle === 'places').detail), true, 'au singulier : « 1 place sans testeur »');
+const toutes = { ...avecPlaces, places: Object.fromEntries(Object.entries(avecPlaces.places).map(([k, v]) => [k, { ...v, testeur: v.testeur || `p-${k}` }])) };
+egal(pretALancer(toutes, { humains: H, testeurs: T }).find((x) => x.cle === 'places').ok, true, 'toutes attribuées : la ligne passe');
+egal(tout(base).length, 4, 'une campagne sans place garde ses quatre lignes');
 
 console.log('\n== Les mots');
 egal([verdictDe('ok'), verdictDe('ko'), verdictDe('na')], ['reussi', 'echec', 'sans-objet'], 'les anciens verdicts se lisent');

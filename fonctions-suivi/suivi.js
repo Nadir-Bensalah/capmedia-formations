@@ -1660,6 +1660,167 @@ const projetDuDocument = async (id) => {
   return d.exists ? d.data().projet || null : null;
 };
 
+/* ==========================================================================
+   Inscrire un testeur, puis l'inviter : deux temps séparés, pour que
+   « attribuerPlace » transfère les passages ENTRE les deux (l'invitation
+   part une fois la place à lui, pas avant). inscrireTesteur enchaîne les
+   deux, comme avant.
+   ========================================================================== */
+async function creerFicheTesteur({ adresse, prenom, plateformes, projets, profil }) {
+  let compte;
+  try { compte = await getAuth().getUserByEmail(adresse); }
+  catch (err) { compte = await getAuth().createUser({ email: adresse, emailVerified: true, displayName: String(prenom).trim() }); }
+  await bdd.doc(`testeurs/${compte.uid}`).set({
+    prenom: String(prenom).trim(), email: adresse,
+    /* Le mobile à côté des plateformes : c'est lui que la répartition
+       regarde pour décider qui voit quoi sur iOS et sur Android. Un
+       testeur qui ne fait que le web n'en a pas. */
+    plateformes,
+    mobile: plateformes.find((x) => x !== 'web') || '',
+    projets, actif: true,
+    profil: {
+      sexe: String((profil || {}).sexe || ''),
+      age: String((profil || {}).age || ''),
+      fonction: String((profil || {}).fonction || ''),
+      aisance: String((profil || {}).aisance || ''),
+      langue: String((profil || {}).langue || 'fr'),
+      certifie: Boolean((profil || {}).certifie),
+    },
+    cree: FieldValue.serverTimestamp(), maj: FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return compte;
+}
+
+/* L'invitation, sans quoi le testeur ne sait pas qu'il est attendu :
+   l'inscription créait son compte en silence, et il n'avait aucun moyen
+   de deviner ni l'adresse de son espace, ni son rôle.
+
+   Un envoi qui échoue ne doit pas faire échouer l'inscription : le
+   testeur existe, et la lettre se renvoie. On le consigne. */
+async function inviterNouveauTesteur({ uid, adresse, prenom, plateformes, projets, par }) {
+  try {
+    const premier = projets[0] || '';
+    const fiche = premier ? await lireProjet(premier) : null;
+    const inv = await invitations.creer({ type: 'testeur', email: adresse, nom: String(prenom).trim(), uid, role: 'testeur', projets, projetNom: fiche ? (fiche.nom || '') : '', par, envoyee: true });
+    await mettreEnFile('invitation-testeur', [{ email: adresse, nom: String(prenom).trim() }], {
+      prenom: String(prenom).trim(),
+      email: adresse,
+      projetNom: fiche ? (fiche.nom || '') : '',
+      plateformes,
+      lien: inv.lien,
+    }, { projet: premier || null, evenement: 'invitation-testeur' });
+    return true;
+  } catch (err) {
+    console.error(`Invitation du testeur ${adresse} non mise en file`, err);
+    return false;
+  }
+}
+
+/* ==========================================================================
+   Attribuer une place de testeur (09/10/2026)
+
+   Une place (campagne.places, voir campagne-plan.js) tient une part de la
+   répartition sans personne derrière. Quand l'équipe a la personne :
+   - un testeur déjà inscrit (même téléphone, actif, pas encore dans la
+     campagne) : il prend la place, sans nouvelle invitation ;
+   - une nouvelle personne (prénom, adresse) : elle est inscrite comme par
+     « inscrireTesteur », avec le téléphone et le web de la place ;
+   puis, d'un seul geste (transaction), l'identifiant de la place est
+   remplacé par le sien dans « testeurs », l'affectation de la place
+   devient la sienne TELLE QUELLE (aucun recalcul), et la place garde la
+   trace de son testeur. Le compte de test, s'il est donné, est posé dans
+   campagnes/{c}/acces/{uid}. L'invitation d'une nouvelle personne part
+   en dernier : à ce moment-là, pas avant.
+   ========================================================================== */
+const COMPTE_TEST = /^[a-z0-9._+-]{1,64}@exemple\.test$/;
+const refusPlace = (code, message) => { const e = new Error(message); e.refus = true; e.code = code; return e; };
+async function attribuerPlace(identite, corps) {
+  const pid = String(corps.projet || '');
+  const cid = String(corps.campagne || '');
+  const placeId = String(corps.place || '');
+  if (!pid || !cid) throw refusPlace(400, 'projet et campagne requis');
+  if (!/^place-[a-z0-9-]{1,40}$/.test(placeId)) throw refusPlace(400, 'place inconnue');
+  const refC = bdd.doc(`projets/${pid}/campagnes/${cid}`);
+  const lue = await refC.get();
+  if (!lue.exists) throw refusPlace(404, 'campagne introuvable');
+  const c = lue.data() || {};
+  const place = (c.places || {})[placeId];
+  if (!place) throw refusPlace(404, 'Cette place n\'existe pas dans la campagne.');
+  if (place.testeur) throw refusPlace(409, 'Cette place a déjà son testeur.');
+  if (c.statut === 'close') throw refusPlace(409, 'La campagne est close : plus rien ne s\'y attribue.');
+  const plateformes = [place.mobile, ...(place.web === false ? [] : ['web'])].filter(Boolean);
+  if (!['ios', 'android'].includes(place.mobile)) throw refusPlace(409, 'Cette place n\'a pas de téléphone.');
+
+  const compteTest = String(corps.compteTest || '').trim().toLowerCase();
+  if (compteTest && !COMPTE_TEST.test(compteTest)) throw refusPlace(400, `« ${compteTest} » n'est pas un compte de test : une adresse @exemple.test.`);
+
+  /* Qui prend la place. */
+  let uid = String(corps.testeur || '');
+  let nouveau = false;
+  let adresse = '';
+  let prenom = '';
+  if (!uid) {
+    adresse = normaliserEmail(corps.email);
+    prenom = String(corps.prenom || '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(adresse)) throw refusPlace(400, 'adresse invalide');
+    if (!prenom) throw refusPlace(400, 'prenom requis');
+    try { await exigerRole(adresse, 'testeur'); } catch (err) { throw refusPlace(409, err.message); }
+    /* L'adresse d'un testeur déjà inscrit : c'est lui, sans nouvelle fiche
+       ni nouvelle invitation. */
+    try { const u = await getAuth().getUserByEmail(adresse); if ((await bdd.doc(`testeurs/${u.uid}`).get()).exists) uid = u.uid; } catch (err) { /* compte à créer */ }
+    nouveau = !uid;
+  }
+  if (uid) {
+    const f = await bdd.doc(`testeurs/${uid}`).get();
+    if (!f.exists) throw refusPlace(404, 'testeur inconnu');
+    const t = f.data() || {};
+    if (t.actif === false) throw refusPlace(409, 'Ce testeur ne fait plus partie des testeurs : réinscrivez-le d\'abord.');
+    if (t.mobile !== place.mobile) throw refusPlace(409, `Ce testeur a ${t.mobile === 'ios' ? 'un iPhone' : t.mobile === 'android' ? 'un Android' : 'aucun téléphone'} : la place ${place.libelle || placeId} attend ${place.mobile === 'ios' ? 'un iPhone' : 'un Android'}.`);
+    if ((c.testeurs || []).includes(uid)) throw refusPlace(409, 'Ce testeur est déjà dans la campagne.');
+    adresse = t.email || adresse;
+    prenom = t.prenom || prenom;
+  }
+
+  /* Le compte de test : un seul testeur par compte dans la campagne. */
+  if (compteTest) {
+    const memes = await refC.collection('acces').where('compteTest', '==', compteTest).get();
+    if (memes.docs.some((d) => d.id !== uid)) throw refusPlace(409, `« ${compteTest} » est déjà le compte de test d'un autre testeur de la campagne.`);
+  }
+
+  if (nouveau) uid = (await creerFicheTesteur({ adresse, prenom, plateformes, projets: [pid], profil: corps.profil })).uid;
+
+  /* Le transfert, d'un seul geste : la place devient la personne. */
+  const transfert = await bdd.runTransaction(async (tx) => {
+    const d = await tx.get(refC);
+    const x = d.data() || {};
+    const p = (x.places || {})[placeId];
+    if (!p) throw refusPlace(409, 'La place a été retirée entre-temps.');
+    if (p.testeur) throw refusPlace(409, 'La place a été attribuée entre-temps.');
+    if ((x.testeurs || []).includes(uid)) throw refusPlace(409, 'Ce testeur est déjà dans la campagne.');
+    const avant = Array.isArray(x.testeurs) ? x.testeurs : [];
+    const aff = (x.affectation || {})[placeId];
+    const maj = {
+      [`places.${placeId}.testeur`]: uid,
+      [`places.${placeId}.attribuee`]: FieldValue.serverTimestamp(),
+      maj: FieldValue.serverTimestamp(),
+    };
+    if (avant.includes(placeId)) maj.testeurs = avant.map((u) => (u === placeId ? uid : u));
+    if (aff !== undefined) {
+      maj[`affectation.${uid}`] = aff;
+      maj[`affectation.${placeId}`] = FieldValue.delete();
+    }
+    tx.update(refC, maj);
+    return { passages: Array.isArray(aff) ? aff.length : (aff && Array.isArray(aff.cles) ? aff.cles.length : 0), dansLaCampagne: avant.includes(placeId) };
+  });
+
+  if (compteTest) await refC.collection('acces').doc(uid).set({ compteTest, maj: FieldValue.serverTimestamp() }, { merge: true });
+  try { await bdd.doc(`testeurs/${uid}`).update({ projets: FieldValue.arrayUnion(pid), maj: FieldValue.serverTimestamp() }); } catch (err) { console.error('Testeur non inscrit au projet', uid, err); }
+
+  const invite = nouveau ? await inviterNouveauTesteur({ uid, adresse, prenom, plateformes, projets: [pid], par: identite.uid }) : false;
+  await audit('testeur.place-attribuee', { projet: pid, campagne: cid, place: placeId, uid, nouveau, invite, passages: transfert.passages });
+  return { ok: true, uid, nouveau, invite, passages: transfert.passages };
+}
+
 const ACTIONS = {
   moi: { permission: null },
   creerProjet: { permission: 'projets.creer' },
@@ -1699,6 +1860,8 @@ const ACTIONS = {
   reactiverEquipe: { permission: 'equipe.gerer' },
   retirerEquipe: { permission: 'equipe.gerer' },
   inscrireTesteur: { permission: 'qa.gerer' },
+  /* Une place de testeur devient une personne (campagne.places). */
+  attribuerPlace: { permission: 'qa.gerer', projet: (c) => c.projet },
   majTesteur: { permission: 'qa.gerer' },
   inviterTesteur: { permission: 'qa.gerer' },
   /* La fiche de suivi d'un testeur : ses invitations (envoyée, acceptée).
@@ -2414,55 +2577,17 @@ exports.suiviAdmin = onRequest(
            refus AVANT de créer quoi que ce soit, pour ne rien laisser derrière. */
         await exigerRole(adresse, 'testeur');
 
-        let compte;
-        try { compte = await getAuth().getUserByEmail(adresse); }
-        catch (err) { compte = await getAuth().createUser({ email: adresse, emailVerified: true, displayName: String(prenom).trim() }); }
-
         const projets = Array.isArray(req.body.projets) ? req.body.projets.map(String) : (projet ? [String(projet)] : []);
-        await bdd.doc(`testeurs/${compte.uid}`).set({
-          prenom: String(prenom).trim(), email: adresse,
-          /* Le mobile à côté des plateformes : c'est lui que la répartition
-             regarde pour décider qui voit quoi sur iOS et sur Android. Un
-             testeur qui ne fait que le web n'en a pas. */
-          plateformes: surQuoi,
-          mobile: surQuoi.find((x) => x !== 'web') || '',
-          projets, actif: true,
-          profil: {
-            sexe: String((profil || {}).sexe || ''),
-            age: String((profil || {}).age || ''),
-            fonction: String((profil || {}).fonction || ''),
-            aisance: String((profil || {}).aisance || ''),
-            langue: String((profil || {}).langue || 'fr'),
-            certifie: Boolean((profil || {}).certifie),
-          },
-          cree: FieldValue.serverTimestamp(), maj: FieldValue.serverTimestamp(),
-        }, { merge: true });
-
-        /* L'invitation, sans quoi le testeur ne sait pas qu'il est attendu :
-           l'inscription créait son compte en silence, et il n'avait aucun
-           moyen de deviner ni l'adresse de son espace, ni son rôle.
-
-           Un envoi qui échoue ne doit pas faire échouer l'inscription : le
-           testeur existe, et la lettre se renvoie. On le consigne. */
-        let invite = false;
-        try {
-          const premier = projets[0] || '';
-          const fiche = premier ? await lireProjet(premier) : null;
-          const inv = await invitations.creer({ type: 'testeur', email: adresse, nom: String(prenom).trim(), uid: compte.uid, role: 'testeur', projets, projetNom: fiche ? (fiche.nom || '') : '', par: identite.uid, envoyee: true });
-          await mettreEnFile('invitation-testeur', [{ email: adresse, nom: String(prenom).trim() }], {
-            prenom: String(prenom).trim(),
-            email: adresse,
-            projetNom: fiche ? (fiche.nom || '') : '',
-            plateformes: surQuoi,
-            lien: inv.lien,
-          }, { projet: premier || null, evenement: 'invitation-testeur' });
-          invite = true;
-        } catch (err) {
-          console.error(`Invitation du testeur ${adresse} non mise en file`, err);
-        }
+        const compte = await creerFicheTesteur({ adresse, prenom, plateformes: surQuoi, projets, profil });
+        const invite = await inviterNouveauTesteur({ uid: compte.uid, adresse, prenom, plateformes: surQuoi, projets, par: identite.uid });
 
         await audit('testeur.inscrit', { uid: compte.uid, email: adresse, projets, invite });
         return res.json({ ok: true, uid: compte.uid, invite });
+      }
+
+      if (action === 'attribuerPlace') {
+        try { return res.json(await attribuerPlace(identite, req.body || {})); }
+        catch (err) { if (err && err.refus) return res.status(err.code).send(err.message); throw err; }
       }
 
       if (action === 'majTesteur') {
