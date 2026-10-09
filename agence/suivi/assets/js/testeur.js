@@ -37,6 +37,7 @@ import { demarrerPush } from './notifications-push.js';
 import { ouvrirAvisAnonyme } from './avis-testeur.js';
 import { logoAppliHtml, resoudreLogos, resoudreCaptures, pagePresentationHtml, fonctionnalitesDe, nomAppli } from './presentation-testeur.js';
 import { lancerVisite, visiteOuverte } from './visite-testeur.js';
+import { boiteCompteHtml, blocScenarioHtml, executerGeste, lireEtatCompte, etatCompte } from './compte-test.js';
 
 /* Le testeur dit « iPhone », jamais « iOS » : PLATEFORMES_TEST (noyau.js)
    le dit pour les trois espaces. */
@@ -520,6 +521,9 @@ const pageCampagne = (moi) => {
   const campagne = etat.campagne;
   /* Sur l'icône de l'application : ce qui reste à dérouler. */
   if (window.capmediaBureau) window.capmediaBureau.compte(campagne ? etat.scenarios.filter((s) => !fait(s.ref)).length : 0);
+  /* Ses identifiants et son compte de test : lus une fois par campagne,
+     pour que les feuilles des scénarios proposent le bon geste. */
+  if (campagne) chargerIdentifiants(moi);
   if (!campagne) {
     if (!etat.charge) return;
     /* Même sans campagne, il doit savoir où il est : un écran nu qui dit
@@ -842,18 +846,22 @@ const sansCampagne = (titre) => `<div class="page">
    campagnes/{c}/acces/{uid}, que lui seul lit. L'ancien champ commun de la
    campagne sert encore tant que rien n'est posé pour lui. Lus une fois par
    campagne, puis la page se redessine. */
-const identifiantsTesteur = { cle: '', valeur: '' };
+const identifiantsTesteur = { cle: '', valeur: '', compte: '' };
 const chargerIdentifiants = async (moi) => {
   const c = etat.campagne;
   const cle = `${c.projet}/${c.id}`;
   if (identifiantsTesteur.cle === cle) return;
   identifiantsTesteur.cle = cle;
   identifiantsTesteur.valeur = '';
+  identifiantsTesteur.compte = '';
   try {
     const d = await getDoc(doc(bdd, 'projets', c.projet, 'campagnes', c.id, 'acces', auth.currentUser.uid));
     identifiantsTesteur.valeur = d.exists() ? String(d.data().identifiants || '') : '';
+    /* Son compte ForgeMe de test, attribué par l'équipe (compte-test.js). */
+    identifiantsTesteur.compte = d.exists() ? String(d.data().compteTest || '') : '';
   } catch (e) { identifiantsTesteur.valeur = ''; }
-  if (identifiantsTesteur.valeur && courant().chemin === '/application') rendre(moi);
+  if (identifiantsTesteur.compte && !etatCompte(c)) await lireEtatCompte(c);
+  if ((identifiantsTesteur.valeur || identifiantsTesteur.compte) && courant().chemin === '/application') rendre(moi);
 };
 
 const pageApplication = (moi) => {
@@ -895,6 +903,7 @@ const pageApplication = (moi) => {
         <p class="aide">Ce sont des comptes de test : rien de réel n'y passe. Ne les partagez pas.</p>
       </div>` : ''}
     </section>` : ''}
+    ${compteTesteur(c) ? boiteCompteHtml(c, compteTesteur(c)) : ''}
     <section>
       <div class="section-tete"><h2>Ce qu'on attend de vous</h2></div>
       ${c.consignes ? `<div class="prose">${echapper(c.consignes).split(/\n{2,}/).map((x) => `<p>${x.replace(/\n/g, '<br>')}</p>`).join('')}</div>`
@@ -907,6 +916,26 @@ const pageApplication = (moi) => {
     try { await navigator.clipboard.writeText(($('#identifiants-bloc') || {}).textContent || ''); toast('Identifiants copiés.'); }
     catch (e) { toast('La copie a échoué : sélectionnez le texte.', 'erreur'); }
   });
+  const boite = $('[data-compte-test]');
+  if (boite) boite.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-compte-geste]');
+    if (b) gesteCompte(c, b, () => { if (courant().chemin === '/application') rendre(moi); });
+  });
+};
+
+/* Le compte ForgeMe de test de CE testeur sur la campagne courante, une
+   fois lu (chargerIdentifiants), sinon rien. */
+const compteTesteur = (c) => (c && identifiantsTesteur.cle === `${c.projet}/${c.id}` ? identifiantsTesteur.compte : '');
+
+/* Un geste sur le compte de test : le bouton patiente, l'erreur se dit. */
+const gesteCompte = async (c, bouton, apres) => {
+  if (bouton.disabled) return;
+  bouton.disabled = true; bouton.classList.add('btn-charge');
+  try {
+    const r = await executerGeste(c, bouton.dataset.compteGeste);
+    if (r && apres) apres(r);
+  } catch (e) { toast(e.message || 'Le geste n\'a pas abouti.', 'erreur'); }
+  finally { bouton.disabled = false; bouton.classList.remove('btn-charge'); }
 };
 
 /* La présentation de l'application : le discours de l'équipe, puis les
@@ -1352,6 +1381,7 @@ const ouvrirFeuille = (s, moi, { apres = null } = {}) => {
       ${p && v !== 'revoir' ? `<div class="fs-etat">${pastille(VERDICTS_TESTEUR, p.resultat)}<span class="t-2 t-petit">Votre résultat${p.commentaire ? ` · ${echapper(p.commentaire)}` : ''}.${fige ? '' : ' Vous pouvez vous corriger.'}</span></div>` : ''}
       ${(s.etapes || s.options) ? `<section class="fs-bloc"><p class="fs-bloc-sur">Ce qu'il faut faire</p><p>${texteEtapes(s.etapes || s.options)}</p></section>` : ''}
       <section class="fs-bloc fs-bloc--attendu"><p class="fs-bloc-sur">Ce qui doit se passer</p><p>${echapper(s.attendu || '')}</p></section>
+      ${fige ? '' : blocScenarioHtml(s, etat.campagne, compteTesteur(etat.campagne))}
       ${plateforme}
       <p class="fs-note">${fige ? '<strong>Le test est terminé</strong> : ce résultat est figé.' : 'Un scénario où rien ne se passe est un échec, jamais une réussite.'}</p>
       ${apres && !fige ? '<p class="fs-note"><button class="lien-sobre" type="button" data-fermer>Faire une pause</button> : tout est enregistré, « Continuer » vous ramènera ici.</p>' : ''}
@@ -1363,6 +1393,8 @@ const ouvrirFeuille = (s, moi, { apres = null } = {}) => {
   });
   m.el.addEventListener('click', async (ev) => {
     if (ev.target.closest('[data-remarque-scenario]')) { await ouvrirRemarque(s, moi); return; }
+    const geste = ev.target.closest('[data-compte-geste]');
+    if (geste) { await gesteCompte(etat.campagne, geste); return; }
     if (ev.target.closest('[data-feuille-passer]')) {
       passer(s.ref);
       m.fermer(true);

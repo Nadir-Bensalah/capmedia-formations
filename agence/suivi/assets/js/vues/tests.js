@@ -1643,9 +1643,10 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
   const ancienBloc = String((c.acces || {}).identifiants || '').trim();
   const identifiantsHtml = equipe && charges.length ? `<div class="groupe" data-identifiants>
     <span class="etiquette-champ">Identifiants de test, par testeur</span>
-    <p class="aide">Chacun ne lit que les siens, tant que son accès court. Le client ne les voit jamais.</p>
+    <p class="aide">Chacun ne lit que les siens, tant que son accès court. Le client ne les voit jamais. Le compte ForgeMe de test (une adresse @exemple.test, un par testeur) ouvre « Mon compte de test » dans son espace : il y change l'abonnement, remplit ou vide ce compte-là, et aucun autre.</p>
     ${charges.map((t) => `<label class="etiquette-champ" for="ident-${echapper(t.id)}" style="margin-top:8px">${echapper(t.nom)}</label>
-      <textarea class="champ" id="ident-${echapper(t.id)}" rows="2" maxlength="2000" data-identifiants-de="${echapper(t.id)}" placeholder="test1@exemple.test · MotDePasse1" disabled></textarea>`).join('')}
+      <textarea class="champ" id="ident-${echapper(t.id)}" rows="2" maxlength="2000" data-identifiants-de="${echapper(t.id)}" placeholder="test1@exemple.test · MotDePasse1" disabled></textarea>
+      <input class="champ" type="email" style="margin-top:6px" maxlength="80" id="compte-${echapper(t.id)}" data-compte-de="${echapper(t.id)}" aria-label="Compte ForgeMe de test de ${echapper(t.nom)}" placeholder="Compte de test : t1@exemple.test" disabled>`).join('')}
     <div class="rang" style="gap:8px;margin-top:10px"><button class="btn btn-secondaire btn-petit" type="button" data-enregistrer-identifiants>Enregistrer les identifiants</button></div>
     ${ancienBloc ? `<div data-ancien-identifiants style="margin-top:12px">
       <p class="aide">L'ancien bloc commun, lisible de tous les testeurs et du client. Ressaisissez-le testeur par testeur, puis videz-le.</p>
@@ -1723,24 +1724,43 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
      changé. Un champ qui n'a pas pu être lu reste fermé : l'écraser à
      l'aveugle effacerait ce qu'un collègue a posé. */
   const lus = new Map();
+  const lusComptes = new Map();
   const champsIdent = [...m.el.querySelectorAll('[data-identifiants-de]')];
+  const champCompte = (uid) => m.el.querySelector(`[data-compte-de="${CSS.escape(uid)}"]`);
   champsIdent.forEach(async (z) => {
     const uid = z.dataset.identifiantsDe;
+    const zc = champCompte(uid);
     try {
       const f = await lireAcces(docAcces(bdd, 'projets', pid, 'campagnes', c.id, 'acces', uid));
       const v = f.exists() ? String((f.data() || {}).identifiants || '') : '';
+      const vc = f.exists() ? String((f.data() || {}).compteTest || '') : '';
       lus.set(uid, v); z.value = v; z.disabled = false;
+      lusComptes.set(uid, vc); if (zc) { zc.value = vc; zc.disabled = false; }
     } catch (e) { console.error(e); z.placeholder = 'Illisible pour l\'instant.'; }
   });
   const ecrireIdent = m.el.querySelector('[data-enregistrer-identifiants]');
   if (ecrireIdent) ecrireIdent.addEventListener('click', () => agir(ecrireIdent, async () => {
-    const changes = champsIdent.filter((z) => lus.has(z.dataset.identifiantsDe) && z.value.trim() !== lus.get(z.dataset.identifiantsDe).trim());
+    const compteDe = (uid) => String((champCompte(uid) || {}).value || '').trim().toLowerCase();
+    const changes = champsIdent.filter((z) => {
+      const uid = z.dataset.identifiantsDe;
+      return lus.has(uid) && (z.value.trim() !== lus.get(uid).trim() || compteDe(uid) !== (lusComptes.get(uid) || ''));
+    });
     if (!changes.length) { toast('Rien n\'a changé.'); return; }
+    /* Le compte de test : une adresse fictive, un seul testeur par compte. */
+    const vus = new Map();
+    for (const z of champsIdent) {
+      const e = compteDe(z.dataset.identifiantsDe);
+      if (!e) continue;
+      if (!/^[a-z0-9._+-]{1,64}@exemple\.test$/.test(e)) { toast(`« ${e} » n'est pas un compte de test : une adresse @exemple.test.`, 'erreur'); return; }
+      if (vus.has(e)) { toast(`« ${e} » est attribué à deux testeurs : un compte par testeur.`, 'erreur'); return; }
+      vus.set(e, true);
+    }
     for (const z of changes) {
       const uid = z.dataset.identifiantsDe;
       const v = z.value.trim().slice(0, 2000);
-      await poserAcces(docAcces(bdd, 'projets', pid, 'campagnes', c.id, 'acces', uid), { identifiants: v, maj: heureServeur() });
-      lus.set(uid, v);
+      const vc = compteDe(uid);
+      await poserAcces(docAcces(bdd, 'projets', pid, 'campagnes', c.id, 'acces', uid), { identifiants: v, compteTest: vc, maj: heureServeur() });
+      lus.set(uid, v); lusComptes.set(uid, vc);
     }
     toast(changes.length > 1 ? `Identifiants de ${changes.length} testeurs enregistrés.` : 'Identifiants enregistrés.');
   }));
