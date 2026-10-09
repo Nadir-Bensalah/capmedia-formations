@@ -41,12 +41,12 @@ import { filAriane } from '../coquille.js';
 import { monter as monterTableau } from './tableau.js';
 import { ouvrirSuiviTesteur } from './suivi-testeur.js';
 import { ordonnerSections as rangerSections } from './plan-tests.js';
-import { scenariosHumainsDuPlan, estSurLePlan, clesAttendues, vivierPropose, pretALancer, verdictDe, VERDICTS, NOMS_PLATEFORMES } from '../campagne-plan.js';
+import { scenariosHumainsDuPlan, estSurLePlan, clesAttendues, vivierPropose, pretALancer, verdictDe, VERDICTS, NOMS_PLATEFORMES, estPlace, placesDe, nouvellesPlaces } from '../campagne-plan.js';
 import {
   repartirSocle, controlerSocle, chargeSocle, retraitsConnus, proposerSocle, plafondDe, regleSocle, MOTIFS_RETRAIT, MINUTES_PAR_TEST,
 } from '../repartition.js';
 /* Les identifiants de test d'un testeur (campagnes/{c}/acces/{uid}). */
-import { doc as docAcces, getDoc as lireAcces, setDoc as poserAcces, serverTimestamp as heureServeur } from '../noyau.js';
+import { doc as docAcces, getDoc as lireAcces, setDoc as poserAcces, serverTimestamp as heureServeur, deleteField as champRetire, arrayRemove as retirerDeListe } from '../noyau.js';
 
 /* La mémoire des filtres tient dans l'adresse, pas dans le stockage : un
    lien vers « les anomalies Android de tel projet » doit pouvoir se coller
@@ -190,6 +190,13 @@ export const nommeur = (d, { equipe, pid }) => {
   const rangs = new Map(gens.map((t, i) => [t.id, i + 1]));
   const rang = (uid) => { if (!rangs.has(uid)) rangs.set(uid, rangs.size + 1); return rangs.get(uid); };
   return (uid) => {
+    /* Une place de testeur (campagne-plan.js) : son libellé, « iPhone 1 »,
+       pour l'équipe comme pour le client. Personne derrière, aucun profil. */
+    if (estPlace(uid)) {
+      const pl = ((d.campagnes || []).find((c) => c && c.places && c.places[uid]) || { places: {} }).places[uid] || {};
+      const nom = String(pl.libelle || 'Place de testeur');
+      return { nom, traits: '', libelle: nom, place: true };
+    }
     const t = (equipe ? (d.testeurs || []) : (d.profils || [])).find((x) => x.id === uid) || {};
     const p = equipe ? (t.profil || {}) : t;
     const appareils = (Array.isArray(p.appareils) ? p.appareils : (Array.isArray(t.appareils) ? t.appareils.filter((a) => a && a.confirme !== false) : []))
@@ -1608,6 +1615,65 @@ const apercuSocle = async ({ c, pid, env, scenariosPlan, gens, garder, nommer, f
   await apercu.fin;
 };
 
+/* Attribuer une place à une personne : une nouvelle (prénom, adresse,
+   compte de test) ou un testeur déjà inscrit qui a le même téléphone. Le
+   serveur (attribuerPlace) fait tout d'un coup : il inscrit la personne
+   au besoin, lui transfère les passages de la place sans rien recalculer,
+   pose son compte de test, puis envoie l'invitation, à ce moment-là et
+   pas avant. */
+const COMPTE_TEST = /^[a-z0-9._+-]{1,64}@exemple\.test$/;
+const ouvrirAttribution = async (c, place, { pid, vivier }) => {
+  const n = clesDe(c.affectation || {}, place.id).length;
+  const candidats = (vivier || []).filter((t) => t.actif !== false && t.mobile === place.mobile && !(c.testeurs || []).includes(t.id));
+  const m = modale({
+    titre: `Attribuer la place ${place.libelle}`,
+    sousTitre: `${NOMS_PLATEFORMES[place.mobile] || place.mobile}${place.web ? ' et web' : ''} · ${pluriel(n, 'passage', 'passages')}`,
+    corps: `
+      <p class="t-corps t-2" style="margin:0 0 14px">${n ? `Ses ${pluriel(n, 'passage', 'passages')} passent à cette personne tels quels, sans nouveau calcul.` : 'Cette place n\'a encore aucun passage : répartissez après l\'avoir attribuée.'}</p>
+      ${candidats.length ? `<div class="groupe"><label class="etiquette-champ" for="place-inscrit">Un testeur déjà inscrit</label>
+        <select class="select" id="place-inscrit" data-place-inscrit>
+          <option value="">Personne, c'est une nouvelle personne</option>
+          ${candidats.map((t) => `<option value="${echapper(t.id)}">${echapper(t.prenom || t.email || t.id)}${t.email ? ` · ${echapper(t.email)}` : ''}</option>`).join('')}
+        </select>
+        <p class="aide">Il est déjà invité : il ne reçoit pas de nouvelle invitation.</p></div>` : ''}
+      <div data-place-nouveau>
+        <div class="forme-rang">
+          <div class="groupe"><label class="etiquette-champ" for="place-prenom">Prénom</label>
+            <input class="champ" id="place-prenom" maxlength="80" placeholder="Karim" data-place-prenom></div>
+          <div class="groupe"><label class="etiquette-champ" for="place-email">Adresse</label>
+            <input class="champ" id="place-email" type="email" maxlength="120" placeholder="karim@exemple.fr" data-place-email></div>
+        </div>
+        <p class="aide">Son invitation part dès que vous attribuez la place.</p>
+      </div>
+      <div class="groupe"><label class="etiquette-champ" for="place-compte">Compte ForgeMe de test</label>
+        <input class="champ" id="place-compte" type="email" maxlength="80" placeholder="t1@exemple.test" data-place-compte>
+        <p class="aide">Facultatif. Une adresse @exemple.test, un compte par testeur.</p></div>`,
+    pied: `<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button>
+      <button class="btn btn-principal" type="button" data-attribuer>Attribuer</button>`,
+  });
+  const choix = m.el.querySelector('[data-place-inscrit]');
+  const nouveau = m.el.querySelector('[data-place-nouveau]');
+  if (choix) choix.addEventListener('change', () => { nouveau.hidden = Boolean(choix.value); });
+  const bouton = m.el.querySelector('[data-attribuer]');
+  bouton.addEventListener('click', () => agir(bouton, async () => {
+    const inscrit = choix ? choix.value : '';
+    const prenom = (m.el.querySelector('[data-place-prenom]').value || '').trim();
+    const email = (m.el.querySelector('[data-place-email]').value || '').trim().toLowerCase();
+    const compteTest = (m.el.querySelector('[data-place-compte]').value || '').trim().toLowerCase();
+    if (!inscrit) {
+      if (!prenom) { toast('Donnez-lui un prénom.', 'erreur'); return; }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { toast('Cette adresse a l\'air incomplète.', 'erreur'); return; }
+    }
+    if (compteTest && !COMPTE_TEST.test(compteTest)) { toast(`« ${compteTest} » n'est pas un compte de test : une adresse @exemple.test.`, 'erreur'); return; }
+    try {
+      const r = await appelServeur('attribuerPlace', { projet: pid, campagne: c.id, place: place.id, ...(inscrit ? { testeur: inscrit } : { prenom, email }), ...(compteTest ? { compteTest } : {}) });
+      toast(`La place ${place.libelle} est à ${inscrit ? ((candidats.find((t) => t.id === inscrit) || {}).prenom || 'ce testeur') : prenom}.${r && r.invite ? ' Son invitation est partie.' : ''}`);
+      m.fermer(true);
+    } catch (e) { toast(lisible(e), 'erreur'); }
+  }));
+  return m.fin;
+};
+
 /* L'affectation des testeurs à une campagne.
    Le calcul propose, il ne décide pas : un testeur tombe malade, un autre
    demande un bloc précis, et aucun calcul ne prévoit cela. */
@@ -1643,10 +1709,17 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
   /* La fin de test : « termine » sur l'appréciation, la date de fin
      d'accès sur la campagne (fins), posée par le serveur et déplacée par
      l'équipe. Les remarques d'après ne se lisent qu'ici. */
+  /* Les places de testeur (campagne-plan.js) : réservées dans la
+     répartition, sans personne derrière, jusqu'à leur attribution. */
+  const places = placesDe(c);
+  const parPlace = new Map(places.map((p) => [p.id, p]));
+  const placesLibres = places.filter((p) => !p.testeur);
   const charges = (c.testeurs || []).map((id) => {
-    const t = vivier.find((x) => x.id === id) || { id };
+    const pl = parPlace.get(id);
+    const t = pl ? { id, mobile: pl.mobile } : (vivier.find((x) => x.id === id) || { id });
     const a = avis.find((x) => x.id === id) || {};
     return {
+      place: Boolean(pl), placeVide: Boolean(pl && !pl.testeur),
       id, nom: nommer(id).nom, mobile: t.mobile || '', n: clesDe(affectation, id).length, accueil: Boolean(a.accueil),
       /* Le client ne lit plus l'appréciation : la fin de test, il la lit
          sur la campagne (« termines », posé par le serveur). */
@@ -1690,10 +1763,11 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
      la campagne était lisible de tous : on le montre ici tant qu'il n'est
      pas vidé, pour le ressaisir testeur par testeur. Équipe seule. */
   const ancienBloc = String((c.acces || {}).identifiants || '').trim();
-  const identifiantsHtml = equipe && charges.length ? `<div class="groupe" data-identifiants>
+  const personnes = charges.filter((t) => !t.place);
+  const identifiantsHtml = equipe && personnes.length ? `<div class="groupe" data-identifiants>
     <span class="etiquette-champ">Identifiants de test, par testeur</span>
     <p class="aide">Chacun ne lit que les siens, tant que son accès court. Le client ne les voit jamais. Le compte ForgeMe de test (une adresse @exemple.test, un par testeur) ouvre « Mon compte de test » dans son espace : il y change l'abonnement, remplit ou vide ce compte-là, et aucun autre.</p>
-    ${charges.map((t) => `<label class="etiquette-champ" for="ident-${echapper(t.id)}" style="margin-top:8px">${echapper(t.nom)}</label>
+    ${personnes.map((t) => `<label class="etiquette-champ" for="ident-${echapper(t.id)}" style="margin-top:8px">${echapper(t.nom)}</label>
       <textarea class="champ" id="ident-${echapper(t.id)}" rows="2" maxlength="2000" data-identifiants-de="${echapper(t.id)}" placeholder="test1@exemple.test · MotDePasse1" disabled></textarea>
       <input class="champ" type="email" style="margin-top:6px" maxlength="80" id="compte-${echapper(t.id)}" data-compte-de="${echapper(t.id)}" aria-label="Compte ForgeMe de test de ${echapper(t.nom)}" placeholder="Compte de test : t1@exemple.test" disabled>`).join('')}
     <div class="rang" style="gap:8px;margin-top:10px"><button class="btn btn-secondaire btn-petit" type="button" data-enregistrer-identifiants>Enregistrer les identifiants</button></div>
@@ -1701,6 +1775,28 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
       <p class="aide">L'ancien bloc commun, lisible de tous les testeurs et du client. Ressaisissez-le testeur par testeur, puis videz-le.</p>
       <p class="t-petit" style="white-space:pre-wrap;margin:6px 0;padding:6px 8px;border-radius:8px;background:var(--fond-2)">${echapper(ancienBloc)}</p>
       <button class="btn btn-fantome btn-petit" type="button" data-vider-ancien>Vider l'ancien bloc</button>
+    </div>` : ''}
+  </div>` : '';
+
+  /* Les places : on les crée tant que la campagne se prépare, on les
+     attribue quand on a la personne. Une place ne reçoit rien, n'ouvre
+     rien : elle tient seulement une part de la répartition. */
+  const nomDe = (uid) => { const t = vivier.find((x) => x.id === uid) || (magasin.lire(K.testeurs) || []).find((x) => x.id === uid); return t ? (t.prenom || t.email || 'Testeur') : 'Testeur'; };
+  const placesHtml = equipe && surPlan && (enPreparation || places.length) ? `<div class="groupe" data-places>
+    <span class="etiquette-champ">Places de testeur</span>
+    <p class="aide">Une place réserve le travail d'un testeur pas encore choisi. Elle entre dans la répartition, mais ne reçoit aucune lettre et n'ouvre aucun accès. Quand vous avez la personne, attribuez-lui la place : ses passages lui reviennent tels quels, et son invitation part à ce moment-là.</p>
+    ${places.length ? `<div class="liste liste--serree">${places.map((p) => `
+      <div class="rang" style="justify-content:space-between;gap:10px;padding:6px 10px;border-radius:8px;background:var(--fond-2)" data-place="${echapper(p.id)}" data-vide="${p.testeur ? '0' : '1'}">
+        <span>${echapper(p.libelle)} <span class="t-micro t-3">${echapper(NOMS_PLATEFORMES[p.mobile] || p.mobile)}${p.web ? ' et web' : ''} · ${pluriel(clesDe(affectation, p.testeur || p.id).length, 'passage', 'passages')}</span></span>
+        ${p.testeur ? `<span class="t-petit t-ok">Attribuée à ${echapper(nomDe(p.testeur))}</span>`
+          : `<span class="rang" style="gap:6px;align-items:center"><span class="t-petit t-3">Sans testeur</span>
+            ${c.statut === 'close' ? '' : `<button class="btn btn-secondaire btn-petit" type="button" data-attribuer-place="${echapper(p.id)}">Attribuer</button>`}
+            ${enPreparation ? `<button class="btn btn-fantome btn-petit" type="button" data-retirer-place="${echapper(p.id)}">Retirer</button>` : ''}</span>`}
+      </div>`).join('')}</div>` : ''}
+    ${enPreparation ? `<div class="rang" style="gap:10px;margin-top:10px;flex-wrap:wrap;align-items:flex-end">
+      <label class="t-petit">iPhone <input class="champ" type="number" min="0" max="20" value="0" style="width:72px" data-places-nombre="ios" aria-label="Places iPhone à créer"></label>
+      <label class="t-petit">Android <input class="champ" type="number" min="0" max="20" value="0" style="width:72px" data-places-nombre="android" aria-label="Places Android à créer"></label>
+      <button class="btn btn-secondaire btn-petit" type="button" data-creer-places>Créer les places</button>
     </div>` : ''}
   </div>` : '';
 
@@ -1718,6 +1814,8 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
 
       ${lancementHtml}
 
+      ${placesHtml}
+
       ${(c.builds && (c.builds.ios || c.builds.android || c.builds.web)) ? `<div class="groupe">
         <span class="etiquette-champ">Builds</span>
         <div class="rang" style="gap:8px;flex-wrap:wrap">
@@ -1733,8 +1831,8 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
             <div class="rang" style="justify-content:space-between">
               <span>${echapper(t.nom)}${t.mobile ? ` <span class="puce puce--mini">${echapper(NOMS_PLATEFORMES[t.mobile] || t.mobile)}</span>` : ''}${nommer(t.id).traits ? ` <span class="t-micro t-3" data-profil>${echapper(nommer(t.id).traits)}</span>` : ''}</span>
               <span class="rang" style="gap:10px;align-items:center">
-                ${!equipe ? '' : t.accueil ? '<span class="pastille pastille--vert" title="A parcouru l\'accueil de son espace">Premiers pas faits</span>' : '<span class="t-micro t-3">premiers pas à faire</span>'}
-                ${!equipe ? '' : `<span class="t-micro ${t.avisApres ? 't-ok' : 't-3'}" data-a-repondu="${t.avisApres ? 'oui' : 'non'}" title="Ses réponses sont anonymes : on sait seulement s'il a répondu">Avis : ${t.avisApres ? 'oui' : (t.avisAvant ? 'première impression seulement' : 'non')}</span>`}
+                ${t.place ? `<span class="t-micro t-3" data-place-sans-testeur>${equipe ? 'place sans testeur' : 'testeur à venir'}</span>` : !equipe ? '' : t.accueil ? '<span class="pastille pastille--vert" title="A parcouru l\'accueil de son espace">Premiers pas faits</span>' : '<span class="t-micro t-3">premiers pas à faire</span>'}
+                ${!equipe || t.place ? '' : `<span class="t-micro ${t.avisApres ? 't-ok' : 't-3'}" data-a-repondu="${t.avisApres ? 'oui' : 'non'}" title="Ses réponses sont anonymes : on sait seulement s'il a répondu">Avis : ${t.avisApres ? 'oui' : (t.avisAvant ? 'première impression seulement' : 'non')}</span>`}
                 <span class="t-micro">${t.n ? pluriel(t.n, 'passage', 'passages') : 'rien encore'}</span>
               </span>
             </div>
@@ -1755,9 +1853,10 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
 
       ${resultatsHtml(c, { dedans, nommer })}
 
-      ${equipe && vivier.length ? `<div class="groupe">
+      ${equipe && (vivier.length || placesLibres.length) ? `<div class="groupe">
         <span class="etiquette-champ">La liste des testeurs</span>
-        <div class="cases-blocs">${vivier.map((t) => `
+        <div class="cases-blocs">${placesLibres.map((p) => `
+          <label class="case"><input type="checkbox" data-testeur="${echapper(p.id)}" ${(c.testeurs || []).includes(p.id) || !Object.prototype.hasOwnProperty.call(affectation, p.id) ? 'checked' : ''}> ${echapper(p.libelle)} · place sans testeur</label>`).join('')}${vivier.map((t) => `
           <label class="case"><input type="checkbox" data-testeur="${echapper(t.id)}" ${(c.testeurs || []).includes(t.id) ? 'checked' : ''}> ${echapper(t.prenom || t.email || t.id)}${t.mobile ? ` · ${echapper((PLATEFORMES_TEST[t.mobile] || {}).court || t.mobile)}` : ''}</label>`).join('')}</div>
         <p class="aide">${socleRegle || (surPlan && (c.statut || 'preparation') === 'preparation') ? 'Chacun fait son téléphone et le web. Le socle chez tous, le reste une fois chacun, par priorité, jusqu\'au plafond. Répartir montre la charge de chacun avant d\'enregistrer.' : 'Chacun fait son téléphone et le web. Un passage « humain seul » part chez deux testeurs, un passage « humain et robot » chez un seul. Répartir montre la charge de chacun avant d\'enregistrer.'}</p>
       </div>` : ''}`,
@@ -1768,6 +1867,33 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
   });
 
   brancherPieces(m.el);
+
+  /* Les places : créer, retirer (vide seulement), attribuer. */
+  const creerPlaces = m.el.querySelector('[data-creer-places]');
+  if (creerPlaces) creerPlaces.addEventListener('click', () => agir(creerPlaces, async () => {
+    const nombres = Object.fromEntries([...m.el.querySelectorAll('[data-places-nombre]')].map((x) => [x.dataset.placesNombre, Number(x.value) || 0]));
+    const neuves = nouvellesPlaces(c, nombres);
+    const ids = Object.keys(neuves);
+    if (!ids.length) { toast('Indiquez combien de places iPhone ou Android créer.', 'erreur'); return; }
+    if (ids.length + places.length > 30) { toast('Trente places au plus par campagne.', 'erreur'); return; }
+    await ecrire.majCampagne(pid, c.id, Object.fromEntries(ids.map((id) => [`places.${id}`, { ...neuves[id], cree: new Date() }])));
+    toast(`${pluriel(ids.length, 'place créée', 'places créées')} : ${ids.map((id) => neuves[id].libelle).join(', ')}. Elles entrent dans la prochaine répartition.`);
+    m.fermer(true);
+  }));
+  m.el.addEventListener('click', async (ev) => {
+    const b = ev.target.closest('[data-retirer-place], [data-attribuer-place]');
+    if (!b || !equipe) return;
+    const pl = parPlace.get(b.dataset.retirerPlace || b.dataset.attribuerPlace);
+    if (!pl || pl.testeur) return;
+    if (b.dataset.attribuerPlace) { if (await ouvrirAttribution(c, pl, { pid, vivier })) m.fermer(true); return; }
+    const n = clesDe(affectation, pl.id).length;
+    if (!(await confirmer({ titre: `Retirer la place ${pl.libelle} ?`, texte: n ? `Ses ${pluriel(n, 'passage', 'passages')} ne seront plus confiés à personne : répartissez de nouveau ensuite.` : 'Elle n\'a aucun passage.', ok: 'Retirer' }))) return;
+    await agir(b, async () => {
+      await ecrire.majCampagne(pid, c.id, { [`places.${pl.id}`]: champRetire(), [`affectation.${pl.id}`]: champRetire(), testeurs: retirerDeListe(pl.id) });
+      toast(`Place ${pl.libelle} retirée.`);
+      m.fermer(true);
+    });
+  });
 
   /* Les identifiants : lus à l'ouverture, écrits seulement s'ils ont
      changé. Un champ qui n'a pas pu être lu reste fermé : l'écraser à
@@ -1878,6 +2004,8 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
        campagne lancée sous l'ancienne règle la garde jusqu'au bout. */
     const auSocle = regleSocle(c) || (c.statut || 'preparation') === 'preparation';
     const gens = ids.map((id) => {
+      const pl = parPlace.get(id);
+      if (pl) return { id, mobile: pl.mobile || '', web: pl.web !== false };
       const t = vivier.find((x) => x.id === id) || {};
       const siennes = Array.isArray(t.plateformes) ? t.plateformes : [];
       return { id, mobile: t.mobile || '', web: !siennes.length || siennes.includes('web') };

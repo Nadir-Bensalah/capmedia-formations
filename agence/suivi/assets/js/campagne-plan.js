@@ -151,6 +151,44 @@ export const bilanAffectation = (affectation = {}, humains = [], testeurs = []) 
   return { attendues: attendues.size, oubliees, incompletes, enTrop, horsSysteme };
 };
 
+/* Les places de testeur (Nadir, 09/10/2026). Une place réserve le travail
+   d'un testeur qui n'est pas encore choisi : « iPhone 1 », « Android 2 ».
+   Elle vit dans la campagne (champ « places »), jamais dans la liste des
+   testeurs : pas d'adresse, pas de compte, aucune lettre, aucun accès.
+   La répartition la traite comme un testeur (son identifiant entre dans
+   « testeurs » et « affectation »). Quand l'équipe a la vraie personne,
+   le serveur (suiviAdmin, attribuerPlace) lui transfère les passages de
+   la place tels quels, et l'invitation part à ce moment-là.
+     places: { 'place-ios-1': { libelle, mobile: 'ios'|'android', web, rang,
+               testeur?: uid, attribuee?: date } }
+   Un identifiant de compte Firebase n'a jamais de tiret : « place-… » ne
+   peut pas désigner une personne. */
+export const PREFIXE_PLACE = 'place-';
+export const estPlace = (id) => typeof id === 'string' && id.startsWith(PREFIXE_PLACE);
+const RANG_MOBILE = { ios: 0, android: 1 };
+export const placesDe = (c) => Object.entries((c && c.places) || {})
+  .filter(([id, p]) => estPlace(id) && p && typeof p === 'object')
+  .map(([id, p]) => ({ id, libelle: String(p.libelle || id), mobile: p.mobile || '', web: p.web !== false, rang: Number(p.rang) || 0, testeur: p.testeur || '' }))
+  .sort((a, b) => (RANG_MOBILE[a.mobile] ?? 2) - (RANG_MOBILE[b.mobile] ?? 2) || a.rang - b.rang || a.id.localeCompare(b.id));
+/* Une place sans testeur : elle bloque le lancement. */
+export const placesVides = (c) => placesDe(c).filter((p) => !p.testeur);
+/* Les places à ajouter : « nombre » par téléphone, numérotées après les
+   existantes. Rend { id: place }, prêt à écrire sous « places ». */
+export const nouvellesPlaces = (c, nombres = {}, { web = true } = {}) => {
+  const existantes = placesDe(c);
+  const sortie = {};
+  ['ios', 'android'].forEach((m) => {
+    const n = Math.max(0, Math.min(50, Math.floor(Number(nombres[m]) || 0)));
+    let rang = Math.max(0, ...existantes.filter((p) => p.mobile === m).map((p) => p.rang));
+    for (let i = 0; i < n; i += 1) {
+      rang += 1;
+      while ((c && c.places && c.places[`${PREFIXE_PLACE}${m}-${rang}`]) || sortie[`${PREFIXE_PLACE}${m}-${rang}`]) rang += 1;
+      sortie[`${PREFIXE_PLACE}${m}-${rang}`] = { libelle: `${NOMS_PLATEFORMES[m]} ${rang}`, mobile: m, web: web !== false, rang };
+    }
+  });
+  return sortie;
+};
+
 /* Le vivier proposé dans une campagne : les retirés n'y sont pas, ceux du
    projet viennent en premier. */
 export const vivierPropose = (vivier = [], pid = '', dejaPris = []) => (vivier || [])
@@ -190,11 +228,15 @@ export const pretALancer = (c = {}, { humains = [], testeurs = [] } = {}) => {
   const inst = c.installation || {};
   const systemes = [...new Set(Object.values(aff).map((e) => (e && !Array.isArray(e) ? e.telephone : '')).filter(Boolean))];
   const liensManquants = systemes.filter((s) => !inst[s]);
+  const places = placesDe(c);
+  const vides = places.filter((p) => !p.testeur);
   return [
     { cle: 'scenarios', ok: surPlan && dedans.length > 0, libelle: 'Les scénarios du plan',
       detail: !surPlan ? 'La campagne reprend l\'ancienne bibliothèque : choisissez les sections du plan.' : `${dedans.length} ${dedans.length > 1 ? 'scénarios retenus' : 'scénario retenu'}.` },
     { cle: 'repartition', ok: socle ? socle.ok : repartie && !bilan.oubliees.length && !bilan.enTrop.length && !bilan.horsSysteme.length, libelle: 'Les testeurs, répartis',
       detail: socle ? socle.detail : !repartie ? 'Personne n\'a encore de scénario.' : bilan.oubliees.length ? `${bilan.oubliees.length} ${bilan.oubliees.length > 1 ? 'passages sans testeur' : 'passage sans testeur'}.` : bilan.enTrop.length ? `${bilan.enTrop.length} ${bilan.enTrop.length > 1 ? 'passages en trop' : 'passage en trop'} : répartissez de nouveau.` : bilan.horsSysteme.length ? `${bilan.horsSysteme.length} ${bilan.horsSysteme.length > 1 ? 'passages confiés' : 'passage confié'} hors du téléphone ou du web du testeur : répartissez de nouveau.` : `${(c.testeurs || []).length} ${(c.testeurs || []).length > 1 ? 'testeurs' : 'testeur'}, ${nombreDeCles(aff)} passages.` },
+    ...(places.length ? [{ cle: 'places', ok: !vides.length, libelle: 'Les places de testeur',
+      detail: vides.length ? `${vides.length} ${vides.length > 1 ? 'places sans testeur' : 'place sans testeur'} : attribuez-les avant de lancer.` : `${places.length} ${places.length > 1 ? 'places, chacune a son testeur' : 'place, elle a son testeur'}.` }] : []),
     { cle: 'installation', ok: repartie && !liensManquants.length && Boolean(inst.ios || inst.android || inst.web), libelle: 'Les liens d\'installation',
       detail: liensManquants.length ? `Il manque le lien ${liensManquants.map((s) => NOMS_PLATEFORMES[s] || s).join(' et ')}.` : (inst.ios || inst.android || inst.web) ? 'Chaque testeur a de quoi installer.' : 'Aucun lien pour l\'instant.' },
     { cle: 'presentation', ok: Boolean(String(c.application || '').trim()), libelle: 'La présentation aux testeurs',
