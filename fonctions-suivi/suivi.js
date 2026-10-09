@@ -2495,7 +2495,7 @@ exports.suiviAdmin = onRequest(
         const fiche = await bdd.doc(`testeurs/${tid}`).get();
         if (!fiche.exists) return res.status(404).send('testeur inconnu');
         const t = fiche.data();
-        if (t.actif === false) return res.status(409).send('ce testeur est retire du vivier');
+        if (t.actif === false) return res.status(409).send('ce testeur ne fait plus partie des testeurs');
 
         const premier = (t.projets || [])[0] || '';
         const p = premier ? await lireProjet(premier) : null;

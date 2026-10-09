@@ -632,7 +632,7 @@ const vivierHtml = (d, { equipe }) => {
 
   return `<section class="section" id="testeurs">
     <div class="section-tete">
-      <div><h2>Testeurs ${infoBouton('testeurs')}</h2><p class="chapo">${gens.length ? pluriel(gens.length, 'personne au vivier', 'personnes au vivier') : 'Le vivier est vide.'}</p></div>
+      <div><h2>Testeurs ${infoBouton('testeurs')}</h2><p class="chapo">${gens.length ? pluriel(gens.length, 'testeur inscrit', 'testeurs inscrits') : 'Aucun testeur inscrit pour l\'instant.'}</p></div>
       <button class="btn btn-principal btn-petit" type="button" data-nouveau-testeur>${icone('plus')} Inscrire un testeur</button>
     </div>
     ${gens.length ? `<div class="liste">${gens.map((t) => {
@@ -1220,7 +1220,7 @@ const ouvrirTesteur = (fiche, { env, projets }) => {
   const retirer = m.el.querySelector('[data-retirer]');
   if (retirer) retirer.addEventListener('click', async () => {
     const sur = await confirmer({
-      titre: `Retirer ${f.prenom || 'ce testeur'} du vivier ?`,
+      titre: `Retirer ${f.prenom || 'ce testeur'} des testeurs ?`,
       texte: "Son accès se ferme tout de suite. Ses résultats restent : ils sont la mémoire de la campagne, et les effacer falsifierait le rapport. Vous pourrez le réinscrire plus tard.",
       ok: 'Retirer', danger: true,
     });
@@ -1277,7 +1277,7 @@ const ouvrirTesteur = (fiche, { env, projets }) => {
     };
     if (neuf) await appelServeur('inscrireTesteur', { ...donnees, email: emailV });
     else await appelServeur('majTesteur', { ...donnees, testeur: f.id });
-    toast(neuf ? `${prenomV} est inscrit au vivier.` : 'Testeur enregistré.');
+    toast(neuf ? `${prenomV} est inscrit parmi les testeurs.` : 'Testeur enregistré.');
     m.fermer(true);
   }));
   return m.fin;
@@ -1698,7 +1698,7 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
             ${equipe && t.noteTest ? `<p class="t-petit" style="margin:6px 0 0">Note du test : <b>${echapper(String(t.noteTest.note))}/5</b>${equipe && t.noteTest.commentaire ? ` · « ${echapper(String(t.noteTest.commentaire))} »` : ''}</p>` : ''}
             ${equipe && t.remarques.length ? `<div style="margin-top:8px">${t.remarques.map((r) => `<p class="t-petit" style="margin:4px 0;padding:6px 8px;border-radius:8px;background:var(--fond-3)">${echapper(String(r.texte || ''))}${enDate(r.le) ? ` <span class="t-micro t-3">· ${echapper(jourCourt(enDate(r.le)))}</span>` : ''}</p>`).join('')}</div>` : ''}
           </div>`).join('')}</div>`
-          : `<p class="aide">Aucun testeur pour l'instant. ${equipe ? (vivier.length ? 'Choisissez-les ci-dessous.' : 'Le vivier est vide : le serveur seul y inscrit quelqu\'un.') : 'Ils apparaîtront ici dès qu\'ils seront choisis.'}</p>`}
+          : `<p class="aide">Aucun testeur pour l'instant. ${equipe ? (vivier.length ? 'Choisissez-les ci-dessous.' : 'La liste des testeurs est vide : le serveur seul y inscrit quelqu\'un.') : 'Ils apparaîtront ici dès qu\'ils seront choisis.'}</p>`}
       </div>
 
       ${identifiantsHtml}
@@ -1706,7 +1706,7 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
       ${resultatsHtml(c, { dedans, nommer })}
 
       ${equipe && vivier.length ? `<div class="groupe">
-        <span class="etiquette-champ">Le vivier</span>
+        <span class="etiquette-champ">La liste des testeurs</span>
         <div class="cases-blocs">${vivier.map((t) => `
           <label class="case"><input type="checkbox" data-testeur="${echapper(t.id)}" ${(c.testeurs || []).includes(t.id) ? 'checked' : ''}> ${echapper(t.prenom || t.email || t.id)}${t.mobile ? ` · ${echapper((PLATEFORMES_TEST[t.mobile] || {}).court || t.mobile)}` : ''}</label>`).join('')}</div>
         <p class="aide">${socleRegle || (surPlan && (c.statut || 'preparation') === 'preparation') ? 'Chacun fait son téléphone et le web. Le socle chez tous, le reste une fois chacun, par priorité, jusqu\'au plafond. Répartir montre la charge de chacun avant d\'enregistrer.' : 'Chacun fait son téléphone et le web. Un passage « humain seul » part chez deux testeurs, un passage « humain et robot » chez un seul. Répartir montre la charge de chacun avant d\'enregistrer.'}</p>
@@ -2034,7 +2034,7 @@ export const vue = async (ctx, env) => {
           ${alertes(d, { nomProjet, plateforme: etat.plateforme })}
           ${etage('etage-projets', 'Projets', `<b>${d.projets.length}</b> ${d.projets.length > 1 ? 'projets' : 'projet'}, <b>${d.campagnes.filter((c) => c.statut === 'en-cours').length}</b> ${d.campagnes.filter((c) => c.statut === 'en-cours').length > 1 ? 'campagnes en cours' : 'campagne en cours'}.`, avancement(d, { nomProjet, plateforme: etat.plateforme, equipe: env.role === 'equipe' }))}
           ${etage('etage-machine', 'Tests par robot', `<b>${(d.parcours || []).filter((x) => x.actif !== false).length + (d.regles || []).filter((x) => x.actif !== false).length}</b> tests par robot, tous projets confondus : <b>${(d.parcours || []).filter((x) => x.actif !== false).length}</b> utilisent l'app comme un humain, <b>${(d.regles || []).filter((x) => x.actif !== false).length}</b> vérifient des calculs.`, `${parcoursHtml(d, { pid: '', equipe: env.role === 'equipe', plateforme: etat.plateforme })}${reglesHtml(d, { pid: '', equipe: env.role === 'equipe' })}`)}
-          ${env.role === 'equipe' ? etage('etage-gens', 'Testeurs', `<b>${(d.testeurs || []).length}</b> ${(d.testeurs || []).length > 1 ? 'personnes au vivier' : 'personne au vivier'}.`, vivierHtml(d, { equipe: true })) : ''}
+          ${env.role === 'equipe' ? etage('etage-gens', 'Testeurs', `<b>${(d.testeurs || []).length}</b> ${(d.testeurs || []).length > 1 ? 'testeurs inscrits' : 'testeur inscrit'}.`, vivierHtml(d, { equipe: true })) : ''}
           ${activite(d, { nomProjet, plateforme: etat.plateforme })}`}
     </div>`;
 

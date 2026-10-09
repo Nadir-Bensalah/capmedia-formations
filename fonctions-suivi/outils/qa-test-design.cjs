@@ -100,7 +100,7 @@ const coupes = (p) => p.evaluate(() => [...document.querySelectorAll('#vue *')].
   verifier(await page.$('.accueil-porte .accueil-mascotte'), 'la mascotte est sur la porte, à la place de la marque assemblée');
   verifier(/Bienvenue, Karim/.test(await texteDe(page, '.accueil-porte h1')), 'la porte dit bienvenue au prénom');
   verifier(/Capmedia\s*Test/.test(await texteDe(page, '.accueil-porte .accueil-marque')) && await page.$('.accueil-porte.accueil-porte--test'), 'et nomme Capmedia Test, au dessin de la porte du Hub');
-  verifier(/regard de nouvel utilisateur/.test(await texteDe(page, '.accueil-porte .texte')), 'son rôle en une phrase', await texteDe(page, '.accueil-porte .texte'));
+  verifier(/Votre regard compte/.test(await texteDe(page, '.accueil-porte .texte')), 'son rôle en une phrase', await texteDe(page, '.accueil-porte .texte'));
   await pause(2600); await capture(page, '1440-accueil-0-porte');
   await page.click('[data-accueil="commencer"]'); await page.waitForSelector('.accueil-guide'); await pause(900);
   verifier(/Atelier/.test(await texteDe(page, '.ecran.actif h2')), 'le premier écran montre l application testée en grand');

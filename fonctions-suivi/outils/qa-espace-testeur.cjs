@@ -39,7 +39,7 @@ let page = null;
   verifier(/Bienvenue, Karim/.test(await page.textContent('.accueil-porte h1')), 'la porte dit bienvenue au prénom');
   verifier(/Capmedia\s*Test/.test(await page.textContent('.accueil-marque')), 'et nomme Capmedia Test');
   await page.waitForSelector('.testeur-tete', { state: 'attached', timeout: 20000 });
-  verifier(/regard de nouvel utilisateur/.test(await page.textContent('.accueil-porte .texte')), 'la porte dit son rôle en une phrase');
+  verifier(/Votre regard compte/.test(await page.textContent('.accueil-porte .texte')), 'la porte dit son rôle en une phrase');
   await page.click('[data-accueil="commencer"]'); await page.waitForSelector('.accueil-guide'); await pause(700);
   const appli = await page.textContent('.ecran.actif');
   verifier(/Atelier/.test(appli) && /dans une seule application/.test(appli), 'Commencer ouvre l application de la campagne, avec sa phrase');

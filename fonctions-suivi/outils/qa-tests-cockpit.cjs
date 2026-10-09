@@ -176,9 +176,9 @@ const fermer = async (page) => { await page.keyboard.press('Escape').catch(() =>
   verifier(Boolean(await pa.$('.voile .feuille .chiffres-tests')) && /projet=atelier/.test(await pa.evaluate(() => location.hash)), 'la campagne s ouvre, dans son projet', await pa.evaluate(() => location.hash));
   await fermer(pa);
   await aller(pa, '#/testeurs-messages/reg-inconnu', '#tm-liens');
-  await pa.waitForFunction(() => /Plus au vivier/.test((document.querySelector('#tm-liens') || {}).textContent || ''), null, { timeout: 8000 }).catch(() => {});
+  await pa.waitForFunction(() => /Plus parmi les testeurs/.test((document.querySelector('#tm-liens') || {}).textContent || ''), null, { timeout: 8000 }).catch(() => {});
   const inconnu = await texteDe(pa, '#tm-liens');
-  verifier(/Plus au vivier/.test(inconnu) && /Aucune campagne/.test(inconnu) && !(await pa.$('#tm-liens [data-fiche-testeur]')), 'un testeur sorti du vivier : pas de lien mort, la page le dit', inconnu);
+  verifier(/Plus parmi les testeurs/.test(inconnu) && /Aucune campagne/.test(inconnu) && !(await pa.$('#tm-liens [data-fiche-testeur]')), 'un testeur sorti du vivier : pas de lien mort, la page le dit', inconnu);
 
   /* ---------------------------------------------------------------- */
   console.log('\n== La fiche d une case : les résultats en mots (D12)');
