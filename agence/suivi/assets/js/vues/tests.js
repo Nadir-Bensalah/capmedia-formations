@@ -34,7 +34,7 @@ import {
   K, ecrire, repartir, profilsTesteurs, scenariosHumains, chargeParTesteur, controler, clesDe, lireSectionsPlan,
 } from '../donnees.js';
 import { ordonnerSections } from './plan-tests.js';
-import { bdd, collection, doc } from '../noyau.js';
+import { bdd, collection, doc, peut, estAdmin } from '../noyau.js';
 import { editer } from './editeurs.js';
 import { appelServeur } from '../serveur.js';
 import { filAriane } from '../coquille.js';
@@ -1781,6 +1781,11 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
   /* Les places : on les crée tant que la campagne se prépare, on les
      attribue quand on a la personne. Une place ne reçoit rien, n'ouvre
      rien : elle tient seulement une part de la répartition. */
+  /* « Voir comme ce testeur » (apercu-testeur.js) : l'espace testeur de
+     cette place ou de cette personne, en lecture seule, dans un nouvel
+     onglet. L'administrateur et qui pilote la recette seulement. */
+  const voirComme = equipe && (estAdmin(env.session) || peut(env.session, 'qa.gerer', pid));
+  const boutonVoir = (uid) => (voirComme ? `<button class="btn btn-fantome btn-petit" type="button" data-voir-comme="${echapper(uid)}">Voir comme ce testeur</button>` : '');
   const nomDe = (uid) => { const t = vivier.find((x) => x.id === uid) || (magasin.lire(K.testeurs) || []).find((x) => x.id === uid); return t ? (t.prenom || t.email || 'Testeur') : 'Testeur'; };
   const placesHtml = equipe && surPlan && (enPreparation || places.length) ? `<div class="groupe" data-places>
     <span class="etiquette-champ">Places de testeur</span>
@@ -1788,8 +1793,8 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
     ${places.length ? `<div class="liste liste--serree">${places.map((p) => `
       <div class="rang" style="justify-content:space-between;gap:10px;padding:6px 10px;border-radius:8px;background:var(--fond-2)" data-place="${echapper(p.id)}" data-vide="${p.testeur ? '0' : '1'}">
         <span>${echapper(p.libelle)} <span class="t-micro t-3">${echapper(NOMS_PLATEFORMES[p.mobile] || p.mobile)}${p.web ? ' et web' : ''} · ${pluriel(clesDe(affectation, p.testeur || p.id).length, 'passage', 'passages')}</span></span>
-        ${p.testeur ? `<span class="t-petit t-ok">Attribuée à ${echapper(nomDe(p.testeur))}</span>`
-          : `<span class="rang" style="gap:6px;align-items:center"><span class="t-petit t-3">Sans testeur</span>
+        ${p.testeur ? `<span class="rang" style="gap:6px;align-items:center"><span class="t-petit t-ok">Attribuée à ${echapper(nomDe(p.testeur))}</span>${boutonVoir(p.testeur)}</span>`
+          : `<span class="rang" style="gap:6px;align-items:center"><span class="t-petit t-3">Sans testeur</span>${boutonVoir(p.id)}
             ${c.statut === 'close' ? '' : `<button class="btn btn-secondaire btn-petit" type="button" data-attribuer-place="${echapper(p.id)}">Attribuer</button>`}
             ${enPreparation ? `<button class="btn btn-fantome btn-petit" type="button" data-retirer-place="${echapper(p.id)}">Retirer</button>` : ''}</span>`}
       </div>`).join('')}</div>` : ''}
@@ -1834,6 +1839,7 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
                 ${t.place ? `<span class="t-micro t-3" data-place-sans-testeur>${equipe ? 'place sans testeur' : 'testeur à venir'}</span>` : !equipe ? '' : t.accueil ? '<span class="pastille pastille--vert" title="A parcouru l\'accueil de son espace">Premiers pas faits</span>' : '<span class="t-micro t-3">premiers pas à faire</span>'}
                 ${!equipe || t.place ? '' : `<span class="t-micro ${t.avisApres ? 't-ok' : 't-3'}" data-a-repondu="${t.avisApres ? 'oui' : 'non'}" title="Ses réponses sont anonymes : on sait seulement s'il a répondu">Avis : ${t.avisApres ? 'oui' : (t.avisAvant ? 'première impression seulement' : 'non')}</span>`}
                 <span class="t-micro">${t.n ? pluriel(t.n, 'passage', 'passages') : 'rien encore'}</span>
+                ${boutonVoir(t.id)}
               </span>
             </div>
             ${(t.termine || t.fin) ? `<div class="rang" style="justify-content:space-between;margin-top:6px;gap:10px;flex-wrap:wrap">
@@ -1880,6 +1886,15 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
     toast(`${pluriel(ids.length, 'place créée', 'places créées')} : ${ids.map((id) => neuves[id].libelle).join(', ')}. Elles entrent dans la prochaine répartition.`);
     m.fermer(true);
   }));
+  m.el.addEventListener('click', (ev) => {
+    const v = ev.target.closest('[data-voir-comme]');
+    if (!v || !voirComme) return;
+    const q = new URLSearchParams();
+    const ici = new URLSearchParams(location.search);
+    if (ici.has('emul')) q.set('emul', ici.get('emul'));
+    q.set('apercu', v.dataset.voirComme); q.set('projet', pid); q.set('campagne', c.id);
+    window.open(`./testeur.html?${q.toString()}`, '_blank', 'noopener');
+  });
   m.el.addEventListener('click', async (ev) => {
     const b = ev.target.closest('[data-retirer-place], [data-attribuer-place]');
     if (!b || !equipe) return;

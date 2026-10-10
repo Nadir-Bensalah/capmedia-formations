@@ -14,7 +14,7 @@
    la bulle d'un projet : les aides sont les siennes.
    ========================================================================== */
 
-import { bdd, auth, doc, collection, query, orderBy, limit, onSnapshot, updateDoc, serverTimestamp, enDate, echapper } from './noyau.js';
+import { bdd, auth, doc, collection, query, orderBy, limit, onSnapshot, updateDoc, serverTimestamp, enDate, echapper, uidCourant } from './noyau.js';
 import { icone } from './icones.js';
 import { depot, toast, agir, brancherPieces, sur, lisible, modale } from './ui.js';
 import { filDeMessages } from './donnees.js';
@@ -27,7 +27,7 @@ const lire = (cle, defaut) => { try { const v = localStorage.getItem(cle); retur
 const ecrireCle = (cle, oui) => { try { localStorage.setItem(cle, oui ? '1' : '0'); } catch (e) { /* stockage refusé */ } };
 
 export const monterBulleTesteur = ({ testeur }) => {
-  const uid = auth.currentUser.uid;
+  const uid = uidCourant();
   const nom = String(testeur.prenom || 'Testeur').slice(0, 80);
   const fil$ = filDeMessages(['conversationsTesteurs', uid, 'messages'], { uid, nom, cote: 'testeur' });
   const racine = document.createElement('div');
