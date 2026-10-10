@@ -14,7 +14,7 @@
    mauvaise adresse, un mauvais moment), et ne pas dire son sexe.
    ========================================================================== */
 
-import { bdd, auth, doc, updateDoc, serverTimestamp, echapper, PLATEFORMES_TEST, signOut, effacerSecretsLocaux } from './noyau.js';
+import { bdd, auth, doc, updateDoc, serverTimestamp, echapper, PLATEFORMES_TEST, signOut, effacerSecretsLocaux, uidCourant } from './noyau.js';
 import { modale, toast, agir, icone } from './ui.js';
 import { releverAppareil, libelleAppareil } from './appareil.js';
 
@@ -43,7 +43,7 @@ const fusionner = (liste, courant, { confirme } = {}) => {
 /** À chaque connexion, silencieusement : cet appareil, daté. */
 export const consignerAppareil = async (testeur) => {
   if (!testeur || !testeur.ficheValidee) return;
-  const uid = auth.currentUser.uid;
+  const uid = uidCourant();
   try {
     const courant = await releverAppareil();
     const ancien = (testeur.appareils || []).find((a) => a && a.cle === courant.cle);
@@ -65,7 +65,7 @@ const champ = (id, libelle, valeur, { type = 'text', placeholder = '', requis = 
  * tenue quand le testeur a validé (jamais avant : la fiche ne se ferme pas).
  */
 export const ouvrirFiche = async (testeur) => {
-  const uid = auth.currentUser.uid;
+  const uid = uidCourant();
   const p = testeur.profil || {};
   const courant = await releverAppareil();
   const dejaLa = (testeur.appareils || []).find((a) => a && a.cle === courant.cle);

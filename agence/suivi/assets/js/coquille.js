@@ -106,7 +106,8 @@ export const monterCoquille = ({ session, role, groupes, sortie }) => {
   brancherNotifications();
   brancherPalette();
   /* Entré par un code sans aucune clé : proposer la clé d'accès, une fois. */
-  import('./cles-acces.js').then((c) => c.proposerCle(session.utilisateur && session.utilisateur.uid)).catch(() => {});
+  /* Pas de clé d'accès proposée dans l'aperçu de l'espace testeur. */
+  if (!session.apercu) import('./cles-acces.js').then((c) => c.proposerCle(session.utilisateur && session.utilisateur.uid)).catch(() => {});
   surChangement(() => { marquerActif(); fermerTiroir(); });
 
   // Sur grand écran, le bouton loupe de la barre est redondant.

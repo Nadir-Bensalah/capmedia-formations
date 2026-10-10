@@ -21,8 +21,9 @@ import {
   bdd, auth, doc, getDoc, setDoc, addDoc, updateDoc, collection, query, where, signOut, onSnapshot, effacerSecretsLocaux, enDate,
   serverTimestamp, session, echapper, envoyerPiece,
   PLATEFORMES_TEST, RESULTATS_PASSAGE, FAMILLES_AVIS, FORMATS_PREUVE,
-  avisRendu, resumeQuestionnaire, remarqueAEnvoyer, REMARQUE_MAX,
+  avisRendu, resumeQuestionnaire, remarqueAEnvoyer, REMARQUE_MAX, MODE_APERCU, uidCourant,
 } from './noyau.js';
+import { preparerApercu } from './apercu-testeur.js';
 import { icone, pastille, toast, agir, modale, vide } from './ui.js';
 import { monterCoquille, definirNavigation, definirEtat, filAriane, enregistrerRecherche } from './coquille.js';
 import { definir, demarrer, courant, naviguer } from './routeur.js';
@@ -121,7 +122,8 @@ const lirePasses = (c, uid) => {
   try { const v = JSON.parse(localStorage.getItem(clePasses(c, uid)) || '[]'); return new Set(Array.isArray(v) ? v.filter((x) => typeof x === 'string') : []); } catch (e) { return new Set(); }
 };
 const ecrirePasses = () => {
-  const c = etat.campagne; const uid = auth.currentUser && auth.currentUser.uid;
+  if (MODE_APERCU) return;
+  const c = etat.campagne; const uid = uidCourant();
   if (!c || !uid) return;
   try { localStorage.setItem(clePasses(c.id, uid), JSON.stringify([...etat.passes])); } catch (e) { /* stockage refusé : la mémoire suffit */ }
 };
@@ -160,7 +162,7 @@ const aTermine = () => Boolean(etat.avis && etat.avis.termine);
 
 const finAcces = () => {
   const c = etat.campagne;
-  const uid = auth.currentUser && auth.currentUser.uid;
+  const uid = uidCourant();
   if (!c || !uid) return null;
   return enDate((c.fins || {})[uid]) || null;
 };
@@ -338,7 +340,7 @@ const terminer = async (moi) => {
   });
   const reponse = await m.fin;
   if (!reponse) return;
-  const uid = auth.currentUser.uid;
+  const uid = uidCourant();
   const chemin = `projets/${etat.campagne.projet}/campagnes/${etat.campagne.id}/appreciations/${uid}`;
   try {
     /* La note du test d'abord, à part (equipe/retour) : le client lit
@@ -358,7 +360,7 @@ const terminer = async (moi) => {
 const ajouterRemarque = async (moi, { texte, scenario, plateforme } = {}) => {
   const { remarque, erreur } = remarqueAEnvoyer({ texte, scenario, plateforme });
   if (erreur) { toast(erreur, 'erreur'); return false; }
-  const uid = auth.currentUser.uid;
+  const uid = uidCourant();
   try {
     await addDoc(collection(bdd, 'projets', etat.campagne.projet, 'campagnes', etat.campagne.id, 'remarques'),
       { ...remarque, testeur: uid, cree: serverTimestamp() });
@@ -733,7 +735,7 @@ const attendreAccueil = () => (accueil ? new Promise((r) => { apresAccueil.push(
 const consignerAccueil = async (moi) => {
   const c = etat.campagne;
   if (!c || (etat.avis && etat.avis.accueil)) return;
-  const uid = auth.currentUser.uid;
+  const uid = uidCourant();
   try {
     await setDoc(doc(bdd, 'projets', c.projet, 'campagnes', c.id, 'appreciations', uid),
       { accueil: serverTimestamp(), testeur: uid, maj: serverTimestamp() }, { merge: true });
@@ -855,7 +857,7 @@ const chargerIdentifiants = async (moi) => {
   identifiantsTesteur.valeur = '';
   identifiantsTesteur.compte = '';
   try {
-    const d = await getDoc(doc(bdd, 'projets', c.projet, 'campagnes', c.id, 'acces', auth.currentUser.uid));
+    const d = await getDoc(doc(bdd, 'projets', c.projet, 'campagnes', c.id, 'acces', uidCourant()));
     identifiantsTesteur.valeur = d.exists() ? String(d.data().identifiants || '') : '';
     /* Son compte ForgeMe de test, attribué par l'équipe (compte-test.js). */
     identifiantsTesteur.compte = d.exists() ? String(d.data().compteTest || '') : '';
@@ -1204,7 +1206,7 @@ const ouvrirEchec = (s) => {
     const chemins = [];
     for (let i = 0; i < pieces.length; i += 1) {
       try {
-        const piece = await envoyerPiece(pieces[i].fichier, `campagnes/${etat.campagne.projet}/${etat.campagne.id}/${auth.currentUser.uid}`,
+        const piece = await envoyerPiece(pieces[i].fichier, `campagnes/${etat.campagne.projet}/${etat.campagne.id}/${uidCourant()}`,
           (n) => { echo.textContent = pieces.length > 1 ? `Envoi de la capture ${i + 1} sur ${pieces.length} · ${n} %` : `Envoi ${n} %`; });
         chemins.push(piece.chemin);
       } catch (e) { echo.textContent = ''; toast(String(e.message || e), 'erreur'); return; }
@@ -1229,7 +1231,7 @@ const poser = async (s, resultat, moi) => {
      clé de l'affectation) : c'est lui qui rend le cloisonnement opposable
      avant service, et les règles l'exigent tel quel. Le résultat s'écrit
      en toutes lettres ; l'écran, lui, raisonne en ok, ko, na. */
-  const uid = auth.currentUser.uid;
+  const uid = uidCourant();
   const scenario = s.id || s.ref;
   const plateforme = s.plateforme || plateformeCourante;
   const chemin = `projets/${etat.campagne.projet}/campagnes/${etat.campagne.id}/passages/${uid}__${clePassage(scenario, plateforme)}`;
@@ -1521,7 +1523,10 @@ const ecouterCampagnes = (moi, redessiner) => {
   const parProjet = new Map();
   const connues = new Set();
   const choisir = () => {
-    const toutes = [...parProjet.values()].flat();
+    /* En aperçu (apercu-testeur.js), la campagne montrée compte même tant
+       qu'elle se prépare : l'équipe voit ce que le testeur verra au
+       lancement. */
+    const toutes = [...parProjet.values()].flat().map((c) => (MODE_APERCU && cleCampagne(c) === campagneChoisie && c.statut === 'preparation' ? { ...c, statut: 'en-cours' } : c));
     /* Toutes ses campagnes en cours (celles dont l'accès est passé en sont
        retirées), la plus récente d'abord. L'écran garde celle qu'il a
        choisie, sinon celle qu'il regarde : une campagne qui s'ouvre ne lui
@@ -1561,7 +1566,15 @@ const ecouterCampagnes = (moi, redessiner) => {
 };
 
 const monter = async () => {
-  const sess = await session();
+  let sess = await session();
+  /* L'aperçu de l'équipe (apercu-testeur.js) : la même page, le testeur
+     choisi, rien d'enregistré. */
+  if (MODE_APERCU) {
+    const ap = await preparerApercu(sess, racine);
+    if (!ap) return;
+    sess = ap.session;
+    campagneChoisie = ap.cle;
+  }
   const { utilisateur, testeur } = sess;
   /* Sans session, la porte de l'espace Test : son badge dit « Test ». */
   if (!utilisateur) { location.replace('./?espace=test'); return; }
@@ -1579,6 +1592,8 @@ const monter = async () => {
       /* La présence part quand on sait sur quelle campagne il est : une
          session sans campagne ne dirait rien à l'équipe. Ensuite, un
          changement de campagne se signale tout de suite. */
+      /* En aperçu, aucune présence ni session au nom du testeur. */
+      if (MODE_APERCU) return;
       if (etat.charge && !presence.uid) demarrerPresence(testeur.uid);
       else if (presence.lancee && (etat.campagne || {}).id !== presence.campagneVue) signe(true);
       presence.campagneVue = (etat.campagne || {}).id;
@@ -1599,11 +1614,13 @@ const monter = async () => {
   /* La première fois : l'accueil, devant tout, pour qu'il sache ce qu'est
      Capmedia Test avant qu'on lui demande quoi que ce soit. La campagne se
      dessine derrière pendant qu'il le lit, et l'attend à la sortie. */
-  if (!accueilVu(testeur.uid)) lancerAccueil(testeur);
+  /* En aperçu, rien ne s'impose : l'accueil et la visite se rejouent
+     depuis le guide, la fiche est réputée remplie. */
+  if (!MODE_APERCU && !accueilVu(testeur.uid)) lancerAccueil(testeur);
   /* Puis sa fiche, tant qu'il ne l'a pas validée : qui teste, sur quoi,
      depuis quel appareil. Ensuite, chaque connexion consigne l'appareil du
      jour sans rien demander. */
-  const fiche = testeur.ficheValidee ? (consignerAppareil(testeur), null)
+  const fiche = MODE_APERCU ? null : testeur.ficheValidee ? (consignerAppareil(testeur), null)
     : attendreAccueil().then(() => ouvrirFiche(testeur));
   /* La bulle vers l'équipe, en bas à droite, une fois la fiche validée :
      rien ne doit passer devant elle. */
@@ -1614,7 +1631,7 @@ const monter = async () => {
   document.addEventListener('suivi:visite-revoir', () => demarrerVisite(testeur));
   /* Les notifications push : la proposition après son premier message, le
      clic sur une notification qui ouvre la bulle (notifications-push.js). */
-  demarrerPush({ session: sess, role: 'testeur' });
+  if (!MODE_APERCU) demarrerPush({ session: sess, role: 'testeur' });
   document.addEventListener('suivi:accueil-revoir', () => lancerAccueil(testeur, { demande: true }));
   majNavigation();
   definir(Object.keys(PAGES).map((chemin) => ({ chemin, vue: () => { rendre(testeur); } })), { defaut: '/', cible: vue });

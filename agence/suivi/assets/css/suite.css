@@ -2653,3 +2653,18 @@ html.salle-plein .lat, html.salle-plein .haut, html.salle-plein .voile-lat, html
 .st-fiche .fs-bloc p.aide { margin: 8px 0 0; font: var(--t-petit); color: var(--encre-3); letter-spacing: 0; }
 .st-fiche .fs-bloc p.st-resume { font: 400 16px/1.45 var(--police); color: var(--encre-2); }
 @media (max-width: 520px) { .st-paire { grid-template-columns: 1fr; gap: 0; } }
+
+/* L'aperçu de l'espace testeur, ouvert depuis le Cockpit (apercu-testeur.js) :
+   un bandeau ambre en haut, le reste de la page inchangé. */
+.apercu-bandeau {
+  position: sticky; top: 0; z-index: 3500;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
+  padding: 10px 16px; background: var(--ambre-clair); color: var(--texte, inherit);
+  font-size: 14px; line-height: 1.35;
+}
+.apercu-texte { margin: 0; flex: 1 1 320px; min-width: 0; }
+.apercu-texte strong { color: var(--ambre); }
+.apercu-aide { display: inline; margin-left: 6px; opacity: .85; }
+.apercu-choix { display: inline-flex; align-items: center; gap: 8px; }
+.apercu-choix select { font: inherit; padding: 4px 8px; border-radius: 8px; max-width: 220px; }
+.apercu-quitter { font-weight: 600; color: var(--ambre); white-space: nowrap; }

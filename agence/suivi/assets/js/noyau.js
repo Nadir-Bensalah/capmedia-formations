@@ -14,12 +14,13 @@ import {
   sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink,
 } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js';
 import {
-  getFirestore, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc,
+  getFirestore, doc, getDoc, getDocs, setDoc as setDocSdk, addDoc as addDocSdk, updateDoc as updateDocSdk, deleteDoc as deleteDocSdk,
   collection, collectionGroup, query, where, orderBy, limit, startAfter, onSnapshot,
-  serverTimestamp, Timestamp, arrayUnion, arrayRemove, increment, writeBatch, runTransaction, deleteField,
+  serverTimestamp, Timestamp, arrayUnion, arrayRemove, increment, writeBatch as writeBatchSdk, runTransaction as runTransactionSdk, deleteField,
 } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js';
 import {
-  getStorage, ref as refStockage, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject, updateMetadata,
+  getStorage, ref as refStockage, uploadBytes as uploadBytesSdk, uploadBytesResumable as uploadBytesResumableSdk, getDownloadURL,
+  deleteObject as deleteObjectSdk, updateMetadata as updateMetadataSdk,
 } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-storage.js';
 
 /* --- Le raccordement ---------------------------------------------------- */
@@ -45,6 +46,55 @@ const ouvrirAuth = () => {
 export const auth = ouvrirAuth();
 export const bdd = getFirestore(app);
 export const stockage = getStorage(app);
+
+/* --- L'aperçu de l'espace testeur (Nadir, 10/10/2026) --------------------
+   Le Cockpit ouvre testeur.html?apercu=<testeur ou place>&projet=&campagne=
+   pour voir l'espace exactement tel qu'un testeur le verra. La page tourne
+   alors sous la session de l'équipe, avec les données du testeur choisi,
+   et RIEN ne doit s'écrire : ni résultat, ni présence, ni session, ni
+   « lu ». C'est ici, et seulement ici, que l'écriture est coupée : toutes
+   les écritures de la suite passent par ces fonctions (Firestore, Storage,
+   et les appels aux fonctions du serveur), le reste de l'espace testeur
+   reste le même code que celui du testeur. Le drapeau se lit une fois, au
+   chargement du module, avant toute autre ligne de l'espace. */
+export const MODE_APERCU = (() => {
+  try { return /testeur(\.html)?$/.test(location.pathname) && new URLSearchParams(location.search).has('apercu'); } catch (e) { return false; }
+})();
+export const ERREUR_APERCU = 'Aperçu : rien n\'est enregistré.';
+const refusApercu = () => {
+  const e = new Error(ERREUR_APERCU); e.code = 'apercu';
+  try { document.dispatchEvent(new CustomEvent('suivi:apercu-refus')); } catch (x) { /* hors page */ }
+  return e;
+};
+const coupee = (f) => (MODE_APERCU ? () => Promise.reject(refusApercu()) : f);
+const setDoc = coupee(setDocSdk);
+const addDoc = coupee(addDocSdk);
+const updateDoc = coupee(updateDocSdk);
+const deleteDoc = coupee(deleteDocSdk);
+const runTransaction = coupee(runTransactionSdk);
+const uploadBytes = coupee(uploadBytesSdk);
+const deleteObject = coupee(deleteObjectSdk);
+const updateMetadata = coupee(updateMetadataSdk);
+/* Un lot se prépare comme d'habitude, mais ne part jamais. */
+const writeBatch = MODE_APERCU ? (...a) => { const lot = writeBatchSdk(...a); lot.commit = () => Promise.reject(refusApercu()); return lot; } : writeBatchSdk;
+/* Un envoi par morceaux rend une tâche, pas une promesse : il s'arrête net. */
+const uploadBytesResumable = MODE_APERCU ? () => { throw refusApercu(); } : uploadBytesResumableSdk;
+/* Les fonctions du serveur (avis, compte de test, pièces, connexion…) :
+   un appel qui n'est pas une simple lecture GET ne part pas. Les requêtes
+   des SDK (jeton, Firestore) ne sont pas concernées. */
+if (MODE_APERCU && typeof window !== 'undefined' && window.fetch) {
+  const fetchSdk = window.fetch.bind(window);
+  window.fetch = (entree, options = {}) => {
+    const url = String((entree && entree.url) || entree || '');
+    const methode = String((options && options.method) || (entree && entree.method) || 'GET').toUpperCase();
+    const fonction = /cloudfunctions\.net\/|\/europe-west1\//.test(url);
+    if (fonction && (methode !== 'GET' || /[?&]geste=/.test(url))) return Promise.reject(refusApercu());
+    return fetchSdk(entree, options);
+  };
+}
+/* Qui l'espace testeur montre : le testeur connecté, ou celui de l'aperçu. */
+export const apercu = { uid: '' };
+export const uidCourant = () => (MODE_APERCU ? apercu.uid : ((auth.currentUser && auth.currentUser.uid) || ''));
 
 /* Banc d'essai local. Deux verrous : la machine doit être la machine de
    développement, et le branchement doit être demandé explicitement.
