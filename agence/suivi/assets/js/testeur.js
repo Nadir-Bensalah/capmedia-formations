@@ -275,6 +275,7 @@ const remarquesBloc = ({ titre = 'Mes remarques' } = {}) => {
       <textarea class="champ" id="remarque-texte" rows="3" maxlength="${REMARQUE_MAX}" placeholder="Ce que vous avez remarqué.">${echapper(brouillonRemarque)}</textarea>
       ${etat.scenarios.length ? `<select class="select" id="remarque-scenario" style="margin-top:8px;width:auto;max-width:100%">
         <option value="">En général</option>
+        ${etat.scenarios.filter((x) => /^exploration-/.test(String(x.id || ''))).map((x) => `<option value="${echapper(x.ref)}">Exploration libre</option>`).join('')}
         ${etat.scenarios.map((x) => `<option value="${echapper(x.ref)}">${echapper(x.id || x.ref)}${plateformeImposee(x) ? ` (${echapper(PLATEFORMES_TESTEUR[x.plateforme] || x.plateforme)})` : ''} · ${echapper(x.titre || '')}</option>`).join('')}
       </select>` : ''}
       <div class="actions" style="margin-top:8px"><button class="btn btn-secondaire" type="button" data-remarque>Envoyer la remarque</button></div>
