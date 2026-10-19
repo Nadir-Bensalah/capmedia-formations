@@ -1105,23 +1105,29 @@ const majNavigation = () => {
   const etapes = c && moiNav.uid ? etapesTesteur(moiNav) : [];
   const parcoursFini = etapes.length > 0 && etapes.every((e) => e.fait);
   const pretATerminer = c && !aTermine() && toutFait() && avisRendu(a, 'apres');
+  /* La barre suit le parcours (19/10/2026) : une page s'ouvre quand son étape est atteinte, grisée
+     avant ; les scénarios et les signalements une fois le parcours d'arrivée fini. */
+  const enParcours = c && moiNav.uid && !MODE_APERCU && lireParcours(moiNav) !== 'fini';
+  const atteinte = enParcours ? Math.min(Number(lireParcours(moiNav)) || 0, 3) : 3;
+  const ferme = (i, texte) => (enParcours && atteinte < i ? { inactif: texte } : {});
+  const apresArrivee = enParcours ? { inactif: 'Après l\'installation, la connexion et la première impression' } : {};
   definirNavigation([
     { items: [
-      { chemin: '/avis', libelle: 'Mon parcours', icone: 'coeur', compte: { total: 0, neuf: avisDus }, ...(parcoursFini ? { ecusson: coche } : {}) },
-      { chemin: '/', libelle: 'Ma campagne', icone: 'accueil', exact: true, compte: c ? { total: r.reste } : 0, ...(c && toutFait() ? { ecusson: coche } : {}) },
+      { chemin: '/avis', libelle: 'Mon parcours', icone: 'coeur', ...(parcoursFini ? { ecusson: coche } : etapes.length ? { marque: { texte: `${etapes.filter((e) => e.fait).length}/${etapes.length}`, ton: 'gris', titre: 'Étapes faites' } } : { compte: { total: 0, neuf: avisDus } }) },
+      { chemin: '/', libelle: 'Ma campagne', icone: 'accueil', exact: true, compte: c ? { total: r.reste } : 0, ...(c && toutFait() ? { ecusson: coche } : {}), ...apresArrivee },
     ] },
     {
       titre: 'Découvrir',
       items: [
         { chemin: '/presentation', libelle: 'Présentation', icone: 'smartphone', ...(vu(0) ? { ecusson: coche } : {}) },
-        { chemin: '/application', libelle: 'L\'application', icone: 'composants', ...(vu(1) ? { ecusson: coche } : {}) },
-        { chemin: '/guide', libelle: 'Guide du testeur', icone: 'ampoule', ...(vu(2) ? { ecusson: coche } : {}) },
+        { chemin: '/application', libelle: 'L\'application', icone: 'composants', ...(vu(1) ? { ecusson: coche } : {}), ...ferme(1, 'Après la présentation') },
+        { chemin: '/guide', libelle: 'Guide du testeur', icone: 'ampoule', ...(vu(2) ? { ecusson: coche } : {}), ...ferme(2, 'Après l\'application') },
       ],
     },
     {
       titre: 'Mon travail',
       items: [
-        { chemin: '/signalements', libelle: 'Mes signalements', icone: 'alerte', compte: { total: r.ko + r.revoir, neuf: r.revoir } },
+        { chemin: '/signalements', libelle: 'Mes signalements', icone: 'alerte', compte: { total: r.ko + r.revoir, neuf: r.revoir }, ...apresArrivee },
       ],
     },
     ...(pretATerminer ? [{ items: [{ chemin: '/avis', libelle: 'J\'ai terminé, je soumets', icone: 'check' }] }] : []),
@@ -1168,8 +1174,9 @@ const barreParcours = (moi, i) => {
       <span class="parcours-texte">Étape ${i + 1} sur ${ETAPES_PARCOURS.length} · ${echapper(ETAPES_PARCOURS[i].libelle)}${bloque ? ' · installez, connectez-vous puis donnez votre première impression' : ''}</span></div>
     <button class="btn btn-principal" type="button" data-parcours-suivant${bloque ? ' disabled' : ''}>${dernier ? 'Voir mes scénarios' : `Suivant : ${echapper(ETAPES_PARCOURS[i + 1].libelle)}`}</button>`;
   barre.querySelector('[data-parcours-suivant]').addEventListener('click', () => {
-    if (dernier) { ecrireParcours(moi, 'fini'); naviguer('/'); toast('Bienvenue dans vos scénarios. Bon test !'); return; }
+    if (dernier) { ecrireParcours(moi, 'fini'); majNavigation(); naviguer('/'); toast('Bienvenue dans vos scénarios. Bon test !'); return; }
     ecrireParcours(moi, i + 1);
+    majNavigation();
     naviguer(ETAPES_PARCOURS[i + 1].chemin);
   });
   const page = racine.querySelector('.page') || racine;

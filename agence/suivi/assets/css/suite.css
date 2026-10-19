@@ -2706,3 +2706,6 @@ html.salle-plein .lat, html.salle-plein .haut, html.salle-plein .voile-lat, html
 /* Barre latérale du testeur : une étape faite porte un rond vert à coche blanche. */
 .nav-coche { width: 18px; height: 18px; border-radius: 50%; background: #34C759; color: #fff; display: inline-grid; place-items: center; flex: 0 0 auto; }
 .nav-coche svg { width: 11px; height: 11px; stroke: currentColor; stroke-width: 3.2; fill: none; }
+
+/* Barre latérale : une page pas encore ouverte par le parcours du testeur, grisée et sans clic. */
+.lat-lien--inactif { opacity: .38; pointer-events: none; cursor: default; }
