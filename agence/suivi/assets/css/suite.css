@@ -2684,3 +2684,24 @@ html.salle-plein .lat, html.salle-plein .haut, html.salle-plein .voile-lat, html
 .parcours-point.actif { width: 22px; border-radius: 4px; background: var(--accent); }
 .parcours-texte { margin-left: 8px; font-size: 13px; color: var(--texte-2, inherit); }
 .parcours-barre .btn[disabled] { opacity: .45; cursor: not-allowed; }
+
+/* Capmedia Test · « Mon parcours » en frise (19/10/2026) : un rond par étape, un trait qui les relie,
+   l'étape en cours mise en avant, les étapes faites en vert avec une coche blanche. */
+.frise { list-style: none; margin: 8px 0 32px; padding: 0; }
+.frise-etape { position: relative; display: grid; grid-template-columns: 36px 1fr; gap: 16px; padding-bottom: 22px; }
+.frise-etape::before { content: ''; position: absolute; left: 17px; top: 36px; bottom: 0; width: 2px; background: var(--trait); }
+.frise-etape:last-child::before { display: none; }
+.frise-rond { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-weight: 600; font-size: 14px; background: var(--fond-2); color: var(--texte-2, inherit); border: 2px solid var(--trait); }
+.frise-rond svg { width: 18px; height: 18px; }
+.frise-etape.faite .frise-rond { background: #2FA84F; border-color: #2FA84F; color: #fff; }
+.frise-etape.faite::before { background: #2FA84F; }
+.frise-etape.courante .frise-rond { border-color: var(--accent); color: var(--accent); background: var(--fond-eleve); box-shadow: 0 0 0 4px var(--accent-voile, rgba(0, 102, 204, .15)); }
+.frise-corps { padding: 6px 18px 16px; border-radius: 16px; }
+.frise-etape.courante .frise-corps { background: var(--fond-2); }
+.frise-corps h2 { margin: 2px 0 4px; font-size: 17px; }
+.frise-etape:not(.faite):not(.courante) .frise-corps { opacity: .6; }
+.frise-corps .btn { margin-top: 10px; }
+
+/* Barre latérale du testeur : une étape faite porte un rond vert à coche blanche. */
+.nav-coche { width: 18px; height: 18px; border-radius: 50%; background: #2FA84F; color: #fff; display: inline-grid; place-items: center; flex: 0 0 auto; }
+.nav-coche svg { width: 12px; height: 12px; }
