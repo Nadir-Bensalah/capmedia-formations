@@ -1027,9 +1027,9 @@ const pageAvis = (moi) => {
   racine.innerHTML = `<div class="page">
     <div class="page-tete"><div><p class="surtitre">Mon travail</p><h1>Mon parcours</h1>
       <p class="chapo">Votre test, étape par étape. Les scénarios disent si l'application marche ; votre avis dit si elle plaît.</p></div></div>
-    <ol class="frise">${etapes.map((e, i) => `<li class="frise-etape${e.fait ? ' faite' : i === courante ? ' courante' : ''}">
-        <span class="frise-rond" aria-hidden="true">${e.fait ? icone('check') : String(i + 1)}</span>
-        <div class="frise-corps">
+    <ol class="pc-frise">${etapes.map((e, i) => `<li class="pc-etape${e.fait ? ' faite' : i === courante ? ' courante' : ''}">
+        <span class="pc-rond" aria-hidden="true">${e.fait ? icone('check') : String(i + 1)}</span>
+        <div class="pc-corps">
           <h2>${echapper(e.titre)}${e.fait ? '<span class="sr-only"> : fait</span>' : ''}</h2>
           <p class="t-2">${echapper(e.texte)}</p>
           ${geste(e, i)}
@@ -1106,7 +1106,10 @@ const majNavigation = () => {
   const parcoursFini = etapes.length > 0 && etapes.every((e) => e.fait);
   const pretATerminer = c && !aTermine() && toutFait() && avisRendu(a, 'apres');
   definirNavigation([
-    { items: [{ chemin: '/', libelle: 'Ma campagne', icone: 'accueil', exact: true, compte: c ? { total: r.reste } : 0, ...(c && toutFait() ? { ecusson: coche } : {}) }] },
+    { items: [
+      { chemin: '/avis', libelle: 'Mon parcours', icone: 'coeur', compte: { total: 0, neuf: avisDus }, ...(parcoursFini ? { ecusson: coche } : {}) },
+      { chemin: '/', libelle: 'Ma campagne', icone: 'accueil', exact: true, compte: c ? { total: r.reste } : 0, ...(c && toutFait() ? { ecusson: coche } : {}) },
+    ] },
     {
       titre: 'Découvrir',
       items: [
@@ -1119,7 +1122,6 @@ const majNavigation = () => {
       titre: 'Mon travail',
       items: [
         { chemin: '/signalements', libelle: 'Mes signalements', icone: 'alerte', compte: { total: r.ko + r.revoir, neuf: r.revoir } },
-        { chemin: '/avis', libelle: 'Mon parcours', icone: 'coeur', compte: { total: 0, neuf: avisDus }, ...(parcoursFini ? { ecusson: coche } : {}) },
       ],
     },
     ...(pretATerminer ? [{ items: [{ chemin: '/avis', libelle: 'J\'ai terminé, je soumets', icone: 'check' }] }] : []),
