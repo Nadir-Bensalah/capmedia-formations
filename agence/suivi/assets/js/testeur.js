@@ -284,7 +284,7 @@ const remarquesBloc = ({ titre = 'Mes remarques' } = {}) => {
 
 /* Sur la page de la campagne, le bloc ne vient qu'après la fin : avant,
    il est dans « Mon avis » et dans la feuille de chaque scénario. */
-const remarquesHtml = () => (aTermine() ? remarquesBloc({ titre: 'Une remarque de plus\u00a0?' }) : '');
+const remarquesHtml = () => remarquesBloc({ titre: aTermine() ? 'Une remarque de plus\u00a0?' : 'Mes remarques libres' });
 
 /* Les fiches des magasins, pour un vrai avis une fois le test fini : un
    testeur qui a passé des heures dans l'application est le mieux placé
@@ -585,7 +585,6 @@ const pageCampagne = (moi) => {
     ${suiteHtml()}
     ${aTermine() ? finTestHtml() : ''}
     ${appelAvis()}
-    ${remarquesHtml()}
 
     <div class="segments t-vues" role="group" aria-label="Affichage">
       <button type="button" data-vue="grille" aria-pressed="${vueCourante === 'grille'}">Tableau</button>
@@ -615,6 +614,7 @@ const pageCampagne = (moi) => {
 
     ${chiffresHtml()}
     ${aTermine() ? '' : astuceHtml()}
+    ${remarquesHtml()}
   </div>`;
 
   const b = $('#f-bloc'); if (b) b.addEventListener('change', (e) => { etat.bloc = e.target.value; rendre(moi); });
@@ -986,41 +986,65 @@ const pageSignalements = (moi) => {
   void moi;
 };
 
-const pageAvis = (moi) => {
-  filAriane([{ libelle: 'Mon avis sur l\'app' }]);
-  if (!etat.campagne) { racine.innerHTML = sansCampagne('Mon avis sur l\'app'); return; }
+/* « Mon parcours » (19/10/2026) : tout le déroulé du testeur en une frise, de sa fiche jusqu'à
+   « J'ai terminé ». Installer et se connecter se déclarent d'un bouton (gardé sur l'appareil) ; la
+   première impression vient APRÈS la connexion, l'avis final après les scénarios. */
+const cleEtape = (moi, nom) => `suivi:testeur-etape:${moi.uid}:${etat.campagne ? `${etat.campagne.projet}/${etat.campagne.id}` : ''}:${nom}`;
+const etapeFaite = (moi, nom) => { try { return localStorage.getItem(cleEtape(moi, nom)) === 'oui'; } catch (e) { return true; } };
+const marquerEtape = (moi, nom) => { try { localStorage.setItem(cleEtape(moi, nom), 'oui'); } catch (e) { /* stockage refusé */ } };
+const decouverteFaite = (moi) => { const v = lireParcours(moi); return v === 'fini' || Number(v) >= 3; };
+
+const etapesTesteur = (moi) => {
   const a = etat.avis || {};
-  const avantFait = avisRendu(a, 'avant');
-  const apresFait = avisRendu(a, 'apres');
-  const q = resumeQuestionnaire();
   const r = compter();
   const total = etat.scenarios.length;
+  const ficheOk = Boolean(moi.ficheValidee) || fichePrete;
+  return [
+    { cle: 'fiche', titre: 'Ma fiche', texte: 'Qui vous êtes et sur quels appareils vous testez.', fait: ficheOk },
+    { cle: 'decouvrir', titre: 'Découvrir l\'application', texte: 'La présentation, l\'application et le guide du testeur.', fait: decouverteFaite(moi), lien: '/presentation', bouton: 'Revoir la présentation' },
+    { cle: 'installer', titre: 'Installer l\'application', texte: 'Le lien d\'installation (TestFlight sur iPhone, programme de test du Play Store sur Android) vous est envoyé par e-mail. Installez la version indiquée dans « L\'application ».', fait: etapeFaite(moi, 'installe'), action: 'installe', bouton: 'C\'est installé' },
+    { cle: 'connexion', titre: 'Se connecter', texte: 'Ouvrez l\'application et connectez-vous avec le compte de test indiqué dans « L\'application » (ou créez votre compte si on vous le demande).', fait: etapeFaite(moi, 'connecte'), action: 'connecte', bouton: 'Je suis connecté' },
+    { cle: 'premiere', titre: 'Première impression', texte: 'Trois questions, deux minutes, juste après avoir ouvert l\'application. Ce regard-là ne se retrouve pas ensuite.', fait: avisRendu(a, 'avant'), avis: 'avant', bouton: 'Donner ma première impression' },
+    { cle: 'campagne', titre: 'Les scénarios et l\'exploration libre', texte: total ? `${total - r.reste} sur ${total} déroulés. Une heure d'exploration libre en fin de liste, et vos remarques libres sous les scénarios.` : 'Vos scénarios arrivent.', fait: total > 0 && toutFait(), lien: '/', bouton: 'Ouvrir mes scénarios' },
+    { cle: 'avis', titre: 'Mon avis sur l\'app', texte: 'Le questionnaire de fin, sans votre nom : l\'esthétique, la facilité, l\'utilité, l\'argent, la performance ressentie.', fait: avisRendu(a, 'apres'), avis: 'apres', bouton: 'Donner mon avis' },
+    { cle: 'terminer', titre: 'J\'ai terminé', texte: 'Vos résultats partent à l\'équipe Capmedia et sont figés.', fait: aTermine(), terminer: true, bouton: 'J\'ai terminé, je soumets' },
+  ];
+};
+
+const pageAvis = (moi) => {
+  filAriane([{ libelle: 'Mon parcours' }]);
+  if (!etat.campagne) { racine.innerHTML = sansCampagne('Mon parcours'); return; }
+  const etapes = etapesTesteur(moi);
+  const courante = etapes.findIndex((e) => !e.fait);
+  const geste = (e, i) => {
+    if (e.fait || i !== courante) return '';
+    if (e.action) return `<button class="btn btn-principal btn-petit" type="button" data-etape="${e.action}">${echapper(e.bouton)}</button>`;
+    if (e.avis) return `<button class="btn btn-principal btn-petit" type="button" data-avis-page="${e.avis}">${echapper(e.bouton)}</button>`;
+    if (e.terminer) return `<button class="btn btn-principal btn-petit" type="button" data-terminer>${echapper(e.bouton)}</button>`;
+    if (e.lien) return `<a class="btn btn-principal btn-petit" href="#${e.lien}">${echapper(e.bouton)}</a>`;
+    return '';
+  };
   racine.innerHTML = `<div class="page">
-    <div class="page-tete"><div><p class="surtitre">Mon travail</p><h1>Mon avis sur l'app</h1>
-      <p class="chapo">Les scénarios disent si l'application marche. Votre avis dit si elle plaît.</p></div></div>
+    <div class="page-tete"><div><p class="surtitre">Mon travail</p><h1>Mon parcours</h1>
+      <p class="chapo">Votre test, étape par étape. Les scénarios disent si l'application marche ; votre avis dit si elle plaît.</p></div></div>
+    <ol class="frise">${etapes.map((e, i) => `<li class="frise-etape${e.fait ? ' faite' : i === courante ? ' courante' : ''}">
+        <span class="frise-rond" aria-hidden="true">${e.fait ? icone('check') : String(i + 1)}</span>
+        <div class="frise-corps">
+          <h2>${echapper(e.titre)}${e.fait ? '<span class="sr-only"> : fait</span>' : ''}</h2>
+          <p class="t-2">${echapper(e.texte)}</p>
+          ${geste(e, i)}
+        </div>
+      </li>`).join('')}</ol>
     <section class="avis-anonyme" data-avis-anonyme>
       <p class="surtitre">Sans votre nom</p>
-      <p>Vos réponses partent sans votre nom. L'équipe Capmedia sait seulement que vous avez répondu, jamais ce que vous avez dit, et personne ne les lit avant trois réponses. Une fois envoyées, elles ne se relisent plus et ne se modifient plus, même par vous.</p>
+      <p>Vos réponses à la première impression et à l'avis final partent sans votre nom. L'équipe Capmedia sait seulement que vous avez répondu, jamais ce que vous avez dit, et personne ne les lit avant trois réponses.</p>
     </section>
-    <div class="avis-moments">
-      <section class="avis-moment">
-        <p class="surtitre">Avant de commencer</p>
-        <h2>Première impression</h2>
-        <p class="t-2">${q.avant} questions, deux minutes, en découvrant l'application. Ce regard-là ne se retrouve pas ensuite.</p>
-        <div class="avis-moment-pied">${avantFait ? '<span class="pastille pastille--vert">Envoyée, merci</span>' : '<span class="pastille pastille--ambre">À donner</span>'}
-          ${avantFait ? '' : '<button class="btn btn-principal btn-petit" type="button" data-avis-page="avant">Donner ma première impression</button>'}</div>
-      </section>
-      <section class="avis-moment">
-        <p class="surtitre">À la fin</p>
-        <h2>Votre avis sur l'application</h2>
-        <p class="t-2">${q.apres} questions : ${echapper(q.sujetsApres)}. Il est demandé avant « J'ai terminé ». ${total ? `Vous en êtes à ${total - r.reste} scénarios sur ${total}.` : ''}</p>
-        <div class="avis-moment-pied">${apresFait ? '<span class="pastille pastille--vert">Envoyé, merci</span>' : '<span class="pastille pastille--gris">Avant de terminer</span>'}
-          ${apresFait ? '' : '<button class="btn btn-principal btn-petit" type="button" data-avis-page="apres">Donner mon avis</button>'}</div>
-      </section>
-    </div>
-    ${remarquesBloc()}
   </div>`;
-  void moi;
+  racine.querySelectorAll('[data-etape]').forEach((b) => b.addEventListener('click', () => {
+    marquerEtape(moi, b.dataset.etape);
+    majNavigation();
+    rendre(moi);
+  }));
 };
 
 const pageGuide = () => {
@@ -1075,23 +1099,30 @@ const majNavigation = () => {
   const a = etat.avis || {};
   const avisDus = c ? (!avisRendu(a, 'avant') ? 1 : 0)
     + (etat.scenarios.length && !r.reste && !avisRendu(a, 'apres') ? 1 : 0) : 0;
+  const moiNav = { uid: uidCourant() };
+  const coche = '<span class="nav-coche" aria-hidden="true">' + icone('check') + '</span>';
+  const vu = (i) => { const v = c ? lireParcours(moiNav) : '0'; return v === 'fini' || Number(v) > i; };
+  const etapes = c && moiNav.uid ? etapesTesteur(moiNav) : [];
+  const parcoursFini = etapes.length > 0 && etapes.every((e) => e.fait);
+  const pretATerminer = c && !aTermine() && toutFait() && avisRendu(a, 'apres');
   definirNavigation([
-    { items: [{ chemin: '/', libelle: 'Ma campagne', icone: 'accueil', exact: true, compte: c ? { total: r.reste } : 0 }] },
+    { items: [{ chemin: '/', libelle: 'Ma campagne', icone: 'accueil', exact: true, compte: c ? { total: r.reste } : 0, ...(c && toutFait() ? { ecusson: coche } : {}) }] },
     {
       titre: 'Découvrir',
       items: [
-        { chemin: '/presentation', libelle: 'Présentation', icone: 'smartphone' },
-        { chemin: '/application', libelle: 'L\'application', icone: 'composants' },
-        { chemin: '/guide', libelle: 'Guide du testeur', icone: 'ampoule' },
+        { chemin: '/presentation', libelle: 'Présentation', icone: 'smartphone', ...(vu(0) ? { ecusson: coche } : {}) },
+        { chemin: '/application', libelle: 'L\'application', icone: 'composants', ...(vu(1) ? { ecusson: coche } : {}) },
+        { chemin: '/guide', libelle: 'Guide du testeur', icone: 'ampoule', ...(vu(2) ? { ecusson: coche } : {}) },
       ],
     },
     {
       titre: 'Mon travail',
       items: [
         { chemin: '/signalements', libelle: 'Mes signalements', icone: 'alerte', compte: { total: r.ko + r.revoir, neuf: r.revoir } },
-        { chemin: '/avis', libelle: 'Mon avis sur l\'app', icone: 'coeur', compte: { total: 0, neuf: avisDus } },
+        { chemin: '/avis', libelle: 'Mon parcours', icone: 'coeur', compte: { total: 0, neuf: avisDus }, ...(parcoursFini ? { ecusson: coche } : {}) },
       ],
     },
+    ...(pretATerminer ? [{ items: [{ chemin: '/avis', libelle: 'J\'ai terminé, je soumets', icone: 'check' }] }] : []),
   ]);
   definirEtat(etatAcces());
 };
@@ -1118,7 +1149,7 @@ const ETAPES_PARCOURS = [
   { chemin: '/presentation', libelle: 'Présentation' },
   { chemin: '/application', libelle: 'L\'application' },
   { chemin: '/guide', libelle: 'Guide du testeur' },
-  { chemin: '/avis', libelle: 'Mon avis sur l\'app' },
+  { chemin: '/avis', libelle: 'Installer, se connecter, première impression' },
 ];
 const cleParcours = (moi) => `suivi:testeur-parcours:${moi.uid}:${etat.campagne ? `${etat.campagne.projet}/${etat.campagne.id}` : ''}`;
 const lireParcours = (moi) => { try { return localStorage.getItem(cleParcours(moi)) || '0'; } catch (e) { return 'fini'; } };
@@ -1128,11 +1159,11 @@ const parcoursEnCours = (moi) => !MODE_APERCU && fichePrete && Boolean(etat.camp
 const barreParcours = (moi, i) => {
   const dernier = i === ETAPES_PARCOURS.length - 1;
   const avantFait = avisRendu(etat.avis || {}, 'avant');
-  const bloque = dernier && !avantFait;
+  const bloque = dernier && !(etapeFaite(moi, 'installe') && etapeFaite(moi, 'connecte') && avantFait);
   const barre = document.createElement('div');
   barre.className = 'parcours-barre';
   barre.innerHTML = `<div class="parcours-etapes">${ETAPES_PARCOURS.map((e, k) => `<span class="parcours-point${k < i ? ' fait' : k === i ? ' actif' : ''}" title="${echapper(e.libelle)}"></span>`).join('')}
-      <span class="parcours-texte">Étape ${i + 1} sur ${ETAPES_PARCOURS.length} · ${echapper(ETAPES_PARCOURS[i].libelle)}${bloque ? ' · donnez votre première impression pour continuer' : ''}</span></div>
+      <span class="parcours-texte">Étape ${i + 1} sur ${ETAPES_PARCOURS.length} · ${echapper(ETAPES_PARCOURS[i].libelle)}${bloque ? ' · installez, connectez-vous puis donnez votre première impression' : ''}</span></div>
     <button class="btn btn-principal" type="button" data-parcours-suivant${bloque ? ' disabled' : ''}>${dernier ? 'Voir mes scénarios' : `Suivant : ${echapper(ETAPES_PARCOURS[i + 1].libelle)}`}</button>`;
   barre.querySelector('[data-parcours-suivant]').addEventListener('click', () => {
     if (dernier) { ecrireParcours(moi, 'fini'); naviguer('/'); toast('Bienvenue dans vos scénarios. Bon test !'); return; }
@@ -1698,7 +1729,7 @@ const monter = async () => {
     { groupe: 'Pages', libelle: 'Présentation', icone: 'smartphone', chemin: '/presentation' },
     { groupe: 'Pages', libelle: 'L\'application', icone: 'composants', chemin: '/application' },
     { groupe: 'Pages', libelle: 'Mes signalements', icone: 'alerte', chemin: '/signalements' },
-    { groupe: 'Pages', libelle: 'Mon avis sur l\'app', icone: 'coeur', chemin: '/avis' },
+    { groupe: 'Pages', libelle: 'Mon parcours', icone: 'coeur', chemin: '/avis' },
     { groupe: 'Pages', libelle: 'Guide du testeur', icone: 'ampoule', chemin: '/guide' },
   ].filter((r) => terme || r.groupe === 'Pages'));
 
