@@ -2668,3 +2668,19 @@ html.salle-plein .lat, html.salle-plein .haut, html.salle-plein .voile-lat, html
 .apercu-choix { display: inline-flex; align-items: center; gap: 8px; }
 .apercu-choix select { font: inherit; padding: 4px 8px; border-radius: 8px; max-width: 220px; }
 .apercu-quitter { font-weight: 600; color: var(--ambre); white-space: nowrap; }
+
+/* Capmedia Test · écrans de l'application testée (page « L'application ») : une rangée qui défile,
+   chaque écran au format téléphone, comme les captures de la présentation. */
+.appli-ecrans { display: flex; gap: 16px; overflow-x: auto; padding: 4px 2px 14px; scroll-snap-type: x mandatory; }
+.appli-ecran { flex: 0 0 auto; width: 180px; margin: 0; scroll-snap-align: start; }
+.appli-ecran img { width: 100%; aspect-ratio: 9 / 19.5; object-fit: cover; display: block; border-radius: 24px; background: var(--fond-2); box-shadow: 0 14px 32px rgba(0, 0, 0, .16), 0 2px 6px rgba(0, 0, 0, .08); }
+.appli-ecran figcaption { margin-top: 8px; font-size: 13px; color: var(--texte-2, inherit); text-align: center; }
+
+/* Capmedia Test · parcours d'arrivée obligatoire : la barre d'étape, collée en bas de la page. */
+.parcours-barre { position: sticky; bottom: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-top: 32px; padding: 14px 16px; border-radius: 16px; background: var(--fond-eleve); box-shadow: 0 -2px 18px rgba(0, 0, 0, .12); }
+.parcours-etapes { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.parcours-point { width: 8px; height: 8px; border-radius: 50%; background: var(--fond-3); flex: 0 0 auto; }
+.parcours-point.fait { background: var(--accent); opacity: .5; }
+.parcours-point.actif { width: 22px; border-radius: 4px; background: var(--accent); }
+.parcours-texte { margin-left: 8px; font-size: 13px; color: var(--texte-2, inherit); }
+.parcours-barre .btn[disabled] { opacity: .45; cursor: not-allowed; }
