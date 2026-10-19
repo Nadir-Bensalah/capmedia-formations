@@ -25,6 +25,16 @@ export const initialeAppli = (c) => (nomAppli(c).trim().slice(0, 1).toUpperCase(
 const cheminLogo = (c) => (c && c.logo && typeof c.logo.chemin === 'string' && /^projets\/[^/]+\/campagnes\/[^/]+\/logo\/[^/]+$/.test(c.logo.chemin) ? c.logo.chemin : '');
 
 /* L'adresse d'un fichier de la campagne, une seule demande à la fois. */
+/* Les adresses déjà connues de la campagne (19/10/2026) : une image déposée avec son lien de
+   téléchargement (champ « url » du logo ou d'un écran) s'affiche sans relire Storage, même quand la
+   lecture par les règles échoue sur l'appareil du testeur. */
+export const amorcerAdresses = (c) => {
+  if (!c) return;
+  const ok = (u) => typeof u === 'string' && /^https:\/\/firebasestorage\.googleapis\.com\//.test(u);
+  if (c.logo && ok(c.logo.url) && c.logo.chemin) adresses.set(c.logo.chemin, c.logo.url);
+  (c.visuels || []).forEach((v) => { if (v && ok(v.url) && v.chemin) adresses.set(v.chemin, v.url); });
+};
+
 export const adresseDe = (chemin) => {
   if (!chemin) return Promise.resolve('');
   if (adresses.has(chemin)) return Promise.resolve(adresses.get(chemin));

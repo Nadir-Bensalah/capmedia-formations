@@ -36,7 +36,7 @@ import { squelette } from './ui.js';
 import { definirRetoucheAriane } from './coquille.js';
 import { demarrerPush } from './notifications-push.js';
 import { ouvrirAvisAnonyme } from './avis-testeur.js';
-import { logoAppliHtml, resoudreLogos, resoudreCaptures, pagePresentationHtml, fonctionnalitesDe, nomAppli } from './presentation-testeur.js';
+import { logoAppliHtml, resoudreLogos, resoudreCaptures, pagePresentationHtml, fonctionnalitesDe, nomAppli, amorcerAdresses } from './presentation-testeur.js';
 import { lancerVisite, visiteOuverte } from './visite-testeur.js';
 import { boiteCompteHtml, blocScenarioHtml, executerGeste, lireEtatCompte, etatCompte } from './compte-test.js';
 
@@ -1145,6 +1145,7 @@ const barreParcours = (moi, i) => {
 
 const rendre = (moi) => {
   const chemin = courant().chemin;
+  amorcerAdresses(etat.campagne);
   if (parcoursEnCours(moi)) {
     const atteinte = Math.min(Number(lireParcours(moi)) || 0, ETAPES_PARCOURS.length - 1);
     const ici = ETAPES_PARCOURS.findIndex((e) => e.chemin === chemin);
