@@ -1192,6 +1192,8 @@ const rendre = (moi) => {
     if (ici < 0 || ici > atteinte) { naviguer(ETAPES_PARCOURS[atteinte].chemin); return; }
     PAGES[chemin](moi);
     barreParcours(moi, ici);
+    resoudreLogos(racine);
+    majNavigation();
     return;
   }
   (PAGES[chemin] || PAGES['/'])(moi);
