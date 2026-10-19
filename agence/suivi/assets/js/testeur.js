@@ -866,6 +866,17 @@ const chargerIdentifiants = async (moi) => {
   if ((identifiantsTesteur.valeur || identifiantsTesteur.compte) && courant().chemin === '/application') rendre(moi);
 };
 
+/* Les écrans de l'application (visuels de la campagne, images seulement), en rangée qui défile :
+   le testeur voit à quoi elle ressemble avant de l'installer. */
+const ecransAppli = (c) => {
+  const images = (c.visuels || []).filter((v) => v && typeof v.chemin === 'string' && /^image\//.test(v.type || '')).slice(0, 12);
+  if (!images.length) return '';
+  return `<section aria-label="Les écrans de l'application">
+      <div class="section-tete"><h2>En images</h2></div>
+      <div class="appli-ecrans">${images.map((v) => `<figure class="appli-ecran"><img data-capture="${echapper(v.chemin)}" alt="${echapper(v.legende || 'Écran de l\'application')}" loading="lazy" draggable="false">${v.legende ? `<figcaption>${echapper(v.legende)}</figcaption>` : ''}</figure>`).join('')}</div>
+    </section>`;
+};
+
 const pageApplication = (moi) => {
   filAriane([{ libelle: 'L\'application' }]);
   const c = etat.campagne;
@@ -884,6 +895,7 @@ const pageApplication = (moi) => {
       ${c.presentation ? `<div class="prose">${echapper(c.presentation).split(/\n{2,}/).map((x) => `<p>${x.replace(/\n/g, '<br>')}</p>`).join('')}</div>`
         : '<p class="t-2">L\'équipe Capmedia n\'a pas encore écrit la présentation. Découvrez-la comme un nouvel utilisateur : c\'est justement ce regard-là qui compte.</p>'}
     </section>
+    ${ecransAppli(c)}
     <section>
       <div class="section-tete"><h2>L'installer</h2></div>
       ${plateformes.length ? `<div class="installations">${plateformes.map((k) => {
@@ -923,6 +935,7 @@ const pageApplication = (moi) => {
     const b = ev.target.closest('[data-compte-geste]');
     if (b) gesteCompte(c, b, () => { if (courant().chemin === '/application') rendre(moi); });
   });
+  resoudreCaptures(racine);
 };
 
 /* Le compte ForgeMe de test de CE testeur sur la campagne courante, une
@@ -974,8 +987,8 @@ const pageSignalements = (moi) => {
 };
 
 const pageAvis = (moi) => {
-  filAriane([{ libelle: 'Mon avis' }]);
-  if (!etat.campagne) { racine.innerHTML = sansCampagne('Mon avis'); return; }
+  filAriane([{ libelle: 'Mon avis sur l\'app' }]);
+  if (!etat.campagne) { racine.innerHTML = sansCampagne('Mon avis sur l\'app'); return; }
   const a = etat.avis || {};
   const avantFait = avisRendu(a, 'avant');
   const apresFait = avisRendu(a, 'apres');
@@ -983,7 +996,7 @@ const pageAvis = (moi) => {
   const r = compter();
   const total = etat.scenarios.length;
   racine.innerHTML = `<div class="page">
-    <div class="page-tete"><div><p class="surtitre">Mon travail</p><h1>Mon avis</h1>
+    <div class="page-tete"><div><p class="surtitre">Mon travail</p><h1>Mon avis sur l'app</h1>
       <p class="chapo">Les scénarios disent si l'application marche. Votre avis dit si elle plaît.</p></div></div>
     <section class="avis-anonyme" data-avis-anonyme>
       <p class="surtitre">Sans votre nom</p>
@@ -1076,7 +1089,7 @@ const majNavigation = () => {
       titre: 'Mon travail',
       items: [
         { chemin: '/signalements', libelle: 'Mes signalements', icone: 'alerte', compte: { total: r.ko + r.revoir, neuf: r.revoir } },
-        { chemin: '/avis', libelle: 'Mon avis', icone: 'coeur', compte: { total: 0, neuf: avisDus } },
+        { chemin: '/avis', libelle: 'Mon avis sur l\'app', icone: 'coeur', compte: { total: 0, neuf: avisDus } },
       ],
     },
   ]);
@@ -1097,8 +1110,49 @@ const PAGES = {
   '/messages': (moi) => { if (bulle) bulle.ouvrir(); naviguer('/'); void moi; },
 };
 
+/* Le parcours d'arrivée (19/10/2026, demande de Nadir) : après sa fiche, un nouveau testeur passe
+   OBLIGATOIREMENT par la présentation, l'application, le guide, puis son avis de départ (première
+   impression), avant de voir ses scénarios. Une étape à la fois, « Suivant » en bas de page ; les
+   étapes déjà vues restent ouvertes. Gardé sur l'appareil, par testeur et par campagne. */
+const ETAPES_PARCOURS = [
+  { chemin: '/presentation', libelle: 'Présentation' },
+  { chemin: '/application', libelle: 'L\'application' },
+  { chemin: '/guide', libelle: 'Guide du testeur' },
+  { chemin: '/avis', libelle: 'Mon avis sur l\'app' },
+];
+const cleParcours = (moi) => `suivi:testeur-parcours:${moi.uid}:${etat.campagne ? `${etat.campagne.projet}/${etat.campagne.id}` : ''}`;
+const lireParcours = (moi) => { try { return localStorage.getItem(cleParcours(moi)) || '0'; } catch (e) { return 'fini'; } };
+const ecrireParcours = (moi, v) => { try { localStorage.setItem(cleParcours(moi), String(v)); } catch (e) { /* stockage refusé */ } };
+const parcoursEnCours = (moi) => !MODE_APERCU && fichePrete && Boolean(etat.campagne) && lireParcours(moi) !== 'fini';
+
+const barreParcours = (moi, i) => {
+  const dernier = i === ETAPES_PARCOURS.length - 1;
+  const avantFait = avisRendu(etat.avis || {}, 'avant');
+  const bloque = dernier && !avantFait;
+  const barre = document.createElement('div');
+  barre.className = 'parcours-barre';
+  barre.innerHTML = `<div class="parcours-etapes">${ETAPES_PARCOURS.map((e, k) => `<span class="parcours-point${k < i ? ' fait' : k === i ? ' actif' : ''}" title="${echapper(e.libelle)}"></span>`).join('')}
+      <span class="parcours-texte">Étape ${i + 1} sur ${ETAPES_PARCOURS.length} · ${echapper(ETAPES_PARCOURS[i].libelle)}${bloque ? ' · donnez votre première impression pour continuer' : ''}</span></div>
+    <button class="btn btn-principal" type="button" data-parcours-suivant${bloque ? ' disabled' : ''}>${dernier ? 'Voir mes scénarios' : `Suivant : ${echapper(ETAPES_PARCOURS[i + 1].libelle)}`}</button>`;
+  barre.querySelector('[data-parcours-suivant]').addEventListener('click', () => {
+    if (dernier) { ecrireParcours(moi, 'fini'); naviguer('/'); toast('Bienvenue dans vos scénarios. Bon test !'); return; }
+    ecrireParcours(moi, i + 1);
+    naviguer(ETAPES_PARCOURS[i + 1].chemin);
+  });
+  const page = racine.querySelector('.page') || racine;
+  page.appendChild(barre);
+};
+
 const rendre = (moi) => {
   const chemin = courant().chemin;
+  if (parcoursEnCours(moi)) {
+    const atteinte = Math.min(Number(lireParcours(moi)) || 0, ETAPES_PARCOURS.length - 1);
+    const ici = ETAPES_PARCOURS.findIndex((e) => e.chemin === chemin);
+    if (ici < 0 || ici > atteinte) { naviguer(ETAPES_PARCOURS[atteinte].chemin); return; }
+    PAGES[chemin](moi);
+    barreParcours(moi, ici);
+    return;
+  }
   (PAGES[chemin] || PAGES['/'])(moi);
   resoudreLogos(racine);
   majNavigation();
@@ -1627,7 +1681,7 @@ const monter = async () => {
   const monterBulle = () => { try { bulle = monterBulleTesteur({ testeur }); } catch (e) { console.warn('[testeur] bulle non montée', e); } };
   if (fiche) fiche.then(monterBulle); else monterBulle();
   /* La visite demandée au dernier écran de l'accueil attend la fiche. */
-  if (fiche) fiche.then(() => { fichePrete = true; essayerVisite(testeur); }); else fichePrete = true;
+  if (fiche) fiche.then(() => { fichePrete = true; rendre(testeur); essayerVisite(testeur); }); else fichePrete = true;
   document.addEventListener('suivi:visite-revoir', () => demarrerVisite(testeur));
   /* Les notifications push : la proposition après son premier message, le
      clic sur une notification qui ouvre la bulle (notifications-push.js). */
@@ -1643,7 +1697,7 @@ const monter = async () => {
     { groupe: 'Pages', libelle: 'Présentation', icone: 'smartphone', chemin: '/presentation' },
     { groupe: 'Pages', libelle: 'L\'application', icone: 'composants', chemin: '/application' },
     { groupe: 'Pages', libelle: 'Mes signalements', icone: 'alerte', chemin: '/signalements' },
-    { groupe: 'Pages', libelle: 'Mon avis', icone: 'coeur', chemin: '/avis' },
+    { groupe: 'Pages', libelle: 'Mon avis sur l\'app', icone: 'coeur', chemin: '/avis' },
     { groupe: 'Pages', libelle: 'Guide du testeur', icone: 'ampoule', chemin: '/guide' },
   ].filter((r) => terme || r.groupe === 'Pages'));
 
