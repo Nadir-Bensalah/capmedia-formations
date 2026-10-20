@@ -84,11 +84,27 @@ const TIRET = '–';
 const estPresentation = (d) => d.id === 'presentation' || d.genre === 'presentation';
 const rangGroupe = (g) => { const i = GROUPES_PLAN.findIndex((x) => x.cle === g); return i < 0 ? 99 : i; };
 
+/* Un scénario « en réserve » (reserve: true) reste dans la base mais sort
+   du plan : ni la page, ni les tableaux, ni les comptes ne le voient. Un
+   scénario fait par les deux peut n'être en réserve que d'un côté
+   (reserveHumain, reserveRobot) : il se lit alors comme robot seul, ou
+   humain seul. */
+const cote = (sc) => {
+  if (!sc || sc.qui !== 'les-deux') return sc;
+  if (sc.reserveHumain === true) return { ...sc, qui: 'robot' };
+  if (sc.reserveRobot === true) return { ...sc, qui: 'humain' };
+  return sc;
+};
+const sansReserve = (d) => ({
+  ...d,
+  aspects: Object.fromEntries(Object.entries(d.aspects).map(([k, l]) => [k, Array.isArray(l) ? l.filter((sc) => !(sc && sc.reserve === true)).map(cote) : l])),
+});
+
 /* Les sections dans l'ordre de la page : groupe, puis numéro. Le tableau
    des tests (onglet des robots) range ses cartes avec la même fonction. */
 export const ordonnerSections = (documents) => (documents || [])
   .filter((d) => d && !estPresentation(d) && d.aspects)
-  .slice()
+  .map(sansReserve)
   .sort((a, b) => rangGroupe(a.groupe) - rangGroupe(b.groupe) || (Number(a.ordre) || 0) - (Number(b.ordre) || 0));
 const sectionsDe = (pid) => ordonnerSections(magasin.lire(K.planTests(pid)));
 
