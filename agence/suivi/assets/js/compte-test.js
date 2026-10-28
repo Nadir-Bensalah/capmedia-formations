@@ -1,10 +1,12 @@
 /* ==========================================================================
    CAPMEDIA TEST · « Mon compte de test »
 
-   Le testeur agit sur SON compte ForgeMe de test (celui que l'équipe lui a
-   attribué, campagnes/{c}/acces/{uid}.compteTest), le même sur son
-   téléphone et sur le web : changer d'abonnement, remplir le compte, le
-   remplir à fond, le remettre à zéro. Tout passe par le serveur
+   Le testeur agit sur SON compte ForgeMe de test, le même sur son
+   téléphone et sur le web : par défaut celui de son adresse de connexion
+   (Gmail, Hotmail ou autre), sinon l'adresse que l'équipe a notée dans sa
+   place (campagnes/{c}/acces/{uid}.compteTest). Il change l'accès (essai,
+   abonné, lecture seule), remplit le compte, le remplit à fond, le remet
+   à zéro. Tout passe par le serveur
    (hubCompteTest), qui vérifie qui il est et n'écrit que dans le projet de
    test. Ce module ne détient aucun secret.
 
@@ -28,28 +30,30 @@ const URL_COMPTE = surEmulateur
 const CONFIRMATION_ZERO = 'REMETTRE A ZERO';
 
 export const GESTES_COMPTE = {
-  gratuit: { libelle: 'Gratuit', invite: 'Repassez en gratuit pour ce test', fait: 'Votre compte est repassé en gratuit.' },
-  premium: { libelle: 'Premium', invite: 'Passez en Premium pour ce test', fait: 'Votre compte est en Premium.' },
-  ultra: { libelle: 'Ultra', invite: 'Passez en Ultra pour ce test', fait: 'Votre compte est en Ultra.' },
+  essai: { libelle: 'Essai 14 jours', invite: 'Passez en essai de 14 jours pour ce test', fait: 'Votre compte est en essai pour 14 jours.' },
+  abonne: { libelle: 'Abonné', invite: 'Passez abonné pour ce test', fait: 'Votre compte est abonné.' },
+  lecture_seule: { libelle: 'Lecture seule', invite: 'Passez en lecture seule pour ce test', fait: 'Votre compte est en lecture seule.' },
   remplir: { libelle: 'Remplir mon compte', invite: 'Remplissez votre compte pour ce test', fait: 'Votre compte est rempli.' },
   'remplir-fond': { libelle: 'Remplir à fond', invite: 'Remplissez à fond votre compte pour ce test', fait: 'Votre compte est rempli à fond.' },
   zero: { libelle: 'Remettre à zéro', invite: 'Remettez votre compte à zéro pour ce test', fait: 'Votre compte est remis à zéro.' },
 };
-const PLANS_LIBELLES = { free: 'Gratuit', premium: 'Premium', premium_ultra: 'Ultra' };
-const GESTE_DU_PLAN = { free: 'gratuit', premium: 'premium', premium_ultra: 'ultra' };
+/* L'accès lu par l'application, en mots, et le bouton qui y correspond. */
+const ACCES_LIBELLES = { essai: 'Essai', actif: 'Abonné', grace: 'Abonné (paiement en attente)', lecture_seule: 'Lecture seule' };
+const GESTE_DE_L_ACCES = (a) => (!a ? '' : a.etat === 'essai' ? 'essai' : a.etat === 'lecture_seule' ? 'lecture_seule' : 'abonne');
+const GESTES_ACCES = ['essai', 'abonne', 'lecture_seule'];
 
 /* La table éditable : un scénario (son identifiant du plan ou sa référence)
    vers ses gestes, quand la détection ne suffit pas. Exemple :
-   'paiements-f-003': ['gratuit'] (un passage en Premium part du gratuit). */
+   'paiements-f-003': ['lecture_seule'] (un achat part d'un compte sans accès). */
 export const GESTES_PAR_SCENARIO = {};
 
 /* La détection, dans l'ordre : un geste d'abonnement au plus, un geste de
    contenu au plus. */
 export const REGLES_GESTES = [
-  { geste: 'gratuit', sorte: 'plan', motif: /souscri|s['’]abonner|paywall|[ée]cran des offres|achat int[ée]gr[ée]|passer (en|à) (premium|ultra)/i },
-  { geste: 'ultra', sorte: 'plan', motif: /\bultra\b/i },
-  { geste: 'gratuit', sorte: 'plan', motif: /non[ -]abonn|sans abonnement|(plan|compte|offre|version) gratuit|limites? du (plan )?gratuit/i },
-  { geste: 'premium', sorte: 'plan', motif: /\bpremium\b|\babonn[ée]e?s?\b|plan payant/i },
+  { geste: 'lecture_seule', sorte: 'plan', motif: /souscri|s['’]abonner|paywall|[ée]cran des offres|achat int[ée]gr[ée]|passer (en|à) (premium|ultra)|lecture seule|fin de l['’]essai|essai (termin|expir|fini)/i },
+  { geste: 'lecture_seule', sorte: 'plan', motif: /non[ -]abonn|sans abonnement|(plan|compte|offre|version) gratuit|limites? du (plan )?gratuit/i },
+  { geste: 'essai', sorte: 'plan', motif: /\bessai\b|p[ée]riode d['’]essai|\btrial\b/i },
+  { geste: 'abonne', sorte: 'plan', motif: /\bultra\b|\bpremium\b|\babonn[ée]e?s?\b|plan payant/i },
   { geste: 'remplir-fond', sorte: 'contenu', motif: /1[\s .,]?500\b|compte (très |bien |fortement )?charg[ée]|gros volume|beaucoup de (tâches|données)|rapidit[ée]|performances?/i },
   { geste: 'zero', sorte: 'contenu', motif: /compte (neuf|vierge|vide)|nouvel utilisateur|premier lancement|premi[èe]re ouverture|remis(e)? à zéro/i },
   { geste: 'remplir', sorte: 'contenu', motif: /compte (rempli|garni)|avec des données|données existantes/i },
@@ -98,7 +102,7 @@ export const etatCompte = (c) => etats.get(cleDe(c)) || null;
 export const lireEtatCompte = async (campagne) => {
   try {
     const r = await appeler(campagne, 'etat');
-    etats.set(cleDe(campagne), { plan: r.plan, taches: r.taches });
+    etats.set(cleDe(campagne), { acces: r.acces, plan: r.plan, taches: r.taches, compte: r.compte });
   } catch (e) {
     etats.set(cleDe(campagne), { erreur: e.message || 'Illisible pour l\'instant.' });
   }
@@ -116,7 +120,7 @@ export const executerGeste = async (campagne, geste) => {
   if (geste === 'zero') {
     const oui = await confirmer({
       titre: 'Remettre votre compte à zéro ?',
-      texte: 'Tout le contenu de votre compte de test sera effacé : tâches, rituels, objectifs, journal, dates, idées, voyages, notes, courses, données suivies. Le compte reste, avec son nom et le plan gratuit. Sur le téléphone, déconnectez-vous puis reconnectez-vous pour repartir comme un nouvel utilisateur.',
+      texte: 'Tout le contenu de votre compte de test sera effacé : tâches, rituels, objectifs, journal, dates, idées, voyages, notes, courses, données suivies. Le compte reste, avec son nom, en lecture seule comme un compte neuf. Sur le téléphone, déconnectez-vous puis reconnectez-vous pour repartir comme un nouvel utilisateur.',
       ok: 'Remettre à zéro', danger: true,
     });
     if (!oui) return null;
@@ -124,30 +128,34 @@ export const executerGeste = async (campagne, geste) => {
   }
   if (geste === 'remplir-fond') toast('Remplissage en cours : jusqu\'à une minute.', 'info');
   const r = await appeler(campagne, geste, extra);
-  etats.set(cleDe(campagne), { plan: r.plan, taches: typeof r.taches === 'number' ? r.taches : (etatCompte(campagne) || {}).taches });
-  toast(`${g.fait} L'application le voit d'elle-même, sans réinstaller.`);
+  const avant = etatCompte(campagne) || {};
+  etats.set(cleDe(campagne), { acces: r.acces || avant.acces, plan: r.plan, compte: r.compte || avant.compte, taches: typeof r.taches === 'number' ? r.taches : avant.taches });
+  if (GESTES_ACCES.includes(geste) && r.applique === false) toast('Demande envoyée : le serveur de test l\'applique dans quelques secondes. L\'application le verra d\'elle-même.', 'info');
+  else toast(`${g.fait} L'application et le site le voient tout de suite, sans réinstaller.`);
   return r;
 };
 
 /** La boîte « Mon compte de test » de la page L'application. */
 export const boiteCompteHtml = (campagne, email) => {
-  if (!email) return '';
   const e = etatCompte(campagne);
-  const planActuel = e && e.plan ? e.plan : '';
+  const adresse = (e && e.compte) || email || '';
+  const a = e && e.acces;
+  const fin = a && a.jusquA && a.etat !== 'actif' ? ` jusqu'au ${new Date(a.jusquA).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}` : '';
   const ligne = !e ? '<span class="t-3">Lecture du compte…</span>'
     : e.erreur ? `<span class="t-3">${echapper(e.erreur)}</span>`
-      : `Plan actuel : <b>${echapper(PLANS_LIBELLES[planActuel] || planActuel)}</b> · ${Number(e.taches || 0).toLocaleString('fr-FR')} tâche${Number(e.taches) > 1 ? 's' : ''}`;
+      : `Accès actuel : <b>${echapper(ACCES_LIBELLES[a && a.etat] || 'Lecture seule')}${echapper(fin)}</b> · ${Number(e.taches || 0).toLocaleString('fr-FR')} tâche${Number(e.taches) > 1 ? 's' : ''}`;
+  const actuel = GESTE_DE_L_ACCES(a);
   const bouton = (geste, classe = 'btn-secondaire') => {
-    const actif = GESTE_DU_PLAN[planActuel] === geste;
-    return `<button class="btn ${classe} btn-petit" type="button" data-compte-geste="${geste}"${['gratuit', 'premium', 'ultra'].includes(geste) ? ` aria-pressed="${actif}"` : ''}>${echapper(GESTES_COMPTE[geste].libelle)}</button>`;
+    const choisi = GESTES_ACCES.includes(geste) && actuel === geste;
+    return `<button class="btn ${choisi ? 'btn-principal' : classe} btn-petit" type="button" data-compte-geste="${geste}"${GESTES_ACCES.includes(geste) ? ` aria-pressed="${choisi}"` : ''}>${echapper(GESTES_COMPTE[geste].libelle)}</button>`;
   };
   return `<section class="compte-test" data-compte-test>
     <div class="section-tete"><h2>Mon compte de test</h2></div>
-    <p class="t-2">Le compte <b data-compte-email>${echapper(email)}</b>, sur votre téléphone comme sur le web. Ces gestes n'agissent que sur lui, dans l'environnement de test : rien de réel.</p>
+    <p class="t-2">${adresse ? `Le compte <b data-compte-email>${echapper(adresse)}</b>, sur votre téléphone comme sur le web.` : 'Le compte de votre adresse de connexion, sur votre téléphone comme sur le web.'} Ces gestes n'agissent que sur lui, dans l'environnement de test : rien de réel.</p>
     <p class="compte-test-etat" data-compte-etat>${ligne}</p>
     <div class="compte-test-rangee">
-      <span class="etiquette-champ">Abonnement</span>
-      <div class="rang compte-test-boutons">${bouton('gratuit')}${bouton('premium')}${bouton('ultra')}</div>
+      <span class="etiquette-champ">Accès</span>
+      <div class="rang compte-test-boutons">${bouton('essai')}${bouton('abonne')}${bouton('lecture_seule')}</div>
     </div>
     <div class="compte-test-rangee">
       <span class="etiquette-champ">Contenu</span>
@@ -158,8 +166,7 @@ export const boiteCompteHtml = (campagne, email) => {
 };
 
 /** Les boutons d'un scénario, à placer dans sa feuille. */
-export const blocScenarioHtml = (s, campagne, email) => {
-  if (!email) return '';
+export const blocScenarioHtml = (s, campagne) => {
   const besoins = besoinsDuScenario(s, campagne);
   if (!besoins.length) return '';
   return `<section class="fs-bloc fs-bloc--compte" data-compte-scenario>

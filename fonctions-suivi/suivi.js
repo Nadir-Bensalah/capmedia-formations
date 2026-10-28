@@ -1732,7 +1732,8 @@ async function inviterNouveauTesteur({ uid, adresse, prenom, plateformes, projet
    campagnes/{c}/acces/{uid}. L'invitation d'une nouvelle personne part
    en dernier : à ce moment-là, pas avant.
    ========================================================================== */
-const COMPTE_TEST = /^[a-z0-9._+-]{1,64}@exemple\.test$/;
+/* Le compte ForgeMe de test d'un testeur : n'importe quelle adresse (depuis le 28/10/2026). */
+const COMPTE_TEST = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/;
 const refusPlace = (code, message) => { const e = new Error(message); e.refus = true; e.code = code; return e; };
 async function attribuerPlace(identite, corps) {
   const pid = String(corps.projet || '');
@@ -1752,7 +1753,7 @@ async function attribuerPlace(identite, corps) {
   if (!['ios', 'android'].includes(place.mobile)) throw refusPlace(409, 'Cette place n\'a pas de téléphone.');
 
   const compteTest = String(corps.compteTest || '').trim().toLowerCase();
-  if (compteTest && !COMPTE_TEST.test(compteTest)) throw refusPlace(400, `« ${compteTest} » n'est pas un compte de test : une adresse @exemple.test.`);
+  if (compteTest && !COMPTE_TEST.test(compteTest)) throw refusPlace(400, `« ${compteTest} » n'est pas une adresse e-mail lisible.`);
 
   /* Qui prend la place. */
   let uid = String(corps.testeur || '');

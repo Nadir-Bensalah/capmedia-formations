@@ -38,7 +38,7 @@ let ok = 0; const ecarts = [];
 const verifier = (c, m, d = '') => { if (c) { ok += 1; console.log(`  ok     ${m}`); } else { ecarts.push(m); console.log(`  ÉCART  ${m}${d ? ` · ${String(d).slice(0, 300)}` : ''}`); } };
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 const migrer = (...args) => {
-  const r = spawnSync(process.execPath, [new URL('./migrer-gate2.mjs', import.meta.url).pathname, ...args], { encoding: 'utf8', env: process.env });
+  const r = spawnSync(process.execPath, [decodeURIComponent(new URL('./migrer-gate2.mjs', import.meta.url).pathname), ...args], { encoding: 'utf8', env: process.env });
   return { code: r.status, sortie: `${r.stdout || ''}${r.stderr || ''}` };
 };
 const unitesDe = (sortie) => Number(((sortie.split('\n').find((l) => /\bunites\b/.test(l)) || '').match(/(\d+)\s+unites/) || [])[1]);

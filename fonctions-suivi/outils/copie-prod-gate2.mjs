@@ -121,7 +121,7 @@ const verifier = (c, m, d = '') => { if (c) { ok += 1; console.log(`  ok     ${m
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 const HUB = process.env.FIREBASE_EMULATOR_HUB || '127.0.0.1:4400';
 const declencheurs = async (allumes) => { const r = await fetch(`http://${HUB}/functions/${allumes ? 'enable' : 'disable'}BackgroundTriggers`, { method: 'PUT' }); if (!r.ok) throw new Error(`hub ${r.status}`); };
-const migrer = (...args) => { const r = spawnSync(process.execPath, [new URL('./migrer-gate2.mjs', import.meta.url).pathname, ...args], { encoding: 'utf8', env: process.env }); return { code: r.status, sortie: `${r.stdout || ''}${r.stderr || ''}` }; };
+const migrer = (...args) => { const r = spawnSync(process.execPath, [decodeURIComponent(new URL('./migrer-gate2.mjs', import.meta.url).pathname), ...args], { encoding: 'utf8', env: process.env }); return { code: r.status, sortie: `${r.stdout || ''}${r.stderr || ''}` }; };
 const unitesDe = (s) => Number(((s.split('\n').find((l) => /\bunites\b/.test(l)) || '').match(/(\d+)\s+unites/) || [])[1]);
 const revivre = (v) => (v && typeof v === 'object' && !Array.isArray(v)
   ? (v.__ts ? Timestamp.fromDate(new Date(v.__ts)) : Object.fromEntries(Object.entries(v).map(([k, x]) => [k, revivre(x)])))

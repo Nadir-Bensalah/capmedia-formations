@@ -2119,14 +2119,16 @@ service cloud.firestore {
                            && campagneOuverte(projetId, campagneId)
                            && accesTesteurEnCours(projetId, campagneId));
           // « compteTest » : l'adresse du compte ForgeMe de test de CE
-          // testeur (une adresse fictive @exemple.test, ou vide). La
-          // fonction hubCompteTest n'agit que sur elle.
+          // testeur, quand elle diffère de son adresse de connexion (vide
+          // sinon), n'importe quel domaine depuis le 28/10/2026. La fonction
+          // hubCompteTest n'agit que sur elle, dans le projet de test.
           allow write: if equipeSurProjet(projetId)
             && request.resource.data.keys().hasOnly(['identifiants', 'maj', 'compteTest'])
             && texteBorne(request.resource.data.get('identifiants', ''), 2000)
             && (request.resource.data.get('compteTest', '') == ''
                 || (request.resource.data.compteTest is string
-                    && request.resource.data.compteTest.matches('^[a-z0-9._+-]{1,64}@exemple[.]test$')));
+                    && request.resource.data.compteTest.size() <= 254
+                    && request.resource.data.compteTest.matches('^[^@ ]{1,64}@[^@ ]{1,190}[.][^@ ]{2,24}$')));
         }
       }
 

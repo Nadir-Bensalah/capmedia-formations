@@ -121,7 +121,7 @@ const LIBELLES = ['iPhone 1', 'iPhone 2', 'iPhone 3', 'Android 1', 'Android 2', 
   const envoisDuDepart = new Set((await db.collection('envois').get()).docs.map((d) => d.id));
   const nouveauxEnvois = async () => (await db.collection('envois').get()).docs.filter((d) => !envoisDuDepart.has(d.id)).map((d) => `${d.data().modele}:${JSON.stringify(d.data().a || []).slice(0, 60)}`).join(' | ');
 
-  const nav = await chromium.launch();
+  const nav = await chromium.launch({ channel: 'chrome', headless: true });
   const page = await (await nav.newContext({ viewport: { width: 1500, height: 1100 } })).newPage();
   const err = []; page.on('pageerror', (e) => err.push(`PAGE: ${e.message.slice(0, 160)}`));
   await connecter(page, 'agent.essai@exemple.test');

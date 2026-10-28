@@ -34,7 +34,7 @@ if (!c.exists) { console.error(`Campagne ${pid}/${cid} introuvable sur le banc.`
 
 /* Le logo : l'icône de ForgeMe, si elle a été copiée en local. */
 let logo = null;
-const source = new URL('./donnees-locales/visuels-banc/forgeme-logo.png', import.meta.url).pathname;
+const source = decodeURIComponent(new URL('./donnees-locales/visuels-banc/forgeme-logo.png', import.meta.url).pathname);
 if (existsSync(source)) {
   const chemin = `projets/${pid}/campagnes/${cid}/logo/forgeme-logo.png`;
   await getStorage().bucket().upload(source, { destination: chemin, contentType: 'image/png' });

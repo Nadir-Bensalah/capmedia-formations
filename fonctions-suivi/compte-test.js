@@ -1,38 +1,40 @@
 /* ==========================================================================
    CAPMEDIA TEST · le compte ForgeMe de test d'un testeur
-
-   Depuis son espace, un testeur agit sur LE compte de test que l'équipe
-   lui a attribué (campagnes/{c}/acces/{uid}.compteTest), et sur lui seul :
-
-     etat          lire le plan et le nombre de tâches (ne compte pas)
-     gratuit       revenir au plan gratuit
-     premium       passer en Premium (plan manuel, comme adminSetUserPlan)
-     ultra         passer en Premium Ultra
+   Depuis son espace, un testeur agit sur SON compte du serveur de test, et
+   sur lui seul : par défaut celui qui porte l'adresse de sa connexion à
+   Capmedia Test (Gmail, Hotmail ou autre, depuis le 28/10/2026), sinon
+   l'adresse que l'équipe a notée dans sa place
+   (campagnes/{c}/acces/{uid}.compteTest) :
+     etat          lire l'accès et le nombre de tâches (ne compte pas)
+     essai         14 jours d'essai, à partir de maintenant
+     abonne        abonné, sans limite (plan manuel)
+     lecture_seule plus d'accès : le compte voit ses données sans écrire
      remplir       un compte de tous les jours, fictif, en français
      remplir-fond  1 500 tâches et le reste en proportion (rapidité)
-     zero          tout vider : le compte, son profil minimal, le plan gratuit
+     zero          tout vider : le compte, son profil minimal, plus d'accès
                    (confirmation « REMETTRE A ZERO » exigée)
-
+   Les trois états passent par le serveur de test lui-même : Capmedia Test
+   dépose subscriptions/{uid}.demandeOutilTest, la fonction outilTestDemande
+   de forgeme-test recalcule l'accès comme pour un achat et répond dans
+   demandeOutilTestFaite. L'app et le site le voient aussitôt. Les anciens
+   noms (gratuit, premium, ultra) restent compris.
    Les écritures partent dans le projet Firebase forgeme-test, et nulle part
    ailleurs, par une seconde application Admin initialisée avec la clé du
    secret FORGEME_TEST_SA. Gardes dures, dans cet ordre :
-
      1. l'appelant est un testeur actif, la campagne lui est confiée, elle
         est en cours et son accès court encore ;
-     2. le compte visé est celui que l'équipe LUI a attribué, une adresse
-        fictive @exemple.test, attribuée à personne d'autre sur la campagne ;
+     2. le compte visé est le sien : son adresse de connexion, ou celle que
+        l'équipe LUI a attribuée, à personne d'autre sur la campagne ;
      3. la clé vise exactement le projet forgeme-test (project_id et adresse
         du compte de service), et l'application ouverte aussi ;
      4. vingt gestes par heure et par testeur, un seul à la fois ;
      5. chaque document écrit est sous users/{uid du compte} ou est
         subscriptions/{uid du compte}.
-
-   Rien du testeur ne part dans forgeme-test : ni son adresse, ni son uid.
+   Rien du Hub n'est écrit dans forgeme-test : l'adresse du testeur sert à
+   trouver son compte, rien de plus.
    Chaque geste, accepté ou refusé, laisse une ligne d'audit dans le Hub.
-
      POST /hubCompteTest   { projet, campagne, geste, confirmation? }
      Authorization: Bearer <jeton>
-
    Banc d'essai : sur l'émulateur seulement, la clé vient de _banc/compteTest
    (une fausse clé posée par la suite) et non du secret ; l'application de
    test parle alors à l'émulateur, sous le projet forgeme-test.
@@ -52,14 +54,15 @@ const FORGEME_TEST_SA = defineSecret('FORGEME_TEST_SA');
 const PROJET_TEST = 'forgeme-test';
 const NOM_APP = 'capmedia-compte-test';
 const ID_VALIDE = /^[A-Za-z0-9_-]{1,128}$/;
-const DOMAINE_FICTIF = '@exemple.test';
-const COMPTE_VALIDE = /^[a-z0-9._+-]{1,64}@exemple\.test$/;
+const COMPTE_VALIDE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/;
 const PLAFOND_HEURE = 20;
 const VERROU_MS = 5 * 60 * 1000;
 const CONFIRMATION_ZERO = 'REMETTRE A ZERO';
-const FIN_ILLIMITEE = new Date('2099-12-31T23:59:59Z');
-const GESTES = ['etat', 'gratuit', 'premium', 'ultra', 'remplir', 'remplir-fond', 'zero'];
-const PLANS = { gratuit: 'free', premium: 'premium', ultra: 'premium_ultra' };
+const ETATS_ACCES = ['essai', 'abonne', 'lecture_seule'];
+/* Les anciens noms des boutons, encore compris (une page ouverte avant la mise à jour). */
+const ALIAS = { gratuit: 'lecture_seule', premium: 'abonne', ultra: 'abonne' };
+const GESTES = ['etat', ...ETATS_ACCES, ...Object.keys(ALIAS), 'remplir', 'remplir-fond', 'zero'];
+const ATTENTE_SERVEUR_MS = 12000;
 const SUR_BANC = process.env.FUNCTIONS_EMULATOR === 'true' && Boolean(process.env.FIRESTORE_EMULATOR_HOST);
 
 const texte = (res, code, message) => res.status(code).type('text/plain; charset=utf-8').set('X-Content-Type-Options', 'nosniff').send(message);
@@ -114,17 +117,17 @@ async function appTest(fournirCle = cleBrute) {
    2. Qui demande, et pour quel compte
    -------------------------------------------------------------------------- */
 
-/** L'adresse du compte de test attribuée, ou null si elle n'est pas fictive. */
-const compteFictif = (v) => {
+/** Une adresse e-mail lisible, ou null. */
+const adresseValide = (v) => {
   const e = normaliserEmail(v);
-  return COMPTE_VALIDE.test(e) && e.endsWith(DOMAINE_FICTIF) ? e : null;
+  return e && COMPTE_VALIDE.test(e) ? e : null;
 };
 
 /**
  * Le compte que l'équipe a attribué à CE testeur sur CETTE campagne.
  * Lève un refus lisible sinon.
  */
-async function compteAttribue({ uid, projet, campagne }) {
+async function compteAttribue({ uid, email: emailConnexion, projet, campagne }) {
   if (!ID_VALIDE.test(String(projet || '')) || !ID_VALIDE.test(String(campagne || ''))) throw new Refus(400, 'Campagne inconnue.');
   const fiche = await bdd.doc(`testeurs/${uid}`).get();
   if (!fiche.exists || fiche.data().actif === false) throw new Refus(403, 'Votre accès de testeur est fermé.');
@@ -139,12 +142,12 @@ async function compteAttribue({ uid, projet, campagne }) {
 
   const tous = await refCampagne.collection('acces').get();
   const sien = tous.docs.find((d) => d.id === uid);
-  const brut = sien ? (sien.data() || {}).compteTest : '';
-  if (!brut) throw new Refus(404, 'Aucun compte de test ne vous est encore attribué. Écrivez à l\'équipe.');
-  const email = compteFictif(brut);
-  if (!email) throw new Refus(403, 'Ce compte n\'est pas un compte de test : l\'équipe doit le corriger.');
+  /* L'adresse notée par l'équipe pour ce testeur, sinon celle de sa connexion. */
+  const brut = sien ? String((sien.data() || {}).compteTest || '').trim() : '';
+  const email = brut ? adresseValide(brut) : adresseValide(emailConnexion);
+  if (!email) throw new Refus(brut ? 403 : 404, brut ? 'L\'adresse notée pour votre compte de test est illisible : l\'équipe doit la corriger.' : 'Votre adresse de connexion est illisible. Écrivez à l\'équipe.');
   const autres = tous.docs.filter((d) => d.id !== uid && normaliserEmail((d.data() || {}).compteTest) === email);
-  if (autres.length) throw new Refus(409, 'Ce compte de test est attribué à deux testeurs : l\'équipe doit le corriger.');
+  if (autres.length) throw new Refus(409, 'Ce compte est attribué à un autre testeur : l\'équipe doit le corriger.');
   return email;
 }
 
@@ -208,29 +211,42 @@ async function recompter(db, uidCompte) {
   return usage;
 }
 
-/** Le plan effectif, comme l'application le lit. */
-const planDe = (abo) => {
-  if (!abo) return 'free';
-  const fin = enMillis(abo.endDate);
-  return ['active', 'trialing'].includes(abo.status) && fin > Date.now() ? (abo.plan || 'free') : 'free';
+/** Les millisecondes d'une date Firestore, d'un nombre ou de rien. */
+const ms = (v) => (v == null ? null : typeof v === 'number' ? v : enMillis(v));
+
+/**
+ * L'accès tel que l'application et le site le lisent (subscriptions/{uid}.acces, écrit par le serveur
+ * de test) : essai, actif, grâce ou lecture seule, avec sa fin. Un compte sans document est en lecture seule.
+ */
+const accesDe = (abo) => {
+  const a = abo && abo.acces;
+  if (!a || typeof a !== 'object') return { etat: 'lecture_seule', jusquA: null, source: null };
+  const jusquA = ms(a.jusquA);
+  const etat = a.etat !== 'lecture_seule' && jusquA && jusquA > Date.now() ? a.etat : 'lecture_seule';
+  return { etat, jusquA: etat === 'lecture_seule' ? null : jusquA, source: a.source || null };
 };
 
-async function poserPlan(db, uidCompte, cle) {
-  const plan = PLANS[cle];
+/** Le plan des anciens écrans (compte-test-donnees.js remplit selon le plan). */
+const planDe = (abo) => (accesDe(abo).etat === 'lecture_seule' ? 'free' : 'premium_ultra');
+
+/**
+ * Un état d'accès, appliqué par le serveur de test lui-même (outilTestDemande) : on dépose la demande
+ * sur le document, puis on attend sa réponse. Sans réponse à temps, la demande reste posée et le
+ * serveur l'appliquera : on le dit au testeur.
+ */
+async function demanderAcces(db, uidCompte, action, { attente = ATTENTE_SERVEUR_MS } = {}) {
   const ref = db.doc(`subscriptions/${uidCompte}`);
   verifierChemins([{ chemin: ref.path }], uidCompte);
-  const maintenant = FieldValue.serverTimestamp();
-  const payload = plan === 'free'
-    ? { plan: 'free', status: 'expired', platform: 'manual', renewalType: null, trialUsed: true, willRenew: false,
-      endDate: Timestamp.now(), updatedAt: maintenant, manualOverride: FieldValue.delete(), grantedBy: FieldValue.delete(), grantedAt: FieldValue.delete() }
-    : { plan, status: 'active', platform: 'manual', renewalType: null, trialUsed: true, willRenew: false,
-      startDate: Timestamp.now(), endDate: Timestamp.fromDate(FIN_ILLIMITEE), updatedAt: maintenant,
-      manualOverride: true, grantedBy: 'capmedia-test', grantedAt: maintenant };
-  await db.runTransaction(async (t) => {
-    const s = await t.get(ref);
-    t.set(ref, s.exists ? payload : { ...payload, createdAt: maintenant }, { merge: true });
-  });
-  return plan;
+  const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  await ref.set({ demandeOutilTest: { id, action, le: FieldValue.serverTimestamp() } }, { merge: true });
+  const limite = Date.now() + attente;
+  while (Date.now() < limite) {
+    await new Promise((r) => setTimeout(r, 600));
+    const abo = (await ref.get()).data() || {};
+    const faite = abo.demandeOutilTestFaite;
+    if (faite && faite.id === id) return { applique: true, acces: accesDe(abo) };
+  }
+  return { applique: false, acces: accesDe((await ref.get()).data()) };
 }
 
 /** Tout vider sous users/{uid}, puis le profil minimal ; plus d'abonnement. */
@@ -251,15 +267,16 @@ async function remettreAZero(db, compte) {
  * Le cœur, sans HTTP : vérifie, puis agit. Rend { ok, ... } ou lève un
  * Refus. `fournirCle` remplace la clé (épreuves) ; `maintenant` aussi.
  */
-async function gesteCompteTest({ uid, projet, campagne, geste, confirmation }, { fournirCle } = {}) {
-  if (!GESTES.includes(geste)) throw new Refus(400, 'Geste inconnu.');
-  const email = await compteAttribue({ uid, projet, campagne });
+async function gesteCompteTest({ uid, email: emailConnexion, projet, campagne, geste: demande, confirmation }, { fournirCle, attente } = {}) {
+  if (!GESTES.includes(demande)) throw new Refus(400, 'Geste inconnu.');
+  const geste = ALIAS[demande] || demande;
+  const email = await compteAttribue({ uid, email: emailConnexion, projet, campagne });
   if (geste === 'zero' && confirmation !== CONFIRMATION_ZERO) throw new Refus(400, `Confirmation requise : tapez « ${CONFIRMATION_ZERO} ».`);
   const app = await appTest(fournirCle);
   const db = getFirestore(app);
   let u;
   try { u = await getAuth(app).getUserByEmail(email); } catch (e) { u = null; }
-  if (!u || normaliserEmail(u.email) !== email) throw new Refus(404, 'Ce compte de test n\'existe pas encore dans le projet de test. Écrivez à l\'équipe.');
+  if (!u || normaliserEmail(u.email) !== email) throw new Refus(404, `Aucun compte ${email} dans l'application de test. Créez-le d'abord en vous inscrivant dans l'application de test avec cette adresse, puis revenez ici.`);
   const profil = (await db.doc(`users/${u.uid}`).get()).data() || {};
   const morceaux = String(u.displayName || '').split(' ');
   const compte = { uid: u.uid, email, prenom: profil.firstName || morceaux[0] || 'Testeur', nom: profil.lastName || morceaux.slice(1).join(' ') || '' };
@@ -267,16 +284,21 @@ async function gesteCompteTest({ uid, projet, campagne, geste, confirmation }, {
   if (geste === 'etat') {
     const abo = (await db.doc(`subscriptions/${compte.uid}`).get()).data();
     const taches = (await db.collection(`users/${compte.uid}/tasks`).count().get()).data().count;
-    return { ok: true, geste, compte: email, plan: planDe(abo), taches };
+    return { ok: true, geste, compte: email, acces: accesDe(abo), plan: planDe(abo), taches };
   }
 
   await prendreUnGeste(uid);
   try {
     verifierApp(app);
-    if (PLANS[geste]) return { ok: true, geste, compte: email, plan: await poserPlan(db, compte.uid, geste) };
+    if (ETATS_ACCES.includes(geste)) {
+      const r = await demanderAcces(db, compte.uid, geste, attente ? { attente } : {});
+      return { ok: true, geste, compte: email, applique: r.applique, acces: r.acces, plan: r.acces.etat === 'lecture_seule' ? 'free' : 'premium_ultra' };
+    }
     if (geste === 'zero') {
       await remettreAZero(db, compte);
-      return { ok: true, geste, compte: email, plan: 'free', taches: 0 };
+      /* Comme un compte neuf : lecture seule, écrite par le serveur de test pour que l'app la lise. */
+      const r = await demanderAcces(db, compte.uid, 'lecture_seule', attente ? { attente } : {});
+      return { ok: true, geste, compte: email, applique: r.applique, acces: r.acces, plan: 'free', taches: 0 };
     }
     const abo = (await db.doc(`subscriptions/${compte.uid}`).get()).data();
     const plan = planDe(abo);
@@ -294,7 +316,8 @@ async function gesteCompteTest({ uid, projet, campagne, geste, confirmation }, {
 exports._gesteCompteTest = gesteCompteTest;
 exports._verifierCle = verifierCle;
 exports._verifierApp = verifierApp;
-exports._compteFictif = compteFictif;
+exports._adresseValide = adresseValide;
+exports._accesDe = accesDe;
 exports.CONFIRMATION_ZERO = CONFIRMATION_ZERO;
 
 exports.hubCompteTest = onRequest({ region: REGION, cors: true, secrets: [FORGEME_TEST_SA], invoker: 'public', timeoutSeconds: 300, memory: '512MiB' }, async (req, res) => {
@@ -307,8 +330,8 @@ exports.hubCompteTest = onRequest({ region: REGION, cors: true, secrets: [FORGEM
   const { projet, campagne, geste, confirmation } = req.body || {};
   const trace = { testeur: qui.uid, projet: String(projet || '').slice(0, 128), campagne: String(campagne || '').slice(0, 128), geste: String(geste || '').slice(0, 20) };
   try {
-    const r = await gesteCompteTest({ uid: qui.uid, projet, campagne, geste, confirmation });
-    if (geste !== 'etat') await audit('test.compte', { ...trace, compte: r.compte, plan: r.plan || null, documents: r.documents || 0 });
+    const r = await gesteCompteTest({ uid: qui.uid, email: qui.email, projet, campagne, geste, confirmation });
+    if (geste !== 'etat') await audit('test.compte', { ...trace, compte: r.compte, plan: r.plan || null, acces: (r.acces && r.acces.etat) || null, documents: r.documents || 0 });
     return res.json(r);
   } catch (err) {
     if (err && err.refus) {

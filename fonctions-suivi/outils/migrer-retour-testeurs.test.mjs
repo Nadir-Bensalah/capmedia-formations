@@ -22,7 +22,7 @@ if (!process.env.FIRESTORE_EMULATOR_HOST) { console.error('Émulateur seulement.
 const PROJET = process.env.GCLOUD_PROJECT || 'capmedia-1f90d';
 initializeApp({ projectId: PROJET });
 const bdd = getFirestore();
-const SCRIPT = new URL('./migrer-retour-testeurs.mjs', import.meta.url).pathname;
+const SCRIPT = decodeURIComponent(new URL('./migrer-retour-testeurs.mjs', import.meta.url).pathname);
 const SAUVEGARDE = join(tmpdir(), `sauvegarde-retour-${process.pid}.json`);
 const lancer = (...args) => execFileSync('node', [SCRIPT, ...args], { env: process.env, encoding: 'utf8' });
 

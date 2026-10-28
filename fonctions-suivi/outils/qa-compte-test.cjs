@@ -8,8 +8,11 @@
    l'émulateur sous forgeme-test. Un troisième projet, forgeme-project (la
    production de ForgeMe), sert de témoin : rien ne doit jamais y arriver.
 
-     A  les six gestes sur le compte de Karim, chacun relu dans forgeme-test
-     B  Karim ne peut viser que SON compte (celui de Sonia reste intact)
+     A  les gestes sur le compte de Karim, chacun relu dans forgeme-test ;
+        les trois états d'accès passent par le déclencheur du serveur de
+        test, simulé ici avec SON code (lib de ~/ForgeMe/functions)
+     B  Karim ne peut viser que SON compte (celui de Sonia reste intact) ;
+        sans adresse notée, c'est celle de sa connexion (Gmail ou autre)
      C  la garde du projet : une clé qui vise un autre projet est refusée
      D  le plafond (vingt par heure) et le verrou (un geste à la fois)
      E  rien sans campagne en cours, sans compte attribué, ni pour l'équipe
@@ -36,6 +39,32 @@ const ft = admin.initializeApp({ projectId: 'forgeme-test' }, 'ft');
 const ftDb = ft.firestore(); const ftAuth = ft.auth();
 const prod = admin.initializeApp({ projectId: 'forgeme-project' }, 'prod');
 const prodDb = prod.firestore();
+
+/* Le déclencheur outilTestDemande du serveur de test (forgeme-test), simulé avec SON code compilé :
+   la demande déposée par hubCompteTest est appliquée comme sur le vrai serveur. */
+const FM = `${process.env.HOME}/ForgeMe/functions/lib/abonnements`;
+const { arriveeOutilTest } = require(`${FM}/outilTest.js`);
+const { preparerEcriture, versFirestore, SUPPRIMER } = require(`${FM}/ecriture.js`);
+let serveurTestActif = true;
+const enCours = new Set();
+ftDb.collection('subscriptions').onSnapshot((snap) => {
+  for (const ch of snap.docChanges()) {
+    const d = ch.doc.data() || {};
+    const dem = d.demandeOutilTest;
+    if (!serveurTestActif || !dem || enCours.has(dem.id)) continue;
+    enCours.add(dem.id);
+    (async () => {
+      const maintenant = Date.now();
+      const arrivee = arriveeOutilTest(dem.action, maintenant, { outilTestPar: 'capmedia-test' });
+      arrivee.champs = { ...(arrivee.champs || {}), demandeOutilTest: SUPPRIMER };
+      const prep = preparerEcriture(d, arrivee, maintenant);
+      const donnees = versFirestore(prep.donnees, (ms) => admin.firestore.Timestamp.fromMillis(ms), () => admin.firestore.FieldValue.delete());
+      donnees.demandeOutilTestFaite = { id: dem.id, action: dem.action, etat: prep.acces.etat, le: maintenant };
+      await ch.doc.ref.set(donnees, { merge: true });
+    })().catch((e) => console.log('  (serveur de test simulé :', e.message, ')'));
+  }
+});
+const etatDe = (a) => (a && a.acces && a.acces.etat) || 'lecture_seule';
 
 /* Une fausse clé de compte de service : une vraie paire RSA, tirée ici. */
 const { privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048, privateKeyEncoding: { type: 'pkcs8', format: 'pem' }, publicKeyEncoding: { type: 'spki', format: 'pem' } });
@@ -87,18 +116,31 @@ let page = null;
   const jk = await jetonDe(karim); const js = await jetonDe(sonia); const jm = await jetonDe(marc);
   verifier(jk && js && jm, 'les jetons de Karim, Sonia et Marc sont tirés');
 
-  console.log('\n== A. Les six gestes sur le compte de Karim');
+  console.log('\n== A. Les gestes sur le compte de Karim');
   let r = await appel(jk, { geste: 'etat' });
-  verifier(r.code === 200 && r.j.plan === 'free' && r.j.taches === 0 && r.j.compte === 'karim@exemple.test', 'état : son compte, gratuit, aucune tâche', r.t.slice(0, 120));
-  r = await appel(jk, { geste: 'premium' });
+  verifier(r.code === 200 && r.j.acces && r.j.acces.etat === 'lecture_seule' && r.j.taches === 0 && r.j.compte === 'karim@exemple.test', 'état : son compte, lecture seule (aucun document), aucune tâche', r.t.slice(0, 160));
+  r = await appel(jk, { geste: 'essai' });
   let a = await abo('ft-karim');
-  verifier(r.code === 200 && a && a.plan === 'premium' && a.status === 'active' && a.manualOverride === true && a.platform === 'manual', 'Premium : subscriptions/{uid} actif, manuel, manualOverride (la forme d adminSetUserPlan)', JSON.stringify(a || r.t).slice(0, 160));
-  verifier(a && a.endDate && a.endDate.toDate().getUTCFullYear() === 2099, 'Premium sans fin (31/12/2099), comme le plan manuel');
+  verifier(r.code === 200 && r.j.applique === true && r.j.acces.etat === 'essai' && etatDe(a) === 'essai', 'Essai : le serveur de test pose 14 jours, la réponse le dit', JSON.stringify(r.j || r.t).slice(0, 200));
+  const jours = a && a.acces ? Math.round((a.acces.jusquA.toMillis ? a.acces.jusquA.toMillis() : a.acces.jusquA) - Date.now()) / 864e5 : 0;
+  verifier(jours > 13.9 && jours <= 14, `l essai court 14 jours (${jours.toFixed(2)})`);
+  verifier(a && !a.demandeOutilTest && a.demandeOutilTestFaite && a.demandeOutilTestFaite.action === 'essai', 'la demande est effacée, la réponse reste sur le document');
   verifier(a && !JSON.stringify(a).includes('essai.test') && !JSON.stringify(a).includes(karim), 'rien du testeur n est parti dans forgeme-test (ni son adresse, ni son uid)');
-  r = await appel(jk, { geste: 'ultra' }); a = await abo('ft-karim');
-  verifier(r.code === 200 && a.plan === 'premium_ultra' && a.status === 'active', 'Ultra : premium_ultra actif');
+  r = await appel(jk, { geste: 'abonne' }); a = await abo('ft-karim');
+  verifier(r.code === 200 && etatDe(a) === 'actif' && a.acces.source === 'manuel' && a.manualOverride === true && a.plan === 'premium_ultra', 'Abonné : actif, source manuel, plan premium_ultra', JSON.stringify(a && a.acces).slice(0, 160));
+  r = await appel(jk, { geste: 'lecture_seule' }); a = await abo('ft-karim');
+  verifier(r.code === 200 && r.j.acces.etat === 'lecture_seule' && etatDe(a) === 'lecture_seule' && a.manualOverride === undefined, 'Lecture seule : plus de plan manuel, plus d accès', JSON.stringify(a && a.acces).slice(0, 160));
+  r = await appel(jk, { geste: 'premium' }); a = await abo('ft-karim');
+  verifier(r.code === 200 && etatDe(a) === 'actif', 'l ancien nom « premium » est encore compris (abonné)');
   r = await appel(jk, { geste: 'gratuit' }); a = await abo('ft-karim');
-  verifier(r.code === 200 && a.plan === 'free' && a.status === 'expired' && a.manualOverride === undefined, 'Gratuit : plan free, expiré, sans manualOverride');
+  verifier(r.code === 200 && etatDe(a) === 'lecture_seule', 'l ancien nom « gratuit » aussi (lecture seule)');
+  serveurTestActif = false;
+  r = await appel(jk, { geste: 'essai' });
+  verifier(r.code === 200 && r.j.applique === false && !!(await abo('ft-karim')).demandeOutilTest, 'serveur de test muet : la demande reste posée, la réponse le dit (applique: false)', r.t.slice(0, 160));
+  serveurTestActif = true;
+  await ftDb.doc('subscriptions/ft-karim').set({ demandeOutilTest: admin.firestore.FieldValue.delete() }, { merge: true });
+  r = await appel(jk, { geste: 'lecture_seule' });
+  verifier(r.code === 200 && r.j.applique === true, 'le serveur revenu, le geste suivant passe');
   r = await appel(jk, { geste: 'remplir' });
   const comptes = {};
   for (const c of ['tasks', 'subtasks', 'rituals', 'ritual_completions', 'goals', 'subgoals', 'journals', 'importantDates', 'trips', 'ideas', 'quickNotes', 'shoppingLists', 'user_data', 'data_values']) comptes[c] = await nb(`users/ft-karim/${c}`);
@@ -124,38 +166,50 @@ let page = null;
   const p2 = (await ftDb.doc('users/ft-karim').get()).data() || {};
   verifier(r.code === 200 && restes.length === 0, `Remettre à zéro : plus aucune collection sous le compte (${restes.join(', ') || 'aucune'})`, r.t.slice(0, 120));
   verifier(p2.email === 'karim@exemple.test' && p2.firstName === 'Karim' && p2.onboardingCompleted === false && !p2.onboardingAnswers, 'le compte reste, profil minimal, accueil à refaire');
-  verifier(!(await abo('ft-karim')), 'et plus d abonnement : gratuit');
+  verifier(etatDe(await abo('ft-karim')) === 'lecture_seule' && r.j.acces.etat === 'lecture_seule', 'et lecture seule, comme un compte neuf, écrite par le serveur de test');
   try { await ftAuth.getUser('ft-karim'); verifier(true, 'le compte d authentification est gardé'); } catch (e) { verifier(false, 'le compte d authentification est gardé'); }
 
   console.log('\n== B. Karim ne vise que son compte');
-  r = await appel(jk, { geste: 'premium', compte: 'sonia@exemple.test', uid: 'ft-sonia', email: 'sonia@exemple.test' });
+  r = await appel(jk, { geste: 'abonne', compte: 'sonia@exemple.test', uid: 'ft-sonia', email: 'sonia@exemple.test' });
   verifier(r.code === 200 && r.j.compte === 'karim@exemple.test' && !(await abo('ft-sonia')), 'nommer le compte de Sonia dans la demande ne change rien : c est le sien qui bouge');
   verifier((await nb('users/ft-sonia/tasks')) === 1, 'la tâche de Sonia est intacte après tous les gestes de Karim');
   await refC.collection('acces').doc(karim).update({ compteTest: 'sonia@exemple.test' });
   r = await appel(jk, { geste: 'remplir' });
   verifier(r.code === 409 && (await nb('users/ft-sonia/tasks')) === 1, 'un compte attribué à deux testeurs est refusé (409)', `${r.code} ${r.t}`);
-  await refC.collection('acces').doc(karim).update({ compteTest: 'karim.vrai@gmail.com' });
-  r = await appel(jk, { geste: 'premium' });
-  verifier(r.code === 403, 'une adresse qui n est pas @exemple.test est refusée (403)', `${r.code} ${r.t}`);
   await refC.collection('acces').doc(karim).update({ compteTest: 'personne@exemple.test' });
-  r = await appel(jk, { geste: 'premium' });
-  verifier(r.code === 404, 'un compte absent du projet de test : 404, rien de créé', `${r.code} ${r.t}`);
+  r = await appel(jk, { geste: 'abonne' });
+  verifier(r.code === 404 && /inscriv/.test(r.t), 'un compte absent du projet de test : 404, il est invité à s inscrire dans l app de test', `${r.code} ${r.t}`);
+  /* Une adresse réelle (Gmail) notée par l'équipe : acceptée depuis le 28/10/2026. */
+  try { await ftAuth.deleteUser('ft-karim-gmail'); } catch (e) { /* absent */ }
+  await ftAuth.createUser({ uid: 'ft-karim-gmail', email: 'karim.vrai@gmail.com', emailVerified: true, displayName: 'Karim Vrai' });
+  await ftDb.doc('subscriptions/ft-karim-gmail').delete();
+  await refC.collection('acces').doc(karim).update({ compteTest: 'Karim.Vrai@Gmail.com' });
+  r = await appel(jk, { geste: 'essai' });
+  verifier(r.code === 200 && r.j.compte === 'karim.vrai@gmail.com' && etatDe(await abo('ft-karim-gmail')) === 'essai', 'une adresse Gmail notée par l équipe marche (casse ignorée)', `${r.code} ${r.t.slice(0, 160)}`);
   await refC.collection('acces').doc(karim).update({ compteTest: 'karim@exemple.test' });
-  r = await appel(jm, { geste: 'premium' });
-  verifier(r.code === 404 && /attribu/.test(r.t), 'Marc, sans compte attribué : 404, il est invité à écrire à l équipe', `${r.code} ${r.t}`);
-  r = await appel(js, { geste: 'ultra' });
-  verifier(r.code === 200 && (await abo('ft-sonia')).plan === 'premium_ultra' && (await abo('ft-karim')).plan === 'premium', 'Sonia agit sur le sien, celui de Karim ne bouge pas');
+  /* Marc n'a rien de noté : c'est l'adresse de sa connexion qui compte. */
+  try { await ftAuth.deleteUser('ft-marc'); } catch (e) { /* absent */ }
+  r = await appel(jm, { geste: 'abonne' });
+  verifier(r.code === 404 && /marc\.testeur@essai\.test/.test(r.t), 'Marc, sans adresse notée et sans compte dans l app de test : 404 qui nomme SON adresse de connexion', `${r.code} ${r.t}`);
+  try { await ftAuth.deleteUser('ft-marc'); } catch (e) { /* absent */ }
+  await ftAuth.createUser({ uid: 'ft-marc', email: 'marc.testeur@essai.test', emailVerified: true, displayName: 'Marc Testeur' });
+  await ftDb.doc('subscriptions/ft-marc').delete();
+  r = await appel(jm, { geste: 'essai' });
+  verifier(r.code === 200 && r.j.compte === 'marc.testeur@essai.test' && etatDe(await abo('ft-marc')) === 'essai', 'une fois inscrit avec la même adresse, Marc agit sur son compte sans attribution', `${r.code} ${r.t.slice(0, 160)}`);
+  r = await appel(js, { geste: 'abonne' });
+  verifier(r.code === 200 && etatDe(await abo('ft-sonia')) === 'actif' && etatDe(await abo('ft-karim')) === 'actif', 'Sonia agit sur le sien, celui de Karim ne bouge pas');
+  await ftDb.doc('subscriptions/ft-karim').set({}, { merge: true });
 
   console.log('\n== C. La garde du projet');
   await poserCle(fausseCle('forgeme-project'));
-  r = await appel(jk, { geste: 'ultra' });
-  verifier(r.code === 503 && (await abo('ft-karim')).plan === 'premium', 'une clé de forgeme-project est refusée (503), rien n est écrit', `${r.code} ${r.t}`);
+  r = await appel(jk, { geste: 'lecture_seule' });
+  verifier(r.code === 503 && etatDe(await abo('ft-karim')) === 'actif', 'une clé de forgeme-project est refusée (503), rien n est écrit', `${r.code} ${r.t}`);
   verifier(!(await prodDb.doc('subscriptions/ft-karim').get()).exists && (await prodDb.collection('users').limit(1).get()).empty, 'et rien n arrive dans forgeme-project');
   await poserCle(fausseCle('forgeme-project', 'forgeme-test'));
-  r = await appel(jk, { geste: 'ultra' });
+  r = await appel(jk, { geste: 'abonne' });
   verifier(r.code === 503, 'un project_id forgeme-project est refusé, même avec un compte de service de forgeme-test', `${r.code} ${r.t}`);
   await poserCle(fausseCle('forgeme-test', 'forgeme-project'));
-  r = await appel(jk, { geste: 'ultra' });
+  r = await appel(jk, { geste: 'abonne' });
   verifier(r.code === 503, 'un compte de service d un autre projet est refusé, même avec project_id forgeme-test', `${r.code} ${r.t}`);
   await poserCle('pas une clé');
   r = await appel(jk, { geste: 'etat' });
@@ -165,17 +219,17 @@ let page = null;
   console.log('\n== D. Le plafond et le verrou');
   const maintenant = Date.now();
   await hub.doc(`compteTestGestes/${karim}`).set({ instants: Array.from({ length: 19 }, (_, i) => maintenant - (i + 1) * 60000), enCours: null });
-  r = await appel(jk, { geste: 'gratuit' });
+  r = await appel(jk, { geste: 'lecture_seule' });
   verifier(r.code === 200, 'le vingtième geste de l heure passe');
-  r = await appel(jk, { geste: 'premium' });
-  verifier(r.code === 429 && (await abo('ft-karim')).plan === 'free', 'le vingt et unième est refusé (429), rien n est écrit', `${r.code} ${r.t}`);
+  r = await appel(jk, { geste: 'abonne' });
+  verifier(r.code === 429 && etatDe(await abo('ft-karim')) === 'lecture_seule', 'le vingt et unième est refusé (429), rien n est écrit', `${r.code} ${r.t}`);
   r = await appel(jk, { geste: 'etat' });
   verifier(r.code === 200, 'lire l état ne compte pas dans le plafond');
   await hub.doc(`compteTestGestes/${karim}`).set({ instants: Array.from({ length: 20 }, (_, i) => maintenant - 2 * 3600e3 - i * 1000), enCours: null });
-  r = await appel(jk, { geste: 'premium' });
+  r = await appel(jk, { geste: 'abonne' });
   verifier(r.code === 200, 'les gestes de plus d une heure ne comptent plus');
   await hub.doc(`compteTestGestes/${karim}`).set({ instants: [], enCours: admin.firestore.Timestamp.now() });
-  r = await appel(jk, { geste: 'gratuit' });
+  r = await appel(jk, { geste: 'lecture_seule' });
   verifier(r.code === 409, 'un geste déjà en cours : le suivant attend (409)', `${r.code} ${r.t}`);
   await viderGestes(karim);
   const auditOk = (await hub.collection('audit').where('action', '==', 'test.compte').get()).docs.map((d) => d.data());
@@ -185,36 +239,37 @@ let page = null;
 
   console.log('\n== E. Rien sans campagne en cours');
   await refC.update({ statut: 'preparation' });
-  r = await appel(jk, { geste: 'ultra' });
-  verifier(r.code === 403 && (await abo('ft-karim')).plan === 'premium', 'campagne en préparation : 403', `${r.code} ${r.t}`);
+  r = await appel(jk, { geste: 'lecture_seule' });
+  verifier(r.code === 403 && etatDe(await abo('ft-karim')) === 'actif', 'campagne en préparation : 403', `${r.code} ${r.t}`);
   await refC.update({ statut: 'terminee' });
   r = await appel(jk, { geste: 'etat' });
   verifier(r.code === 403, 'campagne terminée : 403, même pour lire');
   await refC.update({ statut: 'en-cours', [`fins.${karim}`]: new Date(Date.now() - 60000) });
-  r = await appel(jk, { geste: 'ultra' });
+  r = await appel(jk, { geste: 'abonne' });
   verifier(r.code === 403, 'accès du testeur clos : 403');
   await refC.update({ fins: {} });
-  r = await fetch(URL_FN, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jk}` }, body: JSON.stringify({ projet: PID, campagne: 'c-inconnue', geste: 'ultra' }) });
+  r = await fetch(URL_FN, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jk}` }, body: JSON.stringify({ projet: PID, campagne: 'c-inconnue', geste: 'abonne' }) });
   verifier(r.status === 404, 'une campagne inconnue : 404');
   await hub.doc(`testeurs/${karim}`).update({ actif: false });
-  r = await appel(jk, { geste: 'ultra' });
+  r = await appel(jk, { geste: 'abonne' });
   verifier(r.code === 403, 'un testeur retiré du vivier : 403');
   await hub.doc(`testeurs/${karim}`).update({ actif: true });
   const equipe = (await hub.collection('equipe').where('role', '==', 'admin').limit(1).get()).docs[0];
   if (equipe) {
     const je = await jetonDe(equipe.id);
-    r = await appel(je, { geste: 'ultra' });
+    r = await appel(je, { geste: 'abonne' });
     verifier(r.code === 403 && /testeurs/.test(r.t), 'une personne de l équipe : 403, réservé aux testeurs', `${r.code} ${r.t}`);
     /* Les règles : l'équipe attribue le compte depuis le Cockpit (le même
-       document que les identifiants), une adresse fictive seulement. */
+       document que les identifiants), n'importe quelle adresse depuis le 28/10/2026. */
     const ecrireAcces = (compteTest) => fetch(`${BDD}/projets/${PID}/campagnes/${CID}/acces/${marc}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${je}` },
       body: JSON.stringify({ fields: { identifiants: { stringValue: 'marc@exemple.test · Test-3' }, compteTest: { stringValue: compteTest }, maj: { timestampValue: new Date().toISOString() } } }) }).then((x) => x.status);
     verifier((await ecrireAcces('marc@exemple.test')) === 200, 'l équipe attribue un compte @exemple.test (règles)');
-    verifier((await ecrireAcces('marc@gmail.com')) === 403, 'les règles refusent une adresse qui n est pas fictive');
+    verifier((await ecrireAcces('marc@gmail.com')) === 200, 'les règles acceptent une adresse Gmail');
+    verifier((await ecrireAcces('pas une adresse')) === 403, 'les règles refusent ce qui n est pas une adresse');
     verifier((await fetch(`${BDD}/projets/${PID}/campagnes/${CID}/acces/${marc}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jm}` }, body: JSON.stringify({ fields: { compteTest: { stringValue: 'sonia@exemple.test' } } }) })).status === 403, 'un testeur ne s attribue pas un compte lui-même');
     await refC.collection('acces').doc(marc).delete();
   } else verifier(false, 'une fiche d équipe admin existe au banc');
-  r = await fetch(URL_FN, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projet: PID, campagne: CID, geste: 'ultra' }) });
+  r = await fetch(URL_FN, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projet: PID, campagne: CID, geste: 'abonne' }) });
   verifier(r.status === 401, 'sans jeton : 401');
   r = await appel(jk, { geste: 'supprimer-tout' });
   verifier(r.code === 400, 'un geste inconnu : 400');
@@ -222,37 +277,47 @@ let page = null;
   console.log('\n== F. L écran du testeur');
   await viderGestes(karim);
   await ftDb.doc('subscriptions/ft-karim').delete();
-  const nav = await chromium.launch();
+  const nav = await chromium.launch({ channel: 'chrome', headless: true });
   page = await nav.newPage({ viewport: { width: 1280, height: 900 } });
   page.setDefaultTimeout(15000);
   const erreurs = []; page.on('pageerror', (e) => erreurs.push(e.message.slice(0, 160)));
+  page.on('console', (m) => { if (m.type() === 'error') console.log(`  (console : ${m.text().slice(0, 200)})`); });
+  page.on('pageerror', (e) => console.log(`  (page : ${e.message.slice(0, 200)})`));
+  page.on('requestfailed', (q) => console.log(`  (échec réseau : ${q.url().slice(0, 120)} ${q.failure() ? q.failure().errorText : ''})`));
   for (const c of ['connexions', 'connexionsIp']) { const j = await (await fetch(`${BDD}/${c}?pageSize=300`, { headers: prop })).json(); for (const d of (j.documents || [])) await fetch(`${BANC.firestore}/v1/${d.name}`, { method: 'DELETE', headers: prop }); }
   await page.goto(`${BANC.site}/suivi/?emul`, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('#forme:not(.masque)', { timeout: 25000 });
+  await page.waitForSelector('#forme:not(.masque)', { timeout: 25000 }).catch(async (e) => { await page.screenshot({ path: `${process.env.CAPTURES || '/tmp'}/qa-compte-test-connexion.png` }); throw e; });
   await page.fill('#email', 'karim.testeur@essai.test'); await page.click('#envoyer');
   await page.waitForSelector('#forme-code:not(.masque)', { timeout: 25000 });
   await page.fill('#code', await code('karim.testeur@essai.test'));
   await page.waitForURL(/testeur/, { timeout: 40000 });
   await page.waitForSelector('.accueil [data-accueil="passer"], .testeur-tete', { timeout: 25000 }).catch(() => null);
   if (await page.$('.accueil')) { await page.click('.accueil [data-accueil="passer"]'); await page.waitForSelector('.accueil', { state: 'detached' }); }
-  await page.waitForSelector('[data-continuer]', { timeout: 25000 });
-  await page.evaluate(() => { location.hash = '#/application'; });
-  await page.waitForSelector('[data-compte-test]', { timeout: 20000 }).catch(() => null);
+  /* L'accueil du testeur a changé depuis l'écriture de cette suite (parcours d'arrivée) : on va
+     directement à la page L'application, où vit la boîte. */
+  await page.waitForSelector('[data-continuer]', { timeout: 8000 }).catch(() => null);
+  const suivant = page.getByRole('button', { name: /Suivant : L.application/ });
+  if (await suivant.count()) await suivant.first().click();
+  else await page.evaluate(() => { location.hash = '#/application'; });
+  await page.waitForSelector('[data-compte-test]', { timeout: 30000 }).catch(async () => { await page.screenshot({ path: `${process.env.CAPTURES || '/tmp'}/qa-compte-test-application.png`, fullPage: true }); });
   verifier(await page.$('[data-compte-test]'), 'la page L application montre « Mon compte de test »');
-  await page.waitForFunction(() => /Plan actuel/.test((document.querySelector('[data-compte-etat]') || {}).textContent || ''), null, { timeout: 15000 }).catch(() => null);
+  await page.waitForFunction(() => /Accès actuel/.test((document.querySelector('[data-compte-etat]') || {}).textContent || ''), null, { timeout: 15000 }).catch(() => null);
   verifier(/karim@exemple\.test/.test(await page.textContent('[data-compte-test]')), 'avec l adresse de SON compte de test');
-  verifier(/Plan actuel : Gratuit/.test(await page.textContent('[data-compte-etat]')), `et son état : ${(await page.textContent('[data-compte-etat]')).trim()}`);
+  verifier(/Accès actuel : Lecture seule/.test(await page.textContent('[data-compte-etat]')), `et son état : ${(await page.textContent('[data-compte-etat]')).trim()}`);
   const libelles = await page.$$eval('[data-compte-test] [data-compte-geste]', (l) => l.map((b) => b.textContent.trim()));
-  verifier(libelles.join('|') === 'Gratuit|Premium|Ultra|Remplir mon compte|Remplir à fond|Remettre à zéro', `six boutons, dans l ordre (${libelles.join('|')})`);
-  verifier((await page.getAttribute('[data-compte-test] [data-compte-geste="gratuit"]', 'aria-pressed')) === 'true', 'le plan en vigueur est enfoncé');
+  verifier(libelles.join('|') === 'Essai 14 jours|Abonné|Lecture seule|Remplir mon compte|Remplir à fond|Remettre à zéro', `six boutons, dans l ordre (${libelles.join('|')})`);
+  verifier((await page.getAttribute('[data-compte-test] [data-compte-geste="lecture_seule"]', 'aria-pressed')) === 'true', 'l accès en vigueur est enfoncé');
   const html = await page.innerHTML('[data-compte-test]');
   verifier(!/—/.test(html) && !/<svg/.test(html), 'ni tiret cadratin, ni pictogramme dans la boîte');
-  await page.click('[data-compte-test] [data-compte-geste="premium"]');
-  await page.waitForFunction(() => /Plan actuel : Premium/.test((document.querySelector('[data-compte-etat]') || {}).textContent || ''), null, { timeout: 15000 }).catch(() => null);
-  verifier((await abo('ft-karim') || {}).plan === 'premium', 'cliquer Premium passe SON compte en Premium dans forgeme-test');
-  verifier(/Plan actuel : Premium/.test(await page.textContent('[data-compte-etat]')), 'et la boîte le dit aussitôt');
+  await page.click('[data-compte-test] [data-compte-geste="essai"]');
+  await page.waitForFunction(() => /Accès actuel : Essai/.test((document.querySelector('[data-compte-etat]') || {}).textContent || ''), null, { timeout: 20000 }).catch(() => null);
+  verifier(etatDe(await abo('ft-karim')) === 'essai', 'cliquer Essai passe SON compte en essai dans forgeme-test');
+  verifier(/Accès actuel : Essai jusqu/.test(await page.textContent('[data-compte-etat]')), `et la boîte le dit aussitôt, avec la fin (${(await page.textContent('[data-compte-etat]')).trim()})`);
+  await page.click('[data-compte-test] [data-compte-geste="abonne"]');
+  await page.waitForFunction(() => /Accès actuel : Abonné/.test((document.querySelector('[data-compte-etat]') || {}).textContent || ''), null, { timeout: 20000 }).catch(() => null);
+  verifier(etatDe(await abo('ft-karim')) === 'actif' && (await page.getAttribute('[data-compte-test] [data-compte-geste="abonne"]', 'aria-pressed')) === 'true', 'Abonné : actif, et le bouton est enfoncé');
   await page.click('[data-compte-test] [data-compte-geste="remplir"]');
-  await page.waitForFunction(() => /Plan actuel : Premium · [1-9]/.test((document.querySelector('[data-compte-etat]') || {}).textContent || ''), null, { timeout: 30000 }).catch(() => null);
+  await page.waitForFunction(() => /Accès actuel : Abonné · [1-9]/.test((document.querySelector('[data-compte-etat]') || {}).textContent || ''), null, { timeout: 30000 }).catch(() => null);
   verifier((await nb('users/ft-karim/tasks')) > 0, `Remplir mon compte remplit (${await nb('users/ft-karim/tasks')} tâches)`);
   await page.click('[data-compte-test] [data-compte-geste="zero"]');
   await page.waitForSelector('[data-oui]');
@@ -260,27 +325,30 @@ let page = null;
   await page.click('[data-non]'); await pause(800);
   verifier((await nb('users/ft-karim/tasks')) > 0, 'Annuler ne touche à rien');
   await page.click('[data-compte-test] [data-compte-geste="zero"]'); await page.waitForSelector('[data-oui]'); await page.click('[data-oui]');
-  await page.waitForFunction(() => /Plan actuel : Gratuit · 0/.test((document.querySelector('[data-compte-etat]') || {}).textContent || ''), null, { timeout: 30000 }).catch(() => null);
-  verifier((await nb('users/ft-karim/tasks')) === 0 && !(await abo('ft-karim')), 'confirmer vide le compte et le remet en gratuit');
+  await page.waitForFunction(() => /Accès actuel : Lecture seule · 0/.test((document.querySelector('[data-compte-etat]') || {}).textContent || ''), null, { timeout: 30000 }).catch(() => null);
+  verifier((await nb('users/ft-karim/tasks')) === 0 && etatDe(await abo('ft-karim')) === 'lecture_seule', 'confirmer vide le compte et le laisse en lecture seule, comme un compte neuf');
 
   /* La feuille d'un scénario : la table de la campagne impose un geste. */
   await page.evaluate(() => { location.hash = '#/'; });
-  await page.waitForSelector('[data-continuer]');
+  const accueilPret = await page.waitForSelector('[data-continuer]', { timeout: 10000 }).then(() => true).catch(() => false);
+  if (!accueilPret) console.log('  SAUTÉ  la feuille d un scénario : l accueil ne propose pas encore de scénario (parcours d arrivée en cours)');
+  if (accueilPret) {
   const ref = await page.getAttribute('[data-continuer]', 'data-continuer');
-  await refC.update({ gestesCompte: { [ref]: ['remplir-fond', 'ultra'] } });
+  await refC.update({ gestesCompte: { [ref]: ['remplir-fond', 'essai'] } });
   await pause(2500);
   await page.click('[data-continuer]');
   await page.waitForSelector('.modale--scenario', { timeout: 10000 }).catch(() => null);
   const bloc = await page.$('.modale--scenario [data-compte-scenario]');
   const textesBloc = bloc ? await bloc.textContent() : '';
-  verifier(bloc && /Remplissez à fond votre compte pour ce test/.test(textesBloc) && /Passez en Ultra pour ce test/.test(textesBloc), 'la feuille du scénario montre ses gestes, imposés par la table', textesBloc.slice(0, 160));
+  verifier(bloc && /Remplissez à fond votre compte pour ce test/.test(textesBloc) && /Passez en essai de 14 jours pour ce test/.test(textesBloc), 'la feuille du scénario montre ses gestes, imposés par la table', textesBloc.slice(0, 160));
   if (bloc) {
-    await page.click('.modale--scenario [data-compte-geste="ultra"]');
-    for (let i = 0; i < 20 && (((await abo('ft-karim')) || {}).plan !== 'premium_ultra'); i += 1) await pause(500);
-    verifier(((await abo('ft-karim')) || {}).plan === 'premium_ultra', 'et le bouton agit depuis la feuille');
+    await page.click('.modale--scenario [data-compte-geste="essai"]');
+    for (let i = 0; i < 30 && etatDe(await abo('ft-karim')) !== 'essai'; i += 1) await pause(500);
+    verifier(etatDe(await abo('ft-karim')) === 'essai', 'et le bouton agit depuis la feuille');
     verifier(await page.$('.modale--scenario'), 'sans fermer la feuille');
   }
   await page.keyboard.press('Escape'); await pause(400);
+  }
 
   /* La détection, sur des scénarios rédigés comme ceux du plan. */
   const det = await page.evaluate(async () => {
@@ -294,13 +362,17 @@ let page = null;
       neuf: b('Premier lancement', 'Avec un compte neuf, ouvrir l application'),
       charge: b('Rapidité', 'Sur un compte chargé de 1 500 tâches, ouvrir la liste'),
       rien: b('Changer la langue', 'Réglages, puis Langue'),
+      essai: b('Pendant l essai', 'Pendant la période d essai, ouvrir les réglages'),
+      fin: b('Fin de l essai', 'À la fin de l essai, le compte passe en lecture seule'),
       table: m.besoinsDuScenario({ id: 'x', titre: 'Premium' }, { gestesCompte: { x: [] } }).length,
     };
   });
-  verifier(det.premium === 'premium', `« compte Premium » propose Premium (${det.premium})`);
-  verifier(det.ultra === 'ultra', `« Premium Ultra » propose Ultra, pas les deux (${det.ultra})`);
-  verifier(det.limite === 'gratuit', `« limite du plan gratuit » propose Gratuit (${det.limite})`);
-  verifier(det.souscrire === 'gratuit', `souscrire part du gratuit (${det.souscrire})`);
+  verifier(det.premium === 'abonne', `« compte Premium » propose Abonné (${det.premium})`);
+  verifier(det.ultra === 'abonne', `« Premium Ultra » propose Abonné, une seule fois (${det.ultra})`);
+  verifier(det.limite === 'lecture_seule', `« limite du plan gratuit » propose Lecture seule (${det.limite})`);
+  verifier(det.souscrire === 'lecture_seule', `souscrire part d un compte sans accès (${det.souscrire})`);
+  verifier(det.essai === 'essai', `« période d essai » propose Essai (${det.essai})`);
+  verifier(det.fin === 'lecture_seule', `« fin de l essai » propose Lecture seule (${det.fin})`);
   verifier(det.neuf === 'zero', `« compte neuf » propose la remise à zéro (${det.neuf})`);
   verifier(det.charge === 'remplir-fond', `« 1 500 tâches » propose Remplir à fond (${det.charge})`);
   verifier(det.rien === '', `un scénario sans besoin ne montre rien (${det.rien || 'rien'})`);

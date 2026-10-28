@@ -34,7 +34,7 @@ if (!process.env.FIRESTORE_EMULATOR_HOST || !process.env.FIREBASE_AUTH_EMULATOR_
 const plan = process.argv[2];
 if (!plan) { console.error('Usage : node semer-campagne.mjs <plan.md>'); process.exit(2); }
 
-execFileSync('node', [new URL('./importer-scenarios.mjs', import.meta.url).pathname, 'atelier', plan, '--vrai'], { stdio: 'ignore', env: process.env });
+execFileSync('node', [decodeURIComponent(new URL('./importer-scenarios.mjs', import.meta.url).pathname), 'atelier', plan, '--vrai'], { stdio: 'ignore', env: process.env });
 
 initializeApp({ projectId: process.env.GCLOUD_PROJECT || 'capmedia-1f90d', storageBucket: `${process.env.GCLOUD_PROJECT || 'capmedia-1f90d'}.firebasestorage.app` });
 const bdd = getFirestore();
@@ -48,7 +48,7 @@ const visuels = [];
 if (process.env.FIREBASE_STORAGE_EMULATOR_HOST) {
   const seau = getStorage().bucket();
   for (const nom of ['semaine.svg', 'dates.svg', 'courses.svg']) {
-    const source = new URL(`./donnees-locales/visuels-banc/${nom}`, import.meta.url).pathname;
+    const source = decodeURIComponent(new URL(`./donnees-locales/visuels-banc/${nom}`, import.meta.url).pathname);
     const chemin = `projets/atelier/campagnes/c-oct/visuels/${nom}`;
     await seau.upload(source, { destination: chemin, contentType: 'image/svg+xml' });
     visuels.push({ nom, chemin, taille: statSync(source).size, type: 'image/svg+xml' });

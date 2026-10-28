@@ -860,11 +860,13 @@ const chargerIdentifiants = async (moi) => {
   try {
     const d = await getDoc(doc(bdd, 'projets', c.projet, 'campagnes', c.id, 'acces', uidCourant()));
     identifiantsTesteur.valeur = d.exists() ? String(d.data().identifiants || '') : '';
-    /* Son compte ForgeMe de test, attribué par l'équipe (compte-test.js). */
+    /* L'adresse que l'équipe a notée pour son compte de test, s'il y en a une ; sinon le serveur
+       prend celle de sa connexion (compte-test.js). */
     identifiantsTesteur.compte = d.exists() ? String(d.data().compteTest || '') : '';
   } catch (e) { identifiantsTesteur.valeur = ''; }
-  if (identifiantsTesteur.compte && !etatCompte(c)) await lireEtatCompte(c);
-  if ((identifiantsTesteur.valeur || identifiantsTesteur.compte) && courant().chemin === '/application') rendre(moi);
+  /* Tout testeur a son compte de test : la boîte se montre toujours (pas en aperçu de l'équipe). */
+  if (!MODE_APERCU && !etatCompte(c)) await lireEtatCompte(c);
+  if (courant().chemin === '/application') rendre(moi);
 };
 
 /* Les écrans de l'application (visuels de la campagne, images seulement), en rangée qui défile :
@@ -918,7 +920,7 @@ const pageApplication = (moi) => {
         <p class="aide">Ce sont des comptes de test : rien de réel n'y passe. Ne les partagez pas.</p>
       </div>` : ''}
     </section>` : ''}
-    ${compteTesteur(c) ? boiteCompteHtml(c, compteTesteur(c)) : ''}
+    ${MODE_APERCU ? '' : boiteCompteHtml(c, compteTesteur(c))}
     <section>
       <div class="section-tete"><h2>Ce qu'on attend de vous</h2></div>
       ${c.consignes ? `<div class="prose">${echapper(c.consignes).split(/\n{2,}/).map((x) => `<p>${x.replace(/\n/g, '<br>')}</p>`).join('')}</div>`
@@ -1481,7 +1483,7 @@ const ouvrirFeuille = (s, moi, { apres = null } = {}) => {
       ${p && v !== 'revoir' ? `<div class="fs-etat">${pastille(VERDICTS_TESTEUR, p.resultat)}<span class="t-2 t-petit">Votre résultat${p.commentaire ? ` · ${echapper(p.commentaire)}` : ''}.${fige ? '' : ' Vous pouvez vous corriger.'}</span></div>` : ''}
       ${(s.etapes || s.options) ? `<section class="fs-bloc"><p class="fs-bloc-sur">Ce qu'il faut faire</p><p>${texteEtapes(s.etapes || s.options)}</p></section>` : ''}
       <section class="fs-bloc fs-bloc--attendu"><p class="fs-bloc-sur">Ce qui doit se passer</p><p>${echapper(s.attendu || '')}</p></section>
-      ${fige ? '' : blocScenarioHtml(s, etat.campagne, compteTesteur(etat.campagne))}
+      ${fige || MODE_APERCU ? '' : blocScenarioHtml(s, etat.campagne)}
       ${plateforme}
       <p class="fs-note">${fige ? '<strong>Le test est terminé</strong> : ce résultat est figé.' : 'Un scénario où rien ne se passe est un échec, jamais une réussite.'}</p>
       ${apres && !fige ? '<p class="fs-note"><button class="lien-sobre" type="button" data-fermer>Faire une pause</button> : tout est enregistré, « Continuer » vous ramènera ici.</p>' : ''}

@@ -1621,7 +1621,8 @@ const apercuSocle = async ({ c, pid, env, scenariosPlan, gens, garder, nommer, f
    au besoin, lui transfère les passages de la place sans rien recalculer,
    pose son compte de test, puis envoie l'invitation, à ce moment-là et
    pas avant. */
-const COMPTE_TEST = /^[a-z0-9._+-]{1,64}@exemple\.test$/;
+/* Le compte ForgeMe de test d'un testeur : n'importe quelle adresse (depuis le 28/10/2026). */
+const COMPTE_TEST = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/;
 const ouvrirAttribution = async (c, place, { pid, vivier }) => {
   const n = clesDe(c.affectation || {}, place.id).length;
   const candidats = (vivier || []).filter((t) => t.actif !== false && t.mobile === place.mobile && !(c.testeurs || []).includes(t.id));
@@ -1646,8 +1647,8 @@ const ouvrirAttribution = async (c, place, { pid, vivier }) => {
         <p class="aide">Son invitation part dès que vous attribuez la place.</p>
       </div>
       <div class="groupe"><label class="etiquette-champ" for="place-compte">Compte ForgeMe de test</label>
-        <input class="champ" id="place-compte" type="email" maxlength="80" placeholder="t1@exemple.test" data-place-compte>
-        <p class="aide">Facultatif. Une adresse @exemple.test, un compte par testeur.</p></div>`,
+        <input class="champ" id="place-compte" type="email" maxlength="80" placeholder="Vide : son adresse de connexion" data-place-compte>
+        <p class="aide">Facultatif. Vide : le compte de son adresse de connexion. Sinon l'adresse qu'il utilise dans l'application de test, un compte par testeur.</p></div>`,
     pied: `<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button>
       <button class="btn btn-principal" type="button" data-attribuer>Attribuer</button>`,
   });
@@ -1664,7 +1665,7 @@ const ouvrirAttribution = async (c, place, { pid, vivier }) => {
       if (!prenom) { toast('Donnez-lui un prénom.', 'erreur'); return; }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { toast('Cette adresse a l\'air incomplète.', 'erreur'); return; }
     }
-    if (compteTest && !COMPTE_TEST.test(compteTest)) { toast(`« ${compteTest} » n'est pas un compte de test : une adresse @exemple.test.`, 'erreur'); return; }
+    if (compteTest && !COMPTE_TEST.test(compteTest)) { toast(`« ${compteTest} » n'est pas une adresse e-mail lisible.`, 'erreur'); return; }
     try {
       const r = await appelServeur('attribuerPlace', { projet: pid, campagne: c.id, place: place.id, ...(inscrit ? { testeur: inscrit } : { prenom, email }), ...(compteTest ? { compteTest } : {}) });
       toast(`La place ${place.libelle} est à ${inscrit ? ((candidats.find((t) => t.id === inscrit) || {}).prenom || 'ce testeur') : prenom}.${r && r.invite ? ' Son invitation est partie.' : ''}`);
@@ -1766,10 +1767,10 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
   const personnes = charges.filter((t) => !t.place);
   const identifiantsHtml = equipe && personnes.length ? `<div class="groupe" data-identifiants>
     <span class="etiquette-champ">Identifiants de test, par testeur</span>
-    <p class="aide">Chacun ne lit que les siens, tant que son accès court. Le client ne les voit jamais. Le compte ForgeMe de test (une adresse @exemple.test, un par testeur) ouvre « Mon compte de test » dans son espace : il y change l'abonnement, remplit ou vide ce compte-là, et aucun autre.</p>
+    <p class="aide">Chacun ne lit que les siens, tant que son accès court. Le client ne les voit jamais. « Mon compte de test » agit par défaut sur le compte de son adresse de connexion, dans l'application et sur le site de test : essai, abonné, lecture seule, remplir, vider. Si un testeur utilise une autre adresse dans l'application de test, notez-la ici (un compte par testeur).</p>
     ${personnes.map((t) => `<label class="etiquette-champ" for="ident-${echapper(t.id)}" style="margin-top:8px">${echapper(t.nom)}</label>
       <textarea class="champ" id="ident-${echapper(t.id)}" rows="2" maxlength="2000" data-identifiants-de="${echapper(t.id)}" placeholder="test1@exemple.test · MotDePasse1" disabled></textarea>
-      <input class="champ" type="email" style="margin-top:6px" maxlength="80" id="compte-${echapper(t.id)}" data-compte-de="${echapper(t.id)}" aria-label="Compte ForgeMe de test de ${echapper(t.nom)}" placeholder="Compte de test : t1@exemple.test" disabled>`).join('')}
+      <input class="champ" type="email" style="margin-top:6px" maxlength="80" id="compte-${echapper(t.id)}" data-compte-de="${echapper(t.id)}" aria-label="Compte ForgeMe de test de ${echapper(t.nom)}" placeholder="Compte de test : vide = son adresse de connexion" disabled>`).join('')}
     <div class="rang" style="gap:8px;margin-top:10px"><button class="btn btn-secondaire btn-petit" type="button" data-enregistrer-identifiants>Enregistrer les identifiants</button></div>
     ${ancienBloc ? `<div data-ancien-identifiants style="margin-top:12px">
       <p class="aide">L'ancien bloc commun, lisible de tous les testeurs et du client. Ressaisissez-le testeur par testeur, puis videz-le.</p>
@@ -1941,7 +1942,7 @@ const ouvrirCampagne = async (c, { pid, env, scenarios, sections = [], nommer })
     for (const z of champsIdent) {
       const e = compteDe(z.dataset.identifiantsDe);
       if (!e) continue;
-      if (!/^[a-z0-9._+-]{1,64}@exemple\.test$/.test(e)) { toast(`« ${e} » n'est pas un compte de test : une adresse @exemple.test.`, 'erreur'); return; }
+      if (!COMPTE_TEST.test(e)) { toast(`« ${e} » n'est pas une adresse e-mail lisible.`, 'erreur'); return; }
       if (vus.has(e)) { toast(`« ${e} » est attribué à deux testeurs : un compte par testeur.`, 'erreur'); return; }
       vus.set(e, true);
     }
