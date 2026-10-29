@@ -2709,3 +2709,19 @@ html.salle-plein .lat, html.salle-plein .haut, html.salle-plein .voile-lat, html
 
 /* Barre latérale : une page pas encore ouverte par le parcours du testeur, grisée et sans clic. */
 .lat-lien--inactif { opacity: .38; pointer-events: none; cursor: default; }
+
+/* Le compte de test dans le rail de Capmedia Test (29/10/2026) : les trois accès en segments, comme
+   l'apparence ; l'accès actuel en blanc. Tant que le testeur ne s'en est pas servi, le bloc s'éclaire
+   doucement trois fois pour se faire remarquer. */
+.rail-compte { margin: 2px 0 6px; border-radius: 12px; }
+.rail-compte .rail-compte-choix { margin: 2px 10px 6px; }
+.rail-compte .rail-compte-choix button { white-space: nowrap; padding: 0 4px; }
+.rail-compte .rail-compte-choix button:disabled { cursor: default; opacity: .7; }
+.rail-compte .rail-compte-choix button.btn-charge { opacity: .55; }
+.rail-compte-etat { margin: 0 12px; font: 500 12px/1.4 var(--police); color: var(--encre-2); }
+.rail-compte--neuf .rail-compte-choix { animation: rail-compte-eclat 1.6s var(--courbe) .6s 3; }
+@keyframes rail-compte-eclat {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  40% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--bleu) 35%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) { .rail-compte--neuf .rail-compte-choix { animation: none; } }

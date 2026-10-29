@@ -38,7 +38,7 @@ import { demarrerPush } from './notifications-push.js';
 import { ouvrirAvisAnonyme } from './avis-testeur.js';
 import { logoAppliHtml, resoudreLogos, resoudreCaptures, pagePresentationHtml, fonctionnalitesDe, nomAppli, amorcerAdresses } from './presentation-testeur.js';
 import { lancerVisite, visiteOuverte } from './visite-testeur.js';
-import { boiteCompteHtml, blocScenarioHtml, executerGeste, lireEtatCompte, etatCompte } from './compte-test.js';
+import { boiteCompteHtml, blocScenarioHtml, executerGeste, lireEtatCompte, etatCompte, railCompteHtml, marquerRailCompteVu } from './compte-test.js';
 
 /* Le testeur dit « iPhone », jamais « iOS » : PLATEFORMES_TEST (noyau.js)
    le dit pour les trois espaces. */
@@ -866,6 +866,7 @@ const chargerIdentifiants = async (moi) => {
   } catch (e) { identifiantsTesteur.valeur = ''; }
   /* Tout testeur a son compte de test : la boîte se montre toujours (pas en aperçu de l'équipe). */
   if (!MODE_APERCU && !etatCompte(c)) await lireEtatCompte(c);
+  majNavigation();
   if (courant().chemin === '/application') rendre(moi);
 };
 
@@ -920,7 +921,7 @@ const pageApplication = (moi) => {
         <p class="aide">Ce sont des comptes de test : rien de réel n'y passe. Ne les partagez pas.</p>
       </div>` : ''}
     </section>` : ''}
-    ${MODE_APERCU ? '' : boiteCompteHtml(c, compteTesteur(c))}
+    ${boiteCompteHtml(c, compteTesteur(c), { apercu: MODE_APERCU })}
     <section>
       <div class="section-tete"><h2>Ce qu'on attend de vous</h2></div>
       ${c.consignes ? `<div class="prose">${echapper(c.consignes).split(/\n{2,}/).map((x) => `<p>${x.replace(/\n/g, '<br>')}</p>`).join('')}</div>`
@@ -936,7 +937,7 @@ const pageApplication = (moi) => {
   const boite = $('[data-compte-test]');
   if (boite) boite.addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-compte-geste]');
-    if (b) gesteCompte(c, b, () => { if (courant().chemin === '/application') rendre(moi); });
+    if (b && !MODE_APERCU) gesteCompte(c, b, () => { marquerRailCompteVu(); majNavigation(); if (courant().chemin === '/application') rendre(moi); });
   });
   resoudreCaptures(racine);
 };
@@ -1096,6 +1097,7 @@ const pageGuide = () => {
 };
 
 /* Le rail : les pages, et ce qui attend sur chacune. */
+const lecturesCompte = new Set();
 const majNavigation = () => {
   const r = compter();
   const c = etat.campagne;
@@ -1114,6 +1116,11 @@ const majNavigation = () => {
   const atteinte = enParcours ? Math.min(Number(lireParcours(moiNav)) || 0, 3) : 3;
   const ferme = (i, texte) => (enParcours && atteinte < i ? { inactif: texte } : {});
   const apresArrivee = enParcours ? { inactif: 'Après l\'installation, la connexion et la première impression' } : {};
+  /* L'accès du compte de test, lu une fois par campagne, pour le bloc du rail. */
+  if (c && !MODE_APERCU && !etatCompte(c) && !lecturesCompte.has(`${c.projet}/${c.id}`)) {
+    lecturesCompte.add(`${c.projet}/${c.id}`);
+    lireEtatCompte(c).then(() => majNavigation()).catch(() => {});
+  }
   definirNavigation([
     { items: [
       { chemin: '/avis', libelle: 'Mon parcours', icone: 'coeur', ...(parcoursFini ? { ecusson: coche } : etapes.length ? { marque: { texte: `${etapes.filter((e) => e.fait).length}/${etapes.length}`, ton: 'gris', titre: 'Étapes faites' } } : { compte: { total: 0, neuf: avisDus } }) },
@@ -1133,6 +1140,7 @@ const majNavigation = () => {
         { chemin: '/signalements', libelle: 'Mes signalements', icone: 'alerte', compte: { total: r.ko + r.revoir, neuf: r.revoir }, ...apresArrivee },
       ],
     },
+    ...(c ? [{ titre: 'Mon compte de test', html: railCompteHtml(c, { apercu: MODE_APERCU }) }] : []),
     ...(pretATerminer ? [{ items: [{ chemin: '/avis', libelle: 'J\'ai terminé, je soumets', icone: 'check' }] }] : []),
   ]);
   definirEtat(etatAcces());
@@ -1733,6 +1741,13 @@ const monter = async () => {
      clic sur une notification qui ouvre la bulle (notifications-push.js). */
   if (!MODE_APERCU) demarrerPush({ session: sess, role: 'testeur' });
   document.addEventListener('suivi:accueil-revoir', () => lancerAccueil(testeur, { demande: true }));
+  /* Les trois accès du rail : le même geste que la boîte de la page L'application. */
+  document.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-rail-compte] [data-compte-geste]');
+    if (!b || !etat.campagne || MODE_APERCU) return;
+    marquerRailCompteVu();
+    gesteCompte(etat.campagne, b, () => { majNavigation(); if (courant().chemin === '/application') rendre(testeur); });
+  });
   majNavigation();
   definir(Object.keys(PAGES).map((chemin) => ({ chemin, vue: () => { rendre(testeur); } })), { defaut: '/', cible: vue });
   demarrer();

@@ -99,7 +99,7 @@ const verifier = (c, m, detail) => { if (c) { ok += 1; console.log(`  ok     ${m
     [`affectation.place-ios-2`]: JSON.parse(JSON.stringify(aff[hugo.id])),
   });
 
-  const nav = await chromium.launch();
+  const nav = await chromium.launch({ channel: 'chrome' });
   const err = [];
   const ouvrirContexte = async () => { const ctx = await nav.newContext({ viewport: { width: 1400, height: 1000 } }); const p = await ctx.newPage(); p.on('pageerror', (e) => err.push(`PAGE: ${e.message.slice(0, 160)}`)); return { ctx, p }; };
 
@@ -168,6 +168,12 @@ const verifier = (c, m, detail) => { if (c) { ok += 1; console.log(`  ok     ${m
   verifier(Boolean(await vue.$('.modale--scenario')), 'Passer est arrêté aussi');
   await vue.keyboard.press('Escape'); await pause(600);
   verifier(await aller(vue, '#/application', '.page-tete'), 'la page L application s ouvre');
+  /* Le compte de test (29/10/2026) : l'équipe voit ce que voit le testeur, boutons inactifs. */
+  await vue.waitForSelector('[data-compte-test]', { timeout: 10000 }).catch(() => null);
+  verifier(await vue.$('[data-compte-test]'), 'en aperçu, la page L application montre « Mon compte de test »');
+  verifier(await vue.$('#lat-corps [data-rail-compte]'), 'et la barre latérale ses trois accès');
+  const actifs = await vue.$$eval('[data-compte-test] [data-compte-geste], [data-rail-compte] [data-compte-geste]', (l) => l.filter((x) => !x.disabled).length);
+  verifier(actifs === 0, `boutons inactifs en aperçu (${actifs} actif(s))`);
   verifier(await aller(vue, '#/presentation', '.page--presentation'), 'l onglet Présentation s ouvre');
   verifier(await aller(vue, '#/guide', '[data-visite-relancer]'), 'le guide et sa visite guidée sont là');
   await aller(vue, '#/', '.tb--testeur [data-case]');

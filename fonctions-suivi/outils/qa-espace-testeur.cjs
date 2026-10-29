@@ -18,7 +18,7 @@ let ok = 0; const ecarts = [];
 const verifier = (c, m) => { if (c) { ok += 1; console.log(`  ok     ${m}`); } else { ecarts.push(m); console.log(`  ÉCART  ${m}`); } };
 let page = null;
 (async () => {
-  const nav = await chromium.launch();
+  const nav = await chromium.launch({ channel: 'chrome' });
   page = await nav.newPage({ viewport: { width: 1440, height: 900 } });
   const erreurs = []; page.on('pageerror', (e) => erreurs.push(e.message));
   /* Les réponses du Storage : si une capture ne se résout pas, on veut savoir pourquoi (403 : règle ; 404 : fichier absent). */

@@ -135,19 +135,21 @@ export const executerGeste = async (campagne, geste) => {
   return r;
 };
 
-/** La boîte « Mon compte de test » de la page L'application. */
-export const boiteCompteHtml = (campagne, email) => {
-  const e = etatCompte(campagne);
+/** La boîte « Mon compte de test » de la page L'application. En aperçu de l'équipe, montrée telle
+    que le testeur la voit, boutons inactifs : ils agiraient sur le compte de la personne connectée. */
+export const boiteCompteHtml = (campagne, email, { apercu = false } = {}) => {
+  const e = apercu ? null : etatCompte(campagne);
   const adresse = (e && e.compte) || email || '';
   const a = e && e.acces;
   const fin = a && a.jusquA && a.etat !== 'actif' ? ` jusqu'au ${new Date(a.jusquA).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}` : '';
-  const ligne = !e ? '<span class="t-3">Lecture du compte…</span>'
+  const ligne = apercu ? '<span class="t-3">Aperçu : le testeur voit ici l\'accès et le contenu de son propre compte.</span>'
+    : !e ? '<span class="t-3">Lecture du compte…</span>'
     : e.erreur ? `<span class="t-3">${echapper(e.erreur)}</span>`
       : `Accès actuel : <b>${echapper(ACCES_LIBELLES[a && a.etat] || 'Lecture seule')}${echapper(fin)}</b> · ${Number(e.taches || 0).toLocaleString('fr-FR')} tâche${Number(e.taches) > 1 ? 's' : ''}`;
   const actuel = GESTE_DE_L_ACCES(a);
   const bouton = (geste, classe = 'btn-secondaire') => {
     const choisi = GESTES_ACCES.includes(geste) && actuel === geste;
-    return `<button class="btn ${choisi ? 'btn-principal' : classe} btn-petit" type="button" data-compte-geste="${geste}"${GESTES_ACCES.includes(geste) ? ` aria-pressed="${choisi}"` : ''}>${echapper(GESTES_COMPTE[geste].libelle)}</button>`;
+    return `<button class="btn ${choisi ? 'btn-principal' : classe} btn-petit" type="button" data-compte-geste="${geste}"${GESTES_ACCES.includes(geste) ? ` aria-pressed="${choisi}"` : ''}${apercu ? ' disabled' : ''}>${echapper(GESTES_COMPTE[geste].libelle)}</button>`;
   };
   return `<section class="compte-test" data-compte-test>
     <div class="section-tete"><h2>Mon compte de test</h2></div>
@@ -163,6 +165,30 @@ export const boiteCompteHtml = (campagne, email) => {
     </div>
     <p class="aide">« Remplir » ajoute des données fictives en français, « Remplir à fond » environ 1 500 tâches pour juger la rapidité. L'application voit chaque changement en quelques secondes, sans réinstaller. Vingt gestes par heure au plus.</p>
   </section>`;
+};
+
+/* Les trois accès dans la barre latérale (29/10/2026, demande de Nadir) : toujours à portée, quelle
+   que soit la page, l'accès actuel en évidence. Tant que le testeur ne s'en est jamais servi, le
+   bloc s'éclaire doucement pour se faire remarquer. En aperçu de l'équipe, les boutons sont
+   montrés mais inactifs : ils agiraient sur le compte de la personne connectée. */
+const COURTS = { essai: 'Essai', abonne: 'Abonné', lecture_seule: 'Lecture seule' };
+const cleRailVu = () => `suivi:rail-compte-vu:${(auth.currentUser && auth.currentUser.uid) || ''}`;
+export const marquerRailCompteVu = () => { try { localStorage.setItem(cleRailVu(), '1'); } catch (e) { /* stockage refusé */ } };
+const railCompteVu = () => { try { return localStorage.getItem(cleRailVu()) === '1'; } catch (e) { return true; } };
+
+export const railCompteHtml = (campagne, { apercu = false } = {}) => {
+  const e = apercu ? null : etatCompte(campagne);
+  const a = e && e.acces;
+  const actuel = GESTE_DE_L_ACCES(a);
+  const fin = a && a.jusquA && a.etat === 'essai' ? ` jusqu'au ${new Date(a.jusquA).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}` : '';
+  const ligne = apercu ? 'Aperçu : chaque testeur change ici l\'accès de son propre compte.'
+    : !e ? 'Lecture du compte…'
+      : e.erreur ? 'Compte illisible pour l\'instant.'
+        : `Accès actuel : ${ACCES_LIBELLES[a && a.etat] || 'Lecture seule'}${fin}`;
+  return `<div class="rail-compte${!apercu && !railCompteVu() ? ' rail-compte--neuf' : ''}" data-rail-compte>
+    <div class="theme-rail rail-compte-choix" role="group" aria-label="Accès de mon compte de test">${GESTES_ACCES.map((g) => `<button type="button" data-compte-geste="${g}" aria-pressed="${actuel === g}"${apercu ? ' disabled' : ''} title="${echapper(GESTES_COMPTE[g].invite)}">${COURTS[g]}</button>`).join('')}</div>
+    <p class="rail-compte-etat">${echapper(ligne)}</p>
+  </div>`;
 };
 
 /** Les boutons d'un scénario, à placer dans sa feuille. */

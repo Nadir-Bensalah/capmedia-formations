@@ -293,6 +293,31 @@ let page = null;
   await page.waitForURL(/testeur/, { timeout: 40000 });
   await page.waitForSelector('.accueil [data-accueil="passer"], .testeur-tete', { timeout: 25000 }).catch(() => null);
   if (await page.$('.accueil')) { await page.click('.accueil [data-accueil="passer"]'); await page.waitForSelector('.accueil', { state: 'detached' }); }
+  /* Le rail (29/10/2026) : les trois accès sous « Mon compte de test », sur toutes les pages. */
+  const rail = '#lat-corps [data-rail-compte]';
+  await page.waitForSelector(rail, { timeout: 20000 }).catch(async () => { await page.screenshot({ path: `${process.env.CAPTURES || '/tmp'}/qa-compte-test-rail.png` }); });
+  verifier(await page.$(rail), 'la barre latérale montre « Mon compte de test », dès la première page');
+  verifier(/Mon compte de test/.test(await page.textContent('#lat-corps')), 'sous son titre');
+  await page.waitForFunction((r) => /Accès actuel/.test((document.querySelector(r) || {}).textContent || ''), rail, { timeout: 15000 }).catch(() => null);
+  const railLibelles = await page.$$eval(`${rail} [data-compte-geste]`, (l) => l.map((x) => x.textContent.trim()));
+  verifier(railLibelles.join('|') === 'Essai|Abonné|Lecture seule', `trois boutons : ${railLibelles.join('|')}`);
+  verifier((await page.getAttribute(`${rail} [data-compte-geste="lecture_seule"]`, 'aria-pressed')) === 'true' && /Accès actuel : Lecture seule/.test(await page.textContent(rail)), `l accès actuel est enfoncé et dit (${(await page.textContent(rail)).replace(/\s+/g, ' ').trim()})`);
+  verifier(await page.$('.rail-compte--neuf'), 'le bloc se met en évidence tant qu il n a pas servi');
+  if (process.env.CAPTURES) await page.screenshot({ path: `${process.env.CAPTURES}/rail-compte-avant.png` });
+  await page.click(`${rail} [data-compte-geste="essai"]`);
+  await page.waitForFunction((r) => /Accès actuel : Essai/.test((document.querySelector(r) || {}).textContent || ''), rail, { timeout: 20000 }).catch(() => null);
+  verifier(etatDe(await abo('ft-karim')) === 'essai', 'Essai dans la barre passe SON compte en essai dans forgeme-test');
+  verifier((await page.getAttribute(`${rail} [data-compte-geste="essai"]`, 'aria-pressed')) === 'true' && /jusqu/.test(await page.textContent(rail)), `et la barre le montre aussitôt (${(await page.textContent(rail)).replace(/\s+/g, ' ').trim()})`);
+  verifier(!(await page.$('.rail-compte--neuf')), 'puis la mise en évidence s arrête');
+  if (process.env.CAPTURES) await page.screenshot({ path: `${process.env.CAPTURES}/rail-compte-essai.png` });
+  await page.click(`${rail} [data-compte-geste="abonne"]`);
+  await page.waitForFunction((r) => /Accès actuel : Abonné/.test((document.querySelector(r) || {}).textContent || ''), rail, { timeout: 20000 }).catch(() => null);
+  verifier(etatDe(await abo('ft-karim')) === 'actif', 'Abonné dans la barre : actif');
+  await page.click(`${rail} [data-compte-geste="lecture_seule"]`);
+  await page.waitForFunction((r) => /Accès actuel : Lecture seule/.test((document.querySelector(r) || {}).textContent || ''), rail, { timeout: 20000 }).catch(() => null);
+  verifier(etatDe(await abo('ft-karim')) === 'lecture_seule', 'Lecture seule dans la barre : lecture seule');
+  await viderGestes(karim);
+
   /* L'accueil du testeur a changé depuis l'écriture de cette suite (parcours d'arrivée) : on va
      directement à la page L'application, où vit la boîte. */
   await page.waitForSelector('[data-continuer]', { timeout: 8000 }).catch(() => null);

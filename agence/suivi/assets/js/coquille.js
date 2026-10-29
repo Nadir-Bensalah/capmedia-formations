@@ -243,7 +243,7 @@ const squeletteHtml = ({ projets = 1, branches = 0 } = {}) => `
 const htmlNavigation = () => contexte.groupes.map((g) => `
     <div class="lat-groupe${g.pied ? ' lat-groupe--pied' : ''}">
       ${g.titre ? `<p class="lat-titre">${echapper(g.titre)}</p>` : ''}
-      ${g.squelette ? squeletteHtml(g.squelette) : g.items.map((it) => (it.enfants ? arbreHtml(it) : lienHtml(it))).join('')}
+      ${g.squelette ? squeletteHtml(g.squelette) : g.html ? g.html : g.items.map((it) => (it.enfants ? arbreHtml(it) : lienHtml(it))).join('')}
     </div>`).join('');
 
 /* Le rail ne se réécrit que s'il change vraiment. Chaque page le
