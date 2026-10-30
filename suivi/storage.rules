@@ -273,21 +273,26 @@ service firebase.storage {
             || (request.resource.size < 50 * 1024 * 1024
                 && request.resource.contentType.matches('video/(mp4|quicktime|webm)'));
       }
-      function campagne() {
-        return fiche(/databases/(default)/documents/projets/$(projetId)/campagnes/$(campagneId));
+      // Deux lectures : la fiche du testeur (encore active) et la campagne,
+      // chacune UNE fois (let). En prod, la limite de deux lectures Firestore
+      // compte chaque appel : la campagne relue cinq fois faisait refuser
+      // toute preuve (30/10/2026), ce que l'émulateur ne reproduit pas.
+      function testeurPeutDeposer() {
+        let testeur = fiche(/databases/(default)/documents/testeurs/$(uid));
+        let campagne = fiche(/databases/(default)/documents/projets/$(projetId)/campagnes/$(campagneId));
+        return testeur.get('actif', true) != false
+          && campagne.statut == 'en-cours'
+          && uid in campagne.testeurs
+          && !(uid in campagne.get('termines', {}))
+          && (!(uid in campagne.get('fins', {})) || campagne.get('fins', {})[uid] > request.time);
       }
       allow get:  if jetonEquipe() ? equipeSurProjet(projetId) : surSonProjet(projetId);
       allow list: if equipeSurProjet(projetId);
-      // Deux lectures : la fiche du testeur (encore active) et la campagne.
       allow create: if request.auth != null
         && request.auth.uid == uid
         && request.auth.token.get('testeur', false) == true
-        && fiche(/databases/(default)/documents/testeurs/$(uid)).get('actif', true) != false
-        && campagne().statut == 'en-cours'
-        && uid in campagne().testeurs
-        && !(uid in campagne().get('termines', {}))
-        && (!(uid in campagne().get('fins', {})) || campagne().get('fins', {})[uid] > request.time)
-        && preuveAcceptee();
+        && preuveAcceptee()
+        && testeurPeutDeposer();
       allow update, delete: if equipeSurProjet(projetId);
     }
 
@@ -301,13 +306,15 @@ service firebase.storage {
       // Deux lectures : la fiche du testeur, relue pour ne pas laisser au
       // retiré l'heure de vie de son jeton, et la campagne, où son accès
       // ne doit pas être clos.
+      // Chaque fiche lue UNE fois (let) : la limite de deux lectures compte les appels.
       function testeurDeLaCampagne() {
-        return request.auth != null
-          && request.auth.token.get('testeur', false) == true
-          && fiche(/databases/(default)/documents/testeurs/$(request.auth.uid)).get('actif', true) != false
-          && request.auth.uid in fiche(/databases/(default)/documents/projets/$(projetId)/campagnes/$(campagneId)).get('testeurs', [])
-          && (!(request.auth.uid in fiche(/databases/(default)/documents/projets/$(projetId)/campagnes/$(campagneId)).get('fins', {}))
-              || fiche(/databases/(default)/documents/projets/$(projetId)/campagnes/$(campagneId)).get('fins', {})[request.auth.uid] > request.time);
+        let testeur = fiche(/databases/(default)/documents/testeurs/$(request.auth.uid));
+        let campagne = fiche(/databases/(default)/documents/projets/$(projetId)/campagnes/$(campagneId));
+        return request.auth.token.get('testeur', false) == true
+          && testeur.get('actif', true) != false
+          && request.auth.uid in campagne.get('testeurs', [])
+          && (!(request.auth.uid in campagne.get('fins', {}))
+              || campagne.get('fins', {})[request.auth.uid] > request.time);
       }
       allow get: if jetonEquipe() ? equipeSurProjet(projetId)
         : (request.auth != null && request.auth.token.get('testeur', false) == true
@@ -325,13 +332,15 @@ service firebase.storage {
     // script. Un dossier à part, sinon la règle des écrans, plus large,
     // l'emporterait.
     match /projets/{projetId}/campagnes/{campagneId}/logo/{fichier} {
+      // Chaque fiche lue UNE fois (let) : la limite de deux lectures compte les appels.
       function testeurDeLaCampagne() {
-        return request.auth != null
-          && request.auth.token.get('testeur', false) == true
-          && fiche(/databases/(default)/documents/testeurs/$(request.auth.uid)).get('actif', true) != false
-          && request.auth.uid in fiche(/databases/(default)/documents/projets/$(projetId)/campagnes/$(campagneId)).get('testeurs', [])
-          && (!(request.auth.uid in fiche(/databases/(default)/documents/projets/$(projetId)/campagnes/$(campagneId)).get('fins', {}))
-              || fiche(/databases/(default)/documents/projets/$(projetId)/campagnes/$(campagneId)).get('fins', {})[request.auth.uid] > request.time);
+        let testeur = fiche(/databases/(default)/documents/testeurs/$(request.auth.uid));
+        let campagne = fiche(/databases/(default)/documents/projets/$(projetId)/campagnes/$(campagneId));
+        return request.auth.token.get('testeur', false) == true
+          && testeur.get('actif', true) != false
+          && request.auth.uid in campagne.get('testeurs', [])
+          && (!(request.auth.uid in campagne.get('fins', {}))
+              || campagne.get('fins', {})[request.auth.uid] > request.time);
       }
       allow get: if jetonEquipe() ? equipeSurProjet(projetId)
         : (request.auth != null && request.auth.token.get('testeur', false) == true
