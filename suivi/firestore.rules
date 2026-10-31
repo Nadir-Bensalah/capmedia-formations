@@ -1917,9 +1917,9 @@ service cloud.firestore {
               && preuveValide(d.preuves, 2) && preuveValide(d.preuves, 3)
               && preuveValide(d.preuves, 4)
               && contexteBorne(d.get('contexte', {}))
-              && d.maj == request.time
-              // Un échec sans preuve n'est pas un rapport, c'est une opinion.
-              && (d.resultat != 'echec' || d.preuves.size() > 0);
+              // Un échec passe sans capture (31/10/2026) : elle aide à
+              // reproduire, elle n'est plus exigée.
+              && d.maj == request.time;
           }
 
           allow create: if passageValide(request.resource.data)

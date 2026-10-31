@@ -436,8 +436,9 @@ await refuse('Karim ne consigne pas un scénario qui ne lui est pas affecté', s
 await refuse('ni un scénario affecté à Sonia', setDoc(doc(karim(), CHEMIN('c1', KARIM, 'DI-16', 'android')), PASSAGE(KARIM, 'DI-16', 'android')));
 await refuse('ni son scénario sur une plateforme qui ne lui est pas confiée', setDoc(doc(karim(), CHEMIN('c1', KARIM, 'ID-01', 'web')), PASSAGE(KARIM, 'ID-01', 'web')));
 await refuse('Une affectation d avant le plan (une liste) ne donne rien à écrire', setDoc(doc(karim(), CHEMIN('c-ancienne', KARIM, 'DI-15', 'ios')), PASSAGE(KARIM, 'DI-15', 'ios')));
-/* Un échec sans preuve n'est pas un rapport, c'est une opinion. */
-await refuse('Un échec sans preuve est refusé', setDoc(doc(sonia(), CHEMIN('c1', SONIA, 'ID-01', 'android')), PASSAGE(SONIA, 'ID-01', 'android', { resultat: 'echec', commentaire: 'ça marche pas' })));
+/* La capture aide à reproduire, elle n'est plus exigée (31/10/2026) : un
+   échec se consigne avec le texte seul. */
+await doit('Un échec sans capture passe', setDoc(doc(sonia(), CHEMIN('c1', SONIA, 'DI-16', 'android')), PASSAGE(SONIA, 'DI-16', 'android', { resultat: 'echec', commentaire: 'ça marche pas' })));
 await doit('Un échec avec preuve passe', setDoc(doc(sonia(), CHEMIN('c1', SONIA, 'ID-01', 'android')), PASSAGE(SONIA, 'ID-01', 'android', { resultat: 'echec', commentaire: 'rien ne se passe', preuves: [PREUVE(SONIA, 'c1', '1-capture.png')] })));
 await refuse('Un résultat inventé est refusé', setDoc(doc(sonia(), CHEMIN('c1', SONIA, 'DI-15', 'android')), PASSAGE(SONIA, 'DI-15', 'android', { resultat: 'peut-etre' })));
 await refuse('L ancien verdict « ok » n est plus accepté', setDoc(doc(sonia(), CHEMIN('c1', SONIA, 'DI-15', 'android')), PASSAGE(SONIA, 'DI-15', 'android', { resultat: 'ok' })));

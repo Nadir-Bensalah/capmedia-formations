@@ -1217,9 +1217,9 @@ const rendre = (moi) => {
    Consigner un résultat
    -------------------------------------------------------------------------- */
 
-/* Un échec sans preuve n'est pas un rapport, c'est une opinion. Les règles
-   le refusent côté serveur ; on le dit ici pour que le testeur le sache
-   AVANT d'avoir tout tapé, et non par un message d'erreur après coup. */
+/* La capture aide à reproduire, mais elle n'est plus exigée (31/10/2026) :
+   un testeur dont l'envoi échouait, ou qui n'a pas de capture sous la main,
+   ne pouvait plus rien signaler du tout. Le texte seul vaut un rapport. */
 /* Trois captures au plus : un écran, l'écran d'avant, une vidéo. Les
    règles en acceptent cinq ; trois suffisent à reproduire. */
 const PREUVES_MAX = 3;
@@ -1258,7 +1258,7 @@ const ouvrirEchec = (s) => {
       <div class="groupe">
         <span class="etiquette-champ">Vos captures</span>
         <div class="t-preuves" data-preuves></div>
-        <p class="aide">${echapper(aideCapture())} Sans capture, l'échec ne peut pas être enregistré : c'est elle qui permet de reproduire.</p>
+        <p class="aide">${echapper(aideCapture())} Une capture aide beaucoup à reproduire, mais vous pouvez enregistrer l'échec sans elle.</p>
         <p class="aide" id="t-envoi" aria-live="polite"></p>
       </div>`,
     pied: '<button class="btn btn-secondaire" type="button" data-fermer>Annuler</button><button class="btn btn-principal" type="button" data-valider>Enregistrer l\'échec</button>',
@@ -1309,7 +1309,6 @@ const ouvrirEchec = (s) => {
   bouton.addEventListener('click', () => agir(bouton, async () => {
     const quoi = ($('#t-quoi', m.el).value || '').trim();
     if (!quoi) { toast('Dites ce qui s\'est passé.', 'erreur'); return; }
-    if (!pieces.length) { toast('Ajoutez une capture : sans elle, l\'échec ne peut pas être enregistré.', 'erreur'); return; }
     const echo = $('#t-envoi', m.el);
     const chemins = [];
     for (let i = 0; i < pieces.length; i += 1) {
@@ -1317,7 +1316,15 @@ const ouvrirEchec = (s) => {
         const piece = await envoyerPiece(pieces[i].fichier, `campagnes/${etat.campagne.projet}/${etat.campagne.id}/${uidCourant()}`,
           (n) => { echo.textContent = pieces.length > 1 ? `Envoi de la capture ${i + 1} sur ${pieces.length} · ${n} %` : `Envoi ${n} %`; });
         chemins.push(piece.chemin);
-      } catch (e) { echo.textContent = ''; toast(String(e.message || e), 'erreur'); return; }
+      } catch (e) {
+        /* La fenêtre reste ouverte : le testeur réessaie, ou retire la
+           capture et enregistre l'échec sans elle. Le code de l'erreur
+           reste visible pour qu'on puisse en chercher la cause. */
+        console.error(e);
+        echo.textContent = '';
+        toast(`La capture n'a pas pu être envoyée${e && e.code ? ` (${e.code})` : ''}. Réessayez, ou retirez-la pour enregistrer l'échec sans elle.`, 'erreur');
+        return;
+      }
     }
     m.fermer({ commentaire: quoi, preuves: chemins });
   }));
